@@ -4,7 +4,7 @@ Root `../AGENTS.md` applies first. This file adds design, accessibility, interac
 
 ## Design intent
 
-The UI is a restrained operations interface: dark technical palette, balanced density, serious utility-first tone, strong scanability, low decorative chrome, and one coherent system across routes. Teach workflows visually so users can understand goals, progress, state, and consequences with minimal reading.
+The UI is a restrained operations interface: technical palette in dark and light themes, balanced density, serious utility-first tone, strong scanability, low decorative chrome, and one coherent system across routes. Teach workflows visually so users can understand goals, progress, state, and consequences with minimal reading.
 
 - Prefer hierarchy, alignment, rhythm, and semantic structure over visual effects.
 - Keep routes structurally consistent without forcing every workflow into an identical layout.
@@ -64,8 +64,9 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 - Maintain high information throughput with clear spacing, headings, alignment, and dividers.
 - Keep related data near the actions it unlocks and action placement stable across state changes.
 - Avoid oversized empty panels and cramped control clusters.
-- Use serif display type only for route or hero headings, mono for labels/addresses/hashes/numbers, and sans-serif for body copy and controls.
-- Use semantic variables from `ui/coreShared/css/tokens.css`; add a semantic token for a genuinely new role instead of a raw one-off color.
+- Use serif display type only for route or hero headings, mono for addresses/hashes/numbers, and sans-serif for body copy, labels, and controls. Write labels, tabs, buttons, and headings in sentence case; reserve uppercase letter-spaced text for compact status chips and badges, and never uppercase control values.
+- Use semantic variables from `ui/coreShared/css/tokens.css`; add a semantic token for a genuinely new role instead of a raw one-off color. Every color token is a `light-dark()` pair, so a new color needs a light and a dark value that both meet WCAG AA contrast.
+- Use the `--space-*` tokens for margin, padding, and gap, and only the three breakpoint values documented in `tokens.css` in media queries. Cap single-column forms at `--form-max`; dashboards and tables keep the full content width.
 - Reserve stronger accent treatment for active, focused, or meaningful status states.
 - Keep gradients, glow, shine, and overlays subtle and mostly page-level.
 

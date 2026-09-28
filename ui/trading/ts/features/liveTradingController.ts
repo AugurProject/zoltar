@@ -6,6 +6,7 @@ import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage } from 
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
 import { useQuestionClock } from './live/useLiveTradingState.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useMarketDiscovery } from './live/useMarketDiscovery.js'
 import { usePortfolioQueries, usePortfolioRefreshEffects } from './live/usePortfolioQueries.js'
 import { useTransactionWorkflow } from './live/useTransactionWorkflow.js'
@@ -27,7 +28,6 @@ export function useLiveTradingController({
 	onWalletSummaryChange,
 	walletSummaryRetryNonce,
 	settings,
-	refreshIntervalMilliseconds,
 	services = liveTradingControllerServices,
 }: {
 	route: string
@@ -40,7 +40,6 @@ export function useLiveTradingController({
 	onWalletSummaryChange(summary: WalletSummaryState): void
 	walletSummaryRetryNonce: number
 	settings: TradeSettings
-	refreshIntervalMilliseconds?: number | undefined
 	services?: LiveTradingControllerServices
 }) {
 	const marketDiscovery = useMarketDiscovery()
@@ -60,16 +59,18 @@ export function useLiveTradingController({
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
-	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, walletClient })
+	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, marketTitle: selected?.title, walletClient })
 	const { mode, side, amount, acknowledgedImpactBps, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
-	const nowSeconds = useQuestionClock(undefined, configuration, services)
+	const nowSeconds = useQuestionClock(configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
+	const workflowMarket = transactionWorkflow.transaction.workflowState.kind === 'idle' ? undefined : transactionWorkflow.transaction.workflowState.context?.market
+	const otherMarketWorkflow = workflowMarket !== undefined && selected !== undefined && workflowMarket.toLowerCase() !== selected.pool.toLowerCase()
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
-	const { refresh, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
+	const { refresh, refreshCurrentRoute, refreshFromControl, refreshLocked, loadMarketPage } = useMarketDiscoveryController({
 		route,
 		configuration,
 		configurationError,
@@ -88,7 +89,6 @@ export function useLiveTradingController({
 		discoveryRequests,
 		balanceRequests,
 		portfolioBalanceRequests,
-		refreshIntervalMilliseconds,
 	})
 	const { connect, executeWithCurrentWalletContext, createGuardedWalletWrite, refreshWalletSummaryAfterReceipt, walletContextIsCurrent } = useWalletSessionController({
 		route,
@@ -104,6 +104,10 @@ export function useLiveTradingController({
 		portfolioBalanceRequests,
 		walletSummaryRequests,
 		refresh,
+	})
+	// An explicit invalidation (a simulation control) changed balances without this session's own receipt, so the wallet summary re-reads too.
+	useBlockRefresh(event => {
+		if (event.reason === 'invalidate' && account !== undefined) refreshWalletSummaryAfterReceipt()
 	})
 	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
 	useWalletSummaryEffects({ route, configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
@@ -155,7 +159,8 @@ export function useLiveTradingController({
 		services,
 		createGuardedWalletWrite,
 		executeWithCurrentWalletContext,
-		refresh,
+		// A trade can confirm after navigation; its refresh must load the route now on screen, not the one it started on.
+		refresh: refreshCurrentRoute,
 		marketPageStart: marketPage.start,
 	})
 
@@ -190,10 +195,12 @@ export function useLiveTradingController({
 			routePool,
 			discoveryState,
 			discoveryError,
+			discoveryFreshness: marketDiscovery.freshness,
 			marketPage,
 			nowSeconds,
 			refresh,
 			refreshFromControl,
+			refreshLocked,
 			loadMarketPage,
 		},
 		position: {
@@ -201,10 +208,11 @@ export function useLiveTradingController({
 			side,
 			amount,
 			acknowledgedImpactBps,
-			state,
-			positionHash,
-			message,
-			positionReceiptWarning,
+			// A trade still running on another market stays in the activity list; this market's ticket shows no status of it.
+			state: otherMarketWorkflow ? 'idle' : state,
+			positionHash: otherMarketWorkflow ? undefined : positionHash,
+			message: otherMarketWorkflow ? undefined : message,
+			positionReceiptWarning: otherMarketWorkflow ? undefined : positionReceiptWarning,
 			...positionActions,
 		},
 		workflow: {

@@ -1,9 +1,13 @@
 import { useSignal } from '@preact/signals'
+import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
+import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createZoltarChildUniverse } from '../../../protocol/zoltarForks.js'
 import { loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
+import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { useBlockRefresh, useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
@@ -17,6 +21,7 @@ import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWallet.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
+import { insertCreatedQuestion, mergeQuestionLists } from '../lib/questionRegistry.js'
 import type { DeploymentStatus, MarketDetails, MarketDetailsPage, ZoltarChildUniverseActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage: MarketDetailsPage): MarketDetailsPage {
@@ -30,16 +35,13 @@ function buildQuestionPageFromQuestions(questions: MarketDetails[], currentPage:
 	}
 }
 
-function mergeQuestionLists(existingQuestions: MarketDetails[], nextQuestions: readonly MarketDetails[]) {
-	const getQuestionKey = (question: MarketDetails) => normalizeQuestionId(question.questionId) ?? question.questionId.toLowerCase()
-	const questionsById = new Map(existingQuestions.map(question => [getQuestionKey(question), question]))
-	for (const question of nextQuestions) questionsById.set(getQuestionKey(question), question)
-	return [...questionsById.values()]
-}
-
 function includesQuestionId(questions: readonly MarketDetails[], normalizedQuestionId: string) {
 	return questions.some(question => normalizeQuestionId(question.questionId) === normalizedQuestionId)
 }
+
+/** Universe summaries and question pages refresh in place on each new block, so forks and new questions appear without a reload. */
+const zoltarUniverseQueries = appQueryCache.createStore<ZoltarUniverseSummary | undefined>()
+const zoltarQuestionPageQueries = appQueryCache.createStore<MarketDetailsPage>()
 
 type UseZoltarUniverseParameters = TransactionLifecycleParameters & {
 	accountAddress: Address | undefined
@@ -106,6 +108,14 @@ export function useZoltarUniverse(
 	const nextQuestionCountLoad = useRequestGuard()
 	const nextQuestionsLoad = useRequestGuard()
 	const nextQuestionByIdLoad = useRequestGuard()
+	// Each background request and foreground commit retires older background answers.
+	const universeCommitVersionRef = useRef(0)
+	const questionPageCommitVersionRef = useRef(0)
+	const universeQueryKey = zoltarDeployed ? `${environmentRefreshKey}:${activeUniverseId}` : undefined
+	const questionPage = zoltarQuestionPage.value
+	const questionPageQueryKey = zoltarDeployed && questionPage !== undefined ? `${environmentRefreshKey}:${questionPage.pageIndex}:${questionPage.pageSize}` : undefined
+	const universeQuery = useQueryState(zoltarUniverseQueries, universeQueryKey)
+	const questionPageQuery = useQueryState(zoltarQuestionPageQueries, questionPageQueryKey)
 	currentZoltarContextRef.current = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
 	currentQuestionContextRef.current = { environmentRefreshKey, zoltarDeployed }
 
@@ -189,6 +199,8 @@ export function useZoltarUniverse(
 				zoltarUniverse.value = universe
 				zoltarUniverseLoadedId.value = requestedUniverseId
 				zoltarUniverseResolvedId.value = requestedUniverseId
+				universeCommitVersionRef.current += 1
+				zoltarUniverseQueries.set(`${universeLoadContext.environmentRefreshKey}:${requestedUniverseId}`, universe)
 			},
 			onError: error => {
 				if (!isCurrentZoltarContext(universeLoadContext)) return
@@ -309,6 +321,8 @@ export function useZoltarUniverse(
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
 				zoltarQuestionPage.value = page
+				questionPageCommitVersionRef.current += 1
+				zoltarQuestionPageQueries.set(`${questionLoadContext.environmentRefreshKey}:${pageIndex}:${pageSize}`, page)
 				const mergedQuestions = mergeQuestionLists(zoltarQuestions.value, page.questions)
 				zoltarQuestions.value = mergedQuestions
 				clearResolvedQuestionLookupError(mergedQuestions)
@@ -362,6 +376,90 @@ export function useZoltarUniverse(
 		})
 	}
 
+	/** Reads only the just-created question and the registry count, then merges them into the loaded list and page. */
+	const loadCreatedQuestion = async (questionId: string): Promise<void> => {
+		if (!isMounted.current || !zoltarDeployed) return
+		const normalizedQuestionId = normalizeQuestionId(questionId)
+		if (normalizedQuestionId === undefined) throw new Error('Created question ID is invalid')
+		const questionLoadGeneration = questionLoadGenerationRef.current
+		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
+		const readClient = dependencies.createConnectedReadClient()
+		let loadError: unknown
+		// Page and count reads that started before the creation would otherwise land later with pre-creation data; reads started after this one still win.
+		nextQuestionCountLoad()
+		nextQuestionsLoad()
+		// Track on the list controller so list and create-result loading states cover this read.
+		await questionsLoad.run({
+			load: async () => await Promise.all([dependencies.loadMarketDetails(readClient, BigInt(normalizedQuestionId)), dependencies.loadZoltarQuestionCount(readClient)]),
+			onSuccess: ([question, questionCount]) => {
+				if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+				if (!question.exists) {
+					loadError = new Error('Created question was not found')
+					return
+				}
+				const registry = insertCreatedQuestion({ questionCount: zoltarQuestionCount.value, questionPage: zoltarQuestionPage.value, questions: zoltarQuestions.value }, question, questionCount)
+				zoltarQuestions.value = registry.questions
+				zoltarQuestionPage.value = registry.questionPage
+				zoltarQuestionCount.value = registry.questionCount
+				// Retire older background page answers and seed the cache so the next block refresh compares against the merged page.
+				questionPageCommitVersionRef.current += 1
+				if (registry.questionPage !== undefined) zoltarQuestionPageQueries.set(`${questionLoadContext.environmentRefreshKey}:${registry.questionPage.pageIndex}:${registry.questionPage.pageSize}`, registry.questionPage)
+				clearResolvedQuestionLookupError(registry.questions)
+			},
+			onError: error => {
+				loadError = error
+			},
+		})
+		if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+		// A superseded read may have been for a different page than the one loaded; reissue it, even when this read failed, so that page does not stay blank.
+		const requestedPage = requestedQuestionPage.current
+		const loadedPage = zoltarQuestionPage.value
+		const reissueRequestedPage = requestedPage !== undefined && (loadedPage === undefined || loadedPage.pageIndex !== requestedPage.pageIndex || loadedPage.pageSize !== requestedPage.pageSize)
+		if (loadError !== undefined) {
+			// The page read reports its own failure in the list; the created-question failure is the one surfaced to the caller.
+			if (reissueRequestedPage) await loadQuestionsPage(requestedPage.pageIndex, requestedPage.pageSize).catch(() => undefined)
+			throw loadError
+		}
+		if (reissueRequestedPage) await loadQuestionsPage(requestedPage.pageIndex, requestedPage.pageSize)
+	}
+	/** Re-reads the loaded universe and question page on a new block, keeping the current data visible until the read lands. */
+	const refreshInBackground = async () => {
+		if (!isMounted.current || !zoltarDeployed) return
+		const universeContext = { activeUniverseId, environmentRefreshKey, zoltarDeployed }
+		const questionContext = { environmentRefreshKey, zoltarDeployed }
+		const questionLoadGeneration = questionLoadGenerationRef.current
+		const tasks: Promise<void>[] = []
+		if (universeQueryKey !== undefined && zoltarUniverseLoadedId.value === activeUniverseId && !universeLoad.isLoading.peek()) {
+			const commitVersion = ++universeCommitVersionRef.current
+			tasks.push(
+				zoltarUniverseQueries
+					.fetch(universeQueryKey, async () => await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), activeUniverseId))
+					.then(universe => {
+						if (universe === undefined || !isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
+						if (!isSameQueryData(universe, zoltarUniverse.value)) zoltarUniverse.value = universe
+					}),
+			)
+		}
+		const page = zoltarQuestionPage.value
+		if (questionPageQueryKey !== undefined && page !== undefined && !questionsLoad.isLoading.peek()) {
+			const commitVersion = ++questionPageCommitVersionRef.current
+			tasks.push(
+				zoltarQuestionPageQueries
+					.fetch(questionPageQueryKey, async () => await dependencies.loadZoltarQuestionPage(dependencies.createConnectedReadClient(), page.pageIndex, page.pageSize))
+					.then(nextPage => {
+						if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionContext) || questionsLoad.isLoading.peek() || questionPageCommitVersionRef.current !== commitVersion) return
+						if (isSameQueryData(nextPage, zoltarQuestionPage.value)) return
+						zoltarQuestionCount.value = nextPage.questionCount
+						zoltarQuestionPage.value = nextPage
+						zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, nextPage.questions)
+					}),
+			)
+		}
+		// A failed background read keeps the last data; its age stays visible and the next block retries.
+		await Promise.allSettled(tasks)
+	}
+	useBlockRefresh(() => void refreshInBackground(), autoLoadInitialData && zoltarDeployed)
+
 	const createChildUniverse = async (outcomeIndex: bigint) => {
 		if (
 			!requireWallet(
@@ -379,6 +477,7 @@ export function useZoltarUniverse(
 		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', 'Deploying child universe')
 		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
 		let ownsTransaction = false
+		let requestKey: TransactionRequestKey | undefined
 		try {
 			let refreshRequired = false
 			let result: ZoltarChildUniverseActionResult | undefined
@@ -386,11 +485,13 @@ export function useZoltarUniverse(
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				if (onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel, universeId: activeUniverseId })) === false) {
+				const request = onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel, universeId: activeUniverseId }))
+				if (request === false) {
 					zoltarChildUniverseFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true
+				requestKey = typeof request === 'string' ? request : undefined
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
 				if (!universe.hasForked) throw new Error('This universe must fork before child universes can be deployed')
@@ -409,7 +510,7 @@ export function useZoltarUniverse(
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
-				if (ownsTransaction) onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
 				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)
 				return
 			}
@@ -427,7 +528,7 @@ export function useZoltarUniverse(
 		} finally {
 			if (environmentGuard.isCurrent()) {
 				zoltarChildUniversePendingOutcomeIndex.value = undefined
-				if (ownsTransaction) onTransactionFinished()
+				if (ownsTransaction) onTransactionFinished(requestKey)
 			}
 		}
 	}
@@ -471,6 +572,7 @@ export function useZoltarUniverse(
 		loadingZoltarQuestions: questionsLoad.isLoading.value,
 		loadingZoltarUniverse: universeLoad.isLoading.value,
 		loadZoltarQuestionCount: loadZoltarQuestionCountData,
+		loadCreatedZoltarQuestion: loadCreatedQuestion,
 		loadZoltarQuestion: loadQuestionById,
 		loadZoltarQuestionPage: loadQuestionsPage,
 		loadZoltarQuestions: loadQuestions,
@@ -487,6 +589,8 @@ export function useZoltarUniverse(
 		zoltarQuestionsError: zoltarQuestionsError.value,
 		zoltarUniverse: zoltarUniverseLoadedId.value === activeUniverseId ? zoltarUniverse.value : undefined,
 		zoltarUniverseError: zoltarUniverseError.value,
+		zoltarUniverseFreshness: { refreshing: universeQuery?.fetching === true, updatedAt: universeQuery?.updatedAt },
+		zoltarQuestionsFreshness: { refreshing: questionPageQuery?.fetching === true, updatedAt: questionPageQuery?.updatedAt },
 		zoltarUniverseLoadedId: zoltarUniverseLoadedId.value,
 		zoltarUniverseResolvedId: zoltarUniverseResolvedId.value,
 		zoltarUniverseMissing: zoltarUniverseMissing.value,

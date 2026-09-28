@@ -179,11 +179,15 @@ browserTest(
 					releaseSave = resolve
 				})
 				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
+				const beforeSubmit = executionMutations.length
 				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
 				await waitFor("document.querySelector('#execution-status')?.textContent === 'Enabling live execution…'")
 				expect(await cdp.evaluate("document.querySelector('#execution-fieldset')?.disabled")).toBe(true)
+				// The pending status appears before the request reaches the server, so wait for the held save to arrive before counting.
+				for (let attempt = 0; attempt < 200 && executionMutations.length === beforeSubmit; attempt++) await Bun.sleep(10)
 				// A refresh and a repeated submit while the save is in flight neither unlock the form nor send it twice.
 				const inFlight = executionMutations.length
+				expect(inFlight).toBe(beforeSubmit + 1)
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await Bun.sleep(300)
 				await cdp.evaluate("document.querySelector('#execution-form')?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }))")

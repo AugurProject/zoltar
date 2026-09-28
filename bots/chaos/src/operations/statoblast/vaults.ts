@@ -11,7 +11,6 @@ import {
 	exactPreviousPoolApproval,
 	feeCheckpointDue,
 	operationalPools,
-	safeOraclePriceDeadline,
 	poolAccountingCurrentEvidence,
 	poolApprovalPrepared,
 	poolApprovalStep,
@@ -374,43 +373,5 @@ export const exitCommitmentLimit: OperationDefinition = {
 	id: 'statoblast.vault.exit-limit',
 	label: 'Exit commitment limit',
 	method: 'setUnderwritingLimit',
-	risk: 'low',
-}
-
-function certificationCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
-	return operationalPools(snapshot).flatMap(pool => {
-		const deadline = safeOraclePriceDeadline(snapshot, pool, options)
-		if (deadline === undefined || pool.escalationGame !== '0x0000000000000000000000000000000000000000') return []
-		return pool.vaults.filter(vault => amount(vault.underwritingLimitAttoEth) > 0n && vault.coverageCertified === false).map(vault => ({ pool, vault, deadline }))
-	})
-}
-
-export const certifyCommitment: OperationDefinition = {
-	buildPlan(snapshot, options) {
-		const candidate = choose(certificationCandidates(snapshot, options), mixSeed(options.seed, certifyCommitment.id))
-		if (candidate === undefined) return undefined
-		return planBase({
-			definitionId: certifyCommitment.id,
-			ecosystem: 'statoblast',
-			label: certifyCommitment.label,
-			deadlineTimestamp: candidate.deadline.toString(),
-			metadata: { pool: candidate.pool.address, vault: candidate.vault.address },
-			postconditions: ['The vault full-limit backing is certified against the current pool snapshot'],
-			risk: 'low',
-			snapshot,
-			steps: [
-				encodeStep({ abi: securityPoolAbi, args: [candidate.vault.address], evidence: [eventEvidence(candidate.pool.address, 'VaultCoverageCertified(address,uint256,bytes32,uint256)')], functionName: 'certifyVaultCoverage', id: 'certify-commitment', label: 'Certify commitment backing', to: candidate.pool.address }),
-			],
-		})
-	},
-	classification: 'selectable',
-	contract: 'SecurityPool',
-	description: 'Certifies one standing commitment on chain as an independent keeper action.',
-	discoveryInputs: ['per-vault certificate status', 'current oracle price'],
-	ecosystem: 'statoblast',
-	evaluate: (snapshot, options) => eligible(certificationCandidates(snapshot, options).length > 0 ? undefined : 'No uncertified commitment has a safely fresh price'),
-	id: 'statoblast.vault.certify',
-	label: 'Certify commitment',
-	method: 'certifyVaultCoverage',
 	risk: 'low',
 }

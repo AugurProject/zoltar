@@ -7,6 +7,9 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DeploymentStepList } from '@zoltar/ui-core-shared/components/DeploymentStepList.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { recordTransactionSettled, recordTransactionSubmitted, releaseTransactionActivityWatch } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
+import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
+import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -88,6 +91,9 @@ function inspectionPresentation(state: 'blocked' | 'idle' | 'loading' | 'ready' 
 	if (plan) return { label: deploymentCopy.checkingNetwork, tone: 'muted' as const }
 	return { label: appCopy.completeDeploymentSettings, tone: 'muted' as const }
 }
+
+// A deployment still pending after the setup route was left keeps the deploy action locked when the route returns.
+const tradingDeploymentScope = createTransactionScope('trading-deployment', 'factory')
 
 function deploymentActionLabel(busy: boolean, nextStep: ReturnType<typeof nextTradingDeploymentStep>, plan: TradingDeploymentPlan | undefined, status: DeploymentStatus | undefined) {
 	if (busy) return coreAppCopy.formatDeployingContract(nextStep?.label ?? deploymentCopy.contractFallbackLabel)
@@ -466,8 +472,11 @@ export function TradingDeploymentSetup({
 			const deployStep = services.deployStep ?? defaultServices.deployStep
 			if (deployStep === undefined) throw new Error(deploymentCopy.deploymentServiceUnavailable)
 			await deployStep(publicClient, plan, nextStep, hash => {
+				// A replacement broadcast takes over the row of the transaction it replaced.
+				recordTransactionSubmitted({ hash, previousHash: broadcastHash, scope: tradingDeploymentScope, title: coreAppCopy.formatDeployContract(nextStep.label) })
 				broadcastHash = hash
 			})
+			if (broadcastHash !== undefined) recordTransactionSettled(broadcastHash, { status: 'confirmed' })
 			const status = await loadTradingDeploymentStatus(publicClient, plan)
 			setDeploymentStatus(status)
 			if (isTradingDeploymentComplete(plan, status)) {
@@ -478,6 +487,12 @@ export function TradingDeploymentSetup({
 			}
 			setActionMessage(deploymentCopy.contractDeployedContinue(nextStep.label, nextTradingDeploymentStep(plan, status)?.label ?? deploymentCopy.nextContractFallbackLabel))
 		} catch (error) {
+			if (broadcastHash !== undefined) {
+				// A reverted receipt settles the entry; any other failure leaves the activity list watching the broadcast.
+				const failureKind = getTransactionFailureKind(error)
+				if (failureKind === 'reverted' || failureKind === 'replaced') recordTransactionSettled(broadcastHash, { status: 'failed', failureKind })
+				else releaseTransactionActivityWatch(broadcastHash)
+			}
 			setActionError(true)
 			let detail = publicErrorMessage(error, deploymentCopy.deployFailed(nextStep.label))
 			try {
@@ -539,6 +554,7 @@ export function TradingDeploymentSetup({
 				<div className='actions'>
 					{deploymentComplete ? null : (
 						<TransactionActionButton
+							scope={tradingDeploymentScope}
 							availability={deployAvailability}
 							disabledReasonElementId={externalReasonId}
 							idleLabel={deploymentActionLabel(false, nextStep, plan, deploymentStatus)}

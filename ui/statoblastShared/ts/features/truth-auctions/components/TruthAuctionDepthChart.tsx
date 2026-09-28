@@ -140,8 +140,8 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 					<svg aria-hidden='true' viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} preserveAspectRatio='none'>
 						<defs>
 							<linearGradient id={gradientId} x1='0%' x2='100%' y1='0%' y2='0%'>
-								<stop offset='0%' stop-color='#e8a644' stop-opacity='0.28' />
-								<stop offset='100%' stop-color='#3e9f78' stop-opacity='0.28' />
+								<stop offset='0%' style={{ stopColor: 'var(--truth-auction-eth)' }} stop-opacity='0.28' />
+								<stop offset='100%' style={{ stopColor: 'var(--truth-auction-rep)' }} stop-opacity='0.28' />
 							</linearGradient>
 						</defs>
 						<rect className='truth-auction-depth-base' height={CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom} rx='14' ry='14' width={plotWidth} x={CHART_PADDING.left} y={CHART_PADDING.top} />

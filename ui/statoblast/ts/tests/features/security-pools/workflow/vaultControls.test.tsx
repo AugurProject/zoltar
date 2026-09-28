@@ -109,10 +109,10 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositQueries = within(depositDialog)
 		const depositAmountInput = depositQueries.getByText('REP backing').parentElement?.querySelector('input')
-		const approvalAmountInput = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('input')
+		const approvalAmountInput = depositQueries.getByText('REP approval amount').parentElement?.querySelector('input')
 		expect(depositAmountInput?.disabled).toBe(true)
 		expect(approvalAmountInput?.disabled).toBe(true)
-		expect(depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('button')).toBeNull()
+		expect(depositQueries.getByText('REP approval amount').parentElement?.querySelector('button')).toBeNull()
 		expectTransactionButtonDisabled(depositDialog, 'Approve 1 REP')
 
 		await act(() => {
@@ -123,7 +123,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		})
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		expect(within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')?.disabled).toBe(false)
+		expect(within(withdrawDialog).getByText('REP withdraw amount').parentElement?.querySelector('input')?.disabled).toBe(false)
 	})
 
 	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
@@ -393,7 +393,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(modalQueries.queryByText('Approve REP inside this modal before depositing.')).toBeNull()
 		expect(modalQueries.getByText('Wallet REP')).not.toBeNull()
 		expect(modalQueries.getByText('Required REP')).not.toBeNull()
-		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
+		expect(modalQueries.getByText('REP approval amount')).not.toBeNull()
 	})
 
 	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {

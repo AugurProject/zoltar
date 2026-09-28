@@ -1,6 +1,7 @@
 import type { ComponentType } from 'preact'
 import type { RequestPriceModalProps } from './security-pools/components/SecurityPoolOracleSections.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type {
@@ -143,16 +144,15 @@ type SecurityPoolsOverviewRouteContentProps = {
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
 	environmentRefreshKey: number
-	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
 	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
+	/** Re-reads the visible page in place on each new block. */
+	onRefreshSecurityPoolPage?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	repPerEthPrice: bigint | undefined
-	uiPriceOracle: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle
 	securityPoolOverviewError: string | undefined
-	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
+	securityPoolPageFreshness?: DataFreshness | undefined
 	securityPools: ListedSecurityPool[]
 }
 
@@ -173,6 +173,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void
 	onRefreshSelectedPoolData: (securityPoolAddress?: string) => void
+	securityPoolsFreshness?: DataFreshness | undefined
 	onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) => void | Promise<void>
 	onSelectedPoolViewChange: (view: string | undefined) => void
 	onViewPendingReport: (reportId: bigint) => void
@@ -205,6 +206,8 @@ export type SecurityPoolsSectionProps = {
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined
+	/** The one REP price behind the selected pool's vault health, withdrawable REP, and liquidation figures. */
+	selectedPoolRepPrice?: import('./security-pools/lib/uiPriceOracle.js').ResolvedRepPrice | undefined
 	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps
 	zoltarUniverse: ZoltarUniverseSummary | undefined
@@ -214,7 +217,6 @@ type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onCertifyVaultCoverage?: (() => void) | undefined
 	onSetVaultUnderwritingLimit: (factor: string) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
@@ -280,7 +282,6 @@ type TradingRouteContentProps = {
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	oraclePriceUsable: boolean | undefined
-	calculationPriceConfigured?: boolean
 	embedInCard?: boolean
 	poolState?: SecurityPoolStateModel | undefined
 	showSecurityPoolAddressInput?: boolean

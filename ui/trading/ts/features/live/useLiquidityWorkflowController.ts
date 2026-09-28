@@ -1,3 +1,4 @@
+import * as workflowCopy from '../../copy/workflows.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { useState } from 'preact/hooks'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
@@ -68,6 +69,7 @@ export function useLiquidityWorkflowController({
 	const transaction = useQuotedTransaction<LiquidityQuote>({
 		operation: 'liquidity',
 		label: liquidityCopy.liquidityTransaction,
+		activityTitle: workflowCopy.formatLiquidityActivity(market.title),
 		account,
 		chainId: configuration.chainId,
 		market: market.pool,

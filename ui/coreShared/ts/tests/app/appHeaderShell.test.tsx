@@ -96,7 +96,7 @@ describe('AppHeaderShell', () => {
 			{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
 			{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
 		]
-		const secondaryNavigation = { ariaLabel: 'Zoltar views', onChange: () => undefined, options: [{ href: '#/zoltar?zoltarView=questions', label: 'Browse Questions', value: 'questions' }], value: 'questions' }
+		const secondaryNavigation = { ariaLabel: 'Zoltar views', onChange: () => undefined, options: [{ href: '#/zoltar?zoltarView=questions', label: 'Browse questions', value: 'questions' }], value: 'questions' }
 		for (const [route, expectSecondary] of [
 			['zoltar', true],
 			['deploy', true],
@@ -119,8 +119,8 @@ describe('AppHeaderShell', () => {
 			ariaLabel: 'Zoltar views',
 			onChange: () => undefined,
 			options: [
-				{ href: '#/zoltar?zoltarView=questions', label: 'Browse Questions', value: 'questions' },
-				{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
+				{ href: '#/zoltar?zoltarView=questions', label: 'Browse questions', value: 'questions' },
+				{ href: '#/zoltar?zoltarView=create', label: 'Create question', value: 'create' },
 			],
 			value: 'questions',
 		}
@@ -136,7 +136,7 @@ describe('AppHeaderShell', () => {
 		try {
 			const navigation = within(singleTab.container).getByRole('navigation', { name: 'Zoltar views' })
 			expect(navigation.closest('.header-toolbar-navigation')).not.toBeNull()
-			expect(within(navigation).getByRole('link', { name: 'Browse Questions' }).getAttribute('aria-current')).toBe('page')
+			expect(within(navigation).getByRole('link', { name: 'Browse questions' }).getAttribute('aria-current')).toBe('page')
 			expect(singleTab.container.querySelector('.route-subnav-region')).toBeNull()
 			expect(within(singleTab.container).queryByRole('navigation', { name: 'Application sections' })).toBeNull()
 		} finally {
@@ -148,7 +148,7 @@ describe('AppHeaderShell', () => {
 	test('keeps primary sections in the top bar, section views in one segmented row, and the guide in settings', async () => {
 		installTestRouting()
 		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools')
-		const secondaryNavigation = { ariaLabel: 'Security Pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse Pools', value: 'browse' }], value: 'browse' }
+		const secondaryNavigation = { ariaLabel: 'Security pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse pools', value: 'browse' }], value: 'browse' }
 		const withGuide = await renderIntoDocument(
 			<AppHeaderShell
 				overview={<div>Overview</div>}
@@ -158,7 +158,7 @@ describe('AppHeaderShell', () => {
 					onRouteChange: () => undefined,
 					route: 'security-pools',
 					tabs: [
-						{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+						{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
 						{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
 					],
 				}}
@@ -168,14 +168,14 @@ describe('AppHeaderShell', () => {
 		try {
 			const queries = within(withGuide.container)
 			expect(queries.getByRole('navigation', { name: 'Application sections' }).closest('.header-toolbar-navigation')).not.toBeNull()
-			const views = queries.getByRole('navigation', { name: 'Security Pools views' })
+			const views = queries.getByRole('navigation', { name: 'Security pools views' })
 			expect(views.closest('.app-chrome')).toBeNull()
 			expect(views.querySelector('.view-tabs.segmented')).not.toBeNull()
-			expect(queries.queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
+			expect(queries.queryByRole('link', { name: 'Protocol guide' })).toBeNull()
 			fireEvent.click(queries.getByRole('button', { name: 'Settings' }))
 			expect(
 				within(queries.getByRole('dialog', { name: 'Application settings' }))
-					.getByRole('link', { name: 'Protocol Guide' })
+					.getByRole('link', { name: 'Protocol guide' })
 					.getAttribute('href'),
 			).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
 		} finally {

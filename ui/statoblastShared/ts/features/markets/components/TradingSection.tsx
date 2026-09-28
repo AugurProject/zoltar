@@ -25,7 +25,6 @@ import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
-	calculateMintingCapacityAttoEth,
 	estimateMintCheckpoint,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
@@ -45,6 +44,7 @@ import {
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
+	getPoolMintingCapacityAttoEth,
 } from '../lib/trading.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { ReadinessAction } from '../../types.js'
@@ -52,7 +52,6 @@ import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
 export function TradingSection({
 	accountState,
-	calculationPriceConfigured = false,
 	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
@@ -62,7 +61,6 @@ export function TradingSection({
 	onRedeemShares,
 	onTradingFormChange,
 	poolState,
-	repPerEthPrice,
 	tradingDetails,
 	selectedPool,
 	oraclePriceUsable,
@@ -99,16 +97,16 @@ export function TradingSection({
 	const maxRedeemableCompleteSetsAttoShares = tradingDetails?.maxRedeemableCompleteSetsAttoShares
 	const displayMaxRedeemableCompleteSets = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const displayShareBalances = getShareSettlementBalances(shareBalances, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
+	const outcomeBacking = (outcome: 'yes' | 'no' | 'invalid') => {
+		if (displayShareBalances === undefined) return undefined
+		return selectedPool?.questionOutcome === 'none' || selectedPool?.questionOutcome === outcome ? displayShareBalances[outcome] : 0n
+	}
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
-	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
+	const totalShareCount = shareBalances === undefined ? undefined : shareBalances.invalidAttoShares + shareBalances.noAttoShares + shareBalances.yesAttoShares
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const calculationRepPerEthPrice = calculationPriceConfigured ? repPerEthPrice : (repPerEthPrice ?? selectedPool?.lastOraclePrice)
-	const mintingCapacityAttoEth =
-		selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame
-			? calculateMintingCapacityAttoEth(selectedPool.totalUnderwritingLimitAttoEth, calculationRepPerEthPrice, selectedPool.statoblastSecurityMultiplierBps)
-			: 0n
+	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
@@ -140,7 +138,6 @@ export function TradingSection({
 			mintingCapacityAttoEth,
 			hasSelectedPool,
 			isOnActiveAppChain,
-			isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
 			mintAmountInput: tradingForm.completeSetAmount,
 			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
@@ -175,24 +172,16 @@ export function TradingSection({
 	const mintLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetMintPoolRequiredReason
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
-
-		return (() => {
-			if (!isOnActiveAppChain) return getWrongNetworkReason()
-			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
-			if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
-			if (remainingMintCapacity === undefined) return calculationRepPerEthPrice === undefined || calculationRepPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
-			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
-
-			return (() => {
-				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleUnderwritingLimitAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
-
-					return tradingCopy.mintCapacityEmpty
-				}
-
-				return undefined
-			})()
-		})()
+		if (!isOnActiveAppChain) return getWrongNetworkReason()
+		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
+		if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
+		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
+		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
+		if (remainingMintCapacity === 0n) {
+			if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleUnderwritingLimitAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
+			return tradingCopy.mintCapacityEmpty
+		}
+		return undefined
 	})()
 	const redeemCompleteSetsLauncherBlocker = (() => {
 		if (!hasSelectedPool) return tradingCopy.completeSetBurnPoolRequiredReason
@@ -284,7 +273,17 @@ export function TradingSection({
 			targetOutcomeIndexes: [...selectedTargetOutcomeIndexes, outcomeIndex].map(index => index.toString()).join(', '),
 		})
 	}
-	const renderShareMetricValue = (value: bigint | undefined) => <CurrencyValue loading={loadingTradingDetails} value={value} />
+	const renderShareMetricValue = (value: bigint | undefined, backing?: bigint) => (
+		<>
+			<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={value} />
+			{backing === undefined ? undefined : (
+				<>
+					{' '}
+					(<CurrencyValue exactWhenRoundedToZero decimals={4} value={backing} suffix={commonCopy.eth} />)
+				</>
+			)}
+		</>
+	)
 	const tradingLaunchers: ReadinessAction[] = [
 		{
 			actionLabel: tradingCopy.mintCompleteSetsActionLabel,
@@ -339,7 +338,7 @@ export function TradingSection({
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
 							<span>{tradingCopy.redeemableCompleteSets}</span>
-							<strong>{renderShareMetricValue(displayMaxRedeemableCompleteSets)}</strong>
+							<strong>{renderShareMetricValue(maxRedeemableCompleteSetsAttoShares, displayMaxRedeemableCompleteSets)}</strong>
 							<p className='detail'>{tradingCopy.completeSetBalanceLimitDetail}</p>
 						</div>
 						<div className='trading-holdings-layout'>
@@ -350,23 +349,24 @@ export function TradingSection({
 									{
 										key: 'yes',
 										label: commonCopy.yes,
-										valueText: renderShareMetricValue(displayShareBalances?.yes),
-										...(displayShareBalances?.yes === undefined ? {} : { value: displayShareBalances.yes }),
+										valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
+										...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
 									},
 									{
 										key: 'no',
 										label: commonCopy.no,
-										valueText: renderShareMetricValue(displayShareBalances?.no),
-										...(displayShareBalances?.no === undefined ? {} : { value: displayShareBalances.no }),
+										valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
+										...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
 									},
 									{
 										key: 'invalid',
 										label: commonCopy.invalid,
-										valueText: renderShareMetricValue(displayShareBalances?.invalid),
-										...(displayShareBalances?.invalid === undefined ? {} : { value: displayShareBalances.invalid }),
+										valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
+										...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
 									},
 								]}
 							/>
+							<p className='detail'>{tradingCopy.shareBackingDetail}</p>
 							<div className='trading-share-callouts'>
 								<div className='trading-share-callouts-total'>
 									<span>{tradingCopy.totalAcrossOutcomes}</span>
@@ -381,7 +381,7 @@ export function TradingSection({
 			<SectionBlock title={tradingCopy.shares} variant='embedded'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
-						<ActionLauncherCard key={action.key} action={action} />
+						<ActionLauncherCard key={action.key} action={action} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
 					))}
 				</div>
 			</SectionBlock>
@@ -427,21 +427,18 @@ export function TradingSection({
 								mintedAmountAttoShares === undefined ? (
 									transactionReviewCopy.amountUnavailable
 								) : (
-									<span className='trading-minted-outcomes'>
-										<span className='trading-minted-outcome'>
-											{commonCopy.yes}
-											{' + '}
-											<CurrencyValue value={mintedAmountAttoShares} />
+									<span className='trading-minted-outcomes' role='list' aria-label={tradingCopy.estimatedSharesReceived}>
+										<span className='trading-minted-outcome' role='listitem'>
+											<span>{commonCopy.yes}</span>
+											<CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />
 										</span>
-										<span className='trading-minted-outcome'>
-											{commonCopy.no}
-											{' + '}
-											<CurrencyValue value={mintedAmountAttoShares} />
+										<span className='trading-minted-outcome' role='listitem'>
+											<span>{commonCopy.no}</span>
+											<CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />
 										</span>
-										<span className='trading-minted-outcome'>
-											{commonCopy.invalid}
-											{' + '}
-											<CurrencyValue value={mintedAmountAttoShares} />
+										<span className='trading-minted-outcome' role='listitem'>
+											<span>{commonCopy.invalid}</span>
+											<CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />
 										</span>
 									</span>
 								),
@@ -492,7 +489,7 @@ export function TradingSection({
 									transactionReviewCopy.amountUnavailable
 								) : (
 									<span>
-										{tradingCopy.matchingOutcomeShares}: <CurrencyValue value={redeemAmountAttoShares} />
+										{tradingCopy.matchingOutcomeShares}: <CurrencyValue exactWhenRoundedToZero value={redeemAmountAttoShares} />
 									</span>
 								),
 						},

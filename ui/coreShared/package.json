@@ -83,6 +83,10 @@
 			"bun": "./ts/app/components/ApplicationErrorNotice.tsx",
 			"default": "./js/app/components/ApplicationErrorNotice.js"
 		},
+		"./app/components/ThemeSetting.js": {
+			"bun": "./ts/app/components/ThemeSetting.tsx",
+			"default": "./js/app/components/ThemeSetting.js"
+		},
 		"./components/ApprovedAmountValue.js": {
 			"bun": "./ts/components/ApprovedAmountValue.tsx",
 			"default": "./js/components/ApprovedAmountValue.js"
@@ -107,6 +111,10 @@
 			"bun": "./ts/components/SimulationBanner.tsx",
 			"default": "./js/components/SimulationBanner.js"
 		},
+		"./components/Skeleton.js": {
+			"bun": "./ts/components/Skeleton.tsx",
+			"default": "./js/components/Skeleton.js"
+		},
 		"./components/TabNavigation.js": {
 			"bun": "./ts/components/TabNavigation.tsx",
 			"default": "./js/components/TabNavigation.js"
@@ -114,6 +122,10 @@
 		"./components/TransactionPresentationNotice.js": {
 			"bun": "./ts/components/TransactionPresentationNotice.tsx",
 			"default": "./js/components/TransactionPresentationNotice.js"
+		},
+		"./components/UpdatedAgo.js": {
+			"bun": "./ts/components/UpdatedAgo.tsx",
+			"default": "./js/components/UpdatedAgo.js"
 		},
 		"./tests/actionLauncherButton.test.js": {
 			"bun": "./ts/tests/actionLauncherButton.test.tsx",
@@ -131,6 +143,10 @@
 			"bun": "./ts/tests/app/appHeaderShell.test.tsx",
 			"default": "./js/tests/app/appHeaderShell.test.js"
 		},
+		"./tests/app/transactionActivityMenu.test.js": {
+			"bun": "./ts/tests/app/transactionActivityMenu.test.tsx",
+			"default": "./js/tests/app/transactionActivityMenu.test.js"
+		},
 		"./tests/app/mainnetDisabledNotice.test.js": {
 			"bun": "./ts/tests/app/mainnetDisabledNotice.test.tsx",
 			"default": "./js/tests/app/mainnetDisabledNotice.test.js"
@@ -142,6 +158,10 @@
 		"./tests/app/notFoundSection.test.js": {
 			"bun": "./ts/tests/app/notFoundSection.test.tsx",
 			"default": "./js/tests/app/notFoundSection.test.js"
+		},
+		"./tests/app/themeSetting.test.js": {
+			"bun": "./ts/tests/app/themeSetting.test.tsx",
+			"default": "./js/tests/app/themeSetting.test.js"
 		},
 		"./tests/app/routeSubNavigation.test.js": {
 			"bun": "./ts/tests/app/routeSubNavigation.test.tsx",
@@ -182,6 +202,10 @@
 		"./tests/errorNotice.test.js": {
 			"bun": "./ts/tests/errorNotice.test.tsx",
 			"default": "./js/tests/errorNotice.test.js"
+		},
+		"./tests/freshness.test.js": {
+			"bun": "./ts/tests/freshness.test.tsx",
+			"default": "./js/tests/freshness.test.js"
 		},
 		"./tests/headerToolbar.test.js": {
 			"bun": "./ts/tests/headerToolbar.test.tsx",
@@ -243,6 +267,10 @@
 			"bun": "./ts/tests/transactionActionButton.test.tsx",
 			"default": "./js/tests/transactionActionButton.test.js"
 		},
+		"./tests/walletActionFix.test.js": {
+			"bun": "./ts/tests/walletActionFix.test.tsx",
+			"default": "./js/tests/walletActionFix.test.js"
+		},
 		"./tests/transactionHashLink.test.js": {
 			"bun": "./ts/tests/transactionHashLink.test.tsx",
 			"default": "./js/tests/transactionHashLink.test.js"
@@ -294,6 +322,10 @@
 		"./app/components/AppHeaderShell.js": {
 			"bun": "./ts/app/components/AppHeaderShell.tsx",
 			"default": "./js/app/components/AppHeaderShell.js"
+		},
+		"./app/components/TransactionActivityMenu.js": {
+			"bun": "./ts/app/components/TransactionActivityMenu.tsx",
+			"default": "./js/app/components/TransactionActivityMenu.js"
 		},
 		"./app/components/MainnetDisabledNotice.js": {
 			"bun": "./ts/app/components/MainnetDisabledNotice.tsx",
@@ -483,6 +515,14 @@
 			"bun": "./ts/components/ReadOnlyDetailAccordion.tsx",
 			"default": "./js/components/ReadOnlyDetailAccordion.js"
 		},
+		"./components/FavoriteToggle.js": {
+			"bun": "./ts/components/FavoriteToggle.tsx",
+			"default": "./js/components/FavoriteToggle.js"
+		},
+		"./components/LocalBrowseControls.js": {
+			"bun": "./ts/components/LocalBrowseControls.tsx",
+			"default": "./js/components/LocalBrowseControls.js"
+		},
 		"./components/RouteHeader.js": {
 			"bun": "./ts/components/RouteHeader.tsx",
 			"default": "./js/components/RouteHeader.js"
@@ -522,6 +562,10 @@
 		"./components/TransactionActionButton.js": {
 			"bun": "./ts/components/TransactionActionButton.tsx",
 			"default": "./js/components/TransactionActionButton.js"
+		},
+		"./components/WalletActionFix.js": {
+			"bun": "./ts/components/WalletActionFix.tsx",
+			"default": "./js/components/WalletActionFix.js"
 		},
 		"./components/TransactionHashLink.js": {
 			"bun": "./ts/components/TransactionHashLink.tsx",
@@ -862,6 +906,14 @@
 		"./tests/emptyState.test.js": {
 			"bun": "./ts/tests/emptyState.test.tsx",
 			"default": "./js/tests/emptyState.test.js"
+		},
+		"./tests/favoriteToggle.test.js": {
+			"bun": "./ts/tests/favoriteToggle.test.tsx",
+			"default": "./js/tests/favoriteToggle.test.js"
+		},
+		"./tests/useRememberOpenedEntity.test.js": {
+			"bun": "./ts/tests/useRememberOpenedEntity.test.tsx",
+			"default": "./js/tests/useRememberOpenedEntity.test.js"
 		},
 		"./components/SimulationWalletControls.js": {
 			"bun": "./ts/components/SimulationWalletControls.tsx",

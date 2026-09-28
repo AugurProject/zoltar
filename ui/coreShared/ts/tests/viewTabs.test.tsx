@@ -300,8 +300,8 @@ describe('ViewTabs', () => {
 					onChange={() => undefined}
 					options={[
 						{ label: 'Questions', value: 'questions' },
-						{ label: 'Create Question', value: 'create' },
-						{ label: 'Fork Universe', value: 'fork' },
+						{ label: 'Create question', value: 'create' },
+						{ label: 'Fork universe', value: 'fork' },
 						{ label: 'Migrate REP', value: 'migration' },
 					]}
 				/>,

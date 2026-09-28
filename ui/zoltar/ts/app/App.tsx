@@ -115,6 +115,7 @@ export function App() {
 	return (
 		<UniverseNamesProvider universe={zoltarUniverse}>
 			<ProtocolAppFrame
+				accountAddress={accountState.address}
 				currentBlockNumber={currentBlockNumber}
 				currentTimestamp={currentTimestamp}
 				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
@@ -159,6 +160,7 @@ export function App() {
 				routeContentDisabled={routeContentBlocked}
 				transactionRouteKey={transactionRouteKey}
 				transactionState={transactionState.value}
+				walletActions={overviewWalletProps}
 			>
 				<ZoltarWorkspaceProvider workspace={zoltarWorkspace}>
 					<AppRouteContent deploy={deployRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} zoltarView={activeZoltarView} />

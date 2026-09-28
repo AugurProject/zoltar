@@ -22,6 +22,7 @@ import { isTradingDeploymentMissingError, resolveInstalledTradingDeployment, tra
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import * as appCopy from '../copy/app.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -136,16 +137,11 @@ export function App({
 	const environment = useEnvironmentRevision()
 	const activeEnvironmentNonce = environment.revision.value
 	const activeEnvironmentLocationRef = useRef(getTradingEnvironmentLocationKey())
-	const workflowLockedRef = useRef(workflowLocked)
+	// Navigation never waits for a transaction: a pending one stays in the activity list and keeps its market's ticket locked.
 	const route = useRouteSignal(currentRoute, (next, previous) => {
-		if (workflowLockedRef.current) {
-			window.history.replaceState(undefined, '', getTradingRouteHref(`#/${previous}`))
-			return false
-		}
 		setLiveWalletSummary(current => walletSummaryAfterRouteChange(current, previous, next, selectedUniverseId))
 		return true
 	}).value
-	workflowLockedRef.current = workflowLocked
 	const addressedPool = securityPoolAddressFromRoute(route)
 	const universeSelection = resolveUniverseSelection({ ...urlState, addressedPool: addressedPool?.toLowerCase() }, liveUniverses)
 	const selectedUniverseId = universeSelection.requestedUniverseId
@@ -155,7 +151,6 @@ export function App({
 		if (universeSelection.replaceUrlUniverseId !== undefined) applyUrlStateUpdate(writeUniverseQueryParam(getOwnedSearch(), universeSelection.replaceUrlUniverseId), 'replace')
 	}, [applyUrlStateUpdate, getOwnedSearch, universeSelection.replaceUrlUniverseId])
 	const updateWorkflowLock = useCallback((locked: boolean) => {
-		workflowLockedRef.current = locked
 		setWorkflowLocked(locked)
 	}, [])
 	const updateLiveUniverses = useCallback((universeIds: readonly bigint[], authoritativeSelection: bigint | undefined, scope: UniverseDiscoveryScope) => setLiveUniverses({ ids: universeIds, selected: authoritativeSelection, forRequest: scope.requestedUniverseId, forPool: scope.addressedPool }), [])
@@ -284,6 +279,7 @@ export function App({
 	const showWalletControls = hasTradingWalletControls(walletSlot)
 	return (
 		<ProtocolAppFrame
+			accountAddress={walletSummary.account}
 			actionsLocked={workflowLocked}
 			currentBlockNumber={undefined}
 			currentTimestamp={undefined}
@@ -293,14 +289,13 @@ export function App({
 				<AppHeaderShell
 					simulationController={simulationController}
 					onEnvironmentChanged={refreshActiveEnvironment}
-					onRefresh={async () => window.location.reload()}
+					onRefresh={async () => invalidateAppData()}
 					settingsContent={<TradeSettingsPanel settings={tradeSettings} onChange={updateTradeSettings} />}
 					tabNavigation={{
 						route: displayedRoute,
 						showProtocolGuide: false,
-						...tradingNavigationTabs({ addressedPool, displayedRoute, liveDeploymentStatus, workflowLocked }),
+						...tradingNavigationTabs({ addressedPool, displayedRoute, liveDeploymentStatus }),
 						onRouteChange: nextRoute => {
-							if (workflowLocked) return
 							const hash = (nextRoute === 'liquidity' || nextRoute === 'market') && addressedPool !== undefined ? `#/${nextRoute}/${addressedPool}` : `#/${nextRoute}`
 							window.location.hash = getTradingRouteHref(hash)
 						},

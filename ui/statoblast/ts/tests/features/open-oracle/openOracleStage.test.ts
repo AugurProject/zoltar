@@ -9,7 +9,7 @@ describe('open oracle stage presentation', () => {
 			availableActions: [],
 			blockedActions: [],
 			key: 'dispute-window',
-			label: 'Dispute Window Open',
+			label: 'Dispute window open',
 			tone: 'default',
 		})
 
@@ -17,7 +17,7 @@ describe('open oracle stage presentation', () => {
 			availableActions: [],
 			blockedActions: [],
 			key: 'ready-to-settle',
-			label: 'Ready To Settle',
+			label: 'Ready to settle',
 			tone: 'success',
 		})
 
@@ -44,7 +44,7 @@ describe('open oracle stage presentation', () => {
 			blockedActions: [],
 			detail: 'Disputes open in less than a minute.',
 			key: 'dispute-pending',
-			label: 'Waiting For Dispute Window',
+			label: 'Waiting for dispute window',
 			tone: 'warning',
 		})
 	})
@@ -62,14 +62,14 @@ describe('open oracle stage presentation', () => {
 			blockedActions: [],
 			detail: 'Disputes open in 1 block.',
 			key: 'dispute-pending',
-			label: 'Waiting For Dispute Window',
+			label: 'Waiting for dispute window',
 			tone: 'warning',
 		})
 		expect(getOpenOracleStagePresentation('dispute', { ...blockClockReport, currentBlockNumber: 13n })).toEqual({
 			availableActions: [],
 			blockedActions: [],
 			key: 'dispute-window',
-			label: 'Dispute Window Open',
+			label: 'Dispute window open',
 			tone: 'default',
 		})
 	})

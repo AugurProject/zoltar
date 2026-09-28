@@ -12,7 +12,7 @@ import { installTestRouting } from './testUtils/testRouting.js'
 const DEFAULT_TABS: readonly RouteTabDefinition[] = [
 	{ hash: '#/deploy', label: 'Deploy', route: 'deploy' },
 	{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' },
-	{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
 	{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
 ]
 
@@ -50,10 +50,10 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('aria-current')).toBe('page')
-		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
-		expect(documentQueries.queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
+		expect(documentQueries.queryByRole('link', { name: 'Protocol guide' })).toBeNull()
 	})
 
 	test('omits an empty navigation landmark when only one application section is available', async () => {
@@ -155,7 +155,7 @@ describe('TabNavigation', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Zoltar' }).getAttribute('href')).toBe('#/zoltar?universe=7&simulate=1')
-		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
+		expect(documentQueries.getByRole('link', { name: 'Security pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 	})
 
@@ -173,7 +173,7 @@ describe('TabNavigation', () => {
 		)
 		cleanupRenderedComponent = rendered.cleanup
 
-		const securityPoolsLink = within(document.body).getByRole('link', { name: 'Security Pools' })
+		const securityPoolsLink = within(document.body).getByRole('link', { name: 'Security pools' })
 		const locationBeforeClicks = window.location.href
 		const preventNativeNavigation = (event: Event) => event.preventDefault()
 		document.body.addEventListener('click', preventNativeNavigation)

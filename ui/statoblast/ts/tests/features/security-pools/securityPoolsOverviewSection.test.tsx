@@ -5,11 +5,15 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
@@ -30,6 +34,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const securityPool: ListedSecurityPool = {
+		mintingCapacityAttoEth: 5n * 10n ** 18n,
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
 		feeEligibleUnderwritingLimitAttoEth: 5n * 10n ** 18n,
@@ -76,6 +81,18 @@ function getSecurityPoolPageRequestKey(page: SecurityPoolPage | SecurityPoolBrow
 	return 'requestKey' in page ? page.requestKey : undefined
 }
 
+/** Browsing reads the local cache, so a rendered pool list starts from pools already downloaded and (by default) favorited. */
+function seedDownloadedPools(pools: readonly ListedSecurityPool[], { favorite = true }: { favorite?: boolean } = {}) {
+	if (pools.length === 0) return
+	const scope = getLocalEntityScope('statoblast', 'pool')
+	securityPoolDownloadStore.record(
+		scope,
+		pools.map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress })),
+	)
+	if (!favorite) return
+	for (const pool of [...pools].reverse()) setEntityFavorite(scope, pool.securityPoolAddress, true)
+}
+
 function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}): SecurityPoolsOverviewSectionProps {
 	const accountState = overrides.accountState ?? createAccountState()
 	const defaultPools = [createSecurityPool()]
@@ -99,18 +116,16 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 					...overrideSecurityPoolPage,
 					requestKey: getSecurityPoolPageRequestKey(overrideSecurityPoolPage) ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
 				}
+	seedDownloadedPools(securityPools)
 	return {
 		accountState,
 		activeUniverseId: 1n,
-		hasLoadedSecurityPoolPage: true,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
 		onSelectSecurityPool: () => undefined,
-		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
-		securityPoolBrowseCount: securityPoolPage?.poolCount,
 		securityPoolPage,
 		securityPools,
 	}
@@ -124,6 +139,10 @@ describe('SecurityPoolsOverviewSection', () => {
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
+			resetLocalEntityStoreForTesting()
+		},
+		beforeTest: () => {
+			resetLocalEntityStoreForTesting()
 		},
 	})
 
@@ -139,7 +158,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			if (!(row instanceof HTMLElement)) throw new Error('Expected pool row')
 			expect(within(row).getByRole('button', { name: 'Copy address ' + pool.securityPoolAddress })).not.toBeNull()
 			expect(row.textContent).toContain(index === 0 ? '2×' : '3×')
-			expect(row.querySelector('details')?.textContent).toContain('Initial Report Priority Fee')
+			expect(row.querySelector('details')?.textContent).toContain('Initial report priority fee')
 			const link = within(row).getByRole('link', { name: new RegExp(pool.securityPoolAddress) })
 			expect(link.getAttribute('href')).toContain(pool.securityPoolAddress)
 			fireEvent.click(link)
@@ -180,22 +199,6 @@ describe('SecurityPoolsOverviewSection', () => {
 				.getByRole('link', { name: /Open pool/ })
 				.getAttribute('href'),
 		).toContain(pool.securityPoolAddress)
-	})
-
-	test('shows only pools in the active universe without a universe selector', async () => {
-		const sameUniversePool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Same universe pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000001', universeId: 1n })
-		const otherPool = createSecurityPool({ marketDetails: createMarketDetails({ title: 'Other universe pool' }), securityPoolAddress: '0x0000000000000000000000000000000000000002', universeId: 11n })
-		const view = (activeUniverseId: bigint) => <SecurityPoolsOverviewSection {...createProps({ activeUniverseId, securityPools: [sameUniversePool, otherPool] })} />
-		const renderedComponent = await renderIntoDocument(view(1n))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(within(document.body).queryByRole('combobox', { name: 'Universe' })).toBeNull()
-		expect(within(document.body).queryByText('Other universe pool')).toBeNull()
-		expect(getSecurityPoolCard('Same universe pool')).toBeDefined()
-		await act(async () => {
-			render(view(11n), renderedComponent.container)
-		})
-		expect(within(document.body).queryByText('Same universe pool')).toBeNull()
-		expect(getSecurityPoolCard('Other universe pool')).toBeDefined()
 	})
 
 	test('labels the pool backing per ETH commitment with REP/ETH units', async () => {
@@ -262,7 +265,7 @@ describe('SecurityPoolsOverviewSection', () => {
 				},
 			],
 		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool] })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -302,206 +305,12 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
 	})
 
-	test('reloads the current browse page when the environment refresh key changes', async () => {
-		const onLoadSecurityPoolPage = mock(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					environmentRefreshKey: 0,
-					onLoadSecurityPoolPage,
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
-		})
-
-		await act(() => {
-			render(
-				<SecurityPoolsOverviewSection
-					{...createProps({
-						environmentRefreshKey: 1,
-						onLoadSecurityPoolPage,
-					})}
-				/>,
-				renderedComponent.container,
-			)
-		})
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
-			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, `1:0:6:${zeroAddress}`)
-		})
-	})
-
-	test('hides stale pool page data while an environment refresh reload is pending', async () => {
-		const deferredPageLoad = createDeferred<void>()
-		let pageLoadCount = 0
-		const onLoadSecurityPoolPage = mock(() => {
-			pageLoadCount += 1
-			return pageLoadCount === 2 ? deferredPageLoad.promise : undefined
-		})
-		const securityPoolPage: SecurityPoolPage = {
-			pageIndex: 0,
-			pageSize: 6,
-			poolCount: 12n,
-			pools: [
-				createSecurityPool({
-					marketDetails: createMarketDetails({ title: 'Previous environment pool' }),
-					securityPoolAddress: '0x0000000000000000000000000000000000000100',
-				}),
-			],
-		}
-		const initialProps = createProps({
-			environmentRefreshKey: 0,
-			onLoadSecurityPoolPage,
-			securityPoolPage,
-		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
-		})
-		expect(within(document.body).getByText('Previous environment pool')).not.toBeNull()
-		expect(within(document.body).getByText('Page 1 of 2')).not.toBeNull()
-
-		await act(() => {
-			render(<SecurityPoolsOverviewSection {...initialProps} environmentRefreshKey={1} />, renderedComponent.container)
-		})
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
-		})
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Previous environment pool')).toBeNull()
-		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
-		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
-
-		const staleResolvedPage: SecurityPoolBrowsePage = {
-			...securityPoolPage,
-			pools: [
-				createSecurityPool({
-					marketDetails: createMarketDetails({ title: 'Stale resolved environment pool' }),
-					securityPoolAddress: '0x0000000000000000000000000000000000000101',
-				}),
-			],
-			requestKey: `0:0:6:${zeroAddress}`,
-		}
-		await act(() => {
-			render(
-				<SecurityPoolsOverviewSection
-					{...createProps({
-						environmentRefreshKey: 1,
-						onLoadSecurityPoolPage,
-						securityPoolPage: staleResolvedPage,
-					})}
-				/>,
-				renderedComponent.container,
-			)
-		})
-
-		expect(documentQueries.queryByText('Stale resolved environment pool')).toBeNull()
-		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
-
-		deferredPageLoad.resolve()
-		await act(async () => {
-			await deferredPageLoad.promise
-		})
-	})
-
-	test('hides stale pool page data while an account-specific reload is pending', async () => {
-		const accountA = '0x00000000000000000000000000000000000000a1'
-		const accountB = '0x00000000000000000000000000000000000000b2'
-		const onLoadSecurityPoolPage = mock(() => undefined)
-		const securityPoolPage: SecurityPoolBrowsePage = {
-			pageIndex: 0,
-			pageSize: 6,
-			poolCount: 12n,
-			pools: [
-				createSecurityPool({
-					marketDetails: createMarketDetails({ title: 'Account A pool' }),
-					securityPoolAddress: '0x0000000000000000000000000000000000000102',
-				}),
-			],
-			requestKey: `0:0:6:${accountA}`,
-		}
-		const initialProps = createProps({
-			accountState: createAccountState({ address: accountA }),
-			onLoadSecurityPoolPage,
-			securityPoolPage,
-		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
-		})
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Account A pool')).not.toBeNull()
-		expect(documentQueries.getByText('Page 1 of 2')).not.toBeNull()
-
-		await act(() => {
-			render(<SecurityPoolsOverviewSection {...initialProps} accountState={createAccountState({ address: accountB })} />, renderedComponent.container)
-		})
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
-			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, `0:0:6:${accountB}`)
-		})
-		expect(documentQueries.queryByText('Account A pool')).toBeNull()
-		expect(documentQueries.queryByText('Page 1 of 2')).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true)
-	})
-
-	test('uses a non-wallet request key off-Sepolia and reloads with the wallet key after switching back', async () => {
-		const accountAddress = '0x00000000000000000000000000000000000000a1'
-		const onLoadSecurityPoolPage = mock(() => undefined)
-		const wrongNetworkProps = createProps({
-			accountState: createAccountState({
-				address: accountAddress,
-				chainId: '0x1',
-			}),
-			onLoadSecurityPoolPage,
-		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...wrongNetworkProps} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
-			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, '0:0:6:no-account')
-		})
-
-		await act(() => {
-			render(
-				<SecurityPoolsOverviewSection
-					{...wrongNetworkProps}
-					accountState={createAccountState({
-						address: accountAddress,
-						chainId: '0xaa36a7',
-					})}
-				/>,
-				renderedComponent.container,
-			)
-		})
-
-		await waitFor(() => {
-			expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(2)
-			expect(onLoadSecurityPoolPage).toHaveBeenLastCalledWith(0, 6, `0:0:6:${accountAddress}`)
-		})
-	})
-
 	test('keeps pool-list load errors inline instead of opening liquidation', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
 					securityPoolOverviewError: 'Failed to load security pools',
 					securityPoolPage: undefined,
-					hasLoadedSecurityPoolPage: false,
 				})}
 			/>,
 		)
@@ -513,7 +322,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			await new Promise(resolve => setTimeout(resolve, 0))
 		})
 		expect(document.body.textContent).not.toContain('Loading security pools')
-		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate Vault' })).toBeNull()
+		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
 	test('shows Finalized as Yes for resolved operational pools', async () => {
@@ -534,7 +343,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(badgeTexts).toContain('Finalized as Yes')
 	})
 
-	test('shows Fork Migration for parent pools with child pools even when the loaded parent outcome is resolved', async () => {
+	test('shows Fork migration for parent pools with child pools even when the loaded parent outcome is resolved', async () => {
 		const parentPoolTitle = 'Parent pool'
 		const parentPool = createSecurityPool({
 			hasForkActivity: false,
@@ -560,11 +369,11 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const parentCard = getSecurityPoolCard(parentPoolTitle)
 		const parentCardQueries = within(parentCard)
-		expect(parentCardQueries.getByText('Fork Migration')).not.toBeNull()
+		expect(parentCardQueries.getByText('Fork migration')).not.toBeNull()
 		expect(parentCardQueries.queryByText('Finalized as Yes')).toBeNull()
 	})
 
-	test('shows Fork Migration for pools already in fork migration flow', async () => {
+	test('shows Fork migration for pools already in fork migration flow', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
 				{...createProps({
@@ -581,10 +390,10 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
-		expect(badgeTexts).toContain('Fork Migration')
+		expect(badgeTexts).toContain('Fork migration')
 	})
 
-	test('describes Fork Finalized auction-state guidance without implying the truth auction is already complete', async () => {
+	test('describes Fork finalized auction-state guidance without implying the truth auction is already complete', async () => {
 		const auctionPoolTitle = 'Truth auction pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -611,12 +420,12 @@ describe('SecurityPoolsOverviewSection', () => {
 		const auctionPoolCardQueries = within(auctionPoolCard)
 		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where bidding and settlement determine the child-universe recovery path.')).toBeNull()
 		expect(auctionPoolCardQueries.queryByText('Migration has moved into the truth-auction phase, where the child universe is finalized.')).toBeNull()
-		const truthAuctionBadge = auctionPoolCardQueries.getByText('Truth Auction')
-		expect(truthAuctionBadge.getAttribute('aria-label')).toBe('Truth Auction')
+		const truthAuctionBadge = auctionPoolCardQueries.getByText('Truth auction')
+		expect(truthAuctionBadge.getAttribute('aria-label')).toBe('Truth auction')
 		expect(truthAuctionBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 	})
 
-	test('shows Fork Finalized for child pools with completed fork history', async () => {
+	test('shows Fork finalized for child pools with completed fork history', async () => {
 		const childPoolTitle = 'Finalized child pool'
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolsOverviewSection
@@ -640,16 +449,16 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const badgeTexts = Array.from(document.body.querySelectorAll('.pool-directory-row .badge')).map(element => element.textContent?.trim() ?? '')
-		expect(badgeTexts).toContain('Fork Finalized')
+		expect(badgeTexts).toContain('Fork finalized')
 		const childPoolCard = getSecurityPoolCard(childPoolTitle)
 		const childPoolCardQueries = within(childPoolCard)
-		const forkFinalizedBadge = childPoolCardQueries.getByText('Fork Finalized')
-		expect(forkFinalizedBadge.getAttribute('aria-label')).toBe('Fork Finalized')
+		const forkFinalizedBadge = childPoolCardQueries.getByText('Fork finalized')
+		expect(forkFinalizedBadge.getAttribute('aria-label')).toBe('Fork finalized')
 		expect(forkFinalizedBadge.parentElement?.getAttribute('aria-describedby')).toBeNull()
 		expect(childPoolCardQueries.queryByText('This parent pool has already gone through a fork lifecycle and now acts as a historical reference point.')).toBeNull()
 	})
 
-	test('shows Fork Migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
+	test('shows Fork migration instead of Operational for root-universe pools after Zoltar has forked', async () => {
 		const rootPoolTitle = 'Forked root-universe pool'
 
 		const renderedComponent = await renderIntoDocument(
@@ -671,166 +480,8 @@ describe('SecurityPoolsOverviewSection', () => {
 
 		const poolCard = getSecurityPoolCard(rootPoolTitle)
 		const poolCardQueries = within(poolCard)
-		expect(poolCardQueries.getByText('Fork Migration')).not.toBeNull()
+		expect(poolCardQueries.getByText('Fork migration')).not.toBeNull()
 		expect(poolCardQueries.queryByText('Operational')).toBeNull()
-	})
-
-	test('does not duplicate refresh guidance when the pool list is empty', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					securityPools: [],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('button', { name: 'Refresh pools' })).toBeNull()
-		expect(documentQueries.queryByText('Refresh pools to check again.')).toBeNull()
-	})
-
-	test('opens security pool creation from the empty pool-list state', async () => {
-		let createSecurityPoolClicks = 0
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					onCreateSecurityPool: () => {
-						createSecurityPoolClicks += 1
-					},
-					securityPools: [],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		await act(() => {
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Create security pool' }))
-		})
-
-		expect(createSecurityPoolClicks).toBe(1)
-	})
-
-	test('keeps the empty pool-list CTA visible during a background refresh', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					hasLoadedSecurityPoolPage: true,
-					loadingSecurityPoolPage: true,
-					onCreateSecurityPool: () => undefined,
-					securityPools: [],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('No security pools', { selector: '.empty-state-title' })).not.toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Create security pool' })).not.toBeNull()
-		expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
-	})
-
-	test('shows a loading browse state before the first pool page loads', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					hasLoadedSecurityPoolPage: false,
-					loadingSecurityPoolPage: false,
-					securityPoolPage: undefined,
-					securityPools: [],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
-		expect(documentQueries.queryByText('None yet')).toBeNull()
-	})
-
-	test('does not show the empty pool-list CTA before the first pool page loads', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					hasLoadedSecurityPoolPage: false,
-					loadingSecurityPoolPage: false,
-					onCreateSecurityPool: () => undefined,
-					securityPoolPage: undefined,
-					securityPools: [],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Refreshing pools.')).not.toBeNull()
-		expect(documentQueries.queryByText('No security pools', { selector: '.empty-state-title' })).toBeNull()
-		expect(documentQueries.queryByRole('button', { name: 'Create security pool' })).toBeNull()
-	})
-
-	test('offers an explicit retry action when the pool list fails to load', async () => {
-		const requestedPages: string[] = []
-		const retryPageLoad = createDeferred<void>()
-		let pageLoadCount = 0
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					hasLoadedSecurityPoolPage: false,
-					loadingSecurityPoolPage: false,
-					onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-						requestedPages.push(`${pageIndex}:${pageSize}`)
-						pageLoadCount += 1
-						return pageLoadCount === 1 ? undefined : retryPageLoad.promise
-					},
-					securityPoolOverviewError: 'Failed to load security pools.',
-					securityPoolPage: undefined,
-					securityPools: [],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => {
-			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
-		})
-		const retryButton = documentQueries.getByRole('button', { name: 'Retry' })
-		expect(within(document.body).queryByRole('button', { name: 'Load Security Pools' })).toBeNull()
-		await act(() => {
-			fireEvent.click(retryButton)
-		})
-
-		expect(requestedPages).toContain('0:6')
-		expect(documentQueries.getByRole('button', { name: 'Retrying security pools…' }).hasAttribute('disabled')).toBe(true)
-		retryPageLoad.resolve()
-		await act(async () => {
-			await retryPageLoad.promise
-		})
-	})
-
-	test('does not infer browse page count from selected-pool cache before the first pool page loads', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					hasLoadedSecurityPoolPage: false,
-					loadingSecurityPoolPage: false,
-					securityPoolBrowseCount: undefined,
-					securityPoolPage: undefined,
-					securityPools: [
-						createSecurityPool({
-							marketDetails: createMarketDetails({ title: 'Selected-pool cache entry' }),
-							securityPoolAddress: '0x0000000000000000000000000000000000000abc',
-						}),
-					],
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByText('Page 1 of 1')).toBeNull()
-		expect(documentQueries.queryByText('Selected-pool cache entry')).toBeNull()
-		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 	})
 
 	test('filters the pool list by the derived Ended state', async () => {
@@ -855,10 +506,10 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const searchInput = documentQueries.getByLabelText('Search this page')
+		const searchInput = documentQueries.getByLabelText('Search downloaded pools')
 		expect(searchInput.getAttribute('placeholder')).toBe('Address, question ID, or text')
 		expect(documentQueries.queryByText(/pools? match/)).toBeNull()
-		const systemStateSelect = documentQueries.getByLabelText('System State')
+		const systemStateSelect = documentQueries.getByLabelText('System state')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
 		await act(() => {
@@ -868,107 +519,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(documentQueries.queryByText('Operational pool')).toBeNull()
 		expect(documentQueries.getAllByText('Ended pool').length).toBeGreaterThan(0)
 		expect(documentQueries.getByText('1 of 2 pools matches.')).not.toBeNull()
-	})
-
-	test('clamps the current page when the loaded pool count shrinks', async () => {
-		const loadPageCalls: Array<{ pageIndex: number; pageSize: number }> = []
-		const initialProps = createProps({
-			onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-				loadPageCalls.push({ pageIndex, pageSize })
-			},
-			securityPoolPage: {
-				pageIndex: 0,
-				pageSize: 6,
-				poolCount: 12n,
-				pools: [
-					createSecurityPool({
-						marketDetails: createMarketDetails({ title: 'Paged pool' }),
-						securityPoolAddress: '0x0000000000000000000000000000000000000300',
-					}),
-				],
-			},
-		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...initialProps} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => {
-			expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
-		})
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
-		await act(() => {
-			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-		})
-		expect(documentQueries.queryByText('Page 2 of 2')).toBeNull()
-		expect(loadPageCalls.some(call => call.pageIndex === 1)).toBe(true)
-
-		const shrunkProps = createProps({
-			onLoadSecurityPoolPage: initialProps.onLoadSecurityPoolPage,
-			securityPoolPage: {
-				pageIndex: 0,
-				pageSize: 6,
-				poolCount: 1n,
-				pools: [
-					createSecurityPool({
-						marketDetails: createMarketDetails({ title: 'Shrunk pool' }),
-						securityPoolAddress: '0x0000000000000000000000000000000000000301',
-					}),
-				],
-			},
-		})
-		await act(() => {
-			render(<SecurityPoolsOverviewSection {...shrunkProps} />, renderedComponent.container)
-		})
-
-		expect(documentQueries.getByText('Page 1 of 1')).not.toBeNull()
-		expect(loadPageCalls.some(call => call.pageIndex === 0)).toBe(true)
-	})
-
-	test('stops showing a loading state when a requested pool page fails to load', async () => {
-		const failedPageLoad = createDeferred<void>()
-		const loadPageCalls: number[] = []
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolsOverviewSection
-				{...createProps({
-					onLoadSecurityPoolPage: async pageIndex => {
-						loadPageCalls.push(pageIndex)
-						if (pageIndex === 1) return await failedPageLoad.promise
-					},
-					securityPoolPage: {
-						pageIndex: 0,
-						pageSize: 6,
-						poolCount: 12n,
-						pools: [
-							createSecurityPool({
-								marketDetails: createMarketDetails({ title: 'Paged pool' }),
-								securityPoolAddress: '0x0000000000000000000000000000000000000400',
-							}),
-						],
-					},
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		await waitFor(() => {
-			expect(loadPageCalls.includes(0)).toBe(true)
-		})
-		const nextPageButton = documentQueries.getByRole('button', { name: 'Next page' })
-		await act(() => {
-			nextPageButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-		})
-		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
-
-		void failedPageLoad.promise.catch(() => undefined)
-		failedPageLoad.reject(new Error('page load failed'))
-		await act(async () => {
-			await failedPageLoad.promise.catch(() => undefined)
-		})
-		await waitFor(() => {
-			expect(documentQueries.queryByText('Refreshing pools.')).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
-		})
 	})
 
 	test('shows only the aggregate vault count when browse mode has not loaded vault details yet', async () => {
@@ -1141,5 +691,391 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByRole('button', { name: `Copy address ${viewerVaultAddress}` })).toBeNull()
 		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
+	})
+
+	function createNumberedPool(index: number, overrides: Partial<ListedSecurityPool> = {}) {
+		return createSecurityPool({
+			marketDetails: createMarketDetails({ title: `Numbered pool ${index.toString()}` }),
+			securityPoolAddress: getAddress(`0x${index.toString(16).padStart(40, '0')}`),
+			...overrides,
+		})
+	}
+
+	function getRenderedPoolTitles() {
+		return [...document.querySelectorAll('.pool-directory-row h3')].map(heading => heading.textContent)
+	}
+
+	async function selectOption(label: string, value: string) {
+		const select = within(document.body).getByLabelText(label)
+		if (!(select instanceof window.HTMLSelectElement)) throw new Error(`Expected ${label} select`)
+		select.value = value
+		await act(() => {
+			select.dispatchEvent(new window.Event('change', { bubbles: true }))
+		})
+	}
+
+	async function typeSearch(value: string) {
+		const input = within(document.body).getByLabelText('Search downloaded pools')
+		if (!(input instanceof window.HTMLInputElement)) throw new Error('Expected search input')
+		input.value = value
+		await act(() => {
+			input.dispatchEvent(new window.Event('input', { bubbles: true }))
+		})
+	}
+
+	test('lists favorite pools from the local cache without scanning the chain', async () => {
+		const onLoadSecurityPoolPage = mock((..._args: unknown[]) => undefined)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onLoadSecurityPoolPage, securityPoolPage: undefined, securityPools: [createNumberedPool(1), createNumberedPool(2)] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1', 'Numbered pool 2'])
+		expect(within(document.body).getByRole('button', { name: 'Favorites (2)' }).getAttribute('aria-pressed')).toBe('true')
+		expect(document.body.textContent).not.toContain('Search this page')
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0))
+		})
+		expect(onLoadSecurityPoolPage).not.toHaveBeenCalled()
+	})
+
+	test('scans one registry page per request and adds the results to the downloaded pools', async () => {
+		const requests: Array<{ pageIndex: number; pageSize: number; requestKey: string }> = []
+		const props = createProps({
+			onLoadSecurityPoolPage: (pageIndex, pageSize, requestKey) => {
+				requests.push({ pageIndex, pageSize, requestKey })
+			},
+			securityPoolPage: undefined,
+			securityPools: [],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('No favorite pools yet')).not.toBeNull()
+
+		await act(async () => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		expect(requests.map(request => [request.pageIndex, request.pageSize])).toEqual([[0, 6]])
+		const firstRequest = requests[0]
+		if (firstRequest === undefined) throw new Error('Expected a page request')
+		const firstPage = Array.from({ length: 6 }, (_, index) => createNumberedPool(index + 1))
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={{ pageIndex: 0, pageSize: 6, poolCount: 8n, pools: firstPage, requestKey: firstRequest.requestKey }} />, renderedComponent.container)
+		})
+
+		expect(documentQueries.getByRole('button', { name: 'Downloaded (6)' }).getAttribute('aria-pressed')).toBe('true')
+		expect(documentQueries.getByRole('button', { name: 'Favorites (0)' })).not.toBeNull()
+		expect(getRenderedPoolTitles()).toHaveLength(6)
+		expect(documentQueries.getByText('6 of 8 pools scanned')).not.toBeNull()
+		expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'pool'))).toEqual([])
+
+		await act(async () => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover more' }))
+			await Promise.resolve()
+		})
+		const secondRequest = requests[1]
+		if (secondRequest === undefined) throw new Error('Expected a second page request')
+		expect([secondRequest.pageIndex, secondRequest.pageSize]).toEqual([1, 6])
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={{ pageIndex: 1, pageSize: 6, poolCount: 8n, pools: [createNumberedPool(7), createNumberedPool(8)], requestKey: secondRequest.requestKey }} />, renderedComponent.container)
+		})
+		expect(getRenderedPoolTitles()).toHaveLength(8)
+		expect(documentQueries.queryByText(/pools scanned/)).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Scan again' })).not.toBeNull()
+	})
+
+	test('refreshes the last scanned page on new blocks, records it, and shows its age', async () => {
+		let requestKey = ''
+		const onRefreshSecurityPoolPage = mock(() => undefined)
+		const props = createProps({
+			onLoadSecurityPoolPage: (_pageIndex, _pageSize, key) => {
+				requestKey = key
+			},
+			onRefreshSecurityPoolPage,
+			securityPoolPage: undefined,
+			securityPoolPageFreshness: { refreshing: false, updatedAt: Date.now() - 15_000 },
+			securityPools: [],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => {
+			appBlockWatcher.reportBlock(3_000n)
+			appBlockWatcher.reportBlock(3_001n)
+		})
+		// Nothing is read on new blocks until the user has scanned.
+		expect(onRefreshSecurityPoolPage).not.toHaveBeenCalled()
+		expect(document.querySelector('.local-browse-bar .freshness-indicator')).toBeNull()
+
+		await act(async () => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		const page = { pageIndex: 0, pageSize: 6, poolCount: 1n, pools: [createNumberedPool(1)], requestKey }
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={page} />, renderedComponent.container)
+		})
+		expect(document.querySelector('.local-browse-bar .freshness-indicator')?.textContent).toContain('Updated 15s ago')
+		await act(() => {
+			appBlockWatcher.reportBlock(3_002n)
+			appBlockWatcher.reportBlock(3_003n)
+		})
+		expect(onRefreshSecurityPoolPage).toHaveBeenCalled()
+
+		const refreshed = { ...page, pools: [createNumberedPool(1, { marketDetails: createMarketDetails({ title: 'Refreshed pool title' }) })] }
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={refreshed} />, renderedComponent.container)
+		})
+		expect(getRenderedPoolTitles()).toEqual(['Refreshed pool title'])
+	})
+
+	test('ignores a page that answers a different request', async () => {
+		const props = createProps({ securityPoolPage: undefined, securityPools: [] })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={{ pageIndex: 0, pageSize: 6, poolCount: 1n, pools: [createNumberedPool(1)], requestKey: 'stale-request' }} />, renderedComponent.container)
+		})
+		expect(getRenderedPoolTitles()).toEqual([])
+		expect(within(document.body).getByRole('button', { name: 'Downloaded (0)' })).not.toBeNull()
+	})
+
+	test('searches every downloaded pool and filters universes before display', async () => {
+		const pools = Array.from({ length: 8 }, (_, index) => createNumberedPool(index + 1))
+		seedDownloadedPools([createNumberedPool(9, { marketDetails: createMarketDetails({ title: 'Numbered pool 9 elsewhere' }), universeId: 11n })], { favorite: false })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: pools })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Downloaded (9)' }))
+		})
+		expect(getRenderedPoolTitles()).toHaveLength(8)
+		expect(documentQueries.getByText('1 saved in other universes.')).not.toBeNull()
+
+		await typeSearch('numbered pool 8')
+		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 8'])
+		expect(documentQueries.getByText('1 of 8 pools matches. 1 saved in other universes.')).not.toBeNull()
+
+		await typeSearch(pools[6]?.securityPoolAddress.toUpperCase() ?? '')
+		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 7'])
+	})
+
+	test('sorts downloaded pools by remaining capacity, end time, and state', async () => {
+		const pools = [
+			createNumberedPool(1, { marketDetails: createMarketDetails({ endTime: 300n, title: 'Late large' }), questionOutcome: 'yes', settlementCollateralAttoEth: 0n }),
+			createNumberedPool(2, { marketDetails: createMarketDetails({ endTime: 100n, title: 'Soon full' }), settlementCollateralAttoEth: 5n * 10n ** 18n }),
+			createNumberedPool(3, { marketDetails: createMarketDetails({ endTime: 200n, title: 'Middle half' }), settlementCollateralAttoEth: 2n * 10n ** 18n }),
+		]
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ currentTimestamp: 50n, securityPools: pools })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(getRenderedPoolTitles()).toEqual(['Late large', 'Soon full', 'Middle half'])
+
+		await selectOption('Sort', 'remainingCapacity')
+		expect(getRenderedPoolTitles()).toEqual(['Late large', 'Middle half', 'Soon full'])
+		await selectOption('Sort', 'endTime')
+		expect(getRenderedPoolTitles()).toEqual(['Soon full', 'Middle half', 'Late large'])
+		await selectOption('Sort', 'state')
+		expect(getRenderedPoolTitles()).toEqual(['Soon full', 'Middle half', 'Late large'])
+	})
+
+	test('shows open interest against capacity with the used share on each row', async () => {
+		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 1n * 10n ** 18n, mintingCapacityAttoEth: 4n * 10n ** 18n, totalUnderwritingLimitAttoEth: 4n * 10n ** 18n })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
+		expect(rowText).toContain('25.0% used')
+		expect(rowText).toContain('3.00 ETH remaining')
+	})
+
+	test('removes a pool from favorites with its star and keeps it downloaded', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [createNumberedPool(1)] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const star = documentQueries.getByRole('button', { name: 'Favorite: Numbered pool 1' })
+		expect(star.getAttribute('aria-pressed')).toBe('true')
+		await act(() => {
+			fireEvent.click(star)
+		})
+		expect(getRenderedPoolTitles()).toEqual([])
+		expect(documentQueries.getByText('No favorite pools yet')).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Show downloaded pools' }))
+		})
+		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1'])
+		expect(documentQueries.getByRole('button', { name: 'Favorite: Numbered pool 1' }).getAttribute('aria-pressed')).toBe('false')
+	})
+
+	test('offers to open a pasted pool address that is not downloaded', async () => {
+		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
+		const address = '0x00000000000000000000000000000000000000Ab'
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ activeUniverseId: 1n, onSelectSecurityPool, securityPools: [] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await typeSearch(address)
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool at this address' }))
+		})
+		expect(onSelectSecurityPool).toHaveBeenCalledWith(address, 1n)
+	})
+
+	test('opens a pasted downloaded pool from another universe in its own universe', async () => {
+		const pool = createNumberedPool(6, { universeId: 11n })
+		seedDownloadedPools([pool])
+		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onSelectSecurityPool, securityPools: [createNumberedPool(1)] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await typeSearch(pool.securityPoolAddress)
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool at this address' }))
+		})
+		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
+	})
+
+	test('shows no remaining capacity for a pool whose escalation game has started', async () => {
+		const pool = createNumberedPool(1, { ordinaryEscalationGameStarted: true })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
+		expect(rowText).toContain('/ 5.00 ETH')
+		expect(rowText).toContain('0 ETH remaining')
+	})
+
+	test('shows no remaining capacity when the complete-set exchange rate is undefined', async () => {
+		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n, totalUnderwritingLimitAttoEth: 8n * 10n ** 18n })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
+		expect(rowText).toContain('0 ETH remaining')
+	})
+
+	test('offers to open a pasted address that is downloaded but not listed in the active collection', async () => {
+		const pool = createNumberedPool(5)
+		seedDownloadedPools([pool], { favorite: false })
+		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onSelectSecurityPool, securityPools: [createNumberedPool(1)] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await typeSearch(pool.securityPoolAddress)
+		expect(getRenderedPoolTitles()).toEqual([])
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool at this address' }))
+		})
+		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 1n)
+	})
+
+	test('offers to open a pasted address from the empty favorites state when only downloads exist', async () => {
+		seedDownloadedPools([createNumberedPool(5)], { favorite: false })
+		const onSelectSecurityPool = mock((..._args: unknown[]) => undefined)
+		const address = '0x00000000000000000000000000000000000000Cd'
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onSelectSecurityPool, securityPools: [] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByRole('button', { name: 'Show downloaded pools' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Open pool at this address' })).toBeNull()
+		await typeSearch(address)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Open pool at this address' }))
+		})
+		expect(onSelectSecurityPool).toHaveBeenCalledWith(address, 1n)
+	})
+
+	test('offers pool creation when a scan finds no pools', async () => {
+		let createSecurityPoolClicks = 0
+		let requestKey: string | undefined
+		const props = createProps({
+			onCreateSecurityPool: () => {
+				createSecurityPoolClicks += 1
+			},
+			onLoadSecurityPoolPage: (_pageIndex, _pageSize, key) => {
+				requestKey = key
+			},
+			securityPoolPage: undefined,
+			securityPools: [],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: 'Create security pool' })).toBeNull()
+		await act(async () => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={{ pageIndex: 0, pageSize: 6, poolCount: 0n, pools: [], requestKey: requestKey ?? '' }} />, renderedComponent.container)
+		})
+		expect(documentQueries.getByText('No security pools', { selector: '.empty-state-title' })).not.toBeNull()
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create security pool' }))
+		})
+		expect(createSecurityPoolClicks).toBe(1)
+	})
+
+	test('retries the last scan request after a load error', async () => {
+		const requestedPages: number[] = []
+		const retryPageLoad = createDeferred<void>()
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					onLoadSecurityPoolPage: pageIndex => {
+						requestedPages.push(pageIndex)
+						return retryPageLoad.promise
+					},
+					securityPoolOverviewError: 'Failed to load security pools.',
+					securityPoolPage: undefined,
+					securityPools: [],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
+		})
+		expect(requestedPages).toEqual([0])
+		expect(documentQueries.getByRole('button', { name: 'Retrying security pools…' }).hasAttribute('disabled')).toBe(true)
+		retryPageLoad.resolve()
+		await act(async () => {
+			await retryPageLoad.promise
+		})
+		await waitFor(() => {
+			expect(documentQueries.getByRole('button', { name: 'Retry' })).not.toBeNull()
+		})
+	})
+
+	test('restarts the scan when the environment or account changes', async () => {
+		const requests: Array<{ pageIndex: number; requestKey: string }> = []
+		const props = createProps({
+			onLoadSecurityPoolPage: (pageIndex, _pageSize, requestKey) => {
+				requests.push({ pageIndex, requestKey })
+			},
+			securityPoolPage: undefined,
+			securityPools: [],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		await act(async () => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		const firstRequest = requests[0]
+		if (firstRequest === undefined) throw new Error('Expected a page request')
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={{ pageIndex: 0, pageSize: 6, poolCount: 12n, pools: [createNumberedPool(1)], requestKey: firstRequest.requestKey }} />, renderedComponent.container)
+		})
+		expect(documentQueries.getByRole('button', { name: 'Discover more' })).not.toBeNull()
+
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} environmentRefreshKey={1} securityPoolPage={{ pageIndex: 0, pageSize: 6, poolCount: 12n, pools: [createNumberedPool(1)], requestKey: firstRequest.requestKey }} />, renderedComponent.container)
+		})
+		expect(documentQueries.getByRole('button', { name: 'Discover pools' })).not.toBeNull()
+		expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1'])
+		await act(async () => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		expect(requests.map(request => request.pageIndex)).toEqual([0, 0])
+		expect(requests[1]?.requestKey).not.toBe(firstRequest.requestKey)
 	})
 })

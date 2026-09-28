@@ -218,6 +218,7 @@ function list<T>(value: unknown, transform: (entry: Record<string, unknown>) => 
 function parseWorkflowStep(source: Record<string, unknown>): WorkflowStep {
 	return {
 		confirmedAt: stringValue(source['confirmedAt']),
+		failure: stringValue(source['failure']),
 		label: stringValue(source['label']),
 		status: stringValue(source['status']),
 		txHash: stringValue(source['txHash']),

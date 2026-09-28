@@ -31,7 +31,7 @@ const market: LiveMarket = {
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
 	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 100n * 10n ** 36n,
+	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 	settlementCollateralAttoEth: 100n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
 	totalUnderwritingLimitAttoEth: 1n,
@@ -59,7 +59,7 @@ describe('live portfolio scope', () => {
 
 	for (const state of ['disconnected', 'loading', 'error'] as const) {
 		test(`links to pool details without exposing token identity while balances are ${state}`, async () => {
-			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: state === 'error' ? 'RPC unavailable' : undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} />)
+			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: state === 'error' ? 'RPC unavailable' : undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
 			cleanupRendered = rendered.cleanup
 			expect(rendered.container.textContent).toContain(pool)
 			expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
@@ -73,8 +73,8 @@ describe('live portfolio scope', () => {
 
 	test('renders separate balance groups for each exact SecurityPool', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
-		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 36n, yes: 1n * 10n ** 36n, no: 2n * 10n ** 36n, lp: 0n }
-		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 36n, yes: 4n * 10n ** 36n, no: 5n * 10n ** 36n, lp: 0n }
+		const firstBalances = { scope: { pool, shareToken, invalidTokenId: 1_792n, yesTokenId: 1_793n, noTokenId: 1_794n }, invalid: 3n * 10n ** 18n, yes: 1n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n }
+		const secondBalances = { scope: { pool: secondPool, shareToken: secondShareToken, invalidTokenId: 2_048n, yesTokenId: 2_049n, noTokenId: 2_050n }, invalid: 6n * 10n ** 18n, yes: 4n * 10n ** 18n, no: 5n * 10n ** 18n, lp: 0n }
 		const rendered = await renderIntoDocument(
 			<LivePortfolio
 				entries={[
@@ -84,6 +84,7 @@ describe('live portfolio scope', () => {
 				balanceState='ready'
 				balanceError={undefined}
 				retryBalances={async () => undefined}
+				nowSeconds={0n}
 			/>,
 		)
 		cleanupRendered = rendered.cleanup
@@ -95,7 +96,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).toContain('1 YES')
 		expect(rendered.container.textContent).toContain('4 YES')
 		expect(rendered.container.textContent).not.toContain('LP claims')
-		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toBe('Open position')
+		expect(rendered.container.querySelector(`a[href="#/market/${pool}"]`)?.textContent).toBe('Scoped portfolio')
 		const redemption = Array.from(rendered.container.querySelectorAll('.metric-label')).find(field => field.textContent?.includes('redemption value'))
 		expect(redemption).toBeDefined()
 		expect(redemption?.closest('details')).toBeNull()
@@ -109,19 +110,20 @@ describe('live portfolio scope', () => {
 	})
 
 	test('separates stable outcome quantities, conditional payouts, and finalized redemption', async () => {
-		const valuedMarket = { ...market, shareTokenSupplyAttoShares: 10n ** 36n, settlementCollateralAttoEth: 984_200_000_000_000_000n }
+		const valuedMarket = { ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 984_200_000_000_000_000n }
 		for (const [questionOutcome, systemState, expected] of [
 			[3, 0, '0.9842 ETH if YES wins'],
 			[1, 0, '0.9842 ETH redeemable'],
 			[2, 0, '0 ETH · lost'],
 			[1, 1, 'winning payout; redemption unavailable'],
 		] as const) {
-			const rendered = await renderIntoDocument(<OutcomeHolding amount={10n ** 36n} outcome='YES' market={{ ...valuedMarket, questionOutcome, systemState }} />)
+			const rendered = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, questionOutcome, systemState }} />)
 			expect(rendered.container.textContent).toContain('1 YES')
 			expect(rendered.container.textContent).toContain(expected)
+			expect(rendered.container.textContent).toContain('1 YES (')
 			await rendered.cleanup()
 		}
-		const unavailable = await renderIntoDocument(<OutcomeHolding amount={10n ** 36n} outcome='YES' market={{ ...valuedMarket, loadError: 'RPC failed' }} />)
+		const unavailable = await renderIntoDocument(<OutcomeHolding amount={10n ** 18n} outcome='YES' market={{ ...valuedMarket, loadError: 'RPC failed' }} />)
 		expect(unavailable.container.textContent).toContain('Payout unavailable')
 		expect(unavailable.container.textContent).not.toContain('0.9842 ETH')
 		await unavailable.cleanup()
@@ -144,7 +146,7 @@ describe('live portfolio scope', () => {
 	})
 
 	test('discloses dated backing and a fee estimate clamped to the fee end', async () => {
-		const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 36n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }} />)
+		const rendered = await renderIntoDocument(<BackingDetails market={{ ...market, shareTokenSupplyAttoShares: 10n ** 18n, settlementCollateralAttoEth: 10n ** 18n, valuation: { timestamp: 1n, feeEndTime: 2n, projectedCollateralAttoEth: 9n * 10n ** 17n } }} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('details')?.open).toBe(false)
 		expect(rendered.container.textContent).toContain('Holding fee over next 30 days10%')
