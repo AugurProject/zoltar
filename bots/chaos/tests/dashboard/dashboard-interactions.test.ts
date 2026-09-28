@@ -1752,15 +1752,21 @@ browserTest(
 			const cdp = await connectToChromium()
 			browserSession = cdp
 			await cdp.command('Page.navigate', { url: new URL('/recovery', dashboard.url).href })
-			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")) !== false; attempt++) await Bun.sleep(25)
-			expect(await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.disabled")).toBe(false)
-			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")) !== false; attempt++) await Bun.sleep(25)
-			expect(await cdp.evaluate("document.querySelector('#retirement-start')?.disabled")).toBe(false)
-			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-request')?.disabled")) !== false; attempt++) await Bun.sleep(25)
-			expect(await cdp.evaluate("document.querySelector('#retirement-request')?.disabled")).toBe(false)
+			// Refreshes briefly disable these controls, so assert the value the wait observed instead of reading it again.
+			const waitForValue = async (expression: string, expected: boolean) => {
+				let value: unknown
+				for (let attempt = 0; attempt < 100; attempt++) {
+					value = await cdp.evaluate(expression)
+					if (value === expected) break
+					await Bun.sleep(25)
+				}
+				expect(value).toBe(expected)
+			}
+			await waitForValue("document.querySelector('#rpc-health-retry-button')?.disabled", false)
+			await waitForValue("document.querySelector('#retirement-start')?.disabled", false)
+			await waitForValue("document.querySelector('#retirement-request')?.disabled", false)
 			await cdp.evaluate("document.querySelector('#retirement-start')?.click()")
-			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")) !== false; attempt++) await Bun.sleep(25)
-			expect(await cdp.evaluate("document.querySelector('#retirement-form')?.hidden")).toBe(false)
+			await waitForValue("document.querySelector('#retirement-form')?.hidden", false)
 			await cdp.evaluate("(() => { document.querySelector('#retirement-max-loss').value = '10001'; document.querySelector('#retirement-form').dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true })) })()")
 			for (let attempt = 0; attempt < 100 && (await cdp.evaluate("document.querySelector('#retirement-action-status')?.textContent?.includes('0 to 10000 bps')")) !== true; attempt++) await Bun.sleep(25)
 			expect(await cdp.evaluate("document.querySelector('#retirement-action-status')?.textContent")).toContain('0 to 10000 bps')
