@@ -132,13 +132,15 @@ export function App() {
 				}
 				header={
 					<AppHeaderShell
-						renderOverview={settingsMenu => (
+						renderOverview={({ navigation, settingsMenu }) => (
 							<OverviewPanels
 								{...overviewWalletProps}
+								navigation={navigation}
 								settingsMenu={settingsMenu}
 								applicationTitle={zoltarCopy.applicationTitle}
 								activeUniverseId={activeUniverseId}
 								isLoadingUniverseRepBalance={loadingZoltarForkAccess}
+								migrateRepHref={getZoltarViewHref('universes')}
 								onGoToGenesisUniverse={() => setActiveUniverseId(0n)}
 								universeForkTime={zoltarUniverse?.forkTime}
 								universeHasForked={zoltarUniverse?.hasForked}

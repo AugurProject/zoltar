@@ -112,17 +112,42 @@ describe('AppHeaderShell', () => {
 		domEnvironment.cleanup()
 	})
 
-	test('omits the navigation stack and moves the guide link after the tiers', async () => {
+	test("promotes a single section's views into the top bar instead of stacking a second tab row", async () => {
 		installTestRouting()
 		const domEnvironment = installDomEnvironment('http://localhost/#/zoltar')
+		const secondaryNavigation = {
+			ariaLabel: 'Zoltar views',
+			onChange: () => undefined,
+			options: [
+				{ href: '#/zoltar?zoltarView=questions', label: 'Browse Questions', value: 'questions' },
+				{ href: '#/zoltar?zoltarView=create', label: 'Create Question', value: 'create' },
+			],
+			value: 'questions',
+		}
 		const singleTab = await renderIntoDocument(
-			<AppHeaderShell overview={<div>Overview</div>} simulationController={undefined} tabNavigation={{ onRouteChange: () => undefined, route: 'zoltar', showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }] }} onRefresh={async () => undefined} />,
+			<AppHeaderShell
+				overview={<div>Overview</div>}
+				secondaryNavigation={secondaryNavigation}
+				simulationController={undefined}
+				tabNavigation={{ onRouteChange: () => undefined, route: 'zoltar', showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Zoltar', route: 'zoltar' }] }}
+				onRefresh={async () => undefined}
+			/>,
 		)
 		try {
-			expect(singleTab.container.querySelector('.app-nav-stack')).toBeNull()
+			const navigation = within(singleTab.container).getByRole('navigation', { name: 'Zoltar views' })
+			expect(navigation.closest('.header-toolbar-navigation')).not.toBeNull()
+			expect(within(navigation).getByRole('link', { name: 'Browse Questions' }).getAttribute('aria-current')).toBe('page')
+			expect(singleTab.container.querySelector('.route-subnav-region')).toBeNull()
+			expect(within(singleTab.container).queryByRole('navigation', { name: 'Application sections' })).toBeNull()
 		} finally {
 			await singleTab.cleanup()
+			domEnvironment.cleanup()
 		}
+	})
+
+	test('keeps primary sections in the top bar, section views in one segmented row, and the guide in settings', async () => {
+		installTestRouting()
+		const domEnvironment = installDomEnvironment('http://localhost/#/security-pools')
 		const secondaryNavigation = { ariaLabel: 'Security Pools views', onChange: () => undefined, options: [{ href: '#/security-pools', label: 'Browse Pools', value: 'browse' }], value: 'browse' }
 		const withGuide = await renderIntoDocument(
 			<AppHeaderShell
@@ -141,11 +166,18 @@ describe('AppHeaderShell', () => {
 			/>,
 		)
 		try {
-			const stack = withGuide.container.querySelector('.app-nav-stack')
-			if (stack === null) throw new Error('Navigation stack is missing')
-			const children = Array.from(stack.children).map(child => child.className.split(' ')[0])
-			expect(children).toEqual(['tab-nav', 'route-subnav-region', 'protocol-guide-link'])
-			expect(stack.querySelector('.tab-nav .protocol-guide-link')).toBeNull()
+			const queries = within(withGuide.container)
+			expect(queries.getByRole('navigation', { name: 'Application sections' }).closest('.header-toolbar-navigation')).not.toBeNull()
+			const views = queries.getByRole('navigation', { name: 'Security Pools views' })
+			expect(views.closest('.app-chrome')).toBeNull()
+			expect(views.querySelector('.view-tabs.segmented')).not.toBeNull()
+			expect(queries.queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
+			fireEvent.click(queries.getByRole('button', { name: 'Settings' }))
+			expect(
+				within(queries.getByRole('dialog', { name: 'Application settings' }))
+					.getByRole('link', { name: 'Protocol Guide' })
+					.getAttribute('href'),
+			).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
 		} finally {
 			await withGuide.cleanup()
 			domEnvironment.cleanup()
