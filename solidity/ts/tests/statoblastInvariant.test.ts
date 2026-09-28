@@ -48,7 +48,6 @@ import {
 } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getEscalationGameDeposits, getEscrowedRepByVault, getTotalEscrowedRep } from '../testSupport/simulator/utils/contracts/escalationGame'
 import {
-	createCertifiedCompleteSetFixture,
 	createCompleteSet,
 	depositRepToVault,
 	depositToEscalationGame,
@@ -236,7 +235,7 @@ describe('Statoblast invariant harness', () => {
 		await setVaultCapacityFixture(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createClient(2)
-		await createCertifiedCompleteSetFixture(openInterestHolder, context.securityPool, openInterestAmount)
+		await createCompleteSet(openInterestHolder, context.securityPool, openInterestAmount)
 		await triggerExternalForkForSecurityPool(undefined, 'mixed bids fork source')
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
@@ -442,10 +441,10 @@ describe('Statoblast invariant harness', () => {
 
 			const openInterestActions = shuffle(
 				[
-					{ name: 'actor B opens first-pool complete sets', execute: async () => await createCertifiedCompleteSetFixture(actorB, firstPoolAddresses.securityPool, 20n * 10n ** 18n) },
-					{ name: 'actor C opens first-pool complete sets', execute: async () => await createCertifiedCompleteSetFixture(actorC, firstPoolAddresses.securityPool, 15n * 10n ** 18n) },
-					{ name: 'actor A opens second-pool complete sets', execute: async () => await createCertifiedCompleteSetFixture(actorA, secondPoolAddresses.securityPool, 25n * 10n ** 18n) },
-					{ name: 'actor C opens second-pool complete sets', execute: async () => await createCertifiedCompleteSetFixture(actorC, secondPoolAddresses.securityPool, 10n * 10n ** 18n) },
+					{ name: 'actor B opens first-pool complete sets', execute: async () => await createCompleteSet(actorB, firstPoolAddresses.securityPool, 20n * 10n ** 18n) },
+					{ name: 'actor C opens first-pool complete sets', execute: async () => await createCompleteSet(actorC, firstPoolAddresses.securityPool, 15n * 10n ** 18n) },
+					{ name: 'actor A opens second-pool complete sets', execute: async () => await createCompleteSet(actorA, secondPoolAddresses.securityPool, 25n * 10n ** 18n) },
+					{ name: 'actor C opens second-pool complete sets', execute: async () => await createCompleteSet(actorC, secondPoolAddresses.securityPool, 10n * 10n ** 18n) },
 				],
 				seed ^ 0xc011a7n,
 			)
@@ -756,7 +755,7 @@ describe('Statoblast invariant harness', () => {
 				{
 					name: 'actor B opens first-pool interest',
 					enabled: () => completed.has('capacity ownership'),
-					execute: async () => await createCertifiedCompleteSetFixture(actorB, firstPool.securityPool, 50n * 10n ** 18n),
+					execute: async () => await createCompleteSet(actorB, firstPool.securityPool, 50n * 10n ** 18n),
 				},
 				{
 					name: 'actor C withdraws before fork',
@@ -971,7 +970,7 @@ describe('Statoblast invariant harness', () => {
 
 		for (const mintAmount of mintAmounts) {
 			const nominalSupplyBefore = await getShareTokenSupplyAttoShares(client, context.securityPool)
-			await createCertifiedCompleteSetFixture(minter, context.securityPool, mintAmount)
+			await createCompleteSet(minter, context.securityPool, mintAmount)
 			const nominalSupplyAfter = await getShareTokenSupplyAttoShares(client, context.securityPool)
 			assert.ok(nominalSupplyAfter > nominalSupplyBefore, `successful positive mint must issue nonzero shares for ${mintAmount.toString()} attoETH`)
 
@@ -989,7 +988,7 @@ describe('Statoblast invariant harness', () => {
 		await setVaultCapacityFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
 		const shareHolder = createClient(2)
 		const mintAmount = (seed % (5n * 10n ** 18n)) + 1n * 10n ** 18n
-		await createCertifiedCompleteSetFixture(shareHolder, context.securityPool, mintAmount)
+		await createCompleteSet(shareHolder, context.securityPool, mintAmount)
 		strictEqualTypeSafe(await getSystemState(client, context.securityPool), SystemState.Operational, 'lifecycle should begin operational')
 
 		if (path === 'own') {
@@ -1050,7 +1049,7 @@ describe('Statoblast invariant harness', () => {
 		strictEqualTypeSafe(await getAwaitingForkContinuation(client, yesAddresses.securityPool), false, 'bounded continuation progress should complete before reactivated child operations')
 		const supplyBeforeReactivatedMint = await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool)
 		if (path === 'external') {
-			await createCertifiedCompleteSetFixture(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n)
+			await createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n)
 			assert.ok((await getShareTokenSupplyAttoShares(client, yesAddresses.securityPool)) > supplyBeforeReactivatedMint, 'reactivated unresolved child should accept a positive complete-set mint')
 		} else {
 			await assert.rejects(createCompleteSet(createClient(4), yesAddresses.securityPool, 1n * 10n ** 18n))
@@ -1179,7 +1178,7 @@ describe('Statoblast invariant harness', () => {
 		await setVaultCapacityFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
 		await approveAndDepositRepToVault(unmigratedUnderwritingLimitAttoEthHolder, repDeposit, context.questionId)
 		await setVaultCapacityFixture(unmigratedUnderwritingLimitAttoEthHolder, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, unmigratedUnderwritingLimitAttoEthHolder.account.address, underwritingLimitAttoEth)
-		await createCertifiedCompleteSetFixture(openInterestHolder, context.securityPool, 10n * 10n ** 18n)
+		await createCompleteSet(openInterestHolder, context.securityPool, 10n * 10n ** 18n)
 		const operationalAccounting = await readAccounting(context.securityPool)
 		const operationalVault = await getSecurityVault(client, context.securityPool, client.account.address)
 		const unmigratedOperationalVault = await getSecurityVault(client, context.securityPool, unmigratedUnderwritingLimitAttoEthHolder.account.address)

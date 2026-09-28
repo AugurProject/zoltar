@@ -45,7 +45,6 @@ type SecurityVaultProductionWriteClient = ReturnType<typeof createWalletWriteCli
 type SecurityVaultQueueResult = Pick<SecurityVaultActionResult, 'hash' | 'queuedOperation' | 'stagedExecution'>
 
 export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultProductionWriteClient> = {
-	certifyVaultCoverage?: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveRep') => Promise<SecurityVaultActionResult>
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
@@ -406,24 +405,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		return { managerDetails, funding, walletBalanceAttoEth, writeClient }
 	}
 
-	const certifyCoverage = async () => {
-		if (securityVaultActiveAction.value !== undefined) return
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'certifyVaultCoverage',
-			snapshot,
-			async (vaultAddress, pool, isCurrentSelection, context) => {
-				if (!isCurrentSelection()) return undefined
-				if (dependencies.certifyVaultCoverage === undefined) throw new Error('Coverage certification is unavailable.')
-				return await dependencies.certifyVaultCoverage(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), pool, vaultAddress)
-			},
-			'Failed to certify vault backing',
-			async (_result, pool, vault, isCurrentSelection) => {
-				await reloadSecurityVaultDetails(pool, vault, isCurrentSelection)
-			},
-		)
-	}
-
 	const adjustBackingFactor = async (value: string) => {
 		if (securityVaultActiveAction.value !== undefined) return
 		const snapshot = createVaultActionSnapshot()
@@ -561,7 +542,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultOwner])
 
 	return {
-		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,

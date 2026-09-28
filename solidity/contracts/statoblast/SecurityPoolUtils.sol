@@ -131,13 +131,6 @@ library SecurityPoolUtils {
 		return securityPool.getPoolAccountingSnapshot().badDebtGeneration;
 	}
 
-	/// @dev Local mutations increment the revision; price and backing conversion are read live.
-	/// Minting is closed whenever an escalation game exists, so changing dispute claims cannot bypass this certificate.
-	function coverageSnapshot(ISecurityPool pool) external view returns (bytes32) {
-		return
-			keccak256(abi.encode(pool.coverageRevision(), pool.priceOracleManagerAndOperatorQueuer().lastPrice(), pool.getTotalPoolHeldAttoRep(), pool.totalRepBackingUnits(), pool.totalUnderwritingLimitAttoEth(), pool.systemState()));
-	}
-
 	/// @notice Maximum fully backed limit supported by pool-held REP with no dispute stake.
 	function calculateBackingSupportedLimitAttoEth(uint256 backingAttoRep, uint256 repEthPrice, uint256 securityMultiplierBps) external pure returns (uint256) {
 		if (repEthPrice == 0 || securityMultiplierBps < BPS_DENOMINATOR) return 0;

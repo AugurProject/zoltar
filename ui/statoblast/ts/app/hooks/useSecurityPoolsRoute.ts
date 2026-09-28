@@ -109,7 +109,6 @@ export function useSecurityPoolsRoute({
 		zoltarUniverseHasForked,
 	})
 	const {
-		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,
@@ -495,7 +494,6 @@ export function useSecurityPoolsRoute({
 				accountState,
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
-				onCertifyVaultCoverage: () => void certifyCoverage(),
 				onSetVaultUnderwritingLimit: factor => void adjustBackingFactor(factor),
 				onDepositRepToVault: () => void depositRepToVault(),
 				onLoadSecurityVault: (vaultAddress?: string) => {

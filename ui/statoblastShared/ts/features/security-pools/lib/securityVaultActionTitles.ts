@@ -15,7 +15,6 @@ export const getPendingTitle = (actionName: SecurityVaultActionResult['action'])
 			return 'Claiming fees'
 		case 'redeemRepFromVault':
 			return 'Redeeming REP'
-		case 'certifyVaultCoverage':
 		case 'updateVaultFees':
 			return 'Refreshing vault fees'
 		default:
@@ -36,7 +35,6 @@ export const getSuccessTitle = (actionName: SecurityVaultActionResult['action'])
 			return 'Fees claimed'
 		case 'redeemRepFromVault':
 			return 'REP redeemed'
-		case 'certifyVaultCoverage':
 		case 'updateVaultFees':
 			return 'Vault fees refreshed'
 		default:
@@ -57,7 +55,6 @@ export const getFailureTitle = (actionName: SecurityVaultActionResult['action'])
 			return 'Fee claim failed'
 		case 'redeemRepFromVault':
 			return 'REP redemption failed'
-		case 'certifyVaultCoverage':
 		case 'updateVaultFees':
 			return 'Vault fee refresh failed'
 		default:

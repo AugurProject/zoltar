@@ -252,9 +252,4 @@ export const manualRepPerEth = 'Open Oracle REP/ETH starting price'
 export const manualInitialPriceHint = 'Initial report price; subject to Open Oracle disputes and settlement.'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
 
-export const certifyCoverage = 'Confirm backing for minting'
-export const certifyingCoverage = 'Confirming backing'
-export const certificationNeedsPrice = 'Refresh the oracle price first.'
-export const certificationNeedsLimit = 'Set a positive commitment limit first.'
-
 export const currentProportionalObligation = 'Current proportional obligation'

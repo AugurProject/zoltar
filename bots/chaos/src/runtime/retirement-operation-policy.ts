@@ -58,7 +58,6 @@ const PROHIBITED_OPERATIONS = [
 	'statoblast.staged.queue',
 	'statoblast.vault.deposit-rep',
 	'statoblast.vault.set-limit',
-	'statoblast.vault.certify',
 	'statoblast.vault.update-fees',
 	'token.rep.approve',
 	'token.shares.approve',

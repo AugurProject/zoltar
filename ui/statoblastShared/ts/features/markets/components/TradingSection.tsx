@@ -101,7 +101,7 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const mintingCapacityAttoEth = selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame ? selectedPool.totalUnderwritingLimitAttoEth : 0n
+	const mintingCapacityAttoEth = selectedPool !== undefined && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame ? selectedPool.mintingCapacityAttoEth : 0n
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,

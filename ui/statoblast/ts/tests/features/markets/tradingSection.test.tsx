@@ -52,8 +52,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		certifiedUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
+		mintingCapacityAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -490,7 +490,10 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(mintableMetric, '1.25')).toHaveLength(1)
 	})
 
-	void test('fills the mint amount with the lesser of wallet ETH and remaining capacity', async () => {
+	void test.each([
+		{ capacity: 5n * 10n ** 18n, expected: '1.25' },
+		{ capacity: 10n ** 18n, expected: '1' },
+	])('fills the mint amount within wallet balance and live backing capacity: $expected', async ({ capacity, expected }) => {
 		let mintedAmount: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -499,7 +502,7 @@ void describe('TradingSection', () => {
 					onTradingFormChange: ({ completeSetAmount }) => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
-					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, mintingCapacityAttoEth: capacity }),
 				})}
 			/>,
 		)
@@ -515,10 +518,10 @@ void describe('TradingSection', () => {
 			fireEvent.click(maxButton)
 		})
 
-		expect(mintedAmount).toBe('1.25')
+		expect(mintedAmount).toBe(expected)
 	})
 
-	void test('uses certified commitments when the optional UI price is unavailable', async () => {
+	void test('uses standing commitments when the optional UI price is unavailable', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).not.toContain('Unavailable (no price)')
@@ -544,7 +547,7 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
 	})
 
-	void test('uses certified ETH limits independently of the configured UI price', async () => {
+	void test('uses standing ETH limits independently of the configured UI price', async () => {
 		let mintedAmount: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection

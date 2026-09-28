@@ -16,15 +16,20 @@ describe('Statoblast: continuous proportional commitments', () => {
 	const pool = () => fixture.securityPoolAddresses.securityPool
 	const freshPrice = async (price = fixture.reportedRepEthPrice) => manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, price)
 	const setLimit = async (limit: bigint, client = fixture.client) => writeContractAndWait(client, () => client.writeContract({ abi, address: pool(), functionName: 'setUnderwritingLimit', args: [limit] }))
-	const certify = async (vault = fixture.client.account.address) => writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi, address: pool(), functionName: 'certifyVaultCoverage', args: [vault] }))
 	const obligation = async (vault = fixture.client.account.address) => fixture.client.readContract({ abi, address: pool(), functionName: 'getVaultOpenInterestAttoEth', args: [vault] })
 	const total = async () => fixture.client.readContract({ abi, address: pool(), functionName: 'totalUnderwritingLimitAttoEth' })
-	const certified = async () => fixture.client.readContract({ abi, address: pool(), functionName: 'getCertifiedUnderwritingLimitAttoEth' })
+
+	test('setting a backed limit immediately permits minting without another transaction', async () => {
+		await freshPrice()
+		await setLimit(10n * unit)
+		await createCompleteSet(fixture.client, pool(), unit)
+		expect(await total()).toBe(10n * unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })).toBe(unit)
+	})
 
 	test('wallet-funded escalation closes minting without changing standing commitments', async () => {
 		await freshPrice()
 		await setLimit(10n * unit)
-		await certify()
 		await approveToken(fixture.client, await getRepToken(fixture.client, pool()), pool())
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi, address: pool(), functionName: 'depositWalletRepToEscalationGame', args: [1, unit * 100n] }))
@@ -40,7 +45,6 @@ describe('Statoblast: continuous proportional commitments', () => {
 	test('adding a limit proportionally reassigns existing collateral without mint allocations', async () => {
 		await freshPrice()
 		await setLimit(10n * unit)
-		await certify()
 		await createCompleteSet(fixture.client, pool(), 10n * unit)
 		const receiver = createWriteClient(fixture.mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(receiver, fixture.repDeposit, fixture.questionId)
@@ -53,31 +57,26 @@ describe('Statoblast: continuous proportional commitments', () => {
 		expect(await obligation(receiver.account.address)).toBeLessThanOrEqual(5n * unit)
 	})
 
-	test('keepers can identify each vault needing certification without scanning on chain', async () => {
+	test('underbacked total commitments close all minting even when a small mint would be covered', async () => {
 		await freshPrice()
-		await setLimit(10n * unit)
-		const statusAbi = [{ type: 'function', name: 'isVaultCoverageCertified', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address' }], outputs: [{ type: 'bool' }] }] as const
-		const status = () => fixture.client.readContract({ abi: statusAbi, address: pool(), functionName: 'isVaultCoverageCertified', args: [fixture.client.account.address] })
-		expect(await status()).toBe(false)
-		await certify()
-		expect(await status()).toBe(true)
-		await setLimit(11n * unit)
-		expect(await status()).toBe(false)
-		await certify()
-		await setLimit(0n)
-		expect(await status()).toBe(false)
+		await setLimit(400n * unit)
+		await freshPrice(2n * fixture.reportedRepEthPrice)
+		expect(await total()).toBe(400n * unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(0n)
+		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Pool backing insufficient')
+		await setLimit(250n * unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(250n * unit)
+		await createCompleteSet(fixture.client, pool(), 250n * unit)
 	})
 
-	test('certification is idempotent and price changes require fresh certification', async () => {
+	test('minting rejects insufficient aggregate backing and stale oracle prices', async () => {
 		await freshPrice()
-		await setLimit(10n * unit)
-		await certify()
-		await certify()
-		expect(await certified()).toBe(10n * unit)
+		await setLimit(400n * unit)
 		await freshPrice(2n * fixture.reportedRepEthPrice)
-		expect(await certified()).toBe(0n)
-		await certify()
-		expect(await certified()).toBe(10n * unit)
+		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Pool backing insufficient')
+		await fixture.mockWindow.advanceTime(301n)
+		await expect(createCompleteSet(fixture.client, pool(), unit, true)).rejects.toThrow('Stale price')
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(0n)
 	})
 
 	test('reported backing ratios value the full ETH commitment at the live price', async () => {
@@ -89,37 +88,23 @@ describe('Statoblast: continuous proportional commitments', () => {
 		expect(factors[1]).toBe(factors[0])
 	})
 
-	test('no-op limits cannot invalidate coverage or erase fee rounding carries', async () => {
+	test('no-op limits preserve fee rounding carries', async () => {
 		await freshPrice()
 		await setLimit(10n * unit)
-		await certify()
 		const before = await fixture.client.readContract({ abi, address: pool(), functionName: 'getPoolAccountingSnapshot' })
 		await setLimit(10n * unit)
 		const outsider = createWriteClient(fixture.mockWindow, TEST_ADDRESSES[1])
 		await setLimit(0n, outsider)
-		expect(await certified()).toBe(10n * unit)
 		const after = await fixture.client.readContract({ abi, address: pool(), functionName: 'getPoolAccountingSnapshot' })
 		expect(after.feeIndexRemainder).toBe(before.feeIndexRemainder)
 	})
 
-	test('an underbacked advertised limit cannot be certified after a price change', async () => {
+	test('retained underbacked commitments keep earning fees after a price change', async () => {
 		await freshPrice()
 		await setLimit(400n * unit)
-		await certify()
-		await freshPrice(2n * fixture.reportedRepEthPrice)
-		expect(await certified()).toBe(0n)
-		await expect(certify()).rejects.toThrow()
-		expect(await total()).toBe(400n * unit)
-	})
-
-	test('retained underbacked commitments keep earning fees without health certification', async () => {
-		await freshPrice()
-		await setLimit(400n * unit)
-		await certify()
 		await createCompleteSet(fixture.client, pool(), 10n * unit)
 		await freshPrice(2n * fixture.reportedRepEthPrice)
-		await expect(certify()).rejects.toThrow()
-		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Commitments not certified')
+		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Pool backing insufficient')
 		const before = await getSecurityVault(fixture.client, pool(), fixture.client.account.address)
 		const collateralBefore = await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })
 		await fixture.mockWindow.advanceTime(86_400n)
@@ -127,28 +112,61 @@ describe('Statoblast: continuous proportional commitments', () => {
 		const after = await getSecurityVault(fixture.client, pool(), fixture.client.account.address)
 		expect(after.claimableFeesAttoEth).toBeGreaterThan(before.claimableFeesAttoEth)
 		expect(after.underwritingLimitAttoEth).toBe(400n * unit)
-		expect(await certified()).toBe(0n)
 		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })).toBeLessThan(collateralBefore)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi, address: pool(), functionName: 'redeemFees', args: [fixture.client.account.address] }))
 		expect((await getSecurityVault(fixture.client, pool(), fixture.client.account.address)).claimableFeesAttoEth).toBe(0n)
-		expect(await certified()).toBe(0n)
 	})
 
-	test('backing changes invalidate earlier certification even when the commitment is unchanged', async () => {
+	test('deposits restore aggregate mint capacity without a separate confirmation', async () => {
 		await freshPrice()
-		await setLimit(10n * unit)
-		await certify()
+		await setLimit(400n * unit)
+		await freshPrice(2n * fixture.reportedRepEthPrice)
 		await approveAndDepositRepToVault(fixture.client, fixture.repDeposit, fixture.questionId)
-		expect(await certified()).toBe(0n)
-		expect(await total()).toBe(10n * unit)
-		await certify()
-		expect(await certified()).toBe(10n * unit)
+		expect(await total()).toBe(400n * unit)
+		await createCompleteSet(fixture.client, pool(), 400n * unit)
+	})
+
+	test('withdrawals preserve all standing commitments even with little settlement collateral', async () => {
+		await freshPrice()
+		await setLimit(400n * unit)
+		const receiver = createWriteClient(fixture.mockWindow, TEST_ADDRESSES[1])
+		await approveAndDepositRepToVault(receiver, fixture.repDeposit, fixture.questionId)
+		const price = 2n * fixture.reportedRepEthPrice
+		await freshPrice(price)
+		await createCompleteSet(fixture.client, pool(), unit)
+		const before = await getSecurityVault(fixture.client, pool(), receiver.account.address)
+		await manipulatePriceOracleAndPerformOperation(receiver, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, receiver.account.address, fixture.repDeposit, price)
+		expect((await getSecurityVault(fixture.client, pool(), receiver.account.address)).repBackingUnits).toBe(before.repBackingUnits)
+		await fixture.mockWindow.advanceTime(301n)
+		await manipulatePriceOracleAndPerformOperation(receiver, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, receiver.account.address, 1_000n * unit, price)
+		expect((await getSecurityVault(fixture.client, pool(), receiver.account.address)).repBackingUnits).toBeLessThan(before.repBackingUnits)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBeGreaterThanOrEqual(await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' }))
+	})
+
+	test('liquidation after a price drop and new mint transfers commitments without writing off collateral', async () => {
+		await freshPrice()
+		await setLimit(400n * unit)
+		const receiver = createWriteClient(fixture.mockWindow, TEST_ADDRESSES[1])
+		await approveAndDepositRepToVault(receiver, 3n * fixture.repDeposit, fixture.questionId)
+		await freshPrice(2n * fixture.reportedRepEthPrice)
+		await createCompleteSet(fixture.client, pool(), 400n * unit)
+		const supplyBefore = await fixture.client.readContract({ abi, address: pool(), functionName: 'shareTokenSupplyAttoShares' })
+		await manipulatePriceOracleAndPerformOperation(receiver, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, fixture.client.account.address, 400n * unit)
+		expect(await total()).toBe(400n * unit)
+		expect((await getSecurityVault(fixture.client, pool(), fixture.client.account.address)).underwritingLimitAttoEth).toBe(0n)
+		expect((await getSecurityVault(fixture.client, pool(), receiver.account.address)).underwritingLimitAttoEth).toBe(400n * unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'shareTokenSupplyAttoShares' })).toBe(supplyBefore)
+		const collateral = await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })
+		expect(collateral).toBeGreaterThan(399n * unit)
+		expect(await obligation()).toBe(0n)
+		expect(await obligation(receiver.account.address)).toBe(collateral)
+		await redeemCompleteSet(fixture.client, pool(), supplyBefore)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })).toBe(0n)
 	})
 
 	test('reductions cannot strand settlement collateral and redemption preserves standing limits', async () => {
 		await freshPrice()
 		await setLimit(10n * unit)
-		await certify()
 		await createCompleteSet(fixture.client, pool(), 8n * unit)
 		await expect(setLimit(7n * unit)).rejects.toThrow()
 		await setLimit(9n * unit)

@@ -20,9 +20,6 @@ export function projectedEthToShares(pool: PoolSnapshot, attoEth: bigint) {
 export function canCreateCompleteSet(pool: PoolSnapshot, spend: bigint) {
 	if (spend === 0n || projectedEthToShares(pool, spend) === 0n) return false
 	const nextCollateral = value(pool.projectedSettlementCollateralAttoEth) + spend
-	// Minting requires the current on-chain certificate for every commitment.
-	// A truncated registry or pending auction entitlement cannot satisfy this sum.
 	if (pool.escalationGame !== '0x0000000000000000000000000000000000000000') return false
-	const total = value(pool.totalUnderwritingLimitAttoEth)
-	return value(pool.currentMintingCapacityAttoEth) === total && nextCollateral <= total && pool.vaults.reduce((sum, vault) => sum + value(vault.underwritingLimitAttoEth), 0n) === total
+	return nextCollateral <= value(pool.currentMintingCapacityAttoEth) && nextCollateral <= value(pool.totalUnderwritingLimitAttoEth)
 }
