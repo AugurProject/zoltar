@@ -10,7 +10,7 @@ import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageB
 import { broadcastUncertainMessage, discoveryCommitAllowed, livePairInitialized, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { parseSlippagePercent, parseValidityMinutes } from '../../lib/tradeSettings.js'
 import { isTradingLookupRoute, tradingListKindFor, tradingRouting } from '../../lib/routing.js'
-import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
+import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from '../../features/live/routePresentation.js'
 import { liquidityOperationAvailable } from '../../features/live/useLiquidityWorkflowController.js'
 
 describe('standalone trading UI model', () => {
@@ -26,6 +26,15 @@ describe('standalone trading UI model', () => {
 		expect(liveRouteLoadingPresentation(`market/${pool}`)).toEqual(liveWorkflowRoutePresentation('market'))
 		expect(liveRouteLoadingPresentation(`liquidity/${pool}`)).toEqual(liveWorkflowRoutePresentation('liquidity'))
 		expect(liveRouteLoadingPresentation('create-market')).toEqual(liveWorkflowRoutePresentation('create-market'))
+		expect(liveRouteLoadingPresentation('market')).toEqual(liveLookupRoutePresentation('market'))
+	})
+
+	test('names the market list after the Markets tab while an addressed market keeps the singular title', () => {
+		expect(liveLookupRoutePresentation('market').title).toBe('Markets')
+		expect(liveLookupRoutePresentation('market').description).toBe(liveWorkflowRoutePresentation('market').description)
+		expect(liveRouteLoadingPresentation(`market/0x${'ab'.repeat(20)}`).title).toBe('Market')
+		expect(liveLookupRoutePresentation('liquidity')).toEqual(liveWorkflowRoutePresentation('liquidity'))
+		expect(liveLookupRoutePresentation('create-market')).toEqual(liveWorkflowRoutePresentation('create-market'))
 	})
 
 	test('presents liquidity as its own workflow instead of repeating the market header', () => {

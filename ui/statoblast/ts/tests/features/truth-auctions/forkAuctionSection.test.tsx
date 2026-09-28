@@ -7,6 +7,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
@@ -1468,58 +1470,57 @@ describe('ForkAuctionSection', () => {
 		expect(submitBidButton.disabled).toBe(true)
 	})
 
-	test('keeps fork-auction actions disabled off Sepolia and shows switch-network recovery', async () => {
+	const createLiveAuctionProps = (accountState: AccountState) => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
 			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
 			truthAuctionStartedAt: 1n,
 		})
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }),
-					currentStageView: 'auction',
-					forkAuctionDetails: createForkAuctionDetails({
-						currentTime: 5n,
-						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
-						questionOutcome: 'yes',
-						securityPoolAddress: currentChildPool.securityPoolAddress,
-						systemState: 'forkTruthAuction',
-						truthAuction: {
-							accumulatedBidAttoEth: 0n,
-							auctionEndsAt: 604_801n,
-							clearingPrice: 1n,
-							clearingTick: 0n,
-							bidAtClearingTickAttoEth: 0n,
-							attoEthRaiseCap: 1n,
-							attoEthRaised: 0n,
-							finalized: false,
-							hitCap: false,
-							maxAttoRepBeingSold: 1n,
-							minBidSizeAttoEth: 1n,
-							attoRepPurchasableAtBid: undefined,
-							timeRemaining: 604_796n,
-							totalAttoRepPurchased: 0n,
-							underfunded: false,
-							underfundedThreshold: 0n,
-							underfundedWinningAttoEth: 0n,
-						},
-						truthAuctionAddress: currentChildPool.truthAuctionAddress,
-						truthAuctionStartedAt: 1n,
-						universeId: currentChildPool.universeId,
-					}),
-					forkAuctionForm: createForkAuctionForm({
-						submitBidAmount: '1',
-						submitBidPrice: '1',
-					}),
-					previewPool: currentChildPool,
-					securityPools: [currentChildPool],
-					selectedStageView: 'auction',
-				}),
-			),
-		)
+		return createProps({
+			accountState,
+			currentStageView: 'auction',
+			forkAuctionDetails: createForkAuctionDetails({
+				currentTime: 5n,
+				parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+				questionOutcome: 'yes',
+				securityPoolAddress: currentChildPool.securityPoolAddress,
+				systemState: 'forkTruthAuction',
+				truthAuction: {
+					accumulatedBidAttoEth: 0n,
+					auctionEndsAt: 604_801n,
+					clearingPrice: 1n,
+					clearingTick: 0n,
+					bidAtClearingTickAttoEth: 0n,
+					attoEthRaiseCap: 1n,
+					attoEthRaised: 0n,
+					finalized: false,
+					hitCap: false,
+					maxAttoRepBeingSold: 1n,
+					minBidSizeAttoEth: 1n,
+					attoRepPurchasableAtBid: undefined,
+					timeRemaining: 604_796n,
+					totalAttoRepPurchased: 0n,
+					underfunded: false,
+					underfundedThreshold: 0n,
+					underfundedWinningAttoEth: 0n,
+				},
+				truthAuctionAddress: currentChildPool.truthAuctionAddress,
+				truthAuctionStartedAt: 1n,
+				universeId: currentChildPool.universeId,
+			}),
+			forkAuctionForm: createForkAuctionForm({
+				submitBidAmount: '1',
+				submitBidPrice: '1',
+			}),
+			previewPool: currentChildPool,
+			securityPools: [currentChildPool],
+			selectedStageView: 'auction',
+		})
+	}
+
+	test('keeps fork-auction actions disabled off Sepolia and shows switch-network recovery', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveAuctionProps(createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }))))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -1529,6 +1530,20 @@ describe('ForkAuctionSection', () => {
 		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
+
+	for (const [accountState, fixLabel] of [
+		[createAccountState({ address: undefined, ethBalanceAttoEth: 10n ** 18n }), 'Connect wallet'],
+		[createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }), 'Switch to Sepolia'],
+	] as const)
+		test(`offers the ${fixLabel} fix on fork-auction actions the wallet blocks`, async () => {
+			const { calls, walletActions } = createWalletActions()
+			const renderedComponent = await renderIntoDocument(h(WalletActionsProvider, { walletActions }, h(ForkAuctionSection, createLiveAuctionProps(accountState))))
+			cleanupRenderedComponent = renderedComponent.cleanup
+			const fix = expectWalletFixDescribesAction(document.body, 'Submit bid', fixLabel)
+			expect(document.body.textContent).not.toContain('Connect a wallet before using fork and auction actions.')
+			fireEvent.click(fix)
+			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+		})
 
 	test('keeps fork-auction downstream blocker copy hidden off Sepolia', async () => {
 		const currentChildPool = createChildPool({

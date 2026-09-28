@@ -48,7 +48,8 @@ function tradingDocumentTitle(route: ResolvedTradingRoute) {
 	let label = `${route.charAt(0).toUpperCase()}${route.slice(1)}`
 	if (route === 'not-found') label = appCopy.notFound
 	if (route === 'create-market' || route.startsWith('create-market/')) label = appCopy.createMarket
-	if (route === 'market' || route.startsWith('market/')) label = appCopy.market
+	if (route === 'market') label = appCopy.markets
+	if (route.startsWith('market/')) label = appCopy.market
 	if (route.startsWith('liquidity/')) label = appCopy.liquidity
 	if (route.startsWith('security-pool/')) label = appCopy.securityPool
 	return appCopy.documentTitle(label)

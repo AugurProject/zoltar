@@ -169,6 +169,7 @@ export interface RichListRecord {
 	escalation_claims?: JsonRecord[]
 	auction_claims?: JsonRecord[]
 	lp_positions?: JsonRecord[]
+	trading_pnl?: JsonRecord
 	fork_participation?: JsonRecord[]
 	report_participation?: JsonRecord[]
 	portfolioPagination?: JsonRecord

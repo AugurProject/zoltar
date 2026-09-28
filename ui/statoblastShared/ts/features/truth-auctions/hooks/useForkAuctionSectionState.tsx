@@ -20,7 +20,7 @@ import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementAc
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import { useForkAuctionInteractionState } from './useForkAuctionInteractionState.js'
@@ -304,12 +304,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const onSettlementBidSelectionChange = (bidKey: string, checked: boolean) => {
 		setSelectedSettlementBidKeys(currentKeys => updateTruthAuctionSettlementBidSelection(currentKeys, bidKey, checked))
 	}
-	const interactionDisabledReason = (() => {
-		if (context.accountState.address === undefined) return forkAuctionCopy.forkActionWalletRequired
-		if (!context.isOnActiveAppChain) return getWrongNetworkReason()
-
-		return undefined
-	})()
+	const walletGuard = getWalletActiveAppChainGuardState({ accountAddress: context.accountState.address, isOnActiveAppChain: context.isOnActiveAppChain, walletRequiredReason: forkAuctionCopy.forkActionWalletRequired })
 	const forkPoolState = evaluateSecurityPoolState({
 		forkStage: deriveSecurityPoolForkStage({
 			currentStage: context.currentStage,
@@ -329,9 +324,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const renderStageActionButton = createForkAuctionActionRenderer({
 		activeAction: context.forkAuctionActiveAction,
 		forkPoolState,
-		interactionDisabledReason,
-		isOnActiveAppChain: context.isOnActiveAppChain,
-		wrongNetworkReason: getWrongNetworkReason(),
+		walletGuard,
 	})
 	const truthAuctionBidGuardMessage = (() => {
 		if (isTruthAuctionDetailsLoading) return undefined

@@ -169,7 +169,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 	const tradingRows = trading.map(item =>
 		operationRow(
 			String(item['question_title'] ?? 'Augur AMM market'),
-			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%')} YES`} · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
+			`${item['conditional_yes_bps'] === null || item['conditional_yes_bps'] === undefined ? 'No reserve price' : `${exactUnit(String(item['conditional_yes_bps']), 2, '%')} YES`} · ${exactUnit(String(item['eth_volume_24h_atto_eth'] ?? '0'), 18, 'ETH')} 24-hour volume · ${exactUnit(String(item['eth_volume_atto_eth'] ?? '0'), 18, 'ETH')} all-time volume · ${operationCounted(item['swap_count'], 'swap')} · ${operationCounted(item['lp_holder_count'], 'LP participant')}`,
 			String(item['pair_address'] ?? ''),
 			item['price_block_number'],
 			operationsHref(`/operations/trading/${encodeURIComponent(String(item['pair_address'] ?? ''))}`),

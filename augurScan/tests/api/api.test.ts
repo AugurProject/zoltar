@@ -232,6 +232,23 @@ test('validates operations catalogs and timeline identities before querying', as
 	}
 })
 
+test('validates trading activity cursors before querying', async () => {
+	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
+	databases.push(database)
+	const market = `0x${'1'.repeat(40)}`
+	const otherMarket = `0x${'2'.repeat(40)}`
+	const snapshot = ['9', `0x${'3'.repeat(64)}`, '0', 'abi', 'application', 'projection'] as const
+	const cursorFor = (domain: string, identity: string) => btoa(JSON.stringify([1, domain, identity, ...snapshot, '9', `0x${'4'.repeat(64)}`, 2]))
+	const malformed = await handleApi(new Request(`http://localhost/api/v1/state/trading/1/${market}?activityCursor=not-a-cursor`), database)
+	expect(malformed?.status).toBe(400)
+	expect(await malformed?.json()).toEqual({ error: 'cursor is invalid' })
+	for (const cursor of [cursorFor('trading-activity', otherMarket), cursorFor('trading', market)]) {
+		const response = await handleApi(new Request(`http://localhost/api/v1/state/trading/1/${market}?activityCursor=${encodeURIComponent(cursor)}`), database)
+		expect(response?.status).toBe(400)
+		expect(await response?.json()).toEqual({ error: 'cursor does not match the requested entity' })
+	}
+})
+
 test('requires a complete network and address for account transactions', async () => {
 	const database = new SQL('postgres://user:unused@127.0.0.1:1/unused', { connectionTimeout: 1 })
 	databases.push(database)

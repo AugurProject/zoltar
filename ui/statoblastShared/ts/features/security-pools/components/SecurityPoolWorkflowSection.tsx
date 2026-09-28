@@ -282,6 +282,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 											if (loadedSelectedPool !== undefined) onLoadPoolOracleManager(loadedSelectedPool.managerAddress)
 										}}
 										requestReason={model.requestPriceOpenGuardMessage}
+										requestWalletBlocker={model.requestPriceOpenWalletBlocker}
 										onRequest={openRequestPriceReview}
 									/>
 								}
@@ -353,6 +354,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 								poolState={selectedPoolStateModel}
 								requestPriceGuardMessage={model.requestPriceGuardMessage}
 								requestPriceOpenGuardMessage={model.requestPriceOpenGuardMessage}
+								requestPriceOpenWalletBlocker={model.requestPriceOpenWalletBlocker}
 								requestPriceTransactionValueAttoEth={model.requestPriceTransactionValueAttoEth}
 								selectedPoolOracleMetricValues={model.selectedPoolOracleMetricValues}
 							/>
@@ -361,9 +363,10 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				</section>
 			)}
 			<RequestPriceModal
-				canRequest={selectedPoolStateModel.actions.requestPrice.enabled && model.canUseOracleActions}
+				canRequest={selectedPoolStateModel.actions.requestPrice.enabled}
 				closeOnSuccessKey={poolPriceOracleResult?.action === 'requestPrice' ? poolPriceOracleResult.hash : undefined}
 				confirmationGuardMessage={model.requestPriceConfirmationGuardMessage}
+				confirmationWalletBlocker={model.requestPriceConfirmationWalletBlocker}
 				getReturnFocusTarget={() => {
 					const panel = document.getElementById(SELECTED_POOL_WORKFLOW_PANEL_ID)
 					return panel?.querySelector<HTMLElement>('.oracle-actions .tx-action-button:not(:disabled)') ?? panel?.querySelector<HTMLElement>('.workflow-metric-grid button.link') ?? document.getElementById(PRICE_ORACLE_HEADING_ID) ?? document.querySelector<HTMLElement>('.pool-oracle-status button:not(:disabled)')

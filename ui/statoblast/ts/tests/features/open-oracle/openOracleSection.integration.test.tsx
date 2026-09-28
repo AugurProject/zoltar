@@ -265,6 +265,11 @@ describe.serial('OpenOracleSection integration', () => {
 		const reportDetails = await loadOpenOracleReportDetails(uiReadClient, getOpenOracleAddress(), reportId)
 
 		await clickElement(within(document.body).getByRole('button', { name: 'Browse' }))
+		// Browsing opens on favorites; the created report was downloaded after creation but is not a favorite until it is opened.
+		await waitFor(() => {
+			expect(within(document.body).getByRole('button', { name: 'Show downloaded reports' })).not.toBeNull()
+		})
+		await clickElement(within(document.body).getByRole('button', { name: 'Show downloaded reports' }))
 		await waitFor(() => {
 			expect(
 				within(document.body).getByRole('heading', {
@@ -277,6 +282,13 @@ describe.serial('OpenOracleSection integration', () => {
 		await waitFor(() => {
 			const context = document.body.querySelector('.sticky-object-context')
 			if (!(context instanceof HTMLElement)) throw new Error('Expected selected report context')
+		})
+		await waitFor(() => {
+			expect(
+				within(document.body)
+					.getByRole('button', { name: `Favorite: Report #${reportId.toString()}` })
+					.getAttribute('aria-pressed'),
+			).toBe('true')
 		})
 		let economicsSummary: HTMLElement | undefined
 		await waitFor(() => {

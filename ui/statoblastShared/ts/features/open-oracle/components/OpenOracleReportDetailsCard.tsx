@@ -7,11 +7,13 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
+import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -26,6 +28,7 @@ import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability, type OpenOracleDisputeInputField } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
+import { getOpenOracleReportEntityId } from '../lib/reportBrowse.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 import {
 	DISPUTE_REPORT_MODAL,
@@ -236,7 +239,12 @@ export function OpenOracleReportDetailsCard({
 	return (
 		<>
 			<StickyObjectContext
-				badge={<Badge tone={statusTone}>{status}</Badge>}
+				badge={
+					<div className='open-oracle-report-badges'>
+						<FavoriteToggle app='statoblast' entityLabel={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())} id={getOpenOracleReportEntityId(openOracleReportDetails.reportId)} kind='oracleReport' />
+						<Badge tone={statusTone}>{status}</Badge>
+					</div>
+				}
 				eyebrow={openOracleCopy.openOracleReportDetails}
 				title={openOracleCopy.formatReportNumberTitle(openOracleReportDetails.reportId.toString())}
 				items={[
@@ -480,10 +488,13 @@ export function OpenOracleReportDetailsCard({
 							pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(selectedWithdrawalItem.symbol) : openOracleCopy.withdrawingBalance(selectedWithdrawalItem.symbol)}
 							onClick={() => onWithdrawOpenOracleBalance(selectedWithdrawalItem.key, selectedWithdrawalAmount)}
 							pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === selectedWithdrawalItem.key}
-							availability={{
-								disabled: !isOnActiveAppChain || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
-								reason: withdrawalDisabledReason,
-							}}
+							availability={withWalletGuardFirst(
+								{
+									disabled: !isOnActiveAppChain || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
+									reason: withdrawalDisabledReason,
+								},
+								getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected }),
+							)}
 						/>
 					</div>
 				</OperationModal>
