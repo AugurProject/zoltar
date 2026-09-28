@@ -1,5 +1,7 @@
 import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
+import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
+import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
@@ -16,6 +18,7 @@ export function PriceRequestPreview({
 	requestValue,
 	reason,
 	error,
+	errorWalletBlocker,
 	preparing,
 	hideReason,
 	onClose,
@@ -25,6 +28,8 @@ export function PriceRequestPreview({
 	requestValue: bigint | undefined
 	reason: string
 	error: string | undefined
+	/** The wallet prerequisite, when it is the error that blocks the request. */
+	errorWalletBlocker?: WalletActionBlocker | undefined
 	preparing: boolean
 	hideReason: boolean
 	onClose: () => void
@@ -33,6 +38,8 @@ export function PriceRequestPreview({
 }) {
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
+	const actionButtonRef = useRef<HTMLButtonElement>(null)
+	const availability = { disabled: onReview === undefined, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [error])
@@ -68,9 +75,11 @@ export function PriceRequestPreview({
 					<div className='actions'>
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
 							{visibleFeedback === undefined ? undefined : (
-								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
-									{visibleFeedback}
-								</div>
+								<WalletActionFixReason actionButtonRef={actionButtonRef} availability={availability} id={reasonId}>
+									<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
+										{visibleFeedback}
+									</div>
+								</WalletActionFixReason>
 							)}
 							<TransactionActionButton
 								idleLabel={
@@ -81,7 +90,8 @@ export function PriceRequestPreview({
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
 								onClick={onReview ?? (() => undefined)}
-								availability={{ disabled: onReview === undefined, reason }}
+								actionButtonRef={actionButtonRef}
+								availability={availability}
 								disabledReasonElementId={reasonId}
 								showDisabledReason={false}
 								tone='primary'

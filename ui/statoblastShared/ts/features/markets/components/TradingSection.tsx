@@ -22,6 +22,7 @@ import { TransactionReview } from '@zoltar/ui-core-shared/components/Transaction
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
@@ -238,6 +239,10 @@ export function TradingSection({
 		if (!actionEnabled) return undefined
 		return guardMessage
 	}
+	// For a selected pool the modal guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled.
+	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
+	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined) =>
+		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -436,13 +441,7 @@ export function TradingSection({
 				/>
 				<p className='detail'>{tradingCopy.retentionFeeEstimateDetail}</p>
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={tradingCopy.mintCompleteSetsActionLabel}
-						pendingLabel={tradingCopy.mintingCompleteSets}
-						onClick={onCreateCompleteSet}
-						pending={tradingActiveAction === 'createCompleteSet'}
-						availability={{ disabled: !isOnActiveAppChain || !mintEnabled || mintGuardMessage !== undefined, reason: getModalActionReason(mintEnabled, mintGuardMessage) }}
-					/>
+					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage)} />
 				</div>
 			</OperationModal>
 
@@ -473,7 +472,7 @@ export function TradingSection({
 						pendingLabel={tradingCopy.redeemingCompleteSets}
 						onClick={onRedeemCompleteSet}
 						pending={tradingActiveAction === 'redeemCompleteSet'}
-						availability={{ disabled: !isOnActiveAppChain || !redeemCompleteSetsEnabled || redeemCompleteSetGuardMessage !== undefined, reason: getModalActionReason(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage) }}
+						availability={getModalActionAvailability(redeemCompleteSetsEnabled, redeemCompleteSetGuardMessage)}
 					/>
 				</div>
 			</OperationModal>
@@ -517,13 +516,7 @@ export function TradingSection({
 					risks={[tradingCopy.shareMigrationRisk]}
 				/>
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={tradingCopy.migrateShares}
-						pendingLabel={tradingCopy.migratingShares}
-						onClick={onMigrateShares}
-						pending={tradingActiveAction === 'migrateShares'}
-						availability={{ disabled: !isOnActiveAppChain || !migrateSharesEnabled || migrateSharesGuardMessage !== undefined, reason: getModalActionReason(migrateSharesEnabled, migrateSharesGuardMessage) }}
-					/>
+					<TransactionActionButton idleLabel={tradingCopy.migrateShares} pendingLabel={tradingCopy.migratingShares} onClick={onMigrateShares} pending={tradingActiveAction === 'migrateShares'} availability={getModalActionAvailability(migrateSharesEnabled, migrateSharesGuardMessage)} />
 				</div>
 			</OperationModal>
 
@@ -544,13 +537,7 @@ export function TradingSection({
 					risks={[tradingCopy.resolvedShareRisk]}
 				/>
 				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={tradingCopy.redeemShares}
-						pendingLabel={tradingCopy.redeemingShares}
-						onClick={onRedeemShares}
-						pending={tradingActiveAction === 'redeemShares'}
-						availability={{ disabled: !isOnActiveAppChain || !redeemSharesEnabled || redeemSharesGuardMessage !== undefined, reason: getModalActionReason(redeemSharesEnabled, redeemSharesGuardMessage) }}
-					/>
+					<TransactionActionButton idleLabel={tradingCopy.redeemShares} pendingLabel={tradingCopy.redeemingShares} onClick={onRedeemShares} pending={tradingActiveAction === 'redeemShares'} availability={getModalActionAvailability(redeemSharesEnabled, redeemSharesGuardMessage)} />
 				</div>
 			</OperationModal>
 		</>

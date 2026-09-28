@@ -2,7 +2,8 @@ import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
+import type { OperationModalProps, WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
+import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { useId, useState } from 'preact/hooks'
 import { formatCurrencyInputBalance, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
@@ -23,6 +24,7 @@ export function VaultBackingFactorForm({
 	executionRepPerEthPrice,
 	poolSecurityMultiplierBps,
 	onAdjust,
+	walletBlocker,
 }: {
 	details: SecurityVaultDetails | undefined
 	executionRepPerEthPrice?: bigint | undefined
@@ -32,6 +34,8 @@ export function VaultBackingFactorForm({
 	busy: boolean
 	pending: boolean
 	onAdjust: (limit: string) => void
+	/** The wallet prerequisite, when it is the `blocker`. */
+	walletBlocker?: WalletActionBlocker | undefined
 }) {
 	const [limitInput, setLimit] = useState<string | undefined>(undefined)
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
@@ -71,7 +75,7 @@ export function VaultBackingFactorForm({
 					showDisabledReason={!fieldErrorShown}
 					disabledReasonElementId={fieldErrorShown ? errorId : undefined}
 					onClick={() => onAdjust(limit)}
-					availability={{ disabled: busy || reason !== undefined, reason }}
+					availability={withWalletBlocker({ disabled: busy || reason !== undefined, reason }, walletBlocker)}
 				/>
 			</div>
 		</>

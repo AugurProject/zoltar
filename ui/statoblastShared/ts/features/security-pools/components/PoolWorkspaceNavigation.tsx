@@ -6,6 +6,8 @@ import * as copy from '../../../copy/poolWorkspace.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
+import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 
 const primaryViews: readonly SelectedPoolView[] = ['vaults', 'trading', 'reporting']
 const moreViews: readonly SelectedPoolView[] = ['price-oracle', 'staged-operations', 'fork-workflow']
@@ -69,6 +71,8 @@ export type PoolOracleStatus = {
 	priceValidUntilTimestamp?: bigint | undefined
 	requestDisabledReason: string | undefined
 	requestPending: boolean
+	/** The wallet prerequisite, when it is the request's disabled reason. */
+	requestWalletBlocker?: WalletActionBlocker | undefined
 }
 
 /** The pool's Open Oracle price with its validity or pending countdown, and the one action that moves it forward: view the pending report or request a new price. */
@@ -82,7 +86,16 @@ export function PoolOracleStatusRow({ needsPrice, oracle, onRequestPrice, onView
 			</button>
 		)
 	else if (needsPrice)
-		action = <TransactionActionButton idleLabel={securityPoolCopy.requestNewPrice} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequestPrice} pending={oracle.requestPending} tone='secondary' availability={{ disabled: oracle.requestDisabledReason !== undefined, reason: oracle.requestDisabledReason }} />
+		action = (
+			<TransactionActionButton
+				idleLabel={securityPoolCopy.requestNewPrice}
+				pendingLabel={securityPoolCopy.requestingNewPrice}
+				onClick={onRequestPrice}
+				pending={oracle.requestPending}
+				tone='secondary'
+				availability={withWalletBlocker({ disabled: oracle.requestDisabledReason !== undefined, reason: oracle.requestDisabledReason }, oracle.requestWalletBlocker)}
+			/>
+		)
 	return (
 		<div className={`pool-attention-item pool-oracle-status${needsPrice && pendingReportId === undefined ? ' warning' : ''}`}>
 			<div className='pool-oracle-status-value'>

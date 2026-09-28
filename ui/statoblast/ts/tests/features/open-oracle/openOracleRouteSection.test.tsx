@@ -7,6 +7,8 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -1257,4 +1259,32 @@ describe('OpenOracleSection route create view', () => {
 		})
 		expect(page.queryByRole('dialog')).toBeNull()
 	})
+
+	for (const [dialogName, launcherName, report] of [
+		['Dispute & swap', 'Dispute & swap', { currentAmount1: 10n * 10n ** 18n, currentAmount2: 5n * 10n ** 18n, currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, disputeDelay: 10n, escalationHalt: 20n * 10n ** 18n, multiplier: 20_000n, reportTimestamp: 100n, settlementTime: 200n }],
+		['Settle report #7', 'Settle report…', { currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 2n, timeType: true }],
+	] as const)
+		for (const [blockedAccount, fixLabel] of [
+			[createAccountState({ address: undefined }), 'Connect wallet'],
+			[createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],
+		] as const)
+			test(`offers the ${fixLabel} fix inside the ${dialogName} dialog when the wallet changes while it is open`, async () => {
+				const { calls, walletActions } = createWalletActions()
+				const renderSection = (accountState: AccountState) => (
+					<WalletActionsProvider walletActions={walletActions}>
+						<OpenOracleSection
+							{...createOpenOracleSectionProps({ accountState, activeView: 'selected-report', openOracleForm: { ...getDefaultOpenOracleFormState(), disputeNewAmount1: '11', disputeNewAmount2: '7', reportId: '7' }, openOracleReportDetails: createOpenOracleReportDetails(report), openOracleReportLookupState: 'ready' })}
+						/>
+					</WalletActionsProvider>
+				)
+				const rendered = await renderIntoDocument(renderSection(createAccountState()))
+				cleanupRenderedComponent = rendered.cleanup
+				await act(() => fireEvent.click(within(document.body).getByRole('button', { name: launcherName })))
+				await act(() => render(renderSection(blockedAccount), rendered.container))
+				const dialog = within(document.body).getByRole('dialog', { name: dialogName })
+				expect(within(dialog).getAllByRole('button', { name: fixLabel })).toHaveLength(1)
+				const fix = expectWalletFixDescribesAction(dialog, dialogName, fixLabel)
+				await act(() => fireEvent.click(fix))
+				expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+			})
 })

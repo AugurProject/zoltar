@@ -42,7 +42,7 @@ import {
 } from '../lib/securityVaultAvailability.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { getActiveAppChainWalletBlocker, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
@@ -255,6 +255,8 @@ export function SecurityVaultSection({
 		vaultExistsOnchain,
 		walletRepBalanceAttoRep,
 	}
+	// The launcher blockers check the wallet first, so while the wallet blocks they hold the wallet reason for each dialog action too.
+	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep', launcherBlockerContext)
 	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit', launcherBlockerContext)
 	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees', launcherBlockerContext)
@@ -288,6 +290,7 @@ export function SecurityVaultSection({
 			busy={securityVaultActiveAction !== undefined}
 			pending={securityVaultActiveAction === 'setVaultUnderwritingLimit'}
 			onAdjust={onSetVaultUnderwritingLimit}
+			walletBlocker={repExitLauncherBlocker === undefined ? undefined : walletBlocker}
 		/>
 	)
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
@@ -311,7 +314,7 @@ export function SecurityVaultSection({
 			vaultExistsOnchain,
 			visibleDepositLauncherBlocker,
 			visibleRepExitLauncherBlocker,
-			walletBlocker: getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain }),
+			walletBlocker,
 		}),
 		...extraReadinessActions,
 	])
@@ -341,6 +344,7 @@ export function SecurityVaultSection({
 		repTokenSymbol,
 		securityVaultActiveAction,
 		securityVaultRepApproval,
+		walletGuard: { reason: depositLauncherBlocker, walletBlocker },
 	}
 	const repWithdrawAmountField =
 		effectiveRepExitMode === 'redeem' ? null : (
@@ -358,6 +362,7 @@ export function SecurityVaultSection({
 			repExitGuardMessage={repExitGuardMessage}
 			repExitMode={effectiveRepExitMode}
 			securityVaultActiveAction={securityVaultActiveAction}
+			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 		/>
 	)
 	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
@@ -449,7 +454,7 @@ export function SecurityVaultSection({
 						pendingLabel={securityPoolCopy.claimingFees}
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }}
+						availability={withWalletGuardFirst({ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }, { reason: claimFeesLauncherBlocker, walletBlocker })}
 					/>
 					<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
 						{commonCopy.cancel}

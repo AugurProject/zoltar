@@ -11,7 +11,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { withWalletBlocker, withWalletGuardFirst, type WalletGuard } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
@@ -55,6 +55,7 @@ export function VaultRepExitActionButton({
 	repExitGuardMessage,
 	repExitMode,
 	securityVaultActiveAction,
+	walletGuard,
 }: {
 	canUseLoadedVaultActions: boolean
 	hasPositiveWithdrawAmount: boolean
@@ -66,6 +67,7 @@ export function VaultRepExitActionButton({
 	repExitGuardMessage: string | undefined
 	repExitMode: VaultRepExitMode
 	securityVaultActiveAction: SecurityVaultSectionProps['securityVaultActiveAction']
+	walletGuard: WalletGuard
 }) {
 	return (
 		<TransactionActionButton
@@ -73,10 +75,13 @@ export function VaultRepExitActionButton({
 			pendingLabel={repExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
 			onClick={repExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}
 			pending={repExitMode === 'redeem' ? securityVaultActiveAction === 'redeemRepFromVault' : securityVaultActiveAction === 'queueWithdrawRep'}
-			availability={{
-				disabled: !repExitEnabled || !canUseLoadedVaultActions || (repExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
-				reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
-			}}
+			availability={withWalletGuardFirst(
+				{
+					disabled: !repExitEnabled || !canUseLoadedVaultActions || (repExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
+					reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
+				},
+				walletGuard,
+			)}
 		/>
 	)
 }
@@ -98,6 +103,7 @@ export function VaultDepositApprovalControl({
 	repTokenSymbol,
 	securityVaultActiveAction,
 	securityVaultRepApproval,
+	walletGuard,
 }: {
 	approveRepEnabled: boolean
 	canUseLoadedVaultActions: boolean
@@ -115,6 +121,7 @@ export function VaultDepositApprovalControl({
 	repTokenSymbol: string
 	securityVaultActiveAction: SecurityVaultSectionProps['securityVaultActiveAction']
 	securityVaultRepApproval: SecurityVaultSectionProps['securityVaultRepApproval']
+	walletGuard: WalletGuard
 }) {
 	const renderDepositActions = (approvalButton: ComponentChildren, approvalNotice: string | undefined, noticeId: string) => (
 		<TransactionActionGroup id={noticeId} message={approvalNotice ?? (canUseLoadedVaultActions ? depositActionGuardMessage : undefined)}>
@@ -124,7 +131,7 @@ export function VaultDepositApprovalControl({
 				pendingLabel={securityPoolCopy.formatDepositingRep(repTokenSymbol)}
 				onClick={onDepositRepToVault}
 				pending={securityVaultActiveAction === 'depositRepToVault'}
-				availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
+				availability={withWalletGuardFirst({ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }, walletGuard)}
 			/>
 			{onCancel === undefined ? undefined : (
 				<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={onCancel}>

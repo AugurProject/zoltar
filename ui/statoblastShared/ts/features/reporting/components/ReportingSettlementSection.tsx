@@ -7,9 +7,13 @@ import { EscalationDepositSelectionList } from './EscalationDepositSelectionList
 import { LoadingAwareText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
+import { useRef } from 'preact/hooks'
+import type { RefObject } from 'preact'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { ActiveReportingDetails, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 
 function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey) {
 	if (details === undefined || details.status !== 'active') return undefined
@@ -18,6 +22,8 @@ function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, sel
 }
 
 type ReportingSettlementSideProps = {
+	/** Set on the first side's settle-all action, which regains focus after the shared wallet fix unblocks it. */
+	actionButtonRef: RefObject<HTMLButtonElement> | undefined
 	effectiveReportingDetails: ReportingDetails | undefined
 	isOnActiveAppChain: boolean
 	isPendingSide: boolean
@@ -35,6 +41,7 @@ type ReportingSettlementSideProps = {
 }
 
 function ReportingSettlementSide({
+	actionButtonRef,
 	effectiveReportingDetails,
 	isOnActiveAppChain,
 	isPendingSide,
@@ -119,6 +126,7 @@ function ReportingSettlementSide({
 				<TransactionActionButton
 					idleLabel={commonCopy.launchAction(winning ? reportingCopy.claimDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearDeposits(side.label))}
 					pendingLabel={winning ? reportingCopy.claimingDeposits(side.label, formatCurrencyBalance(claimAmount)) : reportingCopy.clearingDeposits(side.label)}
+					actionButtonRef={actionButtonRef}
 					onClick={() => onWithdraw(side.key, allWithdrawDepositIndexes)}
 					pending={isPendingSide}
 					disabled={otherSidePending}
@@ -147,6 +155,7 @@ export function ReportingSettlementSection({
 	settlementActionDisabledReasonId,
 	settlementContextMessage,
 	settlementDisabledReasonId,
+	settlementWalletBlocker,
 	sharedReportSettlementDisabledReason,
 	withdrawControlsLocked,
 	withdrawEscalationEnabled,
@@ -167,12 +176,15 @@ export function ReportingSettlementSection({
 	settlementActionDisabledReasonId: string
 	settlementContextMessage: string | undefined
 	settlementDisabledReasonId: string
+	/** The wallet prerequisite, when it is the first reason settlement is blocked. */
+	settlementWalletBlocker: WalletActionBlocker | undefined
 	sharedReportSettlementDisabledReason: string | undefined
 	withdrawControlsLocked: boolean
 	withdrawEscalationEnabled: boolean
 	withdrawGuardMessage: string | undefined
 }) {
 	const withdrawActionPending = reportingActiveAction === 'withdrawEscalation'
+	const firstSettleActionButtonRef = useRef<HTMLButtonElement>(null)
 	const withdrawableSides = (activeReportingDetails?.sides.filter(side => side.userDeposits.length > 0) ?? []).sort((left, right) => Number(right.key === effectiveReportingDetails?.questionOutcome) - Number(left.key === effectiveReportingDetails?.questionOutcome))
 	if (!isPoolQuestionFinalized(effectiveReportingDetails) && !activeReportingDetails?.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)) return undefined
 	if (!isPoolQuestionFinalized(effectiveReportingDetails))
@@ -199,18 +211,21 @@ export function ReportingSettlementSection({
 	return (
 		<SectionBlock className='reporting-settlement-section' title={reportingCopy.settleEscalationDeposits} variant='embedded'>
 			{displayedWithdrawGuardMessage === undefined || displayedWithdrawGuardMessage === sharedReportSettlementDisabledReason ? undefined : (
-				<p className='detail' id={settlementDisabledReasonId}>
-					<LoadingAwareText loading={loadingReportingDetails}>{displayedWithdrawGuardMessage}</LoadingAwareText>
-				</p>
+				<WalletActionFixReason actionButtonRef={firstSettleActionButtonRef} availability={{ disabled: true, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }} id={settlementDisabledReasonId}>
+					<p className='detail' id={settlementDisabledReasonId}>
+						<LoadingAwareText loading={loadingReportingDetails}>{displayedWithdrawGuardMessage}</LoadingAwareText>
+					</p>
+				</WalletActionFixReason>
 			)}
 			{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <p className='detail'>{settlementContextMessage}</p>}
 			{hasImportedForkedDeposits ? <p className='detail'>{reportingCopy.forkCarriedSettlementRedirectDetail}</p> : undefined}
 			{shouldShowWithdrawEmptyState && !migrationSettlement ? <p className='detail'>{reportingCopy.walletUnsettledDepositsEmpty}</p> : undefined}
 			{migrationSettlement
 				? undefined
-				: withdrawableSides.map(side => (
+				: withdrawableSides.map((side, index) => (
 						<ReportingSettlementSide
 							key={side.key}
+							actionButtonRef={index === 0 ? firstSettleActionButtonRef : undefined}
 							effectiveReportingDetails={effectiveReportingDetails}
 							isOnActiveAppChain={isOnActiveAppChain}
 							isPendingSide={withdrawActionPending && pendingWithdrawOutcome === side.key}

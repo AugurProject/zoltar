@@ -7,6 +7,8 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ListedSecurityPool, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -275,6 +277,26 @@ void describe('TradingSection', () => {
 		expect(confirm.hasAttribute('disabled')).toBe(true)
 		expect(dialog.textContent).toContain('Request a new price in Price oracle before minting.')
 	})
+
+	for (const [blockedAccount, fixLabel] of [
+		[createAccountState({ address: undefined }), 'Connect wallet'],
+		[createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],
+	] as const)
+		test(`offers the ${fixLabel} fix inside the mint dialog when the wallet changes while it is open`, async () => {
+			const { calls, walletActions } = createWalletActions()
+			const renderSection = (accountState: AccountState) => (
+				<WalletActionsProvider walletActions={walletActions}>
+					<TradingSection {...createTradingSectionProps({ accountState, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />
+				</WalletActionsProvider>
+			)
+			const rendered = await renderIntoDocument(renderSection(createAccountState()))
+			cleanupRenderedComponent = rendered.cleanup
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			await act(() => render(renderSection(blockedAccount), rendered.container))
+			const fix = expectWalletFixDescribesAction(within(document.body).getByRole('dialog'), 'Mint complete sets', fixLabel)
+			await act(() => fireEvent.click(fix))
+			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+		})
 
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps()} />)

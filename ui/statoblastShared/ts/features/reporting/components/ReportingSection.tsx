@@ -10,7 +10,6 @@ import { ReportingResultCard } from './ReportingResultCard.js'
 import { ReportingSides } from './ReportingSides.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
-import type { ComponentChild } from 'preact'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -23,6 +22,8 @@ import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkf
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
+import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { pickFirstReason } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
@@ -129,6 +130,8 @@ export function ReportingSection({
 	const settlementDisabledReasonId = useId()
 	const lastTimedOutRefreshBoundaryKey = useRef<string | undefined>(undefined)
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
+	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
+	const reportActionButtonRef = useRef<HTMLButtonElement>(null)
 	const effectiveCurrentTimestamp = currentTimestamp ?? reportingDetails?.currentTime
 	const effectiveReportingDetails = getEffectiveReportingDetails(reportingDetails, effectiveCurrentTimestamp)
 	const activeReportingDetails = effectiveReportingDetails?.status === 'active' ? effectiveReportingDetails : undefined
@@ -284,6 +287,12 @@ export function ReportingSection({
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
 	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage
+	// The wallet blocks reporting when it is on another network, or when no earlier reason precedes the wallet-first report guard.
+	const reportWalletBlocker = !isOnActiveAppChain || pickFirstReason(vaultFundingLoadingReason, fullReportingLoadingReason, reportActionGuardMessage, reportControlsLockedReason) === undefined ? walletBlocker : undefined
+	const reportActionAvailability = withWalletBlocker(
+		{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason },
+		reportWalletBlocker,
+	)
 	const withdrawGuardMessage =
 		withdrawControlsLockedReason ??
 		getReportingWithdrawGuardMessage({
@@ -310,19 +319,6 @@ export function ReportingSection({
 				) : undefined}
 			</div>
 		)
-	let reportingRepApprovalAction: ComponentChild
-	if (reportingRepApprovalRequired) {
-		reportingRepApprovalAction = (
-			<TransactionActionButton
-				idleLabel={reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
-				pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
-				onClick={onApproveReportingRep}
-				pending={reportingActiveAction === 'approveReportingRep'}
-				availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined, reason: !isOnActiveAppChain ? getWrongNetworkReason() : reportingApprovalGuardMessage }}
-			/>
-		)
-	}
-
 	useEffect(() => {
 		if (activeReportingDetails === undefined) return
 		if (escalationPhase !== 'Timed Out') return
@@ -371,6 +367,7 @@ export function ReportingSection({
 				settlementActionDisabledReasonId={settlementActionDisabledReasonId}
 				settlementContextMessage={settlementContextMessage}
 				settlementDisabledReasonId={settlementDisabledReasonId}
+				settlementWalletBlocker={withdrawControlsLockedReason === undefined ? walletBlocker : undefined}
 				sharedReportSettlementDisabledReason={sharedReportSettlementDisabledReason}
 				withdrawControlsLocked={withdrawControlsLocked}
 				withdrawEscalationEnabled={withdrawEscalationEnabled}
@@ -537,26 +534,41 @@ export function ReportingSection({
 							{activeReportingDetails?.forkContinuation && usesWalletFunding ? <ReportingWalletVaultHelp remainingAmount={walletFundingQuote?.remainingVaultRepAttoRep} depositAmount={walletDepositAmount} reportAmount={actualReportDepositAmount} /> : undefined}
 							<div className='reporting-shared-action-region'>
 								{shouldRenderSharedReportSettlementDisabledReason ? (
-									<p className='detail' id={settlementDisabledReasonId}>
-										<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
-									</p>
+									<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId}>
+										<p className='detail' id={settlementDisabledReasonId}>
+											<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
+										</p>
+									</WalletActionFixReason>
 								) : undefined}
 								<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
-									{reportingRepApprovalAction}
+									{reportingRepApprovalRequired ? (
+										<TransactionActionButton
+											idleLabel={reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
+											pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
+											onClick={onApproveReportingRep}
+											pending={reportingActiveAction === 'approveReportingRep'}
+											availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined, reason: !isOnActiveAppChain ? getWrongNetworkReason() : reportingApprovalGuardMessage }}
+											// While the wallet blocks both actions, the report action's reason holds the row's one wallet fix.
+											{...(reportWalletBlocker === undefined ? {} : { disabledReasonElementId: effectiveReportDisabledReasonElementId, showDisabledReason: false })}
+										/>
+									) : undefined}
 									<TransactionActionButton
 										idleLabel={reportButtonLabel}
 										pendingLabel={reportingCopy.reportingAmount(selectedOutcomeLabel, formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n))}
 										onClick={onReportOutcome}
 										pending={reportingActiveAction === 'reportOutcome'}
-										availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportButtonGuardMessage !== undefined, loading: fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason, reason: reportActionDisabledReason }}
+										actionButtonRef={reportActionButtonRef}
+										availability={reportActionAvailability}
 										disabledReasonElementId={effectiveReportDisabledReasonElementId}
 										showDisabledReason={false}
 									/>
 								</div>
 								{standaloneReportDisabledReason === undefined ? undefined : (
-									<p className='detail disabled-reason' id={reportDisabledReasonId}>
-										<LoadingAwareText loading={fullReportingLoadingReason !== undefined && reportActionDisabledReason === fullReportingLoadingReason}>{standaloneReportDisabledReason}</LoadingAwareText>
-									</p>
+									<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={reportDisabledReasonId}>
+										<p className='detail disabled-reason' id={reportDisabledReasonId}>
+											<LoadingAwareText loading={reportActionAvailability.loading === true}>{standaloneReportDisabledReason}</LoadingAwareText>
+										</p>
+									</WalletActionFixReason>
 								)}
 							</div>
 						</>

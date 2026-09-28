@@ -22,6 +22,8 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/openOracle.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -277,6 +279,10 @@ export function renderSelectedReportActionSection({
 				if (!isOnActiveAppChain) return getWrongNetworkReason()
 				return disputeDisabledMessage ?? (disputeSubmission?.blockMessage?.kind === 'visible' ? disputeSubmission.blockMessage.message : undefined)
 			})()
+			const disputeActionAvailability = withWalletGuardFirst(
+				{ disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false, reason: disputeActionDisabledReason },
+				getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.disputeWalletRequiredReason }),
+			)
 			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
 			const sharedApprovalGuardMessageId = `open-oracle-dispute-approval-guard-${disputeReportId}`
 			const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
@@ -360,7 +366,12 @@ export function renderSelectedReportActionSection({
 							</label>
 						</div>
 						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
-						{sharedApprovalGuardMessage === undefined ? undefined : <InlineHint id={sharedApprovalGuardMessageId} message={sharedApprovalGuardMessage} />}
+						{sharedApprovalGuardMessage === undefined ? undefined : (
+							// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
+							<WalletActionFixReason availability={disputeActionAvailability} id={sharedApprovalGuardMessageId}>
+								<InlineHint id={sharedApprovalGuardMessageId} message={sharedApprovalGuardMessage} />
+							</WalletActionFixReason>
+						)}
 						{disputeSubmission?.inputBlockMessage === undefined ? (
 							<>
 								<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token1Symbol)} variant='embedded'>
@@ -410,10 +421,7 @@ export function renderSelectedReportActionSection({
 								pendingLabel={openOracleCopy.submittingDispute}
 								onClick={onDisputeReport}
 								pending={openOracleActiveAction === 'dispute'}
-								availability={{
-									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !disputeAvailability.canAct || disputeSubmission?.canSubmit === false,
-									reason: disputeActionDisabledReason,
-								}}
+								availability={disputeActionAvailability}
 								disabledReasonElementId={disputeActionReasonElementId}
 								showDisabledReason={sharedApprovalGuardMessage === undefined && !disputeActionReasonUsesInputBlockMessage}
 							/>
@@ -457,10 +465,10 @@ export function renderSelectedReportActionSection({
 								pendingLabel={openOracleCopy.settlingReport}
 								onClick={onSettleReport}
 								pending={openOracleActiveAction === 'settle'}
-								availability={{
-									disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct,
-									reason: settleActionDisabledReason,
-								}}
+								availability={withWalletGuardFirst(
+									{ disabled: !isConnected || !isOnActiveAppChain || openOracleForm.reportId.trim() === '' || !settleAvailability.canAct, reason: settleActionDisabledReason },
+									getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected, walletRequiredReason: openOracleCopy.settlementWalletRequiredReason }),
+								)}
 							/>
 						</div>
 					</div>

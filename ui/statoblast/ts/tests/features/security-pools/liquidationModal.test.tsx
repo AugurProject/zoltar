@@ -5,6 +5,8 @@ import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { LiquidationApprovalDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -319,6 +321,22 @@ describe('LiquidationModal', () => {
 		expect(getTransactionButtonState(document.body, 'Execute vault liquidation')).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
 		expect(document.body.textContent?.includes('Switch to Sepolia.')).toBe(true)
 	})
+
+	for (const [overrides, fixLabel] of [
+		[{ accountAddress: undefined }, 'Connect wallet'],
+		[{ isOnActiveAppChain: false }, 'Switch to Sepolia'],
+	] as const)
+		test(`offers the ${fixLabel} fix on the liquidation the wallet blocks`, async () => {
+			const { calls, walletActions } = createWalletActions()
+			const renderedComponent = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<LiquidationModal {...createLiquidationModalProps({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }), ...overrides })} />
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+			await act(() => fireEvent.click(expectWalletFixDescribesAction(document.body, 'Execute vault liquidation', fixLabel)))
+			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+		})
 
 	test('traps focus while open and restores it when closed', async () => {
 		let open = true

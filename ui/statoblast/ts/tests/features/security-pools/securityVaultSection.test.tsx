@@ -10,6 +10,8 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -527,6 +529,32 @@ describe('SecurityVaultSection', () => {
 		}
 		expect(group?.firstElementChild?.className).toBe('tx-action-feedback')
 	})
+
+	for (const [dialogName, blockedAccount, fixLabel] of [
+		['Deposit REP', createAccountState({ address: undefined }), 'Connect wallet'],
+		['Withdraw REP', createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],
+		['Set commitment limit', createAccountState({ address: undefined }), 'Connect wallet'],
+	] as const)
+		test(`offers the ${fixLabel} fix inside the ${dialogName} dialog when the wallet changes while it is open`, async () => {
+			const { calls, walletActions } = createWalletActions()
+			const accountState = signal<AccountState>(createAccountState())
+			const props = createSecurityVaultSectionProps({ modalFirst: true, securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, settlementCollateralAttoEth: 0n }) })
+			const Harness = () => (
+				<WalletActionsProvider walletActions={walletActions}>
+					<SecurityVaultSection {...props} accountState={accountState.value} securityVaultForm={{ ...props.securityVaultForm, depositAmount: '1', repWithdrawAmount: '1' }} />
+				</WalletActionsProvider>
+			)
+			const rendered = await renderIntoDocument(<Harness />)
+			cleanupRenderedComponent = rendered.cleanup
+			fireEvent.click(within(document.body).getByRole('button', { name: dialogName }))
+			await act(() => {
+				accountState.value = blockedAccount
+			})
+			const dialog = within(document.body).getByRole('dialog', { name: dialogName })
+			const fix = expectWalletFixDescribesAction(dialog, dialogName, fixLabel)
+			await act(() => fireEvent.click(fix))
+			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+		})
 
 	test('distinguishes a wallet REP balance failure from an unloaded balance', async () => {
 		const renderedComponent = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ walletRepBalanceError: 'Wallet REP balance RPC failed' })} />)

@@ -17,10 +17,14 @@ type WalletConnectionActiveAppChainGuardParameters = {
 	walletRequiredReason?: string | undefined
 }
 
-type WalletActiveAppChainGuardState = {
-	blocked: boolean
+/** The wallet prerequisite of an action: its text reason and typed blocker, both undefined while the wallet does not block. */
+export type WalletGuard = {
 	reason: string | undefined
 	walletBlocker: WalletActionBlocker | undefined
+}
+
+type WalletActiveAppChainGuardState = WalletGuard & {
+	blocked: boolean
 }
 
 function getWalletRequiredReason(walletRequiredReason: string | undefined) {
@@ -48,6 +52,12 @@ export function withWalletBlocker(availability: ActionAvailability, walletBlocke
 /** Marks a disabled availability with the active application network's wallet prerequisite, when one blocks the action. */
 export function withActiveAppChainWalletBlocker(availability: ActionAvailability, wallet: { accountAddress: Address | string | undefined; isOnActiveAppChain: boolean }) {
 	return withWalletBlocker(availability, getActiveAppChainWalletBlocker(wallet))
+}
+
+/** Checks the wallet before every other prerequisite: while the wallet blocks, the action is disabled with the wallet reason and offers the connect or switch fix; otherwise the availability is unchanged. */
+export function withWalletGuardFirst(availability: ActionAvailability, walletGuard: WalletGuard): ActionAvailability {
+	if (walletGuard.walletBlocker === undefined) return availability
+	return { disabled: true, reason: walletGuard.reason, walletBlocker: walletGuard.walletBlocker }
 }
 
 /** The typed reason a disabled action is unavailable, or undefined when it is available or gives no reason. */

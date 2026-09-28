@@ -12,6 +12,7 @@ import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
+import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -480,10 +481,13 @@ export function OpenOracleReportDetailsCard({
 							pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(selectedWithdrawalItem.symbol) : openOracleCopy.withdrawingBalance(selectedWithdrawalItem.symbol)}
 							onClick={() => onWithdrawOpenOracleBalance(selectedWithdrawalItem.key, selectedWithdrawalAmount)}
 							pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === selectedWithdrawalItem.key}
-							availability={{
-								disabled: !isOnActiveAppChain || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
-								reason: withdrawalDisabledReason,
-							}}
+							availability={withWalletGuardFirst(
+								{
+									disabled: !isOnActiveAppChain || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
+									reason: withdrawalDisabledReason,
+								},
+								getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected }),
+							)}
 						/>
 					</div>
 				</OperationModal>
