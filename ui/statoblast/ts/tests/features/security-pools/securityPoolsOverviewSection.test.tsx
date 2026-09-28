@@ -34,6 +34,7 @@ function createAccountState(overrides: Partial<AccountState> = {}): AccountState
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const securityPool: ListedSecurityPool = {
+		certifiedUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
 		feeEligibleUnderwritingLimitAttoEth: 5n * 10n ** 18n,
@@ -881,7 +882,7 @@ describe('SecurityPoolsOverviewSection', () => {
 	})
 
 	test('shows open interest against capacity with the used share on each row', async () => {
-		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 1n * 10n ** 18n, totalUnderwritingLimitAttoEth: 4n * 10n ** 18n })
+		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 1n * 10n ** 18n, certifiedUnderwritingLimitAttoEth: 4n * 10n ** 18n, totalUnderwritingLimitAttoEth: 4n * 10n ** 18n })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
@@ -930,6 +931,15 @@ describe('SecurityPoolsOverviewSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Open pool at this address' }))
 		})
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(pool.securityPoolAddress, 11n)
+	})
+
+	test('shows no remaining capacity for a pool whose escalation game has started', async () => {
+		const pool = createNumberedPool(1, { ordinaryEscalationGameStarted: true })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
+		expect(rowText).toContain('/ 5.00 ETH')
+		expect(rowText).toContain('0 ETH remaining')
 	})
 
 	test('shows no remaining capacity when the complete-set exchange rate is undefined', async () => {

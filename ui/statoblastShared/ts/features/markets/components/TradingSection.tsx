@@ -44,6 +44,7 @@ import {
 	NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE,
 	NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE,
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
+	getPoolMintingCapacityAttoEth,
 } from '../lib/trading.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import type { ReadinessAction } from '../../types.js'
@@ -101,7 +102,7 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const mintingCapacityAttoEth = selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame ? selectedPool.totalUnderwritingLimitAttoEth : 0n
+	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,

@@ -27,8 +27,10 @@ export function PoolDirectoryRow({
 	currentTimestamp,
 	fetchedAt,
 	onSelect,
+	remainingCapacity,
 }: {
 	fetchedAt: number
+	remainingCapacity: bigint | undefined
 	pool: ListedSecurityPool
 	lifecycleState: SecurityPoolLifecycleState | undefined
 	capacity: bigint | undefined
@@ -67,7 +69,7 @@ export function PoolDirectoryRow({
 				</div>
 				{oracleExpired || oracleMissing ? <span className='pool-oracle-warning'>{oracleExpired ? copy.poolPriceExpired : copy.poolPriceUnavailable}</span> : undefined}
 			</div>
-			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} shareTokenSupplyAttoShares={pool.shareTokenSupplyAttoShares} showUsage />
+			<PoolCapacitySummary capacity={capacity} minted={pool.settlementCollateralAttoEth} remainingCapacity={remainingCapacity} showUsage />
 			<a
 				className='secondary pool-open-link'
 				href={href}

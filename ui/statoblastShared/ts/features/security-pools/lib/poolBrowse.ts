@@ -3,14 +3,14 @@ import { matchesLocalSearch, type LocalBrowseEntry } from '@zoltar/ui-core-share
 import { createDownloadedEntityStore } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue, readStoredMarketDetails } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getRemainingMintCapacity } from '../../markets/lib/trading.js'
+import { getPoolMintingCapacityAttoEth, getRemainingMintCapacity } from '../../markets/lib/trading.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from './securityPoolState.js'
 
 export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
 export type PoolStateFilter = 'all' | SecurityPoolLifecycleState
 
 export type PoolBrowseRow = Readonly<{
-	capacity: bigint | undefined
+	capacity: bigint
 	fetchedAt: number
 	lifecycleState: SecurityPoolLifecycleState | undefined
 	pool: ListedSecurityPool
@@ -90,11 +90,10 @@ function getPoolLifecycleState(pool: ListedSecurityPool) {
 	}).lifecycleState
 }
 
-/** A pool's capacity is its standing ETH commitment, so rows need no REP price. */
+/** Rows show the standing ETH commitment; remaining capacity counts only what can still be minted (zero once escalation starts or the limit is uncertified). */
 export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[]): PoolBrowseRow[] {
 	return entries.map(({ data: pool, fetchedAt }) => {
-		const capacity = pool.totalUnderwritingLimitAttoEth
-		return { capacity, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getRemainingMintCapacity(capacity, pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares) }
+		return { capacity: pool.totalUnderwritingLimitAttoEth, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares) }
 	})
 }
 

@@ -155,7 +155,7 @@ export function SecurityPoolsOverviewSection({
 		return (
 			<div className='comparison-record-list'>
 				{visibleRows.map(row => (
-					<PoolDirectoryRow key={row.pool.securityPoolAddress} pool={row.pool} lifecycleState={row.lifecycleState} capacity={row.capacity} currentTimestamp={currentTimestamp} fetchedAt={row.fetchedAt} onSelect={onSelectSecurityPool} />
+					<PoolDirectoryRow key={row.pool.securityPoolAddress} pool={row.pool} lifecycleState={row.lifecycleState} capacity={row.capacity} currentTimestamp={currentTimestamp} fetchedAt={row.fetchedAt} onSelect={onSelectSecurityPool} remainingCapacity={row.remainingCapacity} />
 				))}
 			</div>
 		)

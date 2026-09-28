@@ -21,6 +21,11 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 	return settlementCollateralAttoEth === 0n && shareTokenSupplyAttoShares !== 0n
 }
 
+/** Pools accept new open interest only while the whole limit is certified and no escalation game has started; otherwise capacity is zero. */
+export function getPoolMintingCapacityAttoEth(pool: { certifiedUnderwritingLimitAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean; totalUnderwritingLimitAttoEth: bigint }) {
+	return pool.certifiedUnderwritingLimitAttoEth === pool.totalUnderwritingLimitAttoEth && !pool.ordinaryEscalationGameStarted && !pool.hasForkContinuationEscalationGame ? pool.totalUnderwritingLimitAttoEth : 0n
+}
+
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
 	if (mintingCapacityAttoEth === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares) === true) return 0n

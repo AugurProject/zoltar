@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test'
 
 function createPool(index: number, overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
+		certifiedUnderwritingLimitAttoEth: 10n * 10n ** 18n,
 		currentRetentionRate: 10n,
 		feeEligibleUnderwritingLimitAttoEth: 0n,
 		forkOutcome: 'none',
@@ -91,9 +92,16 @@ void describe('pool browse rows', () => {
 		expect(filterPoolBrowseRows(rows, { activeUniverseId: 1n, normalizedSearchText: '0x000000000000000000000000000000000000000e', stateFilter: 'all' }).map(row => row.pool.marketDetails.title)).toEqual(['Pool 14'])
 	})
 
-	void test('sorts by remaining capacity, largest first', () => {
-		const rows = toRows([createPool(1, { settlementCollateralAttoEth: 4n * 10n ** 18n }), createPool(2, { totalUnderwritingLimitAttoEth: 0n }), createPool(3, { settlementCollateralAttoEth: 1n * 10n ** 18n })])
-		expect(sortPoolBrowseRows(rows, 'remainingCapacity', 0n).map(row => row.pool.marketDetails.title)).toEqual(['Pool 3', 'Pool 1', 'Pool 2'])
+	void test('sorts by remaining capacity, largest first, with pools that cannot mint at zero', () => {
+		const rows = toRows([
+			createPool(1, { settlementCollateralAttoEth: 4n * 10n ** 18n }),
+			createPool(2, { totalUnderwritingLimitAttoEth: 0n }),
+			createPool(3, { settlementCollateralAttoEth: 1n * 10n ** 18n }),
+			createPool(4, { ordinaryEscalationGameStarted: true }),
+			createPool(5, { certifiedUnderwritingLimitAttoEth: 1n }),
+		])
+		expect(sortPoolBrowseRows(rows, 'remainingCapacity', 0n).map(row => row.pool.marketDetails.title)).toEqual(['Pool 3', 'Pool 1', 'Pool 2', 'Pool 4', 'Pool 5'])
+		expect(rows.find(row => row.pool.marketDetails.title === 'Pool 4')?.remainingCapacity).toBe(0n)
 	})
 
 	void test('sorts open pools by soonest end and puts ended pools after them, most recent first', () => {

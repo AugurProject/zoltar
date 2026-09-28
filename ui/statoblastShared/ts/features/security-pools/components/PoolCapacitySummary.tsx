@@ -12,15 +12,15 @@ function formatCapacityUsedPercent(minted: bigint, capacity: bigint) {
 	return `${(tenths / 10n).toString()}.${(tenths % 10n).toString()}`
 }
 
-export function PoolCapacitySummary({ capacity, minted, shareTokenSupplyAttoShares, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; shareTokenSupplyAttoShares?: bigint; showUnavailableReason?: boolean; showUsage?: boolean }) {
+export function PoolCapacitySummary({ capacity, minted, remainingCapacity, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; remainingCapacity?: bigint | undefined; showUnavailableReason?: boolean; showUsage?: boolean }) {
 	const value = (
 		<>
 			<CurrencyValue value={minted} suffix={commonCopy.eth} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} exactWhenRoundedToZero />}</span>
 		</>
 	)
 	const usedPercent = capacity === undefined ? undefined : formatCapacityUsedPercent(minted, capacity)
-	// Same rule as the remaining-capacity sort: an undefined complete-set exchange rate blocks minting entirely.
-	const remaining = getRemainingMintCapacity(capacity, minted, shareTokenSupplyAttoShares) ?? 0n
+	// Callers pass the mintable remainder (the value the remaining-capacity sort uses); without one, commitment minus open interest.
+	const remaining = remainingCapacity ?? getRemainingMintCapacity(capacity, minted) ?? 0n
 	const usage =
 		showUsage && usedPercent !== undefined && capacity !== undefined
 			? {
