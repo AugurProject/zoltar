@@ -70,6 +70,7 @@
 	--warning-soft: light-dark(rgba(196, 136, 0, 0.12), rgba(245, 200, 106, 0.12));
 	--warning-border: light-dark(rgba(160, 108, 0, 0.32), rgba(245, 200, 106, 0.24));
 	--warning-border-strong: light-dark(rgba(160, 108, 0, 0.6), rgba(245, 200, 106, 0.52));
+	--favorite: var(--warning);
 	--danger: light-dark(rgba(186, 30, 68, 1), rgba(255, 112, 143, 1));
 	--danger-soft: light-dark(rgba(186, 30, 68, 0.08), rgba(255, 112, 143, 0.12));
 	--danger-medium: light-dark(rgba(186, 30, 68, 0.14), rgba(255, 112, 143, 0.2));

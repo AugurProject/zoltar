@@ -156,6 +156,8 @@ export const liveCopy = {
 	noEligiblePools: 'No security pools on this page are available for a new market.',
 	noMarketsOnPage: 'No trading markets on this page.',
 	marketList: 'Markets',
+	favoriteMarkets: 'Favorites',
+	discoveredMarkets: 'All markets',
 	securityPoolList: appCopy.securityPools,
 	securityPoolListDescription: 'Security pools in the selected universe without a trading market.',
 	trade: 'Trade',
