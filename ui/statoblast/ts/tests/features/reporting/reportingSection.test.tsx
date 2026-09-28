@@ -17,6 +17,7 @@ import { getReportingLockedUntilMessage } from '@zoltar/ui-statoblast-shared/fea
 import { ESCALATION_GAME_ACTIVATION_DELAY } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, spyOn, test } from 'bun:test'
+import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
@@ -2641,6 +2642,51 @@ describe('ReportingSection', () => {
 			expect(within(document.body).getAllByRole('button', { name: 'Switch to Sepolia' })).toHaveLength(1)
 			expectWalletFixDescribesAction(document.body, 'Approve 5 REP', 'Switch to Sepolia')
 			expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Switch to Sepolia')
+		})
+
+		test('returns focus to the report action once the connect fix unblocks it', async () => {
+			const accountState = signal<AccountState>(createAccountState({ address: undefined }))
+			const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
+			const props = createProps({
+				reportingDetails: createReportingDetails({ contributionFunding: 'vault', viewerPoolHeldVaultRepBackingAttoRep: rep(6n), viewerVaultExists: true }),
+				reportingForm: createReportingForm({ contributionFunding: 'vault', reportAmount: '5', selectedOutcome: 'yes' }),
+			})
+			const Harness = () => (
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection {...props} accountState={accountState.value} />
+				</WalletActionsProvider>
+			)
+			const rendered = await renderIntoDocument(<Harness />)
+			cleanupRenderedComponent = rendered.cleanup
+			const fix = expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Connect wallet')
+			fix.focus()
+			await act(() => fireEvent.click(fix))
+			fix.blur()
+			await act(() => {
+				accountState.value = createAccountState()
+			})
+			expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
+			expect(document.activeElement).toBe(within(document.body).getByRole('button', { name: reportingButtonLabel('Yes') }))
+		})
+
+		test('returns focus to the first settle-all action once the shared connect fix unblocks it', async () => {
+			const accountState = signal<AccountState>(createAccountState({ address: undefined }))
+			const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
+			const Harness = () => (
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection {...settlementProps(accountState.value)} />
+				</WalletActionsProvider>
+			)
+			const rendered = await renderIntoDocument(<Harness />)
+			cleanupRenderedComponent = rendered.cleanup
+			const fix = within(document.body).getByRole('button', { name: 'Connect wallet' })
+			fix.focus()
+			await act(() => fireEvent.click(fix))
+			fix.blur()
+			await act(() => {
+				accountState.value = createAccountState()
+			})
+			expect(document.activeElement).toBe(within(document.body).getByRole('button', { name: /^(Claim .* REP from Yes|Clear Yes deposits)/ }))
 		})
 
 		test('keeps an earlier reporting reason as text while the wallet is disconnected', async () => {

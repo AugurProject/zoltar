@@ -285,8 +285,8 @@ describe('wallet action fix', () => {
 						onSwitchNetwork: () => undefined,
 					}}
 				>
-					<WalletActionFixReason actionButtonRef={actionButtonRef} availability={state.value.availability} id='report-reason'>
-						{state.value.availability.reason === undefined ? undefined : <p id='report-reason'>{state.value.availability.reason}</p>}
+					<WalletActionFixReason actionButtonRef={actionButtonRef} availability={state.value.availability} id='report-reason' visible={state.value.availability.reason !== undefined}>
+						<p id='report-reason'>{state.value.availability.reason}</p>
 					</WalletActionFixReason>
 					<TransactionActionButton actionButtonRef={actionButtonRef} availability={state.value.availability} disabledReasonElementId='report-reason' idleLabel='Report Yes' onClick={() => undefined} pendingLabel='Reporting…' showDisabledReason={false} />
 				</WalletActionsProvider>

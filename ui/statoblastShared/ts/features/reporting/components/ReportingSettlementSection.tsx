@@ -210,13 +210,16 @@ export function ReportingSettlementSection({
 	const migrationSettlement = activeReportingDetails?.settlementState === 'migration-required' || activeReportingDetails?.settlementState === 'migration-expired'
 	return (
 		<SectionBlock className='reporting-settlement-section' title={reportingCopy.settleEscalationDeposits} variant='embedded'>
-			{displayedWithdrawGuardMessage === undefined || displayedWithdrawGuardMessage === sharedReportSettlementDisabledReason ? undefined : (
-				<WalletActionFixReason actionButtonRef={firstSettleActionButtonRef} availability={{ disabled: true, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }} id={settlementDisabledReasonId}>
-					<p className='detail' id={settlementDisabledReasonId}>
-						<LoadingAwareText loading={loadingReportingDetails}>{displayedWithdrawGuardMessage}</LoadingAwareText>
-					</p>
-				</WalletActionFixReason>
-			)}
+			<WalletActionFixReason
+				actionButtonRef={firstSettleActionButtonRef}
+				availability={{ disabled: !isOnActiveAppChain || !withdrawEscalationEnabled || withdrawGuardMessage !== undefined, reason: displayedWithdrawGuardMessage, walletBlocker: settlementWalletBlocker }}
+				id={settlementDisabledReasonId}
+				visible={displayedWithdrawGuardMessage !== undefined && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason}
+			>
+				<p className='detail' id={settlementDisabledReasonId}>
+					<LoadingAwareText loading={loadingReportingDetails}>{displayedWithdrawGuardMessage}</LoadingAwareText>
+				</p>
+			</WalletActionFixReason>
 			{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <p className='detail'>{settlementContextMessage}</p>}
 			{hasImportedForkedDeposits ? <p className='detail'>{reportingCopy.forkCarriedSettlementRedirectDetail}</p> : undefined}
 			{shouldShowWithdrawEmptyState && !migrationSettlement ? <p className='detail'>{reportingCopy.walletUnsettledDepositsEmpty}</p> : undefined}

@@ -533,13 +533,11 @@ export function ReportingSection({
 							</p>
 							{activeReportingDetails?.forkContinuation && usesWalletFunding ? <ReportingWalletVaultHelp remainingAmount={walletFundingQuote?.remainingVaultRepAttoRep} depositAmount={walletDepositAmount} reportAmount={actualReportDepositAmount} /> : undefined}
 							<div className='reporting-shared-action-region'>
-								{shouldRenderSharedReportSettlementDisabledReason ? (
-									<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId}>
-										<p className='detail' id={settlementDisabledReasonId}>
-											<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
-										</p>
-									</WalletActionFixReason>
-								) : undefined}
+								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId} visible={shouldRenderSharedReportSettlementDisabledReason}>
+									<p className='detail' id={settlementDisabledReasonId}>
+										<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
+									</p>
+								</WalletActionFixReason>
 								<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
 									{reportingRepApprovalRequired ? (
 										<TransactionActionButton
@@ -563,13 +561,11 @@ export function ReportingSection({
 										showDisabledReason={false}
 									/>
 								</div>
-								{standaloneReportDisabledReason === undefined ? undefined : (
-									<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={reportDisabledReasonId}>
-										<p className='detail disabled-reason' id={reportDisabledReasonId}>
-											<LoadingAwareText loading={reportActionAvailability.loading === true}>{standaloneReportDisabledReason}</LoadingAwareText>
-										</p>
-									</WalletActionFixReason>
-								)}
+								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={reportDisabledReasonId} visible={standaloneReportDisabledReason !== undefined}>
+									<p className='detail disabled-reason' id={reportDisabledReasonId}>
+										<LoadingAwareText loading={reportActionAvailability.loading === true}>{standaloneReportDisabledReason}</LoadingAwareText>
+									</p>
+								</WalletActionFixReason>
 							</div>
 						</>
 					)}

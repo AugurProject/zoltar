@@ -74,13 +74,11 @@ export function PriceRequestPreview({
 					) : undefined}
 					<div className='actions'>
 						<div className='transaction-plan-action transaction-plan-action-wide transaction-plan-action-final'>
-							{visibleFeedback === undefined ? undefined : (
-								<WalletActionFixReason actionButtonRef={actionButtonRef} availability={availability} id={reasonId}>
-									<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
-										{visibleFeedback}
-									</div>
-								</WalletActionFixReason>
-							)}
+							<WalletActionFixReason actionButtonRef={actionButtonRef} availability={availability} id={reasonId} visible={visibleFeedback !== undefined}>
+								<div className='tx-action-feedback' ref={errorRef} aria-live='polite'>
+									{visibleFeedback}
+								</div>
+							</WalletActionFixReason>
 							<TransactionActionButton
 								idleLabel={
 									<>
