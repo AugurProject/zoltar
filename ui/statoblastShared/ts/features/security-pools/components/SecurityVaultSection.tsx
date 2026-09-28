@@ -281,7 +281,6 @@ export function SecurityVaultSection({
 		<VaultBackingFactorForm
 			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
-			repPerEthPrice={repPerEthPrice}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 			key={autoLoadKey}
 			details={currentSelectedVaultDetails}

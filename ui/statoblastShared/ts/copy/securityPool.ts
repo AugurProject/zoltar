@@ -225,7 +225,6 @@ export const backingRatioChangeSuccessDetail = 'The standing ETH commitment has 
 export const queuedVaultAutomaticExecution = 'Executes automatically when the oracle report settles.'
 
 export const exposureSupported = 'Commitment limit'
-export const repEquivalent = 'REP equivalent'
 
 export const queuedVaultOperationExpired = 'Queued operation expired'
 export const queuedVaultOperationExpiredDetail = 'The execution window ended before this operation completed.'

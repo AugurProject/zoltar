@@ -37,7 +37,6 @@ function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyH
 }
 
 export function VaultMetricGrid({
-	repPerEthPrice,
 	openInterestAttoEth,
 	associatedRepPerCapacityBps,
 	badDebtAttoEth,
@@ -69,7 +68,7 @@ export function VaultMetricGrid({
 					<div className='vault-preview-capacity-ownership'>
 						<span>{securityPoolCopy.exposureSupported}</span>
 						<strong>
-							<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+							<VaultExposureValue capacity={underwritingLimitAttoEth} />
 						</strong>
 					</div>
 				</div>
@@ -106,7 +105,7 @@ export function VaultMetricGrid({
 				<div className='vault-detail-hero-primary'>
 					<span>{securityPoolCopy.exposureSupported}</span>
 					<strong>
-						<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+						<VaultExposureValue capacity={underwritingLimitAttoEth} />
 					</strong>
 				</div>
 				<div className='vault-detail-hero-secondary'>

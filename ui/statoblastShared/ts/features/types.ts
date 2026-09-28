@@ -151,8 +151,6 @@ type SecurityPoolsOverviewRouteContentProps = {
 	/** Re-reads the visible page in place on each new block. */
 	onRefreshSecurityPoolPage?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	repPerEthPrice: bigint | undefined
-	uiPriceOracle: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle
 	securityPoolOverviewError: string | undefined
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined

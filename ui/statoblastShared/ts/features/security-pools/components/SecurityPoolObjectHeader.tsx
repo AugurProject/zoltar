@@ -17,7 +17,6 @@ import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { calculateMintingCapacityAttoEth } from '../../markets/lib/trading.js'
 import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
 type SecurityPoolObjectHeaderProps = {
@@ -28,7 +27,6 @@ type SecurityPoolObjectHeaderProps = {
 	/** The pool summary's age; it refreshes in place on each new block. */
 	freshness?: DataFreshness | undefined
 	marketDetails: MarketDetails
-	repPerEthPrice: bigint | undefined
 	selectedPoolHasActualForkActivity: boolean
 	selectedPoolLifecycleState: SecurityPoolLifecycleState | undefined
 	selectedPoolParentPool: ListedSecurityPool | undefined
@@ -44,7 +42,7 @@ function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
 export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	const { currentTimestamp, freshness, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
-	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalUnderwritingLimitAttoEth, props.repPerEthPrice, summaryPool.statoblastSecurityMultiplierBps)
+	const capacity = summaryPool.totalUnderwritingLimitAttoEth
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>

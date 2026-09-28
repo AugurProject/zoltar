@@ -368,8 +368,6 @@ export function useSecurityPoolsRoute({
 			securityPoolPageFreshness,
 			securityPoolOverviewError,
 			securityPools,
-			repPerEthPrice,
-			uiPriceOracle,
 		},
 		securityPools,
 		securityPoolUniverseDirectoryError,

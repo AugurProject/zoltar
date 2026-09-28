@@ -192,7 +192,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					currentTimestamp,
 					freshness: securityPoolsFreshness,
 					marketDetails,
-					repPerEthPrice,
 					selectedPoolHasActualForkActivity: model.selectedPoolHasActualForkActivity,
 					selectedPoolLifecycleState: model.selectedPoolLifecycleState,
 					selectedPoolParentPool: model.selectedPoolParentPool,

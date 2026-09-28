@@ -301,7 +301,6 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
-		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
