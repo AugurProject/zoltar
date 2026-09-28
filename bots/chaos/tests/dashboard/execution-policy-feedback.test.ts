@@ -18,6 +18,7 @@ browserTest(
 		let rejectSave = false
 		let loseCommittedResponse = false
 		let releaseSave = () => {}
+		let notifySaveStarted = () => {}
 		let saveGate: Promise<void> | undefined
 		const executionMutations: unknown[] = []
 		const settingsMutations: unknown[] = []
@@ -78,6 +79,7 @@ browserTest(
 			setCandidate: () => {},
 			setExecution: async value => {
 				executionMutations.push(value)
+				notifySaveStarted()
 				await saveGate
 				if (rejectSave) throw new Error('Execution change rejected')
 				execute = Reflect.get(Object(value), 'execute') === true
@@ -175,6 +177,8 @@ browserTest(
 				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · ready to go live')
 				await capture(`rejected-${width}`)
 				rejectSave = false
+				const saveStarted = Promise.withResolvers<void>()
+				notifySaveStarted = saveStarted.resolve
 				saveGate = new Promise(resolve => {
 					releaseSave = resolve
 				})
@@ -182,6 +186,9 @@ browserTest(
 				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
 				await waitFor("document.querySelector('#execution-status')?.textContent === 'Enabling live execution…'")
 				expect(await cdp.evaluate("document.querySelector('#execution-fieldset')?.disabled")).toBe(true)
+				// The pending UI appears before the server receives the request. Wait for receipt before counting mutations.
+				await saveStarted.promise
+				expect(executionMutations).toHaveLength(before + 2)
 				// A refresh and a repeated submit while the save is in flight neither unlock the form nor send it twice.
 				const inFlight = executionMutations.length
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
