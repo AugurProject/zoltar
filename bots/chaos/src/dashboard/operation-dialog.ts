@@ -255,6 +255,7 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 		preview.disabled = value.fields.length === 0
 		execute.disabled = previewId === undefined
 		status.textContent = [...new Set([...value.blockers, ...(value.fields.length === 0 ? (selected?.blockers ?? []) : [])])].join('. ')
+		if (previewId !== undefined && value.steps.length > 1) status.textContent = 'Simulation and gas checks passed for the first transaction. Later transactions are checked after their prerequisites complete.'
 		transactions.replaceChildren()
 		if (value.steps.length !== 0) {
 			transactions.append(element('h3', 'Transaction preview'))
@@ -333,10 +334,10 @@ export function createOperationDialog(options: { request: (value: unknown) => Pr
 			const transactionSteps = Array.isArray(execution['transactions']) ? execution['transactions'] : []
 			const steps = Array.isArray(execution['steps']) ? execution['steps'] : transactionSteps
 			const active = execution['status'] === 'pending' || ['submitted', 'confirming', 'executing'].includes(string(execution['outcome']))
-			const transactionSignature = JSON.stringify([steps, active])
+			const transactionSignature = JSON.stringify([steps, active, execution['outcome']])
 			if (transactionSignature !== renderedTransactions) {
 				renderedTransactions = transactionSignature
-				receipts.replaceChildren(workflowProgress(steps, active))
+				receipts.replaceChildren(workflowProgress(steps, active, execution['outcome'] === 'skipped'))
 				receipts.setAttribute('aria-busy', String(active))
 				transactions.hidden = steps.length !== 0
 			}

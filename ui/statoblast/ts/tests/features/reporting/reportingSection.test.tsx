@@ -745,7 +745,7 @@ describe('ReportingSection', () => {
 		expect(within(document.body).queryByRole('button', { name: /^Approve / })).toBeNull()
 		expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Wallet REP' }))
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 	})
 
@@ -823,7 +823,7 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
 		expect(document.body.textContent).not.toContain('Paid from: pool vault REP (no approval needed)')
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
 		const reportAction = reportButton.closest('.tx-action')
@@ -834,7 +834,7 @@ describe('ReportingSection', () => {
 		expect(actionRow?.contains(disabledReason)).toBe(false)
 		expect(reportAction?.contains(disabledReason)).toBe(false)
 		expect(reportButton.closest('.reporting-shared-action-region')?.contains(disabledReason)).toBe(true)
-		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP…$/ }))
+		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ }))
 		expect(approvalCalls).toBe(1)
 	})
 
@@ -1599,7 +1599,37 @@ describe('ReportingSection', () => {
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
-		expect((amountInput as HTMLInputElement).value).toBe('4')
+		expect((amountInput as HTMLInputElement).value).toBe('3.000000000000000001')
+	})
+
+	test('displays and autofills precise presets against 1.1 REP', async () => {
+		const renderedComponent = await renderIntoDocument(
+			<ReportingSectionHarness
+				initialProps={{
+					reportingDetails: createReportingDetails({
+						sides: [
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+							{ balance: rep(11n) / 10n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+							{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+						],
+						startBondAttoRep: rep(1n),
+					}),
+					reportingForm: createReportingForm({ selectedOutcome: 'no' }),
+				}}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const queries = within(document.body)
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Min to lead (1.100000000000000001 REP)' }))
+		})
+		const amountInput = queries.getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
+		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Contribution input is unavailable')
+		expect(amountInput.value).toBe('1.100000000000000001')
+		await act(() => {
+			fireEvent.click(queries.getByRole('button', { name: 'Max reward (1.65 REP)' }))
+		})
+		expect(amountInput.value).toBe('1.65')
 	})
 
 	test('autofills the active max-profit preset', async () => {
@@ -2167,7 +2197,7 @@ describe('ReportingSection', () => {
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
 	})
 
-	test('autofills the minimum-outcome-change preset with 1001 REP when another side has 1000 REP', async () => {
+	test('autofills the minimum-outcome-change preset with 1000 REP plus one attoREP when another side has 1000 REP', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ReportingSectionHarness, {
 				initialProps: {
@@ -2194,7 +2224,7 @@ describe('ReportingSection', () => {
 		})
 
 		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution Amount \(REP\)/ })
-		expect((amountInput as HTMLInputElement).value).toBe('1001')
+		expect((amountInput as HTMLInputElement).value).toBe('1000.000000000000000001')
 	})
 
 	test('autofills the max-profit preset with 1500 REP when another side has 1000 REP', async () => {
@@ -2405,7 +2435,7 @@ describe('ReportingSection', () => {
 			const rendered = await renderIntoDocument(h(ReportingSectionHarness, { initialProps: createProps({ reportingDetails: details }) }))
 			cleanupRenderedComponent = rendered.cleanup
 			const status = document.querySelector('.notice-stack-item')
-			expect(status?.textContent).toContain(winning ? "You're winning on Yes. Your 1 REP would be worth about 1 REP if it ended now." : `You're losing on Yes. Add at least 8 REP before ${formatReportingDeadline(300n, 150n)} or your 1 REP is lost.`)
+			expect(status?.textContent).toContain(winning ? "You're winning on Yes. Your 1 REP would be worth about 1 REP if it ended now." : `You're losing on Yes. Add at least 7.000000000000000001 REP before ${formatReportingDeadline(300n, 150n)} or your 1 REP is lost.`)
 			expect(status?.classList.contains(winning ? 'success' : 'warning')).toBe(true)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? "You're winning on Yes." : "You're losing on Yes.")
 			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. Any new report can push this deadline later (up to 7 weeks after the game starts).`)
@@ -2418,7 +2448,7 @@ describe('ReportingSection', () => {
 					scrolled = true
 				}
 				await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Take the lead…' })))
-				expect(input.value).toBe('8')
+				expect(input.value).toBe('7.000000000000000001')
 				expect(scrolled).toBe(true)
 				expect(within(document.body).getByRole('radio', { name: /^Yes/ }).getAttribute('aria-checked')).toBe('true')
 			}

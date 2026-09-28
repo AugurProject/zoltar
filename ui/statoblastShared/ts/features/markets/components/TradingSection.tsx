@@ -25,7 +25,6 @@ import { getWrongNetworkReason, isActiveAppChain } from '@zoltar/ui-core-shared/
 import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
-	calculateMintingCapacityAttoEth,
 	estimateMintCheckpoint,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
@@ -52,7 +51,6 @@ import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | 'redeem-shares' | undefined
 export function TradingSection({
 	accountState,
-	calculationPriceConfigured = false,
 	embedInCard = false,
 	loadingTradingForkUniverse,
 	loadingTradingDetails,
@@ -62,7 +60,6 @@ export function TradingSection({
 	onRedeemShares,
 	onTradingFormChange,
 	poolState,
-	repPerEthPrice,
 	tradingDetails,
 	selectedPool,
 	oraclePriceUsable,
@@ -104,11 +101,7 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const calculationRepPerEthPrice = calculationPriceConfigured ? repPerEthPrice : (repPerEthPrice ?? selectedPool?.lastOraclePrice)
-	const mintingCapacityAttoEth =
-		selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame
-			? calculateMintingCapacityAttoEth(selectedPool.totalUnderwritingLimitAttoEth, calculationRepPerEthPrice, selectedPool.statoblastSecurityMultiplierBps)
-			: 0n
+	const mintingCapacityAttoEth = selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame ? selectedPool.totalUnderwritingLimitAttoEth : 0n
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
@@ -140,7 +133,6 @@ export function TradingSection({
 			mintingCapacityAttoEth,
 			hasSelectedPool,
 			isOnActiveAppChain,
-			isPriceValid: calculationRepPerEthPrice !== undefined && calculationRepPerEthPrice > 0n,
 			mintAmountInput: tradingForm.completeSetAmount,
 			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
@@ -180,7 +172,7 @@ export function TradingSection({
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
-			if (remainingMintCapacity === undefined) return calculationRepPerEthPrice === undefined || calculationRepPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
+			if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {

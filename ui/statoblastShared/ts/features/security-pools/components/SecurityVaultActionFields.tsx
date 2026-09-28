@@ -143,7 +143,7 @@ export function VaultDepositApprovalControl({
 				availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
 			/>
 			{onCancel === undefined ? undefined : (
-				<button className='secondary' type='button' onClick={onCancel}>
+				<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={onCancel}>
 					{commonCopy.cancel}
 				</button>
 			)}

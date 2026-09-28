@@ -5,6 +5,9 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { RetryAction, RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
@@ -58,6 +61,7 @@ export function LiveMarketBrowser({
 	pageMarketCount,
 	discoveryState,
 	discoveryError,
+	freshness,
 	marketPage,
 	workflowLocked,
 	nowSeconds,
@@ -69,6 +73,7 @@ export function LiveMarketBrowser({
 	pageMarketCount: number
 	discoveryState: 'loading' | 'ready' | 'error'
 	discoveryError: string | undefined
+	freshness: DataFreshness
 	marketPage: Readonly<{ start: bigint; total: bigint; previousStart: bigint | undefined; nextStart: bigint | undefined }>
 	workflowLocked: boolean
 	nowSeconds: bigint
@@ -105,7 +110,7 @@ export function LiveMarketBrowser({
 			</div>
 		)
 	let content
-	if (initialLoad) content = <EmptyState live title={liveCopy.discoveringSecurityPoolsFromFactory} />
+	if (initialLoad) content = <SkeletonList label={liveCopy.discoveringSecurityPoolsFromFactory} />
 	else if (discoveryState === 'error' && pageMarketCount === 0) content = <EmptyState title={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} actions={retryAction} />
 	else
 		content = (
@@ -123,13 +128,13 @@ export function LiveMarketBrowser({
 			</>
 		)
 	return (
-		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'}>
-			<OpenPoolForm disabled={workflowLocked} target={lookupRoute} />
+		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'} actions={<UpdatedAgo {...freshness} />}>
+			<OpenPoolForm disabled={false} target={lookupRoute} />
 			{content}
 			<PaginationControls
 				hasNextPage={marketPage.nextStart !== undefined}
 				hasPreviousPage={marketPage.previousStart !== undefined}
-				loading={discoveryState === 'loading' || workflowLocked}
+				loading={discoveryState === 'loading'}
 				summary={pageMarketCount === 0 ? undefined : liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(pageMarketCount), marketPage.total)}
 				onPreviousPage={() => loadMarketPage(marketPage.previousStart)}
 				onNextPage={() => loadMarketPage(marketPage.nextStart)}

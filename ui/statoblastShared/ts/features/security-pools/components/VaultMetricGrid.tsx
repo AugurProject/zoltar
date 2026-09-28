@@ -1,5 +1,6 @@
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -36,7 +37,6 @@ function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyH
 }
 
 export function VaultMetricGrid({
-	repPerEthPrice,
 	openInterestAttoEth,
 	associatedRepPerCapacityBps,
 	badDebtAttoEth,
@@ -68,7 +68,7 @@ export function VaultMetricGrid({
 					<div className='vault-preview-capacity-ownership'>
 						<span>{securityPoolCopy.exposureSupported}</span>
 						<strong>
-							<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+							<VaultExposureValue capacity={underwritingLimitAttoEth} />
 						</strong>
 					</div>
 				</div>
@@ -97,12 +97,15 @@ export function VaultMetricGrid({
 
 	return (
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
-			<p className={`vault-health ${associatedRepToneClass ?? ''}`}>{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}</p>
+			<div className='vault-health-status'>
+				<p className={`vault-health ${associatedRepToneClass ?? ''}`}>{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}</p>
+				<RepPriceStatusLabel />
+			</div>
 			<div className='vault-detail-hero'>
 				<div className='vault-detail-hero-primary'>
 					<span>{securityPoolCopy.exposureSupported}</span>
 					<strong>
-						<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+						<VaultExposureValue capacity={underwritingLimitAttoEth} />
 					</strong>
 				</div>
 				<div className='vault-detail-hero-secondary'>
