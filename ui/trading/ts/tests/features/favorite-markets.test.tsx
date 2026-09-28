@@ -16,7 +16,7 @@ function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveM
 		description: 'Favorite market fixture',
 		endTime: 2n ** 70n,
 		feeBps: 30n,
-		feeEligibleCapacityOwnershipAttoRep: 1n,
+		feeEligibleUnderwritingLimitAttoEth: 1n,
 		initialReportPriorityFeeAttoEthPerGas: 1n,
 		lpTotalSupply: 50n,
 		mintingCapacityCeilingAttoEth: 100n,
@@ -31,7 +31,7 @@ function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveM
 		statoblastSecurityMultiplierBps: 20_000n,
 		systemState: 0,
 		title: `Market ${index.toString()}`,
-		totalCapacityOwnershipAttoRep: 1n,
+		totalUnderwritingLimitAttoEth: 1n,
 		tradingStatus: 6,
 		universeForkTime: 0n,
 		universeId: 1n,
@@ -108,7 +108,8 @@ describe('favorite markets', () => {
 		try {
 			const headings = [...rendered.container.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)
 			expect(headings).toEqual(['Favorites', 'All markets'])
-			const stars = [...rendered.container.querySelectorAll('button.favorite-toggle')].map(star => [star.getAttribute('aria-label'), star.getAttribute('aria-pressed')])
+			// The discovered list keeps its own sort order, so compare the stars without depending on it.
+			const stars = [...rendered.container.querySelectorAll('button.favorite-toggle')].map(star => [star.getAttribute('aria-label'), star.getAttribute('aria-pressed')]).sort()
 			expect(stars).toEqual([
 				['Favorite: Market 1', 'true'],
 				['Favorite: Market 1', 'true'],

@@ -16,13 +16,19 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { usePagedDiscovery, type DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
 import { buildLocalBrowseEntries, normalizeLocalSearchText, type LocalBrowseCollection } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
-import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { MarketRouteContentProps } from '../../types.js'
+import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ZoltarView } from '../../types.js'
 import { QUESTION_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { questionDownloadStore, questionMatchesSearch } from '../../../lib/questionBrowse.js'
 
-type QuestionsViewProps = Pick<MarketRouteContentProps, 'loadingZoltarQuestions' | 'onActiveViewChange' | 'onLoadZoltarQuestionPage' | 'onZoltarForkQuestionIdChange' | 'zoltarQuestionPage' | 'zoltarQuestionsError'> & {
+type QuestionsViewProps = {
+	loadingZoltarQuestions: boolean
+	onActiveViewChange: (view: ZoltarView) => void
+	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
+	onZoltarForkQuestionIdChange: (questionId: string) => void
+	zoltarQuestionPage: MarketDetailsPage | undefined
+	zoltarQuestionsError: string | undefined
 	canFork: boolean
 	hasForked: boolean
 	requestContextKey: number
@@ -99,7 +105,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 									onClick={() => {
 										favorites.setFavorite(question.questionId, true)
 										onZoltarForkQuestionIdChange(question.questionId)
-										onActiveViewChange('universes')
+										onActiveViewChange('fork')
 									}}
 								>
 									{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}

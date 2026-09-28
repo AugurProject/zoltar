@@ -26,7 +26,7 @@ const securityMultiplier = 'Security multiplier'
 const initialReportPriorityFee = 'Initial report priority fee'
 const registeredVaults = 'Registered vaults'
 const perSecondRetentionMultiplier = 'Per-second retention multiplier'
-const totalAndFeeEligibleCapacityOwnership = 'Total / fee-eligible capacity ownership'
+const totalAndFeeEligibleUnderwritingLimits = 'Total / fee-eligible underwriting commitments'
 const mintingCapacity = 'Minting capacity'
 const unknownDiscovery = 'unknown discovery error'
 const loadingSecurityPoolDetails = 'Loading security pool details…'
@@ -143,7 +143,7 @@ export const liveCopy = {
 	initialReportPriorityFee,
 	registeredVaults,
 	perSecondRetentionMultiplier,
-	totalAndFeeEligibleCapacityOwnership,
+	totalAndFeeEligibleUnderwritingLimits,
 	mintingCapacity,
 	unknownDiscovery,
 	loadingSecurityPoolDetails,

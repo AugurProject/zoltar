@@ -12,18 +12,18 @@ const alternateSecurityPoolAddress = getAddress('0x00000000000000000000000000000
 const escalationGameAddress = getAddress('0x00000000000000000000000000000000000000e1')
 const shareTokenAddress = getAddress('0x00000000000000000000000000000000000000b2')
 const defaultForkData = [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n] as const
-const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalCapacityOwnershipAttoRep = 0n, feeEligibleCapacityOwnershipAttoRep = totalCapacityOwnershipAttoRep) => ({
+const createPoolAccountingSnapshot = (settlementCollateralAttoEth = 0n, totalUnderwritingLimitAttoEth = 0n, feeEligibleUnderwritingLimitAttoEth = totalUnderwritingLimitAttoEth) => ({
 	settlementCollateralAttoEth,
 	currentRetentionRate: 0n,
-	feeEligibleCapacityOwnershipAttoRep,
+	feeEligibleUnderwritingLimitAttoEth,
 	feeIndex: 0n,
 	feeIndexRemainder: 0n,
 	lastUpdatedFeeAccumulator: 0n,
 	totalFeesOwedRemainder: 0n,
 	totalClaimableVaultFeesAttoEth: 0n,
-	totalCapacityOwnershipAttoRep,
+	totalUnderwritingLimitAttoEth,
 	unallocatedAccruedFeesAttoEth: 0n,
-	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: 0n,
+	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: 0n,
 	badDebtGeneration: 0n,
 })
 
@@ -36,6 +36,7 @@ describe('securityPools protocol client', () => {
 			},
 			multicall: async () => [],
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 0n
 				throw new Error(`Unexpected read: ${request.functionName}`)
 			},
@@ -51,6 +52,7 @@ describe('securityPools protocol client', () => {
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(currentTimestamp),
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				switch (request.functionName) {
 					case 'escalationGame':
 						return escalationGame
@@ -85,6 +87,7 @@ describe('securityPools protocol client', () => {
 			},
 			multicall: async () => [],
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 0n
 				throw new Error(`Unexpected read: ${request.functionName}`)
 			},
@@ -104,6 +107,7 @@ describe('securityPools protocol client', () => {
 			getLogs: async () => [],
 			multicall: async () => [],
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 0n
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -121,6 +125,7 @@ describe('securityPools protocol client', () => {
 			getBlock: async () => createBlockWithTimestamp(0n),
 			multicall: async () => [],
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return expectedStartIndex + 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					deploymentRangeCalls.push(Array.isArray(request.args) ? [...request.args] : [])
@@ -151,6 +156,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'securityPoolDeploymentCount') {
 					registryReads += 1
@@ -206,6 +212,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -253,6 +260,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 2n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -318,6 +326,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 2n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -409,6 +418,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -474,6 +484,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -545,6 +556,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -615,6 +627,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -696,6 +709,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -759,6 +773,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -826,6 +841,7 @@ describe('securityPools protocol client', () => {
 				throw new Error(`Unexpected multicall contract: ${functionName}`)
 			},
 			readContract: async request => {
+				if (request.functionName === 'getCertifiedUnderwritingLimitAttoEth') return 0n
 				if (request.functionName === 'securityPoolDeploymentCount') return 2n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					return [
@@ -892,9 +908,9 @@ describe('securityPools protocol client', () => {
 		expect(vaultSummaryCalls).toEqual([securityPoolAddress])
 		expect(selectedPool.hasLoadedVaults).toBe(true)
 		expect(selectedPool.vaults).toHaveLength(1)
-		expect(selectedPool.feeEligibleCapacityOwnershipAttoRep).toBe(3n)
+		expect(selectedPool.feeEligibleUnderwritingLimitAttoEth).toBe(3n)
 		expect(selectedPool.totalPoolHeldAttoRep).toBe(5n)
-		expect(selectedPool.totalCapacityOwnershipAttoRep).toBe(9n)
+		expect(selectedPool.totalUnderwritingLimitAttoEth).toBe(9n)
 		expect(deferredPool.hasLoadedVaults).toBe(false)
 		expect(deferredPool.vaults).toEqual([])
 		expect(deferredPool.vaultCount).toBe(2n)
@@ -912,7 +928,7 @@ describe('securityPools protocol client', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				if (request.contracts.length === 7) return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress, 88n, feeEndTimestamp]
+				if (request.contracts.length === 9) return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress, 88n, feeEndTimestamp, 44n, zeroAddress]
 				return getContractFunctionName(request.contracts[0]) === 'isPriceValid' ? [true] : [77n]
 			}),
 			readContract: async () => {
@@ -929,15 +945,26 @@ describe('securityPools protocol client', () => {
 			feeIndexRemainder: 0n,
 			lastUpdatedFeeAccumulator: 0n,
 			settlementCollateralAttoEth: 11n,
-			feeEligibleCapacityOwnershipAttoRep: 17n,
+			feeEligibleUnderwritingLimitAttoEth: 17n,
 			mintingCapacityAttoEth: 55n,
 			shareTokenSupplyAttoShares: 22n,
 			totalPoolHeldAttoRep: 33n,
-			totalCapacityOwnershipAttoRep: 44n,
+			totalUnderwritingLimitAttoEth: 44n,
 			isPriceValid: true,
 			totalFeesOwedRemainder: 0n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'currentRetentionRate', 'getFeeEpochEndTime', 'isPriceValid'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
+		expect(requestedFunctionNames).toEqual([
+			'getPoolAccountingSnapshot',
+			'shareTokenSupplyAttoShares',
+			'getTotalPoolHeldAttoRep',
+			'getCurrentMintingCapacityAttoEth',
+			'priceOracleManagerAndOperatorQueuer',
+			'currentRetentionRate',
+			'getFeeEpochEndTime',
+			'getCertifiedUnderwritingLimitAttoEth',
+			'escalationGame',
+			'isPriceValid',
+		])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
 	})
 })

@@ -108,7 +108,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 					if (parameters.functionName === 'minimumToken1ReportAttoEth') return Promise.resolve(1n)
 					if (parameters.functionName === 'minimumVaultRepDepositAttoRep') return Promise.resolve(1n)
 					if (parameters.functionName === 'getPoolAccountingSnapshot') {
-						return Promise.resolve({ feeEligibleCapacityOwnershipAttoRep: 1n, settlementCollateralAttoEth: 10n, totalCapacityOwnershipAttoRep: 1n })
+						return Promise.resolve({ feeEligibleUnderwritingLimitAttoEth: 1n, settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 1n })
 					}
 					if (parameters.functionName === 'pendingReportId') return Promise.resolve(0n)
 					if (parameters.functionName === 'pendingReportSponsor') return Promise.resolve(getAddress('0x0000000000000000000000000000000000000000'))
@@ -133,7 +133,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 									receiverVault: operator,
 									reservedLiquidationDebtAttoEth: 0n,
 									snapshotTargetBackingUnits: 0n,
-									snapshotTargetCapacityOwnershipAttoRep: 0n,
+									snapshotTargetUnderwritingLimitAttoEth: 0n,
 									targetVault: unregisteredTarget,
 									validForSeconds: 60n,
 								},
@@ -202,7 +202,7 @@ test('a truth-auction haircut globally dirties every retained dispute-staked vau
 		address,
 		backingUnits: backing,
 		badDebtAttoEth: 0n,
-		capacityOwnershipAttoRep: PRICE_PRECISION,
+		underwritingLimitAttoEth: PRICE_PRECISION,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep,
 		openInterestAttoEth: PRICE_PRECISION,
@@ -254,15 +254,15 @@ test('cached raw vault state recomputes backing and open interest from current p
 		address: vault,
 		backingUnits: 2n,
 		badDebtAttoEth: 1n,
-		capacityOwnershipAttoRep: 3n,
+		underwritingLimitAttoEth: 3n,
 		claimableFeesAttoEth: 4n,
 		disputeStakedAttoRep: 5n,
 		openInterestAttoEth: 0n,
 		vaultAttoRepBacking: 0n,
 	}
 
-	expect(currentVaultPositionForPoolAccounting(raw, 100n, 10n, 101n, 10n)).toMatchObject({ openInterestAttoEth: 30n, vaultAttoRepBacking: 20n })
-	expect(currentVaultPositionForPoolAccounting(raw, 200n, 10n, 201n, 10n)).toMatchObject({ openInterestAttoEth: 60n, vaultAttoRepBacking: 40n })
+	expect(currentVaultPositionForPoolAccounting(raw, 100n, 10n, 101n, 10n)).toMatchObject({ openInterestAttoEth: 31n, vaultAttoRepBacking: 20n })
+	expect(currentVaultPositionForPoolAccounting(raw, 200n, 10n, 201n, 10n)).toMatchObject({ openInterestAttoEth: 61n, vaultAttoRepBacking: 40n })
 })
 
 test('unchanged empty operator vaults are read once and then served from the event-aware cache', async () => {
@@ -273,14 +273,14 @@ test('unchanged empty operator vaults are read once and then served from the eve
 		address: operator,
 		backingUnits: 0n,
 		badDebtAttoEth: 0n,
-		capacityOwnershipAttoRep: 0n,
+		underwritingLimitAttoEth: 0n,
 		claimableFeesAttoEth: 0n,
 		disputeStakedAttoRep: 0n,
 		openInterestAttoEth: 0n,
 		vaultAttoRepBacking: 0n,
 	}
 	const refresh = { refreshedVaults: [], reset: false, vaults: [] }
-	const accounting = { denominator: 10n, settlementCollateralAttoEth: 100n, totalAttoRep: 100n, totalCapacityOwnershipAttoRep: 10n }
+	const accounting = { denominator: 10n, settlementCollateralAttoEth: 100n, totalAttoRep: 100n, totalUnderwritingLimitAttoEth: 10n }
 	let positionReads = 0
 	const loadPosition = async () => {
 		positionReads += 1
@@ -293,7 +293,7 @@ test('unchanged empty operator vaults are read once and then served from the eve
 	expect(positionReads).toBe(1)
 })
 
-test('retains only vaults backed by pool-held REP or dispute-staked REP in the active-vault index', async () => {
+test('retains vaults with commitments even when pool-held and dispute-staked REP are zero', async () => {
 	const pool = getAddress('0x0000000000000000000000000000000000000010')
 	const escalationGame = getAddress('0x0000000000000000000000000000000000000011')
 	const blockHash: `0x${string}` = `0x${'22'.repeat(32)}`
@@ -301,7 +301,8 @@ test('retains only vaults backed by pool-held REP or dispute-staked REP in the a
 	const disputeStakedOnly = getAddress('0x0000000000000000000000000000000000000002')
 	const feesOnly = getAddress('0x0000000000000000000000000000000000000003')
 	const badDebtOnly = getAddress('0x0000000000000000000000000000000000000004')
-	const vaults = [backed, disputeStakedOnly, feesOnly, badDebtOnly]
+	const commitmentOnly = getAddress('0x0000000000000000000000000000000000000005')
+	const vaults = [backed, disputeStakedOnly, feesOnly, badDebtOnly, commitmentOnly]
 	const client = new Proxy(createPublicClient({ chain: mainnet, transport: custom({ request: () => Promise.reject(new Error('Unexpected RPC request')) }) }), {
 		get(target, property) {
 			if (property === 'getBlock') return () => Promise.resolve({ hash: blockHash })
@@ -316,7 +317,7 @@ test('retains only vaults backed by pool-held REP or dispute-staked REP in the a
 					Promise.resolve(
 						parameters.contracts.map(contract => {
 							const vault = getAddress(contract.args[0])
-							if (contract.functionName === 'securityVaults') return [vault === backed ? 7n : 0n, 0n, vault === feesOnly ? 5n : 0n, 0n]
+							if (contract.functionName === 'securityVaults') return [vault === backed ? 7n : 0n, vault === commitmentOnly ? 3n : 0n, vault === feesOnly ? 5n : 0n, 0n]
 							if (contract.functionName === 'vaultBadDebtAttoEth') return vault === badDebtOnly ? 3n : 0n
 							if (contract.functionName === 'disputeStakedRepByVaultAttoRep') return vault === disputeStakedOnly ? 9n : 0n
 							throw new Error(`Unexpected multicall read: ${contract.functionName}`)
@@ -329,5 +330,5 @@ test('retains only vaults backed by pool-held REP or dispute-staked REP in the a
 	const index = createVaultStateIndex<VaultPosition>()
 	const refresh = await loadCurrentVaults(client, index, pool, escalationGame, BigInt(vaults.length), 100n, 10n, 0n, 0n, { hash: blockHash, number: 2n })
 	expect(refresh.refreshedVaults.map(vault => vault.address)).toEqual(vaults)
-	expect([...index.activeVaults.values()].map(vault => vault.address)).toEqual([backed, disputeStakedOnly])
+	expect([...index.activeVaults.values()].map(vault => vault.address)).toEqual([backed, disputeStakedOnly, commitmentOnly])
 })

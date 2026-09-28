@@ -15,7 +15,7 @@ function formatCapacityUsedPercent(minted: bigint, capacity: bigint) {
 export function PoolCapacitySummary({ capacity, minted, shareTokenSupplyAttoShares, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; shareTokenSupplyAttoShares?: bigint; showUnavailableReason?: boolean; showUsage?: boolean }) {
 	const value = (
 		<>
-			<CurrencyValue value={minted} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero />}</span>
+			<CurrencyValue value={minted} suffix={commonCopy.eth} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} exactWhenRoundedToZero />}</span>
 		</>
 	)
 	const usedPercent = capacity === undefined ? undefined : formatCapacityUsedPercent(minted, capacity)

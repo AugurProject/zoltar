@@ -36,9 +36,10 @@ function decodeCachedSecurityPool(value: unknown) {
 		})
 		const minimumSecurityBondDebtAttoEth = read.optional('minimumSecurityBondDebtAttoEth', read.bigint)
 		const minimumVaultRepDepositAttoRep = read.optional('minimumVaultRepDepositAttoRep', read.bigint)
+		const certifiedUnderwritingLimitAttoEth = read.optional('certifiedUnderwritingLimitAttoEth', read.bigint)
 		return {
 			currentRetentionRate: read.bigint('currentRetentionRate'),
-			feeEligibleCapacityOwnershipAttoRep: read.bigint('feeEligibleCapacityOwnershipAttoRep'),
+			feeEligibleUnderwritingLimitAttoEth: read.bigint('feeEligibleUnderwritingLimitAttoEth'),
 			forkOutcome: read.oneOf('forkOutcome', REPORTING_OUTCOMES),
 			forkOwnSecurityPool: read.boolean('forkOwnSecurityPool'),
 			hasForkActivity: read.boolean('hasForkActivity'),
@@ -59,7 +60,7 @@ function decodeCachedSecurityPool(value: unknown) {
 			shareTokenSupplyAttoShares: read.bigint('shareTokenSupplyAttoShares'),
 			statoblastSecurityMultiplierBps: read.bigint('statoblastSecurityMultiplierBps'),
 			systemState: read.oneOf('systemState', SYSTEM_STATES),
-			totalCapacityOwnershipAttoRep: read.bigint('totalCapacityOwnershipAttoRep'),
+			totalUnderwritingLimitAttoEth: read.bigint('totalUnderwritingLimitAttoEth'),
 			totalPoolHeldAttoRep: read.bigint('totalPoolHeldAttoRep'),
 			truthAuctionAddress: read.address('truthAuctionAddress'),
 			truthAuctionStartedAt: read.bigint('truthAuctionStartedAt'),
@@ -70,6 +71,7 @@ function decodeCachedSecurityPool(value: unknown) {
 			...(feeAccrualState === undefined ? {} : { feeAccrualState }),
 			...(minimumSecurityBondDebtAttoEth === undefined ? {} : { minimumSecurityBondDebtAttoEth }),
 			...(minimumVaultRepDepositAttoRep === undefined ? {} : { minimumVaultRepDepositAttoRep }),
+			...(certifiedUnderwritingLimitAttoEth === undefined ? {} : { certifiedUnderwritingLimitAttoEth }),
 		}
 	})
 }
@@ -92,7 +94,7 @@ function getPoolLifecycleState(pool: ListedSecurityPool) {
 export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[], { currentTimestamp, repPerEthPrice, uiPriceOracle }: { currentTimestamp: bigint | undefined; repPerEthPrice: bigint | undefined; uiPriceOracle: UiPriceOracle }): PoolBrowseRow[] {
 	return entries.map(({ data: pool, fetchedAt }) => {
 		const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
-		const capacity = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, calculationPrice, pool.statoblastSecurityMultiplierBps)
+		const capacity = calculateMintingCapacityAttoEth(pool.totalUnderwritingLimitAttoEth, calculationPrice, pool.statoblastSecurityMultiplierBps)
 		return { capacity, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getRemainingMintCapacity(capacity, pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares) }
 	})
 }

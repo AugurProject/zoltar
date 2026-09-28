@@ -8,6 +8,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { QuestionsView } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/QuestionsView.js'
 import { questionDownloadStore } from '@zoltar/ui-zoltar-shared/lib/questionBrowse.js'
+import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -44,7 +45,7 @@ function seedQuestions(questions: readonly MarketDetails[], { favorite = true }:
 type ViewOverrides = {
 	canFork?: boolean
 	loadPage?: (pageIndex: number, pageSize: number) => Promise<void>
-	onActiveViewChange?: (view: 'create' | 'questions' | 'universes') => void
+	onActiveViewChange?: (view: ZoltarView) => void
 	onZoltarForkQuestionIdChange?: (questionId: string) => void
 	requestContextKey?: number
 	zoltarQuestionPage?: MarketDetailsPage | undefined
@@ -110,7 +111,7 @@ describe('QuestionsView', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Use for fork' }))
 		})
 		expect(selectedQuestionIds).toEqual([question.questionId])
-		expect(activeViews).toEqual(['universes'])
+		expect(activeViews).toEqual(['fork'])
 		expect(loadPage).not.toHaveBeenCalled()
 	})
 

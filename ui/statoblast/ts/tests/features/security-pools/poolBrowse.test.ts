@@ -11,7 +11,7 @@ import { describe, expect, test } from 'bun:test'
 function createPool(index: number, overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -32,14 +32,14 @@ function createPool(index: number, overrides: Partial<ListedSecurityPool> = {}):
 		shareTokenSupplyAttoShares: 0n,
 		statoblastSecurityMultiplierBps: 20_000n,
 		systemState: 'operational',
-		totalCapacityOwnershipAttoRep: 10n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 10n * 10n ** 18n,
 		totalPoolHeldAttoRep: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
 		universeId: 1n,
 		vaultCount: 2n,
-		vaults: [{ capacityOwnershipAttoRep: 1n, claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, vaultAddress: zeroAddress, vaultAttoRepBacking: 1n }],
+		vaults: [{ underwritingLimitAttoEth: 1n, claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, vaultAddress: zeroAddress, vaultAttoRepBacking: 1n }],
 		...overrides,
 	}
 }
@@ -94,10 +94,9 @@ void describe('pool browse rows', () => {
 		expect(filterPoolBrowseRows(rows, { activeUniverseId: 1n, normalizedSearchText: '0x000000000000000000000000000000000000000e', stateFilter: 'all' }).map(row => row.pool.marketDetails.title)).toEqual(['Pool 14'])
 	})
 
-	void test('sorts by remaining capacity with unknown capacity last', () => {
-		const rows = toRows([createPool(1, { settlementCollateralAttoEth: 4n * 10n ** 18n }), createPool(2, { totalCapacityOwnershipAttoRep: 0n }), createPool(3, { settlementCollateralAttoEth: 1n * 10n ** 18n })])
-		const unpriced = derivePoolBrowseRows([{ data: createPool(4), favoritedAt: undefined, fetchedAt: 0, id: '4' }], { currentTimestamp: 0n, repPerEthPrice: undefined, uiPriceOracle: 'uniswap' })
-		expect(sortPoolBrowseRows([...rows, ...unpriced], 'remainingCapacity', 0n).map(row => row.pool.marketDetails.title)).toEqual(['Pool 3', 'Pool 1', 'Pool 2', 'Pool 4'])
+	void test('sorts by remaining capacity, largest first', () => {
+		const rows = toRows([createPool(1, { settlementCollateralAttoEth: 4n * 10n ** 18n }), createPool(2, { totalUnderwritingLimitAttoEth: 0n }), createPool(3, { settlementCollateralAttoEth: 1n * 10n ** 18n })])
+		expect(sortPoolBrowseRows(rows, 'remainingCapacity', 0n).map(row => row.pool.marketDetails.title)).toEqual(['Pool 3', 'Pool 1', 'Pool 2'])
 	})
 
 	void test('sorts open pools by soonest end and puts ended pools after them, most recent first', () => {

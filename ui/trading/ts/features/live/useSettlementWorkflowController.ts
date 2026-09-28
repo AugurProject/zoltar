@@ -1,15 +1,15 @@
+import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
-import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
-import { useEffect, useReducer, useRef, useState } from 'preact/hooks'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { publicErrorMessage, type LiveMarket, type SettlementOperation, type ShareOutcome } from '../../protocol/live.js'
+import type { LiveMarket, SettlementOperation, ShareOutcome } from '../../protocol/live.js'
+import type { TradeSettings } from '../../lib/tradeSettings.js'
+import * as settlementCopy from '../../copy/settlement.js'
 import type { LiveSettlementServices } from '../LiveSettlementControls.js'
-import { broadcastUncertainMessage, positionControlsWorkflowLocked, type GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
+import type { GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
 import type { BalanceState } from './liveTradingTypes.js'
-import { settlementQuoteCanSubmit, settlementQuoteMatchesInputs, type SettlementQuote } from './settlementQuote.js'
-import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from './transactionWorkflow.js'
+import { useQuotedTransaction } from './useQuotedTransaction.js'
+
+type SettlementSimulation = Awaited<ReturnType<LiveSettlementServices['simulate']>>
 
 export function useSettlementWorkflowController({
 	configuration,
@@ -24,6 +24,7 @@ export function useSettlementWorkflowController({
 	targetOutcomeIndexes,
 	inputBlocker,
 	contextKey,
+	settings,
 	refresh,
 	onKnownReceipt,
 	executeWithCurrentWalletContext,
@@ -43,7 +44,9 @@ export function useSettlementWorkflowController({
 	sourceOutcome: ShareOutcome
 	targetOutcomeIndexes: readonly bigint[]
 	inputBlocker: string | undefined
+	/** Every input and pool field the settlement quote depends on; a change re-quotes. */
 	contextKey: string
+	settings: TradeSettings
 	refresh(): Promise<void>
 	onKnownReceipt(): void
 	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
@@ -52,142 +55,54 @@ export function useSettlementWorkflowController({
 	onMigrationConfirmed(): void
 	services: LiveSettlementServices
 }) {
-	const [quote, setQuote] = useState<SettlementQuote>()
-	const [workflowState, dispatchWorkflow] = useReducer(transactionWorkflowReducer, idleTransactionWorkflow)
-	const state = transactionPhase(workflowState)
-	const transactionHash = transactionWorkflowHash(workflowState)
-	const error = transactionWorkflowError(workflowState, 'Settlement transaction reverted')
-	const receiptWarning = transactionWorkflowReceiptWarning(workflowState)
-	const workflow = useRef(createExclusiveWorkflowGuard()).current
-	const simulationRequests = useRef(createLatestRequestGuard()).current
-	const inputRevision = useRef(0)
-	const mounted = useRef(true)
-	const preserveConfirmedOnNextInvalidation = useRef(false)
-	const matches = settlementQuoteMatchesInputs(quote, inputRevision.current, market, operation, parsedAmount, sourceOutcome, targetOutcomeIndexes, account, walletClient)
-	const actionableQuote = settlementQuoteCanSubmit(balanceState, inputBlocker, matches) ? quote : undefined
-	const submitContext = useRef({ balanceState, inputBlocker, actionableQuote })
-	submitContext.current = { balanceState, inputBlocker, actionableQuote }
-	const workflowLocked = externallyLocked || positionControlsWorkflowLocked(state, receiptWarning)
-	const transactionContext = (expectedAccount: Address, revision: number): TransactionContext => ({ account: expectedAccount, chainId: configuration.chainId, market: market.pool, requestRevision: revision })
-
-	function invalidateInputs() {
-		if (receiptWarning !== undefined) return
-		inputRevision.current++
-		simulationRequests.invalidate()
-		setQuote(undefined)
-		if (!workflow.isActive()) {
-			const preserveConfirmed = preserveConfirmedOnNextInvalidation.current
-			preserveConfirmedOnNextInvalidation.current = false
-			dispatchWorkflow({ type: 'inputs-invalidated', preserveConfirmed })
-		}
+	const simulationParameters = (): Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> => {
+		if (operation === 'redeem-complete-set' && parsedAmount !== undefined) return { amount: parsedAmount, validityMinutes: settings.validityMinutes, slippageBps: settings.slippageBps }
+		if (operation === 'migrate-shares') return { sourceOutcome, targetOutcomeIndexes }
+		return {}
 	}
-
-	useEffect(() => invalidateInputs(), [contextKey])
-	useEffect(() => {
-		if (receiptWarning !== undefined) return
-		simulationRequests.invalidate()
-		setQuote(undefined)
-		if (!workflow.isActive()) dispatchWorkflow({ type: 'inputs-invalidated', preserveConfirmed: true })
-	}, [balanceState, receiptWarning])
-	useEffect(
-		() => () => {
-			mounted.current = false
-			simulationRequests.invalidate()
-			if (workflow.isActive()) workflow.finish()
-			onWorkflowLockChange(false)
+	const quotable = account !== undefined && walletClient !== undefined && balanceState === 'ready' && inputBlocker === undefined
+	const transaction = useQuotedTransaction<SettlementSimulation>({
+		operation: 'settlement',
+		label: settlementCopy.settlementTransaction,
+		account,
+		chainId: configuration.chainId,
+		market: market.pool,
+		walletClient,
+		externallyLocked,
+		quoteSource: {
+			key: quotable ? `${contextKey}\u0000${settings.slippageBps.toString()}\u0000${settings.validityMinutes.toString()}` : undefined,
+			load: async () => {
+				if (account === undefined || walletClient === undefined) throw new Error(settlementCopy.quoteUnavailable)
+				return await services.simulate(walletClient, configuration, market, account, operation, simulationParameters())
+			},
 		},
-		[onWorkflowLockChange],
-	)
-
-	async function simulateCurrent(parameters: Readonly<{ validityMinutes: bigint | undefined; slippageBps: bigint | undefined }>) {
-		if (walletClient === undefined || account === undefined || inputBlocker !== undefined) return
-		const request = simulationRequests.begin()
-		const revision = inputRevision.current
-		const context = transactionContext(account, revision)
-		dispatchWorkflow({ type: 'simulation-started', context })
-		try {
-			let operationParameters: Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> = {}
-			if (operation === 'redeem-complete-set' && parsedAmount !== undefined && parameters.slippageBps !== undefined && parameters.validityMinutes !== undefined) operationParameters = { amount: parsedAmount, validityMinutes: parameters.validityMinutes, slippageBps: parameters.slippageBps }
-			else if (operation === 'migrate-shares') operationParameters = { sourceOutcome, targetOutcomeIndexes }
-			const simulation = await withReadTimeout(services.simulate(walletClient, configuration, market, account, operation, operationParameters))
-			if (!mounted.current || !simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
-			setQuote({ ...simulation, account, walletClient, inputRevision: revision })
-			dispatchWorkflow({ type: 'simulation-succeeded', context })
-		} catch (caught) {
-			if (!mounted.current || !simulationRequests.isCurrent(request) || inputRevision.current !== revision) return
-			dispatchWorkflow({ type: 'failed', context, message: publicErrorMessage(caught, 'Settlement simulation failed') })
-		}
-	}
+		onWorkflowLockChange,
+		onKnownReceipt,
+		failureFallback: settlementCopy.transactionFailed,
+		quoteFailureFallback: settlementCopy.quoteFailed,
+	})
 
 	async function submitCurrent() {
-		const selectedQuote = actionableQuote
-		if (walletClient === undefined || account === undefined || selectedQuote === undefined || workflowState.kind !== 'ready-to-submit' || externallyLocked || !workflow.begin()) return
-		const context = workflowState.context
-		onWorkflowLockChange(true)
-		dispatchWorkflow({ type: 'operation-preparing', context, operation: 'settlement' })
-		let broadcastHash: Hash | undefined
-		let receiptKnown = false
-		let keepLocked = false
-		let signatureRequested = false
-		try {
-			await executeWithCurrentWalletContext(account, 'Wallet network changed; reconnect and simulate again', 'Wallet account changed; reconnect and simulate again', async () => undefined)
-			const current = submitContext.current
-			if (current.balanceState !== 'ready' || current.inputBlocker !== undefined || current.actionableQuote !== selectedQuote) throw new Error('Settlement inputs or balances changed; simulate again')
-			const guardedWrite = createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and simulate again', 'Wallet account changed during settlement revalidation; reconnect and simulate again')
-			broadcastHash = await services.submit(
-				walletClient,
-				configuration,
-				account,
-				selectedQuote,
-				async write =>
-					await guardedWrite(async () => {
-						if (mounted.current) {
-							signatureRequested = true
-							dispatchWorkflow({ type: 'signature-requested', context, operation: 'settlement' })
-						}
-						return await write()
-					}),
-			)
-			if (!mounted.current) return
-			if (!signatureRequested) dispatchWorkflow({ type: 'signature-requested', context, operation: 'settlement' })
-			dispatchWorkflow({ type: 'broadcast', context, operation: 'settlement', transactionHash: broadcastHash })
-			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
-				allowRevertedReceipt: true,
-				onKnownReceipt: () => {
-					receiptKnown = true
-					onKnownReceipt()
-				},
-				onTransactionReplaced: replacementHash => {
-					broadcastHash = replacementHash
-					if (mounted.current) dispatchWorkflow({ type: 'replaced', context, replacementHash })
-				},
-			})
-			if (!mounted.current) return
-			if (receipt.status === 'reverted') {
-				dispatchWorkflow({ type: 'reverted', context })
-				return
-			}
-			setQuote(undefined)
-			dispatchWorkflow({ type: 'confirmed', context })
-			await refresh()
-			if (selectedQuote.operation === 'migrate-shares' && mounted.current) {
-				preserveConfirmedOnNextInvalidation.current = true
-				onMigrationConfirmed()
-			}
-		} catch (caught) {
-			if (!mounted.current) return
-			if (broadcastHash !== undefined && !receiptKnown) {
-				keepLocked = true
-				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage('Settlement transaction', broadcastHash) })
-			} else {
-				setQuote(undefined)
-				dispatchWorkflow({ type: 'failed', context, operation: 'settlement', message: publicErrorMessage(caught, 'Settlement transaction failed') })
-			}
-		} finally {
-			workflow.finish()
-			if (!keepLocked) onWorkflowLockChange(false)
-		}
+		const selectedQuote = transaction.quote
+		if (walletClient === undefined || account === undefined || selectedQuote === undefined || transaction.workflowLocked) return
+		await transaction.submit({
+			prepare: async () => {
+				await executeWithCurrentWalletContext(account, 'Wallet network changed; switch back before submitting', 'Wallet account changed; reconnect and try again', async () => undefined)
+				// Simulate again right before signing; a redemption keeps the quoted minimum but gets a fresh deadline.
+				const fresh = await withReadTimeout(services.simulate(walletClient, configuration, selectedQuote.market, account, selectedQuote.operation, simulationParameters()))
+				return selectedQuote.operation === 'redeem-complete-set' && fresh.operation === 'redeem-complete-set' ? { ...selectedQuote, deadline: fresh.deadline } : selectedQuote
+			},
+			send: async (prepared, requestSignature) => {
+				const guarded = createGuardedWalletWrite(account, 'Wallet network changed during settlement revalidation; reconnect and try again', 'Wallet account changed during settlement revalidation; reconnect and try again')
+				// The settlement services re-simulate at the latest block before writing and keep the quoted minimums.
+				return await services.submit(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
+			},
+			afterConfirmed: async prepared => {
+				await refresh()
+				if (prepared.operation === 'migrate-shares') onMigrationConfirmed()
+			},
+		})
 	}
 
-	return { quote, state, transactionHash, error, receiptWarning, actionableQuote, workflowLocked, invalidateInputs, simulateCurrent, submitCurrent }
+	return { transaction, invalidateInputs: () => transaction.invalidate(), submitCurrent }
 }

@@ -190,11 +190,11 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 0n,
-				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				feeEligibleUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				isPriceValid: true,
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
@@ -228,9 +228,9 @@ describe('useTradingOperations', () => {
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
-	test('blocks complete-set mint writes when total capacity ownership exists but none is fee eligible', async () => {
+	test('blocks complete-set mint writes when total underwriting commitments exists but none is fee eligible', async () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
-			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction capacity ownership')
+			throw new Error('createCompleteSetInSecurityPool should not be called against unclaimed auction underwriting commitments')
 		})
 		const onTransactionFailed = mock(() => undefined)
 		const dependencies = createTradingOperationsDependencies({
@@ -238,11 +238,11 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 0n,
-				feeEligibleCapacityOwnershipAttoRep: 0n,
+				feeEligibleUnderwritingLimitAttoEth: 0n,
 				mintingCapacityAttoEth: 0n,
 				shareTokenSupplyAttoShares: 0n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				isPriceValid: true,
 			})),
 			loadTradingDetails: mock(async () => createTradingDetails()),
@@ -272,7 +272,7 @@ describe('useTradingOperations', () => {
 			await requireHookState(hookState).createCompleteSet()
 		})
 
-		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active capacity ownership')
+		expect(onTransactionFailed).toHaveBeenCalledWith('No mint capacity. No active underwriting commitments')
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
 	})
 
@@ -292,7 +292,7 @@ describe('useTradingOperations', () => {
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				currentRetentionRate: tokenPrecision / 2n,
 				currentTimestamp: 2n,
-				feeEligibleCapacityOwnershipAttoRep: 2n * tokenPrecision,
+				feeEligibleUnderwritingLimitAttoEth: 3n * tokenPrecision,
 				feeEndTimestamp: 100n,
 				feeIndexRemainder: 0n,
 				isPriceValid: true,
@@ -300,7 +300,7 @@ describe('useTradingOperations', () => {
 				mintingCapacityAttoEth: 3n * tokenPrecision,
 				settlementCollateralAttoEth: 2n * tokenPrecision,
 				shareTokenSupplyAttoShares: 2n * tokenPrecision,
-				totalCapacityOwnershipAttoRep: 3n * tokenPrecision,
+				totalUnderwritingLimitAttoEth: 3n * tokenPrecision,
 				totalFeesOwedRemainder: 0n,
 				totalPoolHeldAttoRep: 20n * tokenPrecision,
 			})),
@@ -320,15 +320,15 @@ describe('useTradingOperations', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			requireHookState(hookState).setTradingForm(current => ({ ...current, completeSetAmount: '2' }))
+			requireHookState(hookState).setTradingForm(current => ({ ...current, completeSetAmount: '1.999999999999999999' }))
 		})
 		await act(async () => {
 			await requireHookState(hookState).createCompleteSet()
 		})
 
-		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(onTransactionFailed.mock.calls).toEqual([])
 		expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
-		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * tokenPrecision)
+		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * tokenPrecision - 1n)
 	})
 
 	test('converts redeem complete-set input to share units before submitting', async () => {
@@ -348,11 +348,11 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
-				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				feeEligibleUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				isPriceValid: true,
 			})),
 			loadTradingDetails: mock(async () =>
@@ -392,7 +392,7 @@ describe('useTradingOperations', () => {
 			await requireHookState(hookState).redeemCompleteSet()
 		})
 
-		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(onTransactionFailed.mock.calls).toEqual([])
 		expect(redeemCompleteSetInSecurityPool).toHaveBeenCalled()
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
 	})
@@ -442,11 +442,11 @@ describe('useTradingOperations', () => {
 			getWalletEthBalance: mock(async () => 2n * 10n ** 18n),
 			loadSecurityPoolMintCapacity: mock(async () => ({
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
-				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				feeEligibleUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 1n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				isPriceValid: true,
 			})),
 			loadTradingDetails,
@@ -518,7 +518,7 @@ describe('useTradingOperations', () => {
 		expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeB.universeId)
 		expect(requireHookState(hookState).tradingForkUniverse?.universeId).toBe(universeB.universeId)
 		expect(requireHookState(hookState).tradingDetails?.shareBalances).toEqual(detailsB.shareBalances)
-		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(onTransactionFailed.mock.calls).toEqual([])
 	})
 
 	test('createCompleteSet ignores a stale preflight refresh after the selected pool changes', async () => {
@@ -526,11 +526,11 @@ describe('useTradingOperations', () => {
 		const poolB = getAddress('0x00000000000000000000000000000000000000e2')
 		const deferredMintCapacity = createDeferred<{
 			settlementCollateralAttoEth: bigint
-			feeEligibleCapacityOwnershipAttoRep: bigint
+			feeEligibleUnderwritingLimitAttoEth: bigint
 			mintingCapacityAttoEth: bigint
 			shareTokenSupplyAttoShares: bigint
 			totalPoolHeldAttoRep: bigint
-			totalCapacityOwnershipAttoRep: bigint
+			totalUnderwritingLimitAttoEth: bigint
 			isPriceValid: boolean
 		}>()
 		const detailsA = createTradingDetails({ universeId: 1n })
@@ -624,11 +624,11 @@ describe('useTradingOperations', () => {
 		await act(async () => {
 			deferredMintCapacity.resolve({
 				settlementCollateralAttoEth: 1n * 10n ** 18n,
-				feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				feeEligibleUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 				shareTokenSupplyAttoShares: 1n * 10n ** 18n,
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 				isPriceValid: true,
 			})
 			await createPromise
@@ -637,7 +637,7 @@ describe('useTradingOperations', () => {
 		expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeB.universeId)
 		expect(requireHookState(hookState).tradingFeedback).toBeUndefined()
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
-		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(onTransactionFailed.mock.calls).toEqual([])
 		expect(transactionState.active).toBeUndefined()
 		expect(transactionState.pendingIntent).toBeUndefined()
 		expect(transactionState.inFlightCount).toBe(0)
@@ -655,11 +655,11 @@ describe('useTradingOperations', () => {
 		const onTransactionRequested = mock(() => undefined)
 		const loadSecurityPoolMintCapacity = mock(async () => ({
 			settlementCollateralAttoEth: 1n * 10n ** 18n,
-			feeEligibleCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+			feeEligibleUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 			mintingCapacityAttoEth: 2n * 10n ** 18n,
 			shareTokenSupplyAttoShares: 1n * 10n ** 18n,
 			totalPoolHeldAttoRep: 20n * 10n ** 18n,
-			totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 			isPriceValid: true,
 		}))
 		const loadTradingDetails = mock(async () => createTradingDetails())
@@ -702,7 +702,7 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(onTransactionFailed.mock.calls).toEqual([])
 		expect(requireHookState(hookState).tradingFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again')
 		expect(getWalletEthBalance).not.toHaveBeenCalled()
 		expect(loadTradingDetails).not.toHaveBeenCalled()
@@ -783,7 +783,7 @@ describe('useTradingOperations', () => {
 		})
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
-		expect(onTransactionFailed).not.toHaveBeenCalled()
+		expect(onTransactionFailed.mock.calls).toEqual([])
 		expect(requireHookState(hookState).tradingFeedback?.status.detail).toBe('Wallet account changed. Review the action with the connected account and try again')
 		expect(getWalletEthBalance).not.toHaveBeenCalled()
 		expect(loadTradingDetails).not.toHaveBeenCalled()

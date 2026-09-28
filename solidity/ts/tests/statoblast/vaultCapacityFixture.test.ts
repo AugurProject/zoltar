@@ -12,8 +12,8 @@ describe('explicit vault capacity fixture', () => {
 		const pool = securityPoolAddresses.securityPool
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacity)
 		await updateVaultFees(client, pool, client.account.address)
-		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).capacityOwnershipAttoRep, capacity)
-		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [client.account.address] }), 0n)
-		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'totalCapacityOwnershipAttoRep' }), capacity)
+		assert.strictEqual((await getSecurityVault(client, pool, client.account.address)).underwritingLimitAttoEth, capacity)
+		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultUnderwritingLimitAttoEth', args: [client.account.address] }), capacity)
+		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'totalUnderwritingLimitAttoEth' }), capacity)
 	})
 })

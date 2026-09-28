@@ -424,6 +424,10 @@
 			"bun": "./ts/protocol/oracleTiming.ts",
 			"default": "./js/protocol/oracleTiming.js"
 		},
+		"./protocol/reportingWalletFunding.js": {
+			"bun": "./ts/protocol/reportingWalletFunding.ts",
+			"default": "./js/protocol/reportingWalletFunding.js"
+		},
 		"./protocol/reporting.js": {
 			"bun": "./ts/protocol/reporting.ts",
 			"default": "./js/protocol/reporting.js"
@@ -539,6 +543,26 @@
 		"./features/reporting/lib/reportingViewerStatus.js": {
 			"bun": "./ts/features/reporting/lib/reportingViewerStatus.ts",
 			"default": "./js/features/reporting/lib/reportingViewerStatus.js"
+		},
+		"./lib/statoblastLocation.js": {
+			"bun": "./ts/lib/statoblastLocation.ts",
+			"default": "./js/lib/statoblastLocation.js"
+		},
+		"./features/security-pools/components/PoolStagePanel.js": {
+			"bun": "./ts/features/security-pools/components/PoolStagePanel.tsx",
+			"default": "./js/features/security-pools/components/PoolStagePanel.js"
+		},
+		"./features/security-pools/lib/poolActions.js": {
+			"bun": "./ts/features/security-pools/lib/poolActions.ts",
+			"default": "./js/features/security-pools/lib/poolActions.js"
+		},
+		"./features/security-pools/lib/poolLifecycle.js": {
+			"bun": "./ts/features/security-pools/lib/poolLifecycle.ts",
+			"default": "./js/features/security-pools/lib/poolLifecycle.js"
+		},
+		"./features/security-pools/lib/poolViewModel.js": {
+			"bun": "./ts/features/security-pools/lib/poolViewModel.ts",
+			"default": "./js/features/security-pools/lib/poolViewModel.js"
 		}
 	},
 	"version": "1.0.0"

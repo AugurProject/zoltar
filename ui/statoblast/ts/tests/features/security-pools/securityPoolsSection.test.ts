@@ -92,7 +92,7 @@ function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentPr
 		accountState: createAccountState(),
 		loadingSecurityVault: false,
 		onApproveRep: () => undefined,
-		onAdjustVaultBackingFactor: () => undefined,
+		onSetVaultUnderwritingLimit: () => undefined,
 		onDepositRepToVault: () => undefined,
 		onLoadSecurityVault: () => undefined,
 		onRedeemFees: () => undefined,
@@ -176,7 +176,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		feeEligibleUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -196,7 +196,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -362,6 +362,35 @@ void describe('SecurityPoolsSection', () => {
 		},
 	})
 
+	void test('opens a pool by address without reading the registry on the landing page', async () => {
+		const calls: string[] = []
+		const props = createSecurityPoolsSectionProps({
+			activeView: 'open',
+			onLoadUniverseDirectoryPools: () => calls.push('universes'),
+			overview: createOverviewProps({ onLoadSecurityPoolPage: () => calls.push('browse') }),
+			workflow: createWorkflowProps({ onSecurityPoolAddressChange: address => calls.push(address), onRefreshSelectedPoolData: () => calls.push('refresh') }),
+		})
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, props))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const page = within(document.body)
+		const input = page.getByRole('textbox', { name: 'Security Pool Address' })
+		expect(calls).toEqual([])
+		const form = input.closest('form')
+		if (form === null) throw new Error('Expected the pool address form')
+		await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
+		expect(calls).toEqual([])
+		expect(page.getByText('Enter a valid pool address.')).toBeDefined()
+		const address = '0x1111111111111111111111111111111111111111'
+		await act(() => fireEvent.input(input, { target: { value: address } }))
+		await act(() => {
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+		})
+		expect(calls).toEqual([address])
+	})
+
 	void test('hides the route summary in browse mode without rendering local route tabs', async () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -475,7 +504,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(resetCount).toBe(1)
 	})
 
-	void test('renders one route heading in create and empty manage modes', async () => {
+	void test('renders one route heading in create and empty pool page modes', async () => {
 		const createRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'create' })))
 		cleanupRenderedComponent = createRender.cleanup
 		expect(within(document.body).getAllByRole('heading', { name: 'Create Pool' })).toHaveLength(1)
@@ -484,7 +513,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const manageRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'operate' })))
 		cleanupRenderedComponent = manageRender.cleanup
-		expect(within(document.body).getAllByRole('heading', { name: 'Manage Pool' })).toHaveLength(1)
+		expect(within(document.body).getAllByRole('heading', { name: 'Security Pool' })).toHaveLength(1)
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {
