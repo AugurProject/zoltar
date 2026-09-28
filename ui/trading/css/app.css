@@ -295,6 +295,7 @@
 }
 .market-odds__caption {
 	margin-right: auto;
+	font-family: var(--font-family-sans);
 	color: var(--muted);
 }
 .market-odds__yes {
@@ -406,7 +407,7 @@ button.outcome-button--no:hover:not(:disabled) {
 
 /* Keep in sync with COMPACT_TICKET_QUERY in MarketTicketSheet.tsx. */
 @media (max-width: 64rem) {
-	/* The bottom padding leaves room for the collapsed ticket bar so it never covers the end of the page. */
+	/* The bottom padding leaves room for the collapsed ticket bar (above the tab bar that main already pads for) so it never covers the end of the page. */
 	.market-layout {
 		grid-template-columns: minmax(0, 1fr);
 		padding-bottom: 5rem;
@@ -453,15 +454,16 @@ button.outcome-button--no:hover:not(:disabled) {
 		margin: 0;
 		font-size: 1rem;
 	}
+	/* The collapsed ticket stacks directly above the app's bottom tab bar so both stay reachable. */
 	.market-ticket-bar {
 		position: fixed;
-		inset: auto 0 0;
+		inset: auto 0 var(--bottom-nav-height);
 		z-index: var(--z-nav);
 		display: grid;
 		grid-auto-flow: column;
 		grid-auto-columns: 1fr;
 		gap: var(--space-2);
-		padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+		padding: var(--space-3) var(--space-4);
 		border-top: 1px solid var(--border-strong);
 		background: var(--surface-modal-opaque);
 		box-shadow: var(--shadow-overlay);

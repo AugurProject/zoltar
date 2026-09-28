@@ -102,6 +102,8 @@
 	--disabled-control-border: light-dark(rgba(40, 62, 94, 0.22), rgba(154, 179, 211, 0.22));
 	--disabled-control-text: light-dark(rgba(88, 104, 126, 1), rgba(138, 156, 178, 1));
 	--touch-target-min: 2.75rem;
+	/* Height of the fixed bottom tab bar below --breakpoint-medium (3rem cells, 0.25rem padding, 1px border, safe area); page-level bottom bars stack above it. */
+	--bottom-nav-height: calc(3.5rem + 1px + env(safe-area-inset-bottom, 0px));
 	--scrollbar-thumb: color-mix(in srgb, var(--accent) 18%, transparent);
 	--scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 32%, transparent);
 
