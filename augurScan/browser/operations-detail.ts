@@ -175,7 +175,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No trading observations are available.',
 			),
 		)
-		panels.push(operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits. Share-for-share swaps move no ETH.' }))
+		panels.push(operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits' }))
 		panels.push(tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref }))
 		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
 		panels.push(
