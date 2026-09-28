@@ -1457,7 +1457,7 @@ test('deposit submits from the approval form without replacing it with another r
 		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Deposit REP' })))
 		expect(dialog.querySelector('.operation-modal-steps')?.textContent).toBeUndefined()
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(await review).toBeUndefined()
 		expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
 	} finally {
@@ -1497,7 +1497,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
 			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim fees' : label })
 			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
-			expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 			await review
 			const scope = transactionSteps.value?.reviewSignal
 			expect(scope).toBeDefined()
@@ -1508,7 +1508,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 			expect(dialog.isConnected).toBe(true)
 			expect(scope?.aborted).toBe(false)
 			await act(() => {
-				controller?.failed('Action canceled in wallet.')
+				controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
 				active.value = undefined
 			})
 			expect(cancel.hasAttribute('disabled')).toBe(false)

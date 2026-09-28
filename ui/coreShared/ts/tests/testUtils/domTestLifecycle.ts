@@ -1,5 +1,6 @@
 import { afterEach, beforeEach } from 'bun:test'
 import { installDomEnvironment } from './domEnvironment.js'
+import { resetTransactionActivityForTesting } from '../../transactions/transactionActivityStore.js'
 import { appQueryCache } from '../../lib/dataRefresh.js'
 
 type DomTestLifecycleOptions = {
@@ -14,6 +15,7 @@ export function installDomTestLifecycle(options: DomTestLifecycleOptions = {}) {
 
 	beforeEach(async () => {
 		renderedCleanups.length = 0
+		resetTransactionActivityForTesting()
 		const environment = installDomEnvironment(options.url)
 		restoreDomEnvironment = environment.cleanup
 		await options.beforeTest?.(environment)

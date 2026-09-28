@@ -1,11 +1,12 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, isTransactionReviewCancellation, transactionErrorMessages } from '../lib/errors.js'
 import { assertActiveWallet, type ActiveWalletContext } from '../wallet/assertActiveWallet.js'
-import type { WriteOperationsParameters } from '../types/app.js'
+import type { TransactionFailureDetails, TransactionRequestKey, TransactionRequestResult, WriteOperationsParameters } from '../types/app.js'
 import type { TransactionIntent } from '../types/components.js'
 import { createActiveEnvironmentGuard } from '../lib/activeEnvironment.js'
 
 import { getTransactionReviewSignal } from './transactionReviewScope.js'
+import { getTransactionFailureKind } from './transactionLifecycle.js'
 
 export type WriteActionContext = ActiveWalletContext & {
 	reviewSignal: AbortSignal
@@ -17,10 +18,10 @@ type RunWriteActionParameters = {
 	formatErrorMessage?: ((error: unknown, fallbackMessage: string) => string) | undefined
 	missingWalletMessage: string
 	onRefreshError?: ((message: string, hash?: Hash) => void) | undefined
-	onTransactionCanceled?: (() => void) | undefined
-	onTransactionFailed?: ((message: string) => void) | undefined
-	onTransactionFinished: () => void
-	onTransactionRequested: () => boolean | void
+	onTransactionCanceled?: ((requestKey?: TransactionRequestKey) => void) | undefined
+	onTransactionFailed?: ((message: string, details?: TransactionFailureDetails) => void) | undefined
+	onTransactionFinished: (requestKey?: TransactionRequestKey) => void
+	onTransactionRequested: () => TransactionRequestResult
 	onWriteCanceled?: (() => void) | undefined
 	onWriteError?: ((message: string) => void) | undefined
 	reviewSignal?: AbortSignal | undefined
@@ -73,6 +74,7 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 		if (reviewSignal.aborted) throw new Error(transactionErrorMessages.reviewCanceled)
 	}
 	let ownsTransaction = false
+	let requestKey: TransactionRequestKey | undefined
 	try {
 		const environmentGuard = createActiveEnvironmentGuard()
 		let result: TResult | undefined
@@ -81,17 +83,19 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			const activeWallet = await assertActiveWallet(parameters.accountAddress)
 			assertActive()
 			if (!environmentGuard.isCurrent()) return
-			if (parameters.onTransactionRequested() === false) {
+			const request = parameters.onTransactionRequested()
+			if (request === false) {
 				parameters.onWriteCanceled?.()
 				return
 			}
 			ownsTransaction = true
+			requestKey = typeof request === 'string' ? request : undefined
 			parameters.setErrorMessage(undefined)
 			result = await action(parameters.accountAddress, { ...activeWallet, reviewSignal, assertActive })
 			if (!environmentGuard.isCurrent()) return
 			if (result === undefined) {
 				parameters.onWriteCanceled?.()
-				parameters.onTransactionCanceled?.()
+				parameters.onTransactionCanceled?.(requestKey)
 				return
 			}
 		} catch (error) {
@@ -99,11 +103,11 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			if (isTransactionReviewCancellation(error)) {
 				// Closing the review dialog cancels the remaining steps; nothing failed.
 				parameters.onWriteCanceled?.()
-				if (ownsTransaction) parameters.onTransactionCanceled?.()
+				if (ownsTransaction) parameters.onTransactionCanceled?.(requestKey)
 				return
 			}
 			const message = parameters.formatErrorMessage?.(error, errorFallback) ?? formatWriteErrorMessage(error, errorFallback)
-			if (ownsTransaction) parameters.onTransactionFailed?.(message)
+			if (ownsTransaction) parameters.onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
 			if (parameters.onWriteError === undefined) {
 				parameters.setErrorMessage(message)
 			} else {
@@ -127,6 +131,6 @@ export async function runWriteAction<TResult extends { hash: Hash }>(parameters:
 			}
 		}
 	} finally {
-		if (ownsTransaction) await Promise.resolve(parameters.onTransactionFinished())
+		if (ownsTransaction) await Promise.resolve(parameters.onTransactionFinished(requestKey))
 	}
 }

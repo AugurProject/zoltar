@@ -1,4 +1,6 @@
 import { useSignal } from '@preact/signals'
+import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
+import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { useCallback, useEffect } from 'preact/hooks'
 import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { migrateInternalRepInZoltar } from '../../../protocol/zoltarForks.js'
@@ -67,6 +69,7 @@ export function useZoltarMigration({
 			if (zoltarMigrationPending.value) return
 			let writeFailed = false
 			let ownsTransaction = false
+			let requestKey: TransactionRequestKey | undefined
 			if (
 				!requireWallet(
 					accountAddress,
@@ -90,20 +93,14 @@ export function useZoltarMigration({
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				if (
-					onTransactionRequested(
-						createZoltarMigrationTransactionIntent({
-							amount: submittedForm.amount,
-							outcomeLabels,
-							universeId: activeUniverseId,
-						}),
-					) === false
-				) {
+				const request = onTransactionRequested(createZoltarMigrationTransactionIntent({ amount: submittedForm.amount, outcomeLabels, universeId: activeUniverseId }))
+				if (request === false) {
 					writeFailed = true
 					zoltarMigrationFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true
+				requestKey = typeof request === 'string' ? request : undefined
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
@@ -122,13 +119,13 @@ export function useZoltarMigration({
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, 'Failed to migrate REP')
 				writeFailed = true
-				if (ownsTransaction) onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
 				zoltarMigrationFeedback.value = createErrorActionFeedback('splitMigrationRep', 'REP migration failed', message)
 			} finally {
 				if (environmentGuard.isCurrent()) {
 					zoltarMigrationPending.value = false
 					zoltarMigrationActiveAction.value = undefined
-					if (ownsTransaction) onTransactionFinished()
+					if (ownsTransaction) onTransactionFinished(requestKey)
 				}
 			}
 

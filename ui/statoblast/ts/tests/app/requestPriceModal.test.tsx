@@ -144,7 +144,7 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 		const requestButton = within(dialog).getByRole('button', { name: /^Request new price/ })
 		requestButton.focus()
 		await act(() => fireEvent.click(requestButton))
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
 		await act(() => {
 			controller?.submitted(hash)
@@ -390,7 +390,7 @@ test('allows another price request after a failed transaction step', async () =>
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([{ ...step, title: 'Request new price' }])
 		controller.startWithoutReview(0)
-		controller.failed('nonce too low')
+		controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
 	const rendered = await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />)
 	try {
@@ -628,7 +628,7 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		await settle()
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
 		await settle()
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(transactionSteps.value?.steps[0]?.hash).toBeUndefined()
 		if (action === 'close') await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Request new price' })).getByRole('button', { name: 'Close' })))
 		if (action === 'fetch') await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
@@ -676,7 +676,7 @@ test('keeps submitted funding and pool details beside the original action after 
 		])
 		try {
 			await controller.review()
-			controller.failed('nonce too low')
+			controller.failed({ kind: 'error', message: 'nonce too low' })
 			presentation.value = {
 				tone: 'error',
 				title: 'Requesting new price…',
@@ -751,7 +751,7 @@ test.each(['preparation', 'transaction step'] as const)('does not restart after 
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([{ ...step, title: 'Request new price' }])
 		controller.startWithoutReview(0)
-		controller.failed('nonce too low')
+		controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
 	const rendered = await renderIntoDocument(
 		<GlobalTransactionPresentationProvider transaction={failure === 'preparation' ? { tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.' } : undefined}>
