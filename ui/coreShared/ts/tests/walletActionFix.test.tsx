@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { ActionLauncherButton } from '../components/ActionLauncherButton.js'
 import { ActionLauncherCard } from '../components/ActionLauncherCard.js'
-import { TransactionActionButton, TransactionActionGroup } from '../components/TransactionActionButton.js'
+import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup, TransactionScopeProvider } from '../components/TransactionActionButton.js'
 import { WalletActionsProvider, type WalletActions } from '../components/WalletActionFix.js'
 import type { ActionAvailability } from '../types/components.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
@@ -217,4 +217,23 @@ describe('wallet action fix', () => {
 		expect(page.getAllByRole('button', { name: 'Connect wallet' })).toHaveLength(1)
 		expect(page.getByRole('note', { name: 'Mint details' }).textContent).toContain('Select a pool.')
 	})
+
+	for (const promptOpen of [false, true])
+		test(`keeps the wallet fix instead of the pending-transaction reason under a transaction lock (prompt open: ${String(promptOpen)})`, async () => {
+			const { walletActions } = createWalletActions()
+			const rendered = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<TransactionActionButtonLockProvider lock={{ lockedScopes: [['security-pool:0xa']], promptOpen }}>
+						<TransactionScopeProvider scope={['security-pool:0xa']}>
+							<TransactionActionButton availability={disconnectedAvailability} idleLabel='Deposit REP' onClick={() => undefined} pendingLabel='Depositing REP' />
+						</TransactionScopeProvider>
+					</TransactionActionButtonLockProvider>
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			const page = within(document.body)
+			const fix = page.getByRole('button', { name: 'Connect wallet' })
+			expect(page.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(fix.id)
+			expect(document.body.textContent).not.toContain('Wait for the pending transaction to confirm.')
+		})
 })
