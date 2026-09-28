@@ -1,3 +1,5 @@
+import { getLiquidationFundingPreviewRequestKey, resolveLiquidationFunding } from './liquidationFunding.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -34,10 +36,6 @@ type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
 /** The selected pool's lineage, refreshed in place on each new block. */
 const securityPoolLineageQueries = appQueryCache.createStore<ListedSecurityPool[]>()
 
-function getLiquidationFundingPreviewRequestKey(managerAddress: Address, walletAddress: Address, environmentRefreshKey: number) {
-	return `${environmentRefreshKey}:${managerAddress.toLowerCase()}:${walletAddress.toLowerCase()}`
-}
-
 function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	{ accountAddress, environmentRefreshKey, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseSecurityPoolsOverviewParameters,
 	dependencies: UseSecurityPoolsOverviewDependencies<TWriteClient>,
@@ -60,6 +58,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const liquidationReceiverVaultSummaryLoadingKey = useSignal<string | undefined>(undefined)
 	const liquidationTimeoutMinutes = useSignal(DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString())
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
+	const liquidationFundingPrice = useSignal<bigint | undefined>(undefined)
 	const liquidationFundingPreview = useSignal<LiquidationFundingPreview | undefined>(undefined)
 	const liquidationFundingPreviewError = useSignal<string | undefined>(undefined)
 	const liquidationFundingPreviewErrorKey = useSignal<string | undefined>(undefined)
@@ -191,40 +190,15 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return result !== undefined && latestEnvironmentRefreshKey.current === requestedEnvironmentRefreshKey && currentAccountKey === requestedAccountKey
 	}
 
-	const resolveLiquidationFundingPreview = async (managerAddress: Address, walletAddress: Address): Promise<LiquidationFundingPreview> => {
-		const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted })
-		const queueOperationValueAttoEth = await dependencies.loadOracleManagerQueueOperationEthValue(writeClient, managerAddress)
-		if (queueOperationValueAttoEth === 0n) {
-			return {
-				currentRepBalanceAttoRep: 0n,
-				currentWethBalanceAttoEth: 0n,
-				initialReportRepRequiredAttoRep: 0n,
-				initialReportWethRequiredAttoEth: 0n,
-				queueOperationValueAttoEth,
-				totalWalletEthRequiredAttoEth: 0n,
-				wethShortfallAttoEth: 0n,
-			}
-		}
-		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, walletAddress)
-		return {
-			currentRepBalanceAttoRep: fundingRequirement.currentRepBalanceAttoRep,
-			currentWethBalanceAttoEth: fundingRequirement.currentWethBalanceAttoEth,
-			initialReportRepRequiredAttoRep: fundingRequirement.requiredRepAttoRep,
-			initialReportWethRequiredAttoEth: fundingRequirement.maximumInitialAttoWeth,
-			queueOperationValueAttoEth,
-			totalWalletEthRequiredAttoEth: queueOperationValueAttoEth + fundingRequirement.wethShortfallAttoEth,
-			wethShortfallAttoEth: fundingRequirement.wethShortfallAttoEth,
-		}
-	}
-
 	const getCurrentLiquidationFundingPreviewRequestKey = () => {
 		const managerAddress = liquidationManagerAddress.value
 		const walletAddress = latestAccountAddress.current
 		if (managerAddress === undefined || walletAddress === undefined) return undefined
-		return getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, latestEnvironmentRefreshKey.current)
+		return getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, latestEnvironmentRefreshKey.current, liquidationFundingPrice.value)
 	}
 
-	const loadLiquidationFundingPreview = async (managerAddress: Address) => {
+	const loadLiquidationFundingPreview = async (managerAddress: Address, proposedRepPerEthPrice?: bigint) => {
+		liquidationFundingPrice.value = proposedRepPerEthPrice
 		const walletAddress = latestAccountAddress.current
 		if (walletAddress === undefined) {
 			liquidationFundingPreview.value = undefined
@@ -233,7 +207,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			liquidationFundingPreviewErrorKey.value = undefined
 			return false
 		}
-		const requestKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, latestEnvironmentRefreshKey.current)
+		const requestKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, latestEnvironmentRefreshKey.current, liquidationFundingPrice.value)
 		const isCurrent = nextLiquidationFundingPreviewLoad()
 		const result = await liquidationFundingPreviewLoad.run({
 			isCurrent,
@@ -244,7 +218,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				liquidationFundingPreviewErrorKey.value = undefined
 				liquidationFundingPreviewLoadingKey.value = requestKey
 			},
-			load: async () => await resolveLiquidationFundingPreview(managerAddress, walletAddress),
+			load: async () => await resolveLiquidationFunding(dependencies, dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted }), managerAddress, walletAddress, proposedRepPerEthPrice),
 			onSuccess: preview => {
 				if (getCurrentLiquidationFundingPreviewRequestKey() !== requestKey) return
 				liquidationFundingPreview.value = preview
@@ -360,6 +334,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 
 	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
 		nextLiquidationFundingPreviewLoad()
+		liquidationFundingPrice.value = undefined
 		nextLiquidationApprovalLoad()
 		nextLiquidationReceiverVaultSummaryLoad()
 		securityPoolOverviewError.value = undefined
@@ -390,6 +365,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 
 	const closeLiquidationModal = () => {
 		nextLiquidationFundingPreviewLoad()
+		liquidationFundingPrice.value = undefined
 		nextLiquidationApprovalLoad()
 		nextLiquidationReceiverVaultSummaryLoad()
 		securityPoolLiquidationError.value = undefined
@@ -427,7 +403,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationTargetVault.value === snapshot.targetVault &&
 		liquidationTimeoutMinutes.value === snapshot.timeoutMinutes
 
-	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address) => {
+	const queueLiquidation = async (managerAddress: Address, securityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => {
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewResult.value = undefined
 		const submittedLiquidation = {
@@ -475,19 +451,20 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					},
 				},
 				async (walletAddress, context) => {
+					if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
 					const receiverVault = parseAddressInput(submittedLiquidation.receiverVault, 'Receiver vault')
 					const approvalId = parseBytes32Input(submittedLiquidation.approvalId, 'Liquidation approval ID')
 					const amount = parseEthAmountInput(submittedLiquidation.amount, 'Liquidation debt')
 					const fundingEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
-					const fundingPreviewKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, fundingEnvironmentRefreshKey)
+					const fundingPreviewKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, fundingEnvironmentRefreshKey, proposedRepPerEthPrice)
 					const ensureFundingContextIsCurrent = () => {
 						if (latestAccountAddress.current?.toLowerCase() !== walletAddress.toLowerCase() || latestEnvironmentRefreshKey.current !== fundingEnvironmentRefreshKey) {
 							throw new Error('The wallet or network changed while loading liquidation funding. Review the refreshed funding requirements and try again.')
 						}
 					}
 					const writeClient = dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
-					const fundingPreview = await resolveLiquidationFundingPreview(managerAddress, walletAddress)
+					const fundingPreview = await resolveLiquidationFunding(dependencies, writeClient, managerAddress, walletAddress, proposedRepPerEthPrice)
 					ensureFundingContextIsCurrent()
 					if (getCurrentLiquidationFundingPreviewRequestKey() === fundingPreviewKey) {
 						liquidationFundingPreview.value = fundingPreview
@@ -504,7 +481,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
 					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be at least 1 minute')
 					ensureFundingContextIsCurrent()
-					return await dependencies.queueSecurityPoolLiquidation(writeClient, managerAddress, targetVault, amount, validForSeconds, 0n, receiverVault, approvalId)
+					return await dependencies.queueSecurityPoolLiquidation(writeClient, managerAddress, targetVault, amount, validForSeconds, 0n, receiverVault, approvalId, proposedRepPerEthPrice)
 				},
 				'Failed to queue liquidation',
 				async result => {
