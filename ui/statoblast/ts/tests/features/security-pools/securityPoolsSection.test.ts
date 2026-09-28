@@ -9,6 +9,9 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
+import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { VaultMetricGrid } from '@zoltar/ui-statoblast-shared/features/security-pools/components/VaultMetricGrid.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { ForkAuctionRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -298,7 +301,6 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
-		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
@@ -608,6 +610,20 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
 		expect(within(objectHeader).queryByText('Pool-held REP')).toBeNull()
 		expect(document.body.querySelector('.pool-reference-details')?.textContent).toContain('Pool-held REP')
+	})
+
+	void test('labels vault health with the one resolved REP price', async () => {
+		const selectedPoolRepPrice = resolveRepPrice({ now: 1n, setting: 'uniswap', uniswapPrice: 10n ** 18n })
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SelectedPoolRepPriceContext.Provider,
+				{ value: selectedPoolRepPrice },
+				h(VaultMetricGrid, { claimableFeesAttoEth: 0n, isCurrentlyHealthy: true, repPerEthPrice: selectedPoolRepPrice.price, repPerEthSource: undefined, repPerEthSourceUrl: undefined, selectedPoolStatoblastSecurityMultiplierBps: 20_000n, underwritingLimitAttoEth: 10n ** 18n, vaultAttoRepBacking: 10n ** 18n }),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(document.body.querySelector('.vault-health-status .rep-price-status')?.textContent).toBe('via Uniswap · live')
+		expect(document.body.querySelector('.vault-detail-hero-primary .rep-price-status')).toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {

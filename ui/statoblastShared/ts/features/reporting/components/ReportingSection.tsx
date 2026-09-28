@@ -315,7 +315,7 @@ export function ReportingSection({
 	if (reportingRepApprovalRequired) {
 		reportingRepApprovalAction = (
 			<TransactionActionButton
-				idleLabel={commonCopy.launchAction(reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n)))}
+				idleLabel={reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
 				pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
 				onClick={onApproveReportingRep}
 				pending={reportingActiveAction === 'approveReportingRep'}

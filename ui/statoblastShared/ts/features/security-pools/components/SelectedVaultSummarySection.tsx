@@ -34,7 +34,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{securityPoolCopy.exposureSupported}</span>
 						<strong>
-							<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+							<VaultExposureValue capacity={underwritingLimitAttoEth} />
 						</strong>
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>

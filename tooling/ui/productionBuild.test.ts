@@ -1110,7 +1110,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				await driver.clickButton('Max')
 				const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
 				if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
-				const approvalLabel = `Approve ${amount} REP…`
+				const approvalLabel = `Approve ${amount} REP`
 				const reportLabel = `Report ${outcome} · ${amount} REP…`
 				const reportedTitle = `Reported ${amount} REP on ${outcome}`
 				const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)

@@ -12,7 +12,12 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 	useEffect(() => () => transactionSteps.peek()?.cancel(), [contextKey])
 	const presentation = useGlobalTransactionPresentation()
 	const workflow = transactionSteps.value
+	// Standalone approval buttons already specify their spending limit on the page.
+	const directApproval = workflow?.steps.length === 1 && workflow.steps[0]?.spender !== undefined && workflow.steps[0].approval === undefined
 	const embedded = workflow !== undefined && (isEmbeddedTransactionReview(workflow.reviewSignal) || (embeddedTransactionSteps.value !== undefined && workflow.reviewSignal === embeddedTransactionSteps.value))
+	useEffect(() => {
+		if (!embedded && directApproval && workflow?.steps[workflow.activeIndex]?.phase === 'review') workflow.confirm()
+	}, [workflow, embedded, directApproval])
 	useEffect(() => {
 		if (!embedded && presentation?.tone === 'success' && presentation.hash !== undefined && workflow?.steps.some(step => step.hash === presentation.hash)) workflow.finish()
 	}, [embedded, presentation?.tone, presentation?.hash])
@@ -23,7 +28,7 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 		if (active?.phase === 'failed' || presentation?.tone === 'error' || completed) workflow.cancel()
 	}, [workflow, embedded, presentation?.tone])
 	if (workflow === undefined || workflow.reviewSignal?.aborted) return undefined
-	if (embedded || !workflow.showReviewDialog) return undefined
+	if (embedded || directApproval || !workflow.showReviewDialog) return undefined
 	const current = workflow.steps[workflow.activeIndex]
 	if (current === undefined) return undefined
 	const pending = presentation?.tone !== 'error' && workflow.steps.some(step => step.phase === 'pending' && step.error === undefined)
