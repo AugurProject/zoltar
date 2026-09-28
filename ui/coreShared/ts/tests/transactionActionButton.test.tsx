@@ -107,7 +107,7 @@ describe('TransactionActionButton', () => {
 					loading: true,
 					reason: 'Loading truth auction status…',
 				}}
-				idleLabel='Submit Bid'
+				idleLabel='Submit bid'
 				onClick={() => undefined}
 				pendingLabel='Submitting bid…'
 				showDisabledReason
@@ -122,12 +122,12 @@ describe('TransactionActionButton', () => {
 
 	test('calls onClick immediately when enabled', async () => {
 		let callCount = 0
-		const renderedComponent = await renderIntoDocument(<TransactionActionButton idleLabel='Liquidate Vault' onClick={() => callCount++} pendingLabel='Submitting...' />)
+		const renderedComponent = await renderIntoDocument(<TransactionActionButton idleLabel='Liquidate vault' onClick={() => callCount++} pendingLabel='Submitting...' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Liquidate Vault' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Liquidate vault' }))
 		})
 
 		expect(callCount).toBe(1)

@@ -239,7 +239,7 @@ describe('QuestionsView', () => {
 			await Promise.resolve()
 		})
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Create Question' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' }))
 		})
 		expect(activeViews).toEqual(['create'])
 	})
