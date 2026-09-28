@@ -417,7 +417,7 @@ describe('trading deployment setup', () => {
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => await new Promise<never>(() => undefined)} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('nav a[aria-current="page"]')?.textContent?.trim()).toBe('Markets')
-		expect(document.title).toBe('Market · Augur Trading')
+		expect(document.title).toBe('Markets · Augur Trading')
 		expect(rendered.container.querySelector('.site-header--deployment')).toBeNull()
 		expect(rendered.container.querySelector('.deployment-setup')).toBeNull()
 	})

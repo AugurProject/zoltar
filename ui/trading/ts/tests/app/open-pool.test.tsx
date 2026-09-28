@@ -51,7 +51,19 @@ test('opens an addressed workflow and preserves simulation settings; rejects inv
 test('shows the pool address lookup without a disclosure', async () => {
 	const dom = installDomEnvironment()
 	const rendered = await renderIntoDocument(
-		<LiveMarketBrowser lookupRoute='market' markets={[]} pageMarketCount={0} discoveryState='ready' discoveryError={undefined} marketPage={{ start: 0n, total: 0n, previousStart: undefined, nextStart: undefined }} workflowLocked={false} nowSeconds={0n} retry={() => undefined} loadMarketPage={() => undefined} />,
+		<LiveMarketBrowser
+			freshness={{ refreshing: false, updatedAt: undefined }}
+			lookupRoute='market'
+			markets={[]}
+			pageMarketCount={0}
+			discoveryState='ready'
+			discoveryError={undefined}
+			marketPage={{ start: 0n, total: 0n, previousStart: undefined, nextStart: undefined }}
+			workflowLocked={false}
+			nowSeconds={0n}
+			retry={() => undefined}
+			loadMarketPage={() => undefined}
+		/>,
 	)
 	try {
 		expect(rendered.container.querySelector('input[placeholder]')).not.toBeNull()

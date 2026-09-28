@@ -5,7 +5,7 @@ import { getDownloadedStorageKey, resetLocalEntityStoreForTesting, serializeStor
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
-import { getRememberableMarket, marketDownloadStore, selectFavoriteMarketUpdates, selectFavoriteMarkets } from '../../lib/favoriteMarkets.js'
+import { getRememberableMarket, marketDownloadStore, partitionFavoriteMarkets, selectBrowseMarkets, selectMarketCacheUpdates } from '../../lib/favoriteMarkets.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
 
 function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveMarket {
@@ -67,34 +67,59 @@ describe('favorite markets', () => {
 		expect(getRememberableMarket(undefined)).toBeUndefined()
 	})
 
-	test('selects favorites in the selected universe, newest favorite first', () => {
-		const downloaded = [createMarket(1), createMarket(2, { universeId: 2n }), createMarket(3)].map((market, index) => ({ data: market, fetchedAt: index, id: market.pool.toLowerCase() }))
-		const favorites = [createMarket(3), createMarket(2), createMarket(1)].map((market, index) => ({ addedAt: 10 - index, id: market.pool.toLowerCase() }))
-		expect(selectFavoriteMarkets(downloaded, favorites, '1').map(market => market.title)).toEqual(['Market 3', 'Market 1'])
-		expect(selectFavoriteMarkets(downloaded, favorites, undefined)).toEqual([])
+	test('browses every downloaded market in the selected universe with the live page replacing cached copies', () => {
+		const cachedOne = createMarket(1)
+		const downloaded = [createMarket(3), createMarket(2, { universeId: 2n }), cachedOne].map((market, index) => ({ data: market, fetchedAt: 10 - index, id: market.pool.toLowerCase() }))
+		const refreshedOne = createMarket(1, { yesReserve: 70n })
+		const unavailable = createMarket(4, { loadError: 'unavailable', pair: undefined })
+		const fresh = createMarket(5)
+		const titles = (markets: readonly LiveMarket[]) => markets.map(market => market.title)
+		// Uncached page markets lead, newest registration first; cached ones keep their download order.
+		const browse = selectBrowseMarkets(downloaded, [refreshedOne, unavailable, fresh], '1')
+		expect(titles(browse)).toEqual(['Market 5', 'Market 4', 'Market 3', 'Market 1'])
+		expect(browse[3]).toBe(refreshedOne)
+		expect(titles(selectBrowseMarkets(downloaded, [], '2'))).toEqual(['Market 2'])
+		expect(titles(selectBrowseMarkets(downloaded, [cachedOne, fresh], undefined))).toEqual(['Market 5', 'Market 1'])
 	})
 
-	test('refreshes cached favorites only for market objects this tab has not recorded yet', () => {
+	test('puts favorites first without reordering either group', () => {
+		const markets = [createMarket(1), createMarket(2), createMarket(3), createMarket(4, { loadError: 'unavailable' })]
+		const favorites = [createMarket(3), createMarket(1), createMarket(4)].map((market, index) => ({ addedAt: index, id: market.pool.toLowerCase() }))
+		const { favorites: favoriteMarkets, others } = partitionFavoriteMarkets(markets, favorites)
+		expect(favoriteMarkets.map(market => market.title)).toEqual(['Market 1', 'Market 3'])
+		// An unavailable favorite has no star to show, so it stays with the other markets.
+		expect(others.map(market => market.title)).toEqual(['Market 2', 'Market 4'])
+	})
+
+	test('caches every discovered market on the market list and only favorites elsewhere, skipping objects already recorded', () => {
 		const recordedMarket = createMarket(1)
 		const id = recordedMarket.pool.toLowerCase()
 		const recordedById = new Map([[id, recordedMarket]])
 		const favorites = [{ addedAt: 1, id }]
-		expect(selectFavoriteMarketUpdates([recordedMarket, createMarket(2)], recordedById, favorites)).toEqual([])
+		expect(selectMarketCacheUpdates([recordedMarket, createMarket(2)], recordedById, favorites, false)).toEqual([])
 		const refreshed = createMarket(1, { yesReserve: 60n })
-		expect(selectFavoriteMarketUpdates([refreshed], recordedById, favorites)).toEqual([{ data: refreshed, id }])
-		expect(selectFavoriteMarketUpdates([refreshed], recordedById, [])).toEqual([])
+		expect(selectMarketCacheUpdates([refreshed], recordedById, favorites, false)).toEqual([{ data: refreshed, id }])
+		expect(selectMarketCacheUpdates([refreshed], recordedById, [], false)).toEqual([])
+		// The market list caches the page newest registration first, skipping markets that cannot be browsed.
+		const second = createMarket(2)
+		const third = createMarket(3)
+		expect(selectMarketCacheUpdates([recordedMarket, second, createMarket(9, { pair: undefined }), third], recordedById, [], true)).toEqual([
+			{ data: third, id: third.pool.toLowerCase() },
+			{ data: second, id: second.pool.toLowerCase() },
+		])
 	})
 
-	test('lists favorite markets above the discovered page with lit stars', async () => {
+	test('lists favorite markets first, once, with lit stars', async () => {
 		const dom = installDomEnvironment()
 		resetLocalEntityStoreForTesting()
 		const favorite = createMarket(1)
 		setEntityFavorite(getLocalEntityScope('trading', 'market'), favorite.pool, true)
 		const rendered = await renderIntoDocument(
 			<LiveMarketBrowser
+				freshness={{ refreshing: false, updatedAt: 1 }}
 				lookupRoute='market'
-				markets={[favorite, createMarket(2)]}
-				favoriteMarkets={[favorite]}
+				markets={[createMarket(2), favorite]}
+				favorites={[{ addedAt: 1, id: favorite.pool.toLowerCase() }]}
 				pageMarketCount={2}
 				discoveryState='ready'
 				discoveryError={undefined}
@@ -107,11 +132,9 @@ describe('favorite markets', () => {
 		)
 		try {
 			const headings = [...rendered.container.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)
-			expect(headings).toEqual(['Favorites', 'All markets'])
-			// The discovered list keeps its own sort order, so compare the stars without depending on it.
-			const stars = [...rendered.container.querySelectorAll('button.favorite-toggle')].map(star => [star.getAttribute('aria-label'), star.getAttribute('aria-pressed')]).sort()
+			expect(headings).toEqual(['Favorites', 'Other markets'])
+			const stars = [...rendered.container.querySelectorAll('button.favorite-toggle')].map(star => [star.getAttribute('aria-label'), star.getAttribute('aria-pressed')])
 			expect(stars).toEqual([
-				['Favorite: Market 1', 'true'],
 				['Favorite: Market 1', 'true'],
 				['Favorite: Market 2', 'false'],
 			])
