@@ -60,7 +60,7 @@ export const tradingActivityPanel = (activity: unknown, { operationRow, operatio
 		'Recent market activity',
 		items.map(item => operationRow(tradingActivityTitle(item), tradingActivitySummary(item), String(item['account'] ?? ''), item['block_number'], operationsHref(`/tx/${String(item['tx_hash'] ?? '')}`))),
 		'No trading activity is indexed for this market.',
-		{ label: `Enters, exits, liquidity, and redemptions derived from indexed pool, pair, and share events.${page['hasMore'] === true ? ` Latest ${items.length} shown.` : ''}` },
+		{ label: `Indexed trades, liquidity, and redemptions${page['hasMore'] === true ? ` · latest ${items.length} shown` : ''}` },
 	)
 }
 
@@ -100,14 +100,21 @@ export const tradingPnlPanel = (
 	}: { readonly operationRow: Components['operationRow']; readonly operationsPanel: Components['operationsPanel']; readonly operationsHref: (pathname: string) => string; readonly element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K] },
 ) => {
 	const record = isRecord(pnl) ? pnl : {}
-	return operationsPanel(
+	const panel = operationsPanel(
 		'Trading profit and loss',
 		operationRecords(record['items']).map(item => {
 			const row = operationRow(String(item['question_title'] ?? 'Augur AMM market'), tradingPnlSummary(item), String(item['market_address'] ?? ''), undefined, operationsHref(`/operations/trading/${encodeURIComponent(String(item['market_address'] ?? ''))}`))
-			row.querySelector('div')?.append(element('span', '', tradingPnlHoldings(item)))
+			const copy = row.querySelector('div')
+			copy?.insertBefore(element('span', '', tradingPnlHoldings(item)), copy.querySelector('code'))
 			return row
 		}),
 		'No trading positions or ETH flows are indexed for this address.',
-		{ label: `${String(record['basis'] ?? 'Indexed trading history')}${record['truncated'] === true ? ' First 250 markets shown.' : ''}` },
+		{ label: `Indexed ETH flows${record['truncated'] === true ? ' · first 250 markets shown' : ''}` },
 	)
+	if (typeof record['basis'] === 'string') {
+		const method = element('details', 'operations-raw-evidence')
+		method.append(element('summary', '', 'How profit and loss is calculated'), element('p', 'data-note', record['basis']))
+		panel.append(method)
+	}
+	return panel
 }

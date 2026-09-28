@@ -1,10 +1,7 @@
 import type { SQL } from 'bun'
 import { accountTradingRows, tradingActivityRows, tradingVolumeRows } from '../repositories/trading-activity.ts'
-import { tradingHoldingsValue, tradingProfitAndLoss } from '../trading-pnl.ts'
+import { TRADING_PNL_BASIS, tradingHoldingsValue, tradingProfitAndLoss } from '../trading-pnl.ts'
 import { detailPage, paged, protocolCursorFor, protocolCursorForRequest } from './entity-details.ts'
-
-const TRADING_PNL_BASIS =
-	'Cost basis is the ETH this account paid into the market’s security pool for complete sets, directly or through the trading router; proceeds are the ETH it received from complete-set redemptions, router exits, and settlement. Shares received by plain transfer carry no cost basis. Holdings are valued at the ETH an exit would return at the latest indexed reserves and complete-set exchange rate; fee accrual after that pool event is not reflected. Realized profit follows cost recovery: it counts only after proceeds exceed the ETH paid in, unless the position is closed.'
 
 /** Rewrites `activityCursor`/`activityLimit` into the standard detail-page parameters for the activity collection. */
 const tradingActivityUrl = (url: URL): URL => {

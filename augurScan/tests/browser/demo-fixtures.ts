@@ -1,3 +1,4 @@
+import { TRADING_PNL_BASIS } from '../../src/trading-pnl.ts'
 import type { UniswapPriceObservation } from '../../browser/chart-values.ts'
 
 import type { AmmPriceHistoryRecord, RepEthPriceHistoryRecord } from '../../browser/browser-types.ts'
@@ -141,5 +142,5 @@ export const demoTradingPnl = (market: string) => ({
 		demoPnlPosition('0xa7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7', 'Will the protocol meet its launch reliability target?', ['0', '0', '0'], ['2000000000000000000', '2640000000000000000', '0', '640000000000000000', '0', '640000000000000000']),
 	],
 	truncated: false,
-	basis: 'Cost basis is the ETH this account paid into the market’s security pool; holdings are valued at the ETH an exit would return at the latest indexed reserves.',
+	basis: TRADING_PNL_BASIS,
 })
