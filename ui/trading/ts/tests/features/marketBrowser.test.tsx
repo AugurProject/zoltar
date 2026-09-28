@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -72,7 +73,7 @@ test('market cards lead with odds and one-click outcome buttons that keep the en
 	}
 })
 
-test('search and status filters narrow the loaded page and offer a way back from an empty result', async () => {
+test('search and status filters narrow the downloaded markets and offer a way back from an empty result', async () => {
 	const dom = installDomEnvironment('http://localhost/#/market')
 	const rendered = await renderBrowser('market')
 	try {
@@ -85,7 +86,7 @@ test('search and status filters narrow the loaded page and offer a way back from
 		expect(rendered.container.querySelector('.market-list-filters button[aria-pressed="true"]')?.textContent).toBe('Closing soon')
 		await pressFilter(rendered.container, 'Resolved')
 		expect(rendered.container.querySelector('.market-record')).toBeNull()
-		expect(rendered.container.textContent).toContain('No markets on this page match.')
+		expect(rendered.container.textContent).toContain('No downloaded markets match.')
 		const clear = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === 'Clear filters')
 		if (clear === undefined) throw new Error('Clear filters action did not render')
 		await act(() => clear.click())
@@ -103,6 +104,51 @@ test('the liquidity landing keeps liquidity as the primary action instead of out
 	try {
 		expect(rendered.container.querySelector('.outcome-button')).toBeNull()
 		expect(rendered.container.querySelector('.market-record .button-link.primary')?.getAttribute('href')).toBe(`#/liquidity/${fixtureAddress('02')}`)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('search spans every discovered page, and Discover reads the next page into the list', async () => {
+	const dom = installDomEnvironment('http://localhost/#/market')
+	// The page holds the second registry page; the first page's markets come from the download cache.
+	const secondPage = [liveMarketFixture({ pool: fixtureAddress('03'), title: 'Will the ferry run?' })]
+	const firstPageCached = [liveMarketFixture({ pool: fixtureAddress('01'), title: 'Will it rain in Paris?' }), liveMarketFixture({ pool: fixtureAddress('02'), title: 'Will the bridge open?' })]
+	const requestedStarts: Array<bigint | undefined> = []
+	const renderAt = (nextStart: bigint | undefined) => (
+		<LiveMarketBrowser
+			freshness={{ refreshing: false, updatedAt: Date.now() }}
+			lookupRoute='market'
+			markets={[...secondPage, ...firstPageCached]}
+			pageMarketCount={secondPage.length}
+			discoveryState='ready'
+			discoveryError={undefined}
+			marketPage={{ start: 25n, total: 60n, previousStart: 0n, nextStart }}
+			workflowLocked={false}
+			nowSeconds={FIXTURE_NOW}
+			retry={() => undefined}
+			loadMarketPage={start => requestedStarts.push(start)}
+		/>
+	)
+	const rendered = await renderIntoDocument(renderAt(50n))
+	try {
+		expect(rendered.container.querySelector('.market-list-count')?.textContent).toBe('3 markets')
+		expect(rendered.container.querySelector('.discovery-control')?.textContent).toContain('26 of 60 markets scanned')
+		// There is no page to step through: the list is the downloaded set.
+		expect(Array.from(rendered.container.querySelectorAll('button')).map(button => button.textContent)).not.toContain('Next page')
+		await typeSearch(rendered.container, 'paris')
+		expect(cardTitles(rendered.container)).toEqual(['Will it rain in Paris?'])
+		expect(rendered.container.querySelector('.market-list-count')?.textContent).toBe('1 of 3 markets')
+		const discover = () => Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.discovery-control button'))[0]
+		expect(discover()?.textContent).toBe('Discover more')
+		await act(() => discover()?.click())
+		expect(requestedStarts).toEqual([50n])
+		// After the last page, the same control starts the scan again from the first page.
+		await act(() => render(renderAt(undefined), rendered.container))
+		expect(discover()?.textContent).toBe('Scan again')
+		await act(() => discover()?.click())
+		expect(requestedStarts).toEqual([50n, 0n])
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

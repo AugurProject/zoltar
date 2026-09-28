@@ -212,7 +212,7 @@
 	gap: var(--space-2);
 }
 
-/* Market list: filters and search over the loaded page, then a grid of market cards led by their odds. */
+/* Market list: filters and search over the downloaded markets, then a grid of market cards led by their odds. */
 .market-list-controls {
 	display: flex;
 	flex-wrap: wrap;
@@ -231,6 +231,9 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
+}
+.market-browse-bar.local-browse-bar {
+	margin-bottom: 0;
 }
 .market-list-count {
 	margin: 0;
@@ -394,6 +397,10 @@ button.outcome-button--no:hover:not(:disabled) {
 		flex: 1 1 auto;
 		min-width: 0;
 		padding-inline: var(--space-1);
+	}
+	/* The Discover control keeps its own right-aligned row, so a longer count or scan progress never moves it. */
+	.market-browse-bar > .discovery-control {
+		flex: 1 1 100%;
 	}
 }
 
