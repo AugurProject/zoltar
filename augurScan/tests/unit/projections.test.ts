@@ -70,14 +70,14 @@ describe('state projections', () => {
 				reason: '5',
 				vault,
 				settlementCollateralAttoEth: atomic(12_000_000_000_000_000_000n),
-				totalCapacityOwnershipAttoRep: atomic(9_000_000_000_000_000_000n),
-				feeEligibleCapacityOwnershipAttoRep: atomic(8_000_000_000_000_000_000n),
+				totalUnderwritingLimitAttoEth: atomic(9_000_000_000_000_000_000n),
+				feeEligibleUnderwritingLimitAttoEth: atomic(8_000_000_000_000_000_000n),
 				totalClaimableVaultFeesAttoEth: atomic(40n),
 				unallocatedAccruedFeesAttoEth: atomic(3n),
 				feeIndex: '10',
 				feeIndexRemainder: '1',
 				totalFeesOwedRemainder: '2',
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: atomic(4n),
+				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: atomic(4n),
 				lastUpdatedFeeAccumulator: '2000',
 				currentRetentionRate: '999999000000000000',
 			}),
@@ -85,25 +85,25 @@ describe('state projections', () => {
 		expect(poolProjection?.type).toBe('poolSnapshot')
 		if (poolProjection?.type !== 'poolSnapshot') throw new Error('pool projection missing')
 		expect(poolProjection.settlementCollateralAttoEth).toBe('12000000000000000000')
-		expect(poolProjection.totalCapacityOwnershipAttoRep).toBe('9000000000000000000')
-		expect(poolProjection.feeEligibleCapacityOwnershipAttoRep).toBe('8000000000000000000')
+		expect(poolProjection.totalUnderwritingLimitAttoEth).toBe('9000000000000000000')
+		expect(poolProjection.feeEligibleUnderwritingLimitAttoEth).toBe('8000000000000000000')
 
 		const [vaultProjection, resultingPoolState] = projectionsFrom(
 			log('VaultAccountingCheckpoint', {
 				vault,
 				repBackingUnits: '50',
-				capacityOwnershipAttoRep: atomic(60n),
+				underwritingLimitAttoEth: atomic(60n),
 				claimableFeesAttoEth: atomic(70n),
 				feeIndex: '80',
 				vaultFeeRemainder: '90',
 				resultingTotalRepBackingUnits: '100',
-				resultingFeeEligibleCapacityOwnershipAttoRep: atomic(110n),
+				resultingFeeEligibleUnderwritingLimitAttoEth: atomic(110n),
 			}),
 		)
 		expect(vaultProjection?.type).toBe('vaultSnapshot')
 		if (vaultProjection?.type !== 'vaultSnapshot') throw new Error('vault projection missing')
 		expect(vaultProjection.vaultAddress).toBe(vault.toLowerCase())
-		expect(vaultProjection.capacityOwnershipAttoRep).toBe('60')
+		expect(vaultProjection.underwritingLimitAttoEth).toBe('60')
 		expect(resultingPoolState).toMatchObject({ type: 'poolState', state: { totalRepBackingUnits: '100' } })
 	})
 
@@ -464,7 +464,7 @@ for (const seconds of ['0', '8640000000000', '8640000000001', '281474976710655']
 
 describe('previously raw-only lifecycle evidence', () => {
 	for (const [name, data, kind, entityType, identity] of [
-		['VaultBackingFactorAdjusted', { vault, backingFactorBps: '9000', capacityOwnershipAttoRep: String(12n) }, 'securityPool', 'vault', `${pool}:${vault}`],
+		['VaultBackingFactorAdjusted', { vault, backingFactorBps: '9000', underwritingLimitAttoEth: String(12n) }, 'securityPool', 'vault', `${pool}:${vault}`],
 		['ReputationTokenInitialized', { universeId: '7', repNumber: '2' }, 'reputationToken', 'reputation-token', pool],
 		['ChildReputationTokenInitialized', { universeId: '7', reputationToken: vault, repNumber: '2' }, 'zoltar', 'fork', '7'],
 		['PositionExitedByTransfer', { owner: vault, pair: vault, completeSetShares: '12' }, 'ammRouter', 'amm', vault],

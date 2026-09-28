@@ -49,9 +49,9 @@ void describe('security vault helpers', () => {
 			totalRepBackingUnits: 1n,
 			vaultAttoRepBacking: 1n,
 			repToken: zeroAddress,
-			capacityOwnershipAttoRep: 0n,
+			underwritingLimitAttoEth: 0n,
 			securityPoolAddress,
-			totalCapacityOwnershipAttoRep: 0n,
+			totalUnderwritingLimitAttoEth: 0n,
 			claimableFeesAttoEth: 0n,
 			universeId: 1n,
 			vaultAddress,
@@ -112,9 +112,9 @@ void describe('security vault helpers', () => {
 			totalRepBackingUnits: 0n,
 			vaultAttoRepBacking: 0n,
 			repToken: zeroAddress,
-			capacityOwnershipAttoRep: 0n,
+			underwritingLimitAttoEth: 0n,
 			securityPoolAddress: zeroAddress,
-			totalCapacityOwnershipAttoRep: 0n,
+			totalUnderwritingLimitAttoEth: 0n,
 			claimableFeesAttoEth: 0n,
 			universeId: 0n,
 			vaultAddress: zeroAddress,
@@ -204,10 +204,10 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: undefined,
 				repPerEthPrice: 0n,
-				capacityOwnershipAttoRep: 0n,
+				underwritingLimitAttoEth: 0n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: undefined,
-				totalCapacityOwnershipAttoRep: undefined,
+				totalUnderwritingLimitAttoEth: undefined,
 			}),
 		).toBe(undefined)
 		expect(
@@ -215,20 +215,20 @@ void describe('security vault helpers', () => {
 				disputeStakedAttoRep: 1n,
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
-				capacityOwnershipAttoRep: 0n,
+				underwritingLimitAttoEth: 0n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: undefined,
-				totalCapacityOwnershipAttoRep: undefined,
+				totalUnderwritingLimitAttoEth: undefined,
 			}),
 		).toBe(0n)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 0n,
-				capacityOwnershipAttoRep: 0n,
+				underwritingLimitAttoEth: 0n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: undefined,
-				totalCapacityOwnershipAttoRep: undefined,
+				totalUnderwritingLimitAttoEth: undefined,
 			}),
 		).toBe(10n * 10n ** 18n)
 	})
@@ -238,23 +238,23 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 20n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				capacityOwnershipAttoRep: 3n * 10n ** 18n,
+				underwritingLimitAttoEth: 3n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 10n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 			}),
 		).toBe(2_000_000_000_000_000_000n)
 	})
 
-	void test('withdrawable REP retains the backing required by active capacity ownership', () => {
+	void test('withdrawable REP retains the backing required by active underwriting commitments', () => {
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 2n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				underwritingLimitAttoEth: 1n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 50n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 1n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 1n * 10n ** 18n,
 			}),
 		).toBe(6_000_000_000_000_000_000n)
 
@@ -262,10 +262,10 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 5n * 10n ** 18n,
-				capacityOwnershipAttoRep: 10n * 10n ** 18n,
+				underwritingLimitAttoEth: 10n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 100n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 20n * 10n ** 18n,
+				totalUnderwritingLimitAttoEth: 20n * 10n ** 18n,
 			}),
 		).toBe(0n)
 	})
@@ -275,17 +275,17 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n + 1n,
+				underwritingLimitAttoEth: 1n * 10n ** 18n + 1n,
 				statoblastSecurityMultiplierBps: 20_000n,
 				totalPoolHeldAttoRep: 10n * 10n ** 18n,
-				totalCapacityOwnershipAttoRep: 1n * 10n ** 18n + 1n,
+				totalUnderwritingLimitAttoEth: 1n * 10n ** 18n + 1n,
 			}),
 		).toBe(3_999_999_999_999_999_994n)
 		expect(
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n * 10n ** 18n,
 				repPerEthPrice: 3n * 10n ** 18n,
-				capacityOwnershipAttoRep: 1n * 10n ** 18n,
+				underwritingLimitAttoEth: 1n * 10n ** 18n,
 				statoblastSecurityMultiplierBps: undefined,
 			}),
 		).toBe(undefined)
@@ -296,7 +296,7 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n,
 				repPerEthPrice: 10n ** 18n,
-				capacityOwnershipAttoRep: 1n,
+				underwritingLimitAttoEth: 1n,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 		).toBe(8n)
@@ -304,9 +304,14 @@ void describe('security vault helpers', () => {
 			getSecurityVaultWithdrawableRepAmount({
 				vaultAttoRepBacking: 10n,
 				repPerEthPrice: 10n ** 18n,
-				capacityOwnershipAttoRep: 2n,
+				underwritingLimitAttoEth: 2n,
 				statoblastSecurityMultiplierBps: 20_000n,
 			}),
 		).toBe(6n)
 	})
+})
+
+test('withdrawal estimate preserves nested full-limit rounding and the liquidation reserve', () => {
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 10n, underwritingLimitAttoEth: 1n, repPerEthPrice: 1n, statoblastSecurityMultiplierBps: 20_000n })).toBe(8n)
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 200n, underwritingLimitAttoEth: 100n, repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 10_000n })).toBe(95n)
 })

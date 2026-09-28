@@ -16,26 +16,26 @@ export type PoolAccountingReplay = {
 	reason: bigint
 	vault: Address
 	settlementCollateralAttoEth: bigint
-	totalCapacityOwnershipAttoRep: bigint
-	feeEligibleCapacityOwnershipAttoRep: bigint
+	totalUnderwritingLimitAttoEth: bigint
+	feeEligibleUnderwritingLimitAttoEth: bigint
 	totalClaimableVaultFeesAttoEth: bigint
 	unallocatedAccruedFeesAttoEth: bigint
 	feeIndex: bigint
 	feeIndexRemainder: bigint
 	totalFeesOwedRemainder: bigint
-	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: bigint
+	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: bigint
 	lastUpdatedFeeAccumulator: bigint
 	currentRetentionRate: bigint
 }
 
 export type VaultAccountingReplay = {
 	repBackingUnits: bigint
-	capacityOwnershipAttoRep: bigint
+	underwritingLimitAttoEth: bigint
 	claimableFeesAttoEth: bigint
 	feeIndex: bigint
 	vaultFeeRemainder: bigint
 	resultingTotalRepBackingUnits: bigint
-	resultingFeeEligibleCapacityOwnershipAttoRep: bigint
+	resultingFeeEligibleUnderwritingLimitAttoEth: bigint
 }
 
 export type PoolStateReplay = {
@@ -70,13 +70,13 @@ export type VaultMigrationReplay = {
 	migratedRepDeltaAttoRep: bigint
 	resultingChildMigratedRepTotalAttoRep: bigint
 	resultingParentRepBackingUnits: bigint
-	resultingParentCapacityOwnershipAttoRep: bigint
+	resultingParentUnderwritingLimitAttoEth: bigint
 	resultingChildRepBackingUnits: bigint
-	resultingChildCapacityOwnershipAttoRep: bigint
+	resultingChildUnderwritingLimitAttoEth: bigint
 	resultingParentTotalRepBackingUnits: bigint
 	resultingChildTotalRepBackingUnits: bigint
-	resultingParentTotalCapacityOwnershipAttoRep: bigint
-	resultingChildTotalCapacityOwnershipAttoRep: bigint
+	resultingParentTotalUnderwritingLimitAttoEth: bigint
+	resultingChildTotalUnderwritingLimitAttoEth: bigint
 	settlementCollateralTransferredAttoEth: bigint
 	cumulativeSettlementCollateralTransferredAttoEth: bigint
 }
@@ -124,7 +124,7 @@ export type CoordinatorOperationReplay = {
 	queuedAt: bigint
 	validForSeconds: bigint
 	snapshotTargetBackingUnits: bigint
-	snapshotTargetCapacityOwnershipAttoRep: bigint
+	snapshotTargetUnderwritingLimitAttoEth: bigint
 	snapshotTargetDisputeStakedAttoRep: bigint
 	snapshotTotalPoolHeldAttoRep: bigint
 	snapshotTotalRepBackingUnits: bigint
@@ -851,14 +851,14 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 			reason: requireBigInt(log.args, 'reason'),
 			vault: requireAddress(log.args, 'vault'),
 			settlementCollateralAttoEth: requireBigInt(log.args, 'settlementCollateralAttoEth'),
-			totalCapacityOwnershipAttoRep: requireBigInt(log.args, 'totalCapacityOwnershipAttoRep'),
-			feeEligibleCapacityOwnershipAttoRep: requireBigInt(log.args, 'feeEligibleCapacityOwnershipAttoRep'),
+			totalUnderwritingLimitAttoEth: requireBigInt(log.args, 'totalUnderwritingLimitAttoEth'),
+			feeEligibleUnderwritingLimitAttoEth: requireBigInt(log.args, 'feeEligibleUnderwritingLimitAttoEth'),
 			totalClaimableVaultFeesAttoEth: requireBigInt(log.args, 'totalClaimableVaultFeesAttoEth'),
 			unallocatedAccruedFeesAttoEth: requireBigInt(log.args, 'unallocatedAccruedFeesAttoEth'),
 			feeIndex: requireBigInt(log.args, 'feeIndex'),
 			feeIndexRemainder: requireBigInt(log.args, 'feeIndexRemainder'),
 			totalFeesOwedRemainder: requireBigInt(log.args, 'totalFeesOwedRemainder'),
-			uncheckpointedFeeEligibleCapacityOwnershipAttoRep: requireBigInt(log.args, 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep'),
+			uncheckpointedFeeEligibleUnderwritingLimitAttoEth: requireBigInt(log.args, 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth'),
 			lastUpdatedFeeAccumulator: requireBigInt(log.args, 'lastUpdatedFeeAccumulator'),
 			currentRetentionRate: requireBigInt(log.args, 'currentRetentionRate'),
 		})
@@ -916,12 +916,12 @@ export function reduceSecurityPoolEvent(state: ReplayState, log: ReplayLog) {
 		}
 		vaults.set(requireAddress(log.args, 'vault'), {
 			repBackingUnits: requireBigInt(log.args, 'repBackingUnits'),
-			capacityOwnershipAttoRep: requireBigInt(log.args, 'capacityOwnershipAttoRep'),
+			underwritingLimitAttoEth: requireBigInt(log.args, 'underwritingLimitAttoEth'),
 			claimableFeesAttoEth: requireBigInt(log.args, 'claimableFeesAttoEth'),
 			feeIndex: requireBigInt(log.args, 'feeIndex'),
 			vaultFeeRemainder: requireBigInt(log.args, 'vaultFeeRemainder'),
 			resultingTotalRepBackingUnits: requireBigInt(log.args, 'resultingTotalRepBackingUnits'),
-			resultingFeeEligibleCapacityOwnershipAttoRep: requireBigInt(log.args, 'resultingFeeEligibleCapacityOwnershipAttoRep'),
+			resultingFeeEligibleUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingFeeEligibleUnderwritingLimitAttoEth'),
 		})
 		poolState.totalRepBackingUnits = requireBigInt(log.args, 'resultingTotalRepBackingUnits')
 		state.poolStates.set(log.emitter, poolState)
@@ -986,13 +986,13 @@ export function reduceForkerEvent(state: ReplayState, log: ReplayLog) {
 			migratedRepDeltaAttoRep: requireBigInt(log.args, 'migratedRepDeltaAttoRep'),
 			resultingChildMigratedRepTotalAttoRep: requireBigInt(log.args, 'resultingChildMigratedRepTotalAttoRep'),
 			resultingParentRepBackingUnits: requireBigInt(log.args, 'resultingParentRepBackingUnits'),
-			resultingParentCapacityOwnershipAttoRep: requireBigInt(log.args, 'resultingParentCapacityOwnershipAttoRep'),
+			resultingParentUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingParentUnderwritingLimitAttoEth'),
 			resultingChildRepBackingUnits: requireBigInt(log.args, 'resultingChildRepBackingUnits'),
-			resultingChildCapacityOwnershipAttoRep: requireBigInt(log.args, 'resultingChildCapacityOwnershipAttoRep'),
+			resultingChildUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingChildUnderwritingLimitAttoEth'),
 			resultingParentTotalRepBackingUnits: requireBigInt(log.args, 'resultingParentTotalRepBackingUnits'),
 			resultingChildTotalRepBackingUnits: requireBigInt(log.args, 'resultingChildTotalRepBackingUnits'),
-			resultingParentTotalCapacityOwnershipAttoRep: requireBigInt(log.args, 'resultingParentTotalCapacityOwnershipAttoRep'),
-			resultingChildTotalCapacityOwnershipAttoRep: requireBigInt(log.args, 'resultingChildTotalCapacityOwnershipAttoRep'),
+			resultingParentTotalUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingParentTotalUnderwritingLimitAttoEth'),
+			resultingChildTotalUnderwritingLimitAttoEth: requireBigInt(log.args, 'resultingChildTotalUnderwritingLimitAttoEth'),
 			settlementCollateralTransferredAttoEth: requireBigInt(log.args, 'settlementCollateralTransferredAttoEth'),
 			cumulativeSettlementCollateralTransferredAttoEth: requireBigInt(log.args, 'cumulativeSettlementCollateralTransferredAttoEth'),
 		})
@@ -1468,7 +1468,7 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			queuedAt: requireBigInt(log.args, 'queuedAt'),
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),
-			snapshotTargetCapacityOwnershipAttoRep: requireBigInt(log.args, 'snapshotTargetCapacityOwnershipAttoRep'),
+			snapshotTargetUnderwritingLimitAttoEth: requireBigInt(log.args, 'snapshotTargetUnderwritingLimitAttoEth'),
 			snapshotTargetDisputeStakedAttoRep: 0n,
 			snapshotTotalPoolHeldAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldAttoRep'),
 			snapshotTotalRepBackingUnits: requireBigInt(log.args, 'snapshotTotalRepBackingUnits'),

@@ -204,7 +204,7 @@ export function LiquidationModal({
 			: simulateLiquidation({
 					callerVaultSummary: receiverVaultSummary,
 					requestedDebtAttoEth: liquidationAmountValue,
-					totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
+					totalUnderwritingLimitAttoEth: selectedPool.totalUnderwritingLimitAttoEth,
 					minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
 					repPerEthPrice: uiCalculationPrice,
 					settlementCollateralAttoEth: selectedPool.settlementCollateralAttoEth,
@@ -239,7 +239,7 @@ export function LiquidationModal({
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
 		requestedDebtAttoEth: liquidationAmountValue,
-		totalCapacityOwnershipAttoRep: selectedPool?.totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
 		maxLiquidationDebtAttoEth: protocolLiquidationMaxAmount,
 		minimumSecurityBondDebtAttoEth: selectedPool?.minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep: selectedPool?.minimumVaultRepDepositAttoRep,
@@ -255,7 +255,7 @@ export function LiquidationModal({
 		return getLiquidationFailureReason({
 			callerVaultSummary: receiverVaultSummary,
 			requestedDebtAttoEth: liquidationAmountValue,
-			totalCapacityOwnershipAttoRep: selectedPool.totalCapacityOwnershipAttoRep,
+			totalUnderwritingLimitAttoEth: selectedPool.totalUnderwritingLimitAttoEth,
 			minimumReceiverHealthFactorBps: delegatedReceiver ? liquidationApprovalDetails?.params.minPostLiquidationHealthFactorBps : undefined,
 			minimumSecurityBondDebtAttoEth: selectedPool.minimumSecurityBondDebtAttoEth,
 			minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
