@@ -13,7 +13,7 @@ import { approveAndDepositRepToVault } from '../testSupport/simulator/utils/cont
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, redeemCompleteSet, redeemFees, updateSettlementCollateral } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, redeemCompleteSet, redeemFees, updateSettlementCollateral } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 const PRICE_PRECISION = 10n ** 18n
@@ -78,14 +78,14 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 	test('one attoETH of collateral cannot credit more fees than it holds and brick the pool', async () => {
 		const capacity = await getFeeEligibleUnderwritingLimitAttoEth()
 		assert.ok(capacity > PRICE_PRECISION, 'the explicitly authorized limit must exceed one ETH to exercise fractional fee-index carry')
-		await createCertifiedCompleteSetFixture(client, securityPool, 1n)
+		await createCompleteSet(client, securityPool, 1n)
 		// Repeatedly re-decaying the same attoETH credits floor(capacity / 1e18) attoETH after this many checkpoints.
 		await accrueEveryBlock(capacity / PRICE_PRECISION + 2n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPool)) <= 1n, 'accrual must never mint collateral')
 		assert.ok((await getTotalAccruedFees(client, securityPool)) <= 1n, 'accrual must never credit more fees than the deposited attoETH')
 
 		await redeemFees(client, securityPool, client.account.address)
-		await createCertifiedCompleteSetFixture(client, securityPool, PRICE_PRECISION)
+		await createCompleteSet(client, securityPool, PRICE_PRECISION)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, securityPool)
 		await assertCollateralAndFeesAreFunded('after a normal mint')
@@ -95,12 +95,12 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 
 	test('redeeming dust collateral with uncredited decay pending keeps later accruals funded', async () => {
 		const capacity = await getFeeEligibleUnderwritingLimitAttoEth()
-		await createCertifiedCompleteSetFixture(client, securityPool, 1n)
+		await createCompleteSet(client, securityPool, 1n)
 		await accrueEveryBlock(3n)
 		await redeemCompleteSet(client, securityPool, await getShareTokenSupplyAttoShares(client, securityPool))
-		await createCertifiedCompleteSetFixture(client, securityPool, 1n)
+		await createCompleteSet(client, securityPool, 1n)
 		await accrueEveryBlock(capacity / PRICE_PRECISION + 2n)
-		await createCertifiedCompleteSetFixture(client, securityPool, PRICE_PRECISION)
+		await createCompleteSet(client, securityPool, PRICE_PRECISION)
 		await mockWindow.advanceTime(DAY)
 		await updateSettlementCollateral(client, securityPool)
 		await assertCollateralAndFeesAreFunded('after a normal mint')

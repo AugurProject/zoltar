@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
@@ -59,6 +60,7 @@ function createReadinessInput(overrides: Partial<Parameters<typeof buildVaultRea
 		vaultExistsOnchain: true,
 		visibleDepositLauncherBlocker: undefined,
 		visibleRepExitLauncherBlocker: undefined,
+		walletBlocker: undefined,
 		...overrides,
 	}
 }
@@ -159,5 +161,27 @@ describe('security vault availability', () => {
 		expect(actions[3]).toMatchObject({ blocker: 'adjust', disabledReasonId: 'deposit-id' })
 		const sharedRefresh = buildVaultReadinessActions(createReadinessInput({ adjustmentBlocker: 'adjust', showSharedRefreshVaultBlocker: true }))
 		expect(sharedRefresh[3]?.blocker).toBeUndefined()
+	})
+
+	test('marks the launchers a wallet prerequisite blocks with the typed wallet blocker', () => {
+		const walletBlocker: WalletActionBlocker = { kind: 'wrong-network', targetChainName: 'Sepolia' }
+		const actions = buildVaultReadinessActions(
+			createReadinessInput({
+				adjustmentBlocker: 'Switch to Sepolia.',
+				canUseLoadedVaultActions: false,
+				claimFeesAvailabilityBlocker: 'Switch to Sepolia.',
+				repExitEnabled: false,
+				visibleDepositLauncherBlocker: 'Switch to Sepolia.',
+				visibleRepExitLauncherBlocker: 'Switch to Sepolia.',
+				walletBlocker,
+			}),
+		)
+		expect(actions[0]).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
+		// A lifecycle-disabled launcher keeps its own described reason instead of offering a wallet fix.
+		expect(actions[1]?.blocker).toBeUndefined()
+		expect(actions[1]?.walletBlocker).toBeUndefined()
+		expect(actions[2]).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
+		expect(actions[3]).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
+		expect(buildVaultReadinessActions(createReadinessInput())[0]?.walletBlocker).toBeUndefined()
 	})
 })

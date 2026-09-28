@@ -860,17 +860,6 @@ export const securityPoolAbi = [
 	},
 	{
 		type: 'event',
-		name: 'VaultCoverageCertified',
-		anonymous: false,
-		inputs: [
-			{ name: 'vault', type: 'address', internalType: 'address', indexed: true },
-			{ name: 'limitAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
-			{ name: 'snapshot', type: 'bytes32', internalType: 'bytes32', indexed: false },
-			{ name: 'certifiedTotalAttoEth', type: 'uint256', internalType: 'uint256', indexed: false },
-		],
-	},
-	{
-		type: 'event',
 		name: 'VaultDepositTargetHealthFactorRecorded',
 		anonymous: false,
 		inputs: [
@@ -924,7 +913,6 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'awaitingForkContinuation', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'backingUnitsToAttoRep', stateMutability: 'view', inputs: [{ name: 'repBackingUnits', type: 'uint256', internalType: 'uint256' }], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'burnEscalationWinnerHaircut', stateMutability: 'nonpayable', inputs: [{ name: 'amountAttoRep', type: 'uint256', internalType: 'uint256' }], outputs: [] },
-	{ type: 'function', name: 'certifyVaultCoverage', stateMutability: 'nonpayable', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [] },
 	{
 		type: 'function',
 		name: 'configureFinalizedAuctionVault',
@@ -953,7 +941,6 @@ export const securityPoolAbi = [
 		],
 		outputs: [],
 	},
-	{ type: 'function', name: 'coverageRevision', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'createCompleteSet', stateMutability: 'payable', inputs: [], outputs: [] },
 	{ type: 'function', name: 'currentRetentionRate', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
@@ -990,7 +977,6 @@ export const securityPoolAbi = [
 	{ type: 'function', name: 'escalationGameFactory', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract EscalationGameFactory' }] },
 	{ type: 'function', name: 'eventEmitter', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address', internalType: 'contract SecurityPoolEventEmitter' }] },
 	{ type: 'function', name: 'feeIndex', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
-	{ type: 'function', name: 'getCertifiedUnderwritingLimitAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getCurrentMintingCapacityAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'getFeeEpochEndTime', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{
@@ -1074,7 +1060,6 @@ export const securityPoolAbi = [
 		outputs: [],
 	},
 	{ type: 'function', name: 'isEscalationResolved', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
-	{ type: 'function', name: 'isVaultCoverageCertified', stateMutability: 'view', inputs: [{ name: 'vault', type: 'address', internalType: 'address' }], outputs: [{ name: '', type: 'bool', internalType: 'bool' }] },
 	{ type: 'function', name: 'lastUpdatedFeeAccumulator', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'minimumSecurityBondDebtAttoEth', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },
 	{ type: 'function', name: 'minimumVaultRepDepositAttoRep', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }] },

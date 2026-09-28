@@ -9,7 +9,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
-import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getSettlementCollateralAttoEth, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
@@ -24,7 +24,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
 		const nonDecisionThresholdAttoRep = reportBond * 2n

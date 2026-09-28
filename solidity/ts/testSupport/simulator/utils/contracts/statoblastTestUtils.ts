@@ -92,11 +92,10 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 			args: [targetVault],
 		}),
 	)
-	const [vault, totalUnderwritingLimitAttoEth, poolAccounting, coverageRevision] = await Promise.all([
+	const [vault, totalUnderwritingLimitAttoEth, poolAccounting] = await Promise.all([
 		getSecurityVault(client, securityPool, targetVault),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalUnderwritingLimitAttoEth', args: [] }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'getPoolAccountingSnapshot', args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'coverageRevision', args: [] }),
 	])
 	// Synthetic commitment setup for accounting boundary tests, not an owner-authorized operation.
 	// Production-path tests must use setUnderwritingLimit instead.
@@ -108,7 +107,6 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 				[storageHex(1n)]: totalUnderwritingLimitAttoEth - vault.underwritingLimitAttoEth + amount,
 				[storageHex(12n)]: poolAccounting.feeEligibleUnderwritingLimitAttoEth - vault.underwritingLimitAttoEth + amount,
 				[storageHex(mappingSlot(16n) + 1n)]: amount,
-				[storageHex(28n)]: coverageRevision + 1n,
 			},
 		},
 	})

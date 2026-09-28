@@ -5,21 +5,17 @@ import type { LiveMarket } from '../protocol/liveMarket.js'
 /** The SecurityPool fields that define how many attoShares one attoETH of settlement collateral currently represents. */
 export type ShareValueRate = Pick<LiveMarket, 'settlementCollateralAttoEth' | 'shareTokenSupplyAttoShares'>
 
-// SecurityPool.attoEthToAttoShares mints attoEth * PRICE_PRECISION shares while no complete set exists, so the
-// genesis rate is one attoETH per 10^18 attoShares. One displayed token uses a fixed 10^36 attoShares.
-const GENESIS_ATTO_SHARES_PER_ATTO_ETH = 10n ** 18n
-
 /** Settlement-collateral value of a share amount at the pool's current rate; mirrors SecurityPool.attoSharesToAttoEth. */
 export function attoSharesToCollateralAttoEth(amountAttoShares: bigint, rate: ShareValueRate) {
 	if (amountAttoShares < 0n) throw new Error('Share amounts cannot be negative')
-	if (rate.shareTokenSupplyAttoShares === 0n) return amountAttoShares / GENESIS_ATTO_SHARES_PER_ATTO_ETH
+	if (rate.shareTokenSupplyAttoShares === 0n) return amountAttoShares
 	return (amountAttoShares * rate.settlementCollateralAttoEth) / rate.shareTokenSupplyAttoShares
 }
 
 /** Share amount worth the given settlement-collateral value, rounded down; undefined while the pool has shares but no collateral. */
 export function collateralAttoEthToAttoShares(amountAttoEth: bigint, rate: ShareValueRate) {
 	if (amountAttoEth < 0n) throw new Error('Collateral amounts cannot be negative')
-	if (rate.shareTokenSupplyAttoShares === 0n) return amountAttoEth * GENESIS_ATTO_SHARES_PER_ATTO_ETH
+	if (rate.shareTokenSupplyAttoShares === 0n) return amountAttoEth
 	if (rate.settlementCollateralAttoEth === 0n) return undefined
 	return (amountAttoEth * rate.shareTokenSupplyAttoShares) / rate.settlementCollateralAttoEth
 }
@@ -35,8 +31,8 @@ function formatCollateralValue(amountAttoShares: bigint, rate: ShareValueRate, m
 	return rounding === 'down' ? formatTrimmedUnits(value, 18, maximumFractionDigits) : formatRoundedUnits(value, 18, maximumFractionDigits)
 }
 
-/** Fixed genesis normalization for token quantities, independent of collateral backing. */
-export const SHARE_QUANTITY_DECIMALS = 36
+/** Shares and LP tokens have 18 decimal places, independent of collateral backing. */
+export const SHARE_QUANTITY_DECIMALS = 18
 
 function formatShareQuantity(amount: bigint, maximumFractionDigits: number, rounding: ShareValueRounding) {
 	if (amount < 0n) throw new Error('Share amounts cannot be negative')

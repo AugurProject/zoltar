@@ -134,7 +134,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		feeEligibleUnderwritingLimitAttoEth = feeEligibleUnderwritingLimitAttoEth - oldLimitAttoEth + limitAttoEth;
 		totalUnderwritingLimitAttoEth = nextTotalAttoEth;
 		securityVaults[vault].underwritingLimitAttoEth = limitAttoEth;
-		_invalidateCoverage();
 		context.updateRetentionRate();
 		emit UnderwritingLimitSet(vault, limitAttoEth, nextTotalAttoEth);
 		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitVaultAccountingCheckpoint, (vault)));
@@ -159,29 +158,8 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		feeIndexRemainder = 0;
 		feeEligibleUnderwritingLimitAttoEth += commitmentAttoEth;
 		require(feeEligibleUnderwritingLimitAttoEth <= totalUnderwritingLimitAttoEth, 'Fee ownership exceeds capacity');
-		_invalidateCoverage();
 		context.updateRetentionRate();
 		_delegateEvent(address(context.eventEmitter()), abi.encodeCall(SecurityPoolEventEmitter.emitPoolAccountingCheckpoint, (AccountingReason.CapacityOwnershipChange, vault)));
-	}
-
-	function certifyVaultCoverage(address vault) external {
-		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
-		require(address(escalationGame) == address(0), 'Escalation mint closed');
-		uint256 limitAttoEth = securityVaults[vault].underwritingLimitAttoEth;
-		require(vault != address(0) && limitAttoEth != 0, 'No commitment');
-		_requireLimitBacked(pool, vault, limitAttoEth);
-		bytes32 snapshot = SecurityPoolUtils.coverageSnapshot(pool);
-		if (snapshot != certifiedCoverageSnapshot) {
-			certifiedCoverageSnapshot = snapshot;
-			coverageCertificateGeneration++;
-			certifiedUnderwritingLimitAttoEth = 0;
-		}
-		if (vaultCoverageCertificateGeneration[vault] == coverageCertificateGeneration) return;
-		vaultCoverageCertificateGeneration[vault] = coverageCertificateGeneration;
-		certifiedUnderwritingLimitAttoEth += limitAttoEth;
-		require(certifiedUnderwritingLimitAttoEth <= totalUnderwritingLimitAttoEth, 'Certified commitments exceed total');
-		emit VaultCoverageCertified(vault, limitAttoEth, snapshot, certifiedUnderwritingLimitAttoEth);
 	}
 
 	event EscalationGameSet(EscalationGame escalationGame);
@@ -250,7 +228,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		securityVaults[vault].repBackingUnits += repBackingUnits;
 		totalRepBackingUnits += repBackingUnits;
 		require(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits) >= minimumVaultRepDepositAttoRep, 'Vault REP below minimum');
-		_invalidateCoverage();
 		if (!isKnownVault[vault]) {
 			isKnownVault[vault] = true;
 			vaultAddresses.push(vault);
@@ -349,7 +326,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		securityVaults[request.receiverVault].underwritingLimitAttoEth += debtToMoveAttoEth;
 		securityVaults[request.targetVault].repBackingUnits -= backingUnitsToTransfer;
 		securityVaults[request.receiverVault].repBackingUnits += backingUnitsToTransfer;
-		_invalidateCoverage();
 		uint256 receiverLimitAttoEth = securityVaults[request.receiverVault].underwritingLimitAttoEth;
 		uint256 receiverDisputeAttoRep =
 			address(escalationGame) == address(0)
