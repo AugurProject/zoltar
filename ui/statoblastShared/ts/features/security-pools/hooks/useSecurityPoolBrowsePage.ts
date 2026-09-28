@@ -25,7 +25,7 @@ export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage
 	const hasLoadedSecurityPoolPage = useSignal(false)
 	const securityPoolPageLoad = useLoadController()
 	const nextSecurityPoolPageLoad = useRequestGuard()
-	// Explicit loads bump this, so a slower background read never overwrites a newer committed page.
+	// Each background request and foreground commit retires older background answers.
 	const commitVersionRef = useRef(0)
 	const pageQuery = useQueryState(securityPoolPageQueries, securityPoolPage.value?.requestKey)
 
@@ -55,7 +55,7 @@ export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage
 	const refreshBrowseSecurityPoolPage = async () => {
 		const current = securityPoolPage.value
 		if (current === undefined || securityPoolPageLoad.isLoading.peek()) return
-		const commitVersion = commitVersionRef.current
+		const commitVersion = ++commitVersionRef.current
 		try {
 			const page = await securityPoolPageQueries.fetch(current.requestKey, async () => await loadSecurityPoolPage(current.pageIndex, current.pageSize, accountAddress))
 			if (commitVersionRef.current !== commitVersion || securityPoolPageLoad.isLoading.peek() || securityPoolPage.value?.requestKey !== current.requestKey) return

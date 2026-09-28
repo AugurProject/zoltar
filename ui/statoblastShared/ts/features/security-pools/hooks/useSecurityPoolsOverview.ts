@@ -143,7 +143,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		const address = checkedSecurityPoolAddress.value
 		const queryKey = getLineageQueryKey(address)
 		if (address === undefined || queryKey === undefined || securityPoolsLoad.isLoading.peek()) return
-		const commitVersion = securityPoolsCommitVersion.current
+		const commitVersion = ++securityPoolsCommitVersion.current
 		try {
 			const pools = await securityPoolLineageQueries.fetch(queryKey, async () => await dependencies.loadSecurityPoolLineage(parseAddressInput(address, 'Security pool'), accountAddress))
 			if (securityPoolsCommitVersion.current === commitVersion && !securityPoolsLoad.isLoading.peek() && checkedSecurityPoolAddress.value === address) securityPools.value = pools

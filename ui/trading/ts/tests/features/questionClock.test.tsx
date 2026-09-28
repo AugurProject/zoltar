@@ -1,5 +1,7 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -19,8 +21,8 @@ const configuration: DeploymentConfiguration = {
 	feeBps: 30,
 }
 
-function QuestionClockProbe({ services }: { services: LiveTradingControllerServices }) {
-	const nowSeconds = useQuestionClock(configuration, services)
+function QuestionClockProbe({ services, activeConfiguration = configuration }: { services: LiveTradingControllerServices; activeConfiguration?: DeploymentConfiguration }) {
+	const nowSeconds = useQuestionClock(activeConfiguration, services)
 	return h('output', null, nowSeconds.toString())
 }
 
@@ -67,6 +69,34 @@ describe('question clock', () => {
 		} finally {
 			timers.mockRestore()
 		}
+	})
+
+	test('ignores an old network clock response after switching configurations', async () => {
+		const oldRead = createDeferred<bigint>()
+		let oldStarted = false
+		const services: LiveTradingControllerServices = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: selectedConfiguration =>
+				createPublicClient({
+					transport: custom({
+						request: async () => {
+							if (selectedConfiguration === configuration) oldStarted = true
+							const timestamp = selectedConfiguration === configuration ? await oldRead.promise : 200n
+							return { hash: `0x${'11'.repeat(32)}`, number: '0x2', parentHash: `0x${'22'.repeat(32)}`, timestamp: `0x${timestamp.toString(16)}`, transactions: [] }
+						},
+					}),
+				}),
+		}
+		const rendered = lifecycle.trackRendered(await renderIntoDocument(h(QuestionClockProbe, { services })))
+		await waitFor(() => expect(oldStarted).toBe(true))
+		await act(() => render(h(QuestionClockProbe, { services, activeConfiguration: { ...configuration, chainId: 1 } }), rendered.container))
+		await waitFor(() => expect(rendered.container.textContent).toBe('200'))
+		await act(async () => {
+			oldRead.resolve(100n)
+			await oldRead.promise
+			await Bun.sleep(20)
+		})
+		expect(rendered.container.textContent).toBe('200')
 	})
 
 	test('pauses the block poll while the page is hidden and reads the block as soon as it is visible again', async () => {
