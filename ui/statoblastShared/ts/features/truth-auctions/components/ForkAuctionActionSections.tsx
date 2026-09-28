@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -175,14 +175,8 @@ export function ForkAuctionSubmitBidSection({
 					</p>
 				)}
 				<div className='field-row'>
-					<label className='field'>
-						<span>{forkAuctionCopy.bidPriceEthRep}</span>
-						<FormInput value={submitBidPrice} onInput={event => onBidPriceChange(event.currentTarget.value)} />
-					</label>
-					<label className='field'>
-						<span>{forkAuctionCopy.bidAmountEth}</span>
-						<FormInput value={submitBidAmount} onInput={event => onBidAmountChange(event.currentTarget.value)} />
-					</label>
+					<AmountField label={forkAuctionCopy.bidPrice} onChange={onBidPriceChange} unit={forkAuctionCopy.bidPriceUnit} value={submitBidPrice} />
+					<AmountField label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
 				</div>
 				<TransactionReview
 					context={[

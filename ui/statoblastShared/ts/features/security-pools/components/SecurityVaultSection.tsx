@@ -315,7 +315,16 @@ export function SecurityVaultSection({
 		}),
 		...extraReadinessActions,
 	])
-	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
+	const depositAmountField = (
+		<VaultDepositAmountField
+			disabled={!depositRepToVaultEnabled}
+			onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })}
+			repTokenSymbol={repTokenSymbol}
+			value={normalizedSecurityVaultForm.depositAmount}
+			walletRepBalanceAttoRep={walletRepBalanceAttoRep}
+			walletRepBalanceLoading={walletRepBalanceLoading}
+		/>
+	)
 	const depositApprovalControlProps = {
 		approveRepEnabled,
 		canUseLoadedVaultActions,
@@ -334,7 +343,9 @@ export function SecurityVaultSection({
 		securityVaultRepApproval,
 	}
 	const repWithdrawAmountField =
-		effectiveRepExitMode === 'redeem' ? null : <VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+		effectiveRepExitMode === 'redeem' ? null : (
+			<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+		)
 	const repExitActionButton = (
 		<VaultRepExitActionButton
 			canUseLoadedVaultActions={canUseLoadedVaultActions}
@@ -373,10 +384,6 @@ export function SecurityVaultSection({
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
 						{depositAmountField}
-
-						<MetricGrid>
-							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
-						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
 						<VaultDepositApprovalControl {...depositApprovalControlProps} onCancel={closeVaultActionModal} />
 					</>

@@ -628,7 +628,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const reportOutcomeSection = getReportOutcomeSection()
-		const amountInput = within(reportOutcomeSection).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(reportOutcomeSection).getByRole('textbox', { name: /^Contribution amount/ })
 		const firstSide = reportOutcomeSection.querySelector('.escalation-side')
 		if (!(firstSide instanceof HTMLElement)) throw new Error('Expected escalation side to render')
 		expect(reportOutcomeSection.querySelectorAll('.escalation-side')).toHaveLength(3)
@@ -1085,7 +1085,7 @@ describe('ReportingSection', () => {
 		const sharedReasonId = reportButton.getAttribute('aria-describedby')
 
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
-		expect((documentQueries.getByRole('textbox', { name: /^Contribution amount \(REP\)/ }) as HTMLInputElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: /^Contribution amount/ }) as HTMLInputElement).disabled).toBe(true)
 		for (const button of affectedButtons) {
 			expect((button as HTMLButtonElement).disabled).toBe(true)
 			expect(button.getAttribute('aria-describedby')).toBe(sharedReasonId)
@@ -1252,7 +1252,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect((documentQueries.getByRole('radio', { name: /^Yes/ }) as HTMLButtonElement).disabled).toBe(true)
-		expect((documentQueries.getByRole('textbox', { name: /^Contribution amount \(REP\)/ }) as HTMLInputElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: /^Contribution amount/ }) as HTMLInputElement).disabled).toBe(true)
 		expect((documentQueries.getByRole('button', { name: 'Max' }) as HTMLButtonElement).disabled).toBe(true)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^(Min to lead|Start bond)/ })).disabled).toBe(true)
 		expect(requireButton(documentQueries.getByRole('button', { name: /^Max reward/ })).disabled).toBe(true)
@@ -1478,6 +1478,37 @@ describe('ReportingSection', () => {
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Enter at least 3 REP to start the escalation game.')
 	})
 
+	test('shows the REP unit and reveals an invalid contribution only after blur', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					reportingForm: createReportingForm({
+						reportAmount: '1.2.3',
+						selectedOutcome: 'yes',
+					}),
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
+		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Expected the contribution input')
+		expect(amountInput.inputMode).toBe('decimal')
+		expect(amountInput.closest('.form-input-adorned')?.querySelector('.form-input-adornment')?.textContent).toBe('REP')
+		expect(amountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.body.querySelector('.field-error')).toBeNull()
+
+		await act(() => {
+			amountInput.dispatchEvent(new Event('blur'))
+		})
+		const error = within(document.body).getByText('Enter a number, such as 1.5.', { selector: 'p.field-error' })
+		expect(amountInput.getAttribute('aria-invalid')).toBe('true')
+		expect(amountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe(error.id)
+		expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')
+		expect(document.body.querySelector('[role="alert"]')).toBeNull()
+	})
+
 	test('accepts decimal report amounts without the removed profit preview', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -1494,7 +1525,7 @@ describe('ReportingSection', () => {
 
 		expect(findProjectionPreviewText()).toBe('')
 		expect(document.body.textContent?.includes('Enter a valid report amount to preview profit.')).toBe(false)
-		expect((within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ }) as HTMLInputElement).value).toBe('3.5')
+		expect((within(document.body).getByRole('textbox', { name: /^Contribution amount/ }) as HTMLInputElement).value).toBe('3.5')
 	})
 
 	test('does not render the removed timer-extension preview for contributions that raise binding capital', async () => {
@@ -1598,7 +1629,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: /^(Min to lead|Start bond)/ }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('3.000000000000000001')
 	})
 
@@ -1623,7 +1654,7 @@ describe('ReportingSection', () => {
 		await act(() => {
 			fireEvent.click(queries.getByRole('button', { name: 'Min to lead (1.100000000000000001 REP)' }))
 		})
-		const amountInput = queries.getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = queries.getByRole('textbox', { name: /^Contribution amount/ })
 		if (!(amountInput instanceof HTMLInputElement)) throw new Error('Contribution input is unavailable')
 		expect(amountInput.value).toBe('1.100000000000000001')
 		await act(() => {
@@ -1640,7 +1671,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max reward (7 REP)' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('7')
 		expect(findProjectionPreviewText()).toBe('')
 	})
@@ -1671,7 +1702,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('1')
 	})
 
@@ -1701,7 +1732,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('2')
 	})
 
@@ -1726,7 +1757,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('6')
 	})
 
@@ -1738,7 +1769,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Start bond (3 REP)' }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('3')
 	})
 
@@ -2223,7 +2254,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: /^(Min to lead|Start bond)/ }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('1000.000000000000000001')
 	})
 
@@ -2253,7 +2284,7 @@ describe('ReportingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: /^Max reward/ }))
 		})
 
-		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount \(REP\)/ })
+		const amountInput = within(document.body).getByRole('textbox', { name: /^Contribution amount/ })
 		expect((amountInput as HTMLInputElement).value).toBe('1500')
 		expect(document.body.textContent?.includes('Estimated profit if No wins')).toBe(false)
 	})

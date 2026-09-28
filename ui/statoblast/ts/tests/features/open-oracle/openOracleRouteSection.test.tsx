@@ -23,6 +23,17 @@ import { act } from 'preact/test-utils'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
+function getDescriptionTexts(element: Element) {
+	return (element.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
+}
+
+function expectPoliteFieldError(message: string) {
+	const error = within(document.body).getByText(message, { selector: 'p.field-error' })
+	expect(error.getAttribute('role')).toBeNull()
+	expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')
+	return error
+}
+
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
 	return {
 		address: zeroAddress,
@@ -289,7 +300,7 @@ describe('OpenOracleSection route create view', () => {
 		const baseTokenAddressInput = within(document.body).getByLabelText('Base token address')
 		expect(baseTokenAddressInput.getAttribute('aria-invalid')).toBe('true')
 		expect(baseTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
-		expect(within(document.body).getByText('Base token address is not a readable ERC-20 contract.').getAttribute('role')).toBe('alert')
+		expectPoliteFieldError('Base token address is not a readable ERC-20 contract.')
 		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Base token address is not a readable ERC-20 contract.')
 	})
 
@@ -329,7 +340,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const baseTokenAmountInput = within(document.body).getByLabelText('Base token amount')
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
-		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual([openOracleCopy.initialToken1AmountHelpText])
 		expectTransactionButtonDisabled(document.body, 'Create standalone oracle report', 'Base token amount must be greater than zero.')
 		expect(document.body.textContent?.includes('Review the highlighted report fields.')).toBe(false)
 	})
@@ -396,12 +407,64 @@ describe('OpenOracleSection route create view', () => {
 		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & swap' })
 		const dialogQueries = within(dialog)
 		const baseTokenAmountInput = dialogQueries.getByLabelText('New REPv2 amount')
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-7')).toBeNull()
+		expect(dialog.textContent?.split('Enter a valid new base token amount.')).toHaveLength(2)
+		await act(() => {
+			baseTokenAmountInput.dispatchEvent(new Event('blur'))
+		})
 		expect(baseTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
 		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-1-error-7')
-		const amountError = dialogQueries.getByText('Enter a valid new base token amount.')
-		expect(amountError.getAttribute('role')).toBe('alert')
+		expect(expectPoliteFieldError('Enter a valid new base token amount.').id).toBe('open-oracle-dispute-new-amount-1-error-7')
 		expect(dialog.textContent?.split('Enter a valid new base token amount.')).toHaveLength(2)
 		expect(dialogQueries.getByRole('button', { name: 'Dispute & swap' }).getAttribute('aria-describedby')).toBe('open-oracle-dispute-new-amount-1-error-7')
+		await act(() => {
+			fireEvent.input(baseTokenAmountInput, { target: { value: 'still-not-a-number' } })
+		})
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-7')).toBeNull()
+	})
+
+	test('hides a revealed dispute amount error when another report is selected', async () => {
+		const tokenUnits = 10n ** 18n
+		const createDisputedReport = (reportId: bigint) =>
+			createOpenOracleReportDetails({
+				currentAmount1: 10n * tokenUnits,
+				currentAmount2: 5n * tokenUnits,
+				currentReporter: '0x3000000000000000000000000000000000000000',
+				currentTime: 200n,
+				disputeDelay: 10n,
+				escalationHalt: 20n * tokenUnits,
+				multiplier: 20_000n,
+				reportId,
+				reportTimestamp: 100n,
+				settlementTime: 200n,
+			})
+		const renderReport = (openOracleReportDetails: OpenOracleReportDetails) => (
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), disputeNewAmount1: 'not-a-number', disputeNewAmount2: '7', reportId: openOracleReportDetails.reportId.toString() },
+					openOracleReportDetails,
+				})}
+			/>
+		)
+		const renderedComponent = await renderIntoDocument(renderReport(createDisputedReport(7n)))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
+		const firstInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & swap' })).getByLabelText('New REPv2 amount')
+		await act(() => {
+			firstInput.dispatchEvent(new Event('blur'))
+		})
+		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-7')).not.toBeNull()
+
+		await act(() => {
+			render(renderReport(createDisputedReport(8n)), renderedComponent.container)
+		})
+		const nextInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & swap' })).getByLabelText('New REPv2 amount')
+		expect(nextInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-8')).toBeNull()
 	})
 
 	test('keeps blank and unsubmitted report lookups quiet', async () => {
@@ -662,15 +725,15 @@ describe('OpenOracleSection route create view', () => {
 		const disputeDelayInput = documentQueries.getByLabelText('Dispute delay (seconds)')
 		const protocolFeeInput = documentQueries.getByLabelText('Protocol fee (%)')
 
-		expect(exactToken1ReportInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
-		expect(initialToken2AmountInput.getAttribute('aria-describedby')).toBe('open-oracle-initial-token2-amount-help')
-		expect(settlerRewardInput.getAttribute('aria-describedby')).toBe('open-oracle-settler-reward-help')
-		expect(ethValueInput.getAttribute('aria-describedby')).toBe('open-oracle-eth-value-help')
+		expect(getDescriptionTexts(exactToken1ReportInput)).toEqual([openOracleCopy.initialToken1AmountHelpText])
+		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([openOracleCopy.initialToken2AmountHelpText])
+		expect(getDescriptionTexts(settlerRewardInput)).toEqual([openOracleCopy.settlerRewardHelpText])
+		expect(getDescriptionTexts(ethValueInput)).toEqual([openOracleCopy.creationFundingRequirementHelpText])
 		expect(baseTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(quoteTokenAddressInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(feePercentageInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(settlementTimeInput.hasAttribute('aria-describedby')).toBe(false)
-		expect(escalationHaltInput.getAttribute('aria-describedby')).toBe('open-oracle-escalation-halt-help')
+		expect(getDescriptionTexts(escalationHaltInput)).toEqual([openOracleCopy.disputeEscalationStopAmountHelpText])
 		expect(disputeDelayInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(protocolFeeInput.hasAttribute('aria-describedby')).toBe(false)
 		expect(exactToken1ReportInput.getAttribute('inputmode')).toBe('decimal')
@@ -692,10 +755,8 @@ describe('OpenOracleSection route create view', () => {
 		expect(quoteTokenAddressInput.getAttribute('aria-invalid')).toBe('true')
 		expect(baseTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
 		expect(quoteTokenAddressInput.getAttribute('aria-describedby')).toBe('open-oracle-token2-address-error')
-		const baseTokenAddressError = documentQueries.getByText('Enter a valid base token address.')
-		const quoteTokenAddressError = documentQueries.getByText('Enter a valid quote token address.')
-		expect(baseTokenAddressError.getAttribute('role')).toBe('alert')
-		expect(quoteTokenAddressError.getAttribute('role')).toBe('alert')
+		expectPoliteFieldError('Enter a valid base token address.')
+		expectPoliteFieldError('Enter a valid quote token address.')
 		expect(document.body.textContent?.split('Enter a valid base token address.')).toHaveLength(2)
 		expect(document.body.textContent?.split('Enter a valid quote token address.')).toHaveLength(2)
 		expect(documentQueries.getByRole('button', { name: 'Create standalone oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
@@ -742,8 +803,19 @@ describe('OpenOracleSection route create view', () => {
 			baseTokenAmountInput.dispatchEvent(new Event('blur'))
 		})
 		expect(baseTokenAmountInput.getAttribute('aria-invalid')).toBe('true')
-		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help open-oracle-exact-token1-report-error')
-		expect(documentQueries.getByText('Enter a valid base token amount.').getAttribute('role')).toBe('alert')
+		expect(baseTokenAmountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('open-oracle-exact-token1-report-error')
+		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual(['Enter a valid base token amount.', openOracleCopy.initialToken1AmountHelpText])
+		expectPoliteFieldError('Enter a valid base token amount.')
+		await act(() => {
+			fireEvent.input(baseTokenAmountInput, { target: { value: '..' } })
+		})
+		// Editing hides the error again so the live region stays quiet while typing.
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.getElementById('open-oracle-exact-token1-report-error')).toBeNull()
+		await act(() => {
+			baseTokenAmountInput.dispatchEvent(new Event('blur'))
+		})
+		expectPoliteFieldError('Enter a valid base token amount.')
 
 		await act(() => {
 			fireEvent.input(baseTokenAmountInput, { target: { value: '1' } })
@@ -751,10 +823,10 @@ describe('OpenOracleSection route create view', () => {
 			settlementTimeInput.dispatchEvent(new Event('blur'))
 		})
 		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
-		expect(baseTokenAmountInput.getAttribute('aria-describedby')).toBe('open-oracle-exact-token1-report-help')
+		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual([openOracleCopy.initialToken1AmountHelpText])
 		expect(settlementTimeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(settlementTimeInput.getAttribute('aria-describedby')).toBe('open-oracle-settlement-time-error')
-		expect(documentQueries.getByText('Settlement time must be greater than dispute delay.').getAttribute('role')).toBe('alert')
+		expectPoliteFieldError('Settlement time must be greater than dispute delay.')
 
 		await act(() => {
 			fireEvent.input(settlementTimeInput, { target: { value: '20' } })
@@ -765,8 +837,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(settlementTimeInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(protocolFeeInput.getAttribute('aria-invalid')).toBe('true')
 		expect(protocolFeeInput.getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
-		const feeError = documentQueries.getByText('Fee percentage plus protocol fee must not exceed 100%.')
-		expect(feeError.getAttribute('role')).toBe('alert')
+		expectPoliteFieldError('Fee percentage plus protocol fee must not exceed 100%.')
 		expect(documentQueries.getByRole('button', { name: 'Create standalone oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-protocol-fee-error')
 	})
 

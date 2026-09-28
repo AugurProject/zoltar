@@ -77,4 +77,29 @@ describe('FormInput', () => {
 		expect(adornment.id).not.toBe('')
 		expect(input.getAttribute('aria-describedby')).toBe(adornment.id)
 	})
+
+	test('places an action beside the input and keeps a polite live region for errors', async () => {
+		const renderedComponent = await renderIntoDocument(<FormInput action={<button type='button'>Max</button>} adornment='ETH' errorId='amount-error' hint='Balance: 2 ETH' liveError value='' />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const input = getInput()
+		const row = renderedComponent.container.querySelector('.field-inline')
+		const liveRegion = renderedComponent.container.querySelector('.field-error-live-region')
+		if (row === null || liveRegion === null) throw new Error('Expected the inline row and live region')
+		expect(row.firstElementChild?.classList.contains('form-input-adorned')).toBe(true)
+		expect(row.lastElementChild?.textContent).toBe('Max')
+		expect(liveRegion.getAttribute('aria-live')).toBe('polite')
+		expect(liveRegion.childElementCount).toBe(0)
+		expect(row.nextElementSibling).toBe(liveRegion)
+		expect(input.getAttribute('aria-invalid')).toBeNull()
+
+		await renderedComponent.unmount()
+		const erroredComponent = await renderIntoDocument(<FormInput error='Enter a number.' errorId='amount-error' liveError value='x' />)
+		cleanupRenderedComponent = erroredComponent.cleanup
+		const error = within(document.body).getByText('Enter a number.', { selector: 'p.field-error' })
+		expect(error.id).toBe('amount-error')
+		expect(error.getAttribute('role')).toBeNull()
+		expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')
+		expect(getInput().getAttribute('aria-describedby')).toBe('amount-error')
+	})
 })

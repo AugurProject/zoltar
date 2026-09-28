@@ -5,7 +5,7 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
 import { formatCurrencyInputBalance, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -37,7 +37,8 @@ export function VaultBackingFactorForm({
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
 	const currentLimit = details?.underwritingLimitAttoEth
 	const limit = limitInput ?? (currentLimit !== undefined ? formatCurrencyInputBalance(currentLimit, 18) : '0')
-	const descriptionId = useId()
+	const errorId = useId()
+	const [errorRevealed, setErrorRevealed] = useState(false)
 	let nextLimit: bigint | undefined
 	let limitAttoEth: bigint | undefined
 	let error: string | undefined
@@ -49,15 +50,10 @@ export function VaultBackingFactorForm({
 	}
 	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
+	const fieldErrorShown = prerequisite === undefined && errorRevealed && error !== undefined
 	return (
 		<>
-			<label className='field'>
-				<span>{securityPoolCopy.vaultBackingFactor}</span>
-				<FormInput value={limit} inputMode='decimal' disabled={busy} onInput={event => setLimit(event.currentTarget.value)} invalid={error !== undefined} aria-describedby={descriptionId} />
-			</label>
-			<p className='detail' id={descriptionId}>
-				{error ?? securityPoolCopy.vaultBackingFactorHelp}
-			</p>
+			<AmountField allowZero disabled={busy} error={error} errorId={errorId} errorRevealed={errorRevealed} hint={securityPoolCopy.vaultBackingFactorHelp} label={securityPoolCopy.commitmentLimit} onChange={setLimit} onErrorRevealedChange={setErrorRevealed} unit={commonCopy.eth} value={limit} />
 			<MetricGrid>
 				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>
 				<MetricField label={securityPoolCopy.currentCapacity}>
@@ -72,8 +68,8 @@ export function VaultBackingFactorForm({
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
 					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
 					pending={pending}
-					showDisabledReason={prerequisite !== undefined}
-					disabledReasonElementId={descriptionId}
+					showDisabledReason={!fieldErrorShown}
+					disabledReasonElementId={fieldErrorShown ? errorId : undefined}
 					onClick={() => onAdjust(limit)}
 					availability={{ disabled: busy || reason !== undefined, reason }}
 				/>
