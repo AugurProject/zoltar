@@ -1,6 +1,7 @@
 import { afterEach, beforeEach } from 'bun:test'
 import { installDomEnvironment } from './domEnvironment.js'
 import { resetTransactionActivityForTesting } from '../../transactions/transactionActivityStore.js'
+import { appQueryCache } from '../../lib/dataRefresh.js'
 
 type DomTestLifecycleOptions = {
 	beforeTest?: (environment: ReturnType<typeof installDomEnvironment>) => Promise<void> | void
@@ -26,6 +27,8 @@ export function installDomTestLifecycle(options: DomTestLifecycleOptions = {}) {
 			await options.afterTest?.()
 		} finally {
 			renderedCleanups.length = 0
+			// The application query cache is a module singleton; a read left in flight must not leak into the next test.
+			appQueryCache.clear()
 			restoreDomEnvironment?.()
 			restoreDomEnvironment = undefined
 		}

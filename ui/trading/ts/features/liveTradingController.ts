@@ -6,6 +6,7 @@ import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage } from 
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
 import { useQuestionClock } from './live/useLiveTradingState.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useMarketDiscovery } from './live/useMarketDiscovery.js'
 import { usePortfolioQueries, usePortfolioRefreshEffects } from './live/usePortfolioQueries.js'
 import { useTransactionWorkflow } from './live/useTransactionWorkflow.js'
@@ -27,7 +28,6 @@ export function useLiveTradingController({
 	onWalletSummaryChange,
 	walletSummaryRetryNonce,
 	settings,
-	refreshIntervalMilliseconds,
 	services = liveTradingControllerServices,
 }: {
 	route: string
@@ -40,7 +40,6 @@ export function useLiveTradingController({
 	onWalletSummaryChange(summary: WalletSummaryState): void
 	walletSummaryRetryNonce: number
 	settings: TradeSettings
-	refreshIntervalMilliseconds?: number | undefined
 	services?: LiveTradingControllerServices
 }) {
 	const marketDiscovery = useMarketDiscovery()
@@ -62,7 +61,7 @@ export function useLiveTradingController({
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
 	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, marketTitle: selected?.title, walletClient })
 	const { mode, side, amount, acknowledgedImpactBps, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
-	const nowSeconds = useQuestionClock(undefined, configuration, services)
+	const nowSeconds = useQuestionClock(configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
 	const walletUniverseId = routePool === undefined ? selectedUniverseId : selected?.universeId.toString()
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
@@ -90,7 +89,6 @@ export function useLiveTradingController({
 		discoveryRequests,
 		balanceRequests,
 		portfolioBalanceRequests,
-		refreshIntervalMilliseconds,
 	})
 	const { connect, executeWithCurrentWalletContext, createGuardedWalletWrite, refreshWalletSummaryAfterReceipt, walletContextIsCurrent } = useWalletSessionController({
 		route,
@@ -106,6 +104,10 @@ export function useLiveTradingController({
 		portfolioBalanceRequests,
 		walletSummaryRequests,
 		refresh,
+	})
+	// An explicit invalidation (a simulation control) changed balances without this session's own receipt, so the wallet summary re-reads too.
+	useBlockRefresh(event => {
+		if (event.reason === 'invalidate' && account !== undefined) refreshWalletSummaryAfterReceipt()
 	})
 	usePortfolioRefreshEffects({ route, configuration, account, selected, visibleMarkets, marketRevision: markets, selectedUniverseId: walletUniverseId, walletContextInvalidated, accountRef, queries: portfolioQueries, services, portfolioBalanceRequests, balanceRequests })
 	useWalletSummaryEffects({ route, configuration, configurationError, selectedUniverseId: walletUniverseId, discoveryState, discoveryError, selected: selected ?? visibleMarkets[0], retryNonce: walletSummaryRetryNonce, onWalletSummaryChange, session: walletSession, services, requests: walletSummaryRequests })
@@ -193,6 +195,7 @@ export function useLiveTradingController({
 			routePool,
 			discoveryState,
 			discoveryError,
+			discoveryFreshness: marketDiscovery.freshness,
 			marketPage,
 			nowSeconds,
 			refresh,

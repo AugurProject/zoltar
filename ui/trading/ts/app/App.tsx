@@ -22,6 +22,7 @@ import { isTradingDeploymentMissingError, resolveInstalledTradingDeployment, tra
 import { createTradingPublicClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { withTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import * as appCopy from '../copy/app.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -288,7 +289,7 @@ export function App({
 				<AppHeaderShell
 					simulationController={simulationController}
 					onEnvironmentChanged={refreshActiveEnvironment}
-					onRefresh={async () => window.location.reload()}
+					onRefresh={async () => invalidateAppData()}
 					settingsContent={<TradeSettingsPanel settings={tradeSettings} onChange={updateTradeSettings} />}
 					tabNavigation={{
 						route: displayedRoute,
