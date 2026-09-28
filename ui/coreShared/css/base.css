@@ -1530,7 +1530,7 @@ a.transaction-hash-link {
 	font-weight: 600;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}

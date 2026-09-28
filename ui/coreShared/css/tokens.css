@@ -232,11 +232,11 @@
 	/*
 	 * Breakpoints. Media queries cannot read custom properties, so every width or height media condition
 	 * uses one of these literal values; ui/coreShared/ts/tests/breakpoints.test.ts rejects any other value.
-	 * compact: phones; medium: tablets and narrow windows; wide: small laptops.
+	 * compact: phones; medium: tablets and small laptops; wide: laptops below full desktop width.
 	 */
 	--breakpoint-compact: 40rem;
-	--breakpoint-medium: 50rem;
-	--breakpoint-wide: 64rem;
+	--breakpoint-medium: 64rem;
+	--breakpoint-wide: 80rem;
 
 	/* Shared layout contracts; each application retains its own shell. */
 	--content-max: 90rem;

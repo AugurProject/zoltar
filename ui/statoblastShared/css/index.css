@@ -1180,13 +1180,13 @@
 	font-family: var(--font-family-mono);
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.open-oracle-report-actions {
 		row-gap: 0;
 	}
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.comparison-record {
 		grid-template-columns: 1fr;
 	}
@@ -1482,7 +1482,7 @@
 	color: var(--muted);
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.fork-workflow-summary,
 	.truth-auction-market-board,
 	.truth-auction-market-detail-grid,
@@ -2145,7 +2145,7 @@
 	padding-top: var(--space-1);
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.security-pool-strip,
 	.trading-holdings-layout,
 	.vault-detail-health {
@@ -2496,7 +2496,7 @@
 	box-shadow: none;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.fork-workflow-stage-nav {
 		gap: var(--space-1);
 	}
@@ -2627,7 +2627,7 @@
 }
 
 /* Narrow-viewport collapse for grids this sheet owns; kept after the base rules so the override wins at equal specificity. */
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.escalation-metrics,
 	.fork-summary-grid {
 		grid-template-columns: 1fr;
@@ -2898,7 +2898,7 @@
 	gap: var(--space-3);
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.pool-directory-row,
 	.pool-overview-header {
 		grid-template-columns: minmax(0, 1fr);
@@ -2970,7 +2970,7 @@
 	color: var(--value);
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.vault-workspace-toolbar {
 		align-items: center;
 	}

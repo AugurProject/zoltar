@@ -570,7 +570,7 @@
 	overflow-wrap: anywhere;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	main {
 		padding: 1rem 0.85rem 3rem;
 	}
@@ -1119,8 +1119,8 @@
 	width: 100%;
 }
 
-/* Tablets and phones: the brand keeps only its mark and settings only its icon, leaving the top bar room for universe and account. */
-@media (max-width: 64rem) {
+/* Below full desktop width the brand keeps only its mark and settings only its icon, so the navigation has room on one row. */
+@media (max-width: 80rem) {
 	.header-toolbar .application-brand-name {
 		position: absolute;
 		width: 1px;
@@ -1147,8 +1147,8 @@
 	}
 }
 
-/* Tablets and phones drop the universe caption; the universe keeps its value. */
-@media (max-width: 64rem) {
+/* Below full desktop width the universe caption is dropped; the universe keeps its value. */
+@media (max-width: 80rem) {
 	.header-toolbar-controls .toolbar-field-label {
 		position: absolute;
 		width: 1px;
@@ -1228,8 +1228,8 @@
 	}
 }
 
-/* Narrow tablets and phones: a denser top bar, section views in a two-column grid, and a full-width account popover. */
-@media (max-width: 50rem) {
+/* Phones: a denser top bar, section views in a two-column grid, and a full-width account popover. */
+@media (max-width: 40rem) {
 	.header-toolbar {
 		gap: var(--space-2);
 		padding: 0.25rem 0.35rem 0.25rem 0.5rem;

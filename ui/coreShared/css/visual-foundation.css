@@ -132,7 +132,7 @@ a.secondary-action,
 	}
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 40rem) {
 	:where(main, .app-shell) {
 		padding-inline: var(--gutter-mobile);
 	}

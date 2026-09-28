@@ -445,7 +445,7 @@
 	gap: 0.8rem;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.metric-tile-grid[data-columns="4"] {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -464,7 +464,7 @@
 }
 
 /* Narrow layout adjustments for shell-owned surfaces. Feature grids collapse in their owning stylesheet so the override follows the base rule. */
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	main {
 		padding: 1.5rem 0.9rem 2.5rem;
 	}

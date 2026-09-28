@@ -371,7 +371,7 @@
 }
 
 /* Narrow-viewport collapse for grids this sheet owns; kept after the base rules so the override wins at equal specificity. */
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.categorical-outcome-row {
 		grid-template-columns: 1fr;
 	}

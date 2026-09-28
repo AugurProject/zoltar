@@ -1296,7 +1296,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	gap: 0.75rem;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.sticky-object-context {
 		top: 0;
 	}
