@@ -15,11 +15,12 @@ type LoadWalletStateParameters = {
 	setErrorMessage: (message: string | undefined) => void
 	setWethBalanceAttoEthErrorMessage?: (message: string | undefined) => void
 	trackLoad: <TResult>(work: () => Promise<TResult>) => Promise<TResult>
-	wethBalanceAttoEthPromise: Promise<bigint> | undefined
+	/** Omitted by applications that do not use WETH, so they never read or report it. */
+	wethBalanceAttoEthPromise?: Promise<bigint> | undefined
 }
 
 export async function loadWalletState({ chainIdPromise, connectedAddress, ethBalanceAttoEthPromise, fallbackChainId, getAccountState, isCurrent, setAccountState, setErrorMessage, setEthBalanceErrorMessage, setWethBalanceAttoEthErrorMessage, trackLoad, wethBalanceAttoEthPromise }: LoadWalletStateParameters) {
-	if (connectedAddress === undefined || chainIdPromise === undefined || ethBalanceAttoEthPromise === undefined || wethBalanceAttoEthPromise === undefined) return
+	if (connectedAddress === undefined || chainIdPromise === undefined || ethBalanceAttoEthPromise === undefined) return
 	const resolvedFallbackChainId = fallbackChainId ?? '0x1'
 	const ethBalanceAttoEthError = setEthBalanceErrorMessage ?? setErrorMessage
 	const wethBalanceAttoEthError = setWethBalanceAttoEthErrorMessage ?? setErrorMessage
@@ -48,6 +49,7 @@ export async function loadWalletState({ chainIdPromise, connectedAddress, ethBal
 		}
 	})
 
+	if (wethBalanceAttoEthPromise === undefined) return
 	void trackLoad(async () => {
 		try {
 			const wethBalanceAttoEth = await withReadTimeout(wethBalanceAttoEthPromise)

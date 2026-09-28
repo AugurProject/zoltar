@@ -8,9 +8,9 @@ struct SecurityPoolForkerForkData {
 	UniformPriceDualCapBatchAuction truthAuction;
 	uint256 truthAuctionStarted;
 	uint256 migratedAttoRep;
-	uint256 auctionedCapacityOwnershipAttoRep;
+	uint256 auctionedUnderwritingLimitAttoEth;
 	uint256 claimedAuctionRepPurchasedAttoRep;
-	uint256 claimedAuctionedCapacityOwnershipAttoRep;
+	uint256 claimedAuctionedUnderwritingLimitAttoEth;
 	uint256 escalationElapsedAtFork;
 	uint256 escalationStartBondAtForkAttoRep;
 	uint256 escalationNonDecisionThresholdAtForkAttoRep;
@@ -25,7 +25,7 @@ struct SecurityPoolForkerForkData {
 	uint256 settlementCollateralAtForkAttoEth;
 	uint256 migratedRepAllocatedForSettlementCollateralAttoRep;
 	uint256 settlementCollateralTransferredAttoEth;
-	uint256 migratedCapacityOwnershipAttoRep;
+	uint256 migratedUnderwritingLimitAttoEth;
 	uint256 auctionRepBackingUnits;
 	uint256 claimedAuctionRepBackingUnits;
 	bytes32 escalationSnapshotId;

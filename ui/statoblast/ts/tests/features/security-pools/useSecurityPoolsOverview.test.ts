@@ -30,7 +30,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 0n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
 		hasForkActivity: false,
@@ -51,7 +51,7 @@ function createListedSecurityPool(questionId: string, securityPoolAddress: Addre
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,

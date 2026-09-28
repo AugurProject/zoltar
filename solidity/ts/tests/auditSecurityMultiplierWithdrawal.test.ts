@@ -1,3 +1,4 @@
+import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { OperationType } from '../testSupport/simulator/utils/contracts/statoblast'
 import { manipulatePriceOracleAndPerformOperation, manipulatePriceOracle, setVaultCapacityFixture } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -5,7 +6,7 @@ import { depositToEscalationGame } from '../testSupport/simulator/utils/contract
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
-import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getTotalPoolHeldAttoRep, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, getSecurityVault, getTotalPoolHeldAttoRep, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
@@ -19,9 +20,9 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 
-		const capacityOwnershipAttoRep = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
-		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
-		await createCompleteSet(client, securityPool, 1n * 10n ** 18n)
+		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
+		await createCertifiedCompleteSetFixture(client, securityPool, 1n * 10n ** 18n)
 
 		const getVaultRep = async (vault: typeof client.account.address) => {
 			const state = await getSecurityVault(client, securityPool, vault)
@@ -29,39 +30,40 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 		}
 
 		const targetRepBefore = await getVaultRep(client.account.address)
-		assert.strictEqual(targetRepBefore * PRICE_PRECISION * BPS_DENOMINATOR, capacityOwnershipAttoRep * statoblastSecurityMultiplierBps * reportedRepEthPrice, 'target should begin exactly at the multiplier-adjusted non-liquidatable boundary')
+		assert.strictEqual(targetRepBefore * PRICE_PRECISION * BPS_DENOMINATOR, underwritingLimitAttoEth * statoblastSecurityMultiplierBps * reportedRepEthPrice, 'target should begin exactly at the multiplier-adjusted non-liquidatable boundary')
 
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, targetRepBefore - 1n, reportedRepEthPrice)
 
 		const targetAfterWithdrawal = await getSecurityVault(client, securityPool, client.account.address)
 		const targetRepAfterWithdrawal = await getVaultRep(client.account.address)
 		assert.strictEqual(targetRepAfterWithdrawal, targetRepBefore, 'unsafe withdrawal should leave vault REP unchanged')
-		assert.strictEqual(targetAfterWithdrawal.capacityOwnershipAttoRep, capacityOwnershipAttoRep, 'capacity ownership')
+		assert.strictEqual(targetAfterWithdrawal.underwritingLimitAttoEth, underwritingLimitAttoEth, 'capacity ownership')
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPool)) > 0n, 'open-interest collateral should remain live while the security buffer is withdrawn')
 		const poolRepAfterWithdrawal = await getTotalPoolHeldAttoRep(client, securityPool)
 		assert.strictEqual(poolRepAfterWithdrawal, targetRepBefore, 'unsafe withdrawal should leave aggregate REP unchanged')
-		assert.ok(poolRepAfterWithdrawal * PRICE_PRECISION * BPS_DENOMINATOR >= targetAfterWithdrawal.capacityOwnershipAttoRep * statoblastSecurityMultiplierBps * reportedRepEthPrice, 'vault and pool should retain multiplier-adjusted backing')
+		assert.ok(poolRepAfterWithdrawal * PRICE_PRECISION * BPS_DENOMINATOR >= targetAfterWithdrawal.underwritingLimitAttoEth * statoblastSecurityMultiplierBps * reportedRepEthPrice, 'vault and pool should retain multiplier-adjusted backing')
 	})
 
-	test('a vault without open interest can exit and relinquish its dynamic capacity ownership', async () => {
+	test('a vault without collateral can explicitly exit its standing commitment before withdrawing', async () => {
 		const { client, mockWindow, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
-		const capacityOwnershipAttoRep = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (2n * statoblastSecurityMultiplierBps * reportedRepEthPrice)
-		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (2n * statoblastSecurityMultiplierBps * reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
 
+		await setUnderwritingLimit(client, securityPool, 0n)
 		await manipulatePriceOracleAndPerformOperation(client, mockWindow, coordinator, OperationType.WithdrawRep, client.account.address, repDeposit, reportedRepEthPrice)
 		const exitedVault = await getSecurityVault(client, securityPool, client.account.address)
 		assert.strictEqual(await backingUnitsToAttoRep(client, securityPool, exitedVault.repBackingUnits), 0n, 'vault should return all REP when it has no open interest')
-		assert.strictEqual(exitedVault.capacityOwnershipAttoRep, 0n, 'exiting vault should relinquish all capacity ownership')
+		assert.strictEqual(exitedVault.underwritingLimitAttoEth, 0n, 'exiting vault should relinquish all capacity ownership')
 	})
 
 	test('a vault cannot move multiplier-required REP into an escalation game', async () => {
 		const { client, mockWindow, questionData, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
-		const capacityOwnershipAttoRep = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
-		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, capacityOwnershipAttoRep, reportedRepEthPrice)
+		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, coordinator, reportedRepEthPrice)
 

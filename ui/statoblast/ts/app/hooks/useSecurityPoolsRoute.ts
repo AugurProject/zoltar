@@ -104,11 +104,12 @@ export function useSecurityPoolsRoute({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData,
+		enabled: route === 'pools' && canReadOnchainData,
 		newQuestionForm: marketForm,
 		zoltarUniverseHasForked,
 	})
 	const {
+		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,
@@ -129,7 +130,7 @@ export function useSecurityPoolsRoute({
 		securityVaultResult,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
+	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const { loadingReportingDetails, loadReporting, onApproveReportingRep, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
 		...walletScopedHookConfig,
 		selectedSecurityPoolAddress: securityPoolAddress,
@@ -196,7 +197,7 @@ export function useSecurityPoolsRoute({
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData && selectedPool !== undefined,
+		enabled: route === 'pools' && canReadOnchainData && selectedPool !== undefined,
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const {
@@ -250,7 +251,7 @@ export function useSecurityPoolsRoute({
 		return repPerEthSource
 	})()
 	const uiRepPerEthSourceUrl = uiRepPerEthSource === 'open-oracle' ? undefined : repPerEthSourceUrl
-	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+	const securityPoolsViews: readonly SecurityPoolsView[] = ['open', 'browse', 'create', 'operate', 'universes']
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],
@@ -268,7 +269,7 @@ export function useSecurityPoolsRoute({
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash =
-			securityVaultResult?.action === 'adjustVaultBackingFactor' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
+			securityVaultResult?.action === 'setVaultUnderwritingLimit' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
 				? securityVaultResult.hash
 				: undefined
 		if (securityVaultRepRefreshHash === undefined) {
@@ -501,7 +502,8 @@ export function useSecurityPoolsRoute({
 				accountState,
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
-				onAdjustVaultBackingFactor: factor => void adjustBackingFactor(factor),
+				onCertifyVaultCoverage: () => void certifyCoverage(),
+				onSetVaultUnderwritingLimit: factor => void adjustBackingFactor(factor),
 				onDepositRepToVault: () => void depositRepToVault(),
 				onLoadSecurityVault: (vaultAddress?: string) => {
 					void loadSecurityVault(vaultAddress)

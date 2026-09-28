@@ -53,7 +53,7 @@ function getSummaryCalculationPrice(props: SecurityPoolObjectHeaderProps) {
 export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	const { currentTimestamp, freshness, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
-	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, getSummaryCalculationPrice(props), summaryPool.statoblastSecurityMultiplierBps)
+	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalUnderwritingLimitAttoEth, getSummaryCalculationPrice(props), summaryPool.statoblastSecurityMultiplierBps)
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>

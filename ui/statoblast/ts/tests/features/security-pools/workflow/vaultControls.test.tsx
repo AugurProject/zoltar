@@ -302,8 +302,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(documentQueries.getByText('Failed to load security vault')).toBeTruthy()
 		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(retryReason.id)
-		expect(documentQueries.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(retryReason.id)
-		expectTransactionButtonDisabled(document.body, 'Adjust backing ratio')
+		expect(documentQueries.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBe(retryReason.id)
+		expectTransactionButtonDisabled(document.body, 'Set commitment limit')
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
@@ -413,7 +413,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
 							totalPoolHeldAttoRep: 20_000n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 2_500n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
@@ -421,7 +421,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
 							vaultAttoRepBacking: 20_000n * 10n ** 18n,
-							capacityOwnershipAttoRep: 2_500n * 10n ** 18n,
+							underwritingLimitAttoEth: 2_500n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
@@ -473,7 +473,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
 							totalPoolHeldAttoRep: 9n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
@@ -482,9 +482,9 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						}),
 						securityVaultDetails: createSecurityVaultDetails({
 							vaultAttoRepBacking: 12n * 10n ** 18n,
-							capacityOwnershipAttoRep: 1n * 10n ** 18n,
+							underwritingLimitAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
-							totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',

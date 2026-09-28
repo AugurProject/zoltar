@@ -5,10 +5,10 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from '../lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
 
 type TruthAuctionSummaryCardProps = {
-	auctionedCapacityOwnershipAttoRepDisplay?: ComponentChildren | undefined
+	auctionedUnderwritingLimitAttoEthDisplay?: ComponentChildren | undefined
 	badge: ComponentChildren
 	clearingPriceDisplay: ComponentChildren
 	displayedEthRaisedAttoEth: bigint
@@ -25,7 +25,7 @@ type TruthAuctionSummaryCardProps = {
 }
 
 export function TruthAuctionSummaryCard({
-	auctionedCapacityOwnershipAttoRepDisplay,
+	auctionedUnderwritingLimitAttoEthDisplay,
 	badge,
 	clearingPriceDisplay,
 	displayedEthRaisedAttoEth,
@@ -76,9 +76,9 @@ export function TruthAuctionSummaryCard({
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>
-			{auctionedCapacityOwnershipAttoRepDisplay === undefined ? undefined : (
+			{auctionedUnderwritingLimitAttoEthDisplay === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.auctionDetails}>
-					<MetricField label={AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL}>{auctionedCapacityOwnershipAttoRepDisplay}</MetricField>
+					<MetricField label={AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL}>{auctionedUnderwritingLimitAttoEthDisplay}</MetricField>
 				</ReadOnlyDetailAccordion>
 			)}
 		</SectionBlock>

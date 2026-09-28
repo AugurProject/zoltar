@@ -5,7 +5,7 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRepToVault, manipulatePriceOracle, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, getQuestionId as buildQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, getTotalCapacityOwnershipAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { certifyVaultCoverage, createCertifiedCompleteSetFixture, depositRepToVault, depositToEscalationGame, getRepToken, getTotalUnderwritingLimitAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getEthRaiseCapAttoEth, getQuestionEndDate, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -67,7 +67,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		if ((await getTotalCapacityOwnershipAttoRep(client, securityPoolAddresses.securityPool)) > 0n) {
+		if ((await getTotalUnderwritingLimitAttoEth(client, securityPoolAddresses.securityPool)) > 0n) {
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		}
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -106,12 +106,14 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[4])
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+
+		await certifyVaultCoverage(client, securityPoolAddresses.securityPool, client.account.address)
 
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

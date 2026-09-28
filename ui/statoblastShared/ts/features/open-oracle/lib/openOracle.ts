@@ -7,7 +7,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail, sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatCurrencyBalance, formatCurrencyInputBalance, formatDuration, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
@@ -413,7 +413,7 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 }
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
 	if (multiplier === undefined) return '—'
-	return `${formatScaledBigInt(multiplier, 100n, 2)}x`
+	return formatMultiplier(multiplier, 2)
 }
 function resolveOpenOracleTokenLabel({ fallbackLabel, tokenAddress, tokenSymbol }: { fallbackLabel: string; tokenAddress: string | undefined; tokenSymbol: string | undefined }) {
 	const resolvedSymbol = tokenSymbol?.trim()
@@ -665,7 +665,7 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
 	if (lastSettlementTimestamp === 0n) return '-'
-	return `≈ ${formatRoundedCurrencyBalance(lastPrice, 18, 2)}\u00a0REP / ETH`
+	return `${formatAmountDisplay(lastPrice)}\u00a0REP / ETH`
 }
 
 export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettlementTimestamp, priceValidUntilTimestamp }: { currentTimestamp: bigint; lastSettlementTimestamp: bigint; priceValidUntilTimestamp: bigint | undefined }) {

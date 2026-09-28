@@ -197,7 +197,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
 	})
 
-	test('allows reporting with a stale oracle price when the pool has no capacity ownership', async () => {
+	test('allows reporting with a stale oracle price when the pool has no underwriting commitments', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
 				<SecurityPoolWorkflowSection
@@ -212,7 +212,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 						securityPools: [
 							createSelectedPool({
 								marketDetails: createMarketDetails({ endTime: 0n }),
-								totalCapacityOwnershipAttoRep: 0n,
+								totalUnderwritingLimitAttoEth: 0n,
 							}),
 						],
 						selectedPoolView: 'reporting',
@@ -227,6 +227,58 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
 		expect(reportButton.disabled).toBe(false)
 		expect(document.body.textContent).not.toContain("The pool's oracle price expired.")
+	})
+
+	test.each([
+		['wallet', false, false],
+		['vault', true, false],
+		['vault', false, false],
+		['wallet', false, true],
+	] as const)('applies the stale-price guard to the selected %s funding source (vault: %s)', async (contributionFunding, viewerVaultExists, forkContinuation) => {
+		const reporting = createLoadedReportingProps()
+		if (reporting.reportingDetails === undefined) throw new Error('Expected reporting details')
+		reporting.reportingDetails = {
+			...reporting.reportingDetails,
+			contributionFunding: 'wallet',
+			forkContinuation,
+			minimumVaultRepDepositAttoRep: 1n,
+			walletVaultFunding: { vaultRepBackingUnits: 0n, totalRepBackingUnits: 0n, totalPoolHeldRepAttoRep: 0n },
+			viewerVaultExists,
+			viewerPoolHeldVaultRepBackingAttoRep: viewerVaultExists ? 10n : 0n,
+			viewerWalletRepAllowanceAttoRep: 10n,
+			viewerWalletRepBalanceAttoRep: 10n,
+		}
+		reporting.reportingForm = { ...reporting.reportingForm, contributionFunding }
+		const renderedComponent = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={100n}>
+				<SecurityPoolWorkflowSection
+					{...createSecurityPoolWorkflowProps({
+						checkedSecurityPoolAddress: zeroAddress,
+						poolOracleManagerDetails: createOracleManagerDetails({
+							isPriceValid: false,
+							lastSettlementTimestamp: 1n,
+						}),
+						reporting,
+						securityPoolAddress: zeroAddress,
+						securityPools: [
+							createSelectedPool({
+								marketDetails: createMarketDetails({ endTime: 0n }),
+								totalUnderwritingLimitAttoEth: forkContinuation ? 0n : 10n,
+							}),
+						],
+						selectedPoolView: 'reporting',
+					})}
+					showHeader={false}
+				/>
+			</ChainTimestampContext.Provider>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const reportButton = within(document.body).getByRole('button', { name: /^Report No ·/ })
+		if (!(reportButton instanceof HTMLButtonElement)) throw new Error('Expected report button')
+		expect(reportButton.disabled).toBe(contributionFunding === 'vault' || forkContinuation)
+		if (forkContinuation) expectTransactionButtonDisabled(document.body, reportButton.textContent ?? '', 'A current pool oracle price is required before reporting.')
+		if (contributionFunding === 'vault') expectTransactionButtonDisabled(document.body, reportButton.textContent ?? '', viewerVaultExists ? 'A current pool oracle price is required before reporting.' : 'No REP is available in your pool vault. Select Wallet REP to report.')
 	})
 
 	test('preserves the finalized reporting blocker instead of stale-price recovery', async () => {
@@ -370,7 +422,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Request new price' })).toBeNull()
 	})
 
-	test('shows queued target changes in the existing staged operations table with factor units', async () => {
+	test('shows queued target changes in the existing staged operations table with ETH commitment units', async () => {
 		const rendered = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -380,7 +432,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 					selectedPoolView: 'staged-operations',
 					poolOracleManagerDetails: createOracleManagerDetails({
 						managerAddress: zeroAddress,
-						pendingOperation: { amount: 20_000n, operator: zeroAddress, operation: 'adjustVaultBackingFactor', operationId: 7n, targetVault: zeroAddress },
+						pendingOperation: { amount: 2n * 10n ** 18n, operator: zeroAddress, operation: 'setVaultUnderwritingLimit', operationId: 7n, targetVault: zeroAddress },
 						pendingOperationSlotId: 7n,
 						pendingSettlementOperationIds: [7n],
 					}),
@@ -389,9 +441,9 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		)
 		setCleanup(rendered.cleanup)
 		const page = within(document.body)
-		expect(page.getByText('Target backing ratio')).not.toBeNull()
-		expect(page.getByText('Adjust backing ratio')).not.toBeNull()
-		expect(page.getByText('Target backing ratio').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*×/)
+		expect(page.getByText('Commitment limit (ETH)')).not.toBeNull()
+		expect(page.getByText('Set commitment limit')).not.toBeNull()
+		expect(page.getByText('Commitment limit (ETH)').parentElement?.textContent).toMatch(/2(?:\.0+)?\s*ETH/)
 	})
 
 	test('lists staged operations in the staged operations tab', async () => {
@@ -452,7 +504,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 	})
 
 	test('labels liquidation amounts by accounting role', async () => {
-		for (const stagedCase of [{ amountLabel: 'Requested liquidation debt', operation: 'liquidation' as const }]) {
+		for (const stagedCase of [{ amountLabel: 'Commitment to transfer', operation: 'liquidation' as const }]) {
 			const renderedComponent = await renderIntoDocument(
 				<SecurityPoolWorkflowSection
 					{...createSecurityPoolWorkflowProps({

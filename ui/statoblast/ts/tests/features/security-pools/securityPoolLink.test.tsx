@@ -46,6 +46,7 @@ describe('SecurityPoolLink', () => {
 		expect(link.querySelector('.address-value')?.getAttribute('title')).toBe(securityPoolAddress)
 		expect(link.querySelector('.address-value-full')?.textContent).toBe(securityPoolAddress)
 		const expectedHref = getSecurityPoolLinkHref(securityPoolAddress, 'fork-workflow', 11n)
+		expect(expectedHref.split('?')[0]).toBe(`#/pools/${securityPoolAddress}/fork-workflow`)
 		expect(link.getAttribute('href')).toBe(expectedHref)
 		let hashchangeCount = 0
 		window.addEventListener('hashchange', () => {

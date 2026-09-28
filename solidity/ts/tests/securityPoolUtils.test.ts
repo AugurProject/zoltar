@@ -14,9 +14,9 @@ const MIN_RETENTION_RATE = 999_999_977_880_000_000n
 const RETENTION_RATE_DIP = 800_000_000_000_000_000n
 const RATE_SPAN = MAX_RETENTION_RATE - MIN_RETENTION_RATE
 
-const expectedRetentionRate = (settlementCollateralAttoEth: bigint, capacityOwnershipAttoRep: bigint) => {
-	if (capacityOwnershipAttoRep === 0n) return MAX_RETENTION_RATE
-	const utilization = (settlementCollateralAttoEth * PRICE_PRECISION) / capacityOwnershipAttoRep
+const expectedRetentionRate = (settlementCollateralAttoEth: bigint, underwritingLimitAttoEth: bigint) => {
+	if (underwritingLimitAttoEth === 0n) return MAX_RETENTION_RATE
+	const utilization = (settlementCollateralAttoEth * PRICE_PRECISION) / underwritingLimitAttoEth
 	if (utilization > RETENTION_RATE_DIP) return MIN_RETENTION_RATE
 	const utilizationRatio = (utilization * PRICE_PRECISION) / RETENTION_RATE_DIP
 	return MAX_RETENTION_RATE - (RATE_SPAN * utilizationRatio) / PRICE_PRECISION
@@ -27,12 +27,12 @@ describe('SecurityPoolUtils', () => {
 	let client: WriteClient
 	let securityPoolUtilsAddress: Address
 
-	const calculateRetentionRate = async (settlementCollateralAttoEth: bigint, capacityOwnershipAttoRep: bigint) =>
+	const calculateRetentionRate = async (settlementCollateralAttoEth: bigint, underwritingLimitAttoEth: bigint) =>
 		await client.readContract({
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 			address: securityPoolUtilsAddress,
 			functionName: 'calculateRetentionRate',
-			args: [settlementCollateralAttoEth, capacityOwnershipAttoRep],
+			args: [settlementCollateralAttoEth, underwritingLimitAttoEth],
 		})
 
 	const calculateBundledLiquidationTransfer = async () =>
@@ -40,8 +40,20 @@ describe('SecurityPoolUtils', () => {
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 			address: securityPoolUtilsAddress,
 			functionName: 'calculateBundledLiquidationTransfer',
-			args: [500n * PRICE_PRECISION, 100n * PRICE_PRECISION, 50n * PRICE_PRECISION, 50n * PRICE_PRECISION, PRICE_PRECISION, 1000n * PRICE_PRECISION, 1000n * PRICE_PRECISION, 0n],
+			args: [500n * PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, 50n * PRICE_PRECISION, PRICE_PRECISION, 1000n * PRICE_PRECISION, 1000n * PRICE_PRECISION, 0n],
 		})
+
+	test('a funded receiver may accept the entire commitment with a capped target REP award', async () => {
+		const [commitment, transferredLimit, , award] = await client.readContract({
+			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
+			address: securityPoolUtilsAddress,
+			functionName: 'calculateBundledLiquidationTransfer',
+			args: [PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, PRICE_PRECISION, 10n * PRICE_PRECISION, 10n * PRICE_PRECISION, 0n],
+		})
+		expect(commitment).toBe(100n * PRICE_PRECISION)
+		expect(transferredLimit).toBe(commitment)
+		expect(award).toBe(PRICE_PRECISION)
+	})
 
 	beforeEach(async () => {
 		const mockWindow = getAnvilWindowEthereum()
@@ -62,28 +74,28 @@ describe('SecurityPoolUtils', () => {
 
 	test('retention rate uses fixed-point precision below one percent utilization', async () => {
 		const collateral = 1n * 10n ** 18n
-		const capacityOwnershipAttoRep = 1000n * 10n ** 18n
-		const retentionRate = await calculateRetentionRate(collateral, capacityOwnershipAttoRep)
+		const underwritingLimitAttoEth = 1000n * 10n ** 18n
+		const retentionRate = await calculateRetentionRate(collateral, underwritingLimitAttoEth)
 
 		strictEqualTypeSafe(retentionRate < MAX_RETENTION_RATE, true, 'sub-1% utilization should still move the rate down the curve')
-		strictEqualTypeSafe(retentionRate, expectedRetentionRate(collateral, capacityOwnershipAttoRep), 'sub-1% utilization should use fixed-point precision')
+		strictEqualTypeSafe(retentionRate, expectedRetentionRate(collateral, underwritingLimitAttoEth), 'sub-1% utilization should use fixed-point precision')
 	})
 
 	test('retention rate is linear until the utilization dip and then caps at min', async () => {
-		const capacityOwnershipAttoRep = 100n * 10n ** 18n
+		const underwritingLimitAttoEth = 100n * 10n ** 18n
 		const midpointCollateral = 40n * 10n ** 18n
 		const dipCollateral = 80n * 10n ** 18n
 		const aboveDipCollateral = 81n * 10n ** 18n
 
-		strictEqualTypeSafe(await calculateRetentionRate(midpointCollateral, capacityOwnershipAttoRep), expectedRetentionRate(midpointCollateral, capacityOwnershipAttoRep), '40% utilization should sit halfway through the rate span')
-		strictEqualTypeSafe(await calculateRetentionRate(dipCollateral, capacityOwnershipAttoRep), MIN_RETENTION_RATE, '80% utilization should hit the min retention rate')
-		strictEqualTypeSafe(await calculateRetentionRate(aboveDipCollateral, capacityOwnershipAttoRep), MIN_RETENTION_RATE, 'above 80% utilization should stay capped at the min retention rate')
+		strictEqualTypeSafe(await calculateRetentionRate(midpointCollateral, underwritingLimitAttoEth), expectedRetentionRate(midpointCollateral, underwritingLimitAttoEth), '40% utilization should sit halfway through the rate span')
+		strictEqualTypeSafe(await calculateRetentionRate(dipCollateral, underwritingLimitAttoEth), MIN_RETENTION_RATE, '80% utilization should hit the min retention rate')
+		strictEqualTypeSafe(await calculateRetentionRate(aboveDipCollateral, underwritingLimitAttoEth), MIN_RETENTION_RATE, 'above 80% utilization should stay capped at the min retention rate')
 	})
 
-	test('REP-denominated ownership converts aggregate capacity at the live oracle price', async () => {
-		const ownershipAttoRep = 200n * PRICE_PRECISION
-		const capacityAtOneRepPerEth = await client.readContract({ abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi, address: securityPoolUtilsAddress, functionName: 'calculateMintingCapacityAttoEth', args: [ownershipAttoRep, PRICE_PRECISION, 20_000n] })
-		const capacityAfterRepPriceDoubles = await client.readContract({ abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi, address: securityPoolUtilsAddress, functionName: 'calculateMintingCapacityAttoEth', args: [ownershipAttoRep, 2n * PRICE_PRECISION, 20_000n] })
+	test('backing-derived limits account for the live price without changing standing commitments', async () => {
+		const backingAttoRep = 200n * PRICE_PRECISION
+		const capacityAtOneRepPerEth = await client.readContract({ abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi, address: securityPoolUtilsAddress, functionName: 'calculateBackingSupportedLimitAttoEth', args: [backingAttoRep, PRICE_PRECISION, 20_000n] })
+		const capacityAfterRepPriceDoubles = await client.readContract({ abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi, address: securityPoolUtilsAddress, functionName: 'calculateBackingSupportedLimitAttoEth', args: [backingAttoRep, 2n * PRICE_PRECISION, 20_000n] })
 		strictEqualTypeSafe(capacityAtOneRepPerEth, 100n * PRICE_PRECISION, 'initial capacity')
 		strictEqualTypeSafe(capacityAfterRepPriceDoubles, 50n * PRICE_PRECISION, 'live price conversion')
 	})
@@ -161,53 +173,53 @@ describe('SecurityPoolUtils', () => {
 	})
 
 	test('minimum-multiplier health reserves the complete liquidation award in pool-held vault REP backing', async () => {
-		const capacityOwnershipAttoRep = 100n * PRICE_PRECISION
+		const underwritingLimitAttoEth = 100n * PRICE_PRECISION
 		const isHealthy = async (poolHeldVaultRepBackingAttoRep: bigint, disputeStakedAttoRep: bigint) =>
 			await client.readContract({
 				abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 				address: securityPoolUtilsAddress,
 				functionName: 'isVaultHealthy',
-				args: [poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, capacityOwnershipAttoRep, PRICE_PRECISION, 10_002n],
+				args: [poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, underwritingLimitAttoEth, PRICE_PRECISION, 10_002n],
 			})
 
 		strictEqualTypeSafe(await isHealthy(100n * PRICE_PRECISION + 10n ** 16n, 100n * PRICE_PRECISION), false, 'the 10,001-BPS halfway reserve must not admit a vault that cannot fund its 105% award')
 		strictEqualTypeSafe(await isHealthy(105n * PRICE_PRECISION + 1n, 100n * PRICE_PRECISION), true, 'strictly more than the complete 105% pool-held vault REP backing reserve should be healthy')
 	})
 
-	test('maximum funded liquidation debt is capped to the complete award funded by pool-held vault REP backing', async () => {
+	test('full commitment transfers with the REP reward capped to target backing', async () => {
 		const targetVaultRepBackingAttoRep = 100n * PRICE_PRECISION
-		const targetCapacityOwnershipAttoRep = 900n * PRICE_PRECISION
+		const targetUnderwritingLimitAttoEth = 900n * PRICE_PRECISION
 		const price = 2n * PRICE_PRECISION
 		const liquidation = await client.readContract({
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 			address: securityPoolUtilsAddress,
 			functionName: 'calculateBundledLiquidationTransfer',
-			args: [targetVaultRepBackingAttoRep, targetCapacityOwnershipAttoRep, targetCapacityOwnershipAttoRep, targetCapacityOwnershipAttoRep, price, 1000n * PRICE_PRECISION, 1000n * PRICE_PRECISION, 0n],
+			args: [targetVaultRepBackingAttoRep, targetUnderwritingLimitAttoEth, targetUnderwritingLimitAttoEth, targetUnderwritingLimitAttoEth, price, 1000n * PRICE_PRECISION, 1000n * PRICE_PRECISION, 0n],
 		})
-		const expectedDebtMovedAttoEth = (targetVaultRepBackingAttoRep * PRICE_PRECISION * 10_000n) / (price * 10_500n)
+		const expectedDebtMovedAttoEth = targetUnderwritingLimitAttoEth
 
-		strictEqualTypeSafe(liquidation[0], expectedDebtMovedAttoEth, 'liquidation debt should stop at the fully funded 105% boundary')
-		strictEqualTypeSafe(liquidation[2], targetVaultRepBackingAttoRep - 1n, 'the funded award should consume pool-held vault REP backing only up to atomic rounding')
+		strictEqualTypeSafe(liquidation[0], expectedDebtMovedAttoEth, 'the receiver accepts the complete commitment')
+		strictEqualTypeSafe(liquidation[2], targetVaultRepBackingAttoRep, 'the award cannot exceed target backing')
 	})
 
 	test('partial liquidation moves proportional capacity ownership up to the requested debt', async () => {
-		const targetCapacityOwnershipAttoRep = PRICE_PRECISION / 2n
+		const targetUnderwritingLimitAttoEth = PRICE_PRECISION / 2n
 		const partialLiquidation = await client.readContract({
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 			address: securityPoolUtilsAddress,
 			functionName: 'calculateBundledLiquidationTransfer',
-			args: [100n * PRICE_PRECISION, targetCapacityOwnershipAttoRep, targetCapacityOwnershipAttoRep, targetCapacityOwnershipAttoRep / 2n, PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, 0n],
+			args: [100n * PRICE_PRECISION, targetUnderwritingLimitAttoEth, targetUnderwritingLimitAttoEth, targetUnderwritingLimitAttoEth / 2n, PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, 0n],
 		})
 		const maximumLiquidation = await client.readContract({
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 			address: securityPoolUtilsAddress,
 			functionName: 'calculateBundledLiquidationTransfer',
-			args: [100n * PRICE_PRECISION, targetCapacityOwnershipAttoRep, targetCapacityOwnershipAttoRep, targetCapacityOwnershipAttoRep, PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, 0n],
+			args: [100n * PRICE_PRECISION, targetUnderwritingLimitAttoEth, targetUnderwritingLimitAttoEth, targetUnderwritingLimitAttoEth, PRICE_PRECISION, 100n * PRICE_PRECISION, 100n * PRICE_PRECISION, 0n],
 		})
 
-		strictEqualTypeSafe(partialLiquidation[0], targetCapacityOwnershipAttoRep / 2n, 'partial debt request')
-		strictEqualTypeSafe(partialLiquidation[1], targetCapacityOwnershipAttoRep / 2n, 'partial request moves proportional ownership')
-		strictEqualTypeSafe(maximumLiquidation[0], targetCapacityOwnershipAttoRep, 'maximum debt request')
+		strictEqualTypeSafe(partialLiquidation[0], targetUnderwritingLimitAttoEth / 2n, 'partial debt request')
+		strictEqualTypeSafe(partialLiquidation[1], targetUnderwritingLimitAttoEth / 2n, 'partial request moves proportional ownership')
+		strictEqualTypeSafe(maximumLiquidation[0], targetUnderwritingLimitAttoEth, 'maximum debt request')
 	})
 
 	test('coarse liquidation ownership rounding never moves more receiver debt than requested', async () => {
@@ -215,23 +227,22 @@ describe('SecurityPoolUtils', () => {
 			abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 			address: securityPoolUtilsAddress,
 			functionName: 'calculateBundledLiquidationTransfer',
-			args: [10n ** 30n, 2n, 20n, 1n, PRICE_PRECISION, 10n ** 30n, 10n ** 30n, 0n],
+			args: [10n ** 30n, 2n, 2n, 1n, PRICE_PRECISION, 10n ** 30n, 10n ** 30n, 0n],
 		})
-		strictEqualTypeSafe(regression[0], 0n, 'a one-attoETH request must not round one of two ownership units into a ten-attoETH receiver liability')
-		strictEqualTypeSafe(regression[1], 0n, 'unsafe coarse ownership must remain with the target')
+		strictEqualTypeSafe(regression[0], 1n, 'a one-attoETH request transfers exactly one attoETH of commitment')
+		strictEqualTypeSafe(regression[1], 1n, 'commitments need no conversion into obligation units')
 
 		for (let seed = 1n; seed <= 32n; seed++) {
 			const totalOwnership = 97n + seed
 			const targetOwnership = 1n + (seed % 13n)
 			const receiverOwnership = (seed * 7n) % (totalOwnership - targetOwnership)
-			const activeOpenInterest = totalOwnership * (100n + seed)
-			const targetOpenInterest = (activeOpenInterest * targetOwnership + totalOwnership - 1n) / totalOwnership
-			const requestedDebt = 1n + ((seed * 17n) % (targetOpenInterest - 1n))
+			const activeOpenInterest = totalOwnership / 2n
+			const requestedDebt = 1n + ((seed * 17n) % targetOwnership)
 			const liquidation = await client.readContract({
 				abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
 				address: securityPoolUtilsAddress,
 				functionName: 'calculateBundledLiquidationTransfer',
-				args: [10n ** 30n, targetOwnership, targetOpenInterest, requestedDebt, PRICE_PRECISION, 10n ** 30n, 10n ** 30n, 0n],
+				args: [10n ** 30n, targetOwnership, targetOwnership, requestedDebt, PRICE_PRECISION, 10n ** 30n, 10n ** 30n, 0n],
 			})
 			const receiverDebtBefore = await client.readContract({
 				abi: statoblast_SecurityPoolUtils_SecurityPoolUtils.abi,
@@ -280,9 +291,9 @@ describe('SecurityPoolUtils', () => {
 				abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 				address: harnessAddress,
 				functionName: 'performBundledLiquidation',
-				args: [{ receiverVault, targetVault, requestedDebtAttoEth: 1n, snapshotTargetBackingUnits: 2n, snapshotTargetCapacityOwnershipAttoRep: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
+				args: [{ receiverVault, targetVault, requestedDebtAttoEth: 1n, snapshotTargetBackingUnits: 2n, snapshotTargetUnderwritingLimitAttoEth: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
 			}),
-		).rejects.toThrow('Receiver debt below minimum')
+		).rejects.toThrow('Receiver bad')
 
 		const targetAfter = await client.readContract({
 			abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
@@ -316,7 +327,7 @@ describe('SecurityPoolUtils', () => {
 			}),
 		})
 
-		const request = { receiverVault, targetVault, requestedDebtAttoEth, snapshotTargetBackingUnits: 10n, snapshotTargetCapacityOwnershipAttoRep: 50n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }
+		const request = { receiverVault, targetVault, requestedDebtAttoEth, snapshotTargetBackingUnits: 10n, snapshotTargetUnderwritingLimitAttoEth: 50n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }
 		await expect(client.writeContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'performBundledLiquidation', args: [request] })).rejects.toThrow(expectedReason)
 
 		await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi, address: harnessAddress, functionName: 'advanceBadDebtGeneration' }) })
@@ -332,7 +343,7 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(receiverAfterRecovery[2], 0n, 'post-generation liquidation must not recreate retired bad debt on the receiver')
 	})
 
-	test('liquidation execution rechecks price distance against live open interest', async () => {
+	test('liquidation distance uses the full commitment after collateral redemption', async () => {
 		const targetVault = addressString(TEST_ADDRESSES[0])
 		const receiverVault = addressString(TEST_ADDRESSES[1])
 		const linkedHarnessBytecode = test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.evm.bytecode.object.replace(/__\$[0-9a-f]{34}\$__/g, securityPoolUtilsAddress.slice(2))
@@ -352,7 +363,7 @@ describe('SecurityPoolUtils', () => {
 			abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 5n, snapshotTargetBackingUnits: 7n, snapshotTargetCapacityOwnershipAttoRep: 10n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 2_000n }],
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 5n, snapshotTargetBackingUnits: 7n, snapshotTargetUnderwritingLimitAttoEth: 10n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 2_000n }],
 		})
 
 		const reduceOpenInterestHash = await client.writeContract({
@@ -362,14 +373,12 @@ describe('SecurityPoolUtils', () => {
 			args: [4n],
 		})
 		await client.waitForTransactionReceipt({ hash: reduceOpenInterestHash })
-		await expect(
-			client.writeContract({
-				abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
-				address: harnessAddress,
-				functionName: 'performBundledLiquidation',
-				args: [{ receiverVault, targetVault, requestedDebtAttoEth: 5n, snapshotTargetBackingUnits: 7n, snapshotTargetCapacityOwnershipAttoRep: 10n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 2_000n }],
-			}),
-		).rejects.toThrow('Liquidation distance too low')
+		await client.simulateContract({
+			abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
+			address: harnessAddress,
+			functionName: 'performBundledLiquidation',
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 5n, snapshotTargetBackingUnits: 7n, snapshotTargetUnderwritingLimitAttoEth: 10n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 2_000n }],
+		})
 	})
 
 	test('liquidation execution assigns debt against total capacity before auction ownership is claimed', async () => {
@@ -388,7 +397,7 @@ describe('SecurityPoolUtils', () => {
 		})
 		await client.waitForTransactionReceipt({ hash: configureHash })
 
-		const typedRequest = { receiverVault, targetVault, requestedDebtAttoEth: 4n, snapshotTargetBackingUnits: 7n, snapshotTargetCapacityOwnershipAttoRep: 2n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }
+		const typedRequest = { receiverVault, targetVault, requestedDebtAttoEth: 4n, snapshotTargetBackingUnits: 7n, snapshotTargetUnderwritingLimitAttoEth: 2n, repEthPrice: 2n * PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }
 		const liquidationGas = await client.estimateContractGas({
 			abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
@@ -402,12 +411,12 @@ describe('SecurityPoolUtils', () => {
 			functionName: 'performBundledLiquidation',
 			args: [typedRequest],
 		})
-		strictEqualTypeSafe(liquidation.result[0], 4n, 'receiver accepts the target debt assigned by total capacity')
+		strictEqualTypeSafe(liquidation.result[0], 2n, 'receiver accepts the target commitment independently of unclaimed entitlements')
 		strictEqualTypeSafe(liquidation.result[1], 2n, 'receiver receives the target capacity ownership')
 		strictEqualTypeSafe(liquidation.result[2], 0n, 'fully backed debt does not become bad debt')
 	})
 
-	test('full-target liquidation records exact positive allocation residue after settling less than the nominal quote', async () => {
+	test('full-target liquidation does not write off independently rounded obligations', async () => {
 		const targetVault = addressString(TEST_ADDRESSES[0])
 		const receiverVault = addressString(TEST_ADDRESSES[1])
 		const linkedHarnessBytecode = test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.evm.bytecode.object.replace(/__\$[0-9a-f]{34}\$__/g, securityPoolUtilsAddress.slice(2))
@@ -439,16 +448,16 @@ describe('SecurityPoolUtils', () => {
 			abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 2n, snapshotTargetBackingUnits: 3n, snapshotTargetCapacityOwnershipAttoRep: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 2n, snapshotTargetBackingUnits: 3n, snapshotTargetUnderwritingLimitAttoEth: 1n, repEthPrice: 2n * PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
 		})
 		strictEqualTypeSafe(liquidationPreview.result[0], 1n, 'receiver exact debt increase is below the two-attoETH nominal quote')
 		strictEqualTypeSafe(liquidationPreview.result[1], 1n, 'full-target quote moves the target ownership')
-		strictEqualTypeSafe(liquidationPreview.result[2], 1n, 'full-target residual records integer allocation rounding')
+		strictEqualTypeSafe(liquidationPreview.result[2], 0n, 'rounding does not create a write-off')
 		const liquidationHash = await client.writeContract({
 			abi: test_statoblast_LiquidationApprovalTestMocks_CoarseLiquidationRoundingHarness.abi,
 			address: harnessAddress,
 			functionName: 'performBundledLiquidation',
-			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 2n, snapshotTargetBackingUnits: 3n, snapshotTargetCapacityOwnershipAttoRep: 1n, repEthPrice: PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
+			args: [{ receiverVault, targetVault, requestedDebtAttoEth: 2n, snapshotTargetBackingUnits: 3n, snapshotTargetUnderwritingLimitAttoEth: 1n, repEthPrice: 2n * PRICE_PRECISION, minimumReceiverHealthFactorBps: 10_000n, minLiquidationPriceDistanceBps: 0n }],
 		})
 		await client.waitForTransactionReceipt({ hash: liquidationHash })
 		const targetAfter = await client.readContract({
@@ -477,10 +486,10 @@ describe('SecurityPoolUtils', () => {
 		})
 		strictEqualTypeSafe(targetDebtBefore - targetDebtAfter, 2n, 'the target independently loses two attoETH of rounded debt')
 		strictEqualTypeSafe(receiverDebtAfter - receiverDebtBefore, 1n, 'the receiver incurs the exact one-attoETH reported debt increase')
-		strictEqualTypeSafe(targetAfter[0], 1n, 'the award uses exact moved debt rather than the larger nominal quote')
+		strictEqualTypeSafe(targetAfter[0], 0n, 'the award is capped by target backing')
 		strictEqualTypeSafe(targetAfter[1], 0n, 'full-target ownership moves to the receiver')
-		strictEqualTypeSafe(targetAfter[2], 1n, 'target bad debt records nominal debt minus the exact receiver allocation increase')
-		strictEqualTypeSafe(receiverAfter[0], 12n, 'receiver receives the award derived from one attoETH of exact moved debt')
+		strictEqualTypeSafe(targetAfter[2], 0n, 'rounded obligations do not create synthetic bad debt')
+		strictEqualTypeSafe(receiverAfter[0], 13n, 'receiver receives the capped REP award')
 		strictEqualTypeSafe(receiverAfter[1], 2n, 'receiver receives the floor-rounded ownership quote')
 	})
 })

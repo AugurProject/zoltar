@@ -15,7 +15,6 @@ const paragraph = (text: string): AccountingExampleBlock => ({ kind: 'paragraph'
 const list = (...items: string[]): AccountingExampleBlock => ({ kind: 'list', items })
 // mathml is the structured MathML body so the responsive runtime can wrap and compact it.
 const equation = (id: string, label: string, source: string, mathml: string): AccountingExampleBlock => ({ id, kind: 'equation', label, mathml, source })
-const rounded = (direction: 'down' | 'up'): string => (direction === 'down' ? 'rounded down' : 'rounded up')
 const percent = (value: number): string => `${value.toFixed(1)}%`
 
 const activationDay = escalationRules.activationDays.toString()
@@ -96,10 +95,10 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Liquidation transfer rounding',
 				blocks: [
 					paragraph(
-						`A liquidation request is an ETH-denominated debt amount. Execution caps it at the target vault's live debt and at the largest amount whose complete REP award (\`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps}, so ${formatBps(liquidationRules.repBonusBps)}) the target can fund. The proportional capacity ownership that leaves the target is ${rounded(liquidationRules.capacityOwnershipRounding)}; the REP backing units that leave it are ${rounded(liquidationRules.repBackingUnitsRounding)}. The receiver incurs exactly the reported debt increase and receives those ownership and backing units. Target claims, fees, surplus, and unmatched ownership remain with the target.`,
+						`A liquidation request bounds the standing ETH commitment transferred, capped by the target limit. The nominal REP award includes \`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps} (${formatBps(liquidationRules.repBonusBps)}). REP and backing units round upward before the award is capped at available units. The receiver is checked against its entire resulting limit and backing-unit position. Total ETH commitments remain constant, including at zero settlement collateral. Target claims and earned fees remain with their owners.`,
 					),
 					paragraph(
-						"Only a request covering the target's full position records the untransferable remainder as target-local bad debt. Partial requests leave the remainder as ordinary target debt. After the transfer the receiver must remain healthy and any remaining target position must still meet `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep`, so a liquidation cannot leave unusable dust.",
+						'No liquidation writes off a commitment. An untransferred residual stays visible and continues earning fees. A fully backed receiver can accept the entire target limit even when the nominal REP award is not fully funded. Partial transfers reserve available target REP for the minimum balance, and the remaining commitment must be zero or meet the commitment floor.',
 					),
 				],
 			},
