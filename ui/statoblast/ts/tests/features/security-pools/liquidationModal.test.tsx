@@ -374,6 +374,22 @@ describe('LiquidationModal', () => {
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 		})
 
+	for (const [overrides, fixLabel] of [
+		[{ accountAddress: undefined }, 'Connect wallet'],
+		[{ isOnActiveAppChain: false }, 'Switch to Sepolia'],
+	] as const)
+		test(`keeps the ${fixLabel} fix ahead of a missing manual initial price`, async () => {
+			const { walletActions } = createWalletActions()
+			const renderedComponent = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<LiquidationModal {...createLiquidationModalProps({ currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }), ...overrides })} />
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = renderedComponent.cleanup
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Manual price' }))
+			expectWalletFixDescribesAction(document.body, 'Queue liquidation', fixLabel)
+		})
+
 	test('traps focus while open and restores it when closed', async () => {
 		let open = true
 		const opener = document.createElement('button')

@@ -1235,6 +1235,28 @@ describe('SecurityVaultSection', () => {
 		expect(page.getByText('Queues for execution after oracle settlement.')).toBeDefined()
 	})
 
+	test('keeps the switch fix ahead of a missing manual withdrawal price', async () => {
+		const { walletActions } = createWalletActions()
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<SecurityVaultSection
+						{...createSecurityVaultSectionProps({
+							accountState: createAccountState({ chainId: '0x1' }),
+							oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+							securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+							securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '1' },
+						})}
+					/>
+				</WalletActionsProvider>,
+			)
+		).cleanup
+		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
+		if (!(withdrawal instanceof HTMLElement)) throw new Error('Expected withdrawal section')
+		fireEvent.click(within(withdrawal).getByRole('button', { name: 'Manual price' }))
+		expectWalletFixDescribesAction(withdrawal, 'Withdraw REP', 'Switch to Sepolia')
+	})
+
 	test('blocks pool-held vault REP backing withdrawal while escalation deposits remain unsettled', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection

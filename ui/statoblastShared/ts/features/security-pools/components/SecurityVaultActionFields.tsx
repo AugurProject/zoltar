@@ -71,10 +71,12 @@ export function VaultRepExitActionButton({
 	securityVaultActiveAction: SecurityVaultSectionProps['securityVaultActiveAction']
 	walletGuard: WalletGuard
 }) {
+	// A blocking wallet is the reason shown, so its fix takes the reason slot instead of the price field's error.
+	const describedByElementId = walletGuard.walletBlocker === undefined ? disabledReasonElementId : undefined
 	return (
 		<TransactionActionButton
-			disabledReasonElementId={disabledReasonElementId}
-			showDisabledReason={disabledReasonElementId === undefined}
+			disabledReasonElementId={describedByElementId}
+			showDisabledReason={describedByElementId === undefined}
 			idleLabel={repExitActionLabel}
 			pendingLabel={repExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
 			onClick={repExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}
