@@ -17,10 +17,8 @@ import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import { calculateMintingCapacityAttoEth } from '../../markets/lib/trading.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { SecurityPoolsOverviewSectionProps } from '../../types.js'
-import { resolveUiRepPerEthPrice } from '../lib/uiPriceOracle.js'
 
 export function SecurityPoolsOverviewSection({
 	accountState,
@@ -37,8 +35,6 @@ export function SecurityPoolsOverviewSection({
 	securityPoolPage,
 	securityPoolPageFreshness,
 	securityPoolOverviewError,
-	repPerEthPrice,
-	uiPriceOracle = 'open-oracle',
 }: SecurityPoolsOverviewSectionProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [activePageRequestKey, setActivePageRequestKey] = useState<string | undefined>(undefined)
@@ -197,9 +193,7 @@ export function SecurityPoolsOverviewSection({
 				return (
 					<div className='comparison-record-list'>
 						{filteredSecurityPools.map(({ pool, poolState }) => {
-							const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
-							const capacity = calculateMintingCapacityAttoEth(pool.totalUnderwritingLimitAttoEth, calculationPrice, pool.statoblastSecurityMultiplierBps)
-							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} />
+							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={pool.totalUnderwritingLimitAttoEth} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} />
 						})}
 					</div>
 				)

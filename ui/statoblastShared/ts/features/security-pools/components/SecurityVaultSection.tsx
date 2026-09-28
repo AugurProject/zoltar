@@ -56,6 +56,7 @@ import {
 import type { SecurityVaultSectionProps } from '../../types.js'
 import { VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
+import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
 import { VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
 
@@ -280,7 +281,6 @@ export function SecurityVaultSection({
 		<VaultBackingFactorForm
 			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
-			repPerEthPrice={repPerEthPrice}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
 			key={autoLoadKey}
 			details={currentSelectedVaultDetails}
@@ -407,6 +407,7 @@ export function SecurityVaultSection({
 
 									return <CurrencyValue value={maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
 								})()}
+								{effectiveRepExitMode === 'redeem' ? undefined : <RepPriceStatusLabel />}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
 								<MetricField label={commonCopy.disputeStakedAttoRep}>
@@ -482,6 +483,7 @@ export function SecurityVaultSection({
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={repExitAmountLabel}>
 							<CurrencyValue value={effectiveRepExitMode === 'redeem' ? redeemableRepAmountAttoRep : maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
+							{effectiveRepExitMode === 'redeem' ? undefined : <RepPriceStatusLabel />}
 						</MetricField>
 						{(() => {
 							if (effectiveRepExitMode === 'redeem')

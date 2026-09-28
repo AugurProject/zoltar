@@ -21,10 +21,6 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 	return settlementCollateralAttoEth === 0n && shareTokenSupplyAttoShares !== 0n
 }
 
-export function calculateMintingCapacityAttoEth(underwritingLimitAttoEth: bigint | undefined, _repPerEthPrice: bigint | undefined, _statoblastSecurityMultiplierBps: bigint | undefined) {
-	return underwritingLimitAttoEth
-}
-
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
 	if (mintingCapacityAttoEth === undefined || settlementCollateralAttoEth === undefined) return undefined
 	if (hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares) === true) return 0n
