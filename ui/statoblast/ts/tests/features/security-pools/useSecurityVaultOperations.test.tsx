@@ -164,7 +164,7 @@ describe('useSecurityVaultOperations', () => {
 		},
 	})
 
-	test('passes a manual initial price through funding and queuing without automatic pricing', async () => {
+	test.each(['setVaultUnderwritingLimit', 'withdrawRep'] as const)('passes a manual initial price through funding and queuing without automatic pricing: %s', async operation => {
 		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))
 		const dependencies = createSecurityVaultOperationsDependencies({
 			queueOracleManagerOperation,
@@ -184,10 +184,16 @@ describe('useSecurityVaultOperations', () => {
 			state = next
 		})
 		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
-		await act(async () => await requireHookState(state).adjustBackingFactor('2', price))
+		await act(async () => {
+			if (operation === 'setVaultUnderwritingLimit') await requireHookState(state).adjustBackingFactor('2', price)
+			else {
+				requireHookState(state).setSecurityVaultForm(current => ({ ...current, repWithdrawAmount: '2', stagedOperationTimeoutMinutes: '5' }))
+				await requireHookState(state).withdrawRep(price)
+			}
+		})
 		expect(requireHookState(state).securityVaultError).toBeUndefined()
 		expect(loadFunding).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, WALLET_ADDRESS, price)
-		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setVaultUnderwritingLimit', WALLET_ADDRESS, 2n * 10n ** 18n, 300n, price)
+		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, operation, WALLET_ADDRESS, 2n * 10n ** 18n, 300n, price)
 	})
 
 	test('adjustment revalidates commitments and prevents duplicate submissions', async () => {
@@ -595,7 +601,7 @@ describe('useSecurityVaultOperations', () => {
 		loadSecurityVaultDetailsDeferred.resolve(createSecurityVaultDetails())
 		await withdrawPromise
 
-		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
+		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n, undefined)
 	})
 
 	test('withdrawRep can stage a fresh attached operation without a currently valid price', async () => {
@@ -660,7 +666,7 @@ describe('useSecurityVaultOperations', () => {
 			await requireHookState(hookState).withdrawRep()
 		})
 
-		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n)
+		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'withdrawRep', WALLET_ADDRESS, 10n ** 18n, 5n * 60n, undefined)
 	})
 
 	test('withdrawRep blocks stale-price queueing when the wallet cannot fund the required initial REP report', async () => {

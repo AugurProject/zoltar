@@ -133,8 +133,8 @@ type LiquidationModalStateProps = {
 	onLoadLiquidationReceiverVaultSummary?: (() => void) | undefined
 	onLiquidationTimeoutMinutesChange: (value: string) => void
 	onLoadPoolOracleManager: (managerAddress: Address) => void
-	onLoadLiquidationFundingPreview?: ((managerAddress: Address) => void) | undefined
-	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address) => void
+	onLoadLiquidationFundingPreview?: ((managerAddress: Address, proposedRepPerEthPrice?: bigint) => void) | undefined
+	onQueueLiquidation: (managerAddress: Address, securityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void
 	poolOracleManagerDetails: OracleManagerDetails | undefined
 	uiPriceOracle?: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle | undefined
 }
@@ -226,7 +226,7 @@ type SecurityVaultRouteContentProps = {
 	onRedeemFees: () => void
 	onRedeemRepFromVault: () => void
 	onSecurityVaultFormChange: (update: Partial<SecurityVaultFormState>) => void
-	onWithdrawRep: () => void
+	onWithdrawRep: (proposedRepPerEthPrice?: bigint) => void
 	securityVaultActiveAction: SecurityVaultActionResult['action'] | undefined
 	securityVaultDetails: SecurityVaultDetails | undefined
 	securityVaultError: string | undefined

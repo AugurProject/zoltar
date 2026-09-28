@@ -60,6 +60,7 @@ export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoR
 }
 
 export function VaultRepExitActionButton({
+	disabledReasonElementId,
 	canUseLoadedVaultActions,
 	hasPositiveWithdrawAmount,
 	hasWithdrawableRep,
@@ -71,6 +72,7 @@ export function VaultRepExitActionButton({
 	repExitMode,
 	securityVaultActiveAction,
 }: {
+	disabledReasonElementId?: string | undefined
 	canUseLoadedVaultActions: boolean
 	hasPositiveWithdrawAmount: boolean
 	hasWithdrawableRep: boolean
@@ -84,6 +86,8 @@ export function VaultRepExitActionButton({
 }) {
 	return (
 		<TransactionActionButton
+			disabledReasonElementId={disabledReasonElementId}
+			showDisabledReason={disabledReasonElementId === undefined}
 			idleLabel={repExitActionLabel}
 			pendingLabel={repExitMode === 'redeem' ? securityPoolCopy.redeemingRep : securityPoolCopy.withdrawingRep}
 			onClick={repExitMode === 'redeem' ? onRedeemRepFromVault : onWithdrawRep}

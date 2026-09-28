@@ -1,4 +1,4 @@
-import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
@@ -44,16 +44,9 @@ export function VaultBackingFactorForm({
 }) {
 	const [initialPrice, setInitialPrice] = useState<OracleInitialPriceInput>({ source: 'automatic', price: '' })
 	const priceFieldId = useId()
-	const needsInitialPrice = executionRepPerEthPrice === undefined && oracleManagerDetails?.pendingReportId === 0n && oracleManagerDetails.pendingSettlementOperationIds.length === 0
+	const needsInitialPrice = needsOracleInitialPrice(oracleManagerDetails, executionRepPerEthPrice !== undefined)
 	const { proposedRepPerEthPrice, error: priceError } = parseOracleInitialPrice(needsInitialPrice ? initialPrice : { source: 'automatic', price: '' })
-	let executionMessage = securityPoolCopy.commitmentExecutionLoading
-	if (oracleManagerDetails !== undefined) {
-		const knownOperations = [...(oracleManagerDetails.stagedOperations ?? []), ...(oracleManagerDetails.pendingOperation === undefined ? [] : [oracleManagerDetails.pendingOperation])]
-		const replacesPendingTarget = knownOperations.some(operation => operation.operation === 'setVaultUnderwritingLimit' && sameAddress(operation.targetVault, details?.vaultAddress) && oracleManagerDetails.pendingSettlementOperationIds.includes(operation.operationId))
-		if (executionRepPerEthPrice !== undefined) executionMessage = securityPoolCopy.commitmentExecutesImmediately
-		else if (!replacesPendingTarget && BigInt(oracleManagerDetails.pendingSettlementOperationIds.length) >= oracleManagerDetails.pendingSettlementQueueCapacity) executionMessage = securityPoolCopy.commitmentMayNeedManualExecution
-		else executionMessage = securityPoolCopy.commitmentQueuesForSettlement
-	}
+	const executionMessage = getOracleOperationExecutionMessage(oracleManagerDetails, executionRepPerEthPrice !== undefined, details?.vaultAddress)
 	const [limitInput, setLimit] = useState<string | undefined>(undefined)
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
 	const currentLimit = details?.underwritingLimitAttoEth

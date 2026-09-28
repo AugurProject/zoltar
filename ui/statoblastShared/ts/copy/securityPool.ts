@@ -259,7 +259,7 @@ export const certificationNeedsLimit = 'Set a positive commitment limit first.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
 
-export const commitmentExecutesImmediately = 'Executes immediately with the current oracle price.'
-export const commitmentQueuesForSettlement = 'Queues for execution after oracle settlement.'
-export const commitmentMayNeedManualExecution = 'Queues; manual execution may be needed after oracle settlement.'
-export const commitmentExecutionLoading = 'Checking whether this change will execute immediately or queue.'
+export const oracleOperationExecutesImmediately = 'Executes immediately with the current oracle price.'
+export const oracleOperationQueuesForSettlement = 'Queues for execution after oracle settlement.'
+export const oracleOperationMayNeedManualExecution = 'Queues; manual execution may be needed after oracle settlement.'
+export const oracleOperationExecutionLoading = 'Checking whether this operation will execute immediately or queue.'

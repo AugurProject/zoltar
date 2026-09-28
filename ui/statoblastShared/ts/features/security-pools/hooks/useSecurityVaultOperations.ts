@@ -493,18 +493,19 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		)
 	}
 
-	const withdrawRep = async () => {
+	const withdrawRep = async (proposedRepPerEthPrice?: bigint) => {
 		const snapshot = createVaultActionSnapshot()
 		await runVaultAction(
 			'queueWithdrawRep',
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
+				if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
 				const amount = parseRepAmountInput(snapshot.form.repWithdrawAmount, 'REP withdraw amount')
 				if (amount <= 0n) throw new Error('REP withdraw amount must be greater than zero')
 
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
-				const { funding, walletBalanceAttoEth, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context)
+				const { funding, walletBalanceAttoEth, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context, proposedRepPerEthPrice)
 				const withdrawRepGuardMessage = getOracleRequestEthGuardMessage({
 					actionLabel: 'queue this REP withdrawal',
 					includeBuffer: funding?.includeBuffer === true,
@@ -513,7 +514,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				})
 				if (withdrawRepGuardMessage !== undefined) throw new Error(withdrawRepGuardMessage)
 				if (!isCurrentSelection()) return undefined
-				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot))
+				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'withdrawRep', vaultAddress, amount, resolveStagedOperationValidForSecondsFromSnapshot(snapshot), proposedRepPerEthPrice)
 				return queuedOperations.track(details.managerAddress, { ...result, action: 'queueWithdrawRep' })
 			},
 			'Failed to withdraw REP',

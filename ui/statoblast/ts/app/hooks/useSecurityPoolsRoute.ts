@@ -434,7 +434,7 @@ export function useSecurityPoolsRoute({
 			onLoadLiquidationApproval: () => void loadLiquidationApproval(),
 			onLoadLiquidationReceiverVaultSummary: () => void loadLiquidationReceiverVaultSummary(),
 			onLiquidationTimeoutMinutesChange: setLiquidationTimeoutMinutes,
-			onLoadLiquidationFundingPreview: (managerAddress: Address) => void loadLiquidationFundingPreview(managerAddress),
+			onLoadLiquidationFundingPreview: (managerAddress: Address, proposedRepPerEthPrice?: bigint) => void loadLiquidationFundingPreview(managerAddress, proposedRepPerEthPrice),
 			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
 			onReturnToCurrentUniverse: () => setSecurityPoolsView('browse'),
 			onSwitchToPoolUniverse: (universeId, selectedSecurityPoolAddress) => {
@@ -442,7 +442,7 @@ export function useSecurityPoolsRoute({
 				setSecurityPoolAddress(selectedSecurityPoolAddress)
 				refreshSelectedPoolData(selectedSecurityPoolAddress)
 			},
-			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress),
+			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress, proposedRepPerEthPrice),
 			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, universeId),
 			loadingPoolOracleManager,
 			loadingLiquidationFundingPreview,
@@ -504,7 +504,7 @@ export function useSecurityPoolsRoute({
 				onRedeemFees: () => void redeemFees(),
 				onRedeemRepFromVault: () => void redeemRepFromVault(),
 				onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
-				onWithdrawRep: () => void withdrawRep(),
+				onWithdrawRep: proposedRepPerEthPrice => void withdrawRep(proposedRepPerEthPrice),
 				securityVaultActiveAction,
 				securityVaultDetails,
 				securityVaultError,

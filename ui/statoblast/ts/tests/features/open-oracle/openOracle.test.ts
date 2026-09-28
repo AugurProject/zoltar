@@ -1313,11 +1313,12 @@ describe('Open Oracle helpers', () => {
 		expect(result.stagedExecution).toBeUndefined()
 	})
 
-	test('automatic coordinator operations select Uniswap liquidity at the requested report size', async () => {
+	test.each([false, true])('coordinator operations use the selected initial price source (manual=%s)', async manual => {
 		const minimumToken1ReportAttoEth = 100n
 		const requestedInitialAttoWeth = 250n
 		const reputationTokenAddress = getAddress('0x00000000000000000000000000000000000000f1')
 		const transactionHash = `0x${'3'.repeat(64)}` as Hash
+		const proposedPrice = manual ? 400_000_000_000_000_000n : undefined
 		const runOperation = async (operation: 'request' | 'liquidation-helper' | 'generic') => {
 			const quotedExactAmounts: bigint[] = []
 			let plannedFunctions: string[] = []
@@ -1374,11 +1375,11 @@ describe('Open Oracle helpers', () => {
 				waitForTransactionReceipt: async () => createSuccessfulReceipt(transactionHash, managerAddress),
 			}
 
-			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(mockClient), managerAddress, undefined, requestedInitialAttoWeth, undefined)
-			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(withInitializedV4Pool(mockClient), managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth)
-			else await queueOracleManagerOperation(withInitializedV4Pool(mockClient), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, undefined, requestedInitialAttoWeth)
+			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(mockClient), managerAddress, proposedPrice, requestedInitialAttoWeth, undefined)
+			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(withInitializedV4Pool(mockClient), managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth, undefined, undefined, proposedPrice)
+			else await queueOracleManagerOperation(withInitializedV4Pool(mockClient), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedPrice, requestedInitialAttoWeth)
 
-			expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
+			expect(quotedExactAmounts).toEqual(manual ? [] : Array.from({ length: 8 }, () => requestedInitialAttoWeth))
 			// The committed bounty is the final argument and equals the ETH sent with the request.
 			const committedBounty = preparedQueueValues[0]
 			if (committedBounty === undefined || committedBounty <= 0n) throw new Error('Expected the oracle request to send a positive ETH bounty')

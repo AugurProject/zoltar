@@ -504,17 +504,17 @@ export async function executeOracleManagerStagedOperation(client: WriteContractC
 		...(stagedExecution === undefined ? {} : { stagedExecution }),
 	} satisfies OpenOracleActionResult
 }
-export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth = 0n, receiverVault: Address = client.account.address, approvalId: Hex = `0x${'00'.repeat(32)}`) {
+export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth = 0n, receiverVault: Address = client.account.address, approvalId: Hex = `0x${'00'.repeat(32)}`, proposedRepPerEthPrice?: bigint) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
-	const proposedRepPerEthPrice = queueOperationValueAttoEth > 0n ? await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth) : 0n
+	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))) : 0n
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageLiquidation', contractAddress: managerAddress, value: queueOperationValueAttoEth })
+		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageLiquidation', contractAddress: managerAddress, value: queueOperationValueAttoEth })
 	}
 	const callParams = {
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 		functionName: 'requestPriceIfNeededAndStageLiquidation',
-		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
+		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)

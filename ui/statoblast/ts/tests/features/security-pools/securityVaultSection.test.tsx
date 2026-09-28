@@ -1168,6 +1168,34 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
 
+	test('withdrawal accepts a manual initial price and rejects an empty one', async () => {
+		let submitted: bigint | undefined
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+						onWithdrawRep: price => {
+							submitted = price
+						},
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '1' },
+					})}
+				/>,
+			)
+		).cleanup
+		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
+		if (withdrawal === null) throw new Error('Expected withdrawal section')
+		const page = within(withdrawal)
+		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
+		fireEvent.input(page.getByLabelText('Open Oracle REP/ETH starting price'), { target: { value: '3' } })
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		fireEvent.click(page.getByRole('button', { name: 'Withdraw REP' }))
+		expect(submitted).toBe(3n * 10n ** 18n)
+		expect(page.getByText('Queues for execution after oracle settlement.')).toBeDefined()
+	})
+
 	test('blocks pool-held vault REP backing withdrawal while escalation deposits remain unsettled', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
