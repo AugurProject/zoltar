@@ -135,6 +135,17 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		// YES without INVALID cannot exit through the router, so it stays unvalued.
 		expect((await portfolioFor(settler)).items).toEqual([expect.objectContaining({ yes_atto_shares: '2', holdings_value_atto_eth: '0', valuation: expect.objectContaining({ partial: true, unvalued_yes_atto_shares: '2' }) })])
 
+		// Indexed lifecycle events newer than the sampled pool read close trading, as does a universe fork.
+		const traderValuation = async () => (await portfolioFor(trader)).items[0]?.['valuation']
+		await connection`INSERT INTO entity_state_snapshots (chain_id, entity_type, entity_identity, block_number, block_hash, read_status, read_result, canonical, observed_at) VALUES (${chainId}, 'pool', ${pool}, 1, ${blocks[0].hash}, 'success', ${JSON.stringify({ systemState: '0', awaitingForkContinuation: false, escalationResolved: false })}::text::jsonb, true, now())`
+		expect(await traderValuation()).toMatchObject({ status: 'available' })
+		await connection`INSERT INTO pool_state_events (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, event_name, state, canonical) VALUES (${chainId}, ${blocks[1].hash}, ${hash(7)}, 60, 2, ${pool}, 'SystemStateSet', ${JSON.stringify({ systemState: '1' })}::text::jsonb, true)`
+		expect(await traderValuation()).toEqual({ status: 'unavailable', reason: 'Trading has closed because the pool is not operational' })
+		await connection`DELETE FROM pool_state_events WHERE event_name = 'SystemStateSet'`
+		await connection`INSERT INTO universe_events (chain_id, block_hash, tx_hash, log_index, block_number, universe_id, event_name, canonical) VALUES (${chainId}, ${blocks[1].hash}, ${hash(8)}, 61, 2, 0, 'UniverseForked', true)`
+		expect(await traderValuation()).toEqual({ status: 'unavailable', reason: 'Trading has closed because the universe forked' })
+		await connection`DELETE FROM universe_events`
+
 		await insertLogs(settlementLogs)
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
 		expect(detailResponse?.status).toBe(200)

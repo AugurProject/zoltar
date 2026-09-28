@@ -44,6 +44,18 @@ const optionalBigint = (value: unknown): bigint | undefined => (typeof value ===
 const requiredBigint = (value: unknown): bigint => optionalBigint(value) ?? 0n
 const text = (value: bigint | undefined): string | undefined => value?.toString()
 
+// BinaryOutcomes.BinaryOutcome.None: the escalation game has not resolved the question.
+const NO_OUTCOME = '3'
+
+/** The value from whichever indexed source, a tagged read or a state event, is at the later block. */
+const newerEvidence = (readValue: unknown, readBlock: unknown, eventValue: unknown, eventBlock: unknown): string | undefined => {
+	const read = typeof readValue === 'string' ? readValue : undefined
+	const event = typeof eventValue === 'string' ? eventValue : undefined
+	if (event === undefined) return read
+	if (read === undefined) return event
+	return requiredBigint(eventBlock) > requiredBigint(readBlock) ? event : read
+}
+
 const holdingsValuation = (holdings: TradingHoldings, exitOpen: boolean, market: TradingMarketState) => {
 	if (Object.values(holdings).every(balance => balance === 0n)) return { valueAttoEth: 0n, completeSetsRedeemed: 0n, insuredExitSets: 0n, unvalued: holdings }
 	return exitOpen ? tradingHoldingsValue(holdings, market) : undefined
@@ -60,11 +72,14 @@ export const accountTradingPnl = async (sql: SQL, query: { readonly chainId: num
 		const collateral = optionalBigint(row['settlement_collateral_atto_eth'])
 		const supply = optionalBigint(row['share_supply_atto_shares'])
 		const questionEndTime = optionalBigint(row['question_end_time'])
-		const systemState = row['pool_system_state']
+		const systemState = newerEvidence(row['pool_system_state'], row['pool_read_block'], row['system_state_event'], row['system_state_event_block'])
 		const exit = tradingExitAvailability({
 			asOfTimestamp: requiredBigint(query.asOfTimestamp),
 			...(questionEndTime === undefined ? {} : { questionEndTime }),
-			...(typeof systemState === 'string' ? { poolState: { systemState, awaitingForkContinuation: row['pool_awaiting_fork_continuation'] === 'true', escalationResolved: row['pool_escalation_resolved'] === 'true' } } : {}),
+			...(systemState === undefined ? {} : { systemState }),
+			awaitingForkContinuation: newerEvidence(row['pool_awaiting_fork_continuation'], row['pool_read_block'], row['awaiting_fork_continuation_event'], row['awaiting_fork_continuation_event_block']) === 'true',
+			resolved: row['pool_escalation_resolved'] === 'true' || (typeof row['final_question_resolution'] === 'string' && row['final_question_resolution'] !== NO_OUTCOME),
+			universeForked: row['universe_forked'] === true,
 			settlementObserved: row['settlement_observed'] === true,
 		})
 		const marketState = {

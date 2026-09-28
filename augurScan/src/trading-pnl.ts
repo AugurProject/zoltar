@@ -25,8 +25,12 @@ export type TradingLifecycle = {
 	readonly asOfTimestamp: bigint
 	/** Question end time in seconds; undefined when the question is not indexed. */
 	readonly questionEndTime?: bigint
-	/** Latest successful tagged pool read, when one exists. */
-	readonly poolState?: { readonly systemState: string; readonly awaitingForkContinuation: boolean; readonly escalationResolved: boolean }
+	/** Newest indexed pool state, from a SystemStateSet-style event or a tagged read, whichever is later. */
+	readonly systemState?: string
+	readonly awaitingForkContinuation: boolean
+	/** Tagged pool read of isEscalationResolved, or a sampled escalation game's final resolution other than None. */
+	readonly resolved: boolean
+	readonly universeForked: boolean
 	readonly settlementObserved: boolean
 }
 
@@ -34,8 +38,9 @@ export type TradingLifecycle = {
 export const tradingExitAvailability = (lifecycle: TradingLifecycle): { readonly open: true } | { readonly open: false; readonly reason: string } => {
 	if (lifecycle.questionEndTime === undefined) return { open: false, reason: 'Question end time is not indexed' }
 	if (lifecycle.asOfTimestamp >= lifecycle.questionEndTime) return { open: false, reason: 'Trading has closed because the question ended' }
-	if (lifecycle.settlementObserved || lifecycle.poolState?.escalationResolved === true) return { open: false, reason: 'Trading has closed because the question resolved' }
-	if (lifecycle.poolState !== undefined && (lifecycle.poolState.systemState !== '0' || lifecycle.poolState.awaitingForkContinuation)) return { open: false, reason: 'Trading has closed because the pool is not operational' }
+	if (lifecycle.universeForked) return { open: false, reason: 'Trading has closed because the universe forked' }
+	if (lifecycle.settlementObserved || lifecycle.resolved) return { open: false, reason: 'Trading has closed because the question resolved' }
+	if ((lifecycle.systemState !== undefined && lifecycle.systemState !== '0') || lifecycle.awaitingForkContinuation) return { open: false, reason: 'Trading has closed because the pool is not operational' }
 	return { open: true }
 }
 

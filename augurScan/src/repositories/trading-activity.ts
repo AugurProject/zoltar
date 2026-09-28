@@ -238,8 +238,13 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 			reserve.yes_reserve_atto_shares::text AS yes_reserve, reserve.no_reserve_atto_shares::text AS no_reserve, reserve.block_number::text AS reserve_block,
 			supply_state.supply::text AS share_supply_atto_shares, supply_state.block_number::text AS share_supply_block,
 			collateral_state.collateral::text AS settlement_collateral_atto_eth, collateral_state.block_number::text AS settlement_collateral_block,
-			question.end_time::text AS question_end_time, lifecycle.read_result->>'systemState' AS pool_system_state,
+			question.end_time::text AS question_end_time, lifecycle.block_number::text AS pool_read_block, lifecycle.read_result->>'systemState' AS pool_system_state,
 			lifecycle.read_result->>'awaitingForkContinuation' AS pool_awaiting_fork_continuation, lifecycle.read_result->>'escalationResolved' AS pool_escalation_resolved,
+			system_event.state->>'systemState' AS system_state_event, system_event.block_number::text AS system_state_event_block,
+			continuation_event.state->>'awaitingForkContinuation' AS awaiting_fork_continuation_event, continuation_event.block_number::text AS awaiting_fork_continuation_event_block,
+			escalation.read_result->>'finalQuestionResolution' AS final_question_resolution,
+			EXISTS (SELECT 1 FROM universe_events fork WHERE fork.chain_id = ${chainId} AND fork.universe_id = position.universe_id
+				AND fork.canonical AND fork.block_number <= ${asOfBlock} AND fork.event_name = 'UniverseForked') AS universe_forked,
 			EXISTS (SELECT 1 FROM pool_state_events settlement WHERE settlement.chain_id = ${chainId} AND settlement.pool_address = position.pool_address
 				AND settlement.canonical AND settlement.block_number <= ${asOfBlock} AND settlement.event_name = 'SharesRedeemed') AS settlement_observed,
 			count(*) OVER ()::integer AS total
@@ -268,12 +273,33 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 			) candidate ORDER BY block_number DESC, log_index DESC LIMIT 1
 		) collateral_state ON true
 		LEFT JOIN LATERAL (
-			SELECT state.read_result FROM entity_state_snapshots state
+			SELECT state.read_result, state.block_number FROM entity_state_snapshots state
 			JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
 			WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool' AND state.entity_identity = position.pool_address
 				AND state.canonical AND state.block_number <= ${asOfBlock} AND state.read_status = 'success'
 			ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
 		) lifecycle ON true
+		LEFT JOIN LATERAL (
+			SELECT state.state, state.block_number FROM pool_state_events state
+			WHERE state.chain_id = ${chainId} AND state.pool_address = position.pool_address AND state.canonical AND state.block_number <= ${asOfBlock}
+				AND state.state ? 'systemState'
+			ORDER BY state.block_number DESC, state.log_index DESC LIMIT 1
+		) system_event ON true
+		LEFT JOIN LATERAL (
+			SELECT state.state, state.block_number FROM pool_state_events state
+			WHERE state.chain_id = ${chainId} AND state.pool_address = position.pool_address AND state.canonical AND state.block_number <= ${asOfBlock}
+				AND state.state ? 'awaitingForkContinuation'
+			ORDER BY state.block_number DESC, state.log_index DESC LIMIT 1
+		) continuation_event ON true
+		LEFT JOIN LATERAL (
+			SELECT snapshot.read_result FROM pool_state_events game
+			JOIN entity_state_snapshots snapshot ON snapshot.chain_id = game.chain_id AND snapshot.entity_type = 'escalation'
+				AND snapshot.entity_identity = lower(game.state->>'escalationGame') AND snapshot.canonical AND snapshot.read_status = 'success'
+				AND snapshot.block_number <= ${asOfBlock}
+			WHERE game.chain_id = ${chainId} AND game.pool_address = position.pool_address AND game.canonical AND game.block_number <= ${asOfBlock}
+				AND game.event_name = 'EscalationGameSet'
+			ORDER BY game.block_number DESC, game.log_index DESC, snapshot.block_number DESC, snapshot.observed_at DESC LIMIT 1
+		) escalation ON true
 		ORDER BY position.eth_in DESC, position.pair_address
 		LIMIT 251
 	`

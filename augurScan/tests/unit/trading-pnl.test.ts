@@ -77,15 +77,18 @@ describe('trading profit and loss', () => {
 })
 
 describe('trading exit availability', () => {
-	const operational = { systemState: '0', awaitingForkContinuation: false, escalationResolved: false }
+	const open = { asOfTimestamp: 100n, questionEndTime: 200n, systemState: '0', awaitingForkContinuation: false, resolved: false, universeForked: false, settlementObserved: false }
 	test('values holdings only while the pair can still execute a router exit', () => {
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: operational, settlementObserved: false })).toEqual({ open: true })
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, settlementObserved: false })).toEqual({ open: true })
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, settlementObserved: false })).toEqual({ open: false, reason: 'Question end time is not indexed' })
-		expect(tradingExitAvailability({ asOfTimestamp: 200n, questionEndTime: 200n, poolState: operational, settlementObserved: false })).toMatchObject({ open: false, reason: 'Trading has closed because the question ended' })
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: operational, settlementObserved: true })).toMatchObject({ reason: 'Trading has closed because the question resolved' })
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: { ...operational, escalationResolved: true }, settlementObserved: false })).toMatchObject({ reason: 'Trading has closed because the question resolved' })
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: { ...operational, systemState: '1' }, settlementObserved: false })).toMatchObject({ reason: 'Trading has closed because the pool is not operational' })
-		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: { ...operational, awaitingForkContinuation: true }, settlementObserved: false })).toMatchObject({ open: false })
+		expect(tradingExitAvailability(open)).toEqual({ open: true })
+		const { systemState: _systemState, ...withoutPoolState } = open
+		expect(tradingExitAvailability(withoutPoolState)).toEqual({ open: true })
+		const { questionEndTime: _endTime, ...withoutEndTime } = open
+		expect(tradingExitAvailability(withoutEndTime)).toEqual({ open: false, reason: 'Question end time is not indexed' })
+		expect(tradingExitAvailability({ ...open, asOfTimestamp: 200n })).toEqual({ open: false, reason: 'Trading has closed because the question ended' })
+		expect(tradingExitAvailability({ ...open, universeForked: true })).toEqual({ open: false, reason: 'Trading has closed because the universe forked' })
+		expect(tradingExitAvailability({ ...open, settlementObserved: true })).toEqual({ open: false, reason: 'Trading has closed because the question resolved' })
+		expect(tradingExitAvailability({ ...open, resolved: true })).toEqual({ open: false, reason: 'Trading has closed because the question resolved' })
+		expect(tradingExitAvailability({ ...open, systemState: '1' })).toEqual({ open: false, reason: 'Trading has closed because the pool is not operational' })
+		expect(tradingExitAvailability({ ...open, awaitingForkContinuation: true })).toEqual({ open: false, reason: 'Trading has closed because the pool is not operational' })
 	})
 })
