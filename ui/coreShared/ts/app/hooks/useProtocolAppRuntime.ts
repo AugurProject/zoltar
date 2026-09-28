@@ -4,12 +4,19 @@ import { useRef } from 'preact/hooks'
 import { shouldFollowWalletNetwork } from '../../lib/activeEnvironment.js'
 import { createSupportedNetworkChangeCoordinator } from '../lib/supportedNetworkChange.js'
 import { useTransactionTrayController } from './useTransactionTrayController.js'
+import { appBlockWatcher } from '../../lib/dataRefresh.js'
 
 type CommitGuard = () => boolean
 
 export function useProtocolAppRuntime({ replaceEnvironment, onEnvironmentCommitted }: { replaceEnvironment(canCommit: CommitGuard): Promise<boolean>; onEnvironmentCommitted?(): void }) {
 	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
-	const transactionTray = useTransactionTrayController({ onFinished: () => supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished() })
+	const transactionTray = useTransactionTrayController({
+		onFinished: () => {
+			// A finished transaction mined a block: read the chain now so visible queries refresh once, without waiting for the next poll.
+			void appBlockWatcher.refresh()
+			return supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished()
+		},
+	})
 	const environment = useEnvironmentRevision(() => transactionTray.resetForEnvironment())
 
 	const supportedNetworkChangeCoordinator =
