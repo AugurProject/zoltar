@@ -18,6 +18,7 @@ browserTest(
 		let rejectSave = false
 		let loseCommittedResponse = false
 		let releaseSave = () => {}
+		let notifySaveReceived: (() => void) | undefined
 		let saveGate: Promise<void> | undefined
 		const executionMutations: unknown[] = []
 		const settingsMutations: unknown[] = []
@@ -78,6 +79,7 @@ browserTest(
 			setCandidate: () => {},
 			setExecution: async value => {
 				executionMutations.push(value)
+				notifySaveReceived?.()
 				await saveGate
 				if (rejectSave) throw new Error('Execution change rejected')
 				execute = Reflect.get(Object(value), 'execute') === true
@@ -175,14 +177,23 @@ browserTest(
 				expect(await cdp.evaluate("document.querySelector('#execution-mode-summary')?.textContent")).toBe('Dry run · ready to go live')
 				await capture(`rejected-${width}`)
 				rejectSave = false
+				// Saving feedback can render before the initial request reaches the server.
+				await cdp.evaluate("{ const original = window.fetch; window.fetch = async (...args) => { if (String(args[0]).endsWith('/api/execution')) { window.fetch = original; await new Promise(resolve => setTimeout(resolve, 250)) } return original(...args) } }")
 				saveGate = new Promise(resolve => {
 					releaseSave = resolve
 				})
+				const saveReceived = new Promise<void>(resolve => {
+					notifySaveReceived = resolve
+				})
+				const beforeSave = executionMutations.length
 				await cdp.evaluate("document.querySelector('#execution-enabled').click()")
 				await cdp.evaluate('document.querySelector(\'#execution-form button[type="submit"]\').click()')
 				await waitFor("document.querySelector('#execution-status')?.textContent === 'Enabling live execution…'")
 				expect(await cdp.evaluate("document.querySelector('#execution-fieldset')?.disabled")).toBe(true)
 				// A refresh and a repeated submit while the save is in flight neither unlock the form nor send it twice.
+				await saveReceived
+				notifySaveReceived = undefined
+				expect(executionMutations).toHaveLength(beforeSave + 1)
 				const inFlight = executionMutations.length
 				await cdp.evaluate("window.dispatchEvent(new Event('focus'))")
 				await Bun.sleep(300)
