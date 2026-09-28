@@ -17,7 +17,7 @@ function getDisputeWindowPendingPresentation(report: OpenOracleStageReport): Lif
 		blockedActions: [],
 		detail: `Disputes open in ${duration}.`,
 		key: 'dispute-pending',
-		label: 'Waiting For Dispute Window',
+		label: 'Waiting for dispute window',
 		tone: 'warning',
 	}
 }
@@ -33,7 +33,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 				availableActions: [],
 				blockedActions: [],
 				key: 'dispute-window',
-				label: 'Dispute Window Open',
+				label: 'Dispute window open',
 				tone: 'default',
 			}
 		case 'settle':
@@ -41,7 +41,7 @@ export function getOpenOracleStagePresentation(actionMode: OpenOracleSelectedRep
 				availableActions: [],
 				blockedActions: [],
 				key: 'ready-to-settle',
-				label: 'Ready To Settle',
+				label: 'Ready to settle',
 				tone: 'success',
 			}
 		case 'read-only':

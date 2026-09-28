@@ -1,6 +1,5 @@
 import { statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
 import {
-	createCertifiedCompleteSetFixture,
 	createCompleteSet,
 	redeemCompleteSet,
 	depositRepToVault,
@@ -203,7 +202,7 @@ describe('Statoblast: truth auction', () => {
 		const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 		await setVaultCapacityFixture(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, passiveRepHolder.account.address, repDeposit / 4n)
-		await createCertifiedCompleteSetFixture(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+		await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -329,7 +328,8 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), 0n, 'the original collateral generation should be exhausted before the delayed claim')
 			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesSecurityPool.securityPool, functionName: 'totalBadDebtAttoEth' }), 0n, 'the exhausted generation should clear its aggregate auctioned debt')
 
-			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 10n ** 15n), /Commitments not certified/)
+			await createCompleteSet(client, yesSecurityPool.securityPool, 10n ** 15n)
+			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), 10n ** 15n, 'healthy aggregate backing permits a new collateral generation before a delayed auction claim')
 			const nextGenerationBadDebtAttoEth = 1n
 			await mockWindow.addStateOverrides({
 				[yesSecurityPool.securityPool]: {
@@ -376,7 +376,7 @@ describe('Statoblast: truth auction', () => {
 				await mockWindow.setTime(endTime + 10000n)
 				const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 				await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-				await createCertifiedCompleteSetFixture(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+				await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 				await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, inheritedTie ? forkThresholdAttoRep : 2n * reportBond)
 				await depositToEscalationGame(losingReporter, securityPoolAddresses.securityPool, QuestionOutcome.No, inheritedTie ? forkThresholdAttoRep : reportBond)
 
@@ -664,7 +664,7 @@ describe('Statoblast: truth auction', () => {
 			})
 
 			const mintAmountAttoEth = 10n ** 15n
-			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, mintAmountAttoEth), /Commitments not certified/)
+			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, mintAmountAttoEth), /Unassigned position unhealthy/)
 			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
 			const auctionVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
 			await mockWindow.addStateOverrides({
@@ -674,7 +674,7 @@ describe('Statoblast: truth auction', () => {
 					},
 				},
 			})
-			await createCertifiedCompleteSetFixture(client, yesSecurityPool.securityPool, mintAmountAttoEth)
+			await createCompleteSet(client, yesSecurityPool.securityPool, mintAmountAttoEth)
 		})
 
 		test('nonzero fee redemption cannot reclassify forced child ETH as collateral', async () => {
@@ -694,7 +694,7 @@ describe('Statoblast: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'parent migration window fork source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -711,7 +711,7 @@ describe('Statoblast: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'parent migration deadline boundary fork source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -799,7 +799,7 @@ describe('Statoblast: truth auction', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
-			await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'auction inventory funding fork source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -990,7 +990,7 @@ describe('Statoblast: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const parentUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, parentUnderwritingLimitAttoEth)
-			await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, parentUnderwritingLimitAttoEth)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, parentUnderwritingLimitAttoEth)
 
 			await triggerExternalForkForSecurityPool(undefined, 'non-divisible fully utilized fork source')
 			const parentSettlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
@@ -1033,7 +1033,7 @@ describe('Statoblast: truth auction', () => {
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 			const forkSourceQuestionData = {
 				...questionData,
@@ -1082,7 +1082,7 @@ describe('Statoblast: truth auction', () => {
 		test('own-fork truth auction uses only vault REP as the pool auction basis', async () => {
 			const securityPoolUnderwritingLimitAttoEth = 2n * 10n ** 18n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 			const endTime = await getQuestionEndDate(client, questionId)
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			let vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1165,7 +1165,7 @@ describe('Statoblast: truth auction', () => {
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -1262,7 +1262,7 @@ describe('Statoblast: truth auction', () => {
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
@@ -1594,7 +1594,7 @@ describe('Statoblast: truth auction', () => {
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await setVaultCapacityFixture(unmigratedUnderwritingLimitAttoEthHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, unmigratedUnderwritingLimitAttoEthHolder.account.address, securityPoolUnderwritingLimitAttoEth)
 
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, forkSource)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1688,7 +1688,7 @@ describe('Statoblast: truth auction', () => {
 				await approveAndDepositRepToVault(passiveVault, repDeposit, questionId)
 				await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 10000n)
 				await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
-				await createCertifiedCompleteSetFixture(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+				await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 				await triggerExternalForkForSecurityPool(undefined, `partial ${percentSold}% truth auction source`)
 				await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1743,7 +1743,7 @@ describe('Statoblast: truth auction', () => {
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			// Fork the security pool
 			await triggerExternalForkForSecurityPool(undefined, 'simple truth auction fork source')
@@ -1812,7 +1812,7 @@ describe('Statoblast: truth auction', () => {
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			await triggerExternalForkForSecurityPool(undefined, 'refund-only claim fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1997,7 +1997,7 @@ describe('Statoblast: truth auction', () => {
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			await triggerExternalForkForSecurityPool(undefined, 'zero rep refund fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2094,7 +2094,7 @@ describe('Statoblast: truth auction', () => {
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			await createCertifiedCompleteSetFixture(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[1]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'zero-migration backingUnits normalization source')
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -2151,7 +2151,7 @@ describe('Statoblast: truth auction', () => {
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await mockWindow.advanceTime(10n * 60n)
 			await setVaultCapacityFixture(unmigratedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, unmigratedVault.account.address, securityPoolUnderwritingLimitAttoEth)
-			await createCertifiedCompleteSetFixture(createWriteClient(mockWindow, TEST_ADDRESSES[2]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await createCompleteSet(createWriteClient(mockWindow, TEST_ADDRESSES[2]), securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'rejecting auction winner capacity source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2257,8 +2257,8 @@ describe('Statoblast: truth auction', () => {
 				retentionRateBeforeClaim,
 				'assigning already-counted aggregate capacity should not change pool utilization',
 			)
-			await assert.rejects(createCertifiedCompleteSetFixture(openInterestHolder, yesSecurityPool.securityPool, capacityProbe), /Vault backing insufficient/)
-			await assert.rejects(createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe), /Commitments not certified/)
+			await createCompleteSet(openInterestHolder, yesSecurityPool.securityPool, capacityProbe)
+			assert.ok((await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)) <= mintingCapacityBeforeClaim, 'minted collateral must stay within aggregate backing even when an individual winner is underbacked')
 
 			await client.writeContract({
 				abi: rejectingEthReceiverArtifact.abi,
@@ -2419,7 +2419,7 @@ describe('Statoblast: truth auction', () => {
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await mockWindow.advanceTime(10n * 60n)
 			await setVaultCapacityFixture(passiveRepHolder, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, passiveRepHolder.account.address, securityPoolUnderwritingLimitAttoEth / 2n)
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 
 			await triggerExternalForkForSecurityPool(undefined, 'liquidated unclaimed auction proceeds fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2593,7 +2593,7 @@ describe('Statoblast: truth auction', () => {
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			await triggerExternalForkForSecurityPool(undefined, 'capacity ownership')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2673,7 +2673,7 @@ describe('Statoblast: truth auction', () => {
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			await triggerExternalForkForSecurityPool(undefined, 'fee-index fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2724,7 +2724,7 @@ describe('Statoblast: truth auction', () => {
 
 			const openInterestAmount = 10n * 10n ** 18n
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			await triggerExternalForkForSecurityPool(undefined, 'multi-claim fork source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -2774,7 +2774,7 @@ describe('Statoblast: truth auction', () => {
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 			const firstBidder = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 			const secondBidder = createWriteClient(mockWindow, TEST_ADDRESSES[4])
-			await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 			await triggerExternalForkForSecurityPool(undefined, 'capacity ownership')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

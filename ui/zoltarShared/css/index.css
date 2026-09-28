@@ -35,8 +35,6 @@
 .question-summary-id {
 	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	color: var(--muted);
 	overflow-wrap: anywhere;
 }
@@ -195,11 +193,9 @@
 .question-type-options .question-type-options-label {
 	margin-bottom: 0.5rem;
 	padding: 0;
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--muted);
+	font-weight: 600;
+	color: var(--text-secondary);
 }
 
 .question-type-option-list {
@@ -330,8 +326,6 @@
 .question-preview-timeline-label,
 .question-preview-meta-label {
 	font-size: var(--font-label);
-	letter-spacing: 0.14em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
@@ -444,8 +438,6 @@
 
 .question-draft-preview-meta-label {
 	font-size: var(--font-label);
-	letter-spacing: 0.12em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 
@@ -529,7 +521,7 @@
 }
 
 /* Narrow-viewport collapse for grids this sheet owns; kept after the base rules so the override wins at equal specificity. */
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.categorical-outcome-row {
 		grid-template-columns: 1fr;
 	}

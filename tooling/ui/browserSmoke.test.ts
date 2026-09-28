@@ -8,11 +8,11 @@ import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
 import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, terminateBrowserProcess, waitForBrowserExit, waitForDevToolsPort } from './browserSmoke.mts'
 
 const mountedState = {
-	body: 'Augur Statoblast\nSecurity Pools',
+	body: 'Augur Statoblast\nSecurity pools',
 	height: 844,
 	hasMain: true,
 	readyState: 'complete' as const,
-	title: 'Security Pools | Augur Statoblast',
+	title: 'Security pools | Augur Statoblast',
 	width: 390,
 }
 const viewport = { height: 844, width: 390 }
@@ -31,7 +31,7 @@ const getAvailablePort = async (): Promise<number> => {
 
 test('browser smoke readiness requires the selected application identity', () => {
 	expect(isBrowserSmokeReady(mountedState, 'Augur Statoblast', undefined, viewport)).toBe(true)
-	expect(isBrowserSmokeReady({ ...mountedState, body: 'Security Pools' }, 'Augur Statoblast', undefined, viewport)).toBe(false)
+	expect(isBrowserSmokeReady({ ...mountedState, body: 'Security pools' }, 'Augur Statoblast', undefined, viewport)).toBe(false)
 })
 
 test('browser smoke readiness can wait for route-specific loaded content', () => {

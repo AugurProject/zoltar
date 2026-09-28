@@ -128,14 +128,14 @@ describe('ZoltarRoutes', () => {
 		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false }))
 		expect(queries.getByRole('heading', { name: 'Universes' })).toBeTruthy()
 		expect(queries.queryByRole('button', { name: 'Migrate REP' })).toBeNull()
-		fireEvent.click(queries.getByRole('button', { name: 'Fork Universe' }))
+		fireEvent.click(queries.getByRole('button', { name: 'Fork universe' }))
 		expect(viewChanges).toEqual(['fork'])
 		expect(queries.queryByRole('textbox')).toBeNull()
 	})
 
 	test('shows Migrate, not Fork, in the Universes browser of a forked universe', async () => {
 		const { queries, viewChanges } = await renderRoute('universes', createUniverse())
-		expect(queries.queryByRole('button', { name: 'Fork Universe' })).toBeNull()
+		expect(queries.queryByRole('button', { name: 'Fork universe' })).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Migrate REP' }))
 		expect(viewChanges).toEqual(['migrate'])
 		expect(queries.getByText('Yes')).toBeTruthy()
@@ -144,7 +144,7 @@ describe('ZoltarRoutes', () => {
 
 	test('mounts the fork workflow on the Fork route of an unforked universe', async () => {
 		const { queries } = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }))
-		expect(queries.getByRole('button', { name: 'Fork Universe' })).toBeTruthy()
+		expect(queries.getByRole('button', { name: 'Fork universe' })).toBeTruthy()
 		expect(queries.getByRole('button', { name: 'Approve REP' })).toBeTruthy()
 	})
 
@@ -240,7 +240,7 @@ describe('ZoltarRoutes', () => {
 	test('keeps the global question list available for a missing universe', async () => {
 		const { queries } = await renderRoute('questions', undefined, 'missing')
 		expect(queries.queryByText('Universe not found')).toBeNull()
-		expect(queries.getByRole('heading', { name: 'Browse Questions' })).toBeTruthy()
+		expect(queries.getByRole('heading', { name: 'Browse questions' })).toBeTruthy()
 	})
 
 	test('leads the Overview with the user status and exactly one next step', async () => {

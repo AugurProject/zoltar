@@ -9,7 +9,7 @@ export const circularValue = '[circular value]'
 export const contract = 'Contract'
 export const to = 'To'
 export const functionLabel = 'Function'
-export const ethValue = 'ETH Value'
+export const ethValue = 'ETH value'
 export const argumentListLabel = 'Arguments'
 export const formatDeployingValue = (contractLabel: CopyTemplateValue) => `Deploying ${contractLabel}`
 export const formatValueDeployed = (contractLabel: CopyTemplateValue) => `${contractLabel} deployed`
@@ -38,8 +38,8 @@ export const formatQueuedOperationAutoExecutionDetail = (operationId: CopyTempla
 export const formatQueuedOperationManualExecutionDetail = (operationId: CopyTemplateValue) => `Staged operation #${operationId} was queued and must be executed manually after a valid oracle price is available.`
 export const completeSetBurnSuccessDetail = 'Matching shares were burned and collateral was returned from the selected pool.'
 export const parentPoolSharesMigratedDetail = 'Child-universe shares were materialized from the selected parent-pool entitlements.'
-export const shareOutcome = 'Share Outcome'
-export const targetOutcomeIndexes = 'Target Outcome Indexes'
+export const shareOutcome = 'Share outcome'
+export const targetOutcomeIndexes = 'Target outcome indexes'
 export const reportingContributionSuccessDetail = 'Your selected REP was committed to the chosen escalation side.'
 export const reportingRepApprovalSuccessDetail = 'The escalation game can now transfer the approved REP from your wallet.'
 export const escalationDepositsSettledDetail = 'Selected escalation deposits were settled against the current finalized outcome.'
@@ -57,7 +57,7 @@ export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLab
 export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining underwriting commitments.`
 export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining underwriting commitments; refund-only rows credited locked ETH for withdrawal.`
 export const childUniverseLinkedToForkPathDetail = 'The selected child universe was deployed and linked to this fork path.'
-export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into Fork & Migration.'
+export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into Fork & migration.'
 export const zoltarUniverseForkSubmittedDetail = 'The selected universe fork was submitted on-chain.'
 export const poolReadyForForkMigrationDetail = 'This pool entered fork handling and is ready for migration actions.'
 export const parentEscalationDepositsClaimedDetail = 'Selected winning parent deposits were paid directly in child REP. Their carried proofs are now spent in current and later descendants.'

@@ -60,8 +60,6 @@
 	color: var(--text-secondary);
 	font-size: var(--font-caption);
 	font-weight: 700;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	box-shadow: none;
 }
 
@@ -207,6 +205,13 @@
 	font-size: var(--font-caption);
 }
 
+/* The connect or switch fix a wallet-blocked action offers where its reason would be. */
+button.tx-action-wallet-fix {
+	min-block-size: 2.5rem;
+	padding: 0.45rem 0.9rem;
+	font-size: var(--font-caption);
+}
+
 .tx-action-button-labels {
 	display: grid;
 	align-items: center;
@@ -250,8 +255,6 @@
 
 .transaction-action-status-title {
 	font-size: var(--font-caption);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .transaction-action-status-detail {
@@ -579,7 +582,7 @@
 	overflow-wrap: anywhere;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	main {
 		padding: 1rem 0.85rem 3rem;
 	}
@@ -1093,11 +1096,8 @@
 
 .overview-metric-group-label {
 	color: var(--muted);
-	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
 	font-weight: 700;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
 	white-space: nowrap;
 }
 
@@ -1132,7 +1132,7 @@
 	width: 100%;
 }
 
-/* Below wide desktops the brand keeps its mark and settings keeps its icon, so the navigation has room on one row. */
+/* Below full desktop width the brand keeps only its mark and settings only its icon, so the navigation has room on one row. */
 @media (max-width: 80rem) {
 	.header-toolbar .application-brand-name {
 		position: absolute;
@@ -1160,8 +1160,8 @@
 	}
 }
 
-/* Mid widths drop the universe caption; the universe keeps its value. */
-@media (max-width: 72rem) {
+/* Below full desktop width the universe caption is dropped; the universe keeps its value. */
+@media (max-width: 80rem) {
 	.header-toolbar-controls .toolbar-field-label {
 		position: absolute;
 		width: 1px;
@@ -1173,7 +1173,7 @@
 	}
 }
 
-@media (max-width: 60rem) {
+@media (max-width: 64rem) {
 	.header-toolbar .environment-badge-row {
 		display: none;
 	}
@@ -1191,6 +1191,7 @@
 		bottom: 0;
 		left: 0;
 		z-index: var(--z-nav);
+		min-height: var(--bottom-nav-height);
 		padding: 0.25rem 0.35rem calc(0.25rem + env(safe-area-inset-bottom));
 		border-top: 1px solid var(--border-default);
 		background: var(--surface-modal-opaque);
@@ -1241,18 +1242,18 @@
 	}
 }
 
-/* Phones: a denser top bar, section views in a two-column grid, and a full-width account popover. */
-@media (max-width: 48rem) {
+/* Phones: a denser top bar (universe, account, and settings share one row down to 360px), section views in a two-column grid, and a full-width account popover. */
+@media (max-width: 40rem) {
 	.header-toolbar {
-		gap: var(--space-2);
-		padding: 0.25rem 0.35rem 0.25rem 0.5rem;
+		gap: 0.3rem;
+		padding: 0.25rem 0.3rem;
 		border-radius: var(--radius-control);
 	}
 
 	/* A network-switch action is the only control that can push the bar to a second row. */
 	.header-toolbar-controls {
 		flex-wrap: wrap;
-		gap: var(--space-2);
+		gap: 0.3rem;
 	}
 
 	.header-toolbar-controls .toolbar-field-value,
@@ -1261,8 +1262,8 @@
 	}
 
 	.header-toolbar-controls .wallet-chip {
-		gap: 0.35rem;
-		padding-inline: 0.55rem 0.6rem;
+		gap: 0.25rem;
+		padding-inline: 0.4rem 0.45rem;
 	}
 
 	.header-toolbar-controls .wallet-chip.is-placeholder {
@@ -1300,27 +1301,6 @@
 		width: auto;
 		max-width: calc(100vw - 1.5rem);
 		margin-top: 0.5rem;
-	}
-}
-
-/* The narrowest phones tighten spacing so universe, account, and settings still share one row. */
-@media (max-width: 24rem) {
-	main {
-		padding-inline: 0.4rem;
-	}
-
-	.header-toolbar {
-		padding-inline: 0.3rem;
-	}
-
-	.header-toolbar,
-	.header-toolbar-controls {
-		gap: 0.3rem;
-	}
-
-	.header-toolbar-controls .wallet-chip {
-		gap: 0.25rem;
-		padding-inline: 0.4rem 0.45rem;
 	}
 }
 

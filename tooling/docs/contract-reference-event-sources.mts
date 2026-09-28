@@ -1,6 +1,5 @@
 export const eventSourceByName: Record<string, string> = {
 	UnderwritingLimitSet: 'solidity/contracts/statoblast/SecurityPoolStorage.sol',
-	VaultCoverageCertified: 'solidity/contracts/statoblast/SecurityPoolStorage.sol',
 	VaultBadDebtMigrated: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	Approval: 'solidity/contracts/IERC20.sol',
 	ApprovalForAll: 'solidity/contracts/statoblast/interfaces/IERC1155.sol',

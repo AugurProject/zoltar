@@ -44,7 +44,7 @@ describe('pool locations', () => {
 })
 
 describe('pool lifecycle stage', () => {
-	test('maps the lifecycle and reporting axes onto Operational → Escalation → Fork / Migration → Truth auction → Settled', () => {
+	test('maps the lifecycle and reporting axes onto Operational → Escalation → Fork / migration → Truth auction → Settled', () => {
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: false })).toBe('operational')
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: true })).toBe('escalation')
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: 'operational', reportingOpen: true, reportingStage: 'preOpen' })).toBe('operational')
@@ -59,7 +59,7 @@ describe('pool lifecycle stage', () => {
 		expect(derivePoolLifecycleStep({ hasForkActivity: false, lifecycleState: undefined, reportingOpen: false })).toBeUndefined()
 	})
 
-	test('opens the tab that holds each stage and promotes Fork & Migration once it matters', () => {
+	test('opens the tab that holds each stage and promotes Fork & migration once it matters', () => {
 		expect(getDefaultPoolTab('operational', false)).toBe('vaults')
 		expect(getDefaultPoolTab('escalation', false)).toBe('reporting')
 		expect(getDefaultPoolTab('forkMigration', true)).toBe('fork-workflow')
@@ -171,7 +171,7 @@ describe('derivePoolViewModel', () => {
 		expect(model.actionItems.map(item => item.id)).toEqual(['manageVault', 'mintShares', 'claimFees'])
 	})
 
-	test('opens a pool in fork migration on Fork & Migration with the migration deadline', () => {
+	test('opens a pool in fork migration on Fork & migration with the migration deadline', () => {
 		const pool = createSelectedPool({ hasForkActivity: true, securityPoolAddress: POOL, systemState: 'forkMigration', universeHasForked: true })
 		const model = derive({ forkAuctionDetails: createForkAuctionDetails({ hasForkActivity: true, migrationEndsAt: 900n, securityPoolAddress: POOL, systemState: 'forkMigration' }), securityPools: [pool] })
 		expect(model.lifecycleStep).toBe('forkMigration')

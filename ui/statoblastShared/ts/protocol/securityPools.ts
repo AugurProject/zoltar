@@ -447,9 +447,9 @@ async function loadSecurityPoolDetails(
 	const { truthAuctionStartedAt, migratedAttoRep, forkOwnSecurityPool, forkOutcomeIndex } = requireForkDataView(forkData)
 	const forkOutcome = getForkOutcomeKey(forkOutcomeIndex, parent)
 	const systemState = getSecurityPoolSystemState(systemStateValue)
-	const certifiedUnderwritingLimitAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getCertifiedUnderwritingLimitAttoEth' })
+	const mintingCapacityAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getCurrentMintingCapacityAttoEth' })
 	return {
-		certifiedUnderwritingLimitAttoEth,
+		mintingCapacityAttoEth,
 		settlementCollateralAttoEth,
 		currentRetentionRate,
 		feeAccrualState: {

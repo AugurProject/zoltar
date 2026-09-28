@@ -22,6 +22,8 @@ import type { MarketCreationResult, MarketDetails } from '@zoltar/ui-core-shared
 import { ScalarCreatePreview, type ScalarCreatePreviewDetails } from './ScalarCreatePreview.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import type { ComponentChildren } from 'preact'
+import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
+import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { QuestionDraftPreview } from './QuestionDraftPreview.js'
 import { QuestionTypeOptions } from './QuestionTypeOptions.js'
 import { formatTimeZoneLabel, getBrowserTimeZone } from '../lib/questionTimeZone.js'
@@ -48,10 +50,7 @@ type QuestionCreateSectionProps = {
 	renderResultActions?: (result: { marketType: MarketCreationResult['marketType']; questionId: string; questionTitle: string }) => ComponentChildren
 	submitFields?: ComponentChildren
 	submitActionOverride?: {
-		availability: {
-			disabled: boolean
-			reason: string | undefined
-		}
+		availability: ActionAvailability
 		idleLabel: ComponentChildren
 		onSubmit: () => void
 		pending: boolean
@@ -145,15 +144,18 @@ export function QuestionCreateSection({
 	const submitAction =
 		submitActionOverride === undefined
 			? {
-					availability: {
-						disabled: !canCreateQuestion,
-						reason: (() => {
-							if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
-							if (!isOnActiveAppChain) return getWrongNetworkReason()
-							if (questionFormValidation.isValid) return undefined
-							return questionFormValidation.notice
-						})(),
-					},
+					availability: withActiveAppChainWalletBlocker(
+						{
+							disabled: !canCreateQuestion,
+							reason: (() => {
+								if (accountAddress === undefined) return marketCopy.questionCreationWalletRequired
+								if (!isOnActiveAppChain) return getWrongNetworkReason()
+								if (questionFormValidation.isValid) return undefined
+								return questionFormValidation.notice
+							})(),
+						},
+						{ accountAddress, isOnActiveAppChain },
+					),
 					idleLabel: commonCopy.createQuestionAction,
 					onSubmit: onCreateQuestion,
 					pending: questionCreating,

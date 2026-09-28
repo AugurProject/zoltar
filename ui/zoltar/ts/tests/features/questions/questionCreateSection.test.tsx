@@ -274,7 +274,7 @@ describe('QuestionCreateSection', () => {
 		const documentQueries = within(document.body)
 		const group = document.querySelector('fieldset.question-type-options')
 		if (!(group instanceof HTMLElement)) throw new Error('Expected the question type fieldset')
-		expect(group.querySelector('legend')?.textContent).toBe('Question Type')
+		expect(group.querySelector('legend')?.textContent).toBe('Question type')
 		const radios = within(group).getAllByRole('radio') as HTMLInputElement[]
 		expect(radios.map(radio => radio.value)).toEqual(['binary', 'categorical', 'scalar'])
 		expect(new Set(radios.map(radio => radio.name)).size).toBe(1)
@@ -312,7 +312,7 @@ describe('QuestionCreateSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const endTimeInput = documentQueries.getByLabelText('End Time')
+		const endTimeInput = documentQueries.getByLabelText('End time')
 		const timeZoneHelp = document.getElementById(endTimeInput.getAttribute('aria-describedby') ?? '')
 		expect(timeZoneHelp?.textContent).toMatch(/^Your time \(.+\)\. Blank start means immediately\.$/)
 		if (timeZone !== 'UTC' && timeZone !== 'Etc/UTC') expect(timeZoneHelp?.textContent).toContain(timeZone)

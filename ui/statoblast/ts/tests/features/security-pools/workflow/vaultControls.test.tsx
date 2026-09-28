@@ -108,12 +108,11 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositQueries = within(depositDialog)
-		const depositAmountInput = depositQueries.getByText('REP backing').parentElement?.querySelector('input')
-		const approvalAmountInput = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('input')
-		const approvalMaxButton = depositQueries.getByText('REP Approval Amount').parentElement?.querySelector('button')
+		const depositAmountInput = depositQueries.getByLabelText('REP backing') as HTMLInputElement
+		const approvalAmountInput = depositQueries.getByText('REP approval amount').parentElement?.querySelector('input')
 		expect(depositAmountInput?.disabled).toBe(true)
 		expect(approvalAmountInput?.disabled).toBe(true)
-		expect(approvalMaxButton?.disabled).toBe(true)
+		expect(depositQueries.getByText('REP approval amount').parentElement?.querySelector('button')).toBeNull()
 		expectTransactionButtonDisabled(depositDialog, 'Approve 1 REP')
 
 		await act(() => {
@@ -124,7 +123,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		})
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		expect(within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')?.disabled).toBe(false)
+		expect((within(withdrawDialog).getByLabelText('REP withdraw amount') as HTMLInputElement).disabled).toBe(false)
 	})
 
 	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
@@ -392,9 +391,65 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(modalQueries.queryByText('Review the selected vault, complete REP approval if needed, then deposit REP.')).toBeNull()
 		expect(modalQueries.queryByText('REP approval is sufficient for the deposit amount')).toBeNull()
 		expect(modalQueries.queryByText('Approve REP inside this modal before depositing.')).toBeNull()
-		expect(modalQueries.getByText('Wallet REP')).not.toBeNull()
+		expect(modalQueries.getByText(/^Balance: /, { selector: 'p.field-hint' })).not.toBeNull()
 		expect(modalQueries.getByText('Required REP')).not.toBeNull()
-		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
+		expect(modalQueries.getByText('REP approval amount')).not.toBeNull()
+	})
+
+	test('states an over-balance deposit once, in the approval control', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({
+							securityPoolAddress: selectedPoolAddress,
+						}),
+						securityVaultForm: {
+							depositAmount: '30',
+							repWithdrawAmount: '',
+							targetHealthFactor: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultOwner: zeroAddress,
+						},
+						walletRepBalanceAttoRep: 25n * 10n ** 18n,
+						securityVaultRepApproval: {
+							error: undefined,
+							loading: false,
+							value: 0n,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(
+				documentQueries.getAllByRole('button', {
+					name: 'Deposit REP',
+				})[0] as HTMLElement,
+			)
+		})
+
+		const depositDialog = documentQueries.getByRole('dialog', {
+			name: 'Deposit REP',
+		})
+		const modalQueries = within(depositDialog)
+		const depositInput = modalQueries.getByLabelText('REP backing')
+		await act(() => {
+			depositInput.dispatchEvent(new Event('blur'))
+		})
+		expect(depositDialog.querySelector('.field-error')).toBeNull()
+		expect(depositInput.getAttribute('aria-invalid')).toBeNull()
+		expect(modalQueries.getByText(/^Balance: 25/, { selector: 'p.field-hint' })).not.toBeNull()
+		expect(depositDialog.textContent?.match(/exceeds your wallet balance/gi)).toHaveLength(1)
 	})
 
 	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {
@@ -452,6 +507,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			name: 'Withdraw REP',
 		})
 		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000\u00a0REP or less.')
+		const withdrawInput = within(withdrawDialog).getByLabelText('REP withdraw amount')
+		await act(() => {
+			withdrawInput.dispatchEvent(new Event('blur'))
+		})
+		// The action guard owns the over-maximum reason; the field does not repeat it.
+		expect(withdrawDialog.querySelector('.field-error')).toBeNull()
+		expect(withdrawDialog.textContent?.includes('Enter at most')).toBe(false)
+		expect(withdrawDialog.textContent?.match(/Reduce the withdrawal/g)).toHaveLength(1)
 	})
 
 	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {

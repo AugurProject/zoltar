@@ -12,7 +12,7 @@ import { addressString, dateToBigintSeconds } from '../testSupport/simulator/uti
 import { WriteClient, createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { createCertifiedCompleteSetFixture, depositRepToVault, depositToEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
 	OperationType,
 	executeStagedOperation,
@@ -527,7 +527,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await requestPrice(client, priceOracle)
 		await handleOracleReporting(client, mockWindow, priceOracle, 10n ** 18n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setUnderwritingLimit', args: [openInterest] }))
-		await createCertifiedCompleteSetFixture(client, securityPool, openInterest)
+		await createCompleteSet(client, securityPool, openInterest)
 
 		const minimumToken1ReportAttoEth = await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1841,7 +1841,6 @@ describe('Price Oracle Refund Security Tests', () => {
 		const collateral = 1n * 10n ** 18n
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
 		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setUnderwritingLimit', args: [collateral] })
-		await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'certifyVaultCoverage', args: [client.account.address] })
 		const receiver = await deployContract(
 			client,
 			encodeDeployData({
@@ -1885,7 +1884,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			totalFeeLiabilities: await getTotalAccruedFees(client, securityPool),
 		})
 		const stateBefore = await readRedemptionState()
-		assert.deepStrictEqual(stateBefore.receiverShares, [collateral * 10n ** 18n, collateral * 10n ** 18n, collateral * 10n ** 18n], 'rejecting receiver must hold one complete set before redemption')
+		assert.deepStrictEqual(stateBefore.receiverShares, [collateral, collateral, collateral], 'rejecting receiver must hold one complete set before redemption')
 
 		await assert.rejects(
 			executeThroughRejectingReceiver(
@@ -1894,7 +1893,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: statoblast_SecurityPool_SecurityPool.abi,
 					functionName: 'redeemCompleteSet',
-					args: [collateral * 10n ** 18n],
+					args: [collateral],
 				}),
 			),
 			/ETH failed/,
