@@ -63,14 +63,14 @@ describe('useMarketCreation', () => {
 			callbacks.onTransactionSubmitted('0xabc')
 			return await pendingCreate.promise
 		})
-		const loadZoltarQuestions = mock(async () => undefined)
+		const loadCreatedZoltarQuestion = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
 		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
 		}
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions,
+				loadCreatedZoltarQuestion,
 				setZoltarForkQuestionId,
 			})),
 		}))
@@ -131,7 +131,7 @@ describe('useMarketCreation', () => {
 		await firstCreate
 		await secondCreate
 
-		expect(loadZoltarQuestions).not.toHaveBeenCalled()
+		expect(loadCreatedZoltarQuestion).not.toHaveBeenCalled()
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
@@ -142,7 +142,7 @@ describe('useMarketCreation', () => {
 			marketType: 'binary' as const,
 			questionId: '0x0b',
 		}))
-		const loadZoltarQuestions = mock(async () => undefined)
+		const loadCreatedZoltarQuestion = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
 		const onTransactionRequested = mock(() => undefined)
 		const dependencies: UseMarketCreationDependencies = {
@@ -150,7 +150,7 @@ describe('useMarketCreation', () => {
 		}
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions,
+				loadCreatedZoltarQuestion,
 				setZoltarForkQuestionId,
 			})),
 		}))
@@ -208,7 +208,7 @@ describe('useMarketCreation', () => {
 
 		expect(onTransactionRequested).toHaveBeenCalledTimes(1)
 		expect(createMarketTransaction).toHaveBeenCalledTimes(1)
-		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
+		expect(loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).marketFeedback?.status.tone).toBe('success')
 	})
 
@@ -222,14 +222,14 @@ describe('useMarketCreation', () => {
 				questionId: parameters.questionData.title === 'Question A' ? '0x0b' : '0x0c',
 			}
 		})
-		const loadZoltarQuestions = mock(async () => undefined)
+		const loadCreatedZoltarQuestion = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
 		const dependencies: UseMarketCreationDependencies = {
 			createMarket: createMarketTransaction,
 		}
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions,
+				loadCreatedZoltarQuestion,
 				setZoltarForkQuestionId,
 			})),
 		}))
@@ -290,7 +290,7 @@ describe('useMarketCreation', () => {
 
 		expect(createMarketTransaction).toHaveBeenCalledTimes(1)
 		expect(createMarketTransaction.mock.calls[0]?.[2].questionData.title).toBe('Question A')
-		expect(loadZoltarQuestions).toHaveBeenCalledTimes(1)
+		expect(loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
 		expect(setZoltarForkQuestionId).toHaveBeenCalledWith('0x0b')
 	})
 
@@ -298,7 +298,7 @@ describe('useMarketCreation', () => {
 		const createMarketTransaction = mock(async () => ({ createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary' as const, questionId: '0x0b' }))
 		const onTransactionFinished = mock(() => undefined)
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../../../statoblastShared/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
@@ -333,7 +333,7 @@ describe('useMarketCreation', () => {
 	test('preserves an anonymous question draft when a wallet connects', async () => {
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions: async () => undefined,
+				loadCreatedZoltarQuestion: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
@@ -382,7 +382,7 @@ describe('useMarketCreation', () => {
 	test('keeps the anonymous draft when the connected account already has a draft', async () => {
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions: async () => undefined,
+				loadCreatedZoltarQuestion: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
@@ -425,7 +425,7 @@ describe('useMarketCreation', () => {
 	test('keeps the anonymous draft when copying it to connected storage fails', async () => {
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions: async () => undefined,
+				loadCreatedZoltarQuestion: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
@@ -493,7 +493,7 @@ describe('useMarketCreation', () => {
 		}))
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions: async () => undefined,
+				loadCreatedZoltarQuestion: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
@@ -612,7 +612,7 @@ describe('useMarketCreation', () => {
 		const pendingCreate = createDeferred<MarketCreationResult & { hash: Hash }>()
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions: async () => undefined,
+				loadCreatedZoltarQuestion: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
@@ -691,7 +691,7 @@ describe('useMarketCreation', () => {
 	test('ignores corrupt or unavailable question draft storage without blocking form use', async () => {
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
 			useZoltarOperations: mock(() => ({
-				loadZoltarQuestions: async () => undefined,
+				loadCreatedZoltarQuestion: async () => undefined,
 				setZoltarForkQuestionId: () => undefined,
 			})),
 		}))
@@ -772,7 +772,7 @@ describe('useMarketCreation', () => {
 	test('hides completed market creation state after the environment changes', async () => {
 		const result: MarketCreationResult & { hash: Hash } = { createQuestionHash: '0xabc', hash: '0xabc', marketType: 'binary', questionId: '0x0b' }
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../../../statoblastShared/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
@@ -813,7 +813,7 @@ describe('useMarketCreation', () => {
 	test('returns no created question when the environment changes before completion', async () => {
 		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../../../statoblastShared/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
@@ -862,7 +862,7 @@ describe('useMarketCreation', () => {
 		const secondDeferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		let requestCount = 0
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useMarketCreation } = await import(`../../../../../statoblastShared/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
@@ -928,7 +928,7 @@ describe('useMarketCreation', () => {
 	test('ignores deferred market completion callbacks from a replaced environment', async () => {
 		const deferred = createDeferred<MarketCreationResult & { hash: Hash }>()
 		let submittedCallbacks: Parameters<UseMarketCreationDependencies['createMarket']>[1] | undefined
-		const loadZoltarQuestions = mock(async () => undefined)
+		const loadCreatedZoltarQuestion = mock(async () => undefined)
 		const setZoltarForkQuestionId = mock(() => undefined)
 		const onTransactionFinished = mock(() => undefined)
 		const onTransactionPrepared = mock(() => undefined)
@@ -936,7 +936,7 @@ describe('useMarketCreation', () => {
 		const onTransactionSubmitted = mock(() => undefined)
 		const refreshState = mock(async () => undefined)
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion, setZoltarForkQuestionId }),
 		}))
 		const { useMarketCreation } = await import(`../../../../../statoblastShared/ts/features/markets/hooks/useMarketCreation.ts?case=${crypto.randomUUID()}`)
 		let hookState: UseMarketCreationState | undefined
@@ -992,7 +992,7 @@ describe('useMarketCreation', () => {
 		expect(onTransactionPresented).not.toHaveBeenCalled()
 		expect(onTransactionFinished).toHaveBeenCalledTimes(1)
 		expect(refreshState).not.toHaveBeenCalled()
-		expect(loadZoltarQuestions).not.toHaveBeenCalled()
+		expect(loadCreatedZoltarQuestion).not.toHaveBeenCalled()
 		expect(setZoltarForkQuestionId).not.toHaveBeenCalled()
 	})
 })
