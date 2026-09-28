@@ -194,8 +194,8 @@ describe('ForkZoltarSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent).toContain('Fork threshold≈ 100.00 REP')
-		expect(document.body.textContent).toContain('Permanent REP burn≈ 20.00 REP')
+		expect(document.body.textContent).toContain('Fork threshold100.00 REP')
+		expect(document.body.textContent).toContain('Permanent REP burn20.00 REP')
 		expect(document.body.textContent).not.toContain('Migration Custody Credit')
 		expect(document.body.textContent).not.toContain('Resulting REP Balance')
 		expect(document.body.textContent).not.toContain('Technical Details')

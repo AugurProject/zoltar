@@ -41,6 +41,7 @@ describe('QuestionsView', () => {
 		const selectedQuestionIds: string[] = []
 		const renderedComponent = await renderIntoDocument(
 			<QuestionsView
+				zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
 				canFork={true}
 				hasForked={false}
 				loadingZoltarQuestions={false}
@@ -71,7 +72,7 @@ describe('QuestionsView', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Use for fork' }))
 		})
 		expect(selectedQuestionIds).toEqual([question.questionId])
-		expect(activeViews).toEqual(['universes'])
+		expect(activeViews).toEqual(['fork'])
 		expect(loadPage).toHaveBeenCalledWith(0, 10)
 	})
 
@@ -82,7 +83,18 @@ describe('QuestionsView', () => {
 			if (requestCount === 1) throw new Error('Page read failed')
 		})
 		const renderedComponent = await renderIntoDocument(
-			<QuestionsView canFork={false} hasForked={false} loadingZoltarQuestions={false} onActiveViewChange={() => undefined} onLoadZoltarQuestionPage={loadPage} onZoltarForkQuestionIdChange={() => undefined} requestContextKey={0} zoltarQuestionPage={undefined} zoltarQuestionsError='Page read failed' />,
+			<QuestionsView
+				zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
+				canFork={false}
+				hasForked={false}
+				loadingZoltarQuestions={false}
+				onActiveViewChange={() => undefined}
+				onLoadZoltarQuestionPage={loadPage}
+				onZoltarForkQuestionIdChange={() => undefined}
+				requestContextKey={0}
+				zoltarQuestionPage={undefined}
+				zoltarQuestionsError='Page read failed'
+			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -98,6 +110,7 @@ describe('QuestionsView', () => {
 	test('omits universe fork actions when no universe is available', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<QuestionsView
+				zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
 				canFork={false}
 				hasForked={false}
 				loadingZoltarQuestions={false}
@@ -120,7 +133,18 @@ describe('QuestionsView', () => {
 	test('reloads the current page when its request context changes', async () => {
 		const loadPage = mock(async () => undefined)
 		const view = (requestContextKey: number) => (
-			<QuestionsView canFork={false} hasForked={false} loadingZoltarQuestions={false} onActiveViewChange={() => undefined} onLoadZoltarQuestionPage={loadPage} onZoltarForkQuestionIdChange={() => undefined} requestContextKey={requestContextKey} zoltarQuestionPage={undefined} zoltarQuestionsError={undefined} />
+			<QuestionsView
+				zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
+				canFork={false}
+				hasForked={false}
+				loadingZoltarQuestions={false}
+				onActiveViewChange={() => undefined}
+				onLoadZoltarQuestionPage={loadPage}
+				onZoltarForkQuestionIdChange={() => undefined}
+				requestContextKey={requestContextKey}
+				zoltarQuestionPage={undefined}
+				zoltarQuestionsError={undefined}
+			/>
 		)
 		const renderedComponent = await renderIntoDocument(view(0))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -139,6 +163,7 @@ describe('QuestionsView', () => {
 		const loadPage = mock(async () => undefined)
 		const view = (requestContextKey: number, pageIndex: number, questionCount: bigint, questions: MarketDetails[]) => (
 			<QuestionsView
+				zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
 				canFork={false}
 				hasForked={false}
 				loadingZoltarQuestions={false}

@@ -124,11 +124,11 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>{forkAuctionCopy.loadedDepthEth}</span>
 					<div className='truth-auction-depth-y-ticks' aria-hidden='true'>
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-max' style={{ top: `${(getDepthYPosition(maxLoadedDepth) / CHART_HEIGHT) * 100}%` }}>
-							<CurrencyValue copyable={false} value={maxLoadedDepth} suffix={commonCopy.eth} />
+							<CurrencyValue value={maxLoadedDepth} suffix={commonCopy.eth} />
 						</span>
 						{midpointDepth === undefined ? undefined : (
 							<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-mid' style={{ top: `${(getDepthYPosition(midpointDepth) / CHART_HEIGHT) * 100}%` }}>
-								<CurrencyValue copyable={false} value={midpointDepth} suffix={commonCopy.eth} />
+								<CurrencyValue value={midpointDepth} suffix={commonCopy.eth} />
 							</span>
 						)}
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-min' style={{ top: `${(getDepthYPosition(0n) / CHART_HEIGHT) * 100}%` }}>

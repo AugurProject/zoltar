@@ -1,3 +1,4 @@
+import { SecurityPoolSummaryMetrics } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSummaryMetrics.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
@@ -10,6 +11,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -31,7 +33,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	const securityPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		feeEligibleUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -51,7 +53,7 @@ function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -197,37 +199,45 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(getSecurityPoolCard('Other universe pool')).toBeDefined()
 	})
 
-	test('renders oracle-priced ETH minting capacity separately from REP ownership', async () => {
+	test('labels the pool backing per ETH commitment with REP/ETH units', async () => {
+		const pool = createSecurityPool({ totalPoolHeldAttoRep: 60n * 10n ** 18n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n })
+		const renderedComponent = await renderIntoDocument(<SecurityPoolSummaryMetrics pool={pool} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const label = within(document.body).getByText('Pool-held REP per committed ETH')
+		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6 REP/ETH')
+	})
+
+	test('renders standing ETH commitments separately from REP backing', async () => {
 		const pool = createSecurityPool({
 			lastOraclePrice: 3n * 10n ** 18n,
 			lastOracleSettlementTimestamp: 1n,
 			settlementCollateralAttoEth: 5n * 10n ** 18n,
 			statoblastSecurityMultiplierBps: 20_000n,
-			totalCapacityOwnershipAttoRep: 80n * 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 80n * 10n ** 18n,
 		})
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ ≈ 13.33 ETH')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('/ ≈ 80.00 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ 80.00 ETH')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).not.toContain('/ ≈ 13.33 ETH')
 	})
 
-	test('does not price capacity from a never-reported Open Oracle value', async () => {
+	test('shows standing commitments when the oracle has never reported', async () => {
 		const pool = createSecurityPool({ lastOraclePrice: 0n, lastOracleSettlementTimestamp: 0n })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const card = getSecurityPoolCard('Will this resolve?')
 		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('Oracle price unavailable')
-		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ Unavailable')
+		expect((card.textContent ?? '').replace(/\s+/g, ' ')).toContain('/ 5.00 ETH')
 	})
 
 	test('shows exact small ETH values in browse cards instead of approximate zero', async () => {
 		const pool = createSecurityPool({
 			lastOraclePrice: 1n,
 			settlementCollateralAttoEth: 1_000_000_000_000_000n,
-			totalCapacityOwnershipAttoRep: 1n * 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 1n * 10n ** 18n,
 		})
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -241,13 +251,13 @@ describe('SecurityPoolsOverviewSection', () => {
 		const pool = createSecurityPool({
 			statoblastSecurityMultiplierBps: 20_000n,
 			totalPoolHeldAttoRep: 16n * 10n ** 18n,
-			totalCapacityOwnershipAttoRep: 10n * 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 10n * 10n ** 18n,
 			vaultCount: 1n,
 			vaults: [
 				{
 					disputeStakedAttoRep: 4n * 10n ** 18n,
 					vaultAttoRepBacking: 16n * 10n ** 18n,
-					capacityOwnershipAttoRep: 10n * 10n ** 18n,
+					underwritingLimitAttoEth: 10n * 10n ** 18n,
 					claimableFeesAttoEth: 0n,
 					vaultAddress: '0x0000000000000000000000000000000000000100',
 				},
@@ -403,6 +413,33 @@ describe('SecurityPoolsOverviewSection', () => {
 		await act(async () => {
 			await deferredPageLoad.promise
 		})
+	})
+
+	test('re-reads the visible page in place on each new block and shows its age', async () => {
+		const onLoadSecurityPoolPage = mock(() => undefined)
+		const onRefreshSecurityPoolPage = mock(() => undefined)
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolsOverviewSection
+				{...createProps({
+					onLoadSecurityPoolPage,
+					onRefreshSecurityPoolPage,
+					securityPoolPageFreshness: { refreshing: false, updatedAt: Date.now() - 15_000 },
+					securityPools: [createSecurityPool({ marketDetails: createMarketDetails({ title: 'Live pool' }) })],
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await waitFor(() => expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1))
+		expect(document.querySelector('.freshness-indicator')?.textContent).toContain('Updated 15s ago')
+
+		await act(() => {
+			appBlockWatcher.reportBlock(2_000n)
+			appBlockWatcher.reportBlock(2_001n)
+		})
+		expect(onRefreshSecurityPoolPage).toHaveBeenCalled()
+		// The in-place refresh does not repeat the explicit page load that owns the loading state.
+		expect(onLoadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		expect(within(document.body).getByText('Live pool')).not.toBeNull()
 	})
 
 	test('hides stale pool page data while an account-specific reload is pending', async () => {
@@ -728,6 +765,7 @@ describe('SecurityPoolsOverviewSection', () => {
 					hasLoadedSecurityPoolPage: false,
 					loadingSecurityPoolPage: false,
 					securityPoolPage: undefined,
+					securityPoolPageFreshness: { refreshing: false, updatedAt: undefined },
 					securityPools: [],
 				})}
 			/>,
@@ -737,6 +775,9 @@ describe('SecurityPoolsOverviewSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Refreshing pools.')).not.toBeNull()
 		expect(documentQueries.queryByText('None yet')).toBeNull()
+		// Skeleton rows hold the list's shape, and the freshness line is reserved so nothing moves when data arrives.
+		expect(document.querySelector('.skeleton-list[role="status"]')).not.toBeNull()
+		expect(document.querySelector('.freshness-indicator[data-state="pending"]')).not.toBeNull()
 	})
 
 	test('does not show the empty pool-list CTA before the first pool page loads', async () => {
@@ -1009,7 +1050,7 @@ describe('SecurityPoolsOverviewSection', () => {
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 5n,
+									underwritingLimitAttoEth: 5n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000501',
 								},
@@ -1046,21 +1087,21 @@ describe('SecurityPoolsOverviewSection', () => {
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 1n,
+									underwritingLimitAttoEth: 1n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000701',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 9n,
+									underwritingLimitAttoEth: 9n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000702',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 5n,
+									underwritingLimitAttoEth: 5n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000703',
 								},
@@ -1095,28 +1136,28 @@ describe('SecurityPoolsOverviewSection', () => {
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 8n,
+									underwritingLimitAttoEth: 8n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000601',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 7n,
+									underwritingLimitAttoEth: 7n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000602',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 6n,
+									underwritingLimitAttoEth: 6n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: '0x0000000000000000000000000000000000000603',
 								},
 								{
 									disputeStakedAttoRep: 0n,
 									vaultAttoRepBacking: 10n,
-									capacityOwnershipAttoRep: 1n,
+									underwritingLimitAttoEth: 1n,
 									claimableFeesAttoEth: 0n,
 									vaultAddress: viewerVaultAddress,
 								},

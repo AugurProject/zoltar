@@ -17,7 +17,7 @@ function VaultSelectionHarness({ exists = true, loaded = true, connected = true,
 	const [loadedOwner, setLoadedOwner] = useState(zeroAddress)
 	const details = exists
 		? createSecurityVaultDetails({ vaultAddress: loadedOwner, vaultAttoRepBacking: (loadedOwner === otherOwner ? 17n : 5n) * 10n ** 18n })
-		: createSecurityVaultDetails({ vaultAddress: loadedOwner, capacityOwnershipAttoRep: 0n, claimableFeesAttoEth: 0n, vaultAttoRepBacking: 0n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n })
+		: createSecurityVaultDetails({ vaultAddress: loadedOwner, underwritingLimitAttoEth: 0n, claimableFeesAttoEth: 0n, vaultAttoRepBacking: 0n, disputeStakedAttoRep: 0n, badDebtAttoEth: 0n })
 	return (
 		<>
 			<SecurityPoolWorkflowSection

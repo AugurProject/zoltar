@@ -71,6 +71,10 @@
 			"bun": "./ts/tests/testUtils/transactionActionButton.ts",
 			"default": "./js/tests/testUtils/transactionActionButton.js"
 		},
+		"./app/components/AccountMenu.js": {
+			"bun": "./ts/app/components/AccountMenu.tsx",
+			"default": "./js/app/components/AccountMenu.js"
+		},
 		"./app/components/AppSettingsMenu.js": {
 			"bun": "./ts/app/components/AppSettingsMenu.tsx",
 			"default": "./js/app/components/AppSettingsMenu.js"
@@ -99,9 +103,17 @@
 			"bun": "./ts/components/NoticeStack.tsx",
 			"default": "./js/components/NoticeStack.js"
 		},
+		"./components/SimulationStripSummary.js": {
+			"bun": "./ts/components/SimulationStripSummary.tsx",
+			"default": "./js/components/SimulationStripSummary.js"
+		},
 		"./components/SimulationBanner.js": {
 			"bun": "./ts/components/SimulationBanner.tsx",
 			"default": "./js/components/SimulationBanner.js"
+		},
+		"./components/Skeleton.js": {
+			"bun": "./ts/components/Skeleton.tsx",
+			"default": "./js/components/Skeleton.js"
 		},
 		"./components/TabNavigation.js": {
 			"bun": "./ts/components/TabNavigation.tsx",
@@ -110,6 +122,10 @@
 		"./components/TransactionPresentationNotice.js": {
 			"bun": "./ts/components/TransactionPresentationNotice.tsx",
 			"default": "./js/components/TransactionPresentationNotice.js"
+		},
+		"./components/UpdatedAgo.js": {
+			"bun": "./ts/components/UpdatedAgo.tsx",
+			"default": "./js/components/UpdatedAgo.js"
 		},
 		"./tests/actionLauncherButton.test.js": {
 			"bun": "./ts/tests/actionLauncherButton.test.tsx",
@@ -182,6 +198,10 @@
 		"./tests/errorNotice.test.js": {
 			"bun": "./ts/tests/errorNotice.test.tsx",
 			"default": "./js/tests/errorNotice.test.js"
+		},
+		"./tests/freshness.test.js": {
+			"bun": "./ts/tests/freshness.test.tsx",
+			"default": "./js/tests/freshness.test.js"
 		},
 		"./tests/headerToolbar.test.js": {
 			"bun": "./ts/tests/headerToolbar.test.tsx",
@@ -946,6 +966,26 @@
 		"./tests/app/overviewPanels.test.js": {
 			"bun": "./ts/tests/app/overviewPanels.test.tsx",
 			"default": "./js/tests/app/overviewPanels.test.js"
+		},
+		"./components/UniverseLink.js": {
+			"bun": "./ts/components/UniverseLink.tsx",
+			"default": "./js/components/UniverseLink.js"
+		},
+		"./components/UniverseNames.js": {
+			"bun": "./ts/components/UniverseNames.tsx",
+			"default": "./js/components/UniverseNames.js"
+		},
+		"./components/UniverseBrowser.js": {
+			"bun": "./ts/components/UniverseBrowser.tsx",
+			"default": "./js/components/UniverseBrowser.js"
+		},
+		"./components/UniverseSwitcher.js": {
+			"bun": "./ts/components/UniverseSwitcher.tsx",
+			"default": "./js/components/UniverseSwitcher.js"
+		},
+		"./tests/components/universeBrowser.test.js": {
+			"bun": "./ts/tests/components/universeBrowser.test.tsx",
+			"default": "./js/tests/components/universeBrowser.test.js"
 		}
 	},
 	"version": "1.0.0"

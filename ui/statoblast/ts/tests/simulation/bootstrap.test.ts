@@ -163,7 +163,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 	}
 	const poolPlan = scenario === 'security-pool' ? [{ question: 'Will this resolve?' }] : [{ question: 'Will this resolve? (securitypoolx2 #1)' }, { question: 'Will this resolve? (securitypoolx2 #2)' }]
 	const repDeposits: Record<Address, Record<Address, bigint>> = {}
-	const capacityOwnershipAttoReps: Record<Address, Record<Address, bigint>> = {}
+	const underwritingLimitAttoEths: Record<Address, Record<Address, bigint>> = {}
 	const savedTargets: Record<Address, Record<Address, bigint>> = {}
 	const pendingOperations: Record<Address, { targetVault: Address; amount: bigint; operationId: bigint }> = {}
 	const pendingReportIds: Record<Address, bigint> = {}
@@ -179,12 +179,12 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		repDeposits[poolAddress] = {
 			[primaryVault]: scenario === 'security-pool' ? primaryVaultRepDeposit : x2PrimaryVaultRepDeposit,
 		}
-		capacityOwnershipAttoReps[poolAddress] = {
+		underwritingLimitAttoEths[poolAddress] = {
 			[primaryVault]: 0n,
 		}
 		if (secondaryVault !== undefined) {
 			repDeposits[poolAddress][secondaryVault] = x2SecondaryVaultRepDeposit
-			capacityOwnershipAttoReps[poolAddress][secondaryVault] = 0n
+			underwritingLimitAttoEths[poolAddress][secondaryVault] = 0n
 		}
 	}
 
@@ -232,13 +232,13 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 		return nextManager
 	}
 
-	const settleCapacityOwnershipAttoRep = (managerAddress: Address, accountAddress: Address) => {
+	const settleUnderwritingLimitAttoEth = (managerAddress: Address, accountAddress: Address) => {
 		const operation = pendingOperations[managerAddress]
 		if (operation === undefined || operation.targetVault !== accountAddress) return
 		const ownerPool = managerToPool.get(managerAddress)
 		if (ownerPool === undefined) return
-		capacityOwnershipAttoReps[ownerPool] ??= {}
-		capacityOwnershipAttoReps[ownerPool][accountAddress] = operation.amount
+		underwritingLimitAttoEths[ownerPool] ??= {}
+		underwritingLimitAttoEths[ownerPool][accountAddress] = operation.amount
 		delete pendingOperations[managerAddress]
 		delete pendingReportIds[managerAddress]
 	}
@@ -297,20 +297,23 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			state.callLog.depositRepToVaultToSecurityPool += 1
 			const vaultAddress = vaultAddressByPool[poolAddress]?.find((vaultAddressCandidate: Address) => vaultAddressCandidate === client.account) ?? vaultAddressByPool[poolAddress]?.[0]
 			if (vaultAddress !== undefined) {
-				const savedTarget = savedTargets[poolAddress]?.[vaultAddress]
-				if (savedTarget !== undefined && savedTarget !== targetHealthFactorBps) throw new Error('Use saved vault target')
 				savedTargets[poolAddress] ??= {}
 				savedTargets[poolAddress][vaultAddress] = targetHealthFactorBps
 				repDeposits[poolAddress] ??= {}
 				repDeposits[poolAddress][vaultAddress] = amount
-				capacityOwnershipAttoReps[poolAddress] ??= {}
-				capacityOwnershipAttoReps[poolAddress][vaultAddress] = (amount * 20_000n) / targetHealthFactorBps
 			}
 			return {
 				action: 'depositRepToVault',
 				hash: '0x01',
 			} as never
 		}),
+		setUnderwritingLimit: mock(async (client: { account?: Address }, poolAddress: Address, limitAttoEth: bigint) => {
+			if (client.account === undefined) throw new Error('Missing vault owner')
+			underwritingLimitAttoEths[poolAddress] ??= {}
+			underwritingLimitAttoEths[poolAddress][client.account] = limitAttoEth
+			return { action: 'setVaultUnderwritingLimit', hash: '0x01' }
+		}),
+		certifyVaultCoverage: mock(async () => ({ action: 'certifyVaultCoverage', hash: '0x01' })),
 		executeOracleManagerStagedOperation: mock(
 			async (client: { writeContract: (request: { address: Address; args?: unknown[]; functionName: string; gas?: bigint }) => Promise<`0x${string}`>; waitForTransactionReceipt: (request: { hash: `0x${string}` }) => Promise<unknown> }, managerAddress: Address, operationId: bigint) => {
 				const hash = await client.writeContract({
@@ -356,10 +359,10 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			const parentPools = poolPlan.map((_pool, index) => {
 				const securityPoolAddress = getPoolAddressForMarket(index)
 				const vaultAddresses = vaultAddressByPool[securityPoolAddress] ?? []
-				const vaultRows: Array<{ vaultAddress: Address; vaultAttoRepBacking: bigint; capacityOwnershipAttoRep: bigint }> = vaultAddresses.map(vaultAddress => ({
+				const vaultRows: Array<{ vaultAddress: Address; vaultAttoRepBacking: bigint; underwritingLimitAttoEth: bigint }> = vaultAddresses.map(vaultAddress => ({
 					vaultAddress,
 					vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
-					capacityOwnershipAttoRep: capacityOwnershipAttoReps[securityPoolAddress]?.[vaultAddress] ?? 0n,
+					underwritingLimitAttoEth: underwritingLimitAttoEths[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				}))
 				return {
 					marketDetails: {
@@ -370,7 +373,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					securityPoolAddress,
 					vaultCount: BigInt(vaultRows.length),
 					totalPoolHeldAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.vaultAttoRepBacking, 0n),
-					totalCapacityOwnershipAttoRep: vaultRows.reduce<bigint>((sum, row) => sum + row.capacityOwnershipAttoRep, 0n),
+					totalUnderwritingLimitAttoEth: vaultRows.reduce<bigint>((sum, row) => sum + row.underwritingLimitAttoEth, 0n),
 					vaults: vaultRows,
 				} as never
 			})
@@ -383,7 +386,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 					securityPoolAddress: yesChildPoolAddress,
 					systemState: 'forkTruthAuction',
 					totalPoolHeldAttoRep: 0n,
-					totalCapacityOwnershipAttoRep: 0n,
+					totalUnderwritingLimitAttoEth: 0n,
 					vaultCount: 0n,
 					vaults: [],
 				} as never,
@@ -477,9 +480,9 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				totalRepBackingUnits: 0n,
 				vaultAttoRepBacking: repDeposits[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				repToken: profile.genesisRepTokenAddress,
-				capacityOwnershipAttoRep: capacityOwnershipAttoReps[securityPoolAddress]?.[vaultAddress] ?? 0n,
+				underwritingLimitAttoEth: underwritingLimitAttoEths[securityPoolAddress]?.[vaultAddress] ?? 0n,
 				securityPoolAddress,
-				totalCapacityOwnershipAttoRep: Object.values(capacityOwnershipAttoReps[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
+				totalUnderwritingLimitAttoEth: Object.values(underwritingLimitAttoEths[securityPoolAddress] ?? {}).reduce<bigint>((sum, amount) => sum + (typeof amount === 'bigint' ? amount : 0n), 0n),
 				claimableFeesAttoEth: 0n,
 				universeId: 0n,
 				vaultAddress,
@@ -659,7 +662,7 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 				state.callLog.writeContract += 1
 				const pending = pendingOperations[address]
 				if (pending !== undefined) {
-					settleCapacityOwnershipAttoRep(address, pending.targetVault)
+					settleUnderwritingLimitAttoEth(address, pending.targetVault)
 				}
 				return '0x01'
 			},
@@ -1040,7 +1043,7 @@ describe('simulation bootstrap', () => {
 		expect(writeCalls.length).toBeGreaterThan(0)
 	})
 
-	test('boots the securitypoolx2 simulation path with secondary vault capacity ownership execution', async () => {
+	test('boots the securitypoolx2 simulation path with secondary vault underwriting commitments execution', async () => {
 		const profile = createBaselineProfile()
 		const { applyScenario, createWriteClient, getDeploymentSteps, memoryClient, state, writeCalls } = createMockedBootstrapDependencies({
 			accounts: [MOCK_PRIMARY_ACCOUNT, MOCK_SECONDARY_ACCOUNT],

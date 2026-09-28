@@ -53,7 +53,7 @@ export const ERC20_TRANSFER_ABI = 'event Transfer(address indexed from, address 
 const VAULT_MIGRATION_SIGNATURE = 'VaultMigrationCheckpoint(address,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)'
 
 const VAULT_MIGRATION_ABI =
-	'event VaultMigrationCheckpoint(address indexed parentPool, address indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentCapacityOwnershipAttoRep, uint256 resultingChildRepBackingUnits, uint256 resultingChildCapacityOwnershipAttoRep, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalCapacityOwnershipAttoRep, uint256 resultingChildTotalCapacityOwnershipAttoRep, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth)'
+	'event VaultMigrationCheckpoint(address indexed parentPool, address indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentUnderwritingLimitAttoEth, uint256 resultingChildRepBackingUnits, uint256 resultingChildUnderwritingLimitAttoEth, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalUnderwritingLimitAttoEth, uint256 resultingChildTotalUnderwritingLimitAttoEth, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth)'
 
 export const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 
@@ -364,7 +364,7 @@ export function stagedDownstreamPreflight(pool: PoolSnapshot, staged: EcosystemS
 			args: [staged.operator, amount(staged.amount)],
 			caller: staged.coordinator,
 			expectedResult: staged.executionExpectedResult,
-			functionName: staged.operation === 1 ? 'withdrawRepFromVault' : 'adjustVaultBackingFactor',
+			functionName: staged.operation === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit',
 			label: `${staged.operation === 1 ? 'withdraw REP' : 'adjust backing target'} for staged operation ${staged.id}`,
 			to: pool.address,
 		})

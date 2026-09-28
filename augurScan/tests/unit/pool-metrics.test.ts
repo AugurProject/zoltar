@@ -19,7 +19,7 @@ test('derives pool metrics from one tagged snapshot without treating missing val
 		settlementCollateralAttoEth: String(42n * 10n ** 18n),
 		currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
 		totalPoolHeldAttoRep: String(120n * 10n ** 18n),
-		totalCapacityOwnershipAttoRep: String(100n * 10n ** 18n),
+		totalUnderwritingLimitAttoEth: String(100n * 10n ** 18n),
 		securityMultiplierBps: '25000',
 	})
 	expect(rows).toContainEqual(['Annual open-interest fee', '0 %'])
@@ -27,7 +27,7 @@ test('derives pool metrics from one tagged snapshot without treating missing val
 	expect(rows).toContainEqual(['Minting capacity', '50 ETH'])
 	expect(rows).toContainEqual(['Capacity used', '84 %'])
 	expect(rows).toContainEqual(['Pool-held REP', '120 REP'])
-	expect(rows).toContainEqual(['REP per capacity', '1.2 ×'])
+	expect(rows).toContainEqual(['REP per committed ETH', '1.2 REP/ETH'])
 	expect(rows).toContainEqual(['Security multiplier', '2.5 ×'])
 	expect(poolSummaryMetrics({}).every(([, value]) => value === 'Unavailable')).toBe(true)
 	expect(poolSummaryMetrics({ settlementCollateralAttoEth: String(6n), currentMintingCapacityAttoEth: String(5n) })).toContainEqual(['Capacity used', '120 %'])
@@ -38,7 +38,7 @@ test('renders the production tagged pool snapshot without renaming its fields', 
 	const pool = getAddress('0x1111111111111111111111111111111111111111')
 	const values: Readonly<Record<string, unknown>> = {
 		settlementCollateralAttoEth: 42n * 10n ** 18n,
-		totalCapacityOwnershipAttoRep: 100n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 100n * 10n ** 18n,
 		totalRepBackingUnits: 120n * 10n ** 18n,
 		totalClaimableVaultFeesAttoEth: 1n,
 		totalAccruedFeesAttoEth: 1n,
@@ -65,7 +65,7 @@ test('renders the production tagged pool snapshot without renaming its fields', 
 		['Minting capacity', '50 ETH'],
 		['Capacity used', '84 %'],
 		['Pool-held REP', '120 REP'],
-		['REP per capacity', '1.2 ×'],
+		['REP per committed ETH', '1.2 REP/ETH'],
 		['Security multiplier', '2.5 ×'],
 	])
 })

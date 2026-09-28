@@ -4,11 +4,12 @@ import { createDeferred } from '../testUtils/deferred.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
-import { describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { useOnchainState, type UseOnchainStateDependencies } from '../../app/hooks/useOnchainState.js'
+import { appBlockWatcher } from '../../lib/dataRefresh.js'
 import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import { formatTimestampWithRelative } from '../../lib/formatters.js'
 import type { DeploymentStep } from '../../types/contracts.js'
@@ -193,26 +194,33 @@ function createHarness(dependencies: UseOnchainStateDependencies, onRender: (sta
 	}
 }
 
+// Records the chain clock's block-watcher registrations without running its timers.
+function trackBlockWatcherStarts() {
+	const starts: number[] = []
+	let stops = 0
+	const spy = spyOn(appBlockWatcher, 'start').mockImplementation((_poll, intervalMilliseconds) => {
+		starts.push(intervalMilliseconds)
+		return () => {
+			stops += 1
+		}
+	})
+	return { restore: () => spy.mockRestore(), starts, stops: () => stops }
+}
+
 function requireHookState(state: UseOnchainStateState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
 	return state
 }
 
 let cleanupRenderedComponent: (() => Promise<void>) | undefined
-let originalSetInterval: typeof window.setInterval
-let originalClearInterval: typeof window.clearInterval
 
 installDomTestLifecycle({
 	beforeTest: () => {
-		originalSetInterval = window.setInterval
-		originalClearInterval = window.clearInterval
 		mock.restore()
 	},
 	afterTest: async () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
-		if (typeof window !== 'undefined' && originalSetInterval !== undefined) window.setInterval = originalSetInterval
-		if (typeof window !== 'undefined' && originalClearInterval !== undefined) window.clearInterval = originalClearInterval
 		mock.restore()
 		resetActiveEnvironmentForTesting()
 	},
@@ -331,24 +339,8 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('replaces chain-clock polling when the active environment nonce changes', async () => {
-		const intervalHandlers: TimerHandler[] = []
-		const clearedIntervals: number[] = []
-		const originalSetInterval = window.setInterval
-		const originalClearInterval = window.clearInterval
-		Object.defineProperty(window, 'setInterval', {
-			configurable: true,
-			value: (handler: TimerHandler) => {
-				intervalHandlers.push(handler)
-				return intervalHandlers.length
-			},
-		})
-		Object.defineProperty(window, 'clearInterval', {
-			configurable: true,
-			value: (handle: number | undefined) => {
-				if (handle !== undefined) clearedIntervals.push(handle)
-			},
-		})
+	test('replaces the chain-clock block poller when the active environment nonce changes', async () => {
+		const watcher = trackBlockWatcherStarts()
 		const accountA = getAddress('0x00000000000000000000000000000000000000a1')
 		const accountB = getAddress('0x00000000000000000000000000000000000000b2')
 		const { backend: backendA } = createBackend({
@@ -391,26 +383,19 @@ describe('useOnchainState (integration)', () => {
 			cleanupRenderedComponent = renderedComponent.cleanup
 			await waitFor(() => {
 				requireHookState(hookState)
-				expect(intervalHandlers.length).toBe(1)
+				expect(watcher.starts.length).toBe(1)
 			})
-			expect(intervalHandlers.length).toBe(1)
+			expect(watcher.starts.length).toBe(1)
 
 			resetEnvironment = installActiveEnvironmentForTesting(backendB)
 			fireEvent.click(within(renderedComponent.container).getByRole('button', { name: 'Refresh environment' }))
 
-			await waitFor(() => expect(intervalHandlers.length).toBe(2))
-			expect(clearedIntervals).toEqual([1])
-			expect(intervalHandlers.length).toBe(2)
+			await waitFor(() => expect(watcher.starts.length).toBe(2))
+			expect(watcher.stops()).toBe(1)
+			expect(watcher.starts).toEqual([12_000, 12_000])
 			resetEnvironment()
 		} finally {
-			Object.defineProperty(window, 'setInterval', {
-				configurable: true,
-				value: originalSetInterval,
-			})
-			Object.defineProperty(window, 'clearInterval', {
-				configurable: true,
-				value: originalClearInterval,
-			})
+			watcher.restore()
 		}
 	})
 
@@ -1152,6 +1137,36 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('neither reads nor reports WETH for an application that does not use it', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a9')
+		const readClient = {
+			getBalance: async () => 7n,
+			getBlock: async () => ({ number: 1n, timestamp: 2n }),
+			getChainId: async () => 1,
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const loadErc20Balance = mock(async () => {
+			throw new Error('weth RPC failed')
+		})
+		const dependencies = createOnchainStateDependencies({ loadErc20Balance })
+		delete dependencies.getWethAddress
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(7n))
+		expect(loadErc20Balance).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBeUndefined()
+		expect(requireHookState(hookState).errorMessages).toEqual([])
+		resetEnvironment()
+	})
+
 	test('handles bootstrap wait-success and bootstrap wait-failure paths', async () => {
 		const readySignal = createDeferred<void>()
 		const { backend } = createBackend({
@@ -1717,11 +1732,8 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
-	test('sets and clears chain clock interval when backend is ready', async () => {
-		const setIntervalMock = mock((_callback: () => void, _ms: number) => 42)
-		const clearIntervalMock = mock((_id: number | NodeJS.Timeout) => undefined)
-		window.setInterval = setIntervalMock as unknown as typeof window.setInterval
-		window.clearInterval = clearIntervalMock as unknown as typeof window.clearInterval
+	test('starts and stops the chain-clock block poller when backend is ready', async () => {
+		const watcher = trackBlockWatcherStarts()
 
 		const { backend } = createBackend({
 			isBootstrapped: true,
@@ -1743,10 +1755,11 @@ describe('useOnchainState (integration)', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await waitFor(() => expect(requireHookState(hookState).environmentReady).toBe(true))
-		await waitFor(() => expect(setIntervalMock).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(watcher.starts).toEqual([12_000]))
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
-		expect(clearIntervalMock).toHaveBeenCalledTimes(1)
+		expect(watcher.stops()).toBe(1)
+		watcher.restore()
 		resetEnvironment()
 	})
 
@@ -1796,8 +1809,7 @@ describe('useOnchainState (integration)', () => {
 	})
 
 	test('can disable chain-clock polling while still loading deployment statuses and balances', async () => {
-		const setIntervalMock = mock((_callback: () => void, _ms: number) => 42)
-		window.setInterval = setIntervalMock as unknown as typeof window.setInterval
+		const watcher = trackBlockWatcherStarts()
 		const account = getAddress('0x00000000000000000000000000000000000000a7')
 		let getBlockCalls = 0
 		const readClient = {
@@ -1848,7 +1860,8 @@ describe('useOnchainState (integration)', () => {
 		expect(loadDeploymentStatusOracleSnapshot).toHaveBeenCalledTimes(1)
 		expect(loadErc20Balance).toHaveBeenCalledTimes(1)
 		expect(getBlockCalls).toBe(0)
-		expect(setIntervalMock).toHaveBeenCalledTimes(0)
+		expect(watcher.starts).toEqual([])
+		watcher.restore()
 		resetEnvironment()
 	})
 

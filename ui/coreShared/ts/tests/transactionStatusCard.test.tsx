@@ -51,7 +51,7 @@ describe('TransactionStatusCard', () => {
 	test('renders follow-up actions when provided', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TransactionStatusCard
-				title='Capacity ownership Queued'
+				title='Underwriting commitments Queued'
 				badge={<Badge tone='warning'>Queued</Badge>}
 				actions={
 					<button className='secondary' type='button'>

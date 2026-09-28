@@ -142,7 +142,8 @@ void describe('trading helpers', () => {
 			estimateMintCheckpoint({
 				currentRetentionRate: 900_000_000_000_000_000n,
 				currentTimestamp: 2n,
-				feeEligibleCapacityOwnershipAttoRep: 5n * TOKEN_PRECISION,
+				totalUnderwritingLimitAttoEth: 5n * TOKEN_PRECISION,
+				feeEligibleUnderwritingLimitAttoEth: 5n * TOKEN_PRECISION,
 				feeEndTimestamp: 10n,
 				feeIndexRemainder: 0n,
 				lastUpdatedFeeAccumulator: 1n,
@@ -152,12 +153,12 @@ void describe('trading helpers', () => {
 		).toEqual({ estimatedRetentionFeeAttoEth: TOKEN_PRECISION, settlementCollateralAfterFeesAttoEth: 9n * TOKEN_PRECISION })
 	})
 
-	void test('converts REP capacity ownership into live ETH minting capacity', () => {
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(13_333_333_333_333_333_333n)
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(6_666_666_666_666_666_666n)
+	void test('reports standing ETH commitments independently of REP pricing', () => {
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(80n * 10n ** 18n)
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(80n * 10n ** 18n)
 		expect(calculateMintingCapacityAttoEth(0n, 3n * 10n ** 18n, 20_000n)).toBe(0n)
 		expect(calculateMintingCapacityAttoEth(0n, undefined, 20_000n)).toBe(0n)
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBeUndefined()
+		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBe(80n * 10n ** 18n)
 	})
 
 	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
@@ -166,13 +167,13 @@ void describe('trading helpers', () => {
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
 	})
 
-	void test('formats Statoblast security multiplier basis points as fractional x values', () => {
-		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2')
-		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5')
-		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001')
+	void test('formats Statoblast security multiplier basis points with the multiplication sign', () => {
+		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2×')
+		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5×')
+		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001×')
 	})
 
-	void test('detects pools that have REP backing but no active capacity ownership', () => {
+	void test('detects pools that have REP backing but no active underwriting commitments', () => {
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 0n)).toBe(true)
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(20n * 10n ** 18n, 1n)).toBe(false)
 		expect(hasRepBackedPoolWithNoActiveCapacityOwnership(0n, 0n)).toBe(false)
@@ -288,7 +289,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 20n * 10n ** 18n,
 				mintingCapacityAttoEth: 0n,
 			}),
-		).toBe('No mint capacity. No active capacity ownership.')
+		).toBe('No mint capacity. No active underwriting commitments.')
 
 		expect(
 			getTradingMintGuardMessage({

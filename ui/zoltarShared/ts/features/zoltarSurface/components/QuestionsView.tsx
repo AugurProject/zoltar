@@ -1,7 +1,9 @@
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -13,17 +15,25 @@ import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import type { MarketRouteContentProps } from '../../types.js'
+import type { MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ZoltarView } from '../../types.js'
 import { QUESTION_PAGE_SIZE, formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 
-type QuestionsViewProps = Pick<MarketRouteContentProps, 'loadingZoltarQuestions' | 'onActiveViewChange' | 'onLoadZoltarQuestionPage' | 'onZoltarForkQuestionIdChange' | 'zoltarQuestionPage' | 'zoltarQuestionsError'> & {
+type QuestionsViewProps = {
+	zoltarQuestionsFreshness: DataFreshness
+	loadingZoltarQuestions: boolean
+	onActiveViewChange: (view: ZoltarView) => void
+	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
+	onZoltarForkQuestionIdChange: (questionId: string) => void
+	zoltarQuestionPage: MarketDetailsPage | undefined
+	zoltarQuestionsError: string | undefined
 	canFork: boolean
 	hasForked: boolean
 	requestContextKey: number
 }
 
-export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError }: QuestionsViewProps) {
+export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError, zoltarQuestionsFreshness }: QuestionsViewProps) {
 	const [pageIndex, setPageIndex] = useState(0)
 	const [retryRequestNonce, setRetryRequestNonce] = useState(0)
 	const [searchText, setSearchText] = useState('')
@@ -52,14 +62,17 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 			<RouteHeader description={canFork ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse} title={marketCopy.browseQuestions} />
 			<SectionBlock
 				actions={
-					<PaginationControls
-						hasNextPage={getHasNextPaginationPage(resolvedPageIndex, pageCount)}
-						hasPreviousPage={resolvedPageIndex > 0}
-						loading={loadingZoltarQuestions}
-						onNextPage={() => setPageIndex(current => current + 1)}
-						onPreviousPage={() => setPageIndex(current => Math.max(0, current - 1))}
-						summary={formatPaginationSummary(resolvedPageIndex, pageCount)}
-					/>
+					<>
+						<UpdatedAgo {...zoltarQuestionsFreshness} />
+						<PaginationControls
+							hasNextPage={getHasNextPaginationPage(resolvedPageIndex, pageCount)}
+							hasPreviousPage={resolvedPageIndex > 0}
+							loading={loadingZoltarQuestions}
+							onNextPage={() => setPageIndex(current => current + 1)}
+							onPreviousPage={() => setPageIndex(current => Math.max(0, current - 1))}
+							summary={formatPaginationSummary(resolvedPageIndex, pageCount)}
+						/>
+					</>
 				}
 				title={marketCopy.questions}
 				variant='plain'
@@ -76,7 +89,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 						</button>
 					</div>
 				)}
-				{loadingZoltarQuestions && currentPage === undefined ? <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: marketCopy.loadingQuestions }} /> : undefined}
+				{loadingZoltarQuestions && currentPage === undefined ? <SkeletonList label={marketCopy.loadingQuestions} /> : undefined}
 				{!loadingZoltarQuestions && currentPage !== undefined && currentPage.questions.length === 0 ? (
 					<EmptyState
 						title={marketCopy.noQuestions}
@@ -101,7 +114,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 										disabled={hasForked}
 										onClick={() => {
 											onZoltarForkQuestionIdChange(question.questionId)
-											onActiveViewChange('universes')
+											onActiveViewChange('fork')
 										}}
 									>
 										{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}

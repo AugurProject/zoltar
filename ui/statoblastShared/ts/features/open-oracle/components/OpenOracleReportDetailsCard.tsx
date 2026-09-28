@@ -1,5 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -74,24 +75,27 @@ function useLiveSettlementTime(report: OpenOracleReportDetails | undefined, load
 	const [clock, setClock] = useState<{ key: string | undefined; elapsedSeconds: bigint }>({ key: undefined, elapsedSeconds: 0n })
 	const refresh = useRef({ loading, onLoadReport })
 	const lastRefresh = useRef<{ key: string; at: number } | undefined>(undefined)
+	// The clock counts from when this report was read, so pausing it in a hidden tab loses no elapsed time.
+	const startedAt = useRef<{ key: string | undefined; at: number }>({ key: undefined, at: Date.now() })
+	if (startedAt.current.key !== reportKey) startedAt.current = { key: reportKey, at: Date.now() }
+	const visible = usePageVisible()
 	refresh.current = { loading, onLoadReport }
 	useEffect(() => {
-		setClock(current => (current.key === reportKey && current.elapsedSeconds === 0n ? current : { key: reportKey, elapsedSeconds: 0n }))
-		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n) return
+		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n || !visible) return
 		const readyAt = report.reportTimestamp + report.settlementTime
 		const refreshKey = `${report.reportId}:${report.reportTimestamp}`
-		const startedAt = Date.now()
-		const interval = setInterval(() => {
+		const tick = () => {
 			const now = Date.now()
-			const elapsedSeconds = BigInt(Math.floor((now - startedAt) / 1000))
+			const elapsedSeconds = BigInt(Math.floor((now - startedAt.current.at) / 1000))
 			setClock(current => (current.key === reportKey && current.elapsedSeconds === elapsedSeconds ? current : { key: reportKey, elapsedSeconds }))
 			if (report.currentTime + elapsedSeconds < readyAt || refresh.current.loading) return
 			if (lastRefresh.current?.key === refreshKey && now - lastRefresh.current.at < 5000) return
 			lastRefresh.current = { key: refreshKey, at: now }
 			refresh.current.onLoadReport(report.reportId.toString())
-		}, 250)
+		}
+		const interval = setInterval(tick, 250)
 		return () => clearInterval(interval)
-	}, [reportKey, report?.timeType])
+	}, [reportKey, report?.timeType, visible])
 	return report !== undefined && report.timeType ? report.currentTime + (clock.key === reportKey ? clock.elapsedSeconds : 0n) : report?.currentTime
 }
 
@@ -209,7 +213,7 @@ export function OpenOracleReportDetailsCard({
 			</p>
 		) : undefined
 	} else {
-		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} copyable={false} />))}</MetricGrid>
+		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>
 	}
 	const reportTransactionContext = [
 		{ label: openOracleCopy.reportId, value: openOracleReportDetails.reportId.toString() },
@@ -227,7 +231,7 @@ export function OpenOracleReportDetailsCard({
 					{ label: openOracleCopy.reporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 					{
 						label: openOracleCopy.price,
-						value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />,
+						value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
 					},
 				]}
 			/>
@@ -290,31 +294,31 @@ export function OpenOracleReportDetailsCard({
 					{renderReportSection(openOracleCopy.reportAmounts, [
 						{
 							label: openOracleCopy.formatExactTokenRequiredLabel(openOracleReportDetails.token1Symbol),
-							value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.exactToken1Report} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} />,
 						},
 						{
 							label: openOracleCopy.formatCurrentAmount1Label(openOracleReportDetails.token1Symbol),
-							value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.currentAmount1} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} />,
 						},
 						{
 							label: openOracleCopy.formatCurrentAmount2Label(openOracleReportDetails.token2Symbol),
-							value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.currentAmount2} suffix={openOracleReportDetails.token2Symbol} units={openOracleReportDetails.token2Decimals} />,
 						},
 						{
 							label: openOracleCopy.price,
-							value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
 						},
 						{
 							label: openOracleCopy.fee,
-							value: <CurrencyValue value={openOracleReportDetails.fee} suffix={commonCopy.eth} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.fee} suffix={commonCopy.eth} />,
 						},
 						{
 							label: openOracleCopy.settlerReward,
-							value: <CurrencyValue value={openOracleReportDetails.settlerRewardAttoEth} suffix={commonCopy.eth} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.settlerRewardAttoEth} suffix={commonCopy.eth} />,
 						},
 						{
 							label: openOracleCopy.escalationHalt,
-							value: <CurrencyValue value={openOracleReportDetails.escalationHalt} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} copyable={false} />,
+							value: <CurrencyValue value={openOracleReportDetails.escalationHalt} suffix={openOracleReportDetails.token1Symbol} units={openOracleReportDetails.token1Decimals} />,
 						},
 					])}
 				</ReadOnlyDetailAccordion>

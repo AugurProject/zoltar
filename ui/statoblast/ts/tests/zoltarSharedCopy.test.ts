@@ -15,10 +15,10 @@ test('market and Open Oracle values own their complete spacing and units', () =>
 
 test('dynamic value and unit copy uses nonbreaking separators', () => {
 	expect(commonCopy.formatApproveTokenAmount('12', 'ETH')).toBe('Approve 12\u00a0ETH')
-	expect(zoltarCopy.formatAddMigrationRepDetail('12')).toContain('12\u00a0REP')
-	expect(zoltarCopy.formatMigrationRepShortfall('12')).toContain('12\u00a0more\u00a0REP')
-	expect(zoltarCopy.formatMigrationBalanceExceeded('12', '8', '4')).toContain('12\u00a0REP')
-	expect(zoltarCopy.formatMigrationBalanceExceeded('12', '8', '4')).toContain('4\u00a0wallet\u00a0REP')
+	expect(zoltarCopy.formatUseAllRep('12')).toBe('Use all 12\u00a0REP')
+	expect(zoltarCopy.formatMigrationAmountExceeded('12')).toContain('12\u00a0REP')
+	expect(zoltarCopy.formatMigrationApprovalRequired('12')).toContain('12\u00a0REP')
+	expect(zoltarCopy.formatMigrationSummary('12', 'Yes, No')).toBe('Migrate 12\u00a0REP to: Yes, No')
 })
 
 test('transaction actions and pending labels use sentence case independently of titles', () => {

@@ -336,11 +336,11 @@ describe('SecurityPoolSection', () => {
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
 		for (const [value, message] of [
-			['', 'Enter a Statoblast security multiplier of at least 1.0002x.'],
-			['1', 'Statoblast security multiplier must be at least 1.0002x.'],
-			['1.0001', 'Statoblast security multiplier must be at least 1.0002x.'],
-			['bad', 'Enter a multiplier in x with at most 4 decimal places.'],
-			['2.00001', 'Enter a multiplier in x with at most 4 decimal places.'],
+			['', 'Enter a Statoblast security multiplier of at least 1.0002×.'],
+			['1', 'Statoblast security multiplier must be at least 1.0002×.'],
+			['1.0001', 'Statoblast security multiplier must be at least 1.0002×.'],
+			['bad', 'Enter a multiplier with at most 4 decimal places.'],
+			['2.00001', 'Enter a multiplier with at most 4 decimal places.'],
 		] as const) {
 			const renderedComponent = await renderIntoDocument(
 				h(
@@ -840,7 +840,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...initialProps, activeUniverseId: 2n }), renderedComponent.container)
 		})
 
-		const warning = within(document.body).getByText('This pool belongs to universe 0x1')
+		const warning = within(document.body).getByText('This pool belongs to Universe 0x1')
 		expect(warning.closest('.entity-card') !== null).toBe(true)
 		expect(within(document.body).queryByText('Universe mismatch') === null).toBe(true)
 	})

@@ -154,6 +154,8 @@
 	/* motion */
 	--transition-fast: 140ms ease;
 	--transition-standard: 160ms ease;
+	--motion-pulse: 1s ease-in-out;
+	--motion-shimmer: 1.4s ease-in-out;
 
 	/*
 	 * Stacking order. Local layers (--z-below, --z-content, --z-content-raised, --z-sticky)

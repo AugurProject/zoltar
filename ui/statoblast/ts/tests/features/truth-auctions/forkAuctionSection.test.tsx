@@ -108,7 +108,7 @@ function createActiveReportingDetails(overrides: Partial<ReportingDetails> = {})
 
 function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
-		auctionedCapacityOwnershipAttoRep: 0n,
+		auctionedUnderwritingLimitAttoEth: 0n,
 		claimingAvailable: false,
 		settlementCollateralAttoEth: 0n,
 		currentTime: 3n,
@@ -135,7 +135,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 	return {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
 		hasForkActivity: true,
 		forkOutcome: 'yes',
 		forkOwnSecurityPool: false,
@@ -155,7 +155,7 @@ function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSec
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 1n,
 		universeHasForked: true,
@@ -411,7 +411,7 @@ describe('ForkAuctionSection', () => {
 	})
 
 	test('shows the selected outcome field and child-pool link in the settlement child pools section', async () => {
-		window.history.replaceState({}, '', 'http://localhost/#/security-pools?simulate=1&simScenario=securitypoolx2&selectedPoolView=reporting&universe=1')
+		window.history.replaceState({}, '', 'http://localhost/#/pools/0x00000000000000000000000000000000000000a1/reporting?simulate=1&simScenario=securitypoolx2&universe=1')
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ForkAuctionSection,
@@ -434,7 +434,8 @@ describe('ForkAuctionSection', () => {
 			const href = link.getAttribute('href') ?? ''
 			expect(href).toContain('simulate=1')
 			expect(href).toContain('simScenario=securitypoolx2')
-			expect(href).toContain('selectedPoolView=reporting')
+			expect(href).toMatch(/^#\/pools\/0x[0-9a-fA-F]{40}\/reporting\?/)
+			expect(href).not.toContain('selectedPoolView=')
 			expect(href).toContain('universe=11')
 		}
 	})
@@ -578,7 +579,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		expect(
 			documentQueries.getByText(
-				'First transfers this wallet’s REP backing units and capacity ownership to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
+				'First transfers this wallet’s REP backing units and underwriting commitments to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
 			),
 		).not.toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
@@ -643,7 +644,7 @@ describe('ForkAuctionSection', () => {
 				{
 					disputeStakedAttoRep: 0n,
 					vaultAttoRepBacking: 0n,
-					capacityOwnershipAttoRep: 0n,
+					underwritingLimitAttoEth: 0n,
 					claimableFeesAttoEth: 0n,
 					vaultAddress: walletAddress,
 				},
@@ -764,7 +765,7 @@ describe('ForkAuctionSection', () => {
 							{
 								disputeStakedAttoRep: 0n,
 								vaultAttoRepBacking: 20n,
-								capacityOwnershipAttoRep: 3n,
+								underwritingLimitAttoEth: 3n,
 								claimableFeesAttoEth: 0n,
 								vaultAddress: walletAddress,
 							},
@@ -1333,7 +1334,7 @@ describe('ForkAuctionSection', () => {
 		})
 	})
 
-	test('makes the auctioned capacity ownership transfer explicit during bidding', async () => {
+	test('makes the auctioned underwriting commitments transfer explicit during bidding', async () => {
 		const currentChildPool = createChildPool({
 			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
 			systemState: 'forkTruthAuction',
@@ -1351,7 +1352,7 @@ describe('ForkAuctionSection', () => {
 					currentStageView: 'auction',
 					currentTimestamp: 5n,
 					forkAuctionDetails: createForkAuctionDetails({
-						auctionedCapacityOwnershipAttoRep: 7n,
+						auctionedUnderwritingLimitAttoEth: 7n,
 						currentTime: 5n,
 						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
 						questionOutcome: 'yes',
@@ -1389,9 +1390,10 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Auctioned capacity ownership')).not.toBeNull()
+		expect(documentQueries.getByText('Auctioned underwriting commitments')).not.toBeNull()
+		expect(documentQueries.getByText('Auctioned underwriting commitments').parentElement?.querySelector('.metric-field-value')?.textContent).toMatch(/ETH/)
 		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
-		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool capacity ownership.')).not.toBeNull()
+		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool underwriting commitments.')).not.toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {

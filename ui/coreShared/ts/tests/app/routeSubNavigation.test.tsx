@@ -3,7 +3,6 @@
 import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
-import { act } from 'preact/test-utils'
 import { RouteSubNavigation } from '../../app/components/RouteSubNavigation.js'
 import { fireEvent, within } from '../testUtils/queries'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
@@ -66,7 +65,7 @@ describe('RouteSubNavigation', () => {
 		document.body.removeEventListener('click', preventNativeNavigation)
 	})
 
-	test('shows only controls for scrollable edges', async () => {
+	test('presents section views as a segmented control without sideways scroll controls', async () => {
 		const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')
 		const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth')
 		Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 100 })
@@ -90,43 +89,14 @@ describe('RouteSubNavigation', () => {
 			const tabStrip = document.body.querySelector('.route-subtab-nav')
 			if (!(tabStrip instanceof HTMLElement)) throw new Error('Expected route tab strip')
 
+			expect(tabStrip.classList.contains('segmented')).toBe(true)
 			expect(documentQueries.queryByRole('button', { name: 'Show earlier Overflow views' })).toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Show later Overflow views' })).not.toBeNull()
-
-			await act(() => {
-				tabStrip.scrollLeft = 50
-				tabStrip.dispatchEvent(new Event('scroll'))
-			})
-			const earlierControl = documentQueries.getByRole('button', { name: 'Show earlier Overflow views' })
-			expect(earlierControl).not.toBeNull()
-			expect(documentQueries.getByRole('button', { name: 'Show later Overflow views' })).not.toBeNull()
-
-			const laterControl = documentQueries.getByRole('button', { name: 'Show later Overflow views' })
-			laterControl.focus()
-			await act(() => {
-				tabStrip.scrollLeft = 300
-				tabStrip.dispatchEvent(new Event('scroll'))
-			})
-			expect(documentQueries.getByRole('button', { name: 'Show earlier Overflow views' })).not.toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Show later Overflow views' })).toBeNull()
-			expect(document.activeElement).toBe(documentQueries.getByRole('button', { name: 'Third' }))
-
-			await act(() => {
-				tabStrip.scrollLeft = 50
-				tabStrip.dispatchEvent(new Event('scroll'))
-			})
-			const restoredEarlierControl = documentQueries.getByRole('button', { name: 'Show earlier Overflow views' })
-			restoredEarlierControl.focus()
-			await act(() => {
-				tabStrip.scrollLeft = 0
-				tabStrip.dispatchEvent(new Event('scroll'))
-			})
-			expect(documentQueries.queryByRole('button', { name: 'Show earlier Overflow views' })).toBeNull()
-			expect(document.activeElement).toBe(documentQueries.getByRole('button', { name: 'First' }))
+			expect(documentQueries.getByRole('button', { name: 'First' }).getAttribute('aria-current')).toBe('page')
 		} finally {
-			if (clientWidthDescriptor === undefined) delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth
+			if (clientWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth')
 			else Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor)
-			if (scrollWidthDescriptor === undefined) delete (HTMLElement.prototype as { scrollWidth?: number }).scrollWidth
+			if (scrollWidthDescriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth')
 			else Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor)
 		}
 	})

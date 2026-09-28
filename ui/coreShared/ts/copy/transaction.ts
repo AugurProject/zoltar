@@ -26,13 +26,10 @@ export const forkRepApproved = 'Fork REP approved'
 export const zoltarForkSubmitted = 'Universe fork submitted'
 export const deployingChildUniverse = 'Deploying child universe'
 export const childUniverseDeployed = 'Child universe deployed'
-export const preparingRep = 'Preparing REP'
-export const splittingRep = 'Splitting REP'
-export const migrationRepPreparationSuccessDetail = 'REP was added to your migration balance.'
-export const repSplitSuccessDetail = 'Migration REP was split across the selected child universes.'
-export const outcomeIndexes = 'Outcome indexes'
-export const repPrepared = 'REP prepared'
-export const repSplit = 'REP split'
+export const migratingRep = 'Migrating REP'
+export const repMigratedSuccessDetail = 'Each selected outcome universe minted the migrated REP to your wallet.'
+export const migrationOutcomes = 'Outcomes'
+export const repMigrated = 'REP migrated'
 export const creatingSecurityPool = 'Creating security pool'
 export const securityPoolCreation = 'Security pool creation'
 export const securityPoolCreatedDetail = 'The new security pool is now available for shares, reporting, and vault operations.'
@@ -57,8 +54,8 @@ export const stagedOperationExecuted = 'Staged operation executed'
 export const priceRequested = 'Requested new price'
 export const priceRequest = 'Price request'
 export const formatFinalizedRefundSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected finalized truth-auction refund rows were settled. Locked ETH was credited for withdrawal without assigning REP backing units or ${capacityOwnershipLabel}.`
-export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership.`
-export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining capacity ownership; refund-only rows credited locked ETH for withdrawal.`
+export const formatWinningBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction winning bids were settled. The selected bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining underwriting commitments.`
+export const formatMixedBidSettlementResultDetail = (capacityOwnershipLabel: CopyTemplateValue) => `Selected truth-auction bids were settled. Winning bids received REP backing units plus ${capacityOwnershipLabel}, assigning the remaining underwriting commitments; refund-only rows credited locked ETH for withdrawal.`
 export const childUniverseLinkedToForkPathDetail = 'The selected child universe was deployed and linked to this fork path.'
 export const ownEscalationForkSubmittedDetail = 'This pool submitted its own escalation fork and moved into Fork & migration.'
 export const zoltarUniverseForkSubmittedDetail = 'The selected universe fork was submitted on-chain.'
@@ -68,7 +65,7 @@ export const claimParentEscalationDeposits = 'Claim parent escalation deposits'
 export const poolRepMigrationSuccessDetail = 'Pool-held REP was migrated into the selected child universe.'
 export const unresolvedEscalationMigratedDetail = 'The wallet’s unresolved parent escalation-deposit accounting was cleared in constant-size work. Child backing and proof eligibility were already available and are unchanged.'
 export const clearUnresolvedParentEscalationDepositAccounting = 'Clear unresolved parent escalation-deposit accounting'
-export const vaultMigratedDetail = 'Vault REP backing and capacity ownership were migrated into the selected child universe.'
+export const vaultMigratedDetail = 'Vault REP backing and underwriting commitments were migrated into the selected child universe.'
 export const losingBidsRefundedDetail = 'Selected losing truth-auction bids were settled and their ETH was credited for withdrawal.'
 export const auctionRefundWithdrawnDetail = 'The connected wallet withdrew its credited truth-auction ETH refund.'
 export const forkDepositSettlementSuccessDetail = 'Imported fork-carried escalation deposits were settled.'
@@ -88,7 +85,7 @@ export const dismiss = 'Dismiss'
 
 export const paidFrom = 'Paid from'
 export const walletRep = 'Wallet REP'
-export const vaultBackedRep = 'Vault-backed REP'
+export const vaultBackedRep = 'Pool vault REP'
 export const completedAction = (title: string) => formatActionTense(title, 'completed')
 export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
 export const settleReportNumber = (id: string) => `Settle report #${id}`
@@ -107,6 +104,7 @@ export const reviewedActions: Record<string, { title: string; description?: stri
 	approve: { title: 'Approve token spending', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
 	depositToEscalationGame: { title: 'Report outcome' },
 	depositRepOnOutcome: { title: 'Report outcome' },
+	depositWalletRepToEscalationGame: { title: 'Report outcome' },
 	withdrawFromEscalationGame: { title: 'Settle escalation deposits', description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', description: 'Settle the completed oracle report.' },
 	dispute: { title: 'Dispute report', description: 'Fund the counter-report and swap against the current report.' },
