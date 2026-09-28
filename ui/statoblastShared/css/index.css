@@ -1008,9 +1008,14 @@
 	}
 	.reporting-shared-action-region .actions,
 	.reporting-shared-action-region .tx-action,
-	.reporting-shared-action-region button {
+	.reporting-shared-action-region button:not(.tx-action-wallet-fix) {
 		width: 100%;
 	}
+}
+
+/* A wallet fix that replaces the shared report reason keeps the spacing the reason paragraph had. */
+.reporting-shared-action-region > .tx-action-feedback {
+	margin-block: var(--space-2);
 }
 
 .reporting-wallet-action-row {
