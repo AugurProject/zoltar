@@ -1,4 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
+import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { useSignal } from '@preact/signals'
 import { useCallback, useEffect, useRef } from 'preact/hooks'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
@@ -273,24 +275,20 @@ export function useZoltarFork(
 		zoltarForkResult.value = undefined
 		const submittedQuestionId = zoltarForkQuestionId
 		let ownsTransaction = false
+		let requestKey: TransactionRequestKey | undefined
 
 		try {
 			let result: ZoltarForkActionResult | undefined
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				if (
-					onTransactionRequested(
-						createZoltarForkTransactionIntent(actionName, {
-							questionId: submittedQuestionId,
-							universeId: activeUniverseId,
-						}),
-					) === false
-				) {
+				const request = onTransactionRequested(createZoltarForkTransactionIntent(actionName, { questionId: submittedQuestionId, universeId: activeUniverseId }))
+				if (request === false) {
 					zoltarForkFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true
+				requestKey = typeof request === 'string' ? request : undefined
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
 				const questionId = resolveForkQuestionId(submittedQuestionId, universe)
@@ -302,7 +300,7 @@ export function useZoltarFork(
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, errorFallback)
-				if (ownsTransaction) onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
 				zoltarForkFeedback.value = createErrorActionFeedback(resolveActionResultName(actionName), getFailureTitle(actionName), message)
 				return
 			}
@@ -326,7 +324,7 @@ export function useZoltarFork(
 			if (environmentGuard.isCurrent()) {
 				zoltarForkPending.value = false
 				zoltarForkActiveAction.value = undefined
-				if (ownsTransaction) onTransactionFinished()
+				if (ownsTransaction) onTransactionFinished(requestKey)
 			}
 		}
 	}

@@ -12,6 +12,9 @@ import { liveTradingControllerServices } from '../../features/liveTradingControl
 import * as actualLive from '../../protocol/live.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
+import { isMarketTransactionPending } from '../../features/live/marketTransactionActivity.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -78,6 +81,7 @@ describe('live workflow safety boundary', () => {
 		afterTest: async () => {
 			await cleanupRendered?.()
 			cleanupRendered = undefined
+			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 		},
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
@@ -450,8 +454,38 @@ describe('live workflow safety boundary', () => {
 		// The wallet is held to the minimum the ticket displayed (0.5% below the estimate), not to the simulation's own bound.
 		expect(submittedEntries).toHaveLength(1)
 		expect(submittedEntries[0]?.minimumLongShares).toBe(((submittedEntries[0]?.result.totalLongShares ?? 0n) * 9_950n) / 10_000n)
+		// Navigation stays free while the trade is pending: the activity list keeps it and only this market's ticket is locked.
+		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: transactionHash, scope: [`market:${pool.toLowerCase()}`], status: 'pending' })
+		expect(isMarketTransactionPending(pool)).toBeTrue()
+		expect(isMarketTransactionPending(secondPool)).toBeFalse()
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
+		expect(document.querySelectorAll('[data-portfolio-pool]').length).toBeGreaterThan(0)
+		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
+		// Other routes keep refreshing while the trade runs; only the trade's own market waits for it.
+		const discoveriesBeforePortfolioRefresh = discoveredUniverseIds.length
+		await act(async () => invalidateAppData())
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforePortfolioRefresh)
+		// Another market's ticket shows none of this trade's status or hash and stays locked while it runs.
+		await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await waitForDom(() => document.body.textContent?.includes('Second rendered workflow market') === true, 'second market during a pending trade')
+		expect(document.querySelector('.transaction-hash')).toBeNull()
+		expect(document.body.textContent).not.toContain('Buy YES sent. Waiting for confirmation')
+		expect(document.body.textContent).toContain('Transaction in progress.')
+		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
+		const discoveriesOnPendingMarket = discoveredUniverseIds.length
+		await act(async () => invalidateAppData())
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.length).toBe(discoveriesOnPendingMarket)
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
+		// The replacement settles the same activity row and releases the market's ticket.
+		expect(transactionActivity.value.entries).toHaveLength(1)
+		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: replacementTransactionHash, status: 'confirmed' })
+		expect(isMarketTransactionPending(pool)).toBeFalse()
 		expect(document.body.textContent).toContain('Buy YES confirmed.')
 		// Confirmation moves focus to the outcome block so the result is announced and reachable.
 		expect(document.activeElement?.classList.contains('transaction-outcome')).toBe(true)
@@ -459,7 +493,8 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).not.toContain('Loading balances')
 		expect(document.body.textContent).toContain('1 YES')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(replacementTransactionHash)
-		expect(amountInput.value).toBe('')
+		// Navigating away and back remounted the ticket, so read the amount field again.
+		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.value).toBe('')
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
 		repricePositionReceipt = false
