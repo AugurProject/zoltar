@@ -23,7 +23,7 @@ import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.j
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
-import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
+import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, getSecurityVaultActionRepAmount, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -45,7 +45,6 @@ type SecurityVaultProductionWriteClient = ReturnType<typeof createWalletWriteCli
 type SecurityVaultQueueResult = Pick<SecurityVaultActionResult, 'hash' | 'queuedOperation' | 'stagedExecution'>
 
 export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultProductionWriteClient> = {
-	certifyVaultCoverage?: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	approveErc20: (client: TWriteClient, tokenAddress: Address, spenderAddress: Address, amount: bigint, action: 'approveRep') => Promise<SecurityVaultActionResult>
 	createConnectedReadClient: () => SecurityVaultReadClient
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
@@ -264,6 +263,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const actionSelectionKey = effectiveVaultSelectionKey
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		const transactionContext = {
+			repAmountAttoRep: getSecurityVaultActionRepAmount(actionName, snapshot.form),
 			repTokenSymbol: snapshot.repTokenSymbol,
 			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
 			universeId: snapshot.universeId,
@@ -406,24 +406,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		return { managerDetails, funding, walletBalanceAttoEth, writeClient }
 	}
 
-	const certifyCoverage = async () => {
-		if (securityVaultActiveAction.value !== undefined) return
-		const snapshot = createVaultActionSnapshot()
-		await runVaultAction(
-			'certifyVaultCoverage',
-			snapshot,
-			async (vaultAddress, pool, isCurrentSelection, context) => {
-				if (!isCurrentSelection()) return undefined
-				if (dependencies.certifyVaultCoverage === undefined) throw new Error('Coverage certification is unavailable.')
-				return await dependencies.certifyVaultCoverage(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), pool, vaultAddress)
-			},
-			'Failed to certify vault backing',
-			async (_result, pool, vault, isCurrentSelection) => {
-				await reloadSecurityVaultDetails(pool, vault, isCurrentSelection)
-			},
-		)
-	}
-
 	const adjustBackingFactor = async (value: string, proposedRepPerEthPrice?: bigint) => {
 		if (securityVaultActiveAction.value !== undefined) return
 		const snapshot = createVaultActionSnapshot()
@@ -563,7 +545,6 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	}, [accountAddress, enabled, securityVaultDetails.value?.repToken, securityVaultDetails.value?.securityPoolAddress, securityVaultForm.value.securityPoolAddress, securityVaultForm.value.selectedVaultOwner])
 
 	return {
-		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,

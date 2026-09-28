@@ -14,7 +14,7 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 		<details className='backing-details'>
 			<summary>{payoutCopy.backingValue}</summary>
 			<DataGrid dense>
-				<MetricField label={payoutCopy.backingPerSet}>{formatCollateralEth(10n ** 36n, market)}</MetricField>
+				<MetricField label={payoutCopy.backingPerSet}>{formatCollateralEth(10n ** 18n, market)}</MetricField>
 				{valuation === undefined ? undefined : (
 					<>
 						<MetricField label={payoutCopy.valuationTime}>

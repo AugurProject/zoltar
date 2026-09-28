@@ -79,7 +79,7 @@ void describe('deployment helpers', () => {
 				isOnActiveAppChain: true,
 				nextMissingStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Connect wallet to continue.' })
+		).toEqual({ disabled: true, reason: 'Connect wallet to continue.', walletBlocker: { kind: 'wallet-disconnected' } })
 
 		expect(
 			getDeployNextMissingAvailability({
@@ -89,7 +89,7 @@ void describe('deployment helpers', () => {
 				isOnActiveAppChain: false,
 				nextMissingStep,
 			}),
-		).toEqual({ disabled: true, reason: 'Switch to Sepolia.' })
+		).toEqual({ disabled: true, reason: 'Switch to Sepolia.', walletBlocker: { kind: 'wrong-network', targetChainName: 'Sepolia' } })
 	})
 
 	void test('getDeploymentStepAvailability blocks undeployed steps behind prerequisites and allows ready steps', () => {
@@ -114,6 +114,18 @@ void describe('deployment helpers', () => {
 				step: readyStep,
 			}),
 		).toEqual({ disabled: false, reason: undefined })
+	})
+
+	void test('getDeploymentStepAvailability keeps the wallet reason as text so only the route-level deploy action offers the wallet fix', () => {
+		expect(
+			getDeploymentStepAvailability({
+				accountAddress: undefined,
+				busyStepId: undefined,
+				isOnActiveAppChain: true,
+				prerequisiteLabel: 'Zoltar Question Data',
+				step: createStep('zoltar', false, ['zoltarQuestionData']),
+			}),
+		).toEqual({ disabled: true, reason: 'Connect wallet to deploy this contract.' })
 	})
 
 	void test('getDeploymentSteps includes the deployment status oracle as a proxy deployer step', () => {

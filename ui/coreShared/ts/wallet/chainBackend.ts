@@ -6,6 +6,7 @@ import { sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget, getDefaultNetworkProfile, type NetworkProfile } from './networkProfile.js'
 import { resolveConfiguredRpcConfig, type ConfiguredRpcSource, type RejectedRpcOverride } from './rpcConfig.js'
 import { createRecoveringReceiptWaiter } from '../transactions/receiptRecovery.js'
+import { createConfirmedReadTransport } from './confirmedReadTransport.js'
 
 export type TransactionSubmissionStatus = 'pending' | 'uncertain'
 
@@ -17,7 +18,7 @@ export type WriteClient = WalletClient<Transport, NetworkProfile['chain'], Accou
 		assertCanonicalRawTransactionCost?: (signer: Address, costAttoEth: bigint) => void
 		installSimulationProxyDeployer?: (parameters: { address: Address; runtimeCode: Hex }) => Promise<void>
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
-		onTransactionSubmitted?: ((hash: Hash, status?: TransactionSubmissionStatus) => void) | undefined
+		onTransactionSubmitted?: ((hash: Hash, status?: TransactionSubmissionStatus, replacedHash?: Hash) => void) | undefined
 		patchSimulationGenesisRepToken?: (parameters: { repAddress: Address; zoltarAddress: Address }) => Promise<void>
 		recordCanonicalFunding?: (signer: Address, amountAttoEth: bigint) => void
 		recordCanonicalRawTransaction?: (signer: Address, costAttoEth: bigint) => void
@@ -30,7 +31,7 @@ export type CreateWriteClientCallbacks = {
 	/** Send prepared transactions straight to the wallet, waiting for each preceding transaction to confirm. */
 	skipAppReview?: boolean | undefined
 	onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
-	onTransactionSubmitted?: (hash: Hash, status?: TransactionSubmissionStatus) => void
+	onTransactionSubmitted?: (hash: Hash, status?: TransactionSubmissionStatus, replacedHash?: Hash) => void
 	isCurrentEnvironment?: () => boolean
 }
 
@@ -100,14 +101,15 @@ export type ChainBackend = {
 	waitUntilReady?(): Promise<void>
 }
 
-function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, ethereum?: InjectedEthereum): ReadClient {
+function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, getConfirmedBlock: () => bigint | undefined, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: transportMode === 'provider' && ethereum !== undefined ? custom({ request: parameters => requestWalletRpc(ethereum, parameters) }, { retryCount: 0 }) : http(rpcUrl),
+		transport: createConfirmedReadTransport(transportMode === 'provider' && ethereum !== undefined ? custom({ request: parameters => requestWalletRpc(ethereum, parameters) }, { retryCount: 0 }) : http(rpcUrl), getConfirmedBlock),
 	})
 }
 
-function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWriteClientCallbacks, validateBeforeSend?: () => Promise<void>): WriteClient {
+function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWriteClientCallbacks, onConfirmedBlock: (blockNumber: bigint) => void, validateBeforeSend?: () => Promise<void>): WriteClient {
+	const waitForReceipt = createRecoveringReceiptWaiter(baseClient, callbacks)
 	const sendRawTransaction: typeof baseClient.sendRawTransaction = async parameters => {
 		await validateBeforeSend?.()
 		const hash = await baseClient.sendRawTransaction(parameters)
@@ -133,7 +135,11 @@ function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWrit
 		...baseClient,
 		onTransactionPrepared: callbacks.onTransactionPrepared,
 		onTransactionSubmitted: callbacks.onTransactionSubmitted,
-		waitForTransactionReceipt: createRecoveringReceiptWaiter(baseClient, callbacks),
+		waitForTransactionReceipt: async parameters => {
+			const receipt = await waitForReceipt(parameters)
+			if (callbacks.isCurrentEnvironment?.() !== false) onConfirmedBlock(receipt.blockNumber)
+			return receipt
+		},
 		sendRawTransaction,
 		sendTransaction,
 		writeContract,
@@ -175,6 +181,11 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 	let readTransportMode: ReadTransportMode = 'provider'
 	let readBackendBlockNumber: bigint | undefined
 	let readBackendBlockTimestamp: bigint | undefined
+	let confirmedBlock: bigint | undefined
+	const getConfirmedBlock = () => confirmedBlock
+	const onConfirmedBlock = (blockNumber: bigint) => {
+		if (confirmedBlock === undefined || blockNumber > confirmedBlock) confirmedBlock = blockNumber
+	}
 	const fallbackRpcUrl = profile.chain.rpcUrls.default.http[0]
 	if (fallbackRpcUrl === undefined) throw new Error(`No default RPC URL is configured for ${profile.displayName}`)
 	const configuredRpc = resolveConfiguredRpcConfig(rpcUrl === undefined ? { fallbackRpcUrl, networkId: profile.id } : { fallbackRpcUrl, networkId: profile.id, overrideRpcUrl: rpcUrl })
@@ -183,7 +194,7 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 		bootstrapError: undefined,
 		bootstrapLabel: undefined,
 		bootstrapProgress: undefined,
-		createReadClient: () => createReadClientForProfile(profile, readTransportMode, configuredRpc.url, getProvider()),
+		createReadClient: () => createReadClientForProfile(profile, readTransportMode, configuredRpc.url, getConfirmedBlock, getProvider()),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const ethereum = getProvider()
 			if (ethereum === undefined) throw new Error('No injected wallet found')
@@ -191,10 +202,10 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 			const baseClient = createWalletClient({
 				account: accountAddress,
 				chain: profile.chain,
-				transport: custom({ request: parameters => requestWalletRpc(ethereum, parameters) }),
+				transport: createConfirmedReadTransport(custom({ request: parameters => requestWalletRpc(ethereum, parameters) }), getConfirmedBlock),
 			}).extend(publicActions) as WriteClient
 
-			return withTransactionCallbacks(baseClient, callbacks, async () => {
+			return withTransactionCallbacks(baseClient, callbacks, onConfirmedBlock, async () => {
 				assertNetworkEnabled(profile.chainIdHex)
 				const currentAccounts = await readProviderAccounts(ethereum)
 				const currentAccount = currentAccounts[0]

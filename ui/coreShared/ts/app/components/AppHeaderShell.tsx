@@ -7,6 +7,7 @@ import type { SecondaryNavigation } from '../../navigation/appNavigation.js'
 import type { ComponentChildren } from 'preact'
 import { AppSettingsMenu } from './AppSettingsMenu.js'
 import { RouteSubNavigation } from './RouteSubNavigation.js'
+import { TransactionActivityMenu } from './TransactionActivityMenu.js'
 
 /** The shared pieces an application places in its top bar. */
 type AppChromeSlots = {
@@ -48,19 +49,22 @@ export function AppHeaderShell({ mainElementId = 'app-content', header, renderHe
 	const simulationBanner = simulationController === undefined ? undefined : <SimulationBanner controller={simulationController} onEnvironmentChanged={onEnvironmentChanged} onRefresh={onRefresh} />
 	const showProtocolGuide = tabNavigation !== undefined && tabNavigation.showProtocolGuide !== false
 	const settingsMenu = (
-		<AppSettingsMenu
-			onEnvironmentChanged={onEnvironmentChanged}
-			settingsContent={
-				<>
-					{settingsContent}
-					{showProtocolGuide ? (
-						<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
-							{appCopy.protocolGuide}
-						</a>
-					) : undefined}
-				</>
-			}
-		/>
+		<>
+			<TransactionActivityMenu />
+			<AppSettingsMenu
+				onEnvironmentChanged={onEnvironmentChanged}
+				settingsContent={
+					<>
+						{settingsContent}
+						{showProtocolGuide ? (
+							<a className='protocol-guide-link' href={appCopy.protocolGuideHref} target='_blank' rel='noreferrer'>
+								{appCopy.protocolGuide}
+							</a>
+						) : undefined}
+					</>
+				}
+			/>
+		</>
 	)
 	const allTabs = tabNavigation === undefined ? [] : [...tabNavigation.tabs, ...(tabNavigation.moreTabs ?? [])]
 	const currentRouteIsPrimaryTab = tabNavigation !== undefined && allTabs.some(tab => tab.route === tabNavigation.route)

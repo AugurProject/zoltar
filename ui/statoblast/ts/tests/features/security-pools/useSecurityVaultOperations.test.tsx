@@ -9,6 +9,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
@@ -801,6 +802,33 @@ describe('useSecurityVaultOperations', () => {
 			await requireHookState(hookState).depositRepToVault()
 		})
 		expect(deposit).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, 10n ** 18n, 20_000n)
+	})
+
+	test('states the REP amount of each action in the deposit and withdrawal review', async () => {
+		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
+		const queueOracleManagerOperation = mock(async () => ({ hash: '0x02' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({ depositRepToVaultToSecurityPool: deposit, loadErc20Balance: mock(async () => 10n * 10n ** 18n), queueOracleManagerOperation })
+		const intents: TransactionIntent[] = []
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			{ onTransactionRequested: intent => void intents.push(intent) },
+		)
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '3', repWithdrawAmount: '2', selectedVaultOwner: WALLET_ADDRESS, stagedOperationTimeoutMinutes: '5' }))
+		})
+		await act(async () => await requireHookState(hookState).depositRepToVault())
+		await act(async () => await requireHookState(hookState).withdrawRep())
+		expect(deposit).toHaveBeenCalledTimes(1)
+		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
+		expect(intents.map(intent => [intent.action, intent.rows?.[0]])).toEqual([
+			['depositRepToVault', { label: 'Amount', value: '3\u00a0REP' }],
+			['queueWithdrawRep', { label: 'Amount', value: '2\u00a0REP' }],
+		])
 	})
 
 	test('closing during deposit details loading cancels before creating a write client', async () => {

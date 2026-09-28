@@ -1,7 +1,7 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
 export const applicationTitle = 'Zoltar'
-export const forkZoltar = 'Fork Universe'
+export const forkZoltar = 'Fork universe'
 export const migrateRep = 'Migrate REP'
 export const alreadyForkedReason = 'This universe has already forked.'
 export const forkQuestionRequiredReason = 'Select a valid fork question to continue.'
@@ -13,10 +13,10 @@ export const forkRepInsufficientReason = 'Insufficient REP to meet the fork thre
 export const forkRepApprovalRequiredReason = 'Approve enough REP to continue.'
 export const forkingActionLabel = 'forking the universe'
 export const forkRepApprovalPending = 'Approving REP threshold…'
-export const forkQuestionId = 'Fork Question ID'
+export const forkQuestionId = 'Fork question ID'
 export const forkSubmissionPending = 'Forking universe…'
 export const outcomeUniversesEmpty = 'No outcome universes available.'
-export const permanentRepBurn = 'Permanent REP Burn'
+export const permanentRepBurn = 'Permanent REP burn'
 
 export const migrationIntro = 'Migrating burns REP in this universe and gives you the same amount of REP in each outcome universe you choose. It cannot be undone.'
 export const migrationProgress = 'Migration steps'

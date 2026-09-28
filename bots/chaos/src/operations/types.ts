@@ -85,7 +85,6 @@ export interface QuestionSnapshot {
 }
 
 export interface VaultSnapshot {
-	coverageCertified?: boolean
 	address: Address
 	feeIndex: string
 	repBackingUnits: string

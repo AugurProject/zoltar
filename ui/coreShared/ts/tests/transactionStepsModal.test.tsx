@@ -35,7 +35,7 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		const controller = createTransactionStepController()
 		controller.setPlan([{ title: 'Deposit REP', description: 'Deposit REP into the vault.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		controller.startWithoutReview(0)
-		if (attempts === 1) controller.failed('nonce too low')
+		if (attempts === 1) controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
 	const rendered = await renderIntoDocument(
 		<>
@@ -56,7 +56,7 @@ test('returns a failed transaction to its action for a fresh submission', async 
 		expect(document.activeElement).toBe(submit)
 		await act(() => fireEvent.click(submit))
 		expect(attempts).toBe(2)
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 	} finally {
 		transactionSteps.value?.cancel()
 		await rendered.cleanup()
@@ -273,7 +273,7 @@ test('omits the explanation paragraph for a self-describing step and keeps the o
 	}
 })
 
-for (const choice of ['custom', 'max'] as const) {
+for (const choice of ['default', 'custom'] as const) {
 	test(`reuses the approval amount control for ${choice} without sending the next step`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
@@ -296,7 +296,7 @@ for (const choice of ['custom', 'max'] as const) {
 		])
 		const review = controller.review()
 		const rendered = await renderIntoDocument(
-			<TransactionActionButtonLockProvider locked>
+			<TransactionActionButtonLockProvider lock={{ lockedScopes: [], promptOpen: true }}>
 				<TransactionStepsModal contextKey='approval' />
 			</TransactionActionButtonLockProvider>,
 		)
@@ -309,11 +309,12 @@ for (const choice of ['custom', 'max'] as const) {
 			expect(funding.textContent).toContain('1 WETH')
 			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
-			else await act(() => fireEvent.click(queries.getByText('Max')))
+			expect(queries.queryByRole('button', { name: /Max/ })).toBeNull()
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ })))
-			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
+			const approveLabel = choice === 'custom' ? /Approve 9 REP/ : /Approve 3 REP/
+			expect(queries.getByRole('button', { name: approveLabel }).hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: approveLabel })))
+			expect(await review).toBe(choice === 'custom' ? 9n : 3n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
 			expect(funding.textContent).toContain('Settler bounty')
@@ -451,7 +452,7 @@ for (const phase of ['skipped', 'failed'] as const) {
 			const review = controller.review()
 			transactionSteps.value?.confirm()
 			await review
-			controller.failed('Approval rejected.')
+			controller.failed({ kind: 'rejected', message: 'Approval rejected.' })
 		}
 		const nextReview = phase === 'skipped' ? controller.review(1) : undefined
 		const rendered = await renderIntoDocument(<TransactionStepsModal contextKey={phase} />)
@@ -487,7 +488,7 @@ for (const result of ['pending', 'reverted'] as const) {
 		controller.submitted(hash)
 		if (result === 'reverted') {
 			controller.receipt(hash, 'reverted')
-			controller.failed('Transaction failed after using its full gas limit. Open the transaction details before retrying.')
+			controller.failed({ kind: 'reverted', message: 'Transaction failed after using its full gas limit. Open the transaction details before retrying.' })
 		}
 		const rendered = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={result === 'reverted' ? { tone: 'error', title: 'Request failed', detail: 'Transaction reverted' } : undefined}>
@@ -540,9 +541,9 @@ test('sends a standalone page approval directly and keeps rejection retryable', 
 			review = controller.review()
 		})
 		expect(within(document.body).queryByRole('dialog')).toBeNull()
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(await review).toBeUndefined()
-		await act(() => controller.failed('Action canceled in wallet.'))
+		await act(() => controller.failed({ kind: 'rejected', message: 'Action canceled in wallet.' }))
 		expect(transactionSteps.value).toBeUndefined()
 	} finally {
 		review?.catch(() => undefined)

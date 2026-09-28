@@ -90,7 +90,7 @@ function OpenOracleSectionHarness({ accountAddress, initialActiveView = 'create'
 				options={[
 					{ label: 'Browse', value: 'browse' },
 					{ label: 'Create', value: 'create' },
-					{ label: 'Report Details', value: 'selected-report' },
+					{ label: 'Report details', value: 'selected-report' },
 				]}
 			/>
 			<OpenOracleSection
@@ -165,19 +165,19 @@ async function clickElement(element: HTMLElement) {
 }
 
 async function fillOpenOracleCreateForm() {
-	await setInputValue('Base Token Address', openOracleCreateParameters.token1Address)
-	await setInputValue('Quote Token Address', openOracleCreateParameters.token2Address)
-	await setInputValue('Base Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
-	await setInputValue('Quote Token Amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
-	await setInputValue('Settler Reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerRewardAttoEth))
-	await setInputValue('ETH Value To Send', formatCurrencyInputBalance(openOracleCreateParameters.ethValueAttoEth))
-	await clickElement(within(document.body).getByText('Advanced Dispute & Timing Settings', { selector: 'summary' }))
-	await setInputValue('Dispute Fee (%)', formatFeePercentageInput(openOracleCreateParameters.feePercentage))
+	await setInputValue('Base token address', openOracleCreateParameters.token1Address)
+	await setInputValue('Quote token address', openOracleCreateParameters.token2Address)
+	await setInputValue('Base token amount', formatCurrencyInputBalance(openOracleCreateParameters.exactToken1Report))
+	await setInputValue('Quote token amount', formatCurrencyInputBalance(openOracleCreateParameters.initialToken2Amount))
+	await setInputValue('Settler reward', formatCurrencyInputBalance(openOracleCreateParameters.settlerRewardAttoEth))
+	await setInputValue('ETH value to send', formatCurrencyInputBalance(openOracleCreateParameters.ethValueAttoEth))
+	await clickElement(within(document.body).getByText('Advanced dispute & timing settings', { selector: 'summary' }))
+	await setInputValue('Dispute fee (%)', formatFeePercentageInput(openOracleCreateParameters.feePercentage))
 	await setInputValue('Multiplier', openOracleCreateParameters.multiplier.toString())
-	await setInputValue('Settlement Delay (seconds)', openOracleCreateParameters.settlementTime.toString())
-	await setInputValue('Escalation Halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
-	await setInputValue('Dispute Delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
-	await setInputValue('Protocol Fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
+	await setInputValue('Settlement delay (seconds)', openOracleCreateParameters.settlementTime.toString())
+	await setInputValue('Escalation halt', formatCurrencyInputBalance(openOracleCreateParameters.escalationHalt))
+	await setInputValue('Dispute delay (seconds)', openOracleCreateParameters.disputeDelay.toString())
+	await setInputValue('Protocol fee (%)', formatFeePercentageInput(openOracleCreateParameters.protocolFee))
 }
 
 async function loadSelectedReportInUi() {
@@ -187,7 +187,7 @@ async function loadSelectedReportInUi() {
 	const reportControlButton = reportIdField.querySelector('button')
 	if (!(reportControlButton instanceof HTMLButtonElement)) throw new Error('Expected report ID control button')
 	await clickElement(reportControlButton)
-	await waitFor(() => getSectionByTitle('Report Actions'))
+	await waitFor(() => getSectionByTitle('Report actions'))
 }
 
 async function createSubmittedOpenOracleReport(writeClient: WriteClient, readClient: ReturnType<typeof createConnectedReadClient>) {
@@ -251,11 +251,11 @@ describe.serial('OpenOracleSection integration', () => {
 		const renderedComponent = await renderIntoDocument(<OpenOracleSectionHarness accountAddress={walletAddress} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(within(document.body).getByText('Define the token pair and initial report economics first. Default dispute and timing settings are available below for users who need to tune the report lifecycle.')).not.toBeNull()
-		expect(within(document.body).queryByText('Transaction Review')).toBeNull()
+		expect(within(document.body).queryByText('Transaction review')).toBeNull()
 
 		await fillOpenOracleCreateForm()
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Create standalone Oracle report' }))
+		await clickElement(within(document.body).getByRole('button', { name: 'Create standalone oracle report' }))
 
 		await waitForLatestAction('createReportInstance')
 		await waitFor(async () => {
@@ -268,7 +268,7 @@ describe.serial('OpenOracleSection integration', () => {
 		await waitFor(() => {
 			expect(
 				within(document.body).getByRole('heading', {
-					name: `${reportDetails.token1Symbol} / ${reportDetails.token2Symbol} · Report #${reportId.toString()}`,
+					name: `${reportDetails.token1Symbol} / ${reportDetails.token2Symbol} · report #${reportId.toString()}`,
 				}),
 			).not.toBeNull()
 		})
@@ -287,8 +287,8 @@ describe.serial('OpenOracleSection integration', () => {
 		if (economicsSummary === undefined) throw new Error('Expected economics accordion summary')
 		await clickElement(economicsSummary)
 		await waitFor(() => {
-			expect(document.body.textContent?.includes(`Current Amount 1 (${reportDetails.token1Symbol})`)).toBe(true)
-			expect(document.body.textContent?.includes(`Current Amount 2 (${reportDetails.token2Symbol})`)).toBe(true)
+			expect(document.body.textContent?.includes(`Current amount 1 (${reportDetails.token1Symbol})`)).toBe(true)
+			expect(document.body.textContent?.includes(`Current amount 2 (${reportDetails.token2Symbol})`)).toBe(true)
 		})
 		expect(within(document.body).queryByRole('button', { name: 'Initial Report' })).toBeNull()
 		expect(within(document.body).getByText('Pending')).not.toBeNull()
@@ -321,7 +321,7 @@ describe.serial('OpenOracleSection integration', () => {
 		await waitFor(() => {
 			const dialog = within(document.body).getByRole('dialog', { name: `Settle report #${reportId}` })
 			const settleButton = within(dialog).getByRole('button', { name: `Settle report #${reportId}` })
-			expect(within(dialog).queryByText('Transaction Review')).toBeNull()
+			expect(within(dialog).queryByText('Transaction review')).toBeNull()
 			expect(within(document.body).queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
 			expect(settleButton.hasAttribute('disabled')).toBe(false)
 			expect(within(document.body).queryByText('Dispute window closed. Settle report instead.')).toBeNull()

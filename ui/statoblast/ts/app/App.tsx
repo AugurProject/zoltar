@@ -221,6 +221,7 @@ export function App() {
 	return (
 		<UniverseNamesProvider universe={zoltarUniverse}>
 			<ProtocolAppFrame
+				accountAddress={walletScopedAccountAddress}
 				activeUniverseId={activeUniverseId}
 				currentBlockNumber={currentBlockNumber}
 				currentTimestamp={currentTimestamp}
@@ -240,6 +241,7 @@ export function App() {
 				routeContentDisabled={routeContentBlocked}
 				transactionRouteKey={transactionRouteKey}
 				transactionState={transactionState.value}
+				walletActions={overviewWalletProps}
 			>
 				<AppRouteContent deploy={deployRouteContentProps} openOracle={openOracleRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} securityPools={securityPoolsRouteContentProps} />
 				<TransactionStepsModal contextKey={`${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}`} />

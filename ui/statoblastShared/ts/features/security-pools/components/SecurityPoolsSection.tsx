@@ -9,7 +9,12 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniversePoolDirectorySection } from './UniversePoolDirectorySection.js'
+import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { SelectedPoolRepPriceContext } from './RepPriceStatusLabel.js'
+import { FirstRunRoleGuide } from './FirstRunRoleGuide.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
+import * as glossaryCopy from '../../../copy/glossary.js'
 
 function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
 	if (nextView !== 'operate') return false
@@ -20,8 +25,28 @@ function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, n
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	if (view === 'open') return { description: undefined, title: securityPoolCopy.openPool }
 	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
-	if (view === 'create') return { description: securityPoolCopy.createPoolDescription, title: commonCopy.createPool }
-	if (view === 'universes') return { description: securityPoolCopy.universesDescription, title: commonCopy.universe }
+	if (view === 'create')
+		return {
+			description: (
+				<>
+					{securityPoolCopy.createPoolDescriptionLead}
+					<GlossaryTerm id='security-pool'>{glossaryCopy.securityPoolTerm.toLowerCase()}</GlossaryTerm>
+					{securityPoolCopy.createPoolDescriptionTail}
+				</>
+			),
+			title: commonCopy.createPool,
+		}
+	if (view === 'universes')
+		return {
+			description: (
+				<>
+					{securityPoolCopy.universesDescriptionLead}
+					<GlossaryTerm id='universe'>{glossaryCopy.universeTerm.toLowerCase()}</GlossaryTerm>
+					{securityPoolCopy.universesDescriptionTail}
+				</>
+			),
+			title: commonCopy.universe,
+		}
 	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
 }
 
@@ -43,6 +68,8 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 		<div className='route-view-flow'>
 			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
 			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
+			{/* The role guide follows the address entry so the landing's primary action stays first on narrow screens. */}
+			{view === 'open' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}
@@ -72,10 +99,13 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 				<UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
 			) : undefined}
 
+			{/* A pending transaction on this pool locks only this pool's actions. */}
 			{view === 'operate' ? (
-				<SelectedPoolRepPriceContext.Provider value={selectedPoolRepPrice}>
-					<SecurityPoolWorkflowSection {...workflow} showHeader={false} />
-				</SelectedPoolRepPriceContext.Provider>
+				<TransactionScopeProvider scope={securityPoolTransactionScope(workflow.securityPoolAddress)}>
+					<SelectedPoolRepPriceContext.Provider value={selectedPoolRepPrice}>
+						<SecurityPoolWorkflowSection {...workflow} showHeader={false} />
+					</SelectedPoolRepPriceContext.Provider>
+				</TransactionScopeProvider>
 			) : undefined}
 		</div>
 	)

@@ -8,6 +8,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ZoltarMigrationSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ZoltarMigrationSection.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { getUniverseLinkHref } from '@zoltar/ui-core-shared/navigation/universeNavigation.js'
 import type { ZoltarMigrationFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
@@ -255,6 +256,20 @@ describe('ZoltarMigrationSection', () => {
 		await openStep('Review')
 		expectTransactionButtonDisabled(document.body, 'Migrate REP')
 		expect(document.body.textContent).toContain('Switch to Sepolia')
+	})
+
+	test('offers the network switch fix on Migrate instead of the hint text', async () => {
+		const calls: string[] = []
+		const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => calls.push('connect'), onSwitchNetwork: () => calls.push('switch') }
+		const rendered = await renderIntoDocument(h(WalletActionsProvider, { walletActions }, h(ZoltarMigrationSection, createProps({ isOnActiveAppChain: false }))))
+		cleanupRenderedComponent = rendered.cleanup
+		await openStep('Review')
+		expectTransactionButtonDisabled(document.body, 'Migrate REP')
+		const fix = within(document.body).getByRole('button', { name: 'Switch to Sepolia' })
+		expect(within(document.body).getByRole('button', { name: 'Migrate REP' }).getAttribute('aria-describedby')).toBe(fix.id)
+		expect(document.querySelector('.migration-wizard-nav-hint')?.textContent).toBe('')
+		await act(() => fix.click())
+		expect(calls).toEqual(['switch'])
 	})
 
 	test('stops outcome balance spinners when reads finish without a value', async () => {

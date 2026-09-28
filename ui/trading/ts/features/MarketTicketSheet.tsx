@@ -5,7 +5,7 @@ import { marketsCopy } from '../copy/markets.js'
 import type { TicketSide } from '../lib/ticketSide.js'
 
 /** Below this width the ticket leaves the side column and becomes a bottom sheet. Keep in sync with app.css. */
-const COMPACT_TICKET_QUERY = '(max-width: 56.25rem)'
+const COMPACT_TICKET_QUERY = '(max-width: 64rem)'
 
 function useMediaQuery(query: string) {
 	const [matches, setMatches] = useState(() => typeof window.matchMedia === 'function' && window.matchMedia(query).matches)

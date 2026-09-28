@@ -1,6 +1,6 @@
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
 import {
-	createCertifiedCompleteSetFixture,
+	createCompleteSet,
 	depositRepToVault,
 	depositToEscalationGame,
 	getRepToken,
@@ -294,7 +294,7 @@ describe('Statoblast: escalation migration', () => {
 		await refreshCurrentPrice()
 		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const unresolvedDeposit = reportBond
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, unresolvedDeposit)
@@ -448,7 +448,7 @@ describe('Statoblast: escalation migration', () => {
 		await mockWindow.setTime(endTime + 10000n)
 		await refreshCurrentPrice()
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -470,7 +470,7 @@ describe('Statoblast: escalation migration', () => {
 		await refreshCurrentPrice()
 		const securityPoolUnderwritingLimitAttoEth = reportBond * 2n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])

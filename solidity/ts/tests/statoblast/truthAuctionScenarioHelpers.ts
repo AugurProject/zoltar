@@ -5,7 +5,7 @@ import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRepToVault, manipulatePriceOracle, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion, getQuestionId as buildQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { certifyVaultCoverage, createCertifiedCompleteSetFixture, depositRepToVault, depositToEscalationGame, getRepToken, getTotalUnderwritingLimitAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, getTotalUnderwritingLimitAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
 import { getEthRaiseCapAttoEth, getQuestionEndDate, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -109,11 +109,9 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
-		await certifyVaultCoverage(client, securityPoolAddresses.securityPool, client.account.address)
-
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerExternalForkForSecurityPool(undefined, titlePrefix)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

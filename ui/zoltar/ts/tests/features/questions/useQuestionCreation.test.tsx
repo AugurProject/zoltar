@@ -66,16 +66,16 @@ describe('useQuestionCreation', () => {
 			createQuestion?: UseQuestionCreationDependencies['createQuestion']
 			deploymentStatuses?: DeploymentStatus[]
 			environmentRefreshKey?: number
-			loadZoltarQuestions?: () => Promise<void>
+			loadCreatedZoltarQuestion?: (questionId: string) => Promise<void>
 			onTransactionFinished?: () => void
 			onTransactionRequested?: () => boolean | void
 			refreshState?: () => Promise<void>
 		} = {},
 	) {
-		const loadZoltarQuestions = mock(options.loadZoltarQuestions ?? (async () => undefined))
+		const loadCreatedZoltarQuestion = mock(options.loadCreatedZoltarQuestion ?? (async (_questionId: string) => undefined))
 		const setZoltarForkQuestionId = mock(() => undefined)
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions, setZoltarForkQuestionId }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion, setZoltarForkQuestionId }),
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		const createQuestion = mock(options.createQuestion ?? (async () => CREATION_RESULT))
@@ -135,7 +135,7 @@ describe('useQuestionCreation', () => {
 		return {
 			createQuestion,
 			hookState: () => requireHookState(hookState),
-			loadZoltarQuestions,
+			loadCreatedZoltarQuestion,
 			onTransactionFailed,
 			onTransactionFinished,
 			onTransactionPrepared,
@@ -150,7 +150,7 @@ describe('useQuestionCreation', () => {
 		}
 	}
 
-	test('records a successful creation, selects it for a fork, and refreshes state', async () => {
+	test('records a successful creation, selects it for a fork, and loads only the created question', async () => {
 		const harness = await renderHook()
 		await act(async () => await harness.hookState().createQuestion())
 		expect(harness.createQuestion).toHaveBeenCalledTimes(1)
@@ -158,7 +158,8 @@ describe('useQuestionCreation', () => {
 		expect(harness.hookState().questionFeedback?.status.tone).toBe('success')
 		expect(harness.setZoltarForkQuestionId).toHaveBeenCalledWith(QUESTION_ID)
 		expect(harness.refreshState).toHaveBeenCalledTimes(1)
-		expect(harness.loadZoltarQuestions).toHaveBeenCalledTimes(1)
+		expect(harness.loadCreatedZoltarQuestion).toHaveBeenCalledTimes(1)
+		expect(harness.loadCreatedZoltarQuestion).toHaveBeenCalledWith(QUESTION_ID)
 		expect(harness.onTransactionPresented).toHaveBeenCalledTimes(1)
 		expect(harness.onTransactionRequested.mock.calls[0]?.[0].universeId).toBeUndefined()
 		expect(harness.onTransactionPresented.mock.calls[0]?.[0].universeId).toBeUndefined()
@@ -197,7 +198,7 @@ describe('useQuestionCreation', () => {
 
 	test('keeps the successful result and presents a warning when refresh fails', async () => {
 		const harness = await renderHook({
-			loadZoltarQuestions: async () => {
+			loadCreatedZoltarQuestion: async () => {
 				throw new Error('question refresh unavailable')
 			},
 		})
@@ -282,7 +283,7 @@ describe('useQuestionCreation', () => {
 		expect(harness.onTransactionSubmitted).not.toHaveBeenCalled()
 		expect(harness.onTransactionFinished).toHaveBeenCalledTimes(1)
 		expect(harness.refreshState).not.toHaveBeenCalled()
-		expect(harness.loadZoltarQuestions).not.toHaveBeenCalled()
+		expect(harness.loadCreatedZoltarQuestion).not.toHaveBeenCalled()
 		expect(harness.setZoltarForkQuestionId).not.toHaveBeenCalled()
 	})
 
@@ -395,7 +396,7 @@ describe('useQuestionCreation', () => {
 
 	test('keeps global question drafts across universe changes and isolates them by account', async () => {
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({
-			useZoltarOperations: () => ({ loadZoltarQuestions: async () => undefined, setZoltarForkQuestionId: () => undefined }),
+			useZoltarOperations: () => ({ loadCreatedZoltarQuestion: async () => undefined, setZoltarForkQuestionId: () => undefined }),
 		}))
 		const { useQuestionCreation } = await import(`@zoltar/ui-zoltar-shared/features/questions/hooks/useQuestionCreation.js?case=${crypto.randomUUID()}`)
 		let hookState: UseQuestionCreationState | undefined
