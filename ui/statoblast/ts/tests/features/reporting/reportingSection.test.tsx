@@ -745,7 +745,7 @@ describe('ReportingSection', () => {
 		expect(within(document.body).queryByRole('button', { name: /^Approve / })).toBeNull()
 		expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Wallet REP' }))
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 	})
 
@@ -823,7 +823,7 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
 		expect(document.body.textContent).not.toContain('Paid from: pool vault REP (no approval needed)')
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
 		const reportAction = reportButton.closest('.tx-action')
@@ -834,7 +834,7 @@ describe('ReportingSection', () => {
 		expect(actionRow?.contains(disabledReason)).toBe(false)
 		expect(reportAction?.contains(disabledReason)).toBe(false)
 		expect(reportButton.closest('.reporting-shared-action-region')?.contains(disabledReason)).toBe(true)
-		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP…$/ }))
+		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ }))
 		expect(approvalCalls).toBe(1)
 	})
 
