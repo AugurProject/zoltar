@@ -6,6 +6,7 @@ import { exactUnit } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioPage } from './portfolio-helpers.ts'
 import type { createOperationsComponents } from './operations-components.ts'
+import { tradingPnlPanel } from './trading-panels.ts'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -185,6 +186,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 		),
 		'No current AMM liquidity-token position has been reconstructed for this address.',
 	)
+	const tradingPnl = tradingPnlPanel(item.trading_pnl, { operationRow, operationsPanel, operationsHref, element })
 	const forkParticipation = operationsPanel(
 		'Fork and migration participation',
 		operationRecords(item['fork_participation']).map(event =>
@@ -314,7 +316,7 @@ export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichLis
 	interactionPanel.append(interactionList)
 	setLiveRecord(interactionPanel, 'references', interactions)
 	setLiveRecord(activity, 'transactions', transactions)
-	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, refundPanel, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
+	content.replaceChildren(header, metrics, balances, involvement, payoutPanel, escalationPositions, sharePanel, refundPanel, tradingPnl, lpPositions, forkParticipation, reportParticipation, escalationClaims, auctionClaims, interactionPanel, activity)
 	applyLiveChanges(content, previousSections, { live })
 	content.setAttribute('aria-busy', 'false')
 }

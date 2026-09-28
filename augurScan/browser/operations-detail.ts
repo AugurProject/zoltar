@@ -8,6 +8,7 @@ import { compareCanonicalEventPosition, operationsDetailEvidencePanelVisible, op
 import { exactUnit } from './format.ts'
 import { renderCandleContent } from './operations-candles.ts'
 import type { createOperationsComponents } from './operations-components.ts'
+import { tradingActivityPanel, tradingVolumeRows } from './trading-panels.ts'
 
 type Components = ReturnType<typeof createOperationsComponents>
 
@@ -174,6 +175,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No trading observations are available.',
 			),
 		)
+		panels.push(operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits' }))
+		panels.push(tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref }))
 		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
 		panels.push(
 			operationsPanel(

@@ -5,6 +5,7 @@ import { addressPortfolioRows, richListRows, type RichListSort } from '../reposi
 import { snapshotBoundary } from './entity-details.ts'
 import { ApiConflictError, ApiRequestError, boundedInteger, evmAddress, integer, isNonNegativeSafeInteger, isPostgresBigint, json, jsonRecord } from './shared.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
+import { accountTradingPnl } from './trading-activity.ts'
 
 export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const chainId = integer(url.searchParams.get('chainId'), 'chainId')
@@ -117,7 +118,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 	const lp = collection('lp', lpRows, lpPage, 'market_address')
 	const forks = collection('forks', forkRows, forkPage, 'universe_identity')
 	const reports = collection('reports', reportRows, reportPage, 'open_oracle_address')
-	const [refunds, positions] = await Promise.all([pendingAuctionRefunds(sql, chainId, snapshotBlock, address), escalationPositions(sql, chainId, snapshotBlock, address)])
+	const [refunds, positions, tradingPnl] = await Promise.all([pendingAuctionRefunds(sql, chainId, snapshotBlock, address), escalationPositions(sql, chainId, snapshotBlock, address), accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, asOfTimestamp: String(asOf['blockTimestamp']), account: address })])
 	const base = items[0]
 	// Omit unknown aggregate balances instead of turning absent historical reads into zero.
 	const balances =
@@ -147,6 +148,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 			pending_refunds: refunds.slice(0, 250),
 			pending_refunds_truncated: refunds.length > 250,
 			lp_positions: lp.items,
+			trading_pnl: tradingPnl,
 			fork_participation: forks.items,
 			report_participation: reports.items,
 			portfolioPagination: { lp: lp.page, forks: forks.page, reports: reports.page },

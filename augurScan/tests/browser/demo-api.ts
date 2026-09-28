@@ -1,4 +1,4 @@
-import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
+import { demoAmmPriceHistory, demoDenseUniswapRepEthPriceHistory, demoRepEthPriceHistory, demoTradingActivity, demoTradingPnl, demoUniswapRepEthPriceHistory } from './demo-fixtures.ts'
 
 import { type ContractRecord, type LiveEventPayload } from '../../browser/browser-types.ts'
 
@@ -1231,6 +1231,16 @@ export function createDemoApi(context: DemoContext) {
 						input_volume_7d: '91000000000000000000',
 						fees_24h: '54000000000000000',
 						fees_7d: '273000000000000000',
+						eth_volume_atto_eth: '48250000000000000000',
+						eth_volume_24h_atto_eth: '6400000000000000000',
+						eth_volume_7d_atto_eth: '21700000000000000000',
+						eth_trade_count: 41,
+						eth_trade_count_24h: 5,
+					},
+					activity: {
+						items: demoTradingActivity(operations.asOf),
+						limit: 50,
+						hasMore: false,
 					},
 					twap24h: { state: 'Available', numerator: '49', denominator: '51', coverageSeconds: '86400', windowSeconds: '86400' },
 					twap7d: { state: 'Partial coverage', numerator: '97', denominator: '100', coverageSeconds: '518400', windowSeconds: '604800' },
@@ -1449,6 +1459,11 @@ export function createDemoApi(context: DemoContext) {
 						swap_count: 63,
 						lp_holder_count: 4,
 						price_block_number: operations.asOf.blockNumber,
+						eth_volume_atto_eth: '48250000000000000000',
+						eth_volume_24h_atto_eth: '6400000000000000000',
+						eth_volume_7d_atto_eth: '21700000000000000000',
+						eth_trade_count: 41,
+						eth_trade_count_24h: 5,
 					},
 				]
 				const integrityCombinedCauses = context.pageUrl.searchParams.get('integrityCombinedCauses') === '1'
@@ -1736,6 +1751,7 @@ export function createDemoApi(context: DemoContext) {
 						},
 						escalation_positions: [{ game_address: demoAddress('7'), deposit_index: '4', principal_atto_rep: '2000000000000000000', final_resolution: '1', outcome: '1', resolution_block: operations.asOf.blockNumber }],
 						lp_positions: lpPositions,
+						trading_pnl: demoTradingPnl(demoAddress('fa')),
 						fork_participation: forkParticipation,
 						report_participation: reportParticipation,
 						portfolioPagination: {

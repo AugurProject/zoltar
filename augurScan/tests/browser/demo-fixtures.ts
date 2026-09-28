@@ -1,3 +1,4 @@
+import { TRADING_PNL_BASIS } from '../../src/trading-pnl.ts'
 import type { UniswapPriceObservation } from '../../browser/chart-values.ts'
 
 import type { AmmPriceHistoryRecord, RepEthPriceHistoryRecord } from '../../browser/browser-types.ts'
@@ -91,3 +92,55 @@ export const demoDenseUniswapRepEthPriceHistory = (now = Date.now()): UniswapPri
 		],
 		now,
 	)
+
+const demoTrader = '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db'
+const demoTransaction = (seed: number) => `0x${seed.toString(16).padStart(64, '7')}`
+
+export const demoTradingActivity = (asOf: { readonly blockNumber: string; readonly blockTimestamp: string }) =>
+	(
+		[
+			['exit', 'YES', demoTrader, '5200000000000000000', '0', '3100000000000000000'],
+			['swap', 'NO', '0x3333333333333333333333333333333333333333', '1900000000000000000', null, null],
+			['enter', 'YES', demoTrader, '9800000000000000000', '5000000000000000000', '0'],
+			['add-liquidity', null, '0x2222222222222222222222222222222222222222', '12500000000000000000', '15000000000000000000', '0'],
+		] as const
+	).map(([kind, side, account, shares, ethIn, ethOut], index) => ({
+		block_hash: demoTransaction(900 + index),
+		tx_hash: demoTransaction(index + 1),
+		block_number: String(BigInt(asOf.blockNumber) - BigInt(index * 40)),
+		log_index: 3,
+		timestamp_seconds: String(BigInt(asOf.blockTimestamp) - BigInt(index * 480)),
+		kind,
+		side,
+		account,
+		shares,
+		eth_in_atto_eth: ethIn,
+		eth_out_atto_eth: ethOut,
+	}))
+
+const demoPnlPosition = (market: string, questionTitle: string, holdings: readonly [string, string, string], flows: readonly [cost: string, proceeds: string, value: string, realized: string, unrealized: string, net: string]) => ({
+	market_address: market,
+	question_title: questionTitle,
+	action_count: 2,
+	invalid_atto_shares: holdings[0],
+	yes_atto_shares: holdings[1],
+	no_atto_shares: holdings[2],
+	lp_tokens: '0',
+	cost_basis_atto_eth: flows[0],
+	proceeds_atto_eth: flows[1],
+	holdings_value_atto_eth: flows[2],
+	realized_pnl_atto_eth: flows[3],
+	unrealized_pnl_atto_eth: flows[4],
+	net_pnl_atto_eth: flows[5],
+	open: holdings.some(value => value !== '0'),
+	valuation: { status: 'available' },
+})
+
+export const demoTradingPnl = (market: string) => ({
+	items: [
+		demoPnlPosition(market, 'Will the 2030 global mean temperature anomaly exceed 1.5°C?', ['1800000000000000000', '4600000000000000000', '0'], ['5000000000000000000', '3100000000000000000', '1650000000000000000', '0', '-250000000000000000', '-250000000000000000']),
+		demoPnlPosition('0xa7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7', 'Will the protocol meet its launch reliability target?', ['0', '0', '0'], ['2000000000000000000', '2640000000000000000', '0', '640000000000000000', '0', '640000000000000000']),
+	],
+	truncated: false,
+	basis: TRADING_PNL_BASIS,
+})
