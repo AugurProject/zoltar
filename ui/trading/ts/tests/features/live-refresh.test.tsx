@@ -380,8 +380,17 @@ describe('live market refresh', () => {
 			validateLiveDeployment: async () => undefined,
 			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }], universeIds: [1n], selectedUniverseId: 1n }),
 		}
+		// The desktop layout keeps the ticket beside the market, so the compact-ticket media query must not match.
+		const originalMatchMedia = window.matchMedia
+		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		cleanupRendered = async () => {
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
-		cleanupRendered = rendered.cleanup
+		cleanupRendered = async () => {
+			await rendered.cleanup()
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
 		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
 		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('NO')
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)

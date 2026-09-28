@@ -44,7 +44,7 @@ describe('LifecycleStageBanner', () => {
 	test('renders stage detail as plain text without a loading spinner for standard and warning stages', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<>
-				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading reporting details.', key: 'reportingOpen', label: 'Reporting Open', tone: 'success' }} />
+				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading reporting details.', key: 'reportingOpen', label: 'Reporting open', tone: 'success' }} />
 				<LifecycleStageBanner stage={{ availableActions: [], blockedActions: [], detail: 'Loading warning details.', key: 'warning', label: 'Warning', tone: 'warning' }} />
 			</>,
 		)

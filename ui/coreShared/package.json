@@ -83,6 +83,10 @@
 			"bun": "./ts/app/components/ApplicationErrorNotice.tsx",
 			"default": "./js/app/components/ApplicationErrorNotice.js"
 		},
+		"./app/components/ThemeSetting.js": {
+			"bun": "./ts/app/components/ThemeSetting.tsx",
+			"default": "./js/app/components/ThemeSetting.js"
+		},
 		"./components/ApprovedAmountValue.js": {
 			"bun": "./ts/components/ApprovedAmountValue.tsx",
 			"default": "./js/components/ApprovedAmountValue.js"
@@ -154,6 +158,10 @@
 		"./tests/app/notFoundSection.test.js": {
 			"bun": "./ts/tests/app/notFoundSection.test.tsx",
 			"default": "./js/tests/app/notFoundSection.test.js"
+		},
+		"./tests/app/themeSetting.test.js": {
+			"bun": "./ts/tests/app/themeSetting.test.tsx",
+			"default": "./js/tests/app/themeSetting.test.js"
 		},
 		"./tests/app/routeSubNavigation.test.js": {
 			"bun": "./ts/tests/app/routeSubNavigation.test.tsx",

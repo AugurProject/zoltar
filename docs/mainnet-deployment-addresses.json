@@ -4,7 +4,7 @@
 		"chainIdHex": "0x1",
 		"genesisRepTokenAddress": "0x221657776846890989a759ba2973e427dff5c9bb",
 		"id": "mainnet",
-		"name": "Ethereum Mainnet",
+		"name": "Ethereum mainnet",
 		"wethAddress": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 	},
 	"protocolConfig": {

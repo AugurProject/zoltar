@@ -273,7 +273,7 @@ void describe('TradingSection', () => {
 		const dialog = within(document.body).getByRole('dialog')
 		const confirm = within(dialog).getByRole('button', { name: 'Mint complete sets' })
 		expect(confirm.hasAttribute('disabled')).toBe(true)
-		expect(dialog.textContent).toContain('Request a new price in Price Oracle before minting.')
+		expect(dialog.textContent).toContain('Request a new price in Price oracle before minting.')
 	})
 
 	void test('labels the max complete sets metric as redeemable complete sets', async () => {
@@ -281,7 +281,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Redeemable Complete Sets')).not.toBeNull()
+		expect(documentQueries.getByText('Redeemable complete sets')).not.toBeNull()
 		expect(documentQueries.queryByText('Max Complete Sets')).toBeNull()
 	})
 
@@ -291,15 +291,15 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Share Workflow')).toBeNull()
-		expect(documentQueries.getByRole('heading', { name: 'Your Holdings' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Your holdings' })).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Shares' })).not.toBeNull()
 		expect(document.body.textContent?.includes('Balances are shown as complete-set amounts for the selected pool.')).toBe(false)
 		expect(document.body.textContent?.includes('Statoblast does not execute secondary-market trades here. Use this panel to mint, redeem, or migrate share balances after reviewing pool capacity and finality.')).toBe(false)
-		expect(documentQueries.queryByRole('heading', { name: 'Mint Complete Sets' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Redeem Complete Sets' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Mint complete sets' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Redeem complete sets' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Redeem complete sets' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Migrate Forked Shares' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Migrate forked shares' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Redeem resolved shares' })).toBeNull()
 	})
 
@@ -364,7 +364,7 @@ void describe('TradingSection', () => {
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
 		})
-		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
+		expect(documentQueries.getByRole('dialog', { name: 'Mint complete sets' })).not.toBeNull()
 
 		await act(() => {
 			if (completeTradingOperation === undefined) throw new Error('Expected trading operation completion')
@@ -375,12 +375,12 @@ void describe('TradingSection', () => {
 				universeId: 1n,
 			})
 		})
-		expect(documentQueries.queryByRole('dialog', { name: 'Mint Complete Sets' })).toBeNull()
+		expect(documentQueries.queryByRole('dialog', { name: 'Mint complete sets' })).toBeNull()
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
 		})
-		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
+		expect(documentQueries.getByRole('dialog', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
 	void test('renders your share metrics using rounded values with exact value titles', async () => {
@@ -432,7 +432,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Total Across Outcomes')).not.toBeNull()
+		expect(documentQueries.getByText('Total across outcomes')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
 		expect(documentQueries.getAllByText('1.00').length).toBeGreaterThanOrEqual(4)
@@ -464,8 +464,8 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
-		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
-		const outcomes = within(dialog.getByRole('list', { name: 'Estimated Shares Received' })).getAllByRole('listitem')
+		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
+		const outcomes = within(dialog.getByRole('list', { name: 'Estimated shares received' })).getAllByRole('listitem')
 		expect(outcomes).toHaveLength(3)
 		for (const [index, label] of ['Yes', 'No', 'Invalid'].entries()) {
 			const outcome = outcomes[index]
@@ -517,9 +517,9 @@ void describe('TradingSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
 		})
 
-		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
 		const walletMetric = modalQueries.getByText('Wallet ETH').parentElement
-		const mintableMetric = modalQueries.getByText('Available to Mint').parentElement
+		const mintableMetric = modalQueries.getByText('Available to mint').parentElement
 		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
 		expect(getExactValueTitles(walletMetric, '1.25')).toHaveLength(1)
 		expect(getExactValueTitles(mintableMetric, '1.25')).toHaveLength(1)
@@ -548,7 +548,7 @@ void describe('TradingSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
 		})
 		await act(() => {
-			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.field-inline-action')
+			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint complete sets' }).querySelector('.field-inline-action')
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
 			fireEvent.click(maxButton)
 		})
@@ -570,9 +570,9 @@ void describe('TradingSection', () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ oraclePriceUsable: true, repPerEthPrice: undefined, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
-		const dialog = within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' })
+		const dialog = within(document.body).getByRole('dialog', { name: 'Mint complete sets' })
 		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
-		expect(dialog.textContent).not.toContain('Request a new price in Price Oracle before minting.')
+		expect(dialog.textContent).not.toContain('Request a new price in Price oracle before minting.')
 	})
 
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
@@ -600,7 +600,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' })))
 		await act(() => {
-			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.field-inline-action')
+			const maxButton = documentQueries.getByRole('dialog', { name: 'Mint complete sets' }).querySelector('.field-inline-action')
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
 			fireEvent.click(maxButton)
 		})
@@ -616,7 +616,7 @@ void describe('TradingSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' }))
 		})
 
-		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		let modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
 		let mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button')
 		expect(mintSubmitButton.disabled).toBe(false)
@@ -625,11 +625,11 @@ void describe('TradingSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Switch Test Network' }))
 		})
 
-		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }))
+		modalQueries = within(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }))
 		mintSubmitButton = modalQueries.getByRole('button', { name: 'Mint complete sets' })
 		if (!(mintSubmitButton instanceof HTMLButtonElement)) throw new Error('Expected Mint complete sets transaction button after network switch')
 		expect(mintSubmitButton.disabled).toBe(true)
-		expect(getTransactionButtonState(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }), 'Mint complete sets').reason).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(documentQueries.getByRole('dialog', { name: 'Mint complete sets' }), 'Mint complete sets').reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -657,21 +657,21 @@ void describe('TradingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
 		})
 
-		const dialogElement = within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' })
+		const dialogElement = within(document.body).getByRole('dialog', { name: 'Mint complete sets' })
 		const dialog = within(dialogElement)
-		expect(dialog.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
+		expect(dialog.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		expect(document.body.querySelector('.transaction-review')).toBeNull()
-		expect(dialog.getByText('You Pay')).not.toBeNull()
-		expect(dialog.getByText('Estimated Shares Received')).not.toBeNull()
-		expect(dialog.getByText('Estimated Retention Fee')).not.toBeNull()
+		expect(dialog.getByText('You pay')).not.toBeNull()
+		expect(dialog.getByText('Estimated shares received')).not.toBeNull()
+		expect(dialog.getByText('Estimated retention fee')).not.toBeNull()
 		expect(dialog.getByText('Estimate may change when accrued fees are checkpointed.')).not.toBeNull()
-		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
-		const estimatedFeeRow = dialog.getByText('Estimated Retention Fee').parentElement
+		expect(dialog.getByText('Resulting ETH balance')).not.toBeNull()
+		const estimatedFeeRow = dialog.getByText('Estimated retention fee').parentElement
 		if (estimatedFeeRow === null) throw new Error('Expected estimated retention fee row')
 		expect(getExactValueTitles(estimatedFeeRow, '1')).toHaveLength(1)
 		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(3)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
-		const receivedShares = dialog.getByRole('list', { name: 'Estimated Shares Received' })
+		const receivedShares = dialog.getByRole('list', { name: 'Estimated shares received' })
 		for (const label of ['Yes', 'No', 'Invalid']) expect(within(receivedShares).getByText(label, { exact: true })).not.toBeNull()
 	})
 
@@ -755,9 +755,9 @@ void describe('TradingSection', () => {
 		})
 
 		const modalQueries = within(documentQueries.getByRole('dialog'))
-		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share Outcome To Migrate' }) as HTMLButtonElement
+		const shareOutcomeDropdown = modalQueries.getByRole('button', { name: 'Share outcome to migrate' }) as HTMLButtonElement
 		expect(shareOutcomeDropdown.disabled).toBe(false)
-		expect(modalQueries.getByText('Target Child Universes')).not.toBeNull()
+		expect(modalQueries.getByText('Target child universes')).not.toBeNull()
 	})
 
 	void test('shows the share redemption disabled reason before finalization', async () => {
@@ -790,7 +790,7 @@ void describe('TradingSection', () => {
 		const launcher = documentQueries.getByRole('button', { name: 'Redeem resolved shares' })
 		fireEvent.click(launcher)
 
-		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem Resolved Shares' })
+		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem resolved shares' })
 		expect(within(dialog).getByRole('button', { name: 'Redeem shares' })).not.toBeNull()
 	})
 

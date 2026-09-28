@@ -19,12 +19,12 @@ describe('TransactionStatusCard', () => {
 	})
 
 	test('renders title, badge, and detail', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionStatusCard title='Liquidation submitted' badge={<Badge tone='warning'>Check State</Badge>} detail='Refresh staged operations.' />)
+		const renderedComponent = await renderIntoDocument(<TransactionStatusCard title='Liquidation submitted' badge={<Badge tone='warning'>Check state</Badge>} detail='Refresh staged operations.' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'Liquidation submitted' })).not.toBeNull()
-		expect(documentQueries.getByText('Check State')).not.toBeNull()
+		expect(documentQueries.getByText('Check state')).not.toBeNull()
 		expect(documentQueries.getByText('Refresh staged operations.')).not.toBeNull()
 	})
 
@@ -35,7 +35,7 @@ describe('TransactionStatusCard', () => {
 				badge={<Badge tone='warning'>Queued</Badge>}
 				metrics={
 					<MetricGrid>
-						<div>Staged Operation</div>
+						<div>Staged operation</div>
 						<div>#7</div>
 					</MetricGrid>
 				}
@@ -44,7 +44,7 @@ describe('TransactionStatusCard', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Staged Operation')).not.toBeNull()
+		expect(documentQueries.getByText('Staged operation')).not.toBeNull()
 		expect(documentQueries.getByText('#7')).not.toBeNull()
 	})
 
@@ -55,7 +55,7 @@ describe('TransactionStatusCard', () => {
 				badge={<Badge tone='warning'>Queued</Badge>}
 				actions={
 					<button className='secondary' type='button'>
-						View In Staged Operations
+						View In Staged operations
 					</button>
 				}
 			/>,
@@ -63,11 +63,11 @@ describe('TransactionStatusCard', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'View In Staged Operations' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'View In Staged operations' })).not.toBeNull()
 	})
 
 	test('uses a flat surface when composed inside a dialog or workflow card', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionStatusCard badge={<Badge tone='warning'>Check State</Badge>} surface='flat' title='Liquidation submitted' detail='Refresh staged operations.' />)
+		const renderedComponent = await renderIntoDocument(<TransactionStatusCard badge={<Badge tone='warning'>Check state</Badge>} surface='flat' title='Liquidation submitted' detail='Refresh staged operations.' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.querySelector('.transaction-status-card.flat')).not.toBeNull()

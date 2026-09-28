@@ -5,7 +5,7 @@ import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTa
 
 const deploymentTab = { hash: '#/deploy', label: 'Deploy', route: 'deploy' }
 const primaryTabs = [
-	{ hash: '#/security-pools', label: 'Security Pools', route: 'security-pools' },
+	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
 	{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
 ]
 
@@ -17,7 +17,7 @@ describe('app navigation', () => {
 	})
 
 	test('resolves secondary views only for the route that owns them', () => {
-		const securityPoolViews = createSecondaryNavigation({ ariaLabel: 'Security Pools views', onChange: () => undefined, options: [{ label: 'Browse Pools', value: 'browse' }], value: 'browse' })
+		const securityPoolViews = createSecondaryNavigation({ ariaLabel: 'Security pools views', onChange: () => undefined, options: [{ label: 'Browse pools', value: 'browse' }], value: 'browse' })
 		const secondaryByRoute = { 'security-pools': securityPoolViews }
 		expect(resolveSecondaryNavigation({ route: 'security-pools', secondaryByRoute })).toBe(securityPoolViews)
 		expect(resolveSecondaryNavigation({ route: 'deploy', secondaryByRoute })).toBeUndefined()
@@ -28,11 +28,11 @@ describe('app navigation', () => {
 	test('forwards only known view values to the typed change handler', () => {
 		const changes: Array<'browse' | 'create'> = []
 		const navigation = createSecondaryNavigation<'browse' | 'create'>({
-			ariaLabel: 'Security Pools views',
+			ariaLabel: 'Security pools views',
 			onChange: value => changes.push(value),
 			options: [
-				{ label: 'Browse Pools', value: 'browse' },
-				{ label: 'Create Pool', value: 'create' },
+				{ label: 'Browse pools', value: 'browse' },
+				{ label: 'Create pool', value: 'create' },
 			],
 			value: 'browse',
 		})

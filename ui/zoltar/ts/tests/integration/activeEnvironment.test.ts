@@ -195,7 +195,7 @@ void describe('active environment', () => {
 		)
 
 		expect(isSupportedAppChain('0x539')).toBe(true)
-		expect(getWrongNetworkReason()).toBe('Switch to Browser Simulation.')
+		expect(getWrongNetworkReason()).toBe('Switch to Browser simulation.')
 		resetEnvironment()
 	})
 
