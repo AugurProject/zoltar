@@ -8,7 +8,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { suppressPresentedTransactionError, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
@@ -34,6 +34,9 @@ import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
+
+const MULTIPLIER_ERROR_ID = 'security-pool-security-multiplier-error'
+const PRIORITY_FEE_ERROR_ID = 'security-pool-initial-report-priority-fee-error'
 
 export function SecurityPoolSection({
 	accountState,
@@ -110,6 +113,8 @@ export function SecurityPoolSection({
 	// A transaction still showing keeps the form it summarizes locked while the wallet decides.
 	const questionSourceLocked = questionAndPoolCreating || marketCreating || securityPoolCreating || ownsTransactionReview || marketResult !== undefined
 	const hasSecurityPoolResult = securityPoolResult !== undefined
+	const [multiplierErrorRevealed, setMultiplierErrorRevealed] = useState(false)
+	const [priorityFeeErrorRevealed, setPriorityFeeErrorRevealed] = useState(false)
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
 	const questionFormValidation = validateMarketForm(marketForm)
@@ -154,10 +159,10 @@ export function SecurityPoolSection({
 		return undefined
 	})()
 	let visibleFieldErrorId: string | undefined = undefined
-	if (createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
-		visibleFieldErrorId = 'security-pool-security-multiplier-error'
-	} else if (createDisabledReason === initialReportPriorityFeeValidationMessage) {
-		visibleFieldErrorId = 'security-pool-initial-report-priority-fee-error'
+	if (multiplierErrorRevealed && createDisabledReason === statoblastSecurityMultiplierValidationMessage) {
+		visibleFieldErrorId = MULTIPLIER_ERROR_ID
+	} else if (priorityFeeErrorRevealed && createDisabledReason === initialReportPriorityFeeValidationMessage) {
+		visibleFieldErrorId = PRIORITY_FEE_ERROR_ID
 	}
 	let createdQuestionDetails = undefined
 	if (securityPoolResult !== undefined)
@@ -177,48 +182,33 @@ export function SecurityPoolSection({
 	} else if (zoltarUniverseHasForked) createButtonLabel = securityPoolCopy.poolCreationLocked
 	const poolConfigurationFields = (
 		<>
-			<div className='field'>
-				<label htmlFor='security-pool-security-multiplier'>
-					<span>{statoblastAppCopy.statoblastSecurityMultiplierBps}</span>
-				</label>
-				<FormInput
-					id='security-pool-security-multiplier'
-					aria-describedby={`security-pool-security-multiplier-help${statoblastSecurityMultiplierValidationMessage === undefined ? '' : ' security-pool-security-multiplier-error'}`}
-					invalid={statoblastSecurityMultiplierValidationMessage !== undefined}
-					disabled={questionSourceLocked}
-					value={securityPoolForm.statoblastSecurityMultiplierBps}
-					onInput={event => onSecurityPoolFormChange({ statoblastSecurityMultiplierBps: event.currentTarget.value })}
-				/>
-				<p className='field-help' id='security-pool-security-multiplier-help'>
-					{securityPoolCopy.statoblastSecurityMultiplierBpsHelpText}
-				</p>
-				{statoblastSecurityMultiplierValidationMessage === undefined ? undefined : (
-					<p className='field-error' id='security-pool-security-multiplier-error'>
-						{statoblastSecurityMultiplierValidationMessage}
-					</p>
-				)}
-			</div>
-			<div className='field'>
-				<label htmlFor='security-pool-initial-report-priority-fee'>
-					<span>{securityPoolCopy.initialReportPriorityFeeEthLabel}</span>
-				</label>
-				<FormInput
-					id='security-pool-initial-report-priority-fee'
-					aria-describedby={`security-pool-initial-report-priority-fee-help${initialReportPriorityFeeValidationMessage === undefined ? '' : ' security-pool-initial-report-priority-fee-error'}`}
-					invalid={initialReportPriorityFeeValidationMessage !== undefined}
-					disabled={questionSourceLocked}
-					value={securityPoolForm.initialReportPriorityFeeEth}
-					onInput={event => onSecurityPoolFormChange({ initialReportPriorityFeeEth: event.currentTarget.value })}
-				/>
-				<p className='field-help' id='security-pool-initial-report-priority-fee-help'>
-					{securityPoolCopy.initialReportPriorityFeeHelpText}
-				</p>
-				{initialReportPriorityFeeValidationMessage === undefined ? undefined : (
-					<p className='field-error' id='security-pool-initial-report-priority-fee-error'>
-						{initialReportPriorityFeeValidationMessage}
-					</p>
-				)}
-			</div>
+			<AmountField
+				decimals={4}
+				disabled={questionSourceLocked}
+				error={statoblastSecurityMultiplierValidationMessage}
+				errorId={MULTIPLIER_ERROR_ID}
+				errorRevealed={multiplierErrorRevealed}
+				hint={securityPoolCopy.statoblastSecurityMultiplierBpsHelpText}
+				id='security-pool-security-multiplier'
+				label={statoblastAppCopy.statoblastSecurityMultiplierBps}
+				onChange={statoblastSecurityMultiplierBps => onSecurityPoolFormChange({ statoblastSecurityMultiplierBps })}
+				onErrorRevealedChange={setMultiplierErrorRevealed}
+				unit={commonCopy.multiplierUnit}
+				value={securityPoolForm.statoblastSecurityMultiplierBps}
+			/>
+			<AmountField
+				disabled={questionSourceLocked}
+				error={initialReportPriorityFeeValidationMessage}
+				errorId={PRIORITY_FEE_ERROR_ID}
+				errorRevealed={priorityFeeErrorRevealed}
+				hint={securityPoolCopy.initialReportPriorityFeeHelpText}
+				id='security-pool-initial-report-priority-fee'
+				label={securityPoolCopy.initialReportPriorityFee}
+				onChange={initialReportPriorityFeeEth => onSecurityPoolFormChange({ initialReportPriorityFeeEth })}
+				onErrorRevealedChange={setPriorityFeeErrorRevealed}
+				unit={commonCopy.eth}
+				value={securityPoolForm.initialReportPriorityFeeEth}
+			/>
 			<div className='field'>
 				<span>{securityPoolCopy.initialOpenInterestFeeYear}</span>
 				<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
@@ -272,7 +262,7 @@ export function SecurityPoolSection({
 									<AddressValue address={securityPoolResult.securityPoolAddress} responsiveAbbreviation />
 								</MetricField>
 								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</MetricField>
-								<MetricField label={securityPoolCopy.initialReportPriorityFeeEthLabel}>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
+								<MetricField label={securityPoolCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
 							</>
 						}
 					/>

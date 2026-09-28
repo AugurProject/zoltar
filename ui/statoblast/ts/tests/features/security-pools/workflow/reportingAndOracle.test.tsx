@@ -774,13 +774,22 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const dialog = queries.getByRole('dialog', { name: 'Request new price' })
 		const confirm = within(dialog).getByRole('button', { name: 'Request new price' })
 		expect(getTransactionButtonState(dialog, 'Request new price').disabled).toBe(true)
-		const input = queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' })
+		const input = queries.getByRole('textbox', { name: 'Open Oracle starting price' })
+		expect(input.closest('.form-input-adorned')?.querySelector('.form-input-adornment')?.textContent).toBe('REP / ETH')
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
 			expect(getTransactionButtonState(dialog, 'Request new price').disabled).toBe(true)
 			expect(queries.getAllByText('Enter a positive REP per ETH price with up to 18 decimal places.')).toHaveLength(1)
 			expect(getTransactionButtonState(dialog, 'Request new price').reason).toContain('Enter a positive REP per ETH price')
 		}
+		await act(() => {
+			input.dispatchEvent(new Event('blur'))
+		})
+		const priceError = queries.getByText('Enter a positive REP per ETH price with up to 18 decimal places.')
+		expect(priceError.classList.contains('field-error')).toBe(true)
+		expect(queries.getAllByText('Enter a positive REP per ETH price with up to 18 decimal places.')).toHaveLength(1)
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(confirm.getAttribute('aria-describedby')).toBe(priceError.id)
 		fireEvent.input(input, { target: { value: '1.25' } })
 		expect(getTransactionButtonState(dialog, 'Request new price').disabled).toBe(false)
 		fireEvent.click(confirm)
