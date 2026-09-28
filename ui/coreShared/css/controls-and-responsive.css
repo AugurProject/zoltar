@@ -1228,18 +1228,18 @@
 	}
 }
 
-/* Phones: a denser top bar, section views in a two-column grid, and a full-width account popover. */
+/* Phones: a denser top bar (universe, account, and settings share one row down to 360px), section views in a two-column grid, and a full-width account popover. */
 @media (max-width: 40rem) {
 	.header-toolbar {
-		gap: var(--space-2);
-		padding: 0.25rem 0.35rem 0.25rem 0.5rem;
+		gap: 0.3rem;
+		padding: 0.25rem 0.3rem;
 		border-radius: var(--radius-control);
 	}
 
 	/* A network-switch action is the only control that can push the bar to a second row. */
 	.header-toolbar-controls {
 		flex-wrap: wrap;
-		gap: var(--space-2);
+		gap: 0.3rem;
 	}
 
 	.header-toolbar-controls .toolbar-field-value,
@@ -1248,8 +1248,8 @@
 	}
 
 	.header-toolbar-controls .wallet-chip {
-		gap: 0.35rem;
-		padding-inline: 0.55rem 0.6rem;
+		gap: 0.25rem;
+		padding-inline: 0.4rem 0.45rem;
 	}
 
 	.header-toolbar-controls .wallet-chip.is-placeholder {
@@ -1287,26 +1287,5 @@
 		width: auto;
 		max-width: calc(100vw - 1.5rem);
 		margin-top: 0.5rem;
-	}
-}
-
-/* Phones tighten spacing so universe, account, and settings still share one row. */
-@media (max-width: 40rem) {
-	main {
-		padding-inline: 0.4rem;
-	}
-
-	.header-toolbar {
-		padding-inline: 0.3rem;
-	}
-
-	.header-toolbar,
-	.header-toolbar-controls {
-		gap: 0.3rem;
-	}
-
-	.header-toolbar-controls .wallet-chip {
-		gap: 0.25rem;
-		padding-inline: 0.4rem 0.45rem;
 	}
 }

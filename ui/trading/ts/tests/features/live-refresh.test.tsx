@@ -383,6 +383,9 @@ describe('live market refresh', () => {
 		// The desktop layout keeps the ticket beside the market, so the compact-ticket media query must not match.
 		const originalMatchMedia = window.matchMedia
 		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		cleanupRendered = async () => {
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = async () => {
 			await rendered.cleanup()
