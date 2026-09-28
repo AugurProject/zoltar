@@ -28,9 +28,6 @@ export const totalValueBasis = 'Exit and redemption prices now'
 export function excludedFromTotal(count: number) {
 	return `Excludes ${count.toString()} ${count === 1 ? 'position' : 'positions'} without a price`
 }
-export const profitLoss = 'Profit / loss'
-export const profitLossUnavailable = 'Not available'
-export const costBasisUnavailableReason = 'Entry costs are not recorded on-chain per account.'
 export const positions = 'Positions'
 export const needsAttention = 'Needs attention'
 export const actionItemCount = 'Action items'

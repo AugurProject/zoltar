@@ -655,6 +655,13 @@ button.outcome-button--no:hover:not(:disabled) {
 	font-size: var(--font-label);
 }
 @media (max-width: 40rem) {
+	/* Two columns: total value spans the first row so the three tiles do not leave an orphan. */
+	.portfolio-summary-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+	.portfolio-summary-grid > :first-child {
+		grid-column: 1 / -1;
+	}
 	.portfolio-action-items li {
 		grid-template-columns: auto minmax(0, 1fr);
 	}
