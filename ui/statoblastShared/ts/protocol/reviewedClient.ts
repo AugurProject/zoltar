@@ -8,6 +8,7 @@ import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessag
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
@@ -162,7 +163,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.submitted(hash)
 			return hash
 		} catch (error) {
-			controller.failed(getErrorMessage(error, 'Transaction failed.'))
+			controller.failed(createTransactionFailure(error, getErrorMessage(error, 'Transaction failed.')))
 			throw error
 		}
 	}
@@ -188,7 +189,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				}
 				return true
 			} catch (error) {
-				controller.failed(getErrorMessage(error, 'Funding failed. Remaining transactions were not sent.'))
+				controller.failed(createTransactionFailure(error, getErrorMessage(error, 'Funding failed. Remaining transactions were not sent.')))
 				throw error
 			}
 		},
@@ -229,7 +230,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 					},
 				})
 				controller.receipt(confirmedHash, replaced ? 'reverted' : receipt.status)
-				if (replaced) throw new Error(transactionErrorMessages.canceledOrReplaced)
+				if (replaced) throw createTransactionFailureError('replaced', transactionErrorMessages.canceledOrReplaced)
 				if (receipt.status === 'reverted') {
 					let exhaustedGas = false
 					try {
@@ -242,19 +243,19 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 					if (exhaustedGas) {
 						diagnosedReceiptFailure = true
 						const message = transactionErrorMessages.fullGasLimit
-						controller.failed(message)
-						throw new Error(message)
+						controller.failed({ kind: 'reverted', message })
+						throw createTransactionFailureError('reverted', message)
 					}
 				}
 				if (partialApproval && receipt.status === 'success') {
 					diagnosedReceiptFailure = true
 					const message = transactionErrorMessages.insufficientApproval
-					controller.failed(message)
+					controller.failed({ kind: 'error', message })
 					throw new Error(message)
 				}
 				return receipt
 			} catch (error) {
-				if (!diagnosedReceiptFailure) controller.failed(getErrorMessage(error, transactionErrorMessages.confirmationUnavailable))
+				if (!diagnosedReceiptFailure) controller.failed(createTransactionFailure(error, getErrorMessage(error, transactionErrorMessages.confirmationUnavailable)))
 				throw error
 			}
 		},
