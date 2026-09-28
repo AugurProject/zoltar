@@ -4,6 +4,7 @@ import { candlestickBuckets, fixedWindowTwap, swapAnalytics } from '../operation
 import { tradingDetailData } from '../repositories/trading-detail.ts'
 import { detailPage, paged, protocolCursorFor, protocolCursorForRequest } from './entity-details.ts'
 import { json, jsonRecord, routeInteger } from './shared.ts'
+import { EMPTY_TRADING_VOLUME, tradingActivityCursor, tradingActivityPage, tradingVolumes } from './trading-activity.ts'
 import { operationsAsOfForContinuations } from './snapshot.ts'
 
 export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], url: URL): Promise<Response> => {
@@ -11,7 +12,12 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 	const market = parts[1]?.toLowerCase()
 	if (parts.length !== 2 || chainId === undefined || market === undefined || !/^0x[0-9a-f]{40}$/.test(market)) return json({ error: 'Invalid AMM identifier' }, 400)
 	const cursor = protocolCursorForRequest(url, chainId, 'trading', market)
-	const asOf = await operationsAsOfForContinuations(sql, chainId, cursor === undefined ? [] : [{ parts: cursor, offset: 3 }])
+	const activityCursor = tradingActivityCursor(url, chainId, market)
+	const asOf = await operationsAsOfForContinuations(
+		sql,
+		chainId,
+		[cursor, activityCursor].flatMap(item => (item === undefined ? [] : [{ parts: item, offset: 3 }])),
+	)
 	const page = detailPage(url, chainId, 'trading', market, asOf, cursor)
 	const cursorBlock = page.cursor?.[9] ?? String(asOf['blockNumber'])
 	const cursorTx = page.cursor?.[10] ?? `0x${'f'.repeat(64)}`
@@ -32,6 +38,7 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 		queryLimit: page.queryLimit,
 	})
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'AMM not found' }, 404)
+	const [volumes, activity] = await Promise.all([tradingVolumes(sql, { chainId, asOf, market }), tradingActivityPage(sql, url, { chainId, market, asOf })])
 	const eventRows = rows.map((row: Record<string, unknown>) => {
 		const eventData = jsonRecord(row['event_data'])
 		if (row['event_name'] !== 'Swap') return { ...row, event_data: eventData }
@@ -62,7 +69,8 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 		asOf,
 		data: {
 			market,
-			summary: summaries[0],
+			summary: { ...summaries[0], ...(volumes.get(market) ?? EMPTY_TRADING_VOLUME) },
+			activity,
 			sharePositions: await sharePositions(sql, chainId, String(asOf['blockNumber']), { market }),
 			lpPositions,
 			events: paged(eventRows, page.limit, row => protocolCursorFor(chainId, 'trading', market, asOf, row)),

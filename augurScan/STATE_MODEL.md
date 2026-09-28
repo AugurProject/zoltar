@@ -52,7 +52,7 @@ The same separation applies across the indexed domains:
 | OpenOracle reports | Submitted, disputed, settled, rejected, and recovery occurrences plus coordinator decisions | Latest report round and lifecycle state |
 | Escalations and auctions | Deposits, claims, bids, settlements, refunds, and lifecycle events | Current totals, outcome state, and clearing summary |
 | Statoblast risk | Accounting checkpoints, liquidation approvals, and tagged pool/vault reads | Latest coherent risk snapshot and scanner assessment |
-| Trading | Pair identity, reserve synchronization, swaps, liquidity events, and LP transfers | Current market summary, positions, and bounded analytics |
+| Trading | Pair identity, reserve synchronization, swaps, liquidity events, and LP transfers, joined at read time with pool complete-set events and share transfers | Current market summary, ETH volume, market activity, account profit and loss, positions, and bounded analytics |
 | Zoltar forks | Universe lineage, migration, REP burn, pool checkpoints, and escalation obligations | Current branch and migration summary |
 | Addresses and tokens | Participation occurrences plus tagged balance and metadata read outcomes | Latest successful balance and metadata values |
 
