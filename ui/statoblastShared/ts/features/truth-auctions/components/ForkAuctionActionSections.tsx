@@ -16,6 +16,7 @@ import { renderTruthAuctionCapacityOwnershipNotice, renderTruthAuctionPriceValue
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { SecurityPoolStateModel } from '../../security-pools/lib/securityPoolState.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
+import { withWalletGuardFirst, type WalletGuard } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 export type ForkAuctionActionOptions = {
 	action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -28,34 +29,11 @@ export type ForkAuctionActionOptions = {
 	tone?: 'primary' | 'secondary'
 }
 
-export function createForkAuctionActionRenderer({
-	activeAction,
-	forkPoolState,
-	interactionDisabledReason,
-	isOnActiveAppChain,
-	wrongNetworkReason,
-}: {
-	activeAction: ForkAuctionSectionProps['forkAuctionActiveAction']
-	forkPoolState: SecurityPoolStateModel
-	interactionDisabledReason: string | undefined
-	isOnActiveAppChain: boolean
-	wrongNetworkReason: string
-}) {
+/** Renders fork and truth auction actions. The wallet prerequisite comes before every other blocker, so a disconnected wallet or wrong network offers its connect or switch fix. */
+export function createForkAuctionActionRenderer({ activeAction, forkPoolState, walletGuard }: { activeAction: ForkAuctionSectionProps['forkAuctionActiveAction']; forkPoolState: SecurityPoolStateModel; walletGuard: WalletGuard }) {
 	return ({ action, availability = { disabled: false, reason: undefined }, forceEnabled, idleLabel, onClick, pendingLabel, pending, tone = 'secondary' }: ForkAuctionActionOptions) => {
 		const actionEnabled = forceEnabled ?? forkPoolState.actions[action].enabled
-		return (
-			<TransactionActionButton
-				idleLabel={idleLabel}
-				pendingLabel={pendingLabel}
-				onClick={onClick}
-				pending={pending ?? activeAction === action}
-				tone={tone}
-				availability={{
-					disabled: !isOnActiveAppChain || !actionEnabled || interactionDisabledReason !== undefined || availability.disabled,
-					reason: !isOnActiveAppChain ? wrongNetworkReason : (interactionDisabledReason ?? availability.reason),
-				}}
-			/>
-		)
+		return <TransactionActionButton idleLabel={idleLabel} pendingLabel={pendingLabel} onClick={onClick} pending={pending ?? activeAction === action} tone={tone} availability={withWalletGuardFirst({ disabled: !actionEnabled || availability.disabled, reason: availability.reason }, walletGuard)} />
 	}
 }
 

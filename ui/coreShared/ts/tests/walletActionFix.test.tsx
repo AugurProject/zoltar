@@ -1,31 +1,21 @@
 /// <reference types="bun-types" />
 
 import { signal } from '@preact/signals'
+import { useRef } from 'preact/hooks'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { ActionLauncherButton } from '../components/ActionLauncherButton.js'
 import { ActionLauncherCard } from '../components/ActionLauncherCard.js'
 import { TransactionActionButton, TransactionActionButtonLockProvider, TransactionActionGroup, TransactionScopeProvider } from '../components/TransactionActionButton.js'
-import { WalletActionsProvider, type WalletActions } from '../components/WalletActionFix.js'
+import { WalletActionFixReason, WalletActionsProvider } from '../components/WalletActionFix.js'
 import type { ActionAvailability } from '../types/components.js'
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { fireEvent, within } from './testUtils/queries.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
+import { createWalletActions } from './testUtils/walletActions.js'
 
 const disconnectedAvailability: ActionAvailability = { disabled: true, reason: 'Connect a wallet before creating a question.', walletBlocker: { kind: 'wallet-disconnected' } }
 const wrongNetworkAvailability: ActionAvailability = { disabled: true, reason: 'Switch to Sepolia.', walletBlocker: { kind: 'wrong-network', targetChainName: 'Sepolia' } }
-
-function createWalletActions(overrides: Partial<WalletActions> = {}) {
-	const calls: string[] = []
-	const walletActions: WalletActions = {
-		isConnectingWallet: false,
-		isManagingWallet: false,
-		onConnect: () => calls.push('connect'),
-		onSwitchNetwork: () => calls.push('switch'),
-		...overrides,
-	}
-	return { calls, walletActions }
-}
 
 describe('wallet action fix', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -236,4 +226,83 @@ describe('wallet action fix', () => {
 			expect(page.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(fix.id)
 			expect(document.body.textContent).not.toContain('Wait for the pending transaction to confirm.')
 		})
+
+	test('holds the fix in a shared reason element that several actions name as their description', async () => {
+		const { calls, walletActions } = createWalletActions()
+		const rendered = await renderIntoDocument(
+			<WalletActionsProvider walletActions={walletActions}>
+				<WalletActionFixReason availability={wrongNetworkAvailability} id='shared-reason'>
+					<p id='shared-reason'>Switch to Sepolia.</p>
+				</WalletActionFixReason>
+				<TransactionActionButton availability={wrongNetworkAvailability} disabledReasonElementId='shared-reason' idleLabel='Settle selected' onClick={() => undefined} pendingLabel='Settling…' showDisabledReason={false} />
+				<TransactionActionButton availability={wrongNetworkAvailability} disabledReasonElementId='shared-reason' idleLabel='Settle all' onClick={() => undefined} pendingLabel='Settling…' showDisabledReason={false} />
+			</WalletActionsProvider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		const fix = page.getByRole('button', { name: 'Switch to Sepolia' })
+		expect(fix.id).toBe('shared-reason')
+		expect(page.getAllByRole('button', { name: 'Switch to Sepolia' })).toHaveLength(1)
+		expect(page.getByRole('button', { name: 'Settle selected' }).getAttribute('aria-describedby')).toBe('shared-reason')
+		expect(page.getByRole('button', { name: 'Settle all' }).getAttribute('aria-describedby')).toBe('shared-reason')
+		expect(document.body.textContent).not.toContain('Switch to Sepolia.')
+		await act(() => fireEvent.click(fix))
+		expect(calls).toEqual(['switch'])
+	})
+
+	test('keeps the shared text reason for other blockers or without wallet actions', async () => {
+		const { walletActions } = createWalletActions()
+		const rendered = await renderIntoDocument(
+			<>
+				<WalletActionFixReason availability={disconnectedAvailability} id='without-provider'>
+					<p id='without-provider'>Connect a wallet before creating a question.</p>
+				</WalletActionFixReason>
+				<WalletActionsProvider walletActions={walletActions}>
+					<WalletActionFixReason availability={{ disabled: true, reason: 'Loading reporting details.' }} id='other-reason'>
+						<p id='other-reason'>Loading reporting details.</p>
+					</WalletActionFixReason>
+				</WalletActionsProvider>
+			</>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).queryByRole('button')).toBeNull()
+		expect(document.getElementById('without-provider')?.textContent).toBe('Connect a wallet before creating a question.')
+		expect(document.getElementById('other-reason')?.textContent).toBe('Loading reporting details.')
+	})
+
+	test('returns focus from a shared fix to the action it unblocked', async () => {
+		const state = signal<{ availability: ActionAvailability; connecting: boolean }>({ availability: disconnectedAvailability, connecting: false })
+		const Harness = () => {
+			const actionButtonRef = useRef<HTMLButtonElement>(null)
+			return (
+				<WalletActionsProvider
+					walletActions={{
+						isConnectingWallet: state.value.connecting,
+						isManagingWallet: false,
+						onConnect: () => {
+							state.value = { ...state.value, connecting: true }
+						},
+						onSwitchNetwork: () => undefined,
+					}}
+				>
+					<WalletActionFixReason actionButtonRef={actionButtonRef} availability={state.value.availability} id='report-reason' visible={state.value.availability.reason !== undefined}>
+						<p id='report-reason'>{state.value.availability.reason}</p>
+					</WalletActionFixReason>
+					<TransactionActionButton actionButtonRef={actionButtonRef} availability={state.value.availability} disabledReasonElementId='report-reason' idleLabel='Report Yes' onClick={() => undefined} pendingLabel='Reporting…' showDisabledReason={false} />
+				</WalletActionsProvider>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		const fix = page.getByRole('button', { name: 'Connect wallet' })
+		fix.focus()
+		await act(() => fireEvent.click(fix))
+		fix.blur()
+		await act(() => {
+			state.value = { availability: { disabled: false, reason: undefined }, connecting: false }
+		})
+		expect(page.queryByRole('button', { name: 'Connect wallet' })).toBeNull()
+		expect(document.activeElement).toBe(page.getByRole('button', { name: 'Report Yes' }))
+	})
 })

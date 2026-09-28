@@ -71,3 +71,17 @@ export function useWalletActionFix({ actionButtonRef, actionDisabled, availabili
 		</button>
 	)
 }
+
+/**
+ * The shared reason element that several actions name as their accessible description. While the wallet blocks those
+ * actions it holds the connect or switch fix under the same id, so every action stays described by it; otherwise it
+ * renders its text reason. After the fix unblocks the action in `actionButtonRef`, focus returns to that action, so keep the
+ * element mounted with `visible` false while the reason shows elsewhere or not at all.
+ */
+export function WalletActionFixReason({ actionButtonRef, availability, children, id, visible = true }: { actionButtonRef?: RefObject<HTMLButtonElement> | undefined; availability: ActionAvailability | undefined; children: ComponentChildren; id: string; visible?: boolean }) {
+	const detachedActionButtonRef = useRef<HTMLButtonElement>(null)
+	const renderWalletFix = useWalletActionFix({ actionButtonRef: actionButtonRef ?? detachedActionButtonRef, actionDisabled: availability?.disabled === true, availability })
+	if (!visible) return undefined
+	if (renderWalletFix === undefined) return <>{children}</>
+	return <div className='tx-action-feedback'>{renderWalletFix(id)}</div>
+}

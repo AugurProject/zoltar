@@ -23,7 +23,7 @@ async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['rev
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
 }
 
-export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, closeOnSuccessKey, getReturnFocusTarget, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
+export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, confirmationWalletBlocker, closeOnSuccessKey, getReturnFocusTarget, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
 	const [fetching, setFetching] = useState(false)
 	const [quoteError, setQuoteError] = useState<string>()
 	const quoteAttempt = useRef(0)
@@ -237,6 +237,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							failedPlan={failedPlan}
 							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
 							error={confirmationGuardMessage}
+							errorWalletBlocker={confirmationWalletBlocker}
 							preparing={valid && !manualRequestRequired && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
