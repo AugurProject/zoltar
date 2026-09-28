@@ -372,6 +372,35 @@ describe('LiquidationModal', () => {
 		opener.remove()
 	})
 
+	test('keeps the liquidation form open on a backdrop click while the close button still closes it', async () => {
+		let closeCount = 0
+		const renderedComponent = await renderLiquidationModal({
+			closeLiquidationModal: () => {
+				closeCount += 1
+			},
+			currentPoolOracleManagerDetails: undefined,
+			liquidationModalOpen: true,
+			selectedPool: createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n }),
+			targetVaultSummary: createTargetVaultSummary(),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const dialog = within(document.body).getByRole('dialog', { name: 'Liquidate Vault' })
+		expect(dialog.querySelector('input')).not.toBeNull()
+		const backdrop = dialog.closest('.modal-backdrop')
+		if (!(backdrop instanceof HTMLElement)) throw new Error('Expected the liquidation modal backdrop')
+		await act(() => {
+			fireEvent.click(backdrop)
+		})
+		// A stray click outside must not discard the entered liquidation amounts.
+		expect(closeCount).toBe(0)
+
+		await act(() => {
+			fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+		})
+		expect(closeCount).toBe(1)
+	})
+
 	test('hides sibling page content while open and restores it after close', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
