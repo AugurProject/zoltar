@@ -249,9 +249,9 @@ export function useSecurityPoolCreation({
 						securityPoolCreating.value = true
 						return accepted
 					},
-					onTransactionFinished: () => {
+					onTransactionFinished: requestKey => {
 						securityPoolCreating.value = false
-						onTransactionFinished()
+						onTransactionFinished(requestKey)
 					},
 					onTransactionFailed,
 					onWriteError: message => {

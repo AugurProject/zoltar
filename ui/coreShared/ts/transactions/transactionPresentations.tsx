@@ -84,6 +84,7 @@ export function buildIntent({
 	action,
 	failedTitle,
 	rows,
+	scope,
 	source,
 	submittedDetail,
 	submittedTitle,
@@ -92,6 +93,7 @@ export function buildIntent({
 	action: string
 	failedTitle?: TransactionIntent['failedTitle']
 	rows?: GlobalTransactionRow[] | undefined
+	scope?: TransactionIntent['scope']
 	source: string
 	submittedDetail?: TransactionIntent['submittedDetail']
 	submittedTitle: TransactionIntent['submittedTitle']
@@ -101,6 +103,7 @@ export function buildIntent({
 		action,
 		...(failedTitle === undefined ? {} : { failedTitle }),
 		...(rows === undefined ? {} : { rows }),
+		...(scope === undefined || scope.length === 0 ? {} : { scope }),
 		source,
 		...(submittedDetail === undefined ? {} : { submittedDetail }),
 		submittedTitle,

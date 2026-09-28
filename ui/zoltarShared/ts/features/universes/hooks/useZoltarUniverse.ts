@@ -1,4 +1,6 @@
 import { useSignal } from '@preact/signals'
+import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
+import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createZoltarChildUniverse } from '../../../protocol/zoltarForks.js'
@@ -435,6 +437,7 @@ export function useZoltarUniverse(
 		zoltarChildUniverseFeedback.value = createPendingActionFeedback('createChildUniverse', 'Deploying child universe')
 		zoltarChildUniversePendingOutcomeIndex.value = outcomeIndex
 		let ownsTransaction = false
+		let requestKey: TransactionRequestKey | undefined
 		try {
 			let refreshRequired = false
 			let result: ZoltarChildUniverseActionResult | undefined
@@ -442,11 +445,13 @@ export function useZoltarUniverse(
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				if (onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel, universeId: activeUniverseId })) === false) {
+				const request = onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel, universeId: activeUniverseId }))
+				if (request === false) {
 					zoltarChildUniverseFeedback.value = undefined
 					return
 				}
 				ownsTransaction = true
+				requestKey = typeof request === 'string' ? request : undefined
 				const universe = await ensureZoltarUniverse()
 				if (!environmentGuard.isCurrent()) return
 				if (!universe.hasForked) throw new Error('This universe must fork before child universes can be deployed')
@@ -465,7 +470,7 @@ export function useZoltarUniverse(
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, 'Failed to deploy child universe')
-				if (ownsTransaction) onTransactionFailed?.(message)
+				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
 				zoltarChildUniverseFeedback.value = createErrorActionFeedback('createChildUniverse', 'Child universe deployment failed', message)
 				return
 			}
@@ -483,7 +488,7 @@ export function useZoltarUniverse(
 		} finally {
 			if (environmentGuard.isCurrent()) {
 				zoltarChildUniversePendingOutcomeIndex.value = undefined
-				if (ownsTransaction) onTransactionFinished()
+				if (ownsTransaction) onTransactionFinished(requestKey)
 			}
 		}
 	}

@@ -704,7 +704,7 @@ describe('useSecurityPoolCreation', () => {
 			const controller = createTransactionStepController(client.reviewSignal)
 			controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 			controller.startWithoutReview(0)
-			controller.failed('User rejected the request')
+			controller.failed({ kind: 'rejected', message: 'User rejected the request' })
 			throw new Error('User rejected the request')
 		})
 		await setupContractMocks({
