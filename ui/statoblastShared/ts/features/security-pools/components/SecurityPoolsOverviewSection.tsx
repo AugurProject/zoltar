@@ -11,6 +11,9 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex, SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
@@ -28,9 +31,11 @@ export function SecurityPoolsOverviewSection({
 	loadingSecurityPoolPage,
 	onCreateSecurityPool,
 	onLoadSecurityPoolPage,
+	onRefreshSecurityPoolPage,
 	onSelectSecurityPool,
 	securityPoolBrowseCount,
 	securityPoolPage,
+	securityPoolPageFreshness,
 	securityPoolOverviewError,
 	repPerEthPrice,
 	uiPriceOracle = 'open-oracle',
@@ -110,6 +115,8 @@ export function SecurityPoolsOverviewSection({
 			cancelled = true
 		}
 	}, [currentPageRequestKey, environmentRefreshKey, resolvedPageIndex])
+	// Each new block re-reads the visible page in place; the explicit load above owns the loading state.
+	useBlockRefresh(() => onRefreshSecurityPoolPage?.(), onRefreshSecurityPoolPage !== undefined && hasCurrentPageData)
 	const filteredSecurityPools = securityPoolsWithState.filter(({ pool, poolState }) => {
 		const displayState = poolState.lifecycleState
 		if (pool.universeId !== activeUniverseId) return false
@@ -123,18 +130,21 @@ export function SecurityPoolsOverviewSection({
 			density='compact'
 			variant='plain'
 			actions={
-				<PaginationControls
-					hasNextPage={hasNextPage}
-					hasPreviousPage={hasPreviousPage}
-					loading={loadingCurrentPage}
-					onNextPage={() => {
-						setPageIndex(current => current + 1)
-					}}
-					onPreviousPage={() => {
-						setPageIndex(current => Math.max(0, current - 1))
-					}}
-					summary={hasCurrentPageData ? formatPaginationSummary(resolvedPageIndex, poolPageCount) : undefined}
-				/>
+				<>
+					{securityPoolPageFreshness === undefined ? undefined : <UpdatedAgo {...(hasCurrentPageData ? securityPoolPageFreshness : { refreshing: false, updatedAt: undefined })} />}
+					<PaginationControls
+						hasNextPage={hasNextPage}
+						hasPreviousPage={hasPreviousPage}
+						loading={loadingCurrentPage}
+						onNextPage={() => {
+							setPageIndex(current => current + 1)
+						}}
+						onPreviousPage={() => {
+							setPageIndex(current => Math.max(0, current - 1))
+						}}
+						summary={hasCurrentPageData ? formatPaginationSummary(resolvedPageIndex, poolPageCount) : undefined}
+					/>
+				</>
 			}
 		>
 			<ErrorNotice message={effectiveSecurityPoolOverviewError} />
@@ -179,6 +189,7 @@ export function SecurityPoolsOverviewSection({
 					})()
 
 					if (isEmptyRegistry) return <EmptyState title={securityPoolCopy.noSecurityPools} detail={registryPresentation.detail} actions={registryActions} />
+					if (registryPresentation.key === 'loading') return <SkeletonList label={registryPresentation.detail ?? commonCopy.loadingWithEllipsis} />
 					return <StateHint presentation={registryPresentation} actions={registryActions} />
 				}
 				if (filteredSecurityPools.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} />

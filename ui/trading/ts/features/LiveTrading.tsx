@@ -56,7 +56,6 @@ export function LiveTrading({
 	onWalletSummaryChange = ignoreWalletSummaryChange,
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
-	refreshIntervalMilliseconds,
 	tradeSettings = DEFAULT_TRADE_SETTINGS,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
@@ -79,7 +78,6 @@ export function LiveTrading({
 	onWalletSummaryChange?(summary: WalletSummaryState): void
 	walletSummaryRetryNonce?: number
 	walletConnectRequestNonce?: number
-	refreshIntervalMilliseconds?: number | undefined
 	/** Slippage and validity from the application Settings menu; every Trading transaction uses them. */
 	tradeSettings?: TradeSettings
 	controllerServices?: LiveTradingControllerServices
@@ -97,12 +95,11 @@ export function LiveTrading({
 		onWalletSummaryChange,
 		walletSummaryRetryNonce,
 		settings: tradeSettings,
-		refreshIntervalMilliseconds,
 		services: controllerServices,
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
+	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
 	const { setMode, setSide } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -189,7 +186,19 @@ export function LiveTrading({
 			<div className='route-view-flow'>
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
-				<LiveMarketBrowser lookupRoute={route} markets={listedMarkets} pageMarketCount={visibleMarkets.length} discoveryState={discoveryState} discoveryError={discoveryError} marketPage={marketPage} workflowLocked={workflowLocked} nowSeconds={nowSeconds} retry={refreshFromControl} loadMarketPage={loadMarketPage} />
+				<LiveMarketBrowser
+					lookupRoute={route}
+					markets={listedMarkets}
+					pageMarketCount={visibleMarkets.length}
+					discoveryState={discoveryState}
+					discoveryError={discoveryError}
+					freshness={discoveryFreshness}
+					marketPage={marketPage}
+					workflowLocked={workflowLocked}
+					nowSeconds={nowSeconds}
+					retry={refreshFromControl}
+					loadMarketPage={loadMarketPage}
+				/>
 			</div>
 		)
 	}
