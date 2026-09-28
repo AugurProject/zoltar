@@ -66,6 +66,62 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		},
 	})
 
+	test('uses the supplied initial price for liquidation funding and submission', async () => {
+		const price = 3n * 10n ** 18n
+		const queueSecurityPoolLiquidation = mock(async () => ({ hash: '0x01' as const }))
+		const dependencies = createSecurityPoolsOverviewDependencies({ loadOracleManagerQueueOperationEthValue: mock(async () => 1n), queueSecurityPoolLiquidation, createConnectedReadClient: () => ({ getBalance: async () => 10n ** 18n }) })
+		const funding = await dependencies.loadCoordinatorInitialReportFundingRequirement({ kind: 'write-client' }, zeroAddress, WALLET_ADDRESS)
+		const loadFunding = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _manager: Address, _wallet: Address, proposedPrice?: bigint) => {
+			if (proposedPrice === undefined) throw new Error('Automatic pricing unavailable')
+			return { ...funding, proposedRepPerEthPrice: proposedPrice }
+		})
+		dependencies.loadCoordinatorInitialReportFundingRequirement = loadFunding
+		let state: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => {
+			requireHookState(state).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n)
+			requireHookState(state).setLiquidationAmount('1')
+			await requireHookState(state).loadLiquidationFundingPreview(zeroAddress, price)
+		})
+		expect(requireHookState(state).liquidationFundingPreviewError).toBeUndefined()
+		await act(async () => await requireHookState(state).queueLiquidation(zeroAddress, zeroAddress, price))
+		expect(requireHookState(state).securityPoolLiquidationError).toBeUndefined()
+		expect(loadFunding).toHaveBeenCalledWith(expect.anything(), zeroAddress, WALLET_ADDRESS, price)
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n, 300n, 0n, WALLET_ADDRESS, `0x${'00'.repeat(32)}`, price)
+	})
+
+	test('ignores a late automatic funding result after switching to a manual price', async () => {
+		const dependencies = createSecurityPoolsOverviewDependencies({ loadOracleManagerQueueOperationEthValue: mock(async () => 1n) })
+		const funding = await dependencies.loadCoordinatorInitialReportFundingRequirement({ kind: 'write-client' }, zeroAddress, WALLET_ADDRESS)
+		const automaticFunding = createDeferred<typeof funding>()
+		const loadFunding = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _manager: Address, _wallet: Address, price?: bigint) => (price === undefined ? await automaticFunding.promise : { ...funding, requiredRepAttoRep: price }))
+		dependencies.loadCoordinatorInitialReportFundingRequirement = loadFunding
+		let state: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(() => {
+			requireHookState(state).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
+		})
+		const automaticLoad = requireHookState(state).loadLiquidationFundingPreview(zeroAddress)
+		await waitFor(() => {
+			expect(loadFunding).toHaveBeenCalledTimes(1)
+		})
+		await act(async () => {
+			await requireHookState(state).loadLiquidationFundingPreview(zeroAddress, 3n)
+		})
+		expect(requireHookState(state).liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(3n)
+		automaticFunding.resolve(funding)
+		await act(async () => {
+			await automaticLoad
+		})
+		expect(requireHookState(state).liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(3n)
+	})
+
 	test('snapshots submitted modal inputs before async preflight completes', async () => {
 		const loadOracleManagerQueueOperationEthValueDeferred = createDeferred<bigint>()
 		const queueSecurityPoolLiquidation = mock(async () => ({
@@ -109,7 +165,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		loadOracleManagerQueueOperationEthValueDeferred.resolve(0n)
 		await queuePromise
 
-		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, '0x0000000000000000000000000000000000000001', 10n ** 18n, 5n * 60n, 0n, '0x0000000000000000000000000000000000000001', `0x${'00'.repeat(32)}`)
+		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, '0x0000000000000000000000000000000000000001', 10n ** 18n, 5n * 60n, 0n, '0x0000000000000000000000000000000000000001', `0x${'00'.repeat(32)}`, undefined)
 	})
 
 	test('ignores stale modal errors after the user edits the form', async () => {

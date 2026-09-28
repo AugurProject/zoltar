@@ -178,7 +178,7 @@ export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.
 export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'
 export const selectOwnVaultToWithdrawRep = 'Select your own vault to withdraw REP.'
 export const selfServiceExecutionTimeoutHelpText = 'Whole minutes; expires after oracle settlement.'
-export const formatManualExecutionTimeoutResolvedDetail = (duration: string) => `This queued self-service operation will expire ${duration} after the oracle settlement window completes.`
+export const formatManualExecutionTimeoutResolvedDetail = (duration: string) => `If queued, this operation expires ${duration} after the oracle settlement window completes.`
 export const owned = 'Owned'
 export const readOnlyBadgeLabel = 'Read only'
 export const refreshingWithdrawalStatusDetail = 'Refreshing the oracle manager to determine whether the withdrawal was queued or executed immediately.'
@@ -270,3 +270,8 @@ export const manualInitialPriceHint = 'Initial report price; subject to Open Ora
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
+
+export const oracleOperationExecutesImmediately = 'Executes immediately with the current oracle price.'
+export const oracleOperationQueuesForSettlement = 'Queues for execution after oracle settlement.'
+export const oracleOperationMayNeedManualExecution = 'Queues; manual execution may be needed after oracle settlement.'
+export const oracleOperationExecutionLoading = 'Checking whether this operation will execute immediately or queue.'
