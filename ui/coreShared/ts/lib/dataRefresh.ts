@@ -22,3 +22,13 @@ export function blockPollIntervalMilliseconds(simulation: boolean) {
 export function invalidateAppData() {
 	appBlockWatcher.invalidate()
 }
+
+/**
+ * Whether two read results carry the same data. A background refresh that finds nothing new keeps the current
+ * objects, so components and effects keyed on them do not re-run on every block.
+ */
+export function isSameQueryData(left: unknown, right: unknown) {
+	if (left === right) return true
+	const serialize = (value: unknown) => JSON.stringify(value, (_key, entry: unknown) => (typeof entry === 'bigint' ? `${entry.toString()}n` : entry))
+	return serialize(left) === serialize(right)
+}

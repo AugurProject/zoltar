@@ -4,7 +4,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createZoltarChildUniverse } from '../../../protocol/zoltarForks.js'
 import { loadAllZoltarQuestions, loadMarketDetails, loadZoltarQuestionCount, loadZoltarQuestionPage, loadZoltarUniverseSummary } from '../../../protocol/zoltar.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
-import { appQueryCache } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useBlockRefresh, useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -393,7 +393,7 @@ export function useZoltarUniverse(
 					.fetch(universeQueryKey, async () => await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), activeUniverseId))
 					.then(universe => {
 						if (universe === undefined || !isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
-						zoltarUniverse.value = universe
+						if (!isSameQueryData(universe, zoltarUniverse.value)) zoltarUniverse.value = universe
 					}),
 			)
 		}
@@ -405,6 +405,7 @@ export function useZoltarUniverse(
 					.fetch(questionPageQueryKey, async () => await dependencies.loadZoltarQuestionPage(dependencies.createConnectedReadClient(), page.pageIndex, page.pageSize))
 					.then(nextPage => {
 						if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionContext) || questionsLoad.isLoading.peek() || questionPageCommitVersionRef.current !== commitVersion) return
+						if (isSameQueryData(nextPage, zoltarQuestionPage.value)) return
 						zoltarQuestionCount.value = nextPage.questionCount
 						zoltarQuestionPage.value = nextPage
 						zoltarQuestions.value = mergeQuestionLists(zoltarQuestions.value, nextPage.questions)

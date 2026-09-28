@@ -1,7 +1,7 @@
 import { useSignal } from '@preact/signals'
 import { useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { appQueryCache } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -59,6 +59,7 @@ export function useSecurityPoolBrowsePage({ accountAddress, loadSecurityPoolPage
 		try {
 			const page = await securityPoolPageQueries.fetch(current.requestKey, async () => await loadSecurityPoolPage(current.pageIndex, current.pageSize, accountAddress))
 			if (commitVersionRef.current !== commitVersion || securityPoolPageLoad.isLoading.peek() || securityPoolPage.value?.requestKey !== current.requestKey) return
+			if (isSameQueryData({ ...page, requestKey: current.requestKey }, current)) return
 			securityPoolBrowseCount.value = page.poolCount
 			securityPoolPage.value = { ...page, requestKey: current.requestKey }
 		} catch (error) {

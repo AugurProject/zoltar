@@ -16,7 +16,7 @@ import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/form
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { useSecurityPoolBrowsePage } from './useSecurityPoolBrowsePage.js'
-import { appQueryCache } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
@@ -146,7 +146,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		const commitVersion = securityPoolsCommitVersion.current
 		try {
 			const pools = await securityPoolLineageQueries.fetch(queryKey, async () => await dependencies.loadSecurityPoolLineage(parseAddressInput(address, 'Security pool'), accountAddress))
-			if (securityPoolsCommitVersion.current === commitVersion && !securityPoolsLoad.isLoading.peek() && checkedSecurityPoolAddress.value === address) securityPools.value = pools
+			if (securityPoolsCommitVersion.current === commitVersion && !securityPoolsLoad.isLoading.peek() && checkedSecurityPoolAddress.value === address && !isSameQueryData(pools, securityPools.value)) securityPools.value = pools
 		} catch (error) {
 			// A failed background read keeps the loaded pools; the next block retries.
 			void error

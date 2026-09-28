@@ -166,7 +166,7 @@ a.secondary-action,
 
 .freshness-indicator[data-state="refreshing"] .freshness-indicator-dot {
 	background: var(--status-pending);
-	animation: freshness-pulse 1s ease-in-out infinite;
+	animation: freshness-pulse var(--motion-pulse) infinite;
 }
 
 @keyframes freshness-pulse {
@@ -196,7 +196,7 @@ a.secondary-action,
 	border-radius: var(--radius-compact);
 	background: linear-gradient(90deg, var(--color-white-04) 0%, var(--color-white-08) 50%, var(--color-white-04) 100%);
 	background-size: 200% 100%;
-	animation: skeleton-shimmer 1.4s ease-in-out infinite;
+	animation: skeleton-shimmer var(--motion-shimmer) infinite;
 }
 
 .skeleton-line-title {

@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { createQueryCache } from '../lib/queryCache.js'
+import { isSameQueryData } from '../lib/dataRefresh.js'
 
 function deferred<T>() {
 	let resolve: (value: T) => void = () => undefined
@@ -123,6 +124,12 @@ describe('query cache', () => {
 		})
 		expect(loads).toBe(1)
 		expect(store.get('universe').data).toBe('new environment')
+	})
+
+	test('compares read results by value, including bigint fields', () => {
+		expect(isSameQueryData({ count: 1n, items: ['a'] }, { count: 1n, items: ['a'] })).toBe(true)
+		expect(isSameQueryData({ count: 1n }, { count: 2n })).toBe(false)
+		expect(isSameQueryData({ count: 1n }, { count: '1' })).toBe(false)
 	})
 
 	test('set stores a result read elsewhere', () => {
