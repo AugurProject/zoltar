@@ -76,15 +76,15 @@ export function SecurityPoolsOverviewSection({
 		if (securityPoolPage === undefined) return undefined
 		return { items: securityPoolPage.pools, pageIndex: securityPoolPage.pageIndex, pageSize: securityPoolPage.pageSize, requestKey: securityPoolPage.requestKey, totalCount: securityPoolPage.poolCount }
 	}, [securityPoolPage])
+	const discoveryContextKey = `${environmentRefreshKey.toString()}:${scopedAccountAddress?.toLowerCase() ?? 'no-account'}`
 	const discovery = usePagedDiscovery({
-		contextKey: `${environmentRefreshKey.toString()}:${scopedAccountAddress?.toLowerCase() ?? 'no-account'}`,
+		contextKey: discoveryContextKey,
 		loadPage: (pageIndex, requestKey) => onLoadSecurityPoolPage(pageIndex, SECURITY_POOL_PAGE_SIZE, requestKey),
 		onItems: pools => downloaded.record(pools.map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress }))),
 		pageSize: SECURITY_POOL_PAGE_SIZE,
 		receivedPage,
 	})
 	const discoveryLoading = discovery.loading || loadingSecurityPoolPage
-	const discoveryContextKey = `${environmentRefreshKey.toString()}:${scopedAccountAddress?.toLowerCase() ?? 'no-account'}`
 	// Once the user has scanned, the last scanned page (one bounded read) refreshes on new blocks and keeps its cached pools current.
 	useBlockRefresh(() => onRefreshSecurityPoolPage?.(), onRefreshSecurityPoolPage !== undefined && discovery.hasScanned)
 	// Only a new page object (a completed scan or a block refresh) is recorded; the recorder is read through a ref.

@@ -146,6 +146,35 @@ describe('QuestionsView', () => {
 		expect(documentQueries.getByRole('button', { name: 'Favorites (1)' })).not.toBeNull()
 	})
 
+	test('records refreshed question pages and shows their age only after a scan', async () => {
+		const loadPage = mock(async () => undefined)
+		const freshness = { refreshing: false, updatedAt: Date.now() - 15_000 }
+		const page = (title: string): MarketDetailsPage => ({ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [{ ...createQuestion(1), title }] })
+		const withFreshness = (overrides: ViewOverrides) => <QuestionsView {...view(overrides).props} zoltarQuestionsFreshness={freshness} />
+		const renderedComponent = await renderIntoDocument(withFreshness({ loadPage, zoltarQuestionPage: page('Stale page before a scan') }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		expect(document.querySelector('.local-browse-bar .freshness-indicator')).toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Downloaded (0)' })).not.toBeNull()
+
+		await act(async () => {
+			fireEvent.click(documentQueries.getByRole('button', { name: 'Discover questions' }))
+			await Promise.resolve()
+		})
+		await act(async () => {
+			render(withFreshness({ loadPage, zoltarQuestionPage: page('First scan title') }), renderedComponent.container)
+			await Promise.resolve()
+		})
+		expect(document.querySelector('.local-browse-bar .freshness-indicator')?.textContent).toContain('Updated 15s ago')
+		expect(getRenderedQuestionTitles()).toEqual(['First scan title'])
+
+		await act(async () => {
+			render(withFreshness({ loadPage, zoltarQuestionPage: page('Refreshed on a new block') }), renderedComponent.container)
+			await Promise.resolve()
+		})
+		expect(getRenderedQuestionTitles()).toEqual(['Refreshed on a new block'])
+	})
+
 	test('searches every downloaded question rather than one page', async () => {
 		seedQuestions(
 			Array.from({ length: 14 }, (_, index) => createQuestion(index + 1)),
