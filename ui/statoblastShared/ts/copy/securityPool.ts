@@ -1,6 +1,7 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
-export const createPoolDescription = undefined
+export const createPoolDescriptionLead = 'Set up a '
+export const createPoolDescriptionTail = ' for one question. Vaults secure it with REP; traders mint its shares with ETH.'
 export const createQuestionForPoolDetail = undefined
 export const createQuestionForPoolTitle = 'Create a pool question'
 export const questionSourceLegend = 'How do you want to choose the pool question?'
@@ -19,7 +20,8 @@ export const creatingQuestionAndPool = 'Creating question and pool…'
 export const poolCreationInProgress = 'Security pool creation is already in progress.'
 export const createQuestionAndPoolReviewTitle = 'Create question and security pool'
 export const createPoolReviewTitle = 'Create security pool'
-export const universesDescription = undefined
+export const universesDescriptionLead = 'Security pools grouped by '
+export const universesDescriptionTail = '. A fork creates child universes, each with its own REP and pools.'
 export const createPoolFromQuestion = 'Create pool from question'
 export const formatCreatePoolFromQuestionLabel = (questionTitle: string, questionId: string) => `Create pool from question: ${questionTitle} (${questionId})`
 export const badDebt = 'Bad debt'
@@ -155,7 +157,7 @@ export const poolCreated = 'Pool created'
 export const poolCreationAfterForkReason = 'Security pools cannot be created after this universe has forked.'
 export const checkingDuplicate = 'Checking duplicate…'
 export const duplicatePoolDetail = 'Change the priority fee or Statoblast security multiplier to create a different origin pool.'
-export const initialOpenInterestFeeYear = 'Starting annual fee'
+export const initialOpenInterestFeeYear = 'Starting open interest fee / year'
 export const ineligibleQuestionDetail = 'Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.'
 export const loadingQuestion = 'Loading question…'
 export const poolAddressLabel = 'Pool address'

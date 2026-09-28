@@ -2,6 +2,8 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
+import * as glossaryCopy from '../../../copy/glossary.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import { escalationExplanationHref } from '../lib/reportingViewerStatus.js'
 
 export function EscalationExplainer({ details }: { details: ReportingDetails }) {
@@ -11,7 +13,13 @@ export function EscalationExplainer({ details }: { details: ReportingDetails }) 
 				<li>{copy.explainerFirstReport(formatCurrencyBalance(details.startBondAttoRep))}</li>
 				<li>{copy.explainerCompetition}</li>
 				<li>{copy.explainerResolution}</li>
-				<li>{copy.explainerFork(formatCurrencyBalance(details.nonDecisionThresholdAttoRep))}</li>
+				<li>
+					{copy.explainerForkLead}
+					<GlossaryTerm id='non-decision-threshold'>{glossaryCopy.nonDecisionThresholdTerm.toLowerCase()}</GlossaryTerm>
+					{copy.formatExplainerForkThresholdSeparator(formatCurrencyBalance(details.nonDecisionThresholdAttoRep))}
+					<GlossaryTerm id='universe-fork'>{glossaryCopy.universeForkTerm.toLowerCase()}</GlossaryTerm>
+					{copy.explainerForkTail}
+				</li>
 				<li>
 					<a href={escalationExplanationHref} target='_blank' rel='noreferrer'>
 						{copy.fullExplanation}
