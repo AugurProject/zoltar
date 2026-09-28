@@ -453,7 +453,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
-		const firstInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & Swap' })).getByLabelText('New REPv2 amount')
+		const firstInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & swap' })).getByLabelText('New REPv2 amount')
 		await act(() => {
 			firstInput.dispatchEvent(new Event('blur'))
 		})
@@ -462,7 +462,7 @@ describe('OpenOracleSection route create view', () => {
 		await act(() => {
 			render(renderReport(createDisputedReport(8n)), renderedComponent.container)
 		})
-		const nextInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & Swap' })).getByLabelText('New REPv2 amount')
+		const nextInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & swap' })).getByLabelText('New REPv2 amount')
 		expect(nextInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-8')).toBeNull()
 	})

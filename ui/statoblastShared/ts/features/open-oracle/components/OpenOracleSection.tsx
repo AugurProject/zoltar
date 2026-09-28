@@ -106,6 +106,10 @@ export function OpenOracleSection({
 			next.delete(field)
 			return next
 		})
+	const editCreateField = (field: OpenOracleCreateField, update: Parameters<OpenOracleSectionProps['onOpenOracleCreateFormChange']>[0]) => {
+		clearCreateFieldTouched(field)
+		onOpenOracleCreateFormChange(update)
+	}
 	const getCreateContractFieldError = (field: OpenOracleCreateField) => {
 		if (field === 'token1Address') return openOracleCreateFieldErrors.token1Address
 		if (field === 'token2Address') return openOracleCreateFieldErrors.token2Address
@@ -330,10 +334,7 @@ export function OpenOracleSection({
 													errorId={getOpenOracleCreateFieldErrorId('token1Address')}
 													liveError
 													onBlur={() => markCreateFieldTouched('token1Address')}
-													onInput={event => {
-														clearCreateFieldTouched('token1Address')
-														onOpenOracleCreateFormChange({ token1Address: event.currentTarget.value })
-													}}
+													onInput={event => editCreateField('token1Address', { token1Address: event.currentTarget.value })}
 													placeholder={commonCopy.hexValuePlaceholder}
 													value={openOracleCreateForm.token1Address}
 												/>
@@ -348,10 +349,7 @@ export function OpenOracleSection({
 													errorId={getOpenOracleCreateFieldErrorId('token2Address')}
 													liveError
 													onBlur={() => markCreateFieldTouched('token2Address')}
-													onInput={event => {
-														clearCreateFieldTouched('token2Address')
-														onOpenOracleCreateFormChange({ token2Address: event.currentTarget.value })
-													}}
+													onInput={event => editCreateField('token2Address', { token2Address: event.currentTarget.value })}
 													placeholder={commonCopy.hexValuePlaceholder}
 													value={openOracleCreateForm.token2Address}
 												/>
@@ -372,10 +370,7 @@ export function OpenOracleSection({
 												inputMode='decimal'
 												liveError
 												onBlur={() => markCreateFieldTouched('exactToken1Report')}
-												onInput={event => {
-													clearCreateFieldTouched('exactToken1Report')
-													onOpenOracleCreateFormChange({ exactToken1Report: event.currentTarget.value })
-												}}
+												onInput={event => editCreateField('exactToken1Report', { exactToken1Report: event.currentTarget.value })}
 												value={openOracleCreateForm.exactToken1Report}
 											/>
 										</label>
@@ -389,10 +384,7 @@ export function OpenOracleSection({
 												inputMode='decimal'
 												liveError
 												onBlur={() => markCreateFieldTouched('initialToken2Amount')}
-												onInput={event => {
-													clearCreateFieldTouched('initialToken2Amount')
-													onOpenOracleCreateFormChange({ initialToken2Amount: event.currentTarget.value })
-												}}
+												onInput={event => editCreateField('initialToken2Amount', { initialToken2Amount: event.currentTarget.value })}
 												value={openOracleCreateForm.initialToken2Amount}
 											/>
 										</label>
@@ -407,10 +399,7 @@ export function OpenOracleSection({
 											inputMode='decimal'
 											liveError
 											onBlur={() => markCreateFieldTouched('settlerRewardEthAmount')}
-											onInput={event => {
-												clearCreateFieldTouched('settlerRewardEthAmount')
-												onOpenOracleCreateFormChange({ settlerRewardEthAmount: event.currentTarget.value })
-											}}
+											onInput={event => editCreateField('settlerRewardEthAmount', { settlerRewardEthAmount: event.currentTarget.value })}
 											value={openOracleCreateForm.settlerRewardEthAmount}
 										/>
 									</label>
@@ -424,10 +413,7 @@ export function OpenOracleSection({
 											inputMode='decimal'
 											liveError
 											onBlur={() => markCreateFieldTouched('ethValue')}
-											onInput={event => {
-												clearCreateFieldTouched('ethValue')
-												onOpenOracleCreateFormChange({ ethValue: event.currentTarget.value })
-											}}
+											onInput={event => editCreateField('ethValue', { ethValue: event.currentTarget.value })}
 											value={openOracleCreateForm.ethValue}
 										/>
 									</label>
@@ -445,10 +431,7 @@ export function OpenOracleSection({
 												inputMode='decimal'
 												liveError
 												onBlur={() => markCreateFieldTouched('feePercentage')}
-												onInput={event => {
-													clearCreateFieldTouched('feePercentage')
-													onOpenOracleCreateFormChange({ feePercentage: event.currentTarget.value })
-												}}
+												onInput={event => editCreateField('feePercentage', { feePercentage: event.currentTarget.value })}
 												value={openOracleCreateForm.feePercentage}
 											/>
 										</label>
@@ -462,10 +445,7 @@ export function OpenOracleSection({
 												inputMode='numeric'
 												liveError
 												onBlur={() => markCreateFieldTouched('multiplier')}
-												onInput={event => {
-													clearCreateFieldTouched('multiplier')
-													onOpenOracleCreateFormChange({ multiplier: event.currentTarget.value })
-												}}
+												onInput={event => editCreateField('multiplier', { multiplier: event.currentTarget.value })}
 												value={openOracleCreateForm.multiplier}
 											/>
 										</label>
@@ -481,10 +461,7 @@ export function OpenOracleSection({
 													inputMode='numeric'
 													liveError
 													onBlur={() => markCreateFieldTouched('settlementTime')}
-													onInput={event => {
-														clearCreateFieldTouched('settlementTime')
-														onOpenOracleCreateFormChange({ settlementTime: event.currentTarget.value })
-													}}
+													onInput={event => editCreateField('settlementTime', { settlementTime: event.currentTarget.value })}
 													value={openOracleCreateForm.settlementTime}
 												/>
 											</label>
@@ -498,10 +475,7 @@ export function OpenOracleSection({
 													inputMode='decimal'
 													liveError
 													onBlur={() => markCreateFieldTouched('escalationHalt')}
-													onInput={event => {
-														clearCreateFieldTouched('escalationHalt')
-														onOpenOracleCreateFormChange({ escalationHalt: event.currentTarget.value })
-													}}
+													onInput={event => editCreateField('escalationHalt', { escalationHalt: event.currentTarget.value })}
 													value={openOracleCreateForm.escalationHalt}
 												/>
 											</label>
@@ -516,10 +490,7 @@ export function OpenOracleSection({
 													inputMode='numeric'
 													liveError
 													onBlur={() => markCreateFieldTouched('disputeDelay')}
-													onInput={event => {
-														clearCreateFieldTouched('disputeDelay')
-														onOpenOracleCreateFormChange({ disputeDelay: event.currentTarget.value })
-													}}
+													onInput={event => editCreateField('disputeDelay', { disputeDelay: event.currentTarget.value })}
 													value={openOracleCreateForm.disputeDelay}
 												/>
 											</label>
@@ -532,10 +503,7 @@ export function OpenOracleSection({
 													inputMode='decimal'
 													liveError
 													onBlur={() => markCreateFieldTouched('protocolFee')}
-													onInput={event => {
-														clearCreateFieldTouched('protocolFee')
-														onOpenOracleCreateFormChange({ protocolFee: event.currentTarget.value })
-													}}
+													onInput={event => editCreateField('protocolFee', { protocolFee: event.currentTarget.value })}
 													value={openOracleCreateForm.protocolFee}
 												/>
 											</label>
