@@ -1,4 +1,8 @@
 import { useState } from 'preact/hooks'
+import type { ComponentChildren } from 'preact'
+import { DiscoveryControl } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
+import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
+import type { FavoriteEntry } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -11,6 +15,7 @@ import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
+import { partitionFavoriteMarkets } from '../lib/favoriteMarkets.js'
 import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
 import { tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import type { LiveMarket } from '../protocol/live.js'
@@ -29,12 +34,12 @@ const FILTER_OPTIONS: readonly { value: MarketFilter; label: string }[] = [
 const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
 	{ value: 'closing-soon', label: marketsCopy.sortClosingSoon },
 	{ value: 'liquidity', label: marketsCopy.sortLiquidity },
-	{ value: 'newest', label: marketsCopy.sortNewest },
+	{ value: 'recent', label: favoritesCopy.recentlySaved },
 ]
 
 function listPresentation(listKind: TradingListKind) {
 	if (listKind === 'security-pools') return { title: liveCopy.securityPoolList, description: liveCopy.securityPoolListDescription, empty: liveCopy.noEligiblePools }
-	return { title: liveCopy.marketList, description: undefined, empty: liveCopy.noMarketsOnPage }
+	return { title: liveCopy.marketList, description: undefined, empty: liveCopy.noMarkets }
 }
 
 function MarketListControls({ options, onChange }: { options: MarketListOptions; onChange(next: MarketListOptions): void }) {
@@ -54,11 +59,25 @@ function MarketListControls({ options, onChange }: { options: MarketListOptions;
 	)
 }
 
-/** List-first landing for a workflow: the address lookup sits above the pageable candidate list, and the lookup route decides where an opened address goes. */
+function MarketCardList({ markets, listKind, lookupRoute, nowSeconds }: { markets: readonly LiveMarket[]; listKind: TradingListKind; lookupRoute: TradingLookupRoute; nowSeconds: bigint }) {
+	return (
+		<div className='entity-card-list market-list'>
+			{markets.map(market => (
+				<MarketCard key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
+			))}
+		</div>
+	)
+}
+
+/**
+ * List-first landing for a workflow: the address lookup sits above the candidate list, and the lookup route decides
+ * where an opened address goes. The market list browses every market downloaded to this browser, favorites first,
+ * and Discover reads the next registry page into that cache; security-pool candidates page through the registry.
+ */
 export function LiveMarketBrowser({
 	lookupRoute,
 	markets,
-	favoriteMarkets = [],
+	favorites = [],
 	pageMarketCount,
 	discoveryState,
 	discoveryError,
@@ -70,9 +89,9 @@ export function LiveMarketBrowser({
 	loadMarketPage,
 }: {
 	lookupRoute: TradingLookupRoute
+	/** The market list passes every downloaded market; the security-pool list passes the loaded page. */
 	markets: readonly LiveMarket[]
-	/** Favorites come from the browser cache, so they show before (and independently of) the paged chain scan. */
-	favoriteMarkets?: readonly LiveMarket[]
+	favorites?: readonly FavoriteEntry[]
 	pageMarketCount: number
 	discoveryState: 'loading' | 'ready' | 'error'
 	discoveryError: string | undefined
@@ -86,12 +105,15 @@ export function LiveMarketBrowser({
 	const [listOptions, setListOptions] = useState(DEFAULT_LIST_OPTIONS)
 	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
 	const presentation = listPresentation(listKind)
-	// Filters, search, and sort narrow the loaded page only; security-pool candidates are all open by construction.
-	const arrangeable = listKind === 'markets' && markets.length > 0
+	const browsesDownloads = listKind === 'markets'
+	// Filters, search, and sort run over every downloaded market; security-pool candidates are all open by construction.
+	const arrangeable = browsesDownloads && markets.length > 0
 	const shownMarkets = arrangeable ? arrangeMarkets(markets, listOptions, nowSeconds) : markets
-	const initialLoad = discoveryState === 'loading' && pageMarketCount === 0
+	const groups = browsesDownloads ? partitionFavoriteMarkets(shownMarkets, favorites) : { favorites: [], others: shownMarkets }
+	const initialLoad = discoveryState === 'loading' && pageMarketCount === 0 && (!browsesDownloads || markets.length === 0)
 	const retryAction = <RetryAction label={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} />
-	let list
+	const cardList = (listed: readonly LiveMarket[]) => <MarketCardList markets={listed} listKind={listKind} lookupRoute={lookupRoute} nowSeconds={nowSeconds} />
+	let list: ComponentChildren
 	if (markets.length === 0) list = <EmptyState title={presentation.empty} />
 	else if (shownMarkets.length === 0)
 		list = (
@@ -104,55 +126,67 @@ export function LiveMarketBrowser({
 				}
 			/>
 		)
+	else if (groups.favorites.length === 0) list = cardList(groups.others)
 	else
 		list = (
-			<div className='entity-card-list market-list'>
-				{shownMarkets.map(market => (
-					<MarketCard key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
-				))}
-			</div>
+			<>
+				<h3 className='eyebrow market-list-heading'>{liveCopy.favoriteMarkets}</h3>
+				{cardList(groups.favorites)}
+				{groups.others.length === 0 ? undefined : (
+					<>
+						<h3 className='eyebrow market-list-heading'>{liveCopy.otherMarkets}</h3>
+						{cardList(groups.others)}
+					</>
+				)}
+			</>
 		)
+	const hasScanned = freshness.updatedAt !== undefined
+	const discovery = {
+		// The last page restarts the scan from the first page.
+		discoverNext: () => loadMarketPage(marketPage.nextStart ?? 0n),
+		hasMore: !hasScanned || marketPage.nextStart !== undefined,
+		hasScanned,
+		loading: discoveryState === 'loading',
+		scannedItemCount: marketPage.start + BigInt(pageMarketCount),
+		totalCount: hasScanned ? marketPage.total : undefined,
+	}
+	const browseBar = browsesDownloads ? (
+		<div className='local-browse-bar market-browse-bar'>
+			{arrangeable ? (
+				<p className='market-list-count' role='status'>
+					{marketsCopy.resultCount(shownMarkets.length, markets.length)}
+				</p>
+			) : undefined}
+			<UpdatedAgo {...freshness} />
+			<DiscoveryControl discovery={discovery} discoverLabel={marketsCopy.discoverMarkets} disabled={workflowLocked} nounPlural={marketsCopy.marketsNoun} />
+		</div>
+	) : undefined
 	let content
 	if (initialLoad) content = <SkeletonList label={liveCopy.discoveringSecurityPoolsFromFactory} />
-	else if (discoveryState === 'error' && pageMarketCount === 0) content = <EmptyState title={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} actions={retryAction} />
+	else if (discoveryState === 'error' && markets.length === 0) content = <EmptyState title={liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError)} actions={retryAction} />
 	else
 		content = (
 			<>
 				{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
-				{arrangeable ? (
-					<>
-						<MarketListControls options={listOptions} onChange={setListOptions} />
-						<p className='market-list-count' role='status'>
-							{marketsCopy.resultCount(shownMarkets.length, markets.length)}
-						</p>
-					</>
-				) : undefined}
+				{arrangeable ? <MarketListControls options={listOptions} onChange={setListOptions} /> : undefined}
+				{browseBar}
 				{list}
 			</>
 		)
 	return (
-		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'} actions={<UpdatedAgo {...freshness} />}>
+		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'} actions={browsesDownloads ? undefined : <UpdatedAgo {...freshness} />}>
 			<OpenPoolForm disabled={false} target={lookupRoute} />
-			{listKind === 'markets' && favoriteMarkets.length > 0 ? (
-				<>
-					<h3 className='eyebrow market-list-heading'>{liveCopy.favoriteMarkets}</h3>
-					<div className='entity-card-list market-list'>
-						{favoriteMarkets.map(market => (
-							<MarketCard key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
-						))}
-					</div>
-					<h3 className='eyebrow market-list-heading'>{liveCopy.discoveredMarkets}</h3>
-				</>
-			) : undefined}
 			{content}
-			<PaginationControls
-				hasNextPage={marketPage.nextStart !== undefined}
-				hasPreviousPage={marketPage.previousStart !== undefined}
-				loading={discoveryState === 'loading'}
-				summary={pageMarketCount === 0 ? undefined : liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(pageMarketCount), marketPage.total)}
-				onPreviousPage={() => loadMarketPage(marketPage.previousStart)}
-				onNextPage={() => loadMarketPage(marketPage.nextStart)}
-			/>
+			{browsesDownloads ? undefined : (
+				<PaginationControls
+					hasNextPage={marketPage.nextStart !== undefined}
+					hasPreviousPage={marketPage.previousStart !== undefined}
+					loading={discoveryState === 'loading'}
+					summary={pageMarketCount === 0 ? undefined : liveCopy.poolPageRange(marketPage.start + 1n, marketPage.start + BigInt(pageMarketCount), marketPage.total)}
+					onPreviousPage={() => loadMarketPage(marketPage.previousStart)}
+					onNextPage={() => loadMarketPage(marketPage.nextStart)}
+				/>
+			)}
 		</SectionBlock>
 	)
 }

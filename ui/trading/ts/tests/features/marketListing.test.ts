@@ -46,8 +46,8 @@ describe('market filters and search', () => {
 	const ended = market({ pool: address('03'), endTime: NOW - DAY })
 	const resolved = market({ pool: address('04'), endTime: NOW - DAY, questionOutcome: 1, tradingStatus: 5 })
 	const broken = market({ pool: address('05'), loadError: 'unavailable' })
-	// Newest-first keeps the arrangement a pure filter here: registration order reversed.
-	const filtered = (markets: readonly LiveMarket[], filter: MarketFilter, query = '') => arrangeMarkets(markets, { filter, query, sort: 'newest' }, NOW).toReversed()
+	// The recent order keeps the list order, so the arrangement is a pure filter here.
+	const filtered = (markets: readonly LiveMarket[], filter: MarketFilter, query = '') => arrangeMarkets(markets, { filter, query, sort: 'recent' }, NOW)
 
 	test('open takes only markets that accept new risk', () => {
 		expect(filtered([open, closingSoon, ended, resolved, broken], 'open')).toEqual([open, closingSoon])
@@ -87,8 +87,14 @@ describe('market ordering', () => {
 	const loaded = [first, second, third, unpaired]
 	const pools = (markets: readonly LiveMarket[]) => markets.map(candidate => candidate.pool)
 
-	test('newest reverses registration order', () => {
-		expect(pools(arrangeMarkets(loaded, { filter: 'all', query: '', sort: 'newest' }, NOW))).toEqual(pools([unpaired, third, second, first]))
+	test('recent keeps the downloaded order', () => {
+		expect(pools(arrangeMarkets(loaded, { filter: 'all', query: '', sort: 'recent' }, NOW))).toEqual(pools(loaded))
+	})
+
+	test('ties keep the downloaded order', () => {
+		const tiedLater = market({ pool: address('05'), endTime: second.endTime })
+		expect(pools(arrangeMarkets([tiedLater, second], { filter: 'all', query: '', sort: 'closing-soon' }, NOW))).toEqual(pools([tiedLater, second]))
+		expect(pools(arrangeMarkets([second, tiedLater], { filter: 'all', query: '', sort: 'closing-soon' }, NOW))).toEqual(pools([second, tiedLater]))
 	})
 
 	test('closing soon lists open markets by end time, then ended ones', () => {
@@ -101,8 +107,8 @@ describe('market ordering', () => {
 
 	test('applies the filter and search before sorting', () => {
 		expect(pools(arrangeMarkets(loaded, { filter: 'open', query: '', sort: 'liquidity' }, NOW))).toEqual(pools([second, first, unpaired]))
-		expect(arrangeMarkets(loaded, { filter: 'resolved', query: '', sort: 'newest' }, NOW)).toEqual([])
-		expect(pools(arrangeMarkets(loaded, { filter: 'all', query: address('02'), sort: 'newest' }, NOW))).toEqual(pools([second]))
+		expect(arrangeMarkets(loaded, { filter: 'resolved', query: '', sort: 'recent' }, NOW)).toEqual([])
+		expect(pools(arrangeMarkets(loaded, { filter: 'all', query: address('02'), sort: 'recent' }, NOW))).toEqual(pools([second]))
 	})
 
 	test('does not reorder the caller-owned list', () => {
