@@ -1456,3 +1456,22 @@ test('workflow log exposes retained terminal and active workflows without signed
 	expect(JSON.stringify(state['workflows'])).toContain('completed')
 	expect(JSON.stringify(state['workflows'])).not.toContain('secret')
 })
+
+test('workflow history publishes safe failure reasons through the browser parser', async () => {
+	const { parseSnapshot } = await import('../../src/dashboard/dashboard-data.ts')
+	const state = publicChaosState({
+		workflows: [
+			{
+				status: 'abandoned',
+				steps: [
+					{ status: 'blocked', failure: 'Create REP/WETH pool estimated gas ceiling exceeds strategy.maximumGasCostEth: estimated maximum 0.1165 ETH; configured maximum 0.02 ETH.' },
+					{ status: 'blocked', failure: 'RPC https://user:password@example.com failed' },
+				],
+			},
+		],
+	})
+	const steps = parseSnapshot(state).workflows[0]?.steps
+	expect(steps?.[0]).toHaveProperty('failure', 'Create REP/WETH pool estimated gas ceiling exceeds strategy.maximumGasCostEth: estimated maximum 0.1165 ETH; configured maximum 0.02 ETH.')
+	expect(steps?.[1]).toHaveProperty('failure', 'Error detail withheld because it may contain sensitive data.')
+	expect(JSON.stringify(state)).not.toContain('password')
+})

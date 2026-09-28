@@ -124,7 +124,7 @@ describe('SecurityPoolSection', () => {
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const pendingReview = controller.review()
-		controller.failed('User rejected the request')
+		controller.failed({ kind: 'rejected', message: 'User rejected the request' })
 		const onDismissSecurityPoolReview = mock(() => review.abort())
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolError: 'User rejected the request', securityPoolReviewSignal: review.signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup

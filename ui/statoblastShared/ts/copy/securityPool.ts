@@ -1,6 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
 
-export const annualFee = 'Annual Fee'
 export const createPoolDescription = undefined
 export const createQuestionForPoolDetail = undefined
 export const createQuestionForPoolTitle = 'Create a pool question'
@@ -28,8 +27,6 @@ export const formatDepositRepToVault = (tokenSymbol: CopyTemplateValue) => `Depo
 export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositing ${tokenSymbol}…`
 export const depositRepToVaultDescription = 'Increase the vault’s collateral.'
 export const loadingVault = 'Loading vault details…'
-export const maxLead = 'Max '
-export const openInterestMinted = 'Open Interest Minted'
 export const openPool = 'Open pool'
 export const invalidPoolAddress = 'Enter a valid pool address.'
 export const formatOpenPoolLabel = (questionTitle: string, securityPoolAddress: string) => `Open pool: ${questionTitle} (${securityPoolAddress})`
@@ -49,12 +46,25 @@ export const escalationWithdrawalRequiredDetail = 'Withdraw escalation deposits 
 export const openInterestFeeYear = 'Open Interest Fee / Year'
 export const totalPoolHeldAttoRep = 'Pool-held REP'
 export const vaultCount = 'Known Vaults'
-export const currentOraclePrice = 'Current Oracle Price'
 export const loadingSecurityPools = 'Loading security pools…'
 export const retryingSecurityPoolsTruncated = 'Retrying security pools…'
 export const retryLoadingPools = 'Retry'
 export const poolPageLoadError = 'Unable to refresh security pools.'
-export const searchLoadedPage = 'Search this page'
+export const searchDownloadedPools = 'Search downloaded pools'
+export const sortPools = 'Sort'
+export const remainingCapacity = 'Remaining capacity'
+export const discoverPools = 'Discover pools'
+export const noFavoritePools = 'No favorite pools yet'
+export const noFavoritePoolsDetail = 'Discover pools or paste a pool address. Pools you open are saved here.'
+export const noFavoritePoolsWithDownloadsDetail = 'Star a downloaded pool, or open one, to keep it here.'
+export const showDownloadedPools = 'Show downloaded pools'
+export const noDownloadedPools = 'No downloaded pools yet'
+export const noDownloadedPoolsDetail = 'Discover pools to download their summaries to this browser.'
+export const openPoolAtAddress = 'Open pool at this address'
+export const formatOtherUniversePoolsHidden = (count: CopyTemplateValue) => `${count} saved in other universes.`
+export const formatPoolUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
+export const formatCapacityUsed = (percent: CopyTemplateValue) => `${percent}% used`
+export const capacityRemaining = 'remaining'
 export const poolSearchPlaceholder = 'Address, question ID, or text'
 export const systemState = 'System State'
 export const allStates = 'All states'
@@ -229,7 +239,6 @@ export const backingRatioChangeSuccessDetail = 'The standing ETH commitment has 
 export const queuedVaultAutomaticExecution = 'Executes automatically when the oracle report settles.'
 
 export const exposureSupported = 'Commitment limit'
-export const repEquivalent = 'REP equivalent'
 
 export const queuedVaultOperationExpired = 'Queued operation expired'
 export const queuedVaultOperationExpiredDetail = 'The execution window ended before this operation completed.'

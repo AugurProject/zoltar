@@ -314,7 +314,7 @@ export function ReportingSection({
 	if (reportingRepApprovalRequired) {
 		reportingRepApprovalAction = (
 			<TransactionActionButton
-				idleLabel={commonCopy.launchAction(reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n)))}
+				idleLabel={reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
 				pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
 				onClick={onApproveReportingRep}
 				pending={reportingActiveAction === 'approveReportingRep'}
@@ -511,7 +511,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 								>
-									{reportingCopy.minimumPreset(reportingStatus === 'active', minimumPresetAmount === undefined ? undefined : formatKnownAmount(minimumPresetAmount))}
+									{reportingCopy.minimumPreset(reportingStatus === 'active', minimumPresetAmount === undefined ? undefined : formatCurrencyInputBalance(minimumPresetAmount))}
 								</button>
 								<button
 									className='secondary'
@@ -524,7 +524,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 								>
-									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatKnownAmount(maxProfitContribution.amountAttoRep))}
+									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyInputBalance(maxProfitContribution.amountAttoRep))}
 								</button>
 							</div>
 							{presetBlocker === undefined ? undefined : (

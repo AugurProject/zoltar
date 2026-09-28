@@ -2711,7 +2711,40 @@
 }
 
 .pool-capacity-summary {
+	display: grid;
+	gap: var(--space-2);
 	min-width: 0;
+}
+
+/* Source and staleness of the REP price behind a derived figure; stale adds an icon and the word "Stale", not only color.
+   The element selectors outrank the uppercase label rules of the metric containers the label sits in. */
+span.rep-price-status {
+	display: block;
+	overflow-wrap: anywhere;
+}
+
+.rep-price-status > .rep-price-status-icon {
+	margin-inline-end: 0.25rem;
+}
+
+span.rep-price-status,
+.rep-price-status > span {
+	color: var(--muted);
+	font-family: var(--font-family-sans);
+	font-size: 0.8125rem;
+	font-weight: 400;
+	letter-spacing: normal;
+	line-height: var(--line-height-snug);
+	text-transform: none;
+}
+
+span.rep-price-status.stale,
+.rep-price-status.stale > span {
+	color: var(--warning);
+}
+
+.rep-price-status.stale > .rep-price-status-title {
+	font-weight: 600;
 }
 
 .pool-capacity-summary .progress-meter-header {
@@ -2733,6 +2766,45 @@
 
 .pool-capacity-unavailable .detail {
 	margin: 0;
+}
+
+.pool-directory-heading,
+.pool-object-title {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.pool-directory-heading .favorite-toggle {
+	margin-left: calc(var(--space-2) * -1);
+}
+
+/* Browse rows lead with open interest against capacity: a taller meter with larger numbers and the used share. */
+.pool-capacity-summary.is-prominent .progress-meter-value {
+	font-size: 1.25rem;
+}
+
+.pool-capacity-summary.is-prominent .progress-meter-track {
+	height: 0.625rem;
+}
+
+.pool-capacity-summary.is-prominent .progress-meter-footer {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: var(--space-1) var(--space-3);
+	font-size: 0.8125rem;
+}
+
+.pool-browse-toolbar {
+	grid-template-columns: minmax(14rem, 2fr) repeat(2, minmax(10rem, 1fr));
+}
+
+@media (max-width: 50rem) {
+	.pool-browse-toolbar {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .pool-open-link {
@@ -2886,6 +2958,11 @@
 .vault-primary-actions > * {
 	flex: 0 1 15rem;
 	min-width: 0;
+}
+
+.vault-health-status {
+	display: grid;
+	gap: var(--space-1);
 }
 
 .vault-health {
@@ -3304,12 +3381,6 @@
 .pool-selection-control input {
 	font-family: var(--font-family-mono);
 	font-size: clamp(0.8125rem, 2.35vw, 0.9rem);
-}
-.pool-capacity-values {
-	display: flex;
-	align-items: baseline;
-	flex-wrap: wrap;
-	gap: var(--space-2);
 }
 /* Reserve the busy label width so the address input does not shrink while a refresh runs. */
 .pool-selection-control .lookup-field-controls > .actions {

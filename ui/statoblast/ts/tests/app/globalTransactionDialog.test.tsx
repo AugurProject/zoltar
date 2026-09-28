@@ -13,7 +13,7 @@ import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-cor
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { TransactionStepsActions } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
+import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -55,7 +55,7 @@ describe('GlobalTransactionDialog', () => {
 				controller.receipt(hash, 'success')
 				controller.startWithoutReview(1)
 			})
-			expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'pending'])
+			expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'wallet'])
 			expect(rendered.container.querySelector('.operation-modal-panel')).toBeNull()
 		} finally {
 			transactionSteps.value?.cancel()
@@ -211,11 +211,11 @@ describe('GlobalTransactionDialog', () => {
 		const hash = '0x1111111111111111111111111111111111111111111111111111111111111112'
 		controller.submitted(hash)
 		controller.receipt(hash, 'reverted')
-		controller.failed('Transaction reverted')
+		controller.failed({ kind: 'reverted', message: 'Transaction reverted' })
 		const presentation = { hash, title: 'Price request', tone: 'error' as const, detail: 'Transaction reverted' }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={presentation}>
-				<TransactionStepsActions contextKey='failed-hash' />
+				<TransactionStepsContent contextKey='failed-hash' />
 				<GlobalTransactionDialog transaction={presentation} />
 			</GlobalTransactionPresentationProvider>,
 		)
@@ -369,7 +369,7 @@ describe('GlobalTransactionDialog', () => {
 		const intent = createMarketCreationTransactionIntent({ marketType: 'binary', universeId: 7n })
 		const requested = markTransactionRequested(createInitialTransactionTrayState(), intent)
 		const submitted = markTransactionSubmitted(requested, '0xb234000000000000000000000000000000000000000000000000000000000000')
-		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 		const success = createMarketCreationSuccessPresentation({ createQuestionHash: '0xb234000000000000000000000000000000000000000000000000000000000000', marketType: 'binary', questionId: '0x01' }, { universeId: 7n })
 		const lifecyclePresentations = [submitted.active, failed.active, success]
 		if (lifecyclePresentations.some(presentation => presentation === undefined)) throw new Error('Transaction lifecycle presentation should be defined')
@@ -660,7 +660,7 @@ describe('GlobalTransactionDialog', () => {
 		expect(remountedCompletion.container.textContent).toBe('')
 		await remountedCompletion.cleanup()
 
-		const freshRequestFailure = markTransactionFailed(markTransactionRequested(createInitialTransactionTrayState(), intent), 'Action canceled in wallet.').active
+		const freshRequestFailure = markTransactionFailed(markTransactionRequested(createInitialTransactionTrayState(), intent), { kind: 'rejected', message: 'Action canceled in wallet.' }).active
 		if (freshRequestFailure === undefined) throw new Error('Fresh request failure should be active')
 		expect(freshRequestFailure.operationKey).toBe('transaction-request-1')
 		const freshRequestTray = await renderIntoDocument(<GlobalTransactionDialog transaction={freshRequestFailure} />)

@@ -5,6 +5,7 @@ import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { describeTransactionFailure, formatTransactionFailure, REVERTED_ON_CHAIN } from '../../protocol/transactionFailure.js'
 import { broadcastUncertainMessage, positionControlsWorkflowLocked } from '../liveTradingControllerHelpers.js'
+import { createMarketTransactionActivity } from './marketTransactionActivity.js'
 import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from './transactionWorkflow.js'
 
 export type QuotedOperation = 'trade' | 'liquidity' | 'settlement'
@@ -34,6 +35,7 @@ const QUOTE_DEBOUNCE_MILLISECONDS = 350
 export function useQuotedTransaction<Quote>({
 	operation,
 	label,
+	activityTitle,
 	account,
 	chainId,
 	market,
@@ -49,6 +51,8 @@ export function useQuotedTransaction<Quote>({
 	operation: QuotedOperation
 	/** Names the transaction in the receipt-uncertainty warning. */
 	label: string
+	/** Names the transaction in the activity list, which keeps it (and its market's lock) after navigation or a reload. */
+	activityTitle?: string | undefined
 	account: Address | undefined
 	chainId: number | undefined
 	market: Address | undefined
@@ -146,6 +150,7 @@ export function useQuotedTransaction<Quote>({
 		lockChangeRef.current(true)
 		dispatchWorkflow({ type: 'operation-preparing', context, operation })
 		let broadcastHash: Hash | undefined
+		const activity = createMarketTransactionActivity(market, activityTitle ?? label)
 		let receiptKnown = false
 		let keepLocked = false
 		let signatureRequested = false
@@ -159,7 +164,11 @@ export function useQuotedTransaction<Quote>({
 				}
 				return await write()
 			})
-			if (!mounted.current) return
+			activity.broadcast(broadcastHash)
+			if (!mounted.current) {
+				activity.handOff()
+				return
+			}
 			if (!signatureRequested) dispatchWorkflow({ type: 'signature-requested', context, operation })
 			dispatchWorkflow({ type: 'broadcast', context, operation, transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
@@ -170,9 +179,11 @@ export function useQuotedTransaction<Quote>({
 				},
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
+					activity.replaced(replacementHash)
 					if (mounted.current) dispatchWorkflow({ type: 'replaced', context, replacementHash })
 				},
 			})
+			activity.receipt(receipt.status)
 			if (!mounted.current) return
 			if (receipt.status === 'reverted') {
 				dispatchWorkflow({ type: 'reverted', context })
@@ -181,6 +192,8 @@ export function useQuotedTransaction<Quote>({
 			dispatchWorkflow({ type: 'confirmed', context })
 			await plan.afterConfirmed?.(prepared)
 		} catch (caught) {
+			// A known outcome (such as a wallet cancellation) settles the activity row; otherwise the activity list keeps checking.
+			activity.stopped(caught, receiptKnown)
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
