@@ -334,7 +334,7 @@ describe('OverviewPanels', () => {
 
 	test('explains a forked universe politely and links to the application migration flow', async () => {
 		const documentQueries = await renderOverviewPanels({
-			migrateRepHref: '#/zoltar?zoltarView=universes',
+			migrateRepHref: '#/zoltar?zoltarView=migrate',
 			universeForkTime: 123n,
 			universeHasForked: true,
 		})
@@ -346,7 +346,7 @@ describe('OverviewPanels', () => {
 		expect(notice.textContent).toContain('Migrate your REP to a child universe.')
 		expect(document.body.textContent).not.toContain('continue to use Augur')
 		expect(document.body.textContent).not.toContain('Migration required')
-		expect(documentQueries.getByRole('link', { name: 'Migrate REP' }).getAttribute('href')).toBe('#/zoltar?zoltarView=universes')
+		expect(documentQueries.getByRole('link', { name: 'Migrate REP' }).getAttribute('href')).toBe('#/zoltar?zoltarView=migrate')
 	})
 
 	test('places both critical notices directly below the top bar', async () => {

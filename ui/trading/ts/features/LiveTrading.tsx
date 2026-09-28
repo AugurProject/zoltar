@@ -23,7 +23,7 @@ import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityService
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
-import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
+import { liveLookupRoutePresentation, liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
 import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
@@ -197,7 +197,7 @@ export function LiveTrading({
 		return <UniverseDirectory configuration={configuration} connectionMessage={connectionMessage} universeId={BigInt(confirmedUniverseId)} {...(loadUniverseSummary === undefined ? {} : { loadUniverse: loadUniverseSummary })} />
 	}
 	if (isTradingLookupRoute(route)) {
-		const routePresentation = liveWorkflowRoutePresentation(route)
+		const routePresentation = liveLookupRoutePresentation(route)
 		return (
 			<div className='route-view-flow'>
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
