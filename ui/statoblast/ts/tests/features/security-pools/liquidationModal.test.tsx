@@ -250,6 +250,42 @@ describe('LiquidationModal', () => {
 		expect(document.body.textContent?.includes('Expires 5m after oracle settlement.')).toBe(true)
 	})
 
+	test('manual initial pricing reloads liquidation funding after an automatic quote failure', async () => {
+		const loadFunding = mock(() => undefined)
+		cleanupRenderedComponent = (
+			await renderLiquidationModal({
+				currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+				liquidationFundingPreviewError: 'Automatic pricing unavailable',
+				onLoadLiquidationFundingPreview: loadFunding,
+			})
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
+		expect(loadFunding).not.toHaveBeenCalled()
+		fireEvent.input(page.getByLabelText('Open Oracle REP/ETH starting price'), { target: { value: '3' } })
+		expect(loadFunding).toHaveBeenCalledWith(zeroAddress, 3n * ATTO_ETH_PER_ETH)
+		fireEvent.click(page.getByRole('button', { name: 'Uniswap quote' }))
+		expect(loadFunding).toHaveBeenLastCalledWith(zeroAddress, undefined)
+	})
+
+	test('submits the chosen manual liquidation price', async () => {
+		const submit = mock(() => undefined)
+		cleanupRenderedComponent = (
+			await renderLiquidationModal({
+				currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+				onQueueLiquidation: submit,
+				liquidationFundingPreview: { currentRepBalanceAttoRep: 100n * ATTO_ETH_PER_ETH, currentWethBalanceAttoEth: 1n, initialReportRepRequiredAttoRep: 1n, initialReportWethRequiredAttoEth: 1n, queueOperationValueAttoEth: 1n, totalWalletEthRequiredAttoEth: 1n, wethShortfallAttoEth: 0n },
+				walletBalanceAttoEth: ATTO_ETH_PER_ETH,
+			})
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
+		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
+		fireEvent.input(page.getByLabelText('Open Oracle REP/ETH starting price'), { target: { value: '3' } })
+		fireEvent.click(page.getByRole('button', { name: 'Queue liquidation' }))
+		expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH)
+	})
+
 	test('reviews the complete queued liquidation funding sequence and resulting balances', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),

@@ -1,3 +1,6 @@
+import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
+import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -281,6 +284,7 @@ export function SecurityVaultSection({
 	const adjustmentBlocker = repExitLauncherBlocker ?? (poolState !== undefined && poolState.lifecycleState !== 'operational' && poolState.lifecycleState !== 'ended' ? vaultLifecycleBlocker : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			oracleManagerDetails={oracleManagerDetails}
 			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
@@ -346,6 +350,18 @@ export function SecurityVaultSection({
 		securityVaultRepApproval,
 		walletGuard: { reason: depositLauncherBlocker, walletBlocker },
 	}
+	const [withdrawInitialPrice, setWithdrawInitialPrice] = useState<OracleInitialPriceInput>({ source: 'automatic', price: '' })
+	const withdrawPriceFieldId = useId()
+	useEffect(() => setWithdrawInitialPrice({ source: 'automatic', price: '' }), [autoLoadKey])
+	const needsWithdrawPrice = effectiveRepExitMode === 'withdraw' && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice)
+	const withdrawPrice = parseOracleInitialPrice(needsWithdrawPrice ? withdrawInitialPrice : { source: 'automatic', price: '' })
+	const withdrawPriceFields =
+		effectiveRepExitMode === 'redeem' ? undefined : (
+			<>
+				<InlineHint message={getOracleOperationExecutionMessage(oracleManagerDetails, hasValidOraclePrice)} />
+				{needsWithdrawPrice ? <OracleInitialPriceFields value={withdrawInitialPrice} onChange={setWithdrawInitialPrice} disabled={securityVaultActiveAction !== undefined} fieldId={withdrawPriceFieldId} /> : undefined}
+			</>
+		)
 	const repWithdrawAmountField =
 		effectiveRepExitMode === 'redeem' ? null : (
 			<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
@@ -356,10 +372,11 @@ export function SecurityVaultSection({
 			hasPositiveWithdrawAmount={hasPositiveWithdrawAmount}
 			hasWithdrawableRep={hasWithdrawableRep}
 			onRedeemRepFromVault={onRedeemRepFromVault}
-			onWithdrawRep={onWithdrawRep}
+			onWithdrawRep={() => onWithdrawRep(withdrawPrice.proposedRepPerEthPrice)}
 			repExitActionLabel={repExitActionLabel}
 			repExitEnabled={repExitEnabled}
-			repExitGuardMessage={repExitGuardMessage}
+			repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
+			disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined ? withdrawPriceFieldId : undefined}
 			repExitMode={effectiveRepExitMode}
 			securityVaultActiveAction={securityVaultActiveAction}
 			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
@@ -431,6 +448,7 @@ export function SecurityVaultSection({
 						</MetricGrid>
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
+						{withdrawPriceFields}
 						<div className='actions'>
 							{repExitActionButton}
 							<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
@@ -516,6 +534,7 @@ export function SecurityVaultSection({
 				)}
 				{repWithdrawAmountField}
 				{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
+				{withdrawPriceFields}
 				<div className='actions'>{repExitActionButton}</div>
 				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.disputeStakedAttoRep !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n ? <p className='detail'>{securityPoolCopy.escalationWithdrawalRequiredDetail}</p> : undefined}
 			</SectionBlock>

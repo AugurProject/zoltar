@@ -372,6 +372,39 @@ describe('live market refresh', () => {
 		}
 	})
 
+	test('the market list keeps discovered pages in the download cache, so Discover adds to the list and search spans every page', async () => {
+		const firstPageMarket = { ...market, pool: `0x${'a1'.repeat(20)}` as Address, title: 'First page market' }
+		const secondPageMarket = { ...market, pool: `0x${'a2'.repeat(20)}` as Address, title: 'Second page market' }
+		const requestedStarts: bigint[] = []
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverTradingMarketPage: async (_client: unknown, _configuration: unknown, _universeId: unknown, start = 0n) => {
+				requestedStarts.push(start)
+				const firstPage = start === 0n
+				return { start, count: 1n, total: 2n, previousStart: firstPage ? undefined : 0n, nextStart: firstPage ? 1n : undefined, markets: [{ ...(firstPage ? firstPageMarket : secondPageMarket) }], universeIds: [1n], selectedUniverseId: 1n }
+			},
+		}
+		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 1 && document.querySelector('.discovery-control')?.textContent?.includes('1 of 2 markets scanned') === true, 'first discovered page')
+		await act(() => button('Discover more').click())
+		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'second page joins the downloaded list')
+		expect(requestedStarts).toEqual([0n, 1n])
+		expect(button('Scan again').disabled).toBe(false)
+		expect(document.querySelector('.market-list-count')?.textContent).toBe('2 markets')
+		const search = document.querySelector<HTMLInputElement>('input[type="search"]')
+		if (search === null) throw new Error('Market search did not render')
+		await act(() => {
+			search.value = 'first page'
+			search.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		// The first page is no longer the loaded page, yet its market is still searchable from the cache.
+		expect([...document.querySelectorAll('.market-record h3')].map(heading => heading.textContent)).toEqual(['First page market'])
+		expect(document.querySelector('.market-list-count')?.textContent).toBe('1 of 2 markets')
+	})
+
 	test('a market-card outcome link opens the ticket on that side and drops the one-shot side from the hash', async () => {
 		window.location.hash = `#/market/${pool}?simulate=1&side=no`
 		const services = {

@@ -24,10 +24,10 @@ export const formatTokenApproved = (tokenSymbol: CopyTemplateValue) => `${tokenS
 export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdrawn`
 export const browseReports = 'Browse reports'
 export const reportDirectory = 'Report directory'
-export const browseReportsDescription = 'Find a report on the loaded page, review its status, and open it for available actions.'
+export const browseReportsDescription = 'Browse reports saved in this browser, discover more from Open Oracle, and open one for available actions.'
 export const createReportDescription = 'Create a standalone report and review its assets, funding, and escalation settings before submitting.'
 export const selectedReportDescription = 'Review the selected report’s current stage, balances, and available settlement or dispute actions.'
-export const formatBrowseShownCountSummary = (shownCount: string, pageCount: string) => `${shownCount} of ${pageCount} reports shown on this page.`
+export const formatReportsShownSummary = (shownCount: CopyTemplateValue, totalCount: CopyTemplateValue) => `${shownCount} of ${totalCount} reports shown.`
 export const callbackContract = 'Callback contract'
 export const callbackExtra = 'Callback / extra'
 export const callbackGasLimit = 'Callback gas limit'
@@ -95,7 +95,18 @@ export function formatSettleCountdown(remaining: bigint, timeType: boolean) {
 	if (remaining < 3600n) return `Settle in ${remaining / 60n}m ${remaining % 60n}s`
 	return `Settle in ${remaining / 3600n}h ${(remaining % 3600n) / 60n}m ${remaining % 60n}s`
 }
-export const searchReports = 'Search this page'
+export const searchDownloadedReports = 'Search downloaded reports'
+export const reportSearchPlaceholder = 'Report ID, token symbol, or token address'
+export const discoverReports = 'Discover reports'
+export const reportCountPlural = 'reports'
+export const noFavoriteReports = 'No favorite reports yet'
+export const noFavoriteReportsDetail = 'Discover reports or search a report ID. Reports you open are saved here.'
+export const noFavoriteReportsWithDownloadsDetail = 'Star a downloaded report, or open one, to keep it here.'
+export const showDownloadedReports = 'Show downloaded reports'
+export const noDownloadedReports = 'No downloaded reports yet'
+export const noDownloadedReportsDetail = 'Discover reports to download their summaries to this browser.'
+export const formatOpenReportById = (reportId: CopyTemplateValue) => `Open report #${reportId}`
+export const formatReportUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling report'
 export const reportSettled = 'Settled report'
@@ -109,14 +120,11 @@ export const stateHash = 'State hash'
 export const allStatuses = 'All statuses'
 export const disputed = 'Disputed'
 export const oracleGamesEmpty = 'No Open Oracle reports found.'
-export const reportFiltersEmpty = 'No reports match the current search and status filters.'
-export const reportSummariesInitializingDetail = 'Preparing report summaries.'
-export const reportSummariesRefreshingDetail = 'Refreshing report summaries.'
+export const reportFiltersEmpty = 'No downloaded reports match the current search and status filters.'
 export const retryReports = 'Retry'
 export const refreshReport = 'Refresh report'
 export const reportAmounts = 'Report amounts'
 export const openOracleReportDetails = 'Open Oracle report details'
-export const searchByReportIdTokenSymbolOrTokenAddress = 'Filter this page by report ID, token symbol, or token address'
 export const standaloneOracleWarningDetail = 'Standalone only. Start pool-managed requests from a security pool.'
 export const standaloneOracleIntroduction = 'Define the token pair and initial report economics first. Default dispute and timing settings are available below for users who need to tune the report lifecycle.'
 export const advancedDisputeAndTimingSettings = 'Advanced dispute & timing settings'

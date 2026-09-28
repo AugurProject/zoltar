@@ -2,10 +2,11 @@ import { bigintToSafeNumber } from '@zoltar/core-shared/evm/ethereum'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/liveMarket.js'
 import { attoSharesToCollateralAttoEth } from './shareValue.js'
 
-/** Market-list chips. `all` keeps ended but unresolved markets reachable; the others narrow the loaded page. */
+/** Market-list chips. `all` keeps ended but unresolved markets reachable; the others narrow the downloaded markets. */
 export type MarketFilter = 'all' | 'open' | 'closing-soon' | 'resolved'
 
-export type MarketSort = 'closing-soon' | 'liquidity' | 'newest'
+/** `recent` keeps the list order: the markets downloaded most recently first. */
+export type MarketSort = 'closing-soon' | 'liquidity' | 'recent'
 
 export type MarketListOptions = Readonly<{ filter: MarketFilter; query: string; sort: MarketSort }>
 
@@ -89,15 +90,14 @@ function compareLiquidity(left: LiveMarket, right: LiveMarket) {
 }
 
 /**
- * Filters, searches, and sorts the loaded markets. Discovery returns pools in registration order, so `newest`
- * reverses that order; ties in every other sort keep the newest pool first.
+ * Filters, searches, and sorts the downloaded markets. The caller's order (most recently downloaded first) is the
+ * `recent` order and breaks ties in every other sort.
  */
 export function arrangeMarkets(markets: readonly LiveMarket[], options: MarketListOptions, nowSeconds: bigint) {
-	const newestFirst = markets.map((market, registrationIndex) => ({ market, registrationIndex })).reverse()
-	const matching = newestFirst.filter(({ market }) => marketMatchesFilter(market, options.filter, nowSeconds) && marketMatchesSearch(market, options.query))
-	if (options.sort === 'newest') return matching.map(({ market }) => market)
+	const matching = markets.filter(market => marketMatchesFilter(market, options.filter, nowSeconds) && marketMatchesSearch(market, options.query))
+	if (options.sort === 'recent') return matching
 	const compare = options.sort === 'liquidity' ? compareLiquidity : (left: LiveMarket, right: LiveMarket) => compareClosingSoon(left, right, nowSeconds)
-	return matching.sort((left, right) => compare(left.market, right.market) || right.registrationIndex - left.registrationIndex).map(({ market }) => market)
+	return matching.sort(compare)
 }
 
 export type CoarseDuration = Readonly<{ amount: bigint; unit: 'day' | 'hour' | 'minute' }>

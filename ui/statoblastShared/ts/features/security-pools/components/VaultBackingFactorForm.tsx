@@ -1,3 +1,6 @@
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
+import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
+import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
@@ -10,13 +13,14 @@ import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import type { SecurityVaultDetails, SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails, SecurityVaultDetails, SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getVaultBackingFactorAdjustmentGuard } from '../lib/securityVault.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export function VaultBackingFactorForm({
 	details,
+	oracleManagerDetails,
 	blocker,
 	increaseBlocker,
 	busy,
@@ -27,16 +31,22 @@ export function VaultBackingFactorForm({
 	walletBlocker,
 }: {
 	details: SecurityVaultDetails | undefined
+	oracleManagerDetails?: OracleManagerDetails | undefined
 	executionRepPerEthPrice?: bigint | undefined
 	poolSecurityMultiplierBps?: bigint | undefined
 	blocker: string | undefined
 	increaseBlocker?: string | undefined
 	busy: boolean
 	pending: boolean
-	onAdjust: (limit: string) => void
+	onAdjust: (limit: string, proposedRepPerEthPrice?: bigint) => void
 	/** The wallet prerequisite, when it is the `blocker`. */
 	walletBlocker?: WalletActionBlocker | undefined
 }) {
+	const [initialPrice, setInitialPrice] = useState<OracleInitialPriceInput>({ source: 'automatic', price: '' })
+	const priceFieldId = useId()
+	const needsInitialPrice = needsOracleInitialPrice(oracleManagerDetails, executionRepPerEthPrice !== undefined)
+	const { proposedRepPerEthPrice, error: priceError } = parseOracleInitialPrice(needsInitialPrice ? initialPrice : { source: 'automatic', price: '' })
+	const executionMessage = getOracleOperationExecutionMessage(oracleManagerDetails, executionRepPerEthPrice !== undefined, details?.vaultAddress)
 	const [limitInput, setLimit] = useState<string | undefined>(undefined)
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
 	const currentLimit = details?.underwritingLimitAttoEth
@@ -53,8 +63,11 @@ export function VaultBackingFactorForm({
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
 	}
 	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
-	const reason = prerequisite ?? error
+	const reason = prerequisite ?? error ?? priceError
 	const fieldErrorShown = prerequisite === undefined && errorRevealed && error !== undefined
+	const priceErrorShown = reason === priceError && priceError !== undefined
+	let disabledReasonElementId = fieldErrorShown ? errorId : undefined
+	if (priceErrorShown) disabledReasonElementId = priceFieldId
 	return (
 		<>
 			<AmountField allowZero disabled={busy} error={error} errorId={errorId} errorRevealed={errorRevealed} hint={securityPoolCopy.vaultBackingFactorHelp} label={securityPoolCopy.commitmentLimit} onChange={setLimit} onErrorRevealedChange={setErrorRevealed} unit={commonCopy.eth} value={limit} />
@@ -67,14 +80,16 @@ export function VaultBackingFactorForm({
 					<VaultExposureValue capacity={nextLimit} />
 				</MetricField>
 			</MetricGrid>
+			<InlineHint message={executionMessage} />
+			{needsInitialPrice ? <OracleInitialPriceFields value={initialPrice} onChange={setInitialPrice} disabled={busy} fieldId={priceFieldId} /> : undefined}
 			<div className='actions'>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
 					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
 					pending={pending}
-					showDisabledReason={!fieldErrorShown}
-					disabledReasonElementId={fieldErrorShown ? errorId : undefined}
-					onClick={() => onAdjust(limit)}
+					showDisabledReason={!fieldErrorShown && !priceErrorShown}
+					disabledReasonElementId={disabledReasonElementId}
+					onClick={() => onAdjust(limit, proposedRepPerEthPrice)}
 					availability={withWalletBlocker({ disabled: busy || reason !== undefined, reason }, walletBlocker)}
 				/>
 			</div>
