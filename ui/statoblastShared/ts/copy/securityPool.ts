@@ -163,7 +163,7 @@ export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.
 export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'
 export const selectOwnVaultToWithdrawRep = 'Select your own vault to withdraw REP.'
 export const selfServiceExecutionTimeoutHelpText = 'Whole minutes; expires after oracle settlement.'
-export const formatManualExecutionTimeoutResolvedDetail = (duration: string) => `This queued self-service operation will expire ${duration} after the oracle settlement window completes.`
+export const formatManualExecutionTimeoutResolvedDetail = (duration: string) => `If queued, this operation expires ${duration} after the oracle settlement window completes.`
 export const owned = 'Owned'
 export const readOnlyBadgeLabel = 'Read only'
 export const refreshingWithdrawalStatusDetail = 'Refreshing the oracle manager to determine whether the withdrawal was queued or executed immediately.'

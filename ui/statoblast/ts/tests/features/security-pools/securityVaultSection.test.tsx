@@ -1312,7 +1312,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent?.includes('This queued self-service operation will expire 5m after the oracle settlement window completes.')).toBe(true)
+		expect(document.body.textContent?.includes('If queued, this operation expires 5m after the oracle settlement window completes.')).toBe(true)
 	})
 
 	test('does not render a local vault transaction status card', async () => {
