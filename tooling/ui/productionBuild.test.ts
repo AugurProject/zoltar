@@ -904,7 +904,7 @@ for (const scenario of productionBrowserScenarios) {
 		expect(state.html).toContain('<main')
 		expect(state.body).toContain(scenario.expected)
 		expect(state.body).toContain(scenario.appId === 'zoltar' ? 'Zoltar' : 'Augur Statoblast')
-		expect(state.body).toContain('Simulation')
+		expect(state.body).toContain('Browser simulation')
 		expect(state.height).toBe(scenario.viewport.height)
 		expect(state.width).toBe(scenario.viewport.width)
 		expect(state.body).not.toContain('Failed to initialize the app environment')
@@ -957,7 +957,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
-			await driver.waitForBodyText('REP BACKING')
+			await driver.waitForBodyText('REP backing')
 			await driver.setInputByLabel('REP backing', '1')
 			let depositReady = false
 			for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
@@ -995,7 +995,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Loading vault details…')
 			await driver.waitForButtonEnabled('Deposit REP')
 			await driver.clickButton('Deposit REP')
-			await driver.waitForBodyText('REP BACKING')
+			await driver.waitForBodyText('REP backing')
 			await driver.setInputByLabel('REP backing', '2000000')
 			let reportingDepositReady = false
 			for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
@@ -1074,7 +1074,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			await driver.waitForBodyWithoutText('Requested new price')
 			expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 			await driver.clickButton('+10 min')
-			await driver.waitForBodyText('PENDING REQUEST')
+			await driver.waitForBodyText('Pending request')
 			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
 			expect(pendingReportOpened).toBe(true)
 			await driver.waitForButtonEnabled('Settle report…')
