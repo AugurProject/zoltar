@@ -37,6 +37,8 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 				<div className='open-oracle-report-badges'>
 					<FavoriteToggle app='statoblast' entityLabel={reportTitle} id={getOpenOracleReportEntityId(report.reportId)} kind='oracleReport' />
 					<Badge tone={getOpenOracleReportStatusTone(status)}>{status}</Badge>
+					{/* Cached summaries can be stale; opening the report reads it from chain again. */}
+					<span className='open-oracle-report-updated'>{openOracleCopy.formatReportUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</span>
 				</div>
 			}
 			action={
@@ -52,8 +54,6 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.settlementTimestamp, openOracleCopy.settlementBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
 			]}
 		>
-			{/* Cached summaries can be stale; opening the report reads it from chain again. */}
-			<p className='detail'>{openOracleCopy.formatReportUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</p>
 			<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
 				{renderReportFields([
 					{ label: report.token1Symbol, value: <AddressValue address={report.token1} /> },
@@ -195,7 +195,7 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 					</select>
 				</label>
 			</div>
-			{entries.length === 0 || !hasActiveFilters ? undefined : <p className='detail'>{openOracleCopy.formatReportsShownSummary(visibleReports.length.toString(), entries.length.toString())}</p>}
+			{visibleReports.length === 0 || !hasActiveFilters ? undefined : <p className='detail'>{openOracleCopy.formatReportsShownSummary(visibleReports.length.toString(), entries.length.toString())}</p>}
 			{content}
 		</SectionBlock>
 	)
