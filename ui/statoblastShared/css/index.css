@@ -2679,6 +2679,27 @@ span.rep-price-status.stale,
 	margin-left: calc(var(--space-2) * -1);
 }
 
+/* Report rows and the report header pair the favorite star with the status badge; the star centers on the badge instead of stretching the row. */
+.open-oracle-report-badges {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.open-oracle-report-updated {
+	color: var(--muted);
+	font-size: var(--font-label);
+}
+
+.open-oracle-report-badges .favorite-toggle {
+	margin-block: calc(var(--space-1) * -1);
+}
+
+.comparison-record-badge .open-oracle-report-badges .favorite-toggle {
+	margin-left: calc(var(--space-2) * -1);
+}
+
 /* Browse rows lead with open interest against capacity: a taller meter with larger numbers and the used share. */
 .pool-capacity-summary.is-prominent .progress-meter-value {
 	font-size: 1.25rem;
