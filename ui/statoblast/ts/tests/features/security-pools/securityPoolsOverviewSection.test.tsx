@@ -107,7 +107,6 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
 		onSelectSecurityPool: () => undefined,
-		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
@@ -263,7 +262,7 @@ describe('SecurityPoolsOverviewSection', () => {
 				},
 			],
 		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool] })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
