@@ -23,7 +23,7 @@ import { getReportPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability } from '../lib/openOracle.js'
+import { formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability, type OpenOracleDisputeInputField } from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
@@ -127,6 +127,19 @@ export function OpenOracleReportDetailsCard({
 }: OpenOracleReportDetailsCardProps) {
 	const loadingSelectedReport = openOracleReportLookupState === 'loading'
 	const liveCurrentTime = useLiveSettlementTime(openOracleReportDetails, loadingSelectedReport, onLoadOracleReport)
+	// Revealed dispute errors belong to one report; switching reports starts with hidden errors again.
+	const disputeRevealKey = openOracleReportDetails?.reportId.toString() ?? ''
+	const [revealedDisputeState, setRevealedDisputeState] = useState<{ key: string; fields: ReadonlySet<OpenOracleDisputeInputField> }>({ key: disputeRevealKey, fields: new Set() })
+	const revealedDisputeFields = revealedDisputeState.key === disputeRevealKey ? revealedDisputeState.fields : new Set<OpenOracleDisputeInputField>()
+	const onDisputeFieldRevealChange = (field: OpenOracleDisputeInputField, revealed: boolean) =>
+		setRevealedDisputeState(current => {
+			const fields = current.key === disputeRevealKey ? current.fields : new Set<OpenOracleDisputeInputField>()
+			if (fields.has(field) === revealed) return current.key === disputeRevealKey ? current : { key: disputeRevealKey, fields }
+			const next = new Set(fields)
+			if (revealed) next.add(field)
+			else next.delete(field)
+			return { key: disputeRevealKey, fields: next }
+		})
 	const reportControls = (
 		<div className='form-grid'>
 			<LookupFieldRow
@@ -406,6 +419,8 @@ export function OpenOracleReportDetailsCard({
 			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'dispute' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
 				{renderSelectedReportActionSection({
 					actionMode: 'dispute',
+					onDisputeFieldRevealChange,
+					revealedDisputeFields,
 					disputeSubmission: openOracleDisputeSubmission,
 					isConnected,
 					isOnActiveAppChain,

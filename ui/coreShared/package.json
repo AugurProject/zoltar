@@ -447,6 +447,10 @@
 			"bun": "./ts/tests/sharedControls.test.tsx",
 			"default": "./js/tests/sharedControls.test.js"
 		},
+		"./components/AmountField.js": {
+			"bun": "./ts/components/AmountField.tsx",
+			"default": "./js/components/AmountField.js"
+		},
 		"./components/FormInput.js": {
 			"bun": "./ts/components/FormInput.tsx",
 			"default": "./js/components/FormInput.js"
@@ -906,6 +910,10 @@
 		"./components/EmptyState.js": {
 			"bun": "./ts/components/EmptyState.tsx",
 			"default": "./js/components/EmptyState.js"
+		},
+		"./tests/amountField.test.js": {
+			"bun": "./ts/tests/amountField.test.tsx",
+			"default": "./js/tests/amountField.test.js"
 		},
 		"./tests/formInput.test.js": {
 			"bun": "./ts/tests/formInput.test.tsx",

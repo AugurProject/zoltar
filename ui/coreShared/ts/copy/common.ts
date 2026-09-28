@@ -37,6 +37,7 @@ export const childUniverses = 'Child universes'
 export const childUniversesEmpty = 'No child universes are deployed for this universe.'
 export const max = 'Max'
 export const multiplier = 'Multiplier'
+export const multiplierUnit = '×'
 export const no = 'No'
 export const noMatches = 'No matches'
 export const notFound = 'Not found'
@@ -113,6 +114,13 @@ export const previousPage = 'Previous page'
 export const formatDecimalNumberRequiredError = (fieldLabel: CopyTemplateValue) => `${fieldLabel} must be a decimal number.`
 export const nonNegativeAmountRequiredError = 'Enter a valid nonnegative amount.'
 export const formatDecimalPrecisionError = (units: number) => `Use no more than ${units} decimal places.`
+export const amountInvalidError = 'Enter a number, such as 1.5.'
+export const balance = 'Balance'
+export const formatAmountHint = (label: CopyTemplateValue, amount: CopyTemplateValue) => `${label}: ${amount}`
+export const formatAmountBelowMinimumError = (amount: CopyTemplateValue) => `Enter at least ${amount}.`
+export const formatAmountAboveMaximumError = (amount: CopyTemplateValue) => `Enter at most ${amount}.`
+export const formatAmountExceedsBalanceError = (amount: CopyTemplateValue) => `Exceeds your balance of ${amount}.`
+export const formatAmountPresetLabel = (percent: CopyTemplateValue) => `${percent}%`
 export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
 export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`

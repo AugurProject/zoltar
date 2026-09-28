@@ -5,6 +5,7 @@ export {
 } from './reportingEscalation.js'
 
 export const bidAmountEth = 'Bid amount (ETH)'
+export const bidAmount = 'Bid amount'
 export const scrollableAuctionBidHistory = 'Scrollable auction bid history'
 export const scrollableMyBids = 'Scrollable wallet bid history'
 export const selectedChildPoolRepReadinessLoading = 'Checking whether pool-held REP is already ready for the selected child universe.'
@@ -127,7 +128,8 @@ export const formatPoolMigrationRequiredForVault = (outcomeLabel: CopyTemplateVa
 export const vaultMigrationCompleteReason = 'Vault migration is already complete for this wallet.'
 export const combinedUnresolvedMigrationDetail = 'Optionally clear unresolved parent escalation-deposit accounting while migrating remaining REP backing units and underwriting commitments.'
 export const selectedLadderPriceLead = 'Selected ladder price: '
-export const bidPriceEthRep = 'Bid price (ETH / REP)'
+export const bidPrice = 'Bid price'
+export const bidPriceUnit = 'ETH/REP'
 export const submittingBidTruncated = 'Submitting bid…'
 export const truthAuctionAddress = 'Truth auction address'
 export const started = 'Started'

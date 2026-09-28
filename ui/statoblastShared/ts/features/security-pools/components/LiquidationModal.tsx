@@ -3,13 +3,14 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 import { useEffect, useId, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, isVaultHealthyAtFactor, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
@@ -407,15 +408,7 @@ export function LiquidationModal({
 								)}
 							</>
 						) : null}
-						<label className='field'>
-							<span>{liquidationCopy.requestedLiquidationDebtEth}</span>
-							<div className='field-inline'>
-								<FormInput className='field-inline-input' value={liquidationDebtEthAmount} onInput={event => onLiquidationAmountChange(event.currentTarget.value)} placeholder={commonCopy.zeroDecimalPlaceholder} />
-								<button className='quiet field-inline-action' type='button' onClick={() => onLiquidationAmountChange(liquidationMaxActionAmount === undefined ? '' : formatCurrencyInputBalance(liquidationMaxActionAmount))} disabled={liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n}>
-									{commonCopy.max}
-								</button>
-							</div>
-						</label>
+						<AmountField fillMax={{ amount: liquidationMaxActionAmount }} label={liquidationCopy.requestedLiquidationDebt} onChange={onLiquidationAmountChange} placeholder={commonCopy.zeroDecimalPlaceholder} unit={commonCopy.eth} value={liquidationDebtEthAmount} />
 						{liquidationExecutionMode === 'execute' ? null : (
 							<label className='field'>
 								<span>{commonCopy.manualExecutionTimeout}</span>
