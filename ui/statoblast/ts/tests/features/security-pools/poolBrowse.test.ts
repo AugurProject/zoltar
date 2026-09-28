@@ -44,11 +44,8 @@ function createPool(index: number, overrides: Partial<ListedSecurityPool> = {}):
 	}
 }
 
-function toRows(pools: readonly ListedSecurityPool[], currentTimestamp = 0n) {
-	return derivePoolBrowseRows(
-		pools.map((pool, index) => ({ data: pool, favoritedAt: undefined, fetchedAt: index, id: pool.securityPoolAddress })),
-		{ currentTimestamp, repPerEthPrice: 10n ** 18n, uiPriceOracle: 'uniswap' },
-	)
+function toRows(pools: readonly ListedSecurityPool[]) {
+	return derivePoolBrowseRows(pools.map((pool, index) => ({ data: pool, favoritedAt: undefined, fetchedAt: index, id: pool.securityPoolAddress })))
 }
 
 const scope: LocalEntityScope = { app: 'statoblast', kind: 'pool', network: 'test-0x1' }
@@ -100,7 +97,7 @@ void describe('pool browse rows', () => {
 	})
 
 	void test('sorts open pools by soonest end and puts ended pools after them, most recent first', () => {
-		const rows = toRows([createPool(1), createPool(5), createPool(3), createPool(2)], 250n)
+		const rows = toRows([createPool(1), createPool(5), createPool(3), createPool(2)])
 		expect(sortPoolBrowseRows(rows, 'endTime', 250n).map(row => row.pool.marketDetails.title)).toEqual(['Pool 3', 'Pool 5', 'Pool 2', 'Pool 1'])
 	})
 

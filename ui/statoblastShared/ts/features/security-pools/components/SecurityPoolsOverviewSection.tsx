@@ -62,8 +62,6 @@ export function SecurityPoolsOverviewSection({
 	securityPoolPage,
 	securityPoolPageFreshness,
 	securityPoolOverviewError,
-	repPerEthPrice,
-	uiPriceOracle = 'open-oracle',
 }: SecurityPoolsOverviewSectionProps) {
 	const [collection, setCollection] = useState<LocalBrowseCollection>('favorites')
 	const [searchText, setSearchText] = useState('')
@@ -100,7 +98,7 @@ export function SecurityPoolsOverviewSection({
 	}
 	const favoriteEntries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
 	const collectionEntries = collection === 'favorites' ? favoriteEntries : buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'downloaded')
-	const rows = derivePoolBrowseRows(collectionEntries, { currentTimestamp, repPerEthPrice, uiPriceOracle })
+	const rows = derivePoolBrowseRows(collectionEntries)
 	const normalizedSearchText = normalizeLocalSearchText(searchText)
 	const universeRows = rows.filter(row => row.pool.universeId === activeUniverseId)
 	const visibleRows = sortPoolBrowseRows(filterPoolBrowseRows(rows, { activeUniverseId, normalizedSearchText, stateFilter }), sortKey, currentTimestamp)

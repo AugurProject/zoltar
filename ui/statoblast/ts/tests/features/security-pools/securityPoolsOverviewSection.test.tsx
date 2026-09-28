@@ -122,7 +122,6 @@ function createProps(overrides: SecurityPoolsOverviewSectionTestOverrides = {}):
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
 		onSelectSecurityPool: () => undefined,
-		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
@@ -265,7 +264,7 @@ describe('SecurityPoolsOverviewSection', () => {
 				},
 			],
 		})
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool] })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -869,7 +868,7 @@ describe('SecurityPoolsOverviewSection', () => {
 			createNumberedPool(2, { marketDetails: createMarketDetails({ endTime: 100n, title: 'Soon full' }), settlementCollateralAttoEth: 5n * 10n ** 18n }),
 			createNumberedPool(3, { marketDetails: createMarketDetails({ endTime: 200n, title: 'Middle half' }), settlementCollateralAttoEth: 2n * 10n ** 18n }),
 		]
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ currentTimestamp: 50n, repPerEthPrice: 10n ** 18n, securityPools: pools, uiPriceOracle: 'uniswap' })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ currentTimestamp: 50n, securityPools: pools })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		expect(getRenderedPoolTitles()).toEqual(['Late large', 'Soon full', 'Middle half'])
 
@@ -883,7 +882,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 	test('shows open interest against capacity with the used share on each row', async () => {
 		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 1n * 10n ** 18n, totalUnderwritingLimitAttoEth: 4n * 10n ** 18n })
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool], uiPriceOracle: 'uniswap' })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
 		expect(rowText).toContain('25.0% used')
@@ -935,7 +934,7 @@ describe('SecurityPoolsOverviewSection', () => {
 
 	test('shows no remaining capacity when the complete-set exchange rate is undefined', async () => {
 		const pool = createNumberedPool(1, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 5n, totalUnderwritingLimitAttoEth: 8n * 10n ** 18n })
-		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ repPerEthPrice: 10n ** 18n, securityPools: [pool], uiPriceOracle: 'uniswap' })} />)
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
 		expect(rowText).toContain('0 ETH remaining')

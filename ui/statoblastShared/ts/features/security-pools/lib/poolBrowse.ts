@@ -3,9 +3,8 @@ import { matchesLocalSearch, type LocalBrowseEntry } from '@zoltar/ui-core-share
 import { createDownloadedEntityStore } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue, readStoredMarketDetails } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
-import { calculateMintingCapacityAttoEth, getRemainingMintCapacity } from '../../markets/lib/trading.js'
+import { getRemainingMintCapacity } from '../../markets/lib/trading.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from './securityPoolState.js'
-import { resolveUiRepPerEthPrice, type UiPriceOracle } from './uiPriceOracle.js'
 
 export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
 export type PoolStateFilter = 'all' | SecurityPoolLifecycleState
@@ -91,10 +90,10 @@ function getPoolLifecycleState(pool: ListedSecurityPool) {
 	}).lifecycleState
 }
 
-export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[], { currentTimestamp, repPerEthPrice, uiPriceOracle }: { currentTimestamp: bigint | undefined; repPerEthPrice: bigint | undefined; uiPriceOracle: UiPriceOracle }): PoolBrowseRow[] {
+/** A pool's capacity is its standing ETH commitment, so rows need no REP price. */
+export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[]): PoolBrowseRow[] {
 	return entries.map(({ data: pool, fetchedAt }) => {
-		const calculationPrice = resolveUiRepPerEthPrice({ currentTimestamp, openOraclePrice: pool.lastOraclePrice, openOracleSettlementTimestamp: pool.lastOracleSettlementTimestamp, priceOracle: uiPriceOracle, uniswapPrice: repPerEthPrice })
-		const capacity = calculateMintingCapacityAttoEth(pool.totalUnderwritingLimitAttoEth, calculationPrice, pool.statoblastSecurityMultiplierBps)
+		const capacity = pool.totalUnderwritingLimitAttoEth
 		return { capacity, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getRemainingMintCapacity(capacity, pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares) }
 	})
 }
