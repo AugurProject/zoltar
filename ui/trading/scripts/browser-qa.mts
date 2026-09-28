@@ -157,7 +157,7 @@ const scenarios = [
 		width,
 		height,
 		path: `${simulationPath}#/market`,
-		assertExpression: `(async () => { await (${waitForLookup}); return ${commonAssertion} && document.title === 'Market · Augur Trading' && document.querySelector('.market-lookup a[href^="#/markets"]') !== null && document.querySelector('.market-row') === null })()`,
+		assertExpression: `(async () => { await (${waitForLookup}); return ${commonAssertion} && document.title === 'Markets · Augur Trading' && document.querySelector('.market-lookup a[href^="#/markets"]') !== null && document.querySelector('.market-row') === null })()`,
 	})),
 	...(
 		[
