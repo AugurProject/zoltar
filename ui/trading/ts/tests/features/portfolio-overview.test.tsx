@@ -73,7 +73,7 @@ describe('portfolio overview', () => {
 		cleanupRendered = rendered.cleanup
 		const summary = rendered.container.querySelector('[aria-label="Portfolio summary"]')
 		expect(summary?.textContent).toContain('Total value3 ETH')
-		expect(summary?.textContent).toContain('Profit / lossNot available')
+		expect(summary?.textContent).not.toContain('Profit / loss')
 		expect(summary?.textContent).toContain('Positions2')
 		expect(summary?.textContent).toContain('Action items2')
 		const items = Array.from(rendered.container.querySelectorAll('.portfolio-action-items li')).map(item => item.textContent)
