@@ -120,6 +120,31 @@ describe('transactionTray', () => {
 		expect(unattributed).toBe(both)
 	})
 
+	test("keeps the open prompt's status while another request finishes, then shows the waiting outcome", () => {
+		const otherHash = '0x9999000000000000000000000000000000000000000000000000000000000000'
+		const pendingA = markTransactionSubmitted(markTransactionRequested(createInitialTransactionTrayState(), { action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' }), transactionHash)
+		const promptB = markTransactionRequested(pendingA, { action: 'depositRepToVault', scope: ['security-pool:0xb'], source: 'security-vault', submittedTitle: 'Withdrawing REP' })
+		const aFailed = markTransactionFailed(promptB, { kind: 'reverted', message: 'Transaction reverted' }, 'transaction-request-1')
+		const aSucceeded = markTransactionPresented(promptB, { hash: transactionHash, title: 'REP deposited', tone: 'success' })
+
+		// A's outcome waits instead of replacing B's open prompt.
+		expect(aFailed.active?.operationKey).toBe('transaction-request-2')
+		expect(aFailed.active?.tone).toBe('awaiting-wallet')
+		expect(aFailed.deferred).toMatchObject({ hash: transactionHash, tone: 'error' })
+		expect(aSucceeded.active?.operationKey).toBe('transaction-request-2')
+		// Once B's prompt closes the waiting outcome is shown.
+		const bCanceled = markTransactionCanceled(aFailed, 'transaction-request-2')
+		expect(bCanceled.active).toMatchObject({ hash: transactionHash, tone: 'error' })
+		expect(bCanceled.deferred).toBeUndefined()
+		// Without a waiting outcome, canceling B brings back A's pending status.
+		const restored = markTransactionCanceled(promptB, 'transaction-request-2')
+		expect(restored.active).toMatchObject({ hash: transactionHash, tone: 'pending', operationKey: 'transaction-request-1' })
+		// B's broadcast shows B's pending status; the waiting outcome is shown when B finishes.
+		const bPending = markTransactionSubmitted(aFailed, otherHash)
+		expect(bPending.active).toMatchObject({ hash: otherHash, tone: 'pending' })
+		expect(markTransactionFinished(bPending, 'transaction-request-2').active).toMatchObject({ hash: transactionHash, tone: 'error' })
+	})
+
 	test('ignores outcomes for an unknown request key', () => {
 		const finished = markTransactionFinished(createInitialTransactionTrayState())
 		const requested = markTransactionRequested(finished, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })

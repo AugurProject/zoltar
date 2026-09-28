@@ -237,6 +237,57 @@ test('sends an approval-only workflow from the form control without a separate r
 	}
 })
 
+test("ignores another transaction's failure while its own multi-step review runs", async () => {
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	let review: Promise<bigint | undefined> | undefined
+	const approvalHash = '0x2222222222222222222222222222222222222222222222222222222222222222'
+	const otherHash = '0x3333333333333333333333333333333333333333333333333333333333333333'
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<OperationModal isOpen title='Withdraw REP' onClose={() => undefined}>
+					<button
+						type='button'
+						onClick={() => {
+							controller = createTransactionStepController()
+							controller.setPlan([{ ...step, title: 'Approve REP' }, step])
+							review = controller.review().catch(() => undefined)
+						}}
+					>
+						Withdraw
+					</button>
+				</OperationModal>
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		const dialog = queries.getByRole('dialog', { name: 'Withdraw REP' })
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Withdraw' })))
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Approve REP' })))
+		await review
+		await act(() => {
+			controller?.submitted(approvalHash)
+			// A different pool's transaction reverts while this dialog's approval is pending.
+			presentation.value = { hash: otherHash, operationKey: 'other', title: 'Deposit failed', tone: 'error', detail: 'Transaction reverted.' }
+		})
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(dialog.querySelector('.operation-modal-steps')).not.toBeNull()
+		expect(dialog.querySelector('.operation-modal-steps')?.textContent).not.toContain('Transaction reverted.')
+		await act(() => {
+			presentation.value = { hash: approvalHash, operationKey: 'mine', title: 'Approval failed', tone: 'error', detail: 'Transaction reverted.' }
+		})
+		// Its own failure still returns the dialog to the form.
+		expect(transactionSteps.value).toBeUndefined()
+		expect(dialog.querySelector('.operation-modal-steps')).toBeNull()
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+	}
+})
+
 test('shows one action row while the review runs and keeps the form for reference without editing', async () => {
 	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 	let controller: ReturnType<typeof createTransactionStepController> | undefined

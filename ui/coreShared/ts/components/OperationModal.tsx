@@ -51,19 +51,22 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
 	}, [activeStep, approvalOnly, ownedWorkflow, singleFormAction])
+	const activeTransaction = useGlobalTransactionPresentation()
+	// Another running transaction's status can be shown while this dialog's review runs; only this workflow's own
+	// status (no hash yet, or a hash one of its steps sent) may fail, unlock, or feed the review.
+	const ownsPresentation = activeTransaction !== undefined && (ownedWorkflow === undefined || activeTransaction.hash === undefined || ownedWorkflow.steps.some(step => step.hash === activeTransaction.hash))
+	const ownedFailure = ownsPresentation && activeTransaction?.tone === 'error'
 	// A step that fails after it was sent returns to the form on its own; the outcome notice below the form explains what happened.
-	const activeTransactionTone = useGlobalTransactionPresentation()?.tone
 	useEffect(() => {
 		if (ownedWorkflow === undefined || activeStep === undefined || activeStep.phase === 'review' || activeStep.phase === 'upcoming') return
-		if (activeStep.phase !== 'failed' && activeTransactionTone !== 'error') return
+		if (activeStep.phase !== 'failed' && !ownedFailure) return
 		ownedWorkflow.cancel()
-	}, [activeStep, activeTransactionTone, ownedWorkflow])
-	const activeTransaction = useGlobalTransactionPresentation()
+	}, [activeStep, ownedFailure, ownedWorkflow])
 	// Only an open wallet prompt holds the dialog; a broadcast transaction keeps running and stays in the activity list after it closes.
-	const awaitingWallet = ownsWorkflow && workflow.steps.some(step => step.phase === 'wallet') && activeTransaction?.tone !== 'error'
+	const awaitingWallet = ownsWorkflow && workflow.steps.some(step => step.phase === 'wallet') && !ownedFailure
 	const cannotClose = closeDisabled || awaitingWallet
 	const activeTransactionOperationKey = getTransactionOperationKey(activeTransaction)
-	const modalTransaction = getModalTransactionPresentation(activeTransaction, context)
+	const modalTransaction = getModalTransactionPresentation(ownsPresentation ? activeTransaction : undefined, context)
 	const titleId = useId()
 	const descriptionElementId = useId()
 	const descriptionId = description === undefined ? undefined : descriptionElementId

@@ -12,10 +12,15 @@ type TransactionTrayEntry = Readonly<{
 	intent: TransactionIntent
 	key: string
 	lifecycle: TransactionLifecycle
+	/** This request's latest status presentation, restored when another request's prompt closes. */
+	presentation?: GlobalTransactionPresentation | undefined
 }>
 
 export type TransactionTrayState = Readonly<{
+	/** The status shown to the user; while a prompt is open it always belongs to that prompt's request. */
 	active: GlobalTransactionPresentation | undefined
+	/** An outcome of another request that arrived while a prompt was open; shown once the prompt closes. */
+	deferred?: GlobalTransactionPresentation | undefined
 	entries: readonly TransactionTrayEntry[]
 	requestSequence: number
 }>
@@ -26,6 +31,28 @@ export function createInitialTransactionTrayState(): TransactionTrayState {
 		entries: [],
 		requestSequence: 1,
 	}
+}
+
+/**
+ * Records a request's presentation and shows it unless another request's review or wallet prompt is open, in which
+ * case the outcome waits so it cannot replace or cancel the review the user is working in.
+ */
+function present(state: TransactionTrayState, ownerKey: string | undefined, presentation: GlobalTransactionPresentation): TransactionTrayState {
+	const withEntry = ownerKey === undefined ? state : { ...state, entries: state.entries.map(entry => (entry.key === ownerKey ? { ...entry, presentation } : entry)) }
+	const foreground = getForegroundEntry(withEntry)
+	if (foreground !== undefined && foreground.key !== ownerKey) return { ...withEntry, deferred: presentation }
+	return { ...withEntry, active: presentation }
+}
+
+/** After a prompt closes, show a waiting outcome, or bring back the status of a request that is still running. */
+function settleActive(state: TransactionTrayState): TransactionTrayState {
+	if (getForegroundEntry(state) !== undefined) return state
+	if (state.deferred !== undefined) return { ...state, active: state.deferred, deferred: undefined }
+	const activeOwner = state.active?.operationKey
+	const ownerRunning = activeOwner !== undefined && state.entries.some(entry => entry.key === activeOwner)
+	if (state.active !== undefined && (ownerRunning || (state.active.tone !== 'awaiting-wallet' && state.active.tone !== 'preparing'))) return state
+	const running = [...state.entries].reverse().find(entry => entry.presentation?.tone === 'pending')
+	return { ...state, active: running?.presentation }
 }
 
 function applyActiveBackendTransactionIntentDefaults(intent: TransactionIntent): TransactionIntent {
@@ -80,14 +107,8 @@ export function canRequestTransaction(state: TransactionTrayState, intent: Trans
 export function markTransactionRequested(state: TransactionTrayState, intent: TransactionIntent): TransactionTrayState {
 	const key = `transaction-request-${state.requestSequence}`
 	const resolvedIntent = applyActiveBackendTransactionIntentDefaults(intent)
-	return {
-		active: {
-			...createAwaitingWalletPresentation(resolvedIntent, key),
-			operationKey: key,
-		},
-		entries: [...state.entries, { intent: resolvedIntent, key, lifecycle: startTransactionLifecycle(true) }],
-		requestSequence: state.requestSequence + 1,
-	}
+	const presentation = { ...createAwaitingWalletPresentation(resolvedIntent, key), operationKey: key }
+	return present({ ...state, entries: [...state.entries, { intent: resolvedIntent, key, lifecycle: startTransactionLifecycle(true) }], requestSequence: state.requestSequence + 1 }, key, presentation)
 }
 
 /**
@@ -102,18 +123,16 @@ export function markTransactionPrepared(state: TransactionTrayState, preview: Tr
 	const entry = getPreparingTransactionEntry(state)
 	if (entry === undefined) return state
 	const prepared = createPreparedWalletPresentation(entry.intent, preview, entry.key)
-	return {
-		...updateEntry(state, entry.key, current => ({
-			...current,
-			intent: {
-				...current.intent,
-				...(prepared.rows === undefined ? {} : { rows: prepared.rows }),
-				...(prepared.technicalRows === undefined ? {} : { technicalRows: prepared.technicalRows }),
-			},
-			lifecycle: isTransactionAwaitingUser(current.lifecycle) ? transitionTransactionLifecycle(current.lifecycle, { type: 'review-confirmed' }) : startTransactionLifecycle(false),
-		})),
-		active: { ...prepared, operationKey: entry.key },
-	}
+	const next = updateEntry(state, entry.key, current => ({
+		...current,
+		intent: {
+			...current.intent,
+			...(prepared.rows === undefined ? {} : { rows: prepared.rows }),
+			...(prepared.technicalRows === undefined ? {} : { technicalRows: prepared.technicalRows }),
+		},
+		lifecycle: isTransactionAwaitingUser(current.lifecycle) ? transitionTransactionLifecycle(current.lifecycle, { type: 'review-confirmed' }) : startTransactionLifecycle(false),
+	}))
+	return present(next, entry.key, { ...prepared, operationKey: entry.key })
 }
 
 function findSubmittedEntry(state: TransactionTrayState, hash: Hash, replacedHash: Hash | undefined) {
@@ -132,23 +151,20 @@ export function markTransactionSubmitted(state: TransactionTrayState, hash: Hash
 	if (entry === undefined) return state
 	const intent = entry.intent
 	const next = updateEntry(state, entry.key, current => ({ ...current, lifecycle: transitionTransactionLifecycle(transitionTransactionLifecycle(current.lifecycle, { type: 'review-confirmed' }), { type: 'submitted', hash }) }))
-	const activeBelongsToEntry = state.active === undefined || state.active.operationKey === entry.key || state.active.hash === getEntryHash(entry)
-	if (!activeBelongsToEntry) return next
-	return {
-		...next,
-		active: {
-			dismissKey: hash,
-			hash,
-			operationKey: entry.key,
-			...(intent.submittedDetail === undefined ? {} : { detail: intent.submittedDetail }),
-			...(status === 'uncertain' ? { detail: confirmationUnavailableDetail } : {}),
-			...(intent.rows === undefined ? {} : { rows: intent.rows }),
-			...(intent.technicalRows === undefined ? {} : { technicalRows: intent.technicalRows }),
-			title: intent.submittedTitle,
-			tone: 'pending',
-			...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
-		},
-	}
+	// A later report for an entry whose outcome is already shown (such as a recovered receipt) does not replace it.
+	if (entry.presentation !== undefined && entry.presentation.tone !== 'pending' && entry.presentation.tone !== 'awaiting-wallet' && entry.presentation.tone !== 'preparing') return next
+	return present(next, entry.key, {
+		dismissKey: hash,
+		hash,
+		operationKey: entry.key,
+		...(intent.submittedDetail === undefined ? {} : { detail: intent.submittedDetail }),
+		...(status === 'uncertain' ? { detail: confirmationUnavailableDetail } : {}),
+		...(intent.rows === undefined ? {} : { rows: intent.rows }),
+		...(intent.technicalRows === undefined ? {} : { technicalRows: intent.technicalRows }),
+		title: intent.submittedTitle,
+		tone: 'pending',
+		...(intent.universeId === undefined ? {} : { universeId: intent.universeId }),
+	})
 }
 
 export function markTransactionFailed(state: TransactionTrayState, failure: TransactionFailure, key?: string): TransactionTrayState {
@@ -157,52 +173,43 @@ export function markTransactionFailed(state: TransactionTrayState, failure: Tran
 	const next = updateEntry(state, entry.key, current => ({ ...current, lifecycle: transitionTransactionLifecycle(current.lifecycle, { type: 'failed', failure }) }))
 	const hash = getEntryHash(entry)
 	if (hash !== undefined) {
-		const active = state.active?.hash === hash ? state.active : undefined
-		return {
-			...next,
-			active: {
-				...(active ?? { hash, operationKey: entry.key, title: entry.intent.submittedTitle, tone: 'pending' }),
-				detail: failure.message,
-				dismissKey: hash,
-				title: entry.intent.failedTitle ?? active?.title ?? entry.intent.submittedTitle,
-				tone: 'error',
-			},
-		}
-	}
-	return {
-		...next,
-		active: {
-			...createTransactionFailurePresentation(entry.intent, failure.message, entry.key),
+		const previous = entry.presentation?.hash === hash ? entry.presentation : undefined
+		return present(next, entry.key, {
+			...(previous ?? { hash, title: entry.intent.submittedTitle, tone: 'pending' }),
+			detail: failure.message,
+			dismissKey: hash,
 			operationKey: entry.key,
-		},
+			title: entry.intent.failedTitle ?? previous?.title ?? entry.intent.submittedTitle,
+			tone: 'error',
+		})
 	}
+	return present(next, entry.key, { ...createTransactionFailurePresentation(entry.intent, failure.message, entry.key), operationKey: entry.key })
 }
 
 export function markTransactionCanceled(state: TransactionTrayState, key?: string): TransactionTrayState {
 	const entry = key === undefined ? getForegroundEntry(state) : state.entries.find(candidate => candidate.key === key)
 	if (entry === undefined) return state
-	return {
+	return settleActive({
 		...state,
 		active: state.active?.dismissKey === entry.key ? undefined : state.active,
 		entries: state.entries.filter(candidate => candidate.key !== entry.key),
-	}
+	})
 }
 
 export function markTransactionPresented(state: TransactionTrayState, active: GlobalTransactionPresentation): TransactionTrayState {
-	const previousActive = state.active
+	// The presentation belongs to the request that broadcast its hash, else to the open prompt or the only running request.
+	const owner = (active.hash === undefined ? undefined : state.entries.find(entry => entry.presentation?.hash === active.hash || getEntryHash(entry) === active.hash)) ?? getForegroundEntry(state) ?? (state.entries.length === 1 ? state.entries[0] : undefined)
+	const previousActive = owner?.presentation ?? state.active
 	const isSameTransaction = previousActive !== undefined && ((active.hash !== undefined && active.hash === previousActive.hash) || (active.dismissKey !== undefined && active.dismissKey === previousActive.dismissKey))
 	const operationKey = isSameTransaction ? (previousActive.operationKey ?? active.operationKey ?? active.dismissKey ?? active.hash) : (active.operationKey ?? active.dismissKey ?? active.hash)
 	const technicalRows = active.technicalRows ?? (isSameTransaction ? previousActive.technicalRows : undefined)
 	const universeId = active.universeId ?? (isSameTransaction ? previousActive.universeId : undefined)
-	return {
-		...state,
-		active: {
-			...active,
-			...(operationKey === undefined ? {} : { operationKey }),
-			...(technicalRows === undefined ? {} : { technicalRows }),
-			...(universeId === undefined ? {} : { universeId }),
-		},
-	}
+	return present(state, owner?.key, {
+		...active,
+		...(operationKey === undefined ? {} : { operationKey }),
+		...(technicalRows === undefined ? {} : { technicalRows }),
+		...(universeId === undefined ? {} : { universeId }),
+	})
 }
 
 /**
@@ -217,5 +224,5 @@ export function isTransactionActionLocked(state: TransactionTrayState, scope?: T
 export function markTransactionFinished(state: TransactionTrayState, key?: string): TransactionTrayState {
 	const entry = resolveTransactionTrayEntry(state, key)
 	if (entry === undefined) return state
-	return { ...state, entries: state.entries.filter(candidate => candidate.key !== entry.key) }
+	return settleActive({ ...state, entries: state.entries.filter(candidate => candidate.key !== entry.key) })
 }

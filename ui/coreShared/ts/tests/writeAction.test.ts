@@ -453,6 +453,7 @@ describe('runWriteAction', () => {
 		restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: walletAddress, profile: createFakeSimulationProfile() }))
 		let transactionState = createInitialTransactionTrayState()
 		let requestedRequiresWalletConfirmation: boolean | undefined
+		let requestedPresentation: typeof transactionState.active
 		const errorSignal: { value: string | undefined } = { value: undefined }
 		const writeActionConfig = buildWriteActionConfig(
 			{
@@ -469,6 +470,7 @@ describe('runWriteAction', () => {
 				onTransactionRequested: intent => {
 					transactionState = markTransactionRequested(transactionState, intent)
 					requestedRequiresWalletConfirmation = transactionState.entries.at(-1)?.intent.requiresWalletConfirmation
+					requestedPresentation = transactionState.active
 				},
 				refreshState: async () => undefined,
 			},
@@ -484,8 +486,10 @@ describe('runWriteAction', () => {
 
 		await runWriteAction(writeActionConfig, async () => ({ hash: transactionHash }), 'Failed to create question')
 
-		expect(transactionState.active?.tone).toBe('preparing')
-		expect(transactionState.active?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
+		expect(requestedPresentation?.tone).toBe('preparing')
+		expect(requestedPresentation?.detail).toBe('Submitting in browser simulation. No wallet confirmation is required.')
+		// The request's preparing notice does not outlive the finished action.
+		expect(transactionState.active).toBeUndefined()
 		expect(requestedRequiresWalletConfirmation).toBe(false)
 		expect(transactionState.entries[0]?.intent).toBeUndefined()
 		expect(getInFlightTransactionCount(transactionState)).toBe(0)
