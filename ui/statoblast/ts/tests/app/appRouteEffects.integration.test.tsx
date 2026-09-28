@@ -95,6 +95,25 @@ function UrlStateHarness() {
 
 installStatoblastRouting()
 describe('app route effects integration', () => {
+	test('returning to Browse Pools after minting never loads an empty pool address', async () => {
+		const dom = installDomEnvironment('http://localhost/#/pools')
+		const calls: Array<string | undefined> = []
+		const props = createDefaultProps({
+			route: 'pools',
+			tradingResultHash: 'confirmed-mint',
+			loadSecurityPools: async address => {
+				calls.push(address)
+			},
+		})
+		const { cleanup } = await renderIntoDocument(<RouteEffectsHarness {...props} />)
+		try {
+			expect(calls).not.toContain('')
+		} finally {
+			await cleanup()
+			dom.cleanup()
+		}
+	})
+
 	test('loads linked security pools once while browsing market questions', async () => {
 		const dom = installDomEnvironment('http://localhost/#/zoltar')
 		const calls: Array<string | undefined> = []

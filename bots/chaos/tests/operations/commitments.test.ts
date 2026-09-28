@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { certifyCommitment, exitCommitmentLimit } from '../../src/operations/statoblast/vaults.ts'
+import { exitCommitmentLimit } from '../../src/operations/statoblast/vaults.ts'
 import { canCreateCompleteSet } from '../../src/operations/pool-economics.ts'
 import { snapshotFixture } from './fixture.ts'
 
@@ -15,30 +15,18 @@ function fixture() {
 	pool.projectedSettlementCollateralAttoEth = '1'
 	pool.totalUnderwritingLimitAttoEth = vault.underwritingLimitAttoEth
 	pool.currentMintingCapacityAttoEth = '0'
-	vault.coverageCertified = false
 	return { snapshot, pool, vault }
 }
 
 describe('standing commitment keeper planning', () => {
-	test('certifies one vault independently and requires the aggregate certificate before minting', () => {
-		const { snapshot, pool, vault } = fixture()
-		const plan = certifyCommitment.buildPlan(snapshot, options)
-		expect(plan?.steps).toHaveLength(1)
-		expect(plan?.deadlineTimestamp).toBe((BigInt(pool.lastOracleSettlementTimestamp) + 300n).toString())
+	test('minting follows live aggregate capacity without enumerating vaults', () => {
+		const { pool } = fixture()
 		expect(canCreateCompleteSet(pool, 1n)).toBe(false)
 		pool.currentMintingCapacityAttoEth = pool.totalUnderwritingLimitAttoEth
-		vault.coverageCertified = true
+		pool.vaults = []
 		expect(canCreateCompleteSet(pool, 1n)).toBe(true)
-		expect(certifyCommitment.buildPlan(snapshot, options)).toBeUndefined()
-	})
-
-	test('stale or absent certificate state cannot authorize keeper plans or minting', () => {
-		const { snapshot, pool, vault } = fixture()
-		delete vault.coverageCertified
-		expect(certifyCommitment.buildPlan(snapshot, options)).toBeUndefined()
-		vault.coverageCertified = false
-		pool.lastOracleSettlementTimestamp = (BigInt(snapshot.anchor.timestamp) - 299n).toString()
-		expect(certifyCommitment.buildPlan(snapshot, options)).toBeUndefined()
+		expect(canCreateCompleteSet(pool, BigInt(pool.currentMintingCapacityAttoEth))).toBe(false)
+		pool.escalationGame = '0x0000000000000000000000000000000000000001'
 		expect(canCreateCompleteSet(pool, 1n)).toBe(false)
 	})
 

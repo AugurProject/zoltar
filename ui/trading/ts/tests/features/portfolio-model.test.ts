@@ -5,7 +5,7 @@ import { lpReserveClaims, portfolioOverview } from '../../features/portfolioMode
 import type { PortfolioBalanceEntry } from '../../features/live/liveTradingTypes.js'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 
-const SET = 10n ** 36n
+const SET = 10n ** 18n
 const ATTO_ETH_PER_ETH = 10n ** 18n
 const NOW = 1_000_000n
 const WEEK = 7n * 24n * 60n * 60n
@@ -14,7 +14,7 @@ const secondPool: Address = `0x${'56'.repeat(20)}`
 const shareToken: Address = `0x${'34'.repeat(20)}`
 const pair: Address = `0x${'9a'.repeat(20)}`
 
-// One complete set (10^36 attoShares) is backed by exactly 1 ETH in this fixture, so 10^18 attoShares are worth 1 attoETH.
+// One complete set (10^18 attoShares) is backed by exactly 1 ETH in this fixture.
 const market: LiveMarket = {
 	pool,
 	pair,
@@ -68,12 +68,12 @@ describe('portfolio position value', () => {
 		expect(exitSets).toBeGreaterThan(0n)
 		expect(exitSets).toBeLessThan(SET)
 		// The INVALID the exit cannot use only pays if INVALID wins, so it is flagged rather than priced.
-		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ATTO_ETH_PER_ETH, pendingResolution: true })
-		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets / ATTO_ETH_PER_ETH, pendingResolution: true })
+		expect(valueOf({}, { yes: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets, pendingResolution: true })
+		expect(valueOf({}, { no: (3n * SET) / 2n, invalid: SET })).toEqual({ kind: 'exit', attoEth: exitSets, pendingResolution: true })
 		// A bare long share without INVALID insurance cannot be exited through the pool.
 		expect(valueOf({}, { yes: SET })).toEqual({ kind: 'exit', attoEth: 0n, pendingResolution: true })
 		// Rounding leftovers below the displayed precision are not a pending payout.
-		expect(valueOf({}, { yes: SET, no: SET, invalid: SET + 10n ** 30n })).toEqual({ kind: 'exit', attoEth: ATTO_ETH_PER_ETH, pendingResolution: false })
+		expect(valueOf({}, { yes: SET, no: SET, invalid: SET + 10n ** 12n })).toEqual({ kind: 'exit', attoEth: ATTO_ETH_PER_ETH, pendingResolution: false })
 	})
 
 	test('includes LP reserve claims and exits against the reserves left after withdrawal', () => {

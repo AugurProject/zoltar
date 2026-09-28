@@ -439,7 +439,7 @@ void describe('trading helpers', () => {
 				shareBalances,
 				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
-		).toBe('Max redeemable amount is 2 complete sets.')
+		).toBe('Max redeemable amount is 2\u00a0ETH.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
@@ -456,7 +456,7 @@ void describe('trading helpers', () => {
 	})
 
 	void test('converts first-mint share token amounts through the pool exchange rate', () => {
-		const firstMintShareAmount = TOKEN_PRECISION * TOKEN_PRECISION
+		const firstMintShareAmount = TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
 		expect(convertSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
 		expect(convertMintSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, 0n, 0n)).toBe(firstMintShareAmount)
@@ -476,7 +476,7 @@ void describe('trading helpers', () => {
 				},
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
-		).toBe('Max redeemable amount is 1 complete set.')
+		).toBe('Max redeemable amount is 1\u00a0ETH.')
 	})
 
 	void test('validates share migration targets and positive balances once migration is available', () => {

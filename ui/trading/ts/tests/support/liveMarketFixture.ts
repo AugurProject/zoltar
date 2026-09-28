@@ -21,7 +21,7 @@ export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMark
 		awaitingForkContinuation: false,
 		universeForkTime: 0n,
 		vaultCount: 1n,
-		shareTokenSupplyAttoShares: 10n ** 36n,
+		shareTokenSupplyAttoShares: 10n ** 18n,
 		settlementCollateralAttoEth: 10n ** 18n,
 		currentRetentionRate: 10n ** 18n,
 		totalUnderwritingLimitAttoEth: 1n,
@@ -31,9 +31,9 @@ export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMark
 		feeBps: 30n,
 		tradingStatus: 0,
 		questionOutcome: 3,
-		yesReserve: 100n * 10n ** 36n,
-		noReserve: 100n * 10n ** 36n,
-		lpTotalSupply: 100n * 10n ** 36n,
+		yesReserve: 100n * 10n ** 18n,
+		noReserve: 100n * 10n ** 18n,
+		lpTotalSupply: 100n * 10n ** 18n,
 		...overrides,
 	}
 }
@@ -89,9 +89,9 @@ export function listingMarketFixture(overrides: Partial<LiveMarket> & Pick<LiveM
 		feeEligibleUnderwritingLimitAttoEth: 0n,
 		mintingCapacityCeilingAttoEth: 0n,
 		availableMintingCapacityAttoEth: 0n,
-		yesReserve: 10n ** 36n,
-		noReserve: 10n ** 36n,
-		lpTotalSupply: 10n ** 36n,
+		yesReserve: 10n ** 18n,
+		noReserve: 10n ** 18n,
+		lpTotalSupply: 10n ** 18n,
 		...overrides,
 	})
 }

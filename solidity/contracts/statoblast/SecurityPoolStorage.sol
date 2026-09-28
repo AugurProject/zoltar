@@ -11,7 +11,6 @@ struct VaultBadDebt {
 
 abstract contract SecurityPoolStorage {
 	event UnderwritingLimitSet(address indexed vault, uint256 underwritingLimitAttoEth, uint256 totalUnderwritingLimitAttoEth);
-	event VaultCoverageCertified(address indexed vault, uint256 limitAttoEth, bytes32 snapshot, uint256 certifiedTotalAttoEth);
 
 	EscalationGame public escalationGame;
 	uint256 public totalUnderwritingLimitAttoEth;
@@ -44,15 +43,6 @@ abstract contract SecurityPoolStorage {
 	uint256 internal badDebtGeneration;
 	/// @dev Initial pools use the question end; an activated child uses max until resolution or its next fork fixes the cutoff.
 	uint256 internal feeEpochEndTime;
-	uint256 public coverageRevision;
-	bytes32 internal certifiedCoverageSnapshot;
-	uint256 internal coverageCertificateGeneration;
-	uint256 internal certifiedUnderwritingLimitAttoEth;
-	mapping(address => uint256) internal vaultCoverageCertificateGeneration;
-
-	function _invalidateCoverage() internal {
-		coverageRevision++;
-	}
 
 	function _getVaultBadDebtAttoEth(address vault) internal view returns (uint256 badDebtAttoEth) {
 		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];

@@ -4,13 +4,12 @@ import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-c
 import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { loadCoordinatorInitialReportFundingRequirement, loadQueuedVaultOperationState, loadOracleManagerDetails, queueOracleManagerOperation } from '../../../protocol/oracleCoordinator.js'
 import { isSecurityPoolVaultAdmissionClosed, loadSecurityVaultDetails } from '../../../protocol/securityPools.js'
-import { certifyVaultCoverage, depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
+import { depositRepToVaultToSecurityPool, redeemRepFromVaultFromSecurityPool, redeemSecurityVaultFees, updateSecurityVaultFees } from '../../../protocol/securityVault.js'
 
 export const defaultUseSecurityVaultOperationsDependencies: UseSecurityVaultOperationsDependencies = {
 	approveErc20: async (client, tokenAddress, spenderAddress, amount, action) => await approveErc20(client, tokenAddress, spenderAddress, amount, action),
 	createConnectedReadClient: () => createConnectedReadClient(),
 	createWalletWriteClient,
-	certifyVaultCoverage: async (client, pool, vault) => await certifyVaultCoverage(client, pool, vault),
 	depositRepToVaultToSecurityPool: async (client, securityPoolAddress, amount, targetHealthFactorBps) => await depositRepToVaultToSecurityPool(client, securityPoolAddress, amount, targetHealthFactorBps),
 	isSecurityPoolVaultAdmissionClosed: async securityPoolAddress => await isSecurityPoolVaultAdmissionClosed(createConnectedReadClient(), securityPoolAddress),
 	loadCoordinatorInitialReportFundingRequirement: async (client, managerAddress, walletAddress) => await loadCoordinatorInitialReportFundingRequirement(client, managerAddress, walletAddress),

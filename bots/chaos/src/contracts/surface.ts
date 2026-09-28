@@ -63,7 +63,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolOperationsDelegate', 'activateRecoveredCommitment', 'excluded-dangerous', undefined, 'Storage-coupled forker callback; use the canonical pool wrapper.'),
 	entry('SecurityPoolForker', 'takeOverUnassignedCommitment', 'excluded-dangerous', undefined, 'Requires an explicit receiver decision to accept the entire abandoned commitment and backing.'),
 	entry('SecurityPoolForkerVaultMigrationDelegate', 'takeOverUnassignedCommitment', 'excluded-dangerous', undefined, 'Storage-coupled module; use the canonical forker wrapper.'),
-	entry('SecurityPool', 'certifyVaultCoverage', 'selectable', 'statoblast.vault.certify'),
 	entry('SecurityPool', 'setUnderwritingLimit', 'selectable', 'statoblast.vault.set-limit'),
 	entry('SecurityPool', 'updateSettlementCollateral', 'selectable', 'statoblast.pool.checkpoint-collateral'),
 	entry('SecurityPool', 'updateRetentionRate', 'selectable', 'statoblast.pool.checkpoint-retention'),
@@ -101,7 +100,6 @@ export const MUTATING_CONTRACT_SURFACE: readonly ContractMethodClassification[] 
 	entry('SecurityPoolOperationsDelegate', 'decodeError', 'excluded-dangerous', undefined, 'This helper decodes revert data for canonical SecurityPool delegate calls and has no direct protocol effect.'),
 	entry('SecurityPoolOperationsDelegate', 'updateVaultFees', 'excluded-dangerous', undefined, 'Fee checkpoints run through the SecurityPool host; direct calls use isolated delegate storage.'),
 	entry('SecurityPoolOperationsDelegate', 'setUnderwritingLimit', 'excluded-dangerous', undefined, 'Execute in the pool storage context through its owner-authorized wrapper.'),
-	entry('SecurityPoolOperationsDelegate', 'certifyVaultCoverage', 'excluded-dangerous', undefined, 'Execute in the pool storage context through its certification wrapper.'),
 	entry('SecurityPoolOperationsDelegate', 'setVaultUnderwritingLimit', 'excluded-dangerous', undefined, 'This storage-coupled module is valid only through SecurityPool fallback and requires an explicit vault-owner capacity decision.'),
 	entry('SecurityPoolOperationsDelegate', 'depositWalletRepToEscalationGame', 'excluded-dangerous', undefined, 'Wallet reporting must use the SecurityPool host, which checks inherited outcomes before delegating; direct calls use isolated delegate storage.'),
 
