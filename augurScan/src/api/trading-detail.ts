@@ -38,7 +38,7 @@ export const tradingDetailResponse = async (sql: SQL, parts: readonly string[], 
 		queryLimit: page.queryLimit,
 	})
 	if (rows.length === 0 && page.cursor === undefined) return json({ error: 'AMM not found' }, 404)
-	const [volumes, activity] = await Promise.all([tradingVolumes(sql, { chainId, asOf, market }), tradingActivityPage(sql, url, { chainId, market, asOf })])
+	const [volumes, activity] = await Promise.all([tradingVolumes(sql, { chainId, asOf, markets: [market] }), tradingActivityPage(sql, url, { chainId, market, asOf })])
 	const eventRows = rows.map((row: Record<string, unknown>) => {
 		const eventData = jsonRecord(row['event_data'])
 		if (row['event_name'] !== 'Swap') return { ...row, event_data: eventData }

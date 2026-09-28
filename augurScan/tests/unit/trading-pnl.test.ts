@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { largestInsuredExit, tradingHoldingsValue, tradingProfitAndLoss } from '../../src/trading-pnl.ts'
+import { largestInsuredExit, tradingExitAvailability, tradingHoldingsValue, tradingProfitAndLoss } from '../../src/trading-pnl.ts'
 
 const rate = { settlementCollateralAttoEth: 2_000n, shareSupplyAttoShares: 1_000n }
 const holdings = (invalidShares: bigint, yesShares: bigint, noShares: bigint, lpTokens = 0n) => ({ invalidShares, yesShares, noShares, lpTokens })
@@ -73,5 +73,19 @@ describe('trading profit and loss', () => {
 	test('keeps realized profit but omits unrealized and net results without a valuation', () => {
 		const result = tradingProfitAndLoss(10n, 12n, holdings(0n, 3n, 0n), undefined)
 		expect(result).toEqual({ costBasisAttoEth: 10n, proceedsAttoEth: 12n, realizedAttoEth: 2n, open: true })
+	})
+})
+
+describe('trading exit availability', () => {
+	const operational = { systemState: '0', awaitingForkContinuation: false, escalationResolved: false }
+	test('values holdings only while the pair can still execute a router exit', () => {
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: operational, settlementObserved: false })).toEqual({ open: true })
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, settlementObserved: false })).toEqual({ open: true })
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, settlementObserved: false })).toEqual({ open: false, reason: 'Question end time is not indexed' })
+		expect(tradingExitAvailability({ asOfTimestamp: 200n, questionEndTime: 200n, poolState: operational, settlementObserved: false })).toMatchObject({ open: false, reason: 'Trading has closed because the question ended' })
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: operational, settlementObserved: true })).toMatchObject({ reason: 'Trading has closed because the question resolved' })
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: { ...operational, escalationResolved: true }, settlementObserved: false })).toMatchObject({ reason: 'Trading has closed because the question resolved' })
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: { ...operational, systemState: '1' }, settlementObserved: false })).toMatchObject({ reason: 'Trading has closed because the pool is not operational' })
+		expect(tradingExitAvailability({ asOfTimestamp: 100n, questionEndTime: 200n, poolState: { ...operational, awaitingForkContinuation: true }, settlementObserved: false })).toMatchObject({ open: false })
 	})
 })

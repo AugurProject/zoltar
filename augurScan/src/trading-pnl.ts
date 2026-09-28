@@ -3,7 +3,7 @@ import { ceilDiv } from '../../shared/core/ts/math/bigint.ts'
 const BPS_DENOMINATOR = 10_000n
 
 export const TRADING_PNL_BASIS =
-	'Cost basis is the ETH this account paid into the market’s security pool for complete sets, directly or through the trading router; proceeds are the ETH it received from complete-set redemptions, router exits, and settlement. Shares received by plain transfer carry no cost basis. Holdings are valued at the ETH an exit would return at the latest indexed reserves and complete-set exchange rate; fee accrual after that pool event is not reflected. Realized profit follows cost recovery: it counts only after proceeds exceed the ETH paid in, unless the position is closed.'
+	'Cost basis is the ETH paid into the market’s security pool for complete sets minted for this account, directly or through the trading router; proceeds are the ETH returned when this account’s shares were redeemed, exited through the router, or settled. Router actions are attributed to the account whose shares were minted or burned, because router events are not indexed; a router recipient or payout recipient that differs from that account is not observable. Shares received by plain transfer carry no cost basis. While the market still trades, holdings are valued at the ETH an exit would return at the latest indexed reserves and complete-set exchange rate, and fee accrual after that pool event is not reflected; shares that such an exit cannot convert count as zero, so a partial valuation is a lower bound. After trading closes, holdings are not valued. Realized profit follows cost recovery: it counts only after proceeds exceed the ETH paid in, unless the position is closed.'
 
 export type TradingHoldings = {
 	readonly invalidShares: bigint
@@ -19,6 +19,24 @@ export type TradingMarketState = {
 	readonly lpTotalSupply: bigint
 	/** Latest indexed complete-set exchange rate: settlement collateral per share supply. */
 	readonly completeSetRate?: { readonly settlementCollateralAttoEth: bigint; readonly shareSupplyAttoShares: bigint }
+}
+
+export type TradingLifecycle = {
+	readonly asOfTimestamp: bigint
+	/** Question end time in seconds; undefined when the question is not indexed. */
+	readonly questionEndTime?: bigint
+	/** Latest successful tagged pool read, when one exists. */
+	readonly poolState?: { readonly systemState: string; readonly awaitingForkContinuation: boolean; readonly escalationResolved: boolean }
+	readonly settlementObserved: boolean
+}
+
+/** Whether the pair still accepts the router exit that the holdings valuation assumes (TwoWayConstantProductPair._requireLifecycleOpen). */
+export const tradingExitAvailability = (lifecycle: TradingLifecycle): { readonly open: true } | { readonly open: false; readonly reason: string } => {
+	if (lifecycle.questionEndTime === undefined) return { open: false, reason: 'Question end time is not indexed' }
+	if (lifecycle.asOfTimestamp >= lifecycle.questionEndTime) return { open: false, reason: 'Trading has closed because the question ended' }
+	if (lifecycle.settlementObserved || lifecycle.poolState?.escalationResolved === true) return { open: false, reason: 'Trading has closed because the question resolved' }
+	if (lifecycle.poolState !== undefined && (lifecycle.poolState.systemState !== '0' || lifecycle.poolState.awaitingForkContinuation)) return { open: false, reason: 'Trading has closed because the pool is not operational' }
+	return { open: true }
 }
 
 export type TradingHoldingsValue = {

@@ -118,7 +118,7 @@ export const addressPortfolioResponse = async (sql: SQL, url: URL): Promise<Resp
 	const lp = collection('lp', lpRows, lpPage, 'market_address')
 	const forks = collection('forks', forkRows, forkPage, 'universe_identity')
 	const reports = collection('reports', reportRows, reportPage, 'open_oracle_address')
-	const [refunds, positions, tradingPnl] = await Promise.all([pendingAuctionRefunds(sql, chainId, snapshotBlock, address), escalationPositions(sql, chainId, snapshotBlock, address), accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, account: address })])
+	const [refunds, positions, tradingPnl] = await Promise.all([pendingAuctionRefunds(sql, chainId, snapshotBlock, address), escalationPositions(sql, chainId, snapshotBlock, address), accountTradingPnl(sql, { chainId, asOfBlock: snapshotBlock, asOfTimestamp: String(asOf['blockTimestamp']), account: address })])
 	const base = items[0]
 	// Omit unknown aggregate balances instead of turning absent historical reads into zero.
 	const balances =

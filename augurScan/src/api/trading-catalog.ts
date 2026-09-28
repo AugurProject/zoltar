@@ -52,7 +52,8 @@ export const tradingCatalogResponse = async (sql: SQL, url: URL): Promise<Respon
 	if (page.identity !== cursorIdentity) throw new ApiRequestError('cursor does not match filters')
 	const asOf = await operationsAsOfForContinuations(sql, chainId, page.cursor === undefined ? [] : [{ parts: page.cursor, offset: 3 }])
 	const offset = page.offset
-	const [rows, volumes] = await Promise.all([tradingCatalogRows(sql, { chainId, asOfBlock: String(asOf['blockNumber']), search: query, limit, offset }), tradingVolumes(sql, { chainId, asOf })])
+	const rows = await tradingCatalogRows(sql, { chainId, asOfBlock: String(asOf['blockNumber']), search: query, limit, offset })
+	const volumes = await tradingVolumes(sql, { chainId, asOf, markets: rows.flatMap((row: Record<string, unknown>) => (typeof row['pair_address'] === 'string' ? [row['pair_address']] : [])) })
 	const total = Number(rows[0]?.['total'] ?? 0)
 	const items = rows.map((row: Record<string, unknown>) => ({ ...Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'total')), ...(volumes.get(String(row['pair_address'])) ?? EMPTY_TRADING_VOLUME) }))
 	const hasMore = offset + items.length < total

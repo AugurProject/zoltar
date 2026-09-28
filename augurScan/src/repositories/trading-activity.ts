@@ -3,7 +3,10 @@ import type { SQL } from 'bun'
 type TradingLegFilter = {
 	readonly chainId: number
 	readonly asOfBlock: string
-	readonly market?: string
+	/** Restricts the legs to these pair addresses. */
+	readonly markets?: readonly string[]
+	/** Restricts the legs to transactions in which this account moved shares, minted, redeemed, or received pair output. */
+	readonly account?: string
 }
 
 // One row per trading action in an Augur AMM market. Pool complete-set events carry the exact ETH amounts; the pair's
@@ -13,13 +16,23 @@ type TradingLegFilter = {
 // shares from. Pair events not linked to a complete-set event are share-for-share actions without an ETH amount.
 const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 	const { chainId, asOfBlock } = filter
-	const market = filter.market ?? null
+	const markets = filter.markets === undefined ? null : JSON.stringify(filter.markets)
+	const account = filter.account ?? null
 	return sql`
-		WITH markets AS (
+		WITH account_transactions AS (
+			SELECT log.block_hash, log.tx_hash FROM logs log
+			WHERE ${account}::text IS NOT NULL AND log.chain_id = ${chainId} AND log.canonical AND log.block_number <= ${asOfBlock}
+				AND log.event_name IN ('TransferSingle', 'TransferBatch', 'CompleteSetCreated', 'CompleteSetRedeemed', 'SharesRedeemed')
+				AND ${account} IN (lower(log.arguments->>'from'), lower(log.arguments->>'to'), lower(log.arguments->>'creator'), lower(log.arguments->>'redeemer'))
+			UNION
+			SELECT event.block_hash, event.tx_hash FROM amm_trade_events event
+			WHERE ${account}::text IS NOT NULL AND event.chain_id = ${chainId} AND event.canonical AND event.block_number <= ${asOfBlock}
+				AND lower(event.event_data->>'recipient') = ${account}
+		), markets AS (
 			SELECT DISTINCT ON (market.pair_address) market.pair_address, market.pool_address, market.share_token_address, market.universe_id
 			FROM amm_markets market
 			WHERE market.chain_id = ${chainId} AND market.canonical AND market.block_number <= ${asOfBlock}
-				AND (${market}::text IS NULL OR market.pair_address = ${market})
+				AND (${markets}::text IS NULL OR market.pair_address IN (SELECT jsonb_array_elements_text((${markets}::text)::jsonb)))
 			ORDER BY market.pair_address, market.block_number DESC, market.log_index DESC
 		), pool_events AS (
 			SELECT market.pair_address, market.share_token_address, market.universe_id, log.block_hash, log.tx_hash, log.block_number, log.log_index,
@@ -30,6 +43,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			FROM markets market
 			JOIN logs log ON log.chain_id = ${chainId} AND log.emitter_address = market.pool_address AND log.canonical AND log.block_number <= ${asOfBlock}
 				AND log.event_name IN ('CompleteSetCreated', 'CompleteSetRedeemed', 'SharesRedeemed')
+				AND (${account}::text IS NULL OR (log.block_hash, log.tx_hash) IN (SELECT block_hash, tx_hash FROM account_transactions))
 			JOIN blocks block ON block.chain_id = log.chain_id AND block.hash = log.block_hash AND block.canonical
 		), pair_events AS (
 			SELECT market.pair_address, event.block_hash, event.tx_hash, event.block_number, event.log_index,
@@ -39,6 +53,7 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 			FROM markets market
 			JOIN amm_trade_events event ON event.chain_id = ${chainId} AND event.market_address = market.pair_address AND event.canonical AND event.block_number <= ${asOfBlock}
 				AND event.event_name IN ('Swap', 'LiquidityInitialized', 'LiquidityAdded', 'LiquidityRemoved')
+				AND (${account}::text IS NULL OR (event.block_hash, event.tx_hash) IN (SELECT block_hash, tx_hash FROM account_transactions))
 			JOIN blocks block ON block.chain_id = event.chain_id AND block.hash = event.block_hash AND block.canonical
 		), pool_legs AS (
 			SELECT pool_event.*, companion.event_name AS companion_name, companion.event_data AS companion_data, companion.log_index AS companion_log_index, flow.holder, flow.forwarded_to, flow.received_from
@@ -125,7 +140,9 @@ const tradingLegs = (sql: SQL, filter: TradingLegFilter) => {
 	`
 }
 
-export type TradingActivityQuery = TradingLegFilter & {
+export type TradingActivityQuery = {
+	readonly chainId: number
+	readonly asOfBlock: string
 	readonly market: string
 	readonly cursorBlock: string
 	readonly cursorLog: number
@@ -138,7 +155,7 @@ export const tradingActivityRows = async (sql: SQL, query: TradingActivityQuery)
 	return await sql`
 		SELECT leg.block_hash, leg.tx_hash, leg.block_number::text, leg.log_index, leg.timestamp_seconds::text, leg.kind, leg.side, leg.account,
 			leg.shares::text, leg.eth_in::text AS eth_in_atto_eth, leg.eth_out::text AS eth_out_atto_eth, network.explorer_base_url
-		FROM (${tradingLegs(sql, query)}) leg
+		FROM (${tradingLegs(sql, { chainId: query.chainId, asOfBlock: query.asOfBlock, markets: [query.market] })}) leg
 		JOIN networks network ON network.chain_id = ${query.chainId}
 		WHERE (leg.block_number, leg.log_index, leg.tx_hash) < (${cursorBlock}::bigint, ${cursorLog}::integer, ${cursorTx})
 		ORDER BY leg.block_number DESC, leg.log_index DESC, leg.tx_hash DESC LIMIT ${queryLimit}
@@ -165,7 +182,7 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 		WITH flows AS (
 			SELECT leg.pair_address, sum(COALESCE(leg.eth_in, 0)) AS eth_in, sum(COALESCE(leg.eth_out, 0)) AS eth_out, count(*)::integer AS action_count,
 				max(leg.block_number) AS last_block
-			FROM (${tradingLegs(sql, { chainId, asOfBlock })}) leg
+			FROM (${tradingLegs(sql, { chainId, asOfBlock, account })}) leg
 			WHERE leg.account = ${account}
 			GROUP BY leg.pair_address
 		), markets AS (
@@ -221,6 +238,10 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 			reserve.yes_reserve_atto_shares::text AS yes_reserve, reserve.no_reserve_atto_shares::text AS no_reserve, reserve.block_number::text AS reserve_block,
 			supply_state.supply::text AS share_supply_atto_shares, supply_state.block_number::text AS share_supply_block,
 			collateral_state.collateral::text AS settlement_collateral_atto_eth, collateral_state.block_number::text AS settlement_collateral_block,
+			question.end_time::text AS question_end_time, lifecycle.read_result->>'systemState' AS pool_system_state,
+			lifecycle.read_result->>'awaitingForkContinuation' AS pool_awaiting_fork_continuation, lifecycle.read_result->>'escalationResolved' AS pool_escalation_resolved,
+			EXISTS (SELECT 1 FROM pool_state_events settlement WHERE settlement.chain_id = ${chainId} AND settlement.pool_address = position.pool_address
+				AND settlement.canonical AND settlement.block_number <= ${asOfBlock} AND settlement.event_name = 'SharesRedeemed') AS settlement_observed,
 			count(*) OVER ()::integer AS total
 		FROM positions position
 		LEFT JOIN pools pool ON pool.chain_id = ${chainId} AND pool.pool_address = position.pool_address AND pool.canonical
@@ -246,6 +267,13 @@ export const accountTradingRows = async (sql: SQL, query: { readonly chainId: nu
 				WHERE snapshot.chain_id = ${chainId} AND snapshot.pool_address = position.pool_address AND snapshot.canonical AND snapshot.block_number <= ${asOfBlock}
 			) candidate ORDER BY block_number DESC, log_index DESC LIMIT 1
 		) collateral_state ON true
+		LEFT JOIN LATERAL (
+			SELECT state.read_result FROM entity_state_snapshots state
+			JOIN blocks block ON block.chain_id = state.chain_id AND block.hash = state.block_hash AND block.canonical
+			WHERE state.chain_id = ${chainId} AND state.entity_type = 'pool' AND state.entity_identity = position.pool_address
+				AND state.canonical AND state.block_number <= ${asOfBlock} AND state.read_status = 'success'
+			ORDER BY state.block_number DESC, state.observed_at DESC LIMIT 1
+		) lifecycle ON true
 		ORDER BY position.eth_in DESC, position.pair_address
 		LIMIT 251
 	`

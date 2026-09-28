@@ -73,7 +73,8 @@ const signedEth = (value: unknown): string => {
 /** @internal Exported for presentation unit tests. */
 export const tradingPnlSummary = (item: JsonRecord): string => {
 	const valuation = isRecord(item['valuation']) ? item['valuation'] : {}
-	const holdings = valuation['status'] === 'available' ? `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', 18, 'ETH')} exit value` : `holdings value unavailable (${String(valuation['reason'] ?? 'no valuation')})`
+	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', 18, 'ETH')} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
+	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${String(valuation['reason'] ?? 'no valuation')})`
 	return [
 		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', 18, 'ETH')} paid in`,
 		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', 18, 'ETH')} received`,

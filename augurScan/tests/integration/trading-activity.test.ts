@@ -48,6 +48,10 @@ const poolAndShareLogs: readonly LogFixture[] = [
 	{ block: 2, tx: 3, logIndex: 25, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: '4', settlementCollateralRedeemedAttoEth: '4', resultingShareTokenSupplyAttoShares: '1000', resultingSettlementCollateralAttoEth: '1000' } },
 	{ block: 2, tx: 3, logIndex: 26, emitter: shareToken, name: 'TransferSingle', data: single(router, trader, 1, 6) },
 	{ block: 1, tx: 6, logIndex: 50, emitter: shareToken, name: 'TransferSingle', data: single(zero, settler, 1, 2) },
+]
+
+// The settlement redemption closes trading, so it is inserted after the open-market valuation is checked.
+const settlementLogs: readonly LogFixture[] = [
 	{ block: 2, tx: 5, logIndex: 40, emitter: shareToken, name: 'TransferSingle', data: single(settler, zero, 1, 2) },
 	{ block: 2, tx: 5, logIndex: 41, emitter: pool, name: 'SharesRedeemed', data: { redeemer: settler, winningSharesBurnedAttoShares: '2', settlementCollateralRedeemedAttoEth: '2', resultingShareTokenSupplyAttoShares: '1000', resultingSettlementCollateralAttoEth: '1000' } },
 ]
@@ -79,24 +83,59 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		for (const block of blocks) await connection`INSERT INTO blocks (chain_id, number, hash, timestamp, canonical) VALUES (${chainId}, ${block.number}, ${block.hash}, to_timestamp(${block.timestamp}), true)`
 		await connection`INSERT INTO contracts (chain_id, address, kind, canonical) VALUES (${chainId}, ${shareToken}, 'shareToken', true)`
 		await connection`INSERT INTO amm_markets (chain_id, block_hash, tx_hash, log_index, block_number, pair_address, pool_address, share_token_address, universe_id, fee_bps, canonical) VALUES (${chainId}, ${blocks[0].hash}, ${hash(1)}, 0, 1, ${pair}, ${pool}, ${shareToken}, 0, 30, true)`
-		for (const item of [...poolAndShareLogs, ...pairLogs])
-			await connection`
-				INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, event_name, arguments, decode_status, canonical)
-				VALUES (${chainId}, ${hash(item.tx)}, ${blockHashFor(item.block)}, ${item.block}, ${item.tx}, ${item.logIndex}, ${item.emitter}, ${item.name}, ${JSON.stringify(item.data)}::text::jsonb, 'decoded', true)
-			`
-		for (const item of pairLogs)
-			await connection`
-				INSERT INTO amm_trade_events (chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical)
-				VALUES (${chainId}, ${blockHashFor(item.block)}, ${hash(item.tx)}, ${item.logIndex}, ${item.block}, ${pair}, ${item.name}, ${JSON.stringify(item.data)}::text::jsonb, true)
-			`
+		await connection`INSERT INTO pools (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, question_id, canonical) VALUES (${chainId}, ${blocks[0].hash}, ${hash(1)}, 0, 1, ${pool}, 42, true)`
+		await connection`INSERT INTO questions (chain_id, block_hash, tx_hash, log_index, block_number, question_id, title, end_time, canonical) VALUES (${chainId}, ${blocks[0].hash}, ${hash(1)}, 0, 1, 42, 'Fixture question', ${now + 86_400}, true)`
+		const insertLogs = async (items: readonly LogFixture[]) => {
+			for (const item of items)
+				await connection`
+					INSERT INTO logs (chain_id, tx_hash, block_hash, block_number, transaction_index, log_index, emitter_address, event_name, arguments, decode_status, canonical)
+					VALUES (${chainId}, ${hash(item.tx)}, ${blockHashFor(item.block)}, ${item.block}, ${item.tx}, ${item.logIndex}, ${item.emitter}, ${item.name}, ${JSON.stringify(item.data)}::text::jsonb, 'decoded', true)
+				`
+			for (const item of items.filter(log => log.emitter === pair))
+				await connection`
+					INSERT INTO amm_trade_events (chain_id, block_hash, tx_hash, log_index, block_number, market_address, event_name, event_data, canonical)
+					VALUES (${chainId}, ${blockHashFor(item.block)}, ${hash(item.tx)}, ${item.logIndex}, ${item.block}, ${pair}, ${item.name}, ${JSON.stringify(item.data)}::text::jsonb, true)
+				`
+			for (const item of items.filter(log => log.emitter === pool))
+				await connection`
+					INSERT INTO pool_state_events (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, event_name, state, canonical)
+					VALUES (${chainId}, ${blockHashFor(item.block)}, ${hash(item.tx)}, ${item.logIndex}, ${item.block}, ${pool}, ${item.name},
+						${JSON.stringify({ shareTokenSupplyAttoShares: item.data['resultingShareTokenSupplyAttoShares'], resultingSettlementCollateralAttoEth: item.data['resultingSettlementCollateralAttoEth'] })}::text::jsonb, true)
+				`
+		}
+		await insertLogs([...poolAndShareLogs, ...pairLogs])
 		await connection`INSERT INTO amm_price_snapshots (chain_id, block_hash, tx_hash, log_index, block_number, pair_address, yes_reserve_atto_shares, no_reserve_atto_shares, conditional_yes_bps, conditional_no_bps, canonical) VALUES (${chainId}, ${blocks[1].hash}, ${hash(4)}, 31, 2, ${pair}, 1000, 1000, 5000, 5000, true)`
-		for (const item of poolAndShareLogs.filter(log => log.emitter === pool))
-			await connection`
-				INSERT INTO pool_state_events (chain_id, block_hash, tx_hash, log_index, block_number, pool_address, event_name, state, canonical)
-				VALUES (${chainId}, ${blockHashFor(item.block)}, ${hash(item.tx)}, ${item.logIndex}, ${item.block}, ${pool}, ${item.name},
-					${JSON.stringify({ shareTokenSupplyAttoShares: item.data['resultingShareTokenSupplyAttoShares'], resultingSettlementCollateralAttoEth: item.data['resultingSettlementCollateralAttoEth'] })}::text::jsonb, true)
-			`
+		const portfolioFor = async (account: string) => {
+			const response = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${chainId}&address=${account}`), connection)
+			expect(response?.status).toBe(200)
+			return ((await response?.json()) as { data: { trading_pnl: { items: Record<string, unknown>[]; truncated: boolean } } }).data.trading_pnl
+		}
 
+		const traderPnl = await portfolioFor(trader)
+		expect(traderPnl.truncated).toBe(false)
+		// The trader holds 6 INVALID and 6 YES; at 1000/1000 reserves and 30 bps, the largest insured exit is 2 sets at 1 ETH per set.
+		expect(traderPnl.items).toEqual([
+			expect.objectContaining({
+				market_address: pair,
+				invalid_atto_shares: '6',
+				yes_atto_shares: '6',
+				no_atto_shares: '0',
+				cost_basis_atto_eth: '10',
+				proceeds_atto_eth: '4',
+				holdings_value_atto_eth: '2',
+				realized_pnl_atto_eth: '0',
+				unrealized_pnl_atto_eth: '-4',
+				net_pnl_atto_eth: '-4',
+				open: true,
+				valuation: expect.objectContaining({ status: 'available', partial: true, insured_exit_sets_atto_shares: '2', unvalued_invalid_atto_shares: '4' }),
+			}),
+		])
+		// Removing 99 of 100 LP tokens returns 990 YES and 990 NO, so the 100 INVALID complete 100 sets; 890 YES and NO without INVALID stay unvalued.
+		expect((await portfolioFor(liquidityProvider)).items).toEqual([expect.objectContaining({ lp_tokens: '99', cost_basis_atto_eth: '100', holdings_value_atto_eth: '100', net_pnl_atto_eth: '0', valuation: expect.objectContaining({ partial: true, unvalued_yes_atto_shares: '890', unvalued_no_atto_shares: '890' }) })])
+		// YES without INVALID cannot exit through the router, so it stays unvalued.
+		expect((await portfolioFor(settler)).items).toEqual([expect.objectContaining({ yes_atto_shares: '2', holdings_value_atto_eth: '0', valuation: expect.objectContaining({ partial: true, unvalued_yes_atto_shares: '2' }) })])
+
+		await insertLogs(settlementLogs)
 		const detailResponse = await handleApi(new Request(`http://localhost/api/v1/state/trading/${chainId}/${pair}`), connection)
 		expect(detailResponse?.status).toBe(200)
 		const detail = (await detailResponse?.json()) as { data: { summary: Record<string, unknown>; activity: { items: Record<string, unknown>[]; hasMore: boolean } } }
@@ -123,34 +162,12 @@ test.skipIf(url === undefined)('derives market ETH volume, activity, and account
 		const catalog = (await catalogResponse?.json()) as { data: { items: Record<string, unknown>[] } }
 		expect(catalog.data.items[0]).toMatchObject({ pair_address: pair, eth_volume_atto_eth: '14', eth_volume_24h_atto_eth: '4', eth_trade_count: 2 })
 
-		const portfolioFor = async (account: string) => {
-			const response = await handleApi(new Request(`http://localhost/api/v1/state/address-portfolio?chainId=${chainId}&address=${account}`), connection)
-			expect(response?.status).toBe(200)
-			return ((await response?.json()) as { data: { trading_pnl: { items: Record<string, unknown>[]; truncated: boolean } } }).data.trading_pnl
-		}
-		const traderPnl = await portfolioFor(trader)
-		expect(traderPnl.truncated).toBe(false)
-		// The trader holds 6 INVALID and 6 YES; at 1000/1000 reserves and 30 bps, the largest insured exit is 2 sets at 1 ETH per set.
-		expect(traderPnl.items).toEqual([
-			expect.objectContaining({
-				market_address: pair,
-				invalid_atto_shares: '6',
-				yes_atto_shares: '6',
-				no_atto_shares: '0',
-				cost_basis_atto_eth: '10',
-				proceeds_atto_eth: '4',
-				holdings_value_atto_eth: '2',
-				realized_pnl_atto_eth: '0',
-				unrealized_pnl_atto_eth: '-4',
-				net_pnl_atto_eth: '-4',
-				open: true,
-				valuation: expect.objectContaining({ status: 'available', insured_exit_sets_atto_shares: '2', unvalued_invalid_atto_shares: '4' }),
-			}),
-		])
-		const providerPnl = await portfolioFor(liquidityProvider)
-		// Removing 99 of 100 LP tokens returns 990 YES and 990 NO, so the 100 INVALID complete 100 sets.
-		expect(providerPnl.items).toEqual([expect.objectContaining({ lp_tokens: '99', cost_basis_atto_eth: '100', holdings_value_atto_eth: '100', net_pnl_atto_eth: '0' })])
 		expect((await portfolioFor(settler)).items).toEqual([expect.objectContaining({ cost_basis_atto_eth: '0', proceeds_atto_eth: '2', yes_atto_shares: '0', realized_pnl_atto_eth: '2', open: false })])
+		// After settlement the pair no longer trades, so the open position is not valued at stale reserves.
+		const closedTrader = (await portfolioFor(trader)).items[0]
+		expect(closedTrader).toMatchObject({ realized_pnl_atto_eth: '0', open: true, valuation: { status: 'unavailable', reason: 'Trading has closed because the question resolved' } })
+		expect(closedTrader).not.toHaveProperty('holdings_value_atto_eth')
+		expect(closedTrader).not.toHaveProperty('net_pnl_atto_eth')
 		expect((await portfolioFor(address('9'))).items).toEqual([])
 	} finally {
 		connection.release()
