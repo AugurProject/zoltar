@@ -8,6 +8,7 @@ import { setTransactionActivityOwner, transactionActivity, useTransactionActivit
 import { GlobalTransactionPresentationProvider } from '../../components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider } from '../../components/TransactionActionButton.js'
 import { GlobalTransactionDialog } from './GlobalTransactionDialog.js'
+import { WalletActionsProvider, type WalletActions } from '../../components/WalletActionFix.js'
 
 export function ProtocolAppFrame({
 	accountAddress,
@@ -22,6 +23,7 @@ export function ProtocolAppFrame({
 	routeContentDisabled,
 	transactionRouteKey,
 	transactionState,
+	walletActions,
 }: {
 	/** The connected account whose recent transactions the activity list shows. */
 	accountAddress: Address | undefined
@@ -38,6 +40,8 @@ export function ProtocolAppFrame({
 	transactionRouteKey: string
 	/** The shared transaction state; applications with their own transaction presentation omit it. */
 	transactionState?: TransactionTrayState | undefined
+	/** The header's wallet controls; blocked actions reuse them to offer connect and switch fixes in place. */
+	walletActions?: WalletActions | undefined
 }) {
 	const activeTransaction = transactionState?.active
 	// The owner also follows network changes, so re-check it after every render; an unchanged owner is a no-op.
@@ -55,16 +59,18 @@ export function ProtocolAppFrame({
 					{heading}
 					{notices}
 					{header}
-					<GlobalTransactionPresentationProvider transaction={activeTransaction}>
-						<div id='app-content' tabIndex={-1}>
-							<TransactionActionButtonLockProvider lock={lock}>
-								<fieldset className='route-shell' disabled={routeContentDisabled}>
-									{children}
-								</fieldset>
-							</TransactionActionButtonLockProvider>
-						</div>
-						{transactionState === undefined ? undefined : <GlobalTransactionDialog {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
-					</GlobalTransactionPresentationProvider>
+					<WalletActionsProvider walletActions={walletActions}>
+						<GlobalTransactionPresentationProvider transaction={activeTransaction}>
+							<div id='app-content' tabIndex={-1}>
+								<TransactionActionButtonLockProvider lock={lock}>
+									<fieldset className='route-shell' disabled={routeContentDisabled}>
+										{children}
+									</fieldset>
+								</TransactionActionButtonLockProvider>
+							</div>
+							{transactionState === undefined ? undefined : <GlobalTransactionDialog {...(activeUniverseId === undefined ? {} : { activeUniverseId })} routeKey={transactionRouteKey} transaction={activeTransaction} />}
+						</GlobalTransactionPresentationProvider>
+					</WalletActionsProvider>
 				</main>
 			</ChainTimestampContext.Provider>
 		</ChainBlockNumberContext.Provider>

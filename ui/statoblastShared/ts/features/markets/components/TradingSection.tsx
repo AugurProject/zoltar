@@ -381,7 +381,7 @@ export function TradingSection({
 			<SectionBlock title={tradingCopy.shares} variant='embedded'>
 				<div className='vault-action-launcher-grid'>
 					{tradingLaunchers.map(action => (
-						<ActionLauncherCard key={action.key} action={action} />
+						<ActionLauncherCard key={action.key} action={action} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
 					))}
 				</div>
 			</SectionBlock>
