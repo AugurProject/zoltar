@@ -1,12 +1,12 @@
-import { useEffect, useReducer, useRef, useState } from 'preact/hooks'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'preact/hooks'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { createExclusiveWorkflowGuard, createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
+import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { waitForSubmittedTransactionReceipt } from '@zoltar/ui-core-shared/transactions/transactionReceipt.js'
 import { describeTransactionFailure, formatTransactionFailure, REVERTED_ON_CHAIN } from '../../protocol/transactionFailure.js'
 import { broadcastUncertainMessage, positionControlsWorkflowLocked } from '../liveTradingControllerHelpers.js'
 import { createMarketTransactionActivity } from './marketTransactionActivity.js'
-import { idleTransactionWorkflow, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, transactionWorkflowReducer, type TransactionContext } from './transactionWorkflow.js'
+import { marketTransactionWorkflow, marketTransactionWorkflowsReducer, transactionMarketKey, transactionPhase, transactionWorkflowError, transactionWorkflowHash, transactionWorkflowReceiptWarning, type TransactionContext, type TransactionWorkflowEvent } from './transactionWorkflow.js'
 
 export type QuotedOperation = 'trade' | 'liquidity' | 'settlement'
 
@@ -31,6 +31,8 @@ const QUOTE_DEBOUNCE_MILLISECONDS = 350
  * The shared engine behind the trade, liquidity, and settlement panels. Quotes refresh automatically (debounced) as
  * inputs change, and a submission always re-simulates before the wallet is asked to sign, so no flow needs a separate
  * "simulate" step. The hook owns duplicate-submission guards, receipt tracking, stale-result rejection, and failure copy.
+ * Workflow state, duplicate-submission guards, and locks are kept per market, so one market's running transaction
+ * neither blocks nor relabels another market's ticket; the returned state is the one for `market`.
  */
 export function useQuotedTransaction<Quote>({
 	operation,
@@ -59,17 +61,25 @@ export function useQuotedTransaction<Quote>({
 	walletClient: WalletClient | undefined
 	externallyLocked: boolean
 	quoteSource?: QuoteSource<Quote> | undefined
-	onWorkflowLockChange(locked: boolean): void
+	/** Reports each market's lock by its `transactionMarketKey`. */
+	onWorkflowLockChange(locked: boolean, market: string): void
 	onKnownReceipt(): void
 	failureFallback: string
 	quoteFailureFallback?: string
 	/** Clear a finished or failed result when the account, chain, or market changes. The trade ticket leaves this to the wallet session, which explains the change. */
 	resetOnIdentityChange?: boolean
 }) {
-	const [workflowState, dispatchWorkflow] = useReducer(transactionWorkflowReducer, idleTransactionWorkflow)
+	const [workflows, dispatchWorkflows] = useReducer(marketTransactionWorkflowsReducer, {})
+	const currentMarket = transactionMarketKey(market)
+	const currentMarketRef = useRef(currentMarket)
+	currentMarketRef.current = currentMarket
+	const workflowState = marketTransactionWorkflow(workflows, currentMarket)
 	const [quoted, setQuoted] = useState<Readonly<{ key: string; value: Quote }>>()
 	const [quoteLoad, setQuoteLoad] = useState<Readonly<{ key: string; state: 'loading' | 'error'; error?: string }>>()
-	const workflow = useRef(createExclusiveWorkflowGuard()).current
+	// Markets with a submission between its start and its end, and markets whose transaction still holds its lock
+	// (an uncertain receipt keeps it after the submission ends).
+	const activeMarkets = useRef(new Set<string>()).current
+	const lockedMarkets = useRef(new Set<string>()).current
 	const quoteRequests = useRef(createLatestRequestGuard()).current
 	const mounted = useRef(true)
 	const revision = useRef(0)
@@ -122,13 +132,25 @@ export function useQuotedTransaction<Quote>({
 		return () => {
 			mounted.current = false
 			quoteRequests.invalidate()
-			if (workflow.isActive()) workflow.finish()
-			lockChangeRef.current(false)
+			activeMarkets.clear()
+			for (const locked of lockedMarkets) lockChangeRef.current(false, locked)
+			lockedMarkets.clear()
 		}
 	}, [])
 
+	const setMarketLock = (key: string, locked: boolean) => {
+		if (locked) lockedMarkets.add(key)
+		else lockedMarkets.delete(key)
+		lockChangeRef.current(locked, key)
+	}
+	/** Applies an event to the market on screen when it runs. */
+	const dispatchWorkflow = useCallback((event: TransactionWorkflowEvent) => dispatchWorkflows({ type: 'market', market: currentMarketRef.current, event }), [])
+	/** Clears finished and failed results; a market whose transaction holds its lock keeps its state. */
+	const resetUnlocked = useCallback(() => dispatchWorkflows({ type: 'reset-unlocked', locked: [...lockedMarkets] }), [])
+	const invalidateWalletContext = useCallback((message: string) => dispatchWorkflows({ type: 'wallet-context-invalidated', message, locked: [...lockedMarkets], current: currentMarketRef.current }), [])
+
 	useEffect(() => {
-		if (!resetOnIdentityChange || workflow.isActive() || workflowState.kind === 'uncertain') return
+		if (!resetOnIdentityChange || activeMarkets.has(currentMarket) || workflowState.kind === 'uncertain') return
 		if (workflowState.kind !== 'idle') dispatchWorkflow({ type: 'inputs-invalidated' })
 	}, [account, chainId, market, walletClient])
 
@@ -139,16 +161,20 @@ export function useQuotedTransaction<Quote>({
 
 	/** User edits clear an old failure or confirmation; nothing may disturb an active or uncertain transaction. */
 	function invalidate(preserveConfirmed = false) {
-		if (receiptWarning !== undefined || workflow.isActive()) return false
+		if (receiptWarning !== undefined || activeMarkets.has(currentMarket)) return false
 		dispatchWorkflow({ type: 'inputs-invalidated', preserveConfirmed })
 		return true
 	}
 
 	async function submit<Prepared>(plan: SubmissionPlan<Prepared>) {
-		if (account === undefined || chainId === undefined || market === undefined || walletClient === undefined || externallyLocked || receiptWarning !== undefined || !workflow.begin()) return
+		const key = currentMarket
+		if (account === undefined || chainId === undefined || market === undefined || walletClient === undefined || externallyLocked || receiptWarning !== undefined || activeMarkets.has(key)) return
+		activeMarkets.add(key)
+		// Every event of this submission lands on its own market, whichever market is on screen by then.
+		const dispatch = (event: TransactionWorkflowEvent) => dispatchWorkflows({ type: 'market', market: key, event })
 		const context: TransactionContext = { account, chainId, market, requestRevision: ++revision.current }
-		lockChangeRef.current(true)
-		dispatchWorkflow({ type: 'operation-preparing', context, operation })
+		setMarketLock(key, true)
+		dispatch({ type: 'operation-preparing', context, operation })
 		let broadcastHash: Hash | undefined
 		const activity = createMarketTransactionActivity(market, activityTitle ?? label)
 		let receiptKnown = false
@@ -160,7 +186,7 @@ export function useQuotedTransaction<Quote>({
 			broadcastHash = await plan.send(prepared, async write => {
 				if (mounted.current && !signatureRequested) {
 					signatureRequested = true
-					dispatchWorkflow({ type: 'signature-requested', context, operation })
+					dispatch({ type: 'signature-requested', context, operation })
 				}
 				return await write()
 			})
@@ -169,8 +195,8 @@ export function useQuotedTransaction<Quote>({
 				activity.handOff()
 				return
 			}
-			if (!signatureRequested) dispatchWorkflow({ type: 'signature-requested', context, operation })
-			dispatchWorkflow({ type: 'broadcast', context, operation, transactionHash: broadcastHash })
+			if (!signatureRequested) dispatch({ type: 'signature-requested', context, operation })
+			dispatch({ type: 'broadcast', context, operation, transactionHash: broadcastHash })
 			const { receipt } = await waitForSubmittedTransactionReceipt(walletClient, broadcastHash, {
 				allowRevertedReceipt: true,
 				onKnownReceipt: () => {
@@ -180,16 +206,16 @@ export function useQuotedTransaction<Quote>({
 				onTransactionReplaced: replacementHash => {
 					broadcastHash = replacementHash
 					activity.replaced(replacementHash)
-					if (mounted.current) dispatchWorkflow({ type: 'replaced', context, replacementHash })
+					if (mounted.current) dispatch({ type: 'replaced', context, replacementHash })
 				},
 			})
 			activity.receipt(receipt.status)
 			if (!mounted.current) return
 			if (receipt.status === 'reverted') {
-				dispatchWorkflow({ type: 'reverted', context })
+				dispatch({ type: 'reverted', context })
 				return
 			}
-			dispatchWorkflow({ type: 'confirmed', context })
+			dispatch({ type: 'confirmed', context })
 			await plan.afterConfirmed?.(prepared)
 		} catch (caught) {
 			// A known outcome (such as a wallet cancellation) settles the activity row; otherwise the activity list keeps checking.
@@ -197,14 +223,14 @@ export function useQuotedTransaction<Quote>({
 			if (!mounted.current) return
 			if (broadcastHash !== undefined && !receiptKnown) {
 				keepLocked = true
-				dispatchWorkflow({ type: 'uncertain', context, reason: broadcastUncertainMessage(label, broadcastHash) })
+				dispatch({ type: 'uncertain', context, reason: broadcastUncertainMessage(label, broadcastHash) })
 			} else {
-				dispatchWorkflow({ type: 'failed', context, operation, message: describeTransactionFailure(caught, failureFallback) })
+				dispatch({ type: 'failed', context, operation, message: describeTransactionFailure(caught, failureFallback) })
 				setFailureCount(count => count + 1)
 			}
 		} finally {
-			workflow.finish()
-			if (!keepLocked) lockChangeRef.current(false)
+			activeMarkets.delete(key)
+			if (!keepLocked) setMarketLock(key, false)
 		}
 	}
 
@@ -219,7 +245,8 @@ export function useQuotedTransaction<Quote>({
 		quote,
 		quoteState,
 		quoteError: quoteLoad !== undefined && quoteLoad.key === quoteKey ? quoteLoad.error : undefined,
-		workflowIsActive: () => workflow.isActive(),
+		resetUnlocked,
+		invalidateWalletContext,
 		invalidate,
 		submit,
 	}

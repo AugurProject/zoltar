@@ -30,6 +30,7 @@ const router = `0x${'66'.repeat(20)}` as Address
 const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const replacementTransactionHash = `0x${'89'.repeat(32)}` as Hash
+const secondMarketTransactionHash = `0x${'8a'.repeat(32)}` as Hash
 const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready']
 
 function deferred<T>() {
@@ -89,6 +90,7 @@ describe('live workflow safety boundary', () => {
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
 		let connectedAccount = account
 		let positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		const secondMarketReceipt = deferred<{ status: 'success' | 'reverted' }>()
 		let waitForPositionReceipt = false
 		let repricePositionReceipt = false
 		let positionBroadcast = deferred<undefined>()
@@ -103,7 +105,7 @@ describe('live workflow safety boundary', () => {
 		const childDiscovery = deferred<undefined>()
 		let childBalanceStarted = deferred<undefined>()
 		const discoveredUniverseIds: Array<bigint | undefined> = []
-		const submittedEntries: Array<{ minimumLongShares: bigint; result: { totalLongShares: bigint } }> = []
+		const submittedEntries: Array<{ market: LiveMarket; minimumLongShares: bigint; result: { totalLongShares: bigint } }> = []
 		const balancedPools: Address[] = []
 		const walletSummaries: WalletSummaryState[] = []
 		const recordWalletSummary = (summary: WalletSummaryState) => walletSummaries.push(summary)
@@ -116,6 +118,7 @@ describe('live workflow safety boundary', () => {
 		Reflect.set(window, 'ethereum', injectedProvider)
 		const walletClient = {
 			waitForTransactionReceipt: async (parameters: Parameters<WalletClient['waitForTransactionReceipt']>[0]) => {
+				if (parameters.hash === secondMarketTransactionHash) return await secondMarketReceipt.promise
 				if (waitForPositionReceipt) {
 					const receipt = await positionReceipt.promise
 					if (repricePositionReceipt) {
@@ -229,12 +232,12 @@ describe('live workflow safety boundary', () => {
 				const result = quoteEnterPosition(side, (amount * quotedMarket.shareTokenSupplyAttoShares) / quotedMarket.settlementCollateralAttoEth, quotedMarket)
 				return { blockNumber: 1n, amount, side, market: quotedMarket, deadline: now + 1_200n, slippageBps: 50n, minimumLongShares: 1n, result }
 			},
-			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, quote: { minimumLongShares: bigint; result: { totalLongShares: bigint } }, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
+			submitFreshEntry: async (_client: unknown, _configuration: unknown, _account: unknown, quote: { market: LiveMarket; minimumLongShares: bigint; result: { totalLongShares: bigint } }, guardedWrite: <T>(write: () => Promise<T>) => Promise<T>) => {
 				submittedEntries.push(quote)
 				if (deferPositionBroadcast) await positionBroadcast.promise
 				return await guardedWrite(async () => {
 					if (deferPositionBroadcast) await positionWalletWrite.promise
-					return transactionHash
+					return quote.market.pool === secondPool ? secondMarketTransactionHash : transactionHash
 				})
 			},
 		}
@@ -467,25 +470,69 @@ describe('live workflow safety boundary', () => {
 		await act(async () => invalidateAppData())
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforePortfolioRefresh)
-		// Another market's ticket shows none of this trade's status or hash and stays locked while it runs.
-		await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
-		await waitForDom(() => document.body.textContent?.includes('Second rendered workflow market') === true, 'second market during a pending trade')
+		// Another market's ticket shows none of this trade's status or hash and stays usable: one trade runs per market.
+		const renderSecondMarket = async () =>
+			await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await renderSecondMarket()
+		await waitForDom(() => document.body.textContent?.includes('4 YES') === true, 'second market balances during a pending trade')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 		expect(document.body.textContent).not.toContain('Buy YES sent. Waiting for confirmation')
-		expect(document.body.textContent).toContain('Transaction in progress.')
+		expect(document.body.textContent).not.toContain('Transaction in progress.')
+		// The first market's amount stays with its own ticket.
+		const secondAmountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
+		expect(secondAmountInput?.value).toBe('')
+		expect(secondAmountInput?.disabled).toBeFalse()
+		await act(() => {
+			if (secondAmountInput === null) throw new Error('Second market amount input is unavailable')
+			secondAmountInput.value = '0.03'
+			secondAmountInput.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'second market entry estimate')
+		expect(button('Buy YES').disabled).toBeFalse()
+		await act(async () => button('Buy YES').click())
+		await waitForDom(() => document.body.textContent?.includes('Buy YES sent. Waiting for confirmation') === true, 'second market pending trade')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(secondMarketTransactionHash)
+		expect(document.querySelector('.transaction-hash')?.textContent).not.toContain(transactionHash)
+		expect(submittedEntries.map(entry => entry.market.pool)).toEqual([pool, secondPool])
+		// Both trades are pending at once, each in its own market's activity scope.
+		expect(transactionActivity.value.entries.map(entry => ({ hash: entry.hash, scope: entry.scope, status: entry.status }))).toEqual(
+			expect.arrayContaining([
+				{ hash: transactionHash, scope: [`market:${pool.toLowerCase()}`], status: 'pending' },
+				{ hash: secondMarketTransactionHash, scope: [`market:${secondPool.toLowerCase()}`], status: 'pending' },
+			]),
+		)
+		expect(transactionActivity.value.entries).toHaveLength(2)
+		expect(isMarketTransactionPending(pool)).toBeTrue()
+		expect(isMarketTransactionPending(secondPool)).toBeTrue()
+		// With both trades pending, other routes still refresh and each pending market's route waits for its own trade.
+		const discoveriesOnSecondPendingMarket = discoveredUniverseIds.length
+		await act(async () => invalidateAppData())
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.length).toBe(discoveriesOnSecondPendingMarket)
+		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
+		const discoveriesBeforeSecondPortfolioRefresh = discoveredUniverseIds.length
+		await act(async () => invalidateAppData())
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforeSecondPortfolioRefresh)
 		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
+		expect(document.querySelector('.transaction-hash')?.textContent).not.toContain(secondMarketTransactionHash)
+		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.value).toBe('0.01')
 		const discoveriesOnPendingMarket = discoveredUniverseIds.length
 		await act(async () => invalidateAppData())
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBe(discoveriesOnPendingMarket)
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
-		// The replacement settles the same activity row and releases the market's ticket.
-		expect(transactionActivity.value.entries).toHaveLength(1)
-		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: replacementTransactionHash, status: 'confirmed' })
+		// The replacement settles the same activity row and releases only this market's ticket.
+		expect(transactionActivity.value.entries).toHaveLength(2)
+		expect(transactionActivity.value.entries.find(entry => entry.scope.includes(`market:${pool.toLowerCase()}`))).toMatchObject({ hash: replacementTransactionHash, status: 'confirmed' })
+		expect(transactionActivity.value.entries.find(entry => entry.hash === secondMarketTransactionHash)?.status).toBe('pending')
 		expect(isMarketTransactionPending(pool)).toBeFalse()
+		expect(isMarketTransactionPending(secondPool)).toBeTrue()
 		expect(document.body.textContent).toContain('Buy YES confirmed.')
 		// Confirmation moves focus to the outcome block so the result is announced and reachable.
 		expect(document.activeElement?.classList.contains('transaction-outcome')).toBe(true)
@@ -495,6 +542,21 @@ describe('live workflow safety boundary', () => {
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(replacementTransactionHash)
 		// Navigating away and back remounted the ticket, so read the amount field again.
 		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.value).toBe('')
+		// The second market's trade is still pending on its own ticket, then fails without touching the first market.
+		await renderSecondMarket()
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
+		expect(document.querySelector('.transaction-hash')?.textContent).toContain(secondMarketTransactionHash)
+		expect(document.body.textContent).not.toContain('Buy YES confirmed.')
+		secondMarketReceipt.resolve({ status: 'reverted' })
+		await waitForDom(() => document.body.textContent?.includes('The transaction reverted on-chain') === true, 'second market reverted trade')
+		expect(transactionActivity.value.entries.find(entry => entry.hash === secondMarketTransactionHash)?.status).toBe('failed')
+		expect(transactionActivity.value.entries.find(entry => entry.hash === replacementTransactionHash)?.status).toBe('confirmed')
+		expect(isMarketTransactionPending(secondPool)).toBeFalse()
+		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.disabled).toBeFalse()
+		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await settleAsyncWorkflow()
+		expect(document.body.textContent).not.toContain('The transaction reverted on-chain')
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
 		repricePositionReceipt = false

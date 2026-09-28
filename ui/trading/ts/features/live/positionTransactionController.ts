@@ -11,7 +11,7 @@ import type { GuardedWalletWrite, WorkflowOwner } from '../liveTradingController
 import { authoritativeQuoteMoved, type TradeEstimate } from './tradeTicketModel.js'
 
 type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>
-type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint, owner?: WorkflowOwner) => Promise<void>
+type Refresh = (configuration?: DeploymentConfiguration, requestedStart?: bigint, owner?: WorkflowOwner, options?: Readonly<{ ownerMarket?: Address }>) => Promise<void>
 
 function priceMovedDetail(estimate: TradeEstimate, authoritativeLongShares: bigint) {
 	return estimate.kind === 'entry' ? `${ticketCopy.youReceiveEstimate} ${formatOutcomeQuantity(authoritativeLongShares, estimate.side)}` : `${ticketCopy.youSellEstimate} ${formatOutcomeQuantity(authoritativeLongShares, estimate.side)}`
@@ -59,12 +59,15 @@ export function createPositionTransactionController({
 	refresh: Refresh
 	marketPageStart: bigint
 }) {
-	const { mode, side, transaction, positionWorkflowLockedRef, liquidityWorkflowLockedRef, setMode, setSide, setAmount, setAcknowledgedImpactBps } = workflow
+	const { mode, side, transaction, isPositionLocked, liquidityWorkflowLockedRef, setMode, setSide, setAmount, setAcknowledgedImpactBps } = workflow
+	// Only this market's own trade holds its inputs; a trade running on another market leaves them free.
+	const inputsLocked = () => isPositionLocked(selected?.pool)
 
 	async function submit(estimate: TradeEstimate | undefined) {
 		if (configuration === undefined || selected === undefined || account === undefined || walletClient === undefined || estimate === undefined) return
-		if (positionWorkflowLockedRef.current || liquidityWorkflowLockedRef.current || estimate.kind !== mode || estimate.side !== side) return
+		if (isPositionLocked(selected.pool) || liquidityWorkflowLockedRef.current || estimate.kind !== mode || estimate.side !== side) return
 		const market = selected
+		const ownerRefresh = { ownerMarket: market.pool }
 		const { slippageBps, validityMinutes } = settings
 		await transaction.submit<Quote>({
 			prepare: async () => {
@@ -76,7 +79,7 @@ export function createPositionTransactionController({
 						: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, market, account, side, estimate.quote.completeSetShares, validityMinutes, slippageBps)) }
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
 					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
-					void refresh(configuration, marketPageStart, 'position')
+					void refresh(configuration, marketPageStart, 'position', ownerRefresh)
 					throw new Error(ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares)))
 				}
 				return withApprovedBounds(quote, estimate)
@@ -87,15 +90,14 @@ export function createPositionTransactionController({
 				return quote.kind === 'entry' ? await services.submitFreshEntry(walletClient, configuration, account, quote.value, guardedWrite) : await services.submitFreshExit(walletClient, configuration, account, quote.value, guardedWrite)
 			},
 			afterConfirmed: async () => {
-				setAmount('')
-				setAcknowledgedImpactBps(undefined)
-				await refresh(configuration, marketPageStart, 'position')
+				workflow.clearConfirmedAmount(market.pool)
+				await refresh(configuration, marketPageStart, 'position', ownerRefresh)
 			},
 		})
 	}
 
 	function resetPositionInput(update: () => void) {
-		if (positionWorkflowLockedRef.current) return
+		if (inputsLocked()) return
 		update()
 		setAcknowledgedImpactBps(undefined)
 		transaction.invalidate()
@@ -112,7 +114,7 @@ export function createPositionTransactionController({
 		setSide: (value: 'YES' | 'NO') => resetPositionInput(() => setSide(value)),
 		setAmount: (value: string) => resetPositionInput(() => setAmount(value)),
 		setAcknowledgedImpactBps: (value: bigint | undefined) => {
-			if (!positionWorkflowLockedRef.current) setAcknowledgedImpactBps(value)
+			if (!inputsLocked()) setAcknowledgedImpactBps(value)
 		},
 	}
 }
