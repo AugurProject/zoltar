@@ -464,8 +464,8 @@ void describe('TradingSection', () => {
 		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
-		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
-		const outcomes = within(dialog.getByRole('list', { name: 'Estimated Shares Received' })).getAllByRole('listitem')
+		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
+		const outcomes = within(dialog.getByRole('list', { name: 'Estimated shares received' })).getAllByRole('listitem')
 		expect(outcomes).toHaveLength(3)
 		for (const [index, label] of ['Yes', 'No', 'Invalid'].entries()) {
 			const outcome = outcomes[index]
@@ -671,7 +671,7 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(estimatedFeeRow, '1')).toHaveLength(1)
 		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(3)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
-		const receivedShares = dialog.getByRole('list', { name: 'Estimated Shares Received' })
+		const receivedShares = dialog.getByRole('list', { name: 'Estimated shares received' })
 		for (const label of ['Yes', 'No', 'Invalid']) expect(within(receivedShares).getByText(label, { exact: true })).not.toBeNull()
 	})
 

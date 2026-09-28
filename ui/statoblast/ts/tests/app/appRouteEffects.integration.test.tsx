@@ -95,7 +95,7 @@ function UrlStateHarness() {
 
 installStatoblastRouting()
 describe('app route effects integration', () => {
-	test('returning to Browse Pools after minting never loads an empty pool address', async () => {
+	test('returning to Browse pools after minting never loads an empty pool address', async () => {
 		const dom = installDomEnvironment('http://localhost/#/pools')
 		const calls: Array<string | undefined> = []
 		const props = createDefaultProps({

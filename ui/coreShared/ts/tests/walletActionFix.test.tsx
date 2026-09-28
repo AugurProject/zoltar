@@ -179,16 +179,16 @@ describe('wallet action fix', () => {
 			<WalletActionsProvider walletActions={walletActions}>
 				<TransactionActionGroup id='fork-notice' message='Connect wallet to continue.'>
 					<TransactionActionButton availability={{ disabled: true, reason: 'Approve first.' }} idleLabel='Approve REP' onClick={() => undefined} pendingLabel='Approving…' />
-					<TransactionActionButton availability={disconnectedAvailability} idleLabel='Fork Universe' onClick={() => undefined} pendingLabel='Forking…' />
+					<TransactionActionButton availability={disconnectedAvailability} idleLabel='Fork universe' onClick={() => undefined} pendingLabel='Forking…' />
 				</TransactionActionGroup>
 			</WalletActionsProvider>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
 		const page = within(document.body)
 		const fix = page.getByRole('button', { name: 'Connect wallet' })
-		expect(page.getByRole('button', { name: 'Fork Universe' }).getAttribute('aria-describedby')).toBe(`fork-notice ${fix.id}`)
+		expect(page.getByRole('button', { name: 'Fork universe' }).getAttribute('aria-describedby')).toBe(`fork-notice ${fix.id}`)
 		expect(page.getByRole('button', { name: 'Approve REP' }).getAttribute('aria-describedby')).toBe('fork-notice')
-		expect(fix.closest('.tx-action')?.textContent).toContain('Fork Universe')
+		expect(fix.closest('.tx-action')?.textContent).toContain('Fork universe')
 	})
 
 	test('offers the fix on a launcher blocked only by the wallet', async () => {
