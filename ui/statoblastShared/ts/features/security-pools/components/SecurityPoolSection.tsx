@@ -34,6 +34,7 @@ import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { SecurityPoolLink } from './SecurityPoolLink.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 
 const MULTIPLIER_ERROR_ID = 'security-pool-security-multiplier-error'
 const PRIORITY_FEE_ERROR_ID = 'security-pool-initial-report-priority-fee-error'
@@ -210,7 +211,9 @@ export function SecurityPoolSection({
 				value={securityPoolForm.initialReportPriorityFeeEth}
 			/>
 			<div className='field'>
-				<span>{securityPoolCopy.initialOpenInterestFeeYear}</span>
+				<span>
+					<GlossaryTerm id='open-interest-fee'>{securityPoolCopy.initialOpenInterestFeeYear}</GlossaryTerm>
+				</span>
 				<strong>{formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE)}</strong>
 			</div>
 		</>

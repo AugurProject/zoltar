@@ -269,7 +269,7 @@ describe('SecurityPoolSection', () => {
 		expect(headings).not.toContain('Question Context')
 		expect(headings).not.toContain('Requirements')
 		expect(headings).not.toContain('Existing Pools')
-		expect(documentQueries.getByText('Starting annual fee')).not.toBeNull()
+		expect(documentQueries.getByText('Starting open interest fee / year')).not.toBeNull()
 		expect(documentQueries.getByText(formatOpenInterestFeePerYearPercent(ORIGIN_POOL_INITIAL_RETENTION_RATE))).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Open interest fee / year (%)' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Before You Deploy' })).toBeNull()
