@@ -12,6 +12,7 @@ import {
 	createSecurityVaultTransactionIntent,
 	createTradingSuccessPresentation,
 	createTradingTransactionIntent,
+	getSecurityVaultActionRepAmount,
 } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import {
 	createMarketCreationSuccessPresentation,
@@ -75,6 +76,19 @@ describe('transaction presentations', () => {
 			vaultAddress: '0x0000000000000000000000000000000000000002',
 		})
 		expect(intent.rows?.map(row => row.label)).toEqual(['Security Pool Address', 'Vault'])
+	})
+
+	test('states the REP amount in vault deposit and withdrawal reviews', () => {
+		const form = { depositAmount: '1200', repWithdrawAmount: '12.5' }
+		const context = { repTokenSymbol: 'REP2', securityPoolAddress: '0x0000000000000000000000000000000000000001', vaultAddress: '0x0000000000000000000000000000000000000002' }
+		const deposit = createSecurityVaultTransactionIntent('depositRepToVault', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('depositRepToVault', form) })
+		const withdrawal = createSecurityVaultTransactionIntent('queueWithdrawRep', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('queueWithdrawRep', form) })
+		expect(deposit.rows?.map(row => row.label)).toEqual(['Amount', 'Security Pool Address', 'Vault'])
+		expect(deposit.rows?.[0]?.value).toBe('1 200\u00a0REP2')
+		expect(withdrawal.rows?.[0]).toEqual({ label: 'Amount', value: '12.5\u00a0REP2' })
+		expect(getSecurityVaultActionRepAmount('redeemFees', form)).toBeUndefined()
+		expect(getSecurityVaultActionRepAmount('depositRepToVault', { depositAmount: '', repWithdrawAmount: '' })).toBeUndefined()
+		expect(getSecurityVaultActionRepAmount('queueWithdrawRep', { depositAmount: '', repWithdrawAmount: 'abc' })).toBeUndefined()
 	})
 
 	test('normalizes the Statoblast security multiplier in security pool creation intents', () => {

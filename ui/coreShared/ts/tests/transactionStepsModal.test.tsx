@@ -273,7 +273,7 @@ test('omits the explanation paragraph for a self-describing step and keeps the o
 	}
 })
 
-for (const choice of ['custom', 'max'] as const) {
+for (const choice of ['default', 'custom'] as const) {
 	test(`reuses the approval amount control for ${choice} without sending the next step`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
@@ -309,11 +309,12 @@ for (const choice of ['custom', 'max'] as const) {
 			expect(funding.textContent).toContain('1 WETH')
 			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
-			else await act(() => fireEvent.click(queries.getByText('Max')))
+			expect(queries.queryByRole('button', { name: /Max/ })).toBeNull()
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			expect(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ }).hasAttribute('disabled')).toBe(false)
-			await act(() => fireEvent.click(queries.getByRole('button', { name: choice === 'custom' ? /Approve 9 REP/ : /Approve Max/ })))
-			expect(await review).toBe(choice === 'custom' ? 9n : 2n ** 256n - 1n)
+			const approveLabel = choice === 'custom' ? /Approve 9 REP/ : /Approve 3 REP/
+			expect(queries.getByRole('button', { name: approveLabel }).hasAttribute('disabled')).toBe(false)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: approveLabel })))
+			expect(await review).toBe(choice === 'custom' ? 9n : 3n)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
 			expect(funding.textContent).toContain('Settler bounty')

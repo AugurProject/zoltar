@@ -23,7 +23,7 @@ import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.j
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
-import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
+import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, getSecurityVaultActionRepAmount, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -264,6 +264,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const actionSelectionKey = effectiveVaultSelectionKey
 		const isCurrentSelection = () => isVaultSelectionCurrent(actionSelectionKey)
 		const transactionContext = {
+			repAmountAttoRep: getSecurityVaultActionRepAmount(actionName, snapshot.form),
 			repTokenSymbol: snapshot.repTokenSymbol,
 			securityPoolAddress: snapshot.effectiveSecurityPoolAddressInput,
 			universeId: snapshot.universeId,

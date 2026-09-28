@@ -3191,17 +3191,7 @@
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
-	--request-price-max-width: 3.25rem;
-	--request-price-approval-gap: 0.5rem;
 	grid-template-columns: minmax(0, 1fr);
-}
-
-.operation-modal-body:has(> .request-price-fields) .approval-amount-controls {
-	gap: var(--request-price-approval-gap);
-}
-
-.operation-modal-body:has(> .request-price-fields) .approval-amount-controls > .field-inline-action {
-	inline-size: var(--request-price-max-width);
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions {
@@ -3258,10 +3248,6 @@
 	.request-price-fetch {
 		inline-size: 100%;
 		min-inline-size: 0;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
-		--request-price-approval-gap: 0.25rem;
 	}
 
 	.operation-modal-body:has(> .request-price-fields) .workflow-metric-grid > div {
