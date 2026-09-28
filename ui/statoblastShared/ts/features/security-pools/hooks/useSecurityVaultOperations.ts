@@ -51,12 +51,12 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	depositRepToVaultToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) => Promise<SecurityVaultActionResult>
 	isSecurityPoolVaultAdmissionClosed: (securityPoolAddress: Address) => Promise<boolean>
-	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
+	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 	loadQueuedVaultOperationState: (managerAddress: Address, result: SecurityVaultActionResult) => Promise<Awaited<ReturnType<typeof loadQueuedVaultOperationState>>>
 	loadOracleManagerDetails: (managerAddress: Address) => Promise<Awaited<ReturnType<typeof loadOracleManagerDetails>>>
 	loadSecurityVaultDetails: (securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultDetails | undefined>
-	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep' | 'setVaultUnderwritingLimit', targetVault: Address, amount: bigint, validForSeconds: bigint) => Promise<SecurityVaultQueueResult>
+	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep' | 'setVaultUnderwritingLimit', targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint) => Promise<SecurityVaultQueueResult>
 	redeemRepFromVaultFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	redeemSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	updateSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
@@ -174,8 +174,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		await dependencies.updateSecurityVaultFees(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), securityPoolAddress, vaultAddress)
 	}
 
-	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined) => {
-		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress)
+	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined, proposedRepPerEthPrice?: bigint) => {
+		const fundingRequirement = await dependencies.loadCoordinatorInitialReportFundingRequirement(writeClient, managerAddress, vaultAddress, proposedRepPerEthPrice)
 		if (fundingRequirement.currentRepBalanceAttoRep < fundingRequirement.requiredRepAttoRep) {
 			throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingRequirement.requiredRepAttoRep - fundingRequirement.currentRepBalanceAttoRep, 'REP')} in this wallet to fund the initial report.`)
 		}
@@ -394,14 +394,14 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		)
 	}
 
-	const prepareVaultOracleOperation = async (details: SecurityVaultDetails, vaultAddress: Address, context: WriteActionContext) => {
+	const prepareVaultOracleOperation = async (details: SecurityVaultDetails, vaultAddress: Address, context: WriteActionContext, proposedRepPerEthPrice?: bigint) => {
 		const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
 		context.assertActive()
 		const funding = resolveOracleOperationEthFunding({ managerDetails })
 		const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
 		const walletBalanceAttoEth = funding?.costAttoEth !== undefined && funding.costAttoEth > 0n ? await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress }) : undefined
 		if (funding?.costAttoEth !== undefined && funding.costAttoEth > 0n) {
-			await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this vault operation', walletBalanceAttoEth)
+			await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this vault operation', walletBalanceAttoEth, proposedRepPerEthPrice)
 		}
 		return { managerDetails, funding, walletBalanceAttoEth, writeClient }
 	}
@@ -424,7 +424,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		)
 	}
 
-	const adjustBackingFactor = async (value: string) => {
+	const adjustBackingFactor = async (value: string, proposedRepPerEthPrice?: bigint) => {
 		if (securityVaultActiveAction.value !== undefined) return
 		const snapshot = createVaultActionSnapshot()
 		await runVaultAction(
@@ -432,6 +432,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 			snapshot,
 			async (vaultAddress, securityPoolAddress, isCurrentSelection, context) => {
 				const factor = parseEthAmountInput(value, securityPoolCopy.vaultBackingFactor)
+				if (proposedRepPerEthPrice !== undefined && (proposedRepPerEthPrice <= 0n || proposedRepPerEthPrice >= 2n ** 256n)) throw new Error(securityPoolCopy.manualInitialPriceError)
 				const details = await dependencies.loadSecurityVaultDetails(securityPoolAddress, vaultAddress)
 				if (!isCurrentSelection()) return undefined
 				const guard = getVaultBackingFactorAdjustmentGuard(details, factor)
@@ -439,11 +440,11 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (details === undefined) throw new Error('Refresh vault details.')
 				if (factor > details.underwritingLimitAttoEth && (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress))) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
-				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context)
+				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context, proposedRepPerEthPrice)
 				if (!isCurrentSelection()) return undefined
 				const coverageGuard = getVaultBackingFactorAdjustmentGuard(details, factor, managerDetails?.isPriceValid ? managerDetails.lastPrice : undefined, details.statoblastSecurityMultiplierBps)
 				if (coverageGuard !== undefined) throw new Error(coverageGuard)
-				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setVaultUnderwritingLimit', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n)
+				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setVaultUnderwritingLimit', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n, proposedRepPerEthPrice)
 				return queuedOperations.track(details.managerAddress, { ...result, action: 'setVaultUnderwritingLimit' })
 			},
 			'Failed to adjust backing factor',

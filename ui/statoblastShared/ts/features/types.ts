@@ -220,7 +220,7 @@ type SecurityVaultRouteContentProps = {
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
 	onCertifyVaultCoverage?: (() => void) | undefined
-	onSetVaultUnderwritingLimit: (factor: string) => void
+	onSetVaultUnderwritingLimit: (factor: string, proposedRepPerEthPrice?: bigint) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void
 	onRedeemFees: () => void

@@ -1,6 +1,5 @@
+import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { useLayoutEffect, useId, useState } from 'preact/hooks'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -58,33 +57,14 @@ export type RequestPriceModalProps = {
 
 export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceFieldId = useId()
-	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
-	const [manualPrice, setManualPrice] = useState('')
+	const [initialPrice, setInitialPrice] = useState<OracleInitialPriceInput>({ source: 'automatic', price: '' })
 	useLayoutEffect(() => {
-		setPriceSource('automatic')
-		setManualPrice('')
+		setInitialPrice({ source: 'automatic', price: '' })
 	}, [review])
-	const parsedPrice = tryParseDecimalInput(manualPrice)
-	const proposedRepPerEthPrice = priceSource === 'manual' ? parsedPrice : undefined
-	const manualPriceError = priceSource === 'manual' && (parsedPrice === undefined || parsedPrice <= 0n || parsedPrice >= 2n ** 256n) ? securityPoolCopy.manualInitialPriceError : undefined
+	const { proposedRepPerEthPrice, error: manualPriceError } = parseOracleInitialPrice(initialPrice)
 	return (
 		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
-			<ViewTabs
-				ariaLabel={securityPoolCopy.initialPriceSource}
-				variant='segmented'
-				value={priceSource}
-				onChange={setPriceSource}
-				options={[
-					{ value: 'automatic', label: securityPoolCopy.automaticUniswapPrice, disabled: pending },
-					{ value: 'manual', label: securityPoolCopy.manualInitialPrice, disabled: pending },
-				]}
-			/>
-			{priceSource === 'manual' ? (
-				<label className='field' id={manualPriceFieldId}>
-					<span>{securityPoolCopy.manualRepPerEth}</span>
-					<FormInput aria-label={securityPoolCopy.manualRepPerEth} value={manualPrice} inputMode='decimal' disabled={pending} onInput={event => setManualPrice(event.currentTarget.value)} error={manualPriceError} hint={securityPoolCopy.manualInitialPriceHint} />
-				</label>
-			) : undefined}
+			<OracleInitialPriceFields value={initialPrice} onChange={setInitialPrice} disabled={pending} fieldId={manualPriceFieldId} />
 			<TransactionReview variant='inline' primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton

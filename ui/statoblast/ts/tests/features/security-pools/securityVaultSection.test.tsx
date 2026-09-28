@@ -307,6 +307,72 @@ describe('SecurityVaultSection', () => {
 		expect(submitted).toBe('0')
 	})
 
+	test.each([
+		[true, false, false, 'Executes immediately with the current oracle price.'],
+		[false, false, false, 'Queues for execution after oracle settlement.'],
+		[false, true, false, 'Queues; manual execution may be needed after oracle settlement.'],
+		[false, true, true, 'Queues for execution after oracle settlement.'],
+	] as const)('shows the expected commitment execution mode: fresh=%s, full=%s, replacing=%s', async (fresh, full, replacing, message) => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<ChainTimestampContext.Provider value={signal(2n)}>
+					<SecurityVaultSection
+						{...createSecurityVaultSectionProps({
+							modalFirst: true,
+							oracleManagerDetails: createOracleManagerDetails({
+								isPriceValid: fresh,
+								pendingSettlementOperationIds: full ? [1n, 2n, 3n, 4n] : [],
+								pendingOperation: full ? { operation: 'setVaultUnderwritingLimit', operationId: 1n, targetVault: replacing ? zeroAddress : '0x0000000000000000000000000000000000000001', operator: zeroAddress, amount: 1n } : undefined,
+							}),
+							securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+						})}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
+		expect(dialog.getByText(message)).not.toBeNull()
+		if (fresh || full) expect(dialog.queryByRole('button', { name: 'Manual price' })).toBeNull()
+	})
+
+	test('accepts a manual initial price for a queued commitment change', async () => {
+		let submitted: { limit: string; price: bigint | undefined } | undefined
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+						securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+						onSetVaultUnderwritingLimit: (limit, price) => {
+							submitted = { limit, price }
+						},
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const queries = within(dialog)
+		fireEvent.click(queries.getByRole('button', { name: 'Manual price' }))
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		const input = queries.getByLabelText('Open Oracle REP/ETH starting price')
+		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
+			fireEvent.input(input, { target: { value } })
+			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		}
+		fireEvent.input(input, { target: { value: '12.5' } })
+		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
+		expect(submitted).toEqual({ limit: '2', price: 125n * 10n ** 17n })
+		fireEvent.click(queries.getByRole('button', { name: 'Uniswap quote' }))
+		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
+		expect(submitted).toEqual({ limit: '2', price: undefined })
+	})
+
 	test('blocks a capacity reduction below collateral even after admission closes', async () => {
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection

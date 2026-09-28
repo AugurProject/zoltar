@@ -278,6 +278,7 @@ export function SecurityVaultSection({
 	const adjustmentBlocker = repExitLauncherBlocker ?? (poolState !== undefined && poolState.lifecycleState !== 'operational' && poolState.lifecycleState !== 'ended' ? vaultLifecycleBlocker : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			oracleManagerDetails={oracleManagerDetails}
 			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
 			repPerEthPrice={repPerEthPrice}

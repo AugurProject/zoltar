@@ -259,7 +259,12 @@ export const manualInitialPriceError = 'Enter a positive REP per ETH price with 
 
 export const certifyCoverage = 'Confirm backing for minting'
 export const certifyingCoverage = 'Confirming backing'
-export const certificationNeedsPrice = 'Refresh the oracle price first.'
+export const certificationNeedsPrice = 'Confirming backing requires a settled oracle price.'
 export const certificationNeedsLimit = 'Set a positive commitment limit first.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
+
+export const commitmentExecutesImmediately = 'Executes immediately with the current oracle price.'
+export const commitmentQueuesForSettlement = 'Queues for execution after oracle settlement.'
+export const commitmentMayNeedManualExecution = 'Queues; manual execution may be needed after oracle settlement.'
+export const commitmentExecutionLoading = 'Checking whether this change will execute immediately or queue.'

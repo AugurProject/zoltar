@@ -503,7 +503,7 @@ export function useSecurityPoolsRoute({
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
 				onCertifyVaultCoverage: () => void certifyCoverage(),
-				onSetVaultUnderwritingLimit: factor => void adjustBackingFactor(factor),
+				onSetVaultUnderwritingLimit: (factor, proposedRepPerEthPrice) => void adjustBackingFactor(factor, proposedRepPerEthPrice),
 				onDepositRepToVault: () => void depositRepToVault(),
 				onLoadSecurityVault: (vaultAddress?: string) => {
 					void loadSecurityVault(vaultAddress)
