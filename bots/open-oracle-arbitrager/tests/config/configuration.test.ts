@@ -120,12 +120,20 @@ async function runToExit(configurationPath: string, arguments_: readonly string[
 	return { exitCode, output: `${stdout}${stderr}` }
 }
 
-async function unusedPort() {
-	const server = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
-	const port = server.port
-	await server.stop(true)
-	if (port === undefined) throw new Error('Temporary server did not expose a port')
-	return port
+/**
+ * Reserves a free port for a child process to bind later. The OS can hand a released port to the next `port: 0` server,
+ * so reserve it after every mock server of the test is listening, and skip ports those servers or earlier reservations hold.
+ */
+async function unusedPort(exclude: readonly number[] = []) {
+	const taken = new Set([...exclude, ...servers.flatMap(server => (server.port === undefined ? [] : [server.port]))])
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const server = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
+		const port = server.port
+		await server.stop(true)
+		if (port === undefined) throw new Error('Temporary server did not expose a port')
+		if (!taken.has(port)) return port
+	}
+	throw new Error('Could not reserve a port distinct from the mock servers')
 }
 
 async function waitForJson(origin: string, path: string) {
@@ -334,7 +342,7 @@ describe('file-only startup configuration', () => {
 	test('keeps the dashboard running when the configured RPC is offline at startup', async () => {
 		const directory = await temporaryDirectory()
 		const dashboardPort = await unusedPort()
-		const rpcPort = await unusedPort()
+		const rpcPort = await unusedPort([dashboardPort])
 		const value = settings(`http://127.0.0.1:${rpcPort.toString()}/`, dashboardPort)
 		value.runtime.historyFile = join(directory, 'history.jsonl')
 		value.runtime.positionFile = join(directory, 'positions.json')
@@ -355,7 +363,6 @@ describe('file-only startup configuration', () => {
 
 	test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = await unusedPort()
 		const rpc = Bun.serve({
 			async fetch(request) {
 				const body = (await request.json()) as { id: unknown }
@@ -366,6 +373,8 @@ describe('file-only startup configuration', () => {
 		})
 		servers.push(rpc)
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		// Reserve the dashboard port only once the mock servers listen, so the OS cannot hand it to one of them.
+		const dashboardPort = await unusedPort()
 		const configuration = (await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json()) as Record<string, unknown>
 		const runtime = Reflect.get(configuration, 'runtime')
 		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
@@ -681,7 +690,6 @@ describe('file-only startup configuration', () => {
 
 	test('rejects RPC settings for a chain other than the selected profile', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = await unusedPort()
 		const rpc = Bun.serve({
 			async fetch(request) {
 				const body = (await request.json()) as { id: unknown }
@@ -692,6 +700,8 @@ describe('file-only startup configuration', () => {
 		})
 		servers.push(rpc)
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		// Reserve the dashboard port only once the mock servers listen, so the OS cannot hand it to one of them.
+		const dashboardPort = await unusedPort()
 		const configuration = (await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json()) as Record<string, unknown>
 		const runtime = Reflect.get(configuration, 'runtime')
 		if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
@@ -720,7 +730,6 @@ describe('file-only startup configuration', () => {
 
 	test('keeps executor deployment guarded while a newly saved quorum applies live', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = await unusedPort()
 		const rpc = Bun.serve({
 			hostname: '127.0.0.1',
 			port: 0,
@@ -732,6 +741,8 @@ describe('file-only startup configuration', () => {
 		})
 		servers.push(rpc)
 		if (rpc.port === undefined) throw new Error('Mock RPC did not expose a port')
+		// Reserve the dashboard port only once the mock servers listen, so the OS cannot hand it to one of them.
+		const dashboardPort = await unusedPort()
 		const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
 		const path = join(directory, 'operator.json')
 		const configured = settings(rpcUrl, dashboardPort, `0x${'11'.repeat(32)}`)
@@ -774,7 +785,6 @@ describe('file-only startup configuration', () => {
 
 	test('serves and updates the complete redacted configuration while ignoring operational environment variables', async () => {
 		const directory = await temporaryDirectory()
-		const dashboardPort = await unusedPort()
 		let rpcChainId = '0x1'
 		const rpc = Bun.serve({
 			hostname: '127.0.0.1',
@@ -812,6 +822,8 @@ describe('file-only startup configuration', () => {
 		})
 		servers.push(secondQuorumRpc)
 		if (secondQuorumRpc.port === undefined) throw new Error('Second mock quorum RPC did not expose a port')
+		// Reserve the dashboard port only once the mock servers listen, so the OS cannot hand it to one of them.
+		const dashboardPort = await unusedPort()
 		const savedPrivateKey = `0x${'11'.repeat(32)}` as Hex
 		const ignoredEnvironmentKey = `0x${'22'.repeat(32)}` as Hex
 		const path = join(directory, 'operator.json')
