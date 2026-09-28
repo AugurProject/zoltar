@@ -49,8 +49,8 @@ void describe('question helpers', () => {
 	void test('builds binary question summary fields with clarity labels', async () => {
 		const fields = await renderQuestionSummaryFields(questionBase)
 
-		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Question ID', 'Created', 'End Time', 'Outcomes'])
-		expect(fields.find(field => field.label === 'Question Type')?.value).toBe('Binary')
+		expect(fields.map(field => field.label)).toEqual(['Question type', 'Question ID', 'Created', 'End time', 'Outcomes'])
+		expect(fields.find(field => field.label === 'Question type')?.value).toBe('Binary')
 		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('Yes, No, Invalid')
 	})
 
@@ -65,12 +65,12 @@ void describe('question helpers', () => {
 			outcomeLabels: [],
 		})
 
-		expect(fields.map(field => field.label)).toEqual(['Question Type', 'Question ID', 'Created', 'End Time', 'Outcomes', 'Ticks', 'Display Range', 'Answer Unit'])
-		expect(fields.find(field => field.label === 'Question Type')?.value).toBe('Scalar')
+		expect(fields.map(field => field.label)).toEqual(['Question type', 'Question ID', 'Created', 'End time', 'Outcomes', 'Ticks', 'Display range', 'Answer unit'])
+		expect(fields.find(field => field.label === 'Question type')?.value).toBe('Scalar')
 		expect(fields.find(field => field.label === 'Outcomes')?.value).toBe('Scalar, Invalid')
 		expect(fields.find(field => field.label === 'Ticks')?.value).toBe('100')
-		expect(fields.find(field => field.label === 'Display Range')?.value).toBe('1 to 10\u00a0USD')
-		expect(fields.find(field => field.label === 'Answer Unit')?.value).toBe('USD')
+		expect(fields.find(field => field.label === 'Display range')?.value).toBe('1 to 10\u00a0USD')
+		expect(fields.find(field => field.label === 'Answer unit')?.value).toBe('USD')
 	})
 
 	void test('preserves existing invalid outcomes without duplicating them', async () => {

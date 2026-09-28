@@ -10,7 +10,7 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
-import { createCertifiedCompleteSetFixture, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../testSupport/simulator/utils/contracts/securityPool'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
 const BPS_DENOMINATOR = 10_000n
@@ -50,7 +50,7 @@ describe('Audit PoC: capacity-exit liquidation', () => {
 
 		const temporaryOpenInterest = repDeposit + 1n
 		const receiverEthBeforeAttack = await receiverVault.getBalance({ address: receiverVault.account.address })
-		await createCertifiedCompleteSetFixture(receiverVault, securityPool, temporaryOpenInterest)
+		await createCompleteSet(receiverVault, securityPool, temporaryOpenInterest)
 		const mintingCapacity = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPool,

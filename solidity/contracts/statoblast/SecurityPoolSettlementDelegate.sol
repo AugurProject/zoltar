@@ -35,6 +35,6 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 
 	function _validateSettlementCollateral(ISecurityPool pool, uint256 nextSettlementCollateralAttoEth) private view {
 		require(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity');
-		require(pool.getCertifiedUnderwritingLimitAttoEth() == totalUnderwritingLimitAttoEth, 'Commitments not certified');
+		require(SecurityPoolUtils.isVaultHealthy(pool.getTotalPoolHeldAttoRep(), 0, totalUnderwritingLimitAttoEth, pool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Pool backing insufficient');
 	}
 }

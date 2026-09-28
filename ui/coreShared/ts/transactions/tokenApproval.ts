@@ -1,4 +1,3 @@
-import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { parseDecimalInput } from '../forms/decimal.js'
 import { sanitizeErrorDetail } from '../lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '../lib/formatters.js'
@@ -22,10 +21,6 @@ type ParsedTokenApprovalAmount =
 	  }
 	| {
 			kind: 'default'
-	  }
-	| {
-			kind: 'max'
-			amount: typeof maxUint256
 	  }
 export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefined, approvedAmount: bigint | undefined): TokenApprovalRequirement {
 	if (requiredAmount === undefined)
@@ -62,7 +57,6 @@ export function deriveTokenApprovalRequirement(requiredAmount: bigint | undefine
 export function parseTokenApprovalAmountInput(value: string, label: string, units: number): ParsedTokenApprovalAmount {
 	const trimmed = value.trim()
 	if (trimmed === '') return { kind: 'default' }
-	if (trimmed.toLowerCase() === 'max') return { kind: 'max', amount: maxUint256 }
 	return {
 		kind: 'custom',
 		amount: parseDecimalInput(trimmed, label, units),

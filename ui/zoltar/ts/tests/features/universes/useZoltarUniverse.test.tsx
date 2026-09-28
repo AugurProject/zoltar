@@ -9,6 +9,7 @@ import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { useZoltarUniverse, type UseZoltarUniverseDependencies } from '@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarUniverse.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -18,6 +19,13 @@ type UseZoltarUniverseState = ReturnType<typeof useZoltarUniverse>
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 const TEST_HASH: Hash = '0x0000000000000000000000000000000000000000000000000000000000000001'
+
+// Reports exactly one new block to the shared watcher, whatever block earlier tests left as its latest.
+function announceNewBlock() {
+	const latest = appBlockWatcher.getLatestBlockNumber()
+	if (latest === undefined) appBlockWatcher.reportBlock(1n)
+	appBlockWatcher.reportBlock((latest ?? 1n) + 1n)
+}
 
 function requireHookState(state: UseZoltarUniverseState | undefined) {
 	if (state === undefined) throw new Error('Hook state unavailable')
@@ -689,5 +697,497 @@ describe('useZoltarUniverse', () => {
 
 		expect(requireHookState(hookState).zoltarQuestionsError).toBeUndefined()
 		expect(requireHookState(hookState).zoltarQuestionPage?.questions).toEqual([newQuestion])
+	})
+
+	test('refreshes the universe summary and question page in place on a new block so forks and new questions appear', async () => {
+		const universe = { childUniverses: [], forkQuestionDetails: undefined, forkThresholdAttoRep: 100n, forkTime: 0n, forkingOutcomeIndex: 0n, hasForked: false, parentUniverseId: 0n, reputationToken: zeroAddress, totalTheoreticalSupplyAttoRep: 1000n, universeId: 1n }
+		const forkedUniverse = { ...universe, forkTime: 50n, hasForked: true }
+		const firstPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x01')] }
+		const refreshedPage = { pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [createQuestion('0x01'), createQuestion('0x02')] }
+		const refreshedPageRead = createDeferred<typeof refreshedPage>()
+		let universeReads = 0
+		let pageReads = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: mock(async () => 1n),
+			loadZoltarQuestionPage: mock(async () => (++pageReads === 1 ? firstPage : await refreshedPageRead.promise)),
+			loadZoltarUniverseSummary: mock(async () => (++universeReads === 1 ? universe : forkedUniverse)),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 41,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(false))
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(firstPage)
+		expect(requireHookState(hookState).zoltarUniverseFreshness.updatedAt).toBeNumber()
+		expect(requireHookState(hookState).zoltarQuestionsFreshness).toMatchObject({ refreshing: false })
+
+		await act(() => {
+			announceNewBlock()
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true))
+		// The refresh keeps the loaded page on screen and does not flip the explicit loading state.
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(firstPage)
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+		expect(requireHookState(hookState).zoltarQuestionsFreshness.refreshing).toBe(true)
+
+		await act(async () => {
+			refreshedPageRead.resolve(refreshedPage)
+			await refreshedPageRead.promise
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage))
+		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
+		expect(requireHookState(hookState).zoltarQuestionsFreshness.refreshing).toBe(false)
+		expect(universeReads).toBe(2)
+		expect(pageReads).toBe(2)
+	})
+
+	test('does not let older background responses overwrite a newer universe and question page', async () => {
+		const universe = { childUniverses: [], forkQuestionDetails: undefined, forkThresholdAttoRep: 100n, forkTime: 0n, forkingOutcomeIndex: 0n, hasForked: false, parentUniverseId: 0n, reputationToken: zeroAddress, totalTheoreticalSupplyAttoRep: 1000n, universeId: 1n }
+		const forkedUniverse = { ...universe, forkTime: 50n, hasForked: true }
+		const firstPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x01')] }
+		const refreshedPage = { pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [createQuestion('0x01'), createQuestion('0x02')] }
+		const refreshedPageRead = createDeferred<typeof refreshedPage>()
+		const staleUniverseRead = createDeferred<typeof universe>()
+		let universeReads = 0
+		let pageReads = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: mock(async () => 1n),
+			loadZoltarQuestionPage: mock(async () => {
+				pageReads += 1
+				if (pageReads === 1) return firstPage
+				if (pageReads === 2) return await refreshedPageRead.promise
+				return refreshedPage
+			}),
+			loadZoltarUniverseSummary: mock(async () => {
+				universeReads += 1
+				if (universeReads === 1) return universe
+				if (universeReads === 2) return await staleUniverseRead.promise
+				return forkedUniverse
+			}),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 41,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(false))
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(firstPage)
+		expect(requireHookState(hookState).zoltarUniverseFreshness.updatedAt).toBeNumber()
+		expect(requireHookState(hookState).zoltarQuestionsFreshness).toMatchObject({ refreshing: false })
+
+		await act(() => {
+			announceNewBlock()
+		})
+		await waitFor(() => expect(pageReads).toBe(2))
+		await act(() => announceNewBlock())
+		await waitFor(() => expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage))
+		expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true)
+		await act(async () => {
+			refreshedPageRead.resolve(firstPage)
+			staleUniverseRead.resolve(universe)
+			await Promise.all([refreshedPageRead.promise, staleUniverseRead.promise])
+		})
+		expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true)
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage)
+	})
+
+	test('a slow background read never overwrites a newer foreground page load', async () => {
+		const firstPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x01')] }
+		const staleBackgroundPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x0b')] }
+		const foregroundPage = { pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [createQuestion('0x01'), createQuestion('0x02')] }
+		const backgroundRead = createDeferred<typeof firstPage>()
+		let pageReads = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadZoltarQuestionCount: mock(async () => 1n),
+			loadZoltarQuestionPage: mock(async () => {
+				pageReads += 1
+				if (pageReads === 1) return firstPage
+				if (pageReads === 2) return await backgroundRead.promise
+				return foregroundPage
+			}),
+			loadZoltarUniverseSummary: mock(async () => undefined),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 42,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await act(() => {
+			announceNewBlock()
+		})
+		await waitFor(() => expect(pageReads).toBe(2))
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(foregroundPage)
+		await act(async () => {
+			backgroundRead.resolve(staleBackgroundPage)
+			await backgroundRead.promise
+		})
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(foregroundPage)
+	})
+
+	test('loads only the created question and appends it to the loaded last page', async () => {
+		const existingQuestion = createQuestion('0x01')
+		const createdQuestion = createQuestion('0x02')
+		const loadMarketDetails = mock(async () => createdQuestion)
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails,
+			loadZoltarQuestionCount: async () => 2n,
+			loadZoltarQuestionPage: async () => ({ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [existingQuestion] }),
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadCreatedZoltarQuestion('0x2')
+		})
+
+		expect(loadMarketDetails).toHaveBeenCalledTimes(1)
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([existingQuestion, createdQuestion])
+		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [existingQuestion, createdQuestion] })
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+	})
+
+	test('reports a created question that the registry does not return', async () => {
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => ({ ...createQuestion('0x02'), exists: false }),
+			loadZoltarQuestionCount: async () => 1n,
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let failure: unknown
+		await act(async () => {
+			await requireHookState(hookState)
+				.loadCreatedZoltarQuestion('0x2')
+				.catch((error: unknown) => {
+					failure = error
+				})
+		})
+
+		expect(failure).toBeInstanceOf(Error)
+		expect(requireHookState(hookState).zoltarQuestions).toEqual([])
+	})
+
+	test('keeps the created question when an older page read resolves after it', async () => {
+		const existingQuestion = createQuestion('0x01')
+		const createdQuestion = createQuestion('0x02')
+		const stalePage = createDeferred<{ pageIndex: number; pageSize: number; questionCount: bigint; questions: MarketDetails[] }>()
+		let pageRequests = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => createdQuestion,
+			loadZoltarQuestionCount: async () => 2n,
+			loadZoltarQuestionPage: async () => {
+				pageRequests += 1
+				if (pageRequests === 1) return { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [existingQuestion] }
+				return await stalePage.promise
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		let stalePageRequest: Promise<void> | undefined
+		await act(async () => {
+			stalePageRequest = requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadCreatedZoltarQuestion('0x2')
+		})
+		await act(async () => {
+			stalePage.resolve({ pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [existingQuestion] })
+			await stalePageRequest
+		})
+
+		expect(requireHookState(hookState).zoltarQuestionPage?.questions).toEqual([existingQuestion, createdQuestion])
+		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
+	})
+
+	test('reissues a superseded read for another page after loading the created question', async () => {
+		const pageZeroQuestion = createQuestion('0x01')
+		const pageOneQuestion = createQuestion('0x0b')
+		const createdQuestion = createQuestion('0x0c')
+		const supersededPage = createDeferred<{ pageIndex: number; pageSize: number; questionCount: bigint; questions: MarketDetails[] }>()
+		const pageRequests: number[] = []
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => createdQuestion,
+			loadZoltarQuestionCount: async () => 12n,
+			loadZoltarQuestionPage: async (_client, pageIndex) => {
+				pageRequests.push(pageIndex)
+				if (pageRequests.length === 1) return { pageIndex: 0, pageSize: 10, questionCount: 11n, questions: [pageZeroQuestion] }
+				if (pageRequests.length === 2) return await supersededPage.promise
+				return { pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion, createdQuestion] }
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		let supersededRequest: Promise<void> | undefined
+		await act(async () => {
+			supersededRequest = requireHookState(hookState).loadZoltarQuestionPage(1, 10)
+			await Promise.resolve()
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadCreatedZoltarQuestion('0xc')
+		})
+		await act(async () => {
+			supersededPage.resolve({ pageIndex: 1, pageSize: 10, questionCount: 11n, questions: [pageOneQuestion] })
+			await supersededRequest
+		})
+
+		expect(pageRequests).toEqual([0, 1, 1])
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion, createdQuestion] })
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+	})
+
+	test('reissues a superseded page read even when the created question read fails', async () => {
+		const pageOneQuestion = createQuestion('0x0b')
+		const supersededPage = createDeferred<{ pageIndex: number; pageSize: number; questionCount: bigint; questions: MarketDetails[] }>()
+		const pageRequests: number[] = []
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => {
+				throw new Error('created question read failed')
+			},
+			loadZoltarQuestionCount: async () => 12n,
+			loadZoltarQuestionPage: async (_client, pageIndex) => {
+				pageRequests.push(pageIndex)
+				if (pageRequests.length === 1) return await supersededPage.promise
+				return { pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion] }
+			},
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: false,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 0,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		let supersededRequest: Promise<void> | undefined
+		await act(async () => {
+			supersededRequest = requireHookState(hookState).loadZoltarQuestionPage(1, 10)
+			await Promise.resolve()
+		})
+		let failure: unknown
+		await act(async () => {
+			await requireHookState(hookState)
+				.loadCreatedZoltarQuestion('0xc')
+				.catch((error: unknown) => {
+					failure = error
+				})
+		})
+		await act(async () => {
+			supersededPage.resolve({ pageIndex: 1, pageSize: 10, questionCount: 11n, questions: [] })
+			await supersededRequest
+		})
+
+		expect(failure).toBeInstanceOf(Error)
+		expect(pageRequests).toEqual([1, 1])
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 1, pageSize: 10, questionCount: 12n, questions: [pageOneQuestion] })
+		expect(requireHookState(hookState).loadingZoltarQuestions).toBe(false)
+	})
+
+	test('keeps the created question when an older block refresh of the page lands after it', async () => {
+		const universe = { childUniverses: [], forkQuestionDetails: undefined, forkThresholdAttoRep: 100n, forkTime: 0n, forkingOutcomeIndex: 0n, hasForked: false, parentUniverseId: 0n, reputationToken: zeroAddress, totalTheoreticalSupplyAttoRep: 1000n, universeId: 1n }
+		const existingQuestion = createQuestion('0x01')
+		const createdQuestion = createQuestion('0x02')
+		const firstPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [existingQuestion] }
+		const staleRefresh = createDeferred<typeof firstPage>()
+		let pageReads = 0
+		const dependencies = createZoltarUniverseDependencies({
+			loadMarketDetails: async () => createdQuestion,
+			loadZoltarQuestionCount: async () => 2n,
+			loadZoltarQuestionPage: async () => (++pageReads === 1 ? firstPage : await staleRefresh.promise),
+			loadZoltarUniverseSummary: async () => universe,
+		})
+		let hookState: UseZoltarUniverseState | undefined
+		function Harness() {
+			hookState = useZoltarUniverse(
+				{
+					accountAddress: WALLET_ADDRESS,
+					activeUniverseId: 1n,
+					autoLoadInitialData: true,
+					deploymentStatuses: [createZoltarDeploymentStatus()],
+					environmentRefreshKey: 43,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+				},
+				dependencies,
+			)
+			return <div />
+		}
+		const renderedComponent = await renderIntoDocument(<Harness />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await act(async () => {
+			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
+		})
+		await act(() => {
+			announceNewBlock()
+		})
+		await waitFor(() => expect(pageReads).toBe(2))
+		await act(async () => {
+			await requireHookState(hookState).loadCreatedZoltarQuestion('0x2')
+		})
+		await act(async () => {
+			staleRefresh.resolve(firstPage)
+			await staleRefresh.promise
+		})
+
+		expect(requireHookState(hookState).zoltarQuestionPage).toEqual({ pageIndex: 0, pageSize: 10, questionCount: 2n, questions: [existingQuestion, createdQuestion] })
+		expect(requireHookState(hookState).zoltarQuestionCount).toBe(2n)
 	})
 })

@@ -94,7 +94,7 @@ test('closes after confirmation and permits a new request when reopened after st
 		expect(within(dialogBeforeResult).getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }).hasAttribute('disabled')).toBe(false)
 		await act(() => {
 			completedHash.value = hash
-			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security Pool Address', value: review.securityPoolAddress }] }
+			presentation.value = { tone: 'success', title: 'Price requested', hash, operationKey: 'price-request', rows: [{ label: 'Security pool address', value: review.securityPoolAddress }] }
 		})
 		await settle()
 		expect(closed).toBe(true)
@@ -144,7 +144,7 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 		const requestButton = within(dialog).getByRole('button', { name: /^Request new price/ })
 		requestButton.focus()
 		await act(() => fireEvent.click(requestButton))
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(document.activeElement?.classList.contains('transaction-plan-action')).toBe(true)
 		await act(() => {
 			controller?.submitted(hash)
@@ -390,7 +390,7 @@ test('allows another price request after a failed transaction step', async () =>
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([{ ...step, title: 'Request new price' }])
 		controller.startWithoutReview(0)
-		controller.failed('nonce too low')
+		controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
 	const rendered = await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />)
 	try {
@@ -478,7 +478,7 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 			hash,
 			operationKey: 'price-request',
 			rows: [
-				{ label: 'Security Pool Address', value: review.securityPoolAddress },
+				{ label: 'Security pool address', value: review.securityPoolAddress },
 				{ label: 'Attempted REP/ETH price', value: '2' },
 			],
 		}
@@ -628,7 +628,7 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		await settle()
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
 		await settle()
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(transactionSteps.value?.steps[0]?.hash).toBeUndefined()
 		if (action === 'close') await act(() => fireEvent.click(within(queries.getByRole('dialog', { name: 'Request new price' })).getByRole('button', { name: 'Close' })))
 		if (action === 'fetch') await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
@@ -676,15 +676,15 @@ test('keeps submitted funding and pool details beside the original action after 
 		])
 		try {
 			await controller.review()
-			controller.failed('nonce too low')
+			controller.failed({ kind: 'error', message: 'nonce too low' })
 			presentation.value = {
 				tone: 'error',
 				title: 'Requesting new price…',
 				detail: 'nonce too low',
 				operationKey: 'price-request',
 				rows: [
-					{ label: 'Security Pool Address', value: review.securityPoolAddress },
-					{ label: 'Oracle Manager', value: review.managerAddress },
+					{ label: 'Security pool address', value: review.securityPoolAddress },
+					{ label: 'Oracle manager', value: review.managerAddress },
 					{ label: 'Attempted REP/ETH price', value: '2' },
 				],
 				technicalRows: [{ label: 'Function', value: 'requestPrice' }],
@@ -718,8 +718,8 @@ test('keeps submitted funding and pool details beside the original action after 
 		expect(queries.getByText('2 REP')).not.toBeNull()
 		expect(queries.getByText('1 WETH')).not.toBeNull()
 		expect(within(queries.getByRole('dialog', { name: 'Request new price' })).queryByRole('button', { name: /Approve.*(REP|WETH)/ })).toBeNull()
-		expect(within(statusDialog).getByText('Security Pool Address').parentElement?.textContent).toContain(review.securityPoolAddress)
-		expect(within(statusDialog).getByText('Oracle Manager').parentElement?.textContent).toContain(review.managerAddress)
+		expect(within(statusDialog).getByText('Security pool address').parentElement?.textContent).toContain(review.securityPoolAddress)
+		expect(within(statusDialog).getByText('Oracle manager').parentElement?.textContent).toContain(review.managerAddress)
 		expect(within(statusDialog).getByText('Technical details')).not.toBeNull()
 		expect(within(statusDialog).getByText('requestPrice')).not.toBeNull()
 		expect(queries.getByRole('button', { name: /^Request new price/ }).hasAttribute('disabled')).toBe(false)
@@ -751,7 +751,7 @@ test.each(['preparation', 'transaction step'] as const)('does not restart after 
 		const controller = createTransactionStepController(signal)
 		controller.setPlan([{ ...step, title: 'Request new price' }])
 		controller.startWithoutReview(0)
-		controller.failed('nonce too low')
+		controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
 	const rendered = await renderIntoDocument(
 		<GlobalTransactionPresentationProvider transaction={failure === 'preparation' ? { tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.' } : undefined}>

@@ -9,10 +9,22 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+
+let nextBlockNumber = 5_000n
+// Stands in for the chain producing a block: queued operations are re-read on each new block until they resolve.
+async function announceNewBlock() {
+	await act(() => {
+		appBlockWatcher.reportBlock(nextBlockNumber)
+		appBlockWatcher.reportBlock(nextBlockNumber + 1n)
+		nextBlockNumber += 2n
+	})
+}
 
 type UseSecurityVaultOperationsState = ReturnType<typeof useSecurityVaultOperations>
 type TestSecurityVaultWriteClient = { kind: 'injected-write-client' }
@@ -263,7 +275,8 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('queued'))
 		completed = true
-		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'))
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
@@ -291,7 +304,8 @@ describe('useSecurityVaultOperations', () => {
 		expect(dependencies.redeemSecurityVaultFees).toHaveBeenCalled()
 		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperation).toEqual(queuedOperation)
 		completed = true
-		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'))
 		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.hash).toBe('0x01')
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
 		expect(requireHookState(state).securityVaultResult).toBeUndefined()
@@ -317,7 +331,8 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).withdrawRep())
 		expect(requireHookState(state).securityVaultQueuedOperations.map(result => result.queuedOperation?.operationId)).toEqual([42n, 43n])
 		targetExecuted = true
-		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'))
 		expect(requireHookState(state).securityVaultQueuedOperations[1]?.queuedOperationState?.status).toBe('manual-queued')
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x02')
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
@@ -349,7 +364,8 @@ describe('useSecurityVaultOperations', () => {
 		})
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('missing'))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
-		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'))
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
 
@@ -754,6 +770,33 @@ describe('useSecurityVaultOperations', () => {
 			await requireHookState(hookState).depositRepToVault()
 		})
 		expect(deposit).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, 10n ** 18n, 20_000n)
+	})
+
+	test('states the REP amount of each action in the deposit and withdrawal review', async () => {
+		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
+		const queueOracleManagerOperation = mock(async () => ({ hash: '0x02' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({ depositRepToVaultToSecurityPool: deposit, loadErc20Balance: mock(async () => 10n * 10n ** 18n), queueOracleManagerOperation })
+		const intents: TransactionIntent[] = []
+		let hookState: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(
+			dependencies,
+			state => {
+				hookState = state
+			},
+			{ onTransactionRequested: intent => void intents.push(intent) },
+		)
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(() => {
+			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '3', repWithdrawAmount: '2', selectedVaultOwner: WALLET_ADDRESS, stagedOperationTimeoutMinutes: '5' }))
+		})
+		await act(async () => await requireHookState(hookState).depositRepToVault())
+		await act(async () => await requireHookState(hookState).withdrawRep())
+		expect(deposit).toHaveBeenCalledTimes(1)
+		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
+		expect(intents.map(intent => [intent.action, intent.rows?.[0]])).toEqual([
+			['depositRepToVault', { label: 'Amount', value: '3\u00a0REP' }],
+			['queueWithdrawRep', { label: 'Amount', value: '2\u00a0REP' }],
+		])
 	})
 
 	test('closing during deposit details loading cancels before creating a write client', async () => {

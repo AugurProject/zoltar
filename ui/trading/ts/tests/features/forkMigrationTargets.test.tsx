@@ -97,7 +97,7 @@ describe('fork migration target selection', () => {
 		const tickInput = inputByLabel(rendered.container, 'Select scalar target')
 		const outOfRangeTick = (BigInt(Number.MAX_SAFE_INTEGER) + 2n).toString()
 		await input(tickInput, outOfRangeTick)
-		const selectedOutcomeLabel = Array.from(rendered.container.querySelectorAll('.metric-label')).find(label => label.textContent === 'Selected Outcome')
+		const selectedOutcomeLabel = Array.from(rendered.container.querySelectorAll('.metric-label')).find(label => label.textContent === 'Selected outcome')
 		const selectedOutcomeValue = selectedOutcomeLabel?.parentElement?.querySelector('.metric-field-value')
 
 		expect(tickInput.value).toBe(outOfRangeTick)

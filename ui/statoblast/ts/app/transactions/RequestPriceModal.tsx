@@ -7,7 +7,7 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
-import { TransactionActionButtonLockProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButtonLockProvider, unlockedTransactionActions } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import type { RequestPriceModalProps } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import * as poolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
@@ -15,7 +15,7 @@ import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceReques
 import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
-import { cancelTransactionReview, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { cancelTransactionReview, isTransactionStepInFlight, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { dismissGlobalTransaction } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
 import type { FailedPricePlan } from './PriceRequestPreview.js'
 
@@ -49,7 +49,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const key = review === undefined ? undefined : `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}:${review.requestValueAttoEth}:${price}:${retry}`
 	const valid = review !== undefined && canRequest && confirmationGuardMessage === undefined && validPrice && !fetching
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
-	const sending = ownsWorkflow && (workflow?.steps.some(step => step.phase === 'pending') ?? false)
+	const sending = ownsWorkflow && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
 	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
 	const finalSubmittedHash = run.current?.finalSubmittedHash ?? (ownsWorkflow ? workflow?.steps.at(-1)?.hash : undefined)
 	const completedRequest = finalSubmittedHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalSubmittedHash && (closeOnSuccessKey === undefined || closeOnSuccessKey === finalSubmittedHash)
@@ -224,7 +224,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 
 	return (
 		<GlobalTransactionPresentationProvider transaction={undefined}>
-			<TransactionActionButtonLockProvider locked={false}>
+			<TransactionActionButtonLockProvider lock={unlockedTransactionActions}>
 				<OperationModal embedTransactionSteps={false} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close}>
 					{priceControls}
 					{showSteps ? (

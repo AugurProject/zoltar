@@ -4,6 +4,13 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width" />
 		<title>Zoltar</title>
+		<!-- Apply a saved theme before the stylesheets load so the page never paints the other palette first; keep in sync with ui/coreShared/ts/lib/themePreference.ts. -->
+		<script>
+			try {
+				const theme = localStorage.getItem('zoltar.theme')
+				if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+			} catch {}
+		</script>
 		<link rel="stylesheet" href="/ui/coreShared/css/index.css" />
 		<link rel="stylesheet" href="/ui/zoltarShared/css/index.css" />
 		<link rel="icon" href="./favicon.svg" type="image/svg+xml" />

@@ -1,6 +1,7 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { GlobalTransactionPresentation, TransactionIntent } from './components.js'
 import type { TransactionRequestPreview, TransactionSubmissionStatus } from '../wallet/chainBackend.js'
+import type { TransactionFailureKind } from '../transactions/transactionLifecycle.js'
 
 export type RefreshStateOptions = {
 	loadChainClock?: boolean
@@ -10,15 +11,27 @@ export type RefreshStateOptions = {
 
 type RefreshState = (options?: RefreshStateOptions) => Promise<void>
 
+/** Identifies one requested transaction so its outcome callbacks reach it while other transactions are still pending. */
+export type TransactionRequestKey = string
+
+/** `false` rejects the request; a key identifies the accepted request for its later callbacks. */
+export type TransactionRequestResult = TransactionRequestKey | boolean | void
+
+export type TransactionFailureDetails = {
+	kind?: TransactionFailureKind | undefined
+	requestKey?: TransactionRequestKey | undefined
+}
+
 export type WriteOperationsParameters = {
 	accountAddress: Address | undefined
-	onTransactionCanceled?: () => void
-	onTransactionFailed?: (message: string) => void
-	onTransactionFinished: () => void
+	onTransactionCanceled?: (requestKey?: TransactionRequestKey) => void
+	onTransactionFailed?: (message: string, details?: TransactionFailureDetails) => void
+	onTransactionFinished: (requestKey?: TransactionRequestKey) => void
 	onTransactionPresented: (presentation: GlobalTransactionPresentation) => void
 	onTransactionPrepared?: (preview: TransactionRequestPreview) => void
-	onTransactionRequested: (intent: TransactionIntent) => boolean | void
-	onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus) => void
+	onTransactionRequested: (intent: TransactionIntent) => TransactionRequestResult
+	/** `replacedHash` names the broadcast a wallet speed-up or cancellation replaced, so the right request follows it. */
+	onTransactionSubmitted: (hash: Hash, status?: TransactionSubmissionStatus, replacedHash?: Hash) => void
 	refreshState: RefreshState
 }
 

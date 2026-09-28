@@ -704,7 +704,7 @@ describe('useSecurityPoolCreation', () => {
 			const controller = createTransactionStepController(client.reviewSignal)
 			controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 			controller.startWithoutReview(0)
-			controller.failed('User rejected the request')
+			controller.failed({ kind: 'rejected', message: 'User rejected the request' })
 			throw new Error('User rejected the request')
 		})
 		await setupContractMocks({
@@ -810,13 +810,13 @@ describe('useSecurityPoolCreation', () => {
 
 		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')
 		expect(createSecurityPool).toHaveBeenCalledTimes(1)
-		// The review renders inside the Create Pool card: the write client and the embedded-steps signal share one review signal for the write, released afterwards.
+		// The review renders inside the Create pool card: the write client and the embedded-steps signal share one review signal for the write, released afterwards.
 		expect(reviewSignalDuringWrite).toBeInstanceOf(AbortSignal)
 		expect(embeddedDuringWrite).toBe(reviewSignalDuringWrite)
 		expect(reviewSignalDuringWrite?.aborted).toBe(true)
 		expect(embeddedTransactionSteps.value).toBeUndefined()
 		expect(requireState(state).securityPoolReviewSignal).toBeUndefined()
-		expect(requestedRows.map(rows => rows.map(row => row.label))).toEqual([['Question', 'Statoblast Security Multiplier', 'Initial Report Priority Fee']])
+		expect(requestedRows.map(rows => rows.map(row => row.label))).toEqual([['Question', 'Statoblast security multiplier', 'Initial report priority fee']])
 		expect(requestedRows[0]?.[0]?.value).toBe('Batched question')
 		expect(createSecurityPool.mock.calls[0]?.[2]).toMatchObject({ title: 'Batched question' })
 		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ title: 'Create question and security pool' })

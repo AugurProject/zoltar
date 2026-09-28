@@ -1,5 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useEffect, useRef } from 'preact/hooks'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -16,9 +17,6 @@ import type { useWalletSession } from './useWalletSession.js'
 import type { LiveTradingControllerServices } from './liveTradingTypes.js'
 
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
-
-/** Cadence of the automatic background refresh that replaces manual refresh controls. */
-const LIVE_REFRESH_INTERVAL_MILLISECONDS = 15_000
 
 function discoveryScope(route: string) {
 	return securityPoolAddressFromRoute(route) ?? tradingListKindFor(route) ?? route
@@ -43,7 +41,6 @@ export function useMarketDiscoveryController({
 	discoveryRequests,
 	balanceRequests,
 	portfolioBalanceRequests,
-	refreshIntervalMilliseconds = LIVE_REFRESH_INTERVAL_MILLISECONDS,
 }: {
 	route: string
 	configuration: DeploymentConfiguration | undefined
@@ -64,11 +61,10 @@ export function useMarketDiscoveryController({
 	discoveryRequests: RequestGuard
 	balanceRequests: RequestGuard
 	portfolioBalanceRequests: RequestGuard
-	refreshIntervalMilliseconds?: number | undefined
 }) {
 	const previousRoute = useRef(route)
 	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
-	// A background discovery slower than the refresh interval is left to finish instead of being restarted each tick.
+	// A background discovery slower than the block interval is left to finish instead of being restarted on each block.
 	const backgroundDiscovery = useRef<RequestIdentity>()
 
 	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean) {
@@ -91,15 +87,27 @@ export function useMarketDiscoveryController({
 	 * loaded balances directly: the balance effects revalidate them from the refreshed market objects and keep the
 	 * previous values visible until the new reads resolve.
 	 */
-	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean }> = {}) {
+	// A trade keeps running after navigation; only the route showing that trade's market waits for it. Other routes
+	// (lists, portfolio, other markets) keep refreshing. A liquidity or settlement lock only exists on its own market.
+	const positionMarketRef = useRef<string | undefined>(undefined)
+	positionMarketRef.current = transaction.transaction.workflowState.kind === 'idle' ? undefined : transaction.transaction.workflowState.context?.market
+	const routePoolRef = useRef(routePool)
+	routePoolRef.current = routePool
+	const positionLockOnScreen = () => transaction.positionWorkflowLockedRef.current && positionMarketRef.current !== undefined && routePoolRef.current !== undefined && positionMarketRef.current.toLowerCase() === routePoolRef.current.toLowerCase()
+	const refreshHeldByWorkflow = () => transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen()
+
+	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean; navigation?: boolean }> = {}) {
 		if (nextConfiguration === undefined) return
 		const background = options.background === true
+		// A route change always shows its own data; a pending transaction keeps its captured context and stays in the activity list.
+		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, positionLockOnScreen(), transaction.liquidityWorkflowLockedRef.current)
 		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
 		// It records the application's request (the `universe` parameter), not the resolved universe discovery is asked for.
 		const scope: UniverseDiscoveryScope = { requestedUniverseId: urlUniverseId, addressedPool: routePool?.toLowerCase() }
 		backgroundDiscovery.current = background ? request : undefined
+		if (background) market.setFreshness(current => ({ ...current, refreshing: true }))
 		if (!background) {
 			// Retire any in-flight balance read so the effects re-read after this refresh commits, without hiding current values.
 			balanceRequests.invalidate()
@@ -116,7 +124,7 @@ export function useMarketDiscoveryController({
 		try {
 			const discovered = await withReadTimeout(discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request)))
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
-			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
+			if (!commitAllowed()) {
 				market.setDiscoveryState('ready')
 				return
 			}
@@ -125,9 +133,10 @@ export function useMarketDiscoveryController({
 			market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			market.setDiscoveryError(undefined)
 			market.setDiscoveryState('ready')
+			market.setFreshness({ refreshing: false, updatedAt: Date.now() })
 		} catch (error) {
 			if (!discoveryRequests.isCurrent(request)) return
-			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
+			if (!commitAllowed()) {
 				market.setDiscoveryState('ready')
 				return
 			}
@@ -144,7 +153,10 @@ export function useMarketDiscoveryController({
 				portfolio.setBalanceError('Market refresh failed before wallet balances could be revalidated')
 			}
 		} finally {
-			if (backgroundDiscovery.current === request) backgroundDiscovery.current = undefined
+			if (backgroundDiscovery.current === request) {
+				backgroundDiscovery.current = undefined
+				market.setFreshness(current => (current.refreshing ? { ...current, refreshing: false } : current))
+			}
 		}
 	}
 	const refreshRef = useRef(refresh)
@@ -168,13 +180,13 @@ export function useMarketDiscoveryController({
 	}, [configuration, market.discoveryState, market.marketPage.start, selected, walletSummaryRetryNonce])
 
 	useEffect(() => {
-		if (transaction.positionWorkflowLockedRef.current) return
-		transaction.dispatchWorkflow({ type: 'reset' })
+		// Navigation is never blocked; a running trade keeps its workflow state while the new route loads its own data.
+		if (!transaction.positionWorkflowLockedRef.current) transaction.dispatchWorkflow({ type: 'reset' })
 		wallet.setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
 		if (previousRoute.current !== route) {
 			// Results only carry over between routes that discover the same thing, such as the trade and liquidity views of one pool.
 			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) market.setMarkets([])
-			void refresh(configuration, 0n)
+			void refresh(configuration, 0n, undefined, { navigation: true })
 		}
 		previousRoute.current = route
 	}, [route])
@@ -184,23 +196,24 @@ export function useMarketDiscoveryController({
 		if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) transaction.dispatchWorkflow({ type: 'reset' })
 	}, [nowSeconds, selected])
 
-	const periodicRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
-	useEffect(() => {
-		if (!periodicRefreshActive) return
-		const timer = setInterval(() => {
-			if (transaction.positionWorkflowLockedRef.current || transaction.liquidityWorkflowLockedRef.current) return
-			void refreshRef.current(undefined, undefined, undefined, { background: true })
-		}, refreshIntervalMilliseconds)
-		return () => clearInterval(timer)
-	}, [periodicRefreshActive, refreshIntervalMilliseconds, route, routePool])
+	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
+	const blockRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
+	useBlockRefresh(() => {
+		if (refreshHeldByWorkflow()) return
+		void refreshRef.current(undefined, undefined, undefined, { background: true })
+	}, blockRefreshActive)
 
 	return {
 		refresh,
+		/** Refreshes whatever route is on screen when it runs, for work that finishes after the user navigated away. */
+		refreshCurrentRoute: async (...args: Parameters<typeof refresh>) => await refreshRef.current(...args),
+		/** True while the route on screen shows a market whose own transaction is still running. */
+		refreshLocked: transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen(),
 		refreshFromControl: () => {
-			if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) void refresh()
+			if (!refreshHeldByWorkflow()) void refresh()
 		},
 		loadMarketPage: (start: bigint | undefined) => {
-			if (start !== undefined && !transaction.workflowLocked) void refresh(configuration, start)
+			if (start !== undefined && !refreshHeldByWorkflow()) void refresh(configuration, start)
 		},
 	}
 }

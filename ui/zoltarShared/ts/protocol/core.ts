@@ -1,4 +1,5 @@
 import { encodeFunctionData, RpcError, type Abi, type Account, type Address, type ContractFunctionParameters, type Hash, type MulticallReturnType, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 import { getMulticall3Address } from './zoltarDeploymentHelpers.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -136,7 +137,7 @@ export async function writeContractAndWaitForReceipt<TCallParams extends Contrac
 	const { hash: resolvedHash, receipt } = await waitForSubmittedTransactionReceipt(client, hash, { allowRevertedReceipt: true })
 	if (receipt.status === 'reverted') {
 		const reason = await getContractRevertReason(client, callParams)
-		throw new Error(reason ?? 'Transaction reverted')
+		throw createTransactionFailureError('reverted', reason ?? 'Transaction reverted')
 	}
 	return { hash: resolvedHash, receipt }
 }

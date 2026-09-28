@@ -27,7 +27,7 @@ const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.s
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, certifiedLimit, escalationGame] = await Promise.all([
+	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),
@@ -39,7 +39,6 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'awaitingForkContinuation' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getVaultCount' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'securityPoolForker' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'getCertifiedUnderwritingLimitAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'escalationGame' }),
 	])
 	const checkpoint = (timestamp: bigint) => estimateMintCheckpoint({ ...accounting, currentTimestamp: timestamp, feeEndTimestamp: feeEndTime })
@@ -57,7 +56,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		totalUnderwritingLimitAttoEth: accounting.totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth: accounting.feeEligibleUnderwritingLimitAttoEth,
 		mintingCapacityCeilingAttoEth,
-		availableMintingCapacityAttoEth: certifiedLimit === accounting.totalUnderwritingLimitAttoEth && BigInt(escalationGame) === 0n && mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
+		availableMintingCapacityAttoEth: BigInt(escalationGame) === 0n && mintingCapacityCeilingAttoEth > current.settlementCollateralAfterFeesAttoEth ? mintingCapacityCeilingAttoEth - current.settlementCollateralAfterFeesAttoEth : 0n,
 		systemState,
 		awaitingForkContinuation,
 		vaultCount,

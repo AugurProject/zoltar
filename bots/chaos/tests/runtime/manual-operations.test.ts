@@ -172,6 +172,7 @@ test('shutdown retains process locks until manual execution and recovery persist
 	const persisting = Promise.withResolvers<void>()
 	const persistence = Promise.withResolvers<void>()
 	const controller = createManualOperationController({
+		preflight: async () => {},
 		configuration,
 		state,
 		gate,
@@ -230,6 +231,7 @@ test('controller disposal drains an in-flight inspection scan', async () => {
 	const entered = Promise.withResolvers<void>()
 	const scanned = Promise.withResolvers<void>()
 	const controller = createManualOperationController({
+		preflight: async () => {},
 		configuration,
 		state,
 		gate,
@@ -289,6 +291,7 @@ test('manual live results expose the skip reason and transaction progress for th
 	const release = Promise.withResolvers<void>()
 	const hash = `0x${'ab'.repeat(32)}`
 	const controller = createManualOperationController({
+		preflight: async () => {},
 		configuration,
 		state,
 		gate,
@@ -348,6 +351,7 @@ for (const severity of ['pending', 'alarming'] as const) {
 		const info = spyOn(console, 'log').mockImplementation(() => {})
 		const errors = spyOn(console, 'error').mockImplementation(() => {})
 		const controller = createManualOperationController({
+			preflight: async () => {},
 			configuration,
 			state,
 			gate,
@@ -489,4 +493,31 @@ test('manual trading preview expires independently of its still-valid transactio
 	clock.mockReturnValue(2_000_000_060_001)
 	await expect(controller.handle({ action: 'execute', previewId: preview['previewId'] })).rejects.toThrow('preview expired')
 	expect(executed).toHaveLength(0)
+})
+
+test('preview rejects a simulated transaction above the gas ceiling before allowing execution', async () => {
+	const reason = 'Create REP/WETH pool estimated gas ceiling exceeds strategy.maximumGasCostEth: estimated maximum 0.1165 ETH; configured maximum 0.02 ETH.'
+	let checks = 0
+	const { controller, executed, state } = fixture('open-oracle.weth.wrap', async () => {
+		checks += 1
+		throw new Error(reason)
+	})
+	const preview = object(await controller.handle({ ...wrap, action: 'preview' }))
+	expect(preview['blockers']).toEqual([reason])
+	expect(preview['previewId']).toBeUndefined()
+	expect(checks).toBe(1)
+	expect(executed).toHaveLength(0)
+	expect(state.workflows).toHaveLength(0)
+})
+
+test('failed preflight invalidates an earlier preview and redacts sensitive errors', async () => {
+	let blocked = false
+	const { controller } = fixture('open-oracle.weth.wrap', async () => {
+		if (blocked) throw new Error('RPC https://user:password@example.com failed')
+	})
+	const first = object(await controller.handle({ ...wrap, action: 'preview' }))
+	blocked = true
+	const second = object(await controller.handle({ ...wrap, action: 'preview' }))
+	expect(second['blockers']).toEqual(['Error detail withheld because it may contain sensitive data.'])
+	await expect(controller.handle({ action: 'execute', previewId: first['previewId'] })).rejects.toThrow('Preview the operation again')
 })

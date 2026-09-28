@@ -3,7 +3,6 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
-	calculateMintingCapacityAttoEth,
 	estimateMintCheckpoint,
 	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
@@ -153,14 +152,6 @@ void describe('trading helpers', () => {
 		).toEqual({ estimatedRetentionFeeAttoEth: TOKEN_PRECISION, settlementCollateralAfterFeesAttoEth: 9n * TOKEN_PRECISION })
 	})
 
-	void test('reports standing ETH commitments independently of REP pricing', () => {
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(80n * 10n ** 18n)
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(80n * 10n ** 18n)
-		expect(calculateMintingCapacityAttoEth(0n, 3n * 10n ** 18n, 20_000n)).toBe(0n)
-		expect(calculateMintingCapacityAttoEth(0n, undefined, 20_000n)).toBe(0n)
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBe(80n * 10n ** 18n)
-	})
-
 	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
 		expect(isTradingSystemDeployed([])).toBe(false)
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', true)])).toBe(true)
@@ -245,7 +236,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 10n,
 				mintingCapacityAttoEth: 10n,
 			}),
-		).toBe('Request a new price in Price Oracle before minting.')
+		).toBe('Request a new price in Price oracle before minting.')
 	})
 
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
@@ -448,7 +439,7 @@ void describe('trading helpers', () => {
 				shareBalances,
 				shareTokenSupplyAttoShares: 10n * TOKEN_PRECISION,
 			}),
-		).toBe('Max redeemable amount is 2 complete sets.')
+		).toBe('Max redeemable amount is 2\u00a0ETH.')
 
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
@@ -465,7 +456,7 @@ void describe('trading helpers', () => {
 	})
 
 	void test('converts first-mint share token amounts through the pool exchange rate', () => {
-		const firstMintShareAmount = TOKEN_PRECISION * TOKEN_PRECISION
+		const firstMintShareAmount = TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
 		expect(convertSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
 		expect(convertMintSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, 0n, 0n)).toBe(firstMintShareAmount)
@@ -485,7 +476,7 @@ void describe('trading helpers', () => {
 				},
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
-		).toBe('Max redeemable amount is 1 complete set.')
+		).toBe('Max redeemable amount is 1\u00a0ETH.')
 	})
 
 	void test('validates share migration targets and positive balances once migration is available', () => {

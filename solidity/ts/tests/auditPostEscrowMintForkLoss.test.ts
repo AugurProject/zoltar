@@ -5,7 +5,7 @@ import { getEthRaiseCapAttoEth, participateAuction } from '../testSupport/simula
 import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import { finalizeTruthAuction, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
-import { createCertifiedCompleteSetFixture, createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
 import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
@@ -55,7 +55,7 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 		await mockWindow.setTime(questionData.endTime + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n * PRICE_PRECISION)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 
 		// Reconstruct the full-bad-debt accounting boundary so this regression isolates
 		// fork finalization from the independent liquidation setup.

@@ -2,6 +2,7 @@ import { formatDate, node, replaceWhenChanged, setBadge, statusLabel, statusTone
 import { workflowProgress } from './workflow-progress.js'
 
 export type WorkflowStep = {
+	failure?: string | undefined
 	confirmedAt?: string | undefined
 	label?: string | undefined
 	status?: string | undefined
@@ -42,8 +43,9 @@ export function createWorkflowHistory(container: HTMLElement) {
 				const label = node('span')
 				label.append(node('strong', undefined, workflow.label ?? workflow.operationId ?? 'Workflow'), node('span', 'muted', `Started ${formatDate(workflow.startedAt)}`))
 				const badge = node('span')
+				const stoppedBeforeSigning = workflow.status === 'abandoned' && workflow.steps.some(step => step.status === 'blocked') && workflow.steps.every(step => step.txHash === undefined && (step.status === 'blocked' || step.status === 'planned'))
 				const tone = workflow.status?.startsWith('waiting-') === true ? 'warning' : statusTone(workflow.status)
-				setBadge(badge, statusLabel(workflow.status), workflow.status === 'completed' ? 'success' : tone)
+				setBadge(badge, stoppedBeforeSigning ? 'Stopped before signing' : statusLabel(workflow.status), workflow.status === 'completed' ? 'success' : tone)
 				summary.append(label, badge)
 				const active = workflow.status === 'waiting-transaction' || workflow.status === 'waiting-obligation' || (!paused && workflow.status === 'running')
 				details.append(
@@ -52,8 +54,10 @@ export function createWorkflowHistory(container: HTMLElement) {
 					workflowProgress(
 						workflow.steps.map(step => ({ ...step, hash: step.txHash, explorerUrl: step.txHash === undefined ? undefined : transactionExplorerUrl(explorerUrl, step.txHash) })),
 						active,
+						stoppedBeforeSigning,
 					),
 				)
+				if (stoppedBeforeSigning) details.append(node('p', 'muted', 'Resolve the error, then preview the operation again.'))
 				retained.set(key, { signature, element: details })
 				return details
 			})

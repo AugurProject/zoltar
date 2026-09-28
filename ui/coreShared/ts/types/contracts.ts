@@ -201,7 +201,7 @@ export type QueuedVaultOperationState = {
 
 export type SecurityVaultActionResult = ActionResult & {
 	queuedOperationState?: QueuedVaultOperationState
-	action: 'certifyVaultCoverage' | 'setVaultUnderwritingLimit' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
+	action: 'setVaultUnderwritingLimit' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
 	stagedExecution?: StagedOracleExecutionResult
 }
@@ -294,7 +294,7 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 }
 
 export type ListedSecurityPool = {
-	certifiedUnderwritingLimitAttoEth?: bigint
+	mintingCapacityAttoEth?: bigint
 	settlementCollateralAttoEth: bigint
 	currentRetentionRate: bigint
 	feeAccrualState?: {

@@ -89,12 +89,12 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		securityPoolOverviewError,
 		securityPoolOverviewResult,
 		securityPools,
+		securityPoolsFreshness,
 		securityVault,
 		selectedPoolRefreshNonce,
 		selectedPoolView,
 		showHeader = true,
 		trading,
-		uiPriceOracle,
 		universeForkTime,
 	} = props
 	const chainCurrentTimestamp = useChainTimestamp()
@@ -186,13 +186,12 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		model.selectedPoolSummaryPool === undefined || marketDetails === undefined
 			? undefined
 			: {
-					calculationPriceConfigured: uiPriceOracle !== undefined,
 					currentPoolOracleManagerDetails,
 					currentPoolOraclePrice: model.currentPoolOraclePrice,
 					currentPoolOracleSettlementTimestamp: model.currentPoolOracleSettlementTimestamp,
 					currentTimestamp,
+					freshness: securityPoolsFreshness,
 					marketDetails,
-					repPerEthPrice,
 					selectedPoolHasActualForkActivity: model.selectedPoolHasActualForkActivity,
 					selectedPoolLifecycleState: model.selectedPoolLifecycleState,
 					selectedPoolParentPool: model.selectedPoolParentPool,
@@ -268,7 +267,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 							/>
 						) : undefined}
 
-						{view === 'trading' ? <SelectedPoolTradingPanel calculationPriceConfigured={uiPriceOracle !== undefined} currentPoolOraclePriceUsable={model.currentPoolOraclePriceUsable} poolState={selectedPoolStateModel} selectedPool={loadedSelectedPool} trading={trading} /> : undefined}
+						{view === 'trading' ? <SelectedPoolTradingPanel currentPoolOraclePriceUsable={model.currentPoolOraclePriceUsable} poolState={selectedPoolStateModel} selectedPool={loadedSelectedPool} trading={trading} /> : undefined}
 
 						{view === 'reporting' ? (
 							<SelectedPoolReportingPanel

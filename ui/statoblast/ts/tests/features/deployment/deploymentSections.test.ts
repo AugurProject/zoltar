@@ -20,7 +20,7 @@ describe('getStatoblastDeploymentSections', () => {
 	test('adds Statoblast contracts without teaching Zoltar about them', () => {
 		const sections = getStatoblastDeploymentSections([createStep('proxyDeployer'), createStep('zoltar'), createStep('openOracle'), createStep('securityPoolFactory')])
 
-		expect(sections.map(section => section.title)).toEqual(['Utilities', 'Zoltar', 'Security Pools'])
+		expect(sections.map(section => section.title)).toEqual(['Utilities', 'Zoltar', 'Security pools'])
 		expect(sections.at(-1)?.steps.map(step => step.id)).toEqual(['openOracle', 'securityPoolFactory'])
 	})
 })
