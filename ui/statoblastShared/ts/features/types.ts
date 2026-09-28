@@ -217,7 +217,6 @@ type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onCertifyVaultCoverage?: (() => void) | undefined
 	onSetVaultUnderwritingLimit: (factor: string) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void

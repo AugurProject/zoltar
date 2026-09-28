@@ -8,7 +8,7 @@ import * as availabilityCopy from '../../copy/availability.js'
 import { liveMarketFixture, ticketEstimateFor, ticketModelFor } from '../support/liveMarketFixture.js'
 
 const eth = 10n ** 18n
-const shares = 10n ** 36n
+const shares = 10n ** 18n
 
 // One ETH mints one complete set; the pool holds 100 YES and 100 NO.
 const market = liveMarketFixture()
@@ -47,7 +47,7 @@ describe('trade ticket estimate', () => {
 		const estimate = ticketEstimateFor(market, 'exit', '2', { ...balances, invalid: 10n * shares })
 		if (estimate.kind !== 'exit') throw new Error('Expected a sell estimate')
 		expect(estimate.quote.totalLongShares).toBeLessThanOrEqual(2n * shares)
-		expect(estimate.receiveAttoEth).toBe(estimate.quote.completeSetShares / 10n ** 18n)
+		expect(estimate.receiveAttoEth).toBe(estimate.quote.completeSetShares)
 		expect(estimate.minimumAttoEth).toBe((estimate.receiveAttoEth * 9_950n) / 10_000n)
 		expect(estimate.maximumLongShares).toBeLessThanOrEqual(balances.yes)
 		expect(estimate.quote.conditionalYesBpsAfter).toBeLessThan(estimate.quote.conditionalYesBpsBefore)
@@ -56,7 +56,7 @@ describe('trade ticket estimate', () => {
 	test('reports amounts too small to trade instead of an estimate', () => {
 		const expensive = liveMarketFixture({ shareTokenSupplyAttoShares: 1n, settlementCollateralAttoEth: eth })
 		expect(ticketModelFor(expensive, 'entry', '0.000000000000000001')).toMatchObject({ estimate: undefined, estimateProblem: ticketCopy.amountTooSmall })
-		expect(ticketModelFor(market, 'exit', '0.000000000000000000000000000000000001', balances)).toMatchObject({ estimate: undefined, estimateProblem: ticketCopy.amountTooSmall })
+		expect(ticketModelFor(market, 'exit', '0.000000000000000001', balances)).toMatchObject({ estimate: undefined, estimateProblem: ticketCopy.amountTooSmall })
 		expect(ticketModelFor(market, 'entry', '0')).toMatchObject({ estimate: undefined, estimateProblem: undefined })
 	})
 
@@ -74,11 +74,11 @@ describe('trade ticket inputs', () => {
 	test('parses ETH and share amounts at their own precision and starts empty', () => {
 		expect(ticketModelFor(market, 'entry', '')).toMatchObject({ parsedAmount: undefined, amountError: undefined })
 		expect(ticketModelFor(market, 'entry', '0.5').parsedAmount).toBe(5n * 10n ** 17n)
-		expect(ticketModelFor(market, 'exit', '1.5').parsedAmount).toBe(15n * 10n ** 35n)
+		expect(ticketModelFor(market, 'exit', '1.5').parsedAmount).toBe(15n * 10n ** 17n)
 		expect(ticketModelFor(market, 'entry', 'abc').amountError).toBe(ticketCopy.invalidEthAmount)
-		expect(ticketModelFor(market, 'exit', '0.0000000000000000000000000000000000001').amountError).toBe(ticketCopy.invalidShareAmount)
-		expect(formatAmountInput(15n * 10n ** 35n, 36)).toBe('1.5')
-		expect(formatAmountInput(1_000n * shares, 36)).toBe('1000')
+		expect(ticketModelFor(market, 'exit', '0.0000000000000000001').amountError).toBe(ticketCopy.invalidShareAmount)
+		expect(formatAmountInput(15n * 10n ** 17n, 18)).toBe('1.5')
+		expect(formatAmountInput(1_000n * shares, 18)).toBe('1000')
 	})
 
 	test('offers 25%, 50%, and the largest insured sale as shortcuts', () => {
@@ -87,7 +87,7 @@ describe('trade ticket inputs', () => {
 		expect(shortcuts[0]?.value).toBe(balances.yes / 4n)
 		// INVALID (2 shares) bounds the complete sets, so Max is well below the 10-share holding.
 		// Max is trimmed to eight decimals so the field shows a readable amount that can still be sold in full.
-		expect(shortcuts[2]?.value).toBe(sellable === undefined ? undefined : sellable - (sellable % 10n ** 28n))
+		expect(shortcuts[2]?.value).toBe(sellable === undefined ? undefined : sellable - (sellable % 10n ** 10n))
 		expect(sellable).toBeGreaterThan(2n * shares)
 		expect(sellable).toBeLessThan(5n * shares)
 		expect(ticketModelFor(market, 'exit', '', { ...balances, yes: 0n }).shortcuts).toEqual([])

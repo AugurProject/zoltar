@@ -332,7 +332,7 @@ describe('useTradingOperations', () => {
 	})
 
 	test('converts redeem complete-set input to share units before submitting', async () => {
-		const firstMintShareAmount = 10n ** 36n
+		const firstMintShareAmount = 10n ** 18n
 		let submittedRedeemAmount: bigint | undefined
 		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: typeof SECURITY_POOL_ADDRESS, amount: bigint) => {
 			submittedRedeemAmount = amount

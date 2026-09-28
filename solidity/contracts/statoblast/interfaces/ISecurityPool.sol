@@ -182,11 +182,7 @@ interface ISecurityPool {
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external;
 	function setUnderwritingLimit(uint256 limitAttoEth) external;
 	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external;
-	function certifyVaultCoverage(address vault) external;
-	function isVaultCoverageCertified(address vault) external view returns (bool);
-	function getCertifiedUnderwritingLimitAttoEth() external view returns (uint256);
 	function getVaultUnderwritingLimitAttoEth(address vault) external view returns (uint256);
-	function coverageRevision() external view returns (uint256);
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external;
 	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external;
 	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external;

@@ -165,7 +165,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
-		_invalidateCoverage();
 		if (msg.sender != address(escalationGame)) revert('Unauthorized');
 		if (address(repToken) == address(zoltar.genesisReputationToken()))
 			IERC20(address(repToken)).safeApprove(address(zoltar), amountAttoRep);
@@ -300,9 +299,9 @@ contract SecurityPool is SecurityPoolStorage {
 			address(escalationGame) == address(0x0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
 		securityVaults[vault].repBackingUnits -= withdrawBackingUnits;
 		totalRepBackingUnits -= withdrawBackingUnits;
-		_invalidateCoverage();
 		updateRetentionRate();
 		_requireVaultCoverage(totalRepBackingUnits == 0 ? 0 : Math.mulDiv(securityVaults[vault].repBackingUnits, getTotalPoolHeldAttoRep() - withdrawRepAmountAttoRep, totalRepBackingUnits), vaultDisputeStakedAttoRep, securityVaults[vault].underwritingLimitAttoEth, repEthPrice);
+		_requirePoolCoverage(getTotalPoolHeldAttoRep() - withdrawRepAmountAttoRep, _getTotalDisputeStakedRep(), totalUnderwritingLimitAttoEth, repEthPrice);
 		_registerVault(vault);
 		IERC20(address(repToken)).safeTransfer(vault, withdrawRepAmountAttoRep);
 		emit RepWithdrawnFromVault(vault, withdrawRepAmountAttoRep, securityVaults[vault].repBackingUnits, totalRepBackingUnits);
@@ -333,21 +332,9 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
-		return totalUnderwritingLimitAttoEth;
-	}
-
-	function getCertifiedUnderwritingLimitAttoEth() public view returns (uint256) {
-		return
-			certifiedCoverageSnapshot == SecurityPoolUtils.coverageSnapshot(ISecurityPool(payable(address(this))))
-				? certifiedUnderwritingLimitAttoEth
-				: 0;
-	}
-
-	function isVaultCoverageCertified(address vault) external view returns (bool) {
-		// Limit changes invalidate the snapshot; certification only records positive limits.
-		return
-			vaultCoverageCertificateGeneration[vault] == coverageCertificateGeneration &&
-			getCertifiedUnderwritingLimitAttoEth() != 0;
+		if (!priceOracleManagerAndOperatorQueuer.isPriceValid() || address(escalationGame) != address(0)) return 0;
+		uint256 backedCapacityAttoEth = SecurityPoolUtils.calculateBackingSupportedLimitAttoEth(getTotalPoolHeldAttoRep(), priceOracleManagerAndOperatorQueuer.lastPrice(), statoblastSecurityMultiplierBps);
+		return backedCapacityAttoEth >= totalUnderwritingLimitAttoEth ? totalUnderwritingLimitAttoEth : 0;
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) public view returns (uint256) {
@@ -365,10 +352,6 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external onlyForker {
 		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.activateRecoveredCommitment, (vault, commitmentAttoEth)));
-	}
-
-	function certifyVaultCoverage(address vault) external {
-		DelegateCallForwarder.invoke(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.certifyVaultCoverage, (vault)));
 	}
 
 	function vaultBadDebtAttoEth(address vault) external view returns (uint256) {
@@ -424,7 +407,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
 		if (shareTokenSupplyAttoShares == 0) {
 			require(settlementCollateralAttoEth == 0, 'Exchange rate undefined');
-			return amountAttoEth * SecurityPoolUtils.PRICE_PRECISION;
+			return amountAttoEth;
 		}
 		require(settlementCollateralAttoEth > 0, 'Exchange rate undefined');
 		return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth;
@@ -498,7 +481,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function redeemRepFromVault(address vault) external {
-		_invalidateCoverage();
 		require(msg.sender == vault, 'Unauthorized');
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(ISecurityPoolForker(securityPoolForker).getQuestionOutcome(ISecurityPool(payable(address(this)))) != BinaryOutcomes.BinaryOutcome.None, 'Question open');
@@ -547,7 +529,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
-		_invalidateCoverage();
 		if (hasInheritedForkOutcome) revert('Forked');
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0x0)) {
@@ -593,7 +574,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function withdrawFromEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256[] calldata depositIndexes) external {
-		_invalidateCoverage();
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Invalid outcome');
@@ -667,7 +647,6 @@ contract SecurityPool is SecurityPoolStorage {
 
 	function _configureVault(address vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth, bool clearFeeIndexRemainderOnCapacityChange) private {
 		require(vault != address(0x0), 'Zero vault');
-		_invalidateCoverage();
 		securityVaults[vault].repBackingUnits = repBackingUnits;
 		if (
 			clearFeeIndexRemainderOnCapacityChange &&
@@ -706,7 +685,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function setTotalRepBackingUnits(uint256 newDenominator) external onlyForker {
-		_invalidateCoverage();
 		totalRepBackingUnits = newDenominator;
 		emit TotalRepBackingUnitsSet(totalRepBackingUnits);
 	}
@@ -717,7 +695,6 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalUnderwritingLimitAttoEth, uint256 newFeeEligibleUnderwritingLimitAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
-		_invalidateCoverage();
 		// Fee-eligible capacity is a subset of total capacity.
 		if (newFeeEligibleUnderwritingLimitAttoEth > newTotalUnderwritingLimitAttoEth)
 			revert('Fee ownership exceeds capacity');

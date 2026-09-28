@@ -35,7 +35,7 @@ function decodeCachedSecurityPool(value: unknown) {
 		})
 		const minimumSecurityBondDebtAttoEth = read.optional('minimumSecurityBondDebtAttoEth', read.bigint)
 		const minimumVaultRepDepositAttoRep = read.optional('minimumVaultRepDepositAttoRep', read.bigint)
-		const certifiedUnderwritingLimitAttoEth = read.optional('certifiedUnderwritingLimitAttoEth', read.bigint)
+		const mintingCapacityAttoEth = read.optional('mintingCapacityAttoEth', read.bigint)
 		return {
 			currentRetentionRate: read.bigint('currentRetentionRate'),
 			feeEligibleUnderwritingLimitAttoEth: read.bigint('feeEligibleUnderwritingLimitAttoEth'),
@@ -70,7 +70,7 @@ function decodeCachedSecurityPool(value: unknown) {
 			...(feeAccrualState === undefined ? {} : { feeAccrualState }),
 			...(minimumSecurityBondDebtAttoEth === undefined ? {} : { minimumSecurityBondDebtAttoEth }),
 			...(minimumVaultRepDepositAttoRep === undefined ? {} : { minimumVaultRepDepositAttoRep }),
-			...(certifiedUnderwritingLimitAttoEth === undefined ? {} : { certifiedUnderwritingLimitAttoEth }),
+			...(mintingCapacityAttoEth === undefined ? {} : { mintingCapacityAttoEth }),
 		}
 	})
 }
@@ -90,7 +90,7 @@ function getPoolLifecycleState(pool: ListedSecurityPool) {
 	}).lifecycleState
 }
 
-/** Rows show the standing ETH commitment; remaining capacity counts only what can still be minted (zero once escalation starts or the limit is uncertified). */
+/** Rows show the standing ETH commitment; remaining capacity counts only what can still be minted (zero once escalation starts or reported backing capacity is zero or unknown). */
 export function derivePoolBrowseRows(entries: readonly LocalBrowseEntry<ListedSecurityPool>[]): PoolBrowseRow[] {
 	return entries.map(({ data: pool, fetchedAt }) => {
 		return { capacity: pool.totalUnderwritingLimitAttoEth, fetchedAt, lifecycleState: getPoolLifecycleState(pool), pool, remainingCapacity: getRemainingMintCapacity(getPoolMintingCapacityAttoEth(pool), pool.settlementCollateralAttoEth, pool.shareTokenSupplyAttoShares) }

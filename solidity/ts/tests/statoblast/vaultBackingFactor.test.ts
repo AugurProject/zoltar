@@ -6,7 +6,7 @@ import { statoblast_interfaces_ISecurityPool_ISecurityPool, statoblast_OpenOracl
 import { describe, test } from 'bun:test'
 import assert from '../../testSupport/simulator/utils/assert'
 import { useStatoblastVaultAccountingFixture } from './fixture'
-import { certifyVaultCoverage, depositRepToVault, updateVaultFees, createCompleteSet, getSecurityVault, getTotalUnderwritingLimitAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { depositRepToVault, updateVaultFees, createCompleteSet, getSecurityVault, getTotalUnderwritingLimitAttoEth, getShareTokenSupplyAttoShares, redeemCompleteSet } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { approveToken, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
@@ -38,7 +38,6 @@ describe('Vault standing underwriting limit adjustment', () => {
 	const unit = 10n ** 18n
 	const readLimit = async (client = fixture.client) => client.readContract({ address: fixture.securityPoolAddresses.securityPool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultUnderwritingLimitAttoEth', args: [client.account.address] })
 	const mint = async (amount: bigint) => {
-		await certifyVaultCoverage(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.client.account.address)
 		await createCompleteSet(fixture.client, fixture.securityPoolAddresses.securityPool, amount)
 	}
 

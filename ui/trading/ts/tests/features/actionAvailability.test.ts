@@ -4,7 +4,7 @@ import { resolveActionGroupMessage, transactionPendingLabel, transactionStatusTe
 import * as copy from '../../copy/availability.js'
 
 const eth = 10n ** 18n
-const shares = 10n ** 36n
+const shares = 10n ** 18n
 
 const readyLiquidity: LiquidityAvailabilityInputs = {
 	walletConnected: true,

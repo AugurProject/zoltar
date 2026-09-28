@@ -4,7 +4,7 @@ import { getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupp
 import { forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { createCertifiedCompleteSetFixture, getRepToken, getTotalRepBackingUnits, getSecurityVault, getSystemState, backingUnitsToAttoRep, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getRepToken, getTotalRepBackingUnits, getSecurityVault, getSystemState, backingUnitsToAttoRep, depositToEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { claimAuctionProceeds, finalizeTruthAuction, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction, getSecurityPoolForkerForkData } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -56,7 +56,7 @@ describe('Recursive truth-auction ownership regression', () => {
 		await approveAndDepositRepToVault(passiveVault, passiveRep, questionId)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
-		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, PRICE_PRECISION)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, PRICE_PRECISION)
 
 		const initialAttackerVault = await getSecurityVault(client, securityPoolAddresses.securityPool, attacker.account.address)
 		const initialAttackerOwnership = attackerRep * PRICE_PRECISION

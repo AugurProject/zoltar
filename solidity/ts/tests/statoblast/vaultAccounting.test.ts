@@ -227,9 +227,6 @@ describe('Statoblast: vault accounting', () => {
 		for (const vault of [vaultA, vaultB]) {
 			await vault.waitForTransactionReceipt({ hash: await vault.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setUnderwritingLimit', args: [(depositAmount * 3n) / 2n] }) })
 		}
-		for (const vault of [vaultA, vaultB]) {
-			await client.waitForTransactionReceipt({ hash: await client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'certifyVaultCoverage', args: [vault.account.address] }) })
-		}
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 
 		const vaultAState = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultA.account.address)
