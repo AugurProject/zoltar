@@ -36,7 +36,7 @@ function totalValueCaptions(overview: PortfolioOverview) {
 	return captions.length === 0 ? [portfolioCopy.totalValueBasis] : captions
 }
 
-/** Totals across every listed position; profit and loss stay unavailable because entry costs are not recorded per account. */
+/** Current value, position count, and action items across every listed position. */
 export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) {
 	return (
 		<section className='portfolio-summary' aria-label={portfolioCopy.summaryLabel}>
@@ -48,10 +48,6 @@ export function PortfolioSummary({ overview }: { overview: PortfolioOverview }) 
 							{caption}
 						</small>
 					))}
-				</MetricField>
-				<MetricField label={portfolioCopy.profitLoss}>
-					{portfolioCopy.profitLossUnavailable}
-					<small className='payout-caption'>{portfolioCopy.costBasisUnavailableReason}</small>
 				</MetricField>
 				<MetricField label={portfolioCopy.positions}>{overview.positionCount.toString()}</MetricField>
 				<MetricField label={portfolioCopy.actionItemCount}>{overview.actionItems.length === 0 ? portfolioCopy.nothingNeedsAttention : overview.actionItems.length.toString()}</MetricField>
