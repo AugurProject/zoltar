@@ -806,6 +806,16 @@ describe('OpenOracleSection route create view', () => {
 		expect(baseTokenAmountInput.getAttribute('aria-describedby')?.split(' ')[0]).toBe('open-oracle-exact-token1-report-error')
 		expect(getDescriptionTexts(baseTokenAmountInput)).toEqual(['Enter a valid base token amount.', openOracleCopy.initialToken1AmountHelpText])
 		expectPoliteFieldError('Enter a valid base token amount.')
+		await act(() => {
+			fireEvent.input(baseTokenAmountInput, { target: { value: '..' } })
+		})
+		// Editing hides the error again so the live region stays quiet while typing.
+		expect(baseTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.getElementById('open-oracle-exact-token1-report-error')).toBeNull()
+		await act(() => {
+			baseTokenAmountInput.dispatchEvent(new Event('blur'))
+		})
+		expectPoliteFieldError('Enter a valid base token amount.')
 
 		await act(() => {
 			fireEvent.input(baseTokenAmountInput, { target: { value: '1' } })

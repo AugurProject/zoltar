@@ -508,6 +508,14 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			name: 'Withdraw REP',
 		})
 		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000\u00a0REP or less.')
+		const withdrawInput = within(withdrawDialog).getByLabelText('REP Withdraw Amount')
+		await act(() => {
+			withdrawInput.dispatchEvent(new Event('blur'))
+		})
+		// The action guard owns the over-maximum reason; the field does not repeat it.
+		expect(withdrawDialog.querySelector('.field-error')).toBeNull()
+		expect(withdrawDialog.textContent?.includes('Enter at most')).toBe(false)
+		expect(withdrawDialog.textContent?.match(/Reduce the withdrawal/g)).toHaveLength(1)
 	})
 
 	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {

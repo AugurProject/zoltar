@@ -39,7 +39,8 @@ export function VaultDepositAmountField({
 }
 
 export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoRep, onChange, repTokenSymbol, value }: { disabled: boolean; maximumWithdrawableAttoRep: bigint | undefined; onChange: (repWithdrawAmount: string) => void; repTokenSymbol: string; value: string }) {
-	return <AmountField disabled={disabled} label={securityPoolCopy.repWithdrawAmount} fillMax={{ amount: maximumWithdrawableAttoRep }} maximum={maximumWithdrawableAttoRep} onChange={onChange} unit={repTokenSymbol} value={value} />
+	// The withdraw action guard owns the over-maximum reason, so the field only offers Max.
+	return <AmountField disabled={disabled} label={securityPoolCopy.repWithdrawAmount} fillMax={{ amount: maximumWithdrawableAttoRep }} onChange={onChange} unit={repTokenSymbol} value={value} />
 }
 
 export function VaultRepExitActionButton({
