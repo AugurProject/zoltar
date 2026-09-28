@@ -41,11 +41,11 @@ function getClosestSection(heading: HTMLElement | null) {
 }
 
 function getEscalationMetricsSection() {
-	return getClosestSection(within(document.body).getByRole('heading', { name: 'Escalation Metrics' }))
+	return getClosestSection(within(document.body).getByRole('heading', { name: 'Escalation metrics' }))
 }
 
 function getReportOutcomeSection() {
-	return getClosestSection(within(document.body).getByRole('heading', { name: 'Report Outcome' }))
+	return getClosestSection(within(document.body).getByRole('heading', { name: 'Report outcome' }))
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
@@ -386,7 +386,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Reporting Workflow' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting workflow' })).toBeNull()
 		expect(document.body.querySelector('.reporting-workflow-section')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(false)
@@ -445,7 +445,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
-		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Report outcome' })).not.toBeNull()
 	})
 
 	test('keeps the outcome cards unselected when reporting is locked', async () => {
@@ -465,7 +465,7 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
 	})
 
-	test('renders Reporting Not Enabled before market end', async () => {
+	test('renders Reporting not enabled before market end', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -478,16 +478,16 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting not enabled' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByText('Opens In')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Escalation Metrics' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Settle Escalation Deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Escalation metrics' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report outcome' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Settle escalation deposits' })).toBeNull()
 		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 50n))).toBe(true)
 	})
 
-	test('renders Reporting Open when the market has ended but details are not loaded', async () => {
+	test('renders Reporting open when the market has ended but details are not loaded', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -516,8 +516,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Reporting Open' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting not enabled' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting open' })).toBeNull()
 		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 100n))).toBe(true)
 	})
 
@@ -567,7 +567,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 	})
 
-	test('keeps escalation metrics inside Escalation Metrics', async () => {
+	test('keeps escalation metrics inside Escalation metrics', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -623,7 +623,7 @@ describe('ReportingSection', () => {
 		expect(metricsSection.textContent?.includes(formatTimestamp(activationTime))).toBe(true)
 	})
 
-	test('keeps placeholder outcome cards visible inside Report Outcome before reporting details load', async () => {
+	test('keeps placeholder outcome cards visible inside Report outcome before reporting details load', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -1096,7 +1096,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('checkbox')).toBeNull()
 	})
 
-	test('shows the time-left metric inside Escalation Metrics', async () => {
+	test('shows the time-left metric inside Escalation metrics', async () => {
 		const reportingDetails = createReportingDetails()
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails })))
 		cleanupRenderedComponent = renderedComponent.cleanup
