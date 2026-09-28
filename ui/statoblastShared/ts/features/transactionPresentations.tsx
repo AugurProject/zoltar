@@ -5,10 +5,13 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, humanizeTransactionAction, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
+import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
+import type { SecurityVaultFormState } from '../types/app.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
@@ -64,6 +67,7 @@ export function createSecurityPoolCreationWarningPresentation(result: SecurityPo
 }
 
 type SecurityVaultTransactionContext = {
+	repAmountAttoRep?: bigint | undefined
 	repTokenSymbol?: string | undefined
 	securityPoolAddress?: string | undefined
 	universeId?: bigint | undefined
@@ -73,9 +77,19 @@ type SecurityVaultTransactionContext = {
 function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContext | undefined) {
 	if (context === undefined) return undefined
 	return [
+		...(context.repAmountAttoRep === undefined ? [] : [{ label: transactionCopy.amount, value: formatCurrencyBalanceWithUnit(context.repAmountAttoRep, context.repTokenSymbol ?? commonCopy.rep) }]),
 		...(context.securityPoolAddress === undefined || context.securityPoolAddress.trim() === '' ? [] : [{ label: commonCopy.securityPoolAddress, value: <AddressValue address={context.securityPoolAddress} /> }]),
 		...(context.vaultAddress === undefined || context.vaultAddress.trim() === '' ? [] : [{ label: securityPoolCopy.vault, value: <AddressValue address={context.vaultAddress} /> }]),
 	]
+}
+
+/** The REP a vault deposit or withdrawal moves, so its review and result state the amount, not only the addresses. */
+export function getSecurityVaultActionRepAmount(actionName: SecurityVaultActionResult['action'], form: Pick<SecurityVaultFormState, 'depositAmount' | 'repWithdrawAmount'>) {
+	let input: string | undefined
+	if (actionName === 'depositRepToVault') input = form.depositAmount
+	if (actionName === 'queueWithdrawRep') input = form.repWithdrawAmount
+	const amount = input === undefined ? undefined : tryParseRepAmountInput(input)
+	return amount !== undefined && amount > 0n ? amount : undefined
 }
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
@@ -90,6 +104,7 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 	return buildIntent({
 		action: actionName,
 		rows: getSecurityVaultTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'security-vault',
 		submittedTitle: getSecurityVaultActionTitle(actionName, context?.repTokenSymbol),
 		universeId: context?.universeId,
@@ -127,6 +142,7 @@ export function createTradingTransactionIntent(actionName: TradingActionResult['
 	return buildIntent({
 		action: actionName,
 		rows: getTradingTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'trading',
 		submittedTitle: humanizeTransactionAction(actionName),
 		universeId: context?.universeId,
@@ -175,6 +191,7 @@ export function createLiquidationTransactionIntent(context?: LiquidationTransact
 	return buildIntent({
 		action: 'queueLiquidation',
 		rows: getLiquidationTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'security-pools',
 		submittedTitle: transactionCopy.submittingLiquidation,
 		universeId: context?.universeId,
@@ -224,6 +241,7 @@ export function createForkAuctionTransactionIntent(actionName: ForkAuctionAction
 	return buildIntent({
 		action: actionName,
 		rows: getPoolUniverseTransactionRows(context),
+		scope: securityPoolTransactionScope(context?.securityPoolAddress),
 		source: 'fork-auction',
 		submittedTitle: resolvedSubmittedTitle,
 		universeId: context?.universeId,

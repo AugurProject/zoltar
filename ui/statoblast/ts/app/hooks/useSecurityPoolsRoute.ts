@@ -1,5 +1,5 @@
 import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
@@ -11,8 +11,10 @@ import { useSecurityVaultOperations } from '@zoltar/ui-statoblast-shared/feature
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingForm.js'
 import { getCurrentPoolOracleManagerDetails } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
+import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
@@ -109,7 +111,6 @@ export function useSecurityPoolsRoute({
 		zoltarUniverseHasForked,
 	})
 	const {
-		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,
@@ -141,7 +142,6 @@ export function useSecurityPoolsRoute({
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
-		hasLoadedSecurityPoolPage,
 		hasLoadedUniverseDirectoryPools,
 		liquidationDebtEthAmount,
 		maximumLiquidationDebtAttoEth,
@@ -179,7 +179,6 @@ export function useSecurityPoolsRoute({
 		securityPoolOverviewError,
 		securityPoolLiquidationError,
 		securityPoolOverviewResult,
-		securityPoolBrowseCount,
 		securityPoolPage,
 		securityPools,
 		securityPoolUniverseDirectoryError,
@@ -194,6 +193,8 @@ export function useSecurityPoolsRoute({
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
 	useBlockRefresh(() => void refreshSecurityPools(), route === 'security-pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const openedPoolSummary = useMemo(() => (selectedPool === undefined ? undefined : toCachedSecurityPool(selectedPool)), [selectedPool])
+	useRememberOpenedEntity('statoblast', 'pool', securityPoolDownloadStore, selectedPool?.securityPoolAddress, openedPoolSummary)
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
@@ -230,21 +231,15 @@ export function useSecurityPoolsRoute({
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
-	const uiRepPerEthPrice = resolveUiRepPerEthPrice({
-		currentTimestamp,
-		openOraclePrice: selectedPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice,
-		openOracleSettlementTimestamp: selectedPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp,
-		openOracleValid: selectedPoolOracleManagerDetails?.isPriceValid,
-		priceOracle: uiPriceOracle,
+	const selectedPoolRepPrice = resolveRepPrice({
+		now: currentTimestamp,
+		oracleManager: selectedPoolOracleManagerDetails === undefined ? undefined : { isPriceValid: selectedPoolOracleManagerDetails.isPriceValid, price: selectedPoolOracleManagerDetails.lastPrice, settlementTimestamp: selectedPoolOracleManagerDetails.lastSettlementTimestamp },
+		poolOracle: selectedPool === undefined ? undefined : { price: selectedPool.lastOraclePrice, settlementTimestamp: selectedPool.lastOracleSettlementTimestamp },
+		setting: uiPriceOracle,
 		uniswapPrice: repPerEthPrice,
 	})
-	const uiUsesOpenOraclePrice = isUiOpenOraclePriceUsed({
-		currentTimestamp,
-		openOraclePrice: selectedPoolOracleManagerDetails?.lastPrice ?? selectedPool?.lastOraclePrice,
-		openOracleSettlementTimestamp: selectedPoolOracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp,
-		openOracleValid: selectedPoolOracleManagerDetails?.isPriceValid,
-		priceOracle: uiPriceOracle,
-	})
+	const uiRepPerEthPrice = selectedPoolRepPrice.price
+	const uiUsesOpenOraclePrice = selectedPoolRepPrice.source === 'open-oracle'
 	const uiRepPerEthSource = (() => {
 		if (uiRepPerEthPrice === undefined) return undefined
 		if (uiUsesOpenOraclePrice) return 'open-oracle' as const
@@ -364,21 +359,18 @@ export function useSecurityPoolsRoute({
 			activeUniverseId,
 			currentTimestamp,
 			environmentRefreshKey: activeEnvironmentNonce,
-			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
 			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
 			onRefreshSecurityPoolPage: () => void refreshBrowseSecurityPoolPage(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
-			securityPoolBrowseCount,
 			securityPoolPage,
 			securityPoolPageFreshness,
 			securityPoolOverviewError,
 			securityPools,
-			repPerEthPrice,
-			uiPriceOracle,
 		},
 		securityPools,
 		securityPoolUniverseDirectoryError,
+		selectedPoolRepPrice,
 		universeDirectoryPools,
 		workflow: {
 			accountState,
@@ -502,7 +494,6 @@ export function useSecurityPoolsRoute({
 				accountState,
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
-				onCertifyVaultCoverage: () => void certifyCoverage(),
 				onSetVaultUnderwritingLimit: factor => void adjustBackingFactor(factor),
 				onDepositRepToVault: () => void depositRepToVault(),
 				onLoadSecurityVault: (vaultAddress?: string) => {

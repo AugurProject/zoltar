@@ -66,6 +66,10 @@
 			"bun": "./ts/features/questions/lib/questionForm.ts",
 			"default": "./js/features/questions/lib/questionForm.js"
 		},
+		"./features/questions/lib/questionTimeZone.js": {
+			"bun": "./ts/features/questions/lib/questionTimeZone.ts",
+			"default": "./js/features/questions/lib/questionTimeZone.js"
+		},
 		"./features/types.js": {
 			"bun": "./ts/features/types.ts",
 			"default": "./js/features/types.js"
@@ -94,6 +98,10 @@
 			"bun": "./ts/features/universes/hooks/useZoltarUniverse.ts",
 			"default": "./js/features/universes/hooks/useZoltarUniverse.js"
 		},
+		"./features/universes/lib/questionRegistry.js": {
+			"bun": "./ts/features/universes/lib/questionRegistry.ts",
+			"default": "./js/features/universes/lib/questionRegistry.js"
+		},
 		"./features/universes/lib/zoltarMigrationGuards.js": {
 			"bun": "./ts/features/universes/lib/zoltarMigrationGuards.ts",
 			"default": "./js/features/universes/lib/zoltarMigrationGuards.js"
@@ -105,6 +113,10 @@
 		"./lib/routing.js": {
 			"bun": "./ts/lib/routing.ts",
 			"default": "./js/lib/routing.js"
+		},
+		"./lib/questionBrowse.js": {
+			"bun": "./ts/lib/questionBrowse.ts",
+			"default": "./js/lib/questionBrowse.js"
 		},
 		"./protocol/activeProtocolAddresses.js": {
 			"bun": "./ts/protocol/activeProtocolAddresses.ts",

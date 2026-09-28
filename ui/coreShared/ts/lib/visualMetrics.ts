@@ -18,13 +18,6 @@ export function getVisualRatio({ value, maxValue }: { value: bigint | undefined;
 	return bigintToSafeNumber(scaledRatio, 'Visual ratio') / 1_000_000
 }
 
-export function getToneRatioThreshold({ ratio, warningThreshold = 0.4, successThreshold = 0.75 }: { ratio: number | undefined; warningThreshold?: number; successThreshold?: number }) {
-	if (ratio === undefined) return 'muted'
-	if (ratio >= successThreshold) return 'success'
-	if (ratio >= warningThreshold) return 'warning'
-	return 'danger'
-}
-
 export function takeTopRankedItems<TItem extends { value?: bigint }>({ items, limit }: { items: readonly TItem[]; limit: number }) {
 	return [...items]
 		.sort((left, right) => {

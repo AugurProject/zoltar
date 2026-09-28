@@ -1,7 +1,6 @@
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
@@ -21,23 +20,17 @@ export function VaultBackingFactorForm({
 	increaseBlocker,
 	busy,
 	pending,
-	repPerEthPrice,
 	executionRepPerEthPrice,
 	poolSecurityMultiplierBps,
-	onCertify,
-	certificatePending,
 	onAdjust,
 }: {
 	details: SecurityVaultDetails | undefined
 	executionRepPerEthPrice?: bigint | undefined
-	repPerEthPrice?: bigint | undefined
 	poolSecurityMultiplierBps?: bigint | undefined
 	blocker: string | undefined
 	increaseBlocker?: string | undefined
 	busy: boolean
 	pending: boolean
-	onCertify?: (() => void) | undefined
-	certificatePending: boolean
 	onAdjust: (limit: string) => void
 }) {
 	const [limitInput, setLimit] = useState<string | undefined>(undefined)
@@ -46,7 +39,6 @@ export function VaultBackingFactorForm({
 	const limit = limitInput ?? (currentLimit !== undefined ? formatCurrencyInputBalance(currentLimit, 18) : '0')
 	const errorId = useId()
 	const [errorRevealed, setErrorRevealed] = useState(false)
-	const sharedReasonId = useId()
 	let nextLimit: bigint | undefined
 	let limitAttoEth: bigint | undefined
 	let error: string | undefined
@@ -58,45 +50,26 @@ export function VaultBackingFactorForm({
 	}
 	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
-	let certificationBlocker = blocker ?? increaseBlocker
-	if (certificationBlocker === undefined && executionRepPerEthPrice === undefined) certificationBlocker = securityPoolCopy.certificationNeedsPrice
-	if (certificationBlocker === undefined && (details?.underwritingLimitAttoEth ?? 0n) === 0n) certificationBlocker = securityPoolCopy.certificationNeedsLimit
-	const sharedReason = certificationBlocker === reason ? reason : undefined
 	const fieldErrorShown = prerequisite === undefined && errorRevealed && error !== undefined
-	let limitReasonId: string | undefined = sharedReason === undefined ? undefined : sharedReasonId
-	if (sharedReason === undefined && fieldErrorShown) limitReasonId = errorId
 	return (
 		<>
 			<AmountField allowZero disabled={busy} error={error} errorId={errorId} errorRevealed={errorRevealed} hint={securityPoolCopy.vaultBackingFactorHelp} label={securityPoolCopy.commitmentLimit} onChange={setLimit} onErrorRevealedChange={setErrorRevealed} unit={commonCopy.eth} value={limit} />
 			<MetricGrid>
 				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>
 				<MetricField label={securityPoolCopy.currentCapacity}>
-					<VaultExposureValue capacity={details?.underwritingLimitAttoEth} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
+					<VaultExposureValue capacity={details?.underwritingLimitAttoEth} />
 				</MetricField>
 				<MetricField label={securityPoolCopy.resultingCapacity}>
-					<VaultExposureValue capacity={nextLimit} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
+					<VaultExposureValue capacity={nextLimit} />
 				</MetricField>
 			</MetricGrid>
-			{sharedReason === undefined ? undefined : <InlineHint id={sharedReasonId} message={sharedReason} />}
 			<div className='actions'>
-				<TransactionActionButton
-					idleLabel={securityPoolCopy.certifyCoverage}
-					pendingLabel={securityPoolCopy.certifyingCoverage}
-					pending={certificatePending}
-					showDisabledReason={sharedReason === undefined}
-					disabledReasonElementId={sharedReason === undefined ? undefined : sharedReasonId}
-					onClick={() => onCertify?.()}
-					availability={{
-						disabled: busy || onCertify === undefined || certificationBlocker !== undefined,
-						reason: certificationBlocker,
-					}}
-				/>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
 					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
 					pending={pending}
-					showDisabledReason={sharedReason === undefined && !fieldErrorShown}
-					disabledReasonElementId={limitReasonId}
+					showDisabledReason={!fieldErrorShown}
+					disabledReasonElementId={fieldErrorShown ? errorId : undefined}
 					onClick={() => onAdjust(limit)}
 					availability={{ disabled: busy || reason !== undefined, reason }}
 				/>

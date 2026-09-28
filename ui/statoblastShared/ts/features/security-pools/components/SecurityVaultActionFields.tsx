@@ -11,6 +11,8 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
@@ -126,7 +128,7 @@ export function VaultDepositApprovalControl({
 				availability={{ disabled: !depositRepToVaultEnabled || !canUseLoadedVaultActions || !hasPositiveDepositAmount || depositGuardMessage !== undefined, reason: canUseLoadedVaultActions ? depositActionGuardMessage : undefined }}
 			/>
 			{onCancel === undefined ? undefined : (
-				<button className='secondary' type='button' onClick={onCancel}>
+				<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={onCancel}>
 					{commonCopy.cancel}
 				</button>
 			)}
@@ -183,7 +185,7 @@ export function VaultActionLaunchers({
 					pendingLabel={commonCopy.opening}
 					onClick={() => action.onAction?.()}
 					tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
-					availability={{ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }}
+					availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
 				/>
 				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
 			</div>

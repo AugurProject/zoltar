@@ -59,7 +59,7 @@ export function useLiveTradingController({
 	const visiblePortfolioEntries = portfolioEntries.filter(entry => entry.market.universeId.toString() === selectedUniverseId)
 	// Only addressed routes work on a market; list routes show candidates until an address is opened.
 	const selected = routePool === undefined ? undefined : visibleMarkets.find(market => market.pool.toLowerCase() === routePool.toLowerCase())
-	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, walletClient })
+	const transactionWorkflow = useTransactionWorkflow({ onWorkflowLockChange, account, chainId: configuration?.chainId, market: selected?.pool, marketTitle: selected?.title, walletClient })
 	const { mode, side, amount, acknowledgedImpactBps, dispatchWorkflow, state, positionHash, message, positionReceiptWarning, positionWorkflowLockedRef, workflowLocked, updateLiquidityWorkflowLock } = transactionWorkflow
 	const nowSeconds = useQuestionClock(configuration, services)
 	const listedMarkets = visibleMarkets.filter(market => (tradingListKindFor(route) === 'security-pools' ? market.pair === undefined && market.loadError === undefined && marketAcceptsNewRisk(market, nowSeconds) : market.pair !== undefined || market.loadError !== undefined))
@@ -67,8 +67,10 @@ export function useLiveTradingController({
 	const selectedBalances = balanceState === 'ready' ? liveBalancesForMarket(balances, selected) : undefined
 	let selectedBalanceState = balanceState
 	if (balanceState !== 'error' && balances !== undefined && selectedBalances === undefined) selectedBalanceState = account === undefined ? 'disconnected' : 'loading'
+	const workflowMarket = transactionWorkflow.transaction.workflowState.kind === 'idle' ? undefined : transactionWorkflow.transaction.workflowState.context?.market
+	const otherMarketWorkflow = workflowMarket !== undefined && selected !== undefined && workflowMarket.toLowerCase() !== selected.pool.toLowerCase()
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
-	const { refresh, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
+	const { refresh, refreshCurrentRoute, refreshFromControl, refreshLocked, loadMarketPage } = useMarketDiscoveryController({
 		route,
 		configuration,
 		configurationError,
@@ -157,7 +159,8 @@ export function useLiveTradingController({
 		services,
 		createGuardedWalletWrite,
 		executeWithCurrentWalletContext,
-		refresh,
+		// A trade can confirm after navigation; its refresh must load the route now on screen, not the one it started on.
+		refresh: refreshCurrentRoute,
 		marketPageStart: marketPage.start,
 	})
 
@@ -197,6 +200,7 @@ export function useLiveTradingController({
 			nowSeconds,
 			refresh,
 			refreshFromControl,
+			refreshLocked,
 			loadMarketPage,
 		},
 		position: {
@@ -204,10 +208,11 @@ export function useLiveTradingController({
 			side,
 			amount,
 			acknowledgedImpactBps,
-			state,
-			positionHash,
-			message,
-			positionReceiptWarning,
+			// A trade still running on another market stays in the activity list; this market's ticket shows no status of it.
+			state: otherMarketWorkflow ? 'idle' : state,
+			positionHash: otherMarketWorkflow ? undefined : positionHash,
+			message: otherMarketWorkflow ? undefined : message,
+			positionReceiptWarning: otherMarketWorkflow ? undefined : positionReceiptWarning,
 			...positionActions,
 		},
 		workflow: {

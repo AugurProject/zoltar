@@ -129,7 +129,7 @@ function TransactionFeedbackOperationModalHarness() {
 		<GlobalTransactionPresentationProvider transaction={transaction}>
 			<OperationModal
 				context={[
-					{ identityKey: 'security-pool', label: 'Security Pool Address', value: '0xpool' },
+					{ identityKey: 'security-pool', label: 'Security pool address', value: '0xpool' },
 					{ identityKey: 'outcome', label: 'Outcome', value: 'Yes' },
 				]}
 				isOpen={isOpen}
@@ -144,7 +144,7 @@ function TransactionFeedbackOperationModalHarness() {
 							dismissKey: 'transaction-request-2',
 							rows: [
 								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
-								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
+								{ identityKey: 'outcome', label: 'Share outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
 							technicalRows: [{ label: 'Function', value: 'approve' }],
@@ -163,7 +163,7 @@ function TransactionFeedbackOperationModalHarness() {
 							dismissKey: 'transaction-request-2',
 							rows: [
 								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
-								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
+								{ identityKey: 'outcome', label: 'Share outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
 							technicalRows: [{ label: 'Function', value: 'approve' }],
@@ -217,7 +217,7 @@ function ExistingTransactionLifecycleOperationModalHarness() {
 				<button type='button' onClick={() => setTransactionState(state => markTransactionSubmitted(state, existingTransactionHash))}>
 					Submit existing transaction
 				</button>
-				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, 'The existing transaction failed.'))}>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, { kind: 'error', message: 'The existing transaction failed.' }))}>
 					Fail existing transaction
 				</button>
 				<button
@@ -241,7 +241,7 @@ function ExistingTransactionLifecycleOperationModalHarness() {
 				<button type='button' onClick={() => setTransactionState(state => markTransactionSubmitted(state, newTransactionHash))}>
 					Submit new transaction
 				</button>
-				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, 'The new transaction failed.'))}>
+				<button type='button' onClick={() => setTransactionState(state => markTransactionFailed(state, { kind: 'error', message: 'The new transaction failed.' }))}>
 					Fail new transaction
 				</button>
 				<button
@@ -466,7 +466,7 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
+		expect(dialog.textContent?.includes('Security pool address')).toBe(false)
 		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete prerequisite' }))
@@ -474,7 +474,7 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
+		expect(dialog.textContent?.includes('Security pool address')).toBe(false)
 		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {

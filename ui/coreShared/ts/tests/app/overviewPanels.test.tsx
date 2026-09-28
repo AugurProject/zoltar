@@ -26,7 +26,7 @@ describe('OverviewPanels', () => {
 	function getAccountMenuTrigger() {
 		const trigger = document.body.querySelector('.account-menu > .account-menu-trigger')
 		if (!(trigger instanceof HTMLElement)) throw new Error('Expected the account menu trigger')
-		expect(trigger.getAttribute('aria-label')).toBe('Account Menu 0x123456…567890')
+		expect(trigger.getAttribute('aria-label')).toBe('Account menu 0x123456…567890')
 		return trigger
 	}
 
@@ -248,7 +248,7 @@ describe('OverviewPanels', () => {
 			accountState: { ...connectedAccount, chainId: '0x2105' },
 		})
 
-		expect(documentQueries.getByText('Wrong Network (Base)')).not.toBeNull()
+		expect(documentQueries.getByText('Wrong network (Base)')).not.toBeNull()
 		expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
 
 		await cleanupRenderedComponent?.()
@@ -257,7 +257,7 @@ describe('OverviewPanels', () => {
 			accountState: { ...connectedAccount, chainId: '0xcc6b' },
 		})
 
-		expect(documentQueries.getByText('Wrong Network (52331)')).not.toBeNull()
+		expect(documentQueries.getByText('Wrong network (52331)')).not.toBeNull()
 		openAccountMenu()
 		expect(document.body.querySelector('.account-menu-network dt')?.textContent).toBe('Network')
 		expect(document.body.querySelector('.account-menu-metrics [data-wallet-asset="ETH"]')?.textContent).toBe('—')
@@ -430,9 +430,9 @@ describe('OverviewPanels', () => {
 				},
 			})
 
-			expect(documentQueries.getByText('Wrong Network (31337)')).not.toBeNull()
+			expect(documentQueries.getByText('Wrong network (31337)')).not.toBeNull()
 			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).not.toBeNull()
-			const switchButton = documentQueries.getByRole('button', { name: 'Switch to Browser Simulation' })
+			const switchButton = documentQueries.getByRole('button', { name: 'Switch to Browser simulation' })
 			expect(switchButton.closest('.header-toolbar-controls')).not.toBeNull()
 			fireEvent.click(switchButton)
 			expect(onSwitchNetwork).toHaveBeenCalledTimes(1)
@@ -460,7 +460,7 @@ describe('OverviewPanels', () => {
 			expect(documentQueries.queryByText(/Wrong Network/)).toBeNull()
 			expect(document.body.querySelector('.account-menu-trigger .wallet-chip.is-danger')).toBeNull()
 			openAccountMenu()
-			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser Simulation' })).toBeNull()
+			expect(documentQueries.queryByRole('button', { name: 'Switch to Browser simulation' })).toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Disconnect' })).toBeNull()
 			expect(document.body.querySelector('.account-menu-network')?.textContent).toContain('12')
 		} finally {

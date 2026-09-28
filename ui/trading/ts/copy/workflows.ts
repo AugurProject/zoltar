@@ -37,3 +37,6 @@ export function actionConfirmedOnchain(action: string) {
 export function revalidatingAfterReceipt(status: string) {
 	return `${status} · ${refreshingWalletBalances}`
 }
+export const formatTradeActivity = (market: string) => `Trade · ${market}`
+export const formatLiquidityActivity = (market: string) => `Liquidity · ${market}`
+export const formatSettlementActivity = (market: string) => `Settlement · ${market}`

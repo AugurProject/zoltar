@@ -349,7 +349,7 @@
 	padding: 0.75rem 0.8rem 0;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.simulation-banner-stats,
 	.simulation-delay-grid {
 		grid-template-columns: 1fr;

@@ -46,7 +46,7 @@ const sepoliaChain = defineChain({
 
 const simulationChain = defineChain({
 	id: 1337,
-	name: 'Browser Simulation',
+	name: 'Browser simulation',
 	nativeCurrency: {
 		decimals: 18,
 		name: 'Ether',
@@ -62,7 +62,7 @@ const simulationChain = defineChain({
 export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	chain: mainnet,
 	chainIdHex: '0x1',
-	displayName: 'Ethereum Mainnet',
+	displayName: 'Ethereum mainnet',
 	genesisRepTokenAddress: '0x221657776846890989a759ba2973e427dff5c9bb',
 	id: 'mainnet',
 	isSupportedAppChain: true,
@@ -135,7 +135,7 @@ export function createSimulationProfile({ genesisRepTokenAddress, wethAddress }:
 	return {
 		chain: simulationChain,
 		chainIdHex: '0x539',
-		displayName: 'Browser Simulation',
+		displayName: 'Browser simulation',
 		genesisRepTokenAddress,
 		id: 'simulation',
 		isSupportedAppChain: true,

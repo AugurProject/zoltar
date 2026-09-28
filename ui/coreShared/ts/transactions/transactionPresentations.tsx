@@ -12,13 +12,16 @@ export type PoolUniverseTransactionContext = {
 	universeId?: bigint | undefined
 }
 
+/** Turns a camelCase contract action into a sentence-case title that keeps token symbols and product names. */
 export function humanizeTransactionAction(action: string) {
 	return action
 		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.toLowerCase()
 		.replace(/^./, value => value.toUpperCase())
-		.replaceAll(/\bRep\b/g, commonCopy.rep)
-		.replaceAll(/\bEth\b/g, commonCopy.eth)
-		.replaceAll(/\bWeth\b/g, commonCopy.weth)
+		.replaceAll(/\brep\b/gi, commonCopy.rep)
+		.replaceAll(/\beth\b/gi, commonCopy.eth)
+		.replaceAll(/\bweth\b/gi, commonCopy.weth)
+		.replaceAll(/\bzoltar\b/gi, 'Zoltar')
 }
 
 export function getPoolUniverseTransactionRows(context: PoolUniverseTransactionContext | undefined): GlobalTransactionRow[] | undefined {
@@ -84,6 +87,7 @@ export function buildIntent({
 	action,
 	failedTitle,
 	rows,
+	scope,
 	source,
 	submittedDetail,
 	submittedTitle,
@@ -92,6 +96,7 @@ export function buildIntent({
 	action: string
 	failedTitle?: TransactionIntent['failedTitle']
 	rows?: GlobalTransactionRow[] | undefined
+	scope?: TransactionIntent['scope']
 	source: string
 	submittedDetail?: TransactionIntent['submittedDetail']
 	submittedTitle: TransactionIntent['submittedTitle']
@@ -101,6 +106,7 @@ export function buildIntent({
 		action,
 		...(failedTitle === undefined ? {} : { failedTitle }),
 		...(rows === undefined ? {} : { rows }),
+		...(scope === undefined || scope.length === 0 ? {} : { scope }),
 		source,
 		...(submittedDetail === undefined ? {} : { submittedDetail }),
 		submittedTitle,

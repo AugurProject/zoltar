@@ -49,7 +49,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '9237c39fea79f15823f1b7e696d2ec801f80ee19cb7562d58c8c8cf14883a9ca'
+export const expectedProductionSoliditySourceFingerprint = 'f59fe8d895f71895cf78e078a28ca285e2a70365d4f96c500749f35955d53502'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -262,7 +262,7 @@ export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-export const referencedEventAbiFingerprint = 'e817514f60425182aae48fdd50579678062a013b39c24a679447ca1ab5b1f759'
+export const referencedEventAbiFingerprint = '94be605112d124dcf4670e6b61b005d48db3d018da32d82fd6e006ab4476b7a6'
 
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -352,7 +352,6 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		configureFinalizedAuctionVault: ['external(address,uint256,uint256,uint256,uint256,uint256)'],
 		configureVault: ['external(address,uint256,uint256,uint256,uint256,uint256)'],
 		setUnderwritingLimit: ['external(uint256)'],
-		certifyVaultCoverage: ['external(address)'],
 		activateRecoveredCommitment: ['external(address,uint256)'],
 		createCompleteSet: ['external()'],
 		depositRepToVault: ['external(uint256,uint256)'],
@@ -435,7 +434,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'f9a9beff48fc7d1516b4db58430627a2be805c631b2328a4a8c84fab48a1689f',
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
-	'solidity/contracts/statoblast/SecurityPool.sol': 'ed2d2f9059ae96082da0c643aa23ba99051568611d1ad1cb419909068a1e5441',
+	'solidity/contracts/statoblast/SecurityPool.sol': 'd4a3581d8b6cfe40a5a50026237d0967ef28e9239f5f79cb56270a7061170e54',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'b885410984916de3e66b38b14532f58e495190f140342045780fba91c0cab6ab',
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',

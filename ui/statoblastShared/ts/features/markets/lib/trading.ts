@@ -2,7 +2,7 @@ import * as tradingCopy from '../../../copy/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { formatAdditionalCurrencyBalance, formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
@@ -21,8 +21,9 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 	return settlementCollateralAttoEth === 0n && shareTokenSupplyAttoShares !== 0n
 }
 
-export function calculateMintingCapacityAttoEth(underwritingLimitAttoEth: bigint | undefined, _repPerEthPrice: bigint | undefined, _statoblastSecurityMultiplierBps: bigint | undefined) {
-	return underwritingLimitAttoEth
+/** Use contract-reported backing capacity; unknown capacity or an escalation game keeps minting closed. */
+export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
+	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
 }
 
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
@@ -112,11 +113,6 @@ function getMaxRedeemableCompleteSets(shareBalances: TradingShareBalances | unde
 	return shareBalances.noAttoShares
 }
 
-function formatCompleteSetAmount(value: bigint) {
-	const formattedValue = formatCurrencyBalance(value)
-	return `${formattedValue} complete ${formattedValue === '1' ? 'set' : 'sets'}`
-}
-
 function divideRoundedUp(numerator: bigint, denominator: bigint) {
 	if (denominator <= 0n) throw new RangeError('Denominator must be greater than zero')
 	return (numerator + denominator - 1n) / denominator
@@ -143,7 +139,7 @@ export function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bi
 
 export function convertMintSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
 	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
-	if (shareTokenSupplyAttoShares === 0n) return settlementCollateralAttoEth === 0n ? amountAttoEth * PRICE_PRECISION : undefined
+	if (shareTokenSupplyAttoShares === 0n) return settlementCollateralAttoEth === 0n ? amountAttoEth : undefined
 	if (settlementCollateralAttoEth === 0n) return undefined
 	return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth
 }
@@ -290,7 +286,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	if (redeemAmountAttoShares === undefined) return 'Redeeming is unavailable because this pool has complete-set shares but no collateral.'
 	if (redeemAmountAttoShares > maxRedeemableCompleteSetsAttoShares) {
 		const maximumRedeemableAmountAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableCompleteSetsAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
-		return `Max redeemable amount is ${formatCompleteSetAmount(maximumRedeemableAmountAttoEth)}.`
+		return `Max redeemable amount is ${formatCurrencyBalanceWithUnit(maximumRedeemableAmountAttoEth, 'ETH')}.`
 	}
 	return undefined
 }

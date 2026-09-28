@@ -6,14 +6,20 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
+import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
+import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { VaultMetricGrid } from '@zoltar/ui-statoblast-shared/features/security-pools/components/VaultMetricGrid.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { ForkAuctionRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
-import { h, render } from 'preact'
+import { h } from 'preact'
 import { act } from 'preact/test-utils'
 installTestRouting()
 
@@ -295,14 +301,11 @@ function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides 
 	return {
 		accountState,
 		activeUniverseId: 1n,
-		hasLoadedSecurityPoolPage: securityPoolPage !== undefined,
 		loadingSecurityPoolPage: false,
 		onLoadSecurityPoolPage: () => undefined,
-		repPerEthPrice: undefined,
 		securityPoolOverviewError: undefined,
 		...overrides,
 		environmentRefreshKey,
-		securityPoolBrowseCount: securityPoolPage?.poolCount,
 		securityPoolPage,
 		securityPools,
 	}
@@ -354,6 +357,10 @@ void describe('SecurityPoolsSection', () => {
 		afterTest: async () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
+			resetLocalEntityStoreForTesting()
+		},
+		beforeTest: () => {
+			resetLocalEntityStoreForTesting()
 		},
 	})
 
@@ -368,7 +375,7 @@ void describe('SecurityPoolsSection', () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, props))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const page = within(document.body)
-		const input = page.getByRole('textbox', { name: 'Security Pool Address' })
+		const input = page.getByRole('textbox', { name: 'Security pool address' })
 		expect(calls).toEqual([])
 		const form = input.closest('form')
 		if (form === null) throw new Error('Expected the pool address form')
@@ -392,7 +399,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('tab', { name: 'Browse' })).toBeNull()
-		expect(documentQueries.queryByRole('tab', { name: 'Create Pool' })).toBeNull()
+		expect(documentQueries.queryByRole('tab', { name: 'Create pool' })).toBeNull()
 		expect(documentQueries.queryByRole('tab', { name: 'Manage Pool' })).toBeNull()
 		expect(documentQueries.queryByText('Mode')).toBeNull()
 		expect(document.body.querySelector('.route-summary-strip')).toBeNull()
@@ -404,39 +411,25 @@ void describe('SecurityPoolsSection', () => {
 		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
 	})
 
-	void test('auto-loads pool browse data once when opening the browse view without loaded pools', async () => {
+	void test('opens the browse view from local favorites without scanning the chain', async () => {
 		const calls: string[] = []
-		const initialProps = createSecurityPoolsSectionProps({
-			overview: createOverviewProps({
-				hasLoadedSecurityPoolPage: false,
-				loadingSecurityPoolPage: false,
-				onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-					calls.push(`${pageIndex}:${pageSize}`)
-				},
-			}),
-		})
-
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, initialProps))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(calls).toEqual(['0:6'])
-
-		await act(() => {
-			render(
-				h(SecurityPoolsSection, {
-					...initialProps,
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SecurityPoolsSection,
+				createSecurityPoolsSectionProps({
 					overview: createOverviewProps({
-						hasLoadedSecurityPoolPage: false,
 						loadingSecurityPoolPage: false,
 						onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-							calls.push(`rerender:${pageIndex}:${pageSize}`)
+							calls.push(`${pageIndex}:${pageSize}`)
 						},
 					}),
 				}),
-				renderedComponent.container,
-			)
-		})
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(calls).toEqual(['0:6'])
+		expect(calls).toEqual([])
+		expect(within(document.body).getByRole('button', { name: 'Discover pools' })).not.toBeNull()
 	})
 
 	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {
@@ -516,13 +509,13 @@ void describe('SecurityPoolsSection', () => {
 	void test('renders one route heading in create and empty pool page modes', async () => {
 		const createRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'create' })))
 		cleanupRenderedComponent = createRender.cleanup
-		expect(within(document.body).getAllByRole('heading', { name: 'Create Pool' })).toHaveLength(1)
+		expect(within(document.body).getAllByRole('heading', { name: 'Create pool' })).toHaveLength(1)
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined
 
 		const manageRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'operate' })))
 		cleanupRenderedComponent = manageRender.cleanup
-		expect(within(document.body).getAllByRole('heading', { name: 'Security Pool' })).toHaveLength(1)
+		expect(within(document.body).getAllByRole('heading', { name: 'Security pool' })).toHaveLength(1)
 	})
 
 	void test('keeps the route summary hidden even when the selected pool is resolved in operate mode', async () => {
@@ -551,13 +544,27 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		expect(documentQueries.queryByRole('textbox', { name: 'Security Pool Address' }) !== null).toBe(true)
+		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
 		expect(within(objectHeader).queryByText('Pool-held REP')).toBeNull()
 		expect(document.body.querySelector('.pool-reference-details')?.textContent).toContain('Pool-held REP')
+	})
+
+	void test('labels vault health with the one resolved REP price', async () => {
+		const selectedPoolRepPrice = resolveRepPrice({ now: 1n, setting: 'uniswap', uniswapPrice: 10n ** 18n })
+		const renderedComponent = await renderIntoDocument(
+			h(
+				SelectedPoolRepPriceContext.Provider,
+				{ value: selectedPoolRepPrice },
+				h(VaultMetricGrid, { claimableFeesAttoEth: 0n, isCurrentlyHealthy: true, repPerEthPrice: selectedPoolRepPrice.price, repPerEthSource: undefined, repPerEthSourceUrl: undefined, selectedPoolStatoblastSecurityMultiplierBps: 20_000n, underwritingLimitAttoEth: 10n ** 18n, vaultAttoRepBacking: 10n ** 18n }),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(document.body.querySelector('.vault-health-status .rep-price-status')?.textContent).toBe('via Uniswap · live')
+		expect(document.body.querySelector('.vault-detail-hero-primary .rep-price-status')).toBeNull()
 	})
 
 	void test('keeps the route summary hidden in operate mode until the selected pool resolves', async () => {
@@ -592,7 +599,7 @@ void describe('SecurityPoolsSection', () => {
 
 		const metricLabels = Array.from(document.body.querySelectorAll('.metric-label')).map(element => element.textContent?.trim() ?? '')
 		expect(metricLabels.includes('Manager')).toBe(false)
-		expect(metricLabels.includes('Truth Auction')).toBe(false)
+		expect(metricLabels.includes('Truth auction')).toBe(false)
 	})
 
 	void test('filters the browse registry by search text and the derived ended state', async () => {
@@ -610,6 +617,12 @@ void describe('SecurityPoolsSection', () => {
 			securityPoolAddress: '0x0000000000000000000000000000000000000002',
 			systemState: 'operational',
 		})
+		const scope = getLocalEntityScope('statoblast', 'pool')
+		securityPoolDownloadStore.record(
+			scope,
+			[operationalPool, endedPool].map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress })),
+		)
+		for (const pool of [operationalPool, endedPool]) setEntityFavorite(scope, pool.securityPoolAddress, true)
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolsSection,
@@ -637,7 +650,7 @@ void describe('SecurityPoolsSection', () => {
 			searchInput.dispatchEvent(new window.Event('input', { bubbles: true }))
 		})
 
-		const systemStateSelect = documentQueries.getByLabelText('System State')
+		const systemStateSelect = documentQueries.getByLabelText('System state')
 		if (!(systemStateSelect instanceof window.HTMLSelectElement)) throw new Error('Expected system state filter')
 		systemStateSelect.value = 'ended'
 		await act(() => {

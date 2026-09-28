@@ -21,7 +21,7 @@ export const allPools = 'All pools'
 export const poolStage = 'Pool stage'
 export const lifecycleStepLabels = {
 	escalation: 'Escalation',
-	forkMigration: 'Fork / Migration',
+	forkMigration: 'Fork / migration',
 	operational: 'Operational',
 	settled: 'Settled',
 	truthAuction: 'Truth auction',

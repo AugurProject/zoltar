@@ -1,3 +1,4 @@
+import { preflightOperationPreview } from '../../src/execution/operation-preview.ts'
 import { processRetirementCycle, retirementPositionsForScan } from '../../src/runtime/retirement-runner.ts'
 import { retirementUniswapV3PositionAbi } from '../../src/contracts/retirement-abi.ts'
 import { buildV3RetirementPlan } from '../../src/runtime/retirement-v3-positions.ts'
@@ -1791,4 +1792,23 @@ test('a throwing signer cannot reopen sweep cancellation', async () => {
 	await expect(executeOperationPlan(environment, { ...executablePlan(), definitionId: 'retirement.sweep.erc20' })).rejects.toThrow('signer response lost')
 	expect(environment.state.retirement.finalSweepStartedAt).toBeDefined()
 	expect((await loadDurableState(fixture.stateFile, 1)).retirement.finalSweepStartedAt).toBeDefined()
+})
+
+test('read-only preview applies the signing gas ceiling after successful RPC simulation', async () => {
+	const first = executionRpcServer()
+	const second = executionRpcServer()
+	const current = environment(first.url, second.url)
+	current.clock = () => 1_000
+	const plan = executablePlan()
+	await expect(preflightOperationPreview(current, plan)).rejects.toThrow('estimated gas ceiling exceeds strategy.maximumGasCostEth')
+	for (const server of [first, second]) {
+		expect(server.requestedMethods).toContain('eth_call')
+		expect(server.requestedMethods).toContain('eth_estimateGas')
+		expect(server.requestedMethods).not.toContain('eth_sendRawTransaction')
+	}
+	expect(current.state.workflows).toHaveLength(0)
+	expect(current.state.pendingTransactions).toHaveLength(0)
+	current.settings.strategy.maximumGasCostAttoEth = 10n ** 18n
+	await preflightOperationPreview(current, plan)
+	expect(current.state.workflows).toHaveLength(0)
 })

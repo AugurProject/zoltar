@@ -32,7 +32,7 @@ describe('network profile helpers', () => {
 	test('exports expected defaults for Ethereum mainnet', () => {
 		expect(MAINNET_NETWORK_PROFILE.id).toBe('mainnet')
 		expect(MAINNET_NETWORK_PROFILE.chainIdHex).toBe('0x1')
-		expect(MAINNET_NETWORK_PROFILE.displayName).toBe('Ethereum Mainnet')
+		expect(MAINNET_NETWORK_PROFILE.displayName).toBe('Ethereum mainnet')
 		expect(MAINNET_NETWORK_PROFILE.repPricingMode).toBe('uniswap')
 		expect(MAINNET_NETWORK_PROFILE.transactionExplorerBaseUrl).toBe('https://etherscan.io/tx/')
 		expect(MAINNET_NETWORK_PROFILE.wethAddress).toBe(getAddress(MAINNET_WETH_ADDRESS))
@@ -77,13 +77,13 @@ describe('network profile helpers', () => {
 		expect(profile.id).toBe('simulation')
 		expect(profile.chain.id).toBe(1337)
 		expect(profile.chainIdHex).toBe('0x539')
-		expect(profile.displayName).toBe('Browser Simulation')
+		expect(profile.displayName).toBe('Browser simulation')
 		expect(profile.repPricingMode).toBe('mock')
 		expect(profile.transactionExplorerBaseUrl).toBeUndefined()
-		expect(formatTransactionNetworkLabel(profile)).toBe('Browser Simulation · local sandbox')
+		expect(formatTransactionNetworkLabel(profile)).toBe('Browser simulation · local sandbox')
 	})
 
 	test('uses the public network name for mainnet transaction reviews', () => {
-		expect(formatTransactionNetworkLabel(MAINNET_NETWORK_PROFILE)).toBe('Ethereum Mainnet')
+		expect(formatTransactionNetworkLabel(MAINNET_NETWORK_PROFILE)).toBe('Ethereum mainnet')
 	})
 })

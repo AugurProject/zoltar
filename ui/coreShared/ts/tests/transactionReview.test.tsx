@@ -17,10 +17,10 @@ describe('TransactionReview', () => {
 	})
 
 	test('keeps decision data without generic or technical-detail sections', async () => {
-		const renderedComponent = await renderIntoDocument(<TransactionReview primary={[{ label: 'You Pay', value: '1 ETH' }]} risks={['Funds remain locked until settlement.']} />)
+		const renderedComponent = await renderIntoDocument(<TransactionReview primary={[{ label: 'You pay', value: '1 ETH' }]} risks={['Funds remain locked until settlement.']} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const reviewHeading = within(document.body).getByRole('heading', { name: 'Transaction Review' })
+		const reviewHeading = within(document.body).getByRole('heading', { name: 'Transaction review' })
 		const review = reviewHeading.closest('.transaction-review')
 		if (!(review instanceof HTMLElement)) throw new Error('Expected a transaction review')
 		expect(review.querySelector('.transaction-review-header .detail')).toBeNull()

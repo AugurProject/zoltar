@@ -4,6 +4,7 @@ import { useRef } from 'preact/hooks'
 import { shouldFollowWalletNetwork } from '../../lib/activeEnvironment.js'
 import { createSupportedNetworkChangeCoordinator } from '../lib/supportedNetworkChange.js'
 import { useTransactionTrayController } from './useTransactionTrayController.js'
+import { getInFlightTransactionCount } from '../../transactions/transactionTray.js'
 import { appBlockWatcher } from '../../lib/dataRefresh.js'
 
 type CommitGuard = () => boolean
@@ -22,7 +23,7 @@ export function useProtocolAppRuntime({ replaceEnvironment, onEnvironmentCommitt
 	const supportedNetworkChangeCoordinator =
 		supportedNetworkChangeCoordinatorRef.current ??
 		createSupportedNetworkChangeCoordinator({
-			getInFlightCount: () => transactionTray.transactionState.value.inFlightCount,
+			getInFlightCount: () => getInFlightTransactionCount(transactionTray.transactionState.value),
 			replaceEnvironment: async canCommit => {
 				if (!(await replaceEnvironment(canCommit))) return false
 				environment.setRevision(currentNonce => currentNonce + 1)

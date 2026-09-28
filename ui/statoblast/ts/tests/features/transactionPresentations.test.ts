@@ -12,6 +12,7 @@ import {
 	createSecurityVaultTransactionIntent,
 	createTradingSuccessPresentation,
 	createTradingTransactionIntent,
+	getSecurityVaultActionRepAmount,
 } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import {
 	createMarketCreationSuccessPresentation,
@@ -47,7 +48,7 @@ describe('transaction presentations', () => {
 			['categorical', 'Categorical'],
 			['scalar', 'Scalar'],
 		] as const) {
-			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question Type')
+			const questionTypeRow = createMarketCreationSuccessPresentation({ createQuestionHash: '0x1234', marketType, questionId: '0x01' }).rows?.find(row => row.label === 'Question type')
 			expect(questionTypeRow?.value).toBe(expectedLabel)
 		}
 	})
@@ -74,7 +75,20 @@ describe('transaction presentations', () => {
 			securityPoolAddress: '0x0000000000000000000000000000000000000001',
 			vaultAddress: '0x0000000000000000000000000000000000000002',
 		})
-		expect(intent.rows?.map(row => row.label)).toEqual(['Security Pool Address', 'Vault'])
+		expect(intent.rows?.map(row => row.label)).toEqual(['Security pool address', 'Vault'])
+	})
+
+	test('states the REP amount in vault deposit and withdrawal reviews', () => {
+		const form = { depositAmount: '1200', repWithdrawAmount: '12.5' }
+		const context = { repTokenSymbol: 'REP2', securityPoolAddress: '0x0000000000000000000000000000000000000001', vaultAddress: '0x0000000000000000000000000000000000000002' }
+		const deposit = createSecurityVaultTransactionIntent('depositRepToVault', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('depositRepToVault', form) })
+		const withdrawal = createSecurityVaultTransactionIntent('queueWithdrawRep', { ...context, repAmountAttoRep: getSecurityVaultActionRepAmount('queueWithdrawRep', form) })
+		expect(deposit.rows?.map(row => row.label)).toEqual(['Amount', 'Security pool address', 'Vault'])
+		expect(deposit.rows?.[0]?.value).toBe('1 200\u00a0REP2')
+		expect(withdrawal.rows?.[0]).toEqual({ label: 'Amount', value: '12.5\u00a0REP2' })
+		expect(getSecurityVaultActionRepAmount('redeemFees', form)).toBeUndefined()
+		expect(getSecurityVaultActionRepAmount('depositRepToVault', { depositAmount: '', repWithdrawAmount: '' })).toBeUndefined()
+		expect(getSecurityVaultActionRepAmount('queueWithdrawRep', { depositAmount: '', repWithdrawAmount: 'abc' })).toBeUndefined()
 	})
 
 	test('normalizes the Statoblast security multiplier in security pool creation intents', () => {
@@ -82,7 +96,7 @@ describe('transaction presentations', () => {
 			statoblastSecurityMultiplierBps: 25_000n,
 		})
 
-		expect(intent.rows).toEqual([{ label: 'Statoblast Security Multiplier', value: '2.5×' }])
+		expect(intent.rows).toEqual([{ label: 'Statoblast security multiplier', value: '2.5×' }])
 		expect(intent.failedTitle).toBe('Security pool creation')
 	})
 
@@ -102,8 +116,8 @@ describe('transaction presentations', () => {
 		})
 
 		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
-		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast Security Multiplier', 'Initial Report Priority Fee'])
-		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast Security Multiplier', 'Initial Report Priority Fee'])
+		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast security multiplier', 'Initial report priority fee'])
+		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast security multiplier', 'Initial report priority fee'])
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
@@ -152,7 +166,7 @@ describe('transaction presentations', () => {
 		})
 		const reportingIntent = createReportingTransactionIntent('reportOutcome', { ...context, outcome: 'no' })
 
-		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share Outcome'])
+		expect(tradingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Share outcome'])
 		expect(tradingIntent.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(tradingPresentation.rows?.map(row => row.identityKey)).toEqual(['security-pool', 'outcome'])
 		expect(reportingIntent.rows?.map(row => row.label)).toEqual(['Pool', 'Outcome'])
@@ -175,8 +189,8 @@ describe('transaction presentations', () => {
 			context,
 		)
 
-		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Commitment to transfer'])
-		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target Vault', 'Commitment to transfer'])
+		expect(intent.rows?.map(row => row.label)).toEqual(['Pool', 'Target vault', 'Commitment to transfer'])
+		expect(presentation.rows?.map(row => row.label)).toEqual(['Pool', 'Target vault', 'Commitment to transfer'])
 		expect(intent.rows?.at(-1)).toMatchObject({ label: 'Commitment to transfer', value: '4.5\u00a0ETH' })
 		expect(presentation.rows?.at(-1)).toMatchObject({ label: 'Commitment to transfer', value: '4.5\u00a0ETH' })
 	})
@@ -224,7 +238,7 @@ describe('transaction presentations', () => {
 				value: 0n,
 			})
 			const submitted = markTransactionSubmitted(prepared, transactionHash)
-			const failed = markTransactionFailed(submitted, 'Transaction reverted')
+			const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 
 			for (const state of [requested, prepared, submitted, failed]) {
 				expect(state.active?.rows?.map(row => row.label)).toContain('Pool')
@@ -255,7 +269,7 @@ describe('transaction presentations', () => {
 			value: 0n,
 		})
 		const submitted = markTransactionSubmitted(prepared, transactionHash)
-		const failed = markTransactionFailed(submitted, 'Transaction reverted')
+		const failed = markTransactionFailed(submitted, { kind: 'reverted', message: 'Transaction reverted' })
 		const success = createPoolOracleSuccessPresentation({ action: 'requestPrice', hash: transactionHash }, context)
 
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {

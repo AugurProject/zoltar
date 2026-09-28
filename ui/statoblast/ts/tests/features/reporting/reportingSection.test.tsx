@@ -41,11 +41,11 @@ function getClosestSection(heading: HTMLElement | null) {
 }
 
 function getEscalationMetricsSection() {
-	return getClosestSection(within(document.body).getByRole('heading', { name: 'Escalation Metrics' }))
+	return getClosestSection(within(document.body).getByRole('heading', { name: 'Escalation metrics' }))
 }
 
 function getReportOutcomeSection() {
-	return getClosestSection(within(document.body).getByRole('heading', { name: 'Report Outcome' }))
+	return getClosestSection(within(document.body).getByRole('heading', { name: 'Report outcome' }))
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
@@ -386,7 +386,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('heading', { name: 'Active' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Reporting Workflow' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting workflow' })).toBeNull()
 		expect(document.body.querySelector('.reporting-workflow-section')).toBeNull()
 		expect(document.body.querySelector('.workflow-summary-strip')).toBeNull()
 		expect(document.body.textContent?.includes('Current guidance')).toBe(false)
@@ -445,7 +445,7 @@ describe('ReportingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Response window')
-		expect(documentQueries.getByRole('heading', { name: 'Report Outcome' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Report outcome' })).not.toBeNull()
 	})
 
 	test('keeps the outcome cards unselected when reporting is locked', async () => {
@@ -465,7 +465,7 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelectorAll('.escalation-side.selected').length).toBe(0)
 	})
 
-	test('renders Reporting Not Enabled before market end', async () => {
+	test('renders Reporting not enabled before market end', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -478,16 +478,16 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting not enabled' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Reporting Context' })).toBeNull()
 		expect(documentQueries.queryByText('Opens In')).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Escalation Metrics' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Report Outcome' })).toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Settle Escalation Deposits' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Escalation metrics' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Report outcome' })).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Settle escalation deposits' })).toBeNull()
 		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 50n))).toBe(true)
 	})
 
-	test('renders Reporting Open when the market has ended but details are not loaded', async () => {
+	test('renders Reporting open when the market has ended but details are not loaded', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -516,8 +516,8 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('heading', { name: 'Reporting Not Enabled' })).not.toBeNull()
-		expect(documentQueries.queryByRole('heading', { name: 'Reporting Open' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Reporting not enabled' })).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Reporting open' })).toBeNull()
 		expect(document.body.textContent?.includes(getReportingLockedUntilMessage(100n, 100n))).toBe(true)
 	})
 
@@ -567,7 +567,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Latest Reporting Action' })).toBeNull()
 	})
 
-	test('keeps escalation metrics inside Escalation Metrics', async () => {
+	test('keeps escalation metrics inside Escalation metrics', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -623,7 +623,7 @@ describe('ReportingSection', () => {
 		expect(metricsSection.textContent?.includes(formatTimestamp(activationTime))).toBe(true)
 	})
 
-	test('keeps placeholder outcome cards visible inside Report Outcome before reporting details load', async () => {
+	test('keeps placeholder outcome cards visible inside Report outcome before reporting details load', async () => {
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: undefined })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
@@ -661,7 +661,7 @@ describe('ReportingSection', () => {
 
 	test('blocks stale-price submission and links to the pool oracle recovery view', async () => {
 		let openOracleCalls = 0
-		const reason = "The pool's oracle price expired. Request a new price in Price Oracle, then retry."
+		const reason = "The pool's oracle price expired. Request a new price in Price oracle, then retry."
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -745,7 +745,7 @@ describe('ReportingSection', () => {
 		expect(within(document.body).queryByRole('button', { name: /^Approve / })).toBeNull()
 		expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Wallet REP' }))
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 	})
 
@@ -823,7 +823,7 @@ describe('ReportingSection', () => {
 
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
 		expect(document.body.textContent).not.toContain('Paid from: pool vault REP (no approval needed)')
-		expectTransactionButtonEnabled(document.body, 'Approve 5 REP…')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
 		const reportAction = reportButton.closest('.tx-action')
@@ -834,7 +834,7 @@ describe('ReportingSection', () => {
 		expect(actionRow?.contains(disabledReason)).toBe(false)
 		expect(reportAction?.contains(disabledReason)).toBe(false)
 		expect(reportButton.closest('.reporting-shared-action-region')?.contains(disabledReason)).toBe(true)
-		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP…$/ }))
+		fireEvent.click(within(document.body).getByRole('button', { name: /^Approve [\d.]+ REP$/ }))
 		expect(approvalCalls).toBe(1)
 	})
 
@@ -1096,7 +1096,7 @@ describe('ReportingSection', () => {
 		expect(documentQueries.queryByRole('checkbox')).toBeNull()
 	})
 
-	test('shows the time-left metric inside Escalation Metrics', async () => {
+	test('shows the time-left metric inside Escalation metrics', async () => {
 		const reportingDetails = createReportingDetails()
 		const renderedComponent = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails })))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -1290,14 +1290,14 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
-		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & migration')).toBeNull()
 		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), forkTriggeredReason)
 		const reportButton = documentQueries.getByRole('button', { name: /^Report Yes ·/ })
 		const reportDescription = document.getElementById(reportButton.getAttribute('aria-describedby') ?? '')
 		expect(reportDescription?.textContent).toContain(forkTriggeredReason)
 	})
 
-	test('shows Continue in Fork & Migration in the lifecycle banner after the fork has already been triggered', async () => {
+	test('shows Continue in Fork & migration in the lifecycle banner after the fork has already been triggered', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1315,8 +1315,8 @@ describe('ReportingSection', () => {
 		const lifecycleBanner = document.body.querySelector('.escalation-phase')
 		if (!(lifecycleBanner instanceof HTMLElement)) throw new Error('Expected phase stepper')
 		const lifecycleBannerQueries = within(lifecycleBanner)
-		expect(document.body.textContent?.includes('Escalation reached non-decision and the universe fork has already been triggered for this pool. Continue in Fork & Migration.')).toBe(true)
-		expect(lifecycleBannerQueries.queryByText('Continue in Fork & Migration')).toBeNull()
+		expect(document.body.textContent?.includes('Escalation reached non-decision and the universe fork has already been triggered for this pool. Continue in Fork & migration.')).toBe(true)
+		expect(lifecycleBannerQueries.queryByText('Continue in Fork & migration')).toBeNull()
 		expect(lifecycleBannerQueries.queryByText('Trigger universe fork')).toBeNull()
 	})
 
@@ -1869,7 +1869,7 @@ describe('ReportingSection', () => {
 	})
 
 	test('shares one workflow lock reason across reporting and settlement actions', async () => {
-		const sharedLockReason = 'This parent pool is forked. Continue in Fork & Migration for migration and settlement.'
+		const sharedLockReason = 'This parent pool is forked. Continue in Fork & migration for migration and settlement.'
 		const renderedComponent = await renderIntoDocument(
 			h(
 				ReportingSection,
@@ -1914,7 +1914,7 @@ describe('ReportingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child proof eligibility is unchanged.')).toBe(true)
-		expect(document.body.textContent?.includes('must migrate in Fork & Migration')).toBe(false)
+		expect(document.body.textContent?.includes('must migrate in Fork & migration')).toBe(false)
 		expect(document.body.textContent?.includes('Connected wallet has no unsettled escalation deposits.')).toBe(false)
 	})
 
@@ -1964,7 +1964,7 @@ describe('ReportingSection', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Trigger universe fork' })).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Open fork & migration' })).not.toBeNull()
-		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & Migration.')).toBe(true)
+		expect(document.body.textContent?.includes('Dispute-staked REP remains in escalation after non-decision. The universe fork has already been triggered for this pool, so continue in Fork & migration.')).toBe(true)
 	})
 
 	test('shows a Trigger universe fork action when non-decision blocks reporting', async () => {

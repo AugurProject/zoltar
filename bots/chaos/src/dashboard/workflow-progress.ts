@@ -1,7 +1,7 @@
 import { optionalRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { fullIdentifier, node } from './dom.js'
 
-export function workflowProgress(values: readonly unknown[], active: boolean) {
+export function workflowProgress(values: readonly unknown[], active: boolean, stoppedBeforeSigning = false) {
 	const steps = values.map(value => optionalRecord(value) ?? {})
 	const view = node('div', 'operation-receipts')
 	view.setAttribute('aria-busy', String(active))
@@ -22,8 +22,16 @@ export function workflowProgress(values: readonly unknown[], active: boolean) {
 	for (const [index, step] of steps.entries()) {
 		const row = node('li')
 		const status = typeof step['status'] === 'string' ? step['status'] : 'planned'
-		const labels: Record<string, string> = { planned: active && index === current ? 'Preparing transaction' : 'Queued', signed: 'Signed · awaiting submission', submitted: 'Submitted · awaiting inclusion', confirmed: 'Included', failed: 'Failed', blocked: 'Recovery required' }
+		const labels: Record<string, string> = {
+			planned: active && index === current ? 'Preparing transaction' : 'Queued',
+			signed: 'Signed · awaiting submission',
+			submitted: 'Submitted · awaiting inclusion',
+			confirmed: 'Included',
+			failed: 'Failed',
+			blocked: stoppedBeforeSigning ? 'Stopped before signing' : 'Recovery required',
+		}
 		row.append(node('p', undefined, `${typeof step['label'] === 'string' ? step['label'] : 'Transaction'} · ${labels[status] ?? status}`))
+		if (typeof step['failure'] === 'string' && step['failure'].trim() !== '') row.append(node('p', undefined, step['failure']))
 		const hash = step['hash']
 		if (typeof hash === 'string' && /^0x[0-9a-f]{64}$/i.test(hash)) {
 			const url = typeof step['explorerUrl'] === 'string' ? step['explorerUrl'] : ''

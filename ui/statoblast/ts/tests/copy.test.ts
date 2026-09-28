@@ -58,11 +58,11 @@ test('security-pool dynamic values use nonbreaking separators', () => {
 
 test('liquidation actions and pending labels use sentence case independently of titles', () => {
 	expect(liquidationCopy.executeVaultLiquidation).toBe('Execute vault liquidation')
-	expect(liquidationCopy.executeVaultLiquidationTitle).toBe('Execute Vault Liquidation')
+	expect(liquidationCopy.executeVaultLiquidationTitle).toBe('Execute vault liquidation')
 	expect(liquidationCopy.queueLiquidation).toBe('Queue liquidation')
-	expect(liquidationCopy.queueVaultLiquidation).toBe('Queue Vault Liquidation')
+	expect(liquidationCopy.queueVaultLiquidation).toBe('Queue vault liquidation')
 	expect(liquidationCopy.liquidateVault).toBe('Liquidate vault')
-	expect(liquidationCopy.liquidateVaultTitle).toBe('Liquidate Vault')
+	expect(liquidationCopy.liquidateVaultTitle).toBe('Liquidate vault')
 })
 
 test('oracle actions distinguish action labels from review titles', () => {

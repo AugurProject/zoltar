@@ -373,8 +373,6 @@ export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAd
 		'Total REP balance',
 	)
 
-export const certifyVaultCoverage = async (client: WriteClient, securityPoolAddress: Address, vault: Address) => writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'certifyVaultCoverage', args: [vault] }))
-
 async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Address) {
 	const priceOracleManagerAndOperatorQueuer = requireAddress(
 		await client.readContract({
@@ -426,20 +424,6 @@ async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Ad
 		)
 		if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
 	}
-}
-
-/** Prepare real on-chain certificates for lifecycle tests that are not testing admission itself.
- * The RPC enumeration is off-chain; every vault is verified by its own contract call.
- * This helper never creates commitments or bypasses backing checks.
- */
-export async function createCertifiedCompleteSetFixture(client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint) {
-	await prepareTestMintPrice(client, securityPoolAddress)
-	const count = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'getVaultCount' })
-	const vaults = await getVaults(client, securityPoolAddress, 0n, count)
-	for (const vault of vaults) {
-		if ((await getSecurityVault(client, securityPoolAddress, vault)).underwritingLimitAttoEth > 0n) await certifyVaultCoverage(client, securityPoolAddress, vault)
-	}
-	return createCompleteSet(client, securityPoolAddress, settlementCollateralAttoEth, true)
 }
 
 export async function setUnderwritingLimit(client: WriteClient, securityPool: Address, limitAttoEth: bigint) {
