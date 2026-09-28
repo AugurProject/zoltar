@@ -55,7 +55,7 @@ describe('GlobalTransactionDialog', () => {
 				controller.receipt(hash, 'success')
 				controller.startWithoutReview(1)
 			})
-			expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'pending'])
+			expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'wallet'])
 			expect(rendered.container.querySelector('.operation-modal-panel')).toBeNull()
 		} finally {
 			transactionSteps.value?.cancel()

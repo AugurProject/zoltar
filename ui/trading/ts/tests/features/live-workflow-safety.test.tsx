@@ -481,7 +481,8 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).not.toContain('Loading balances')
 		expect(document.body.textContent).toContain('1 YES')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(replacementTransactionHash)
-		expect(amountInput.value).toBe('')
+		// Navigating away and back remounted the ticket, so read the amount field again.
+		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.value).toBe('')
 		deferPositionBroadcast = false
 		waitForPositionReceipt = false
 		repricePositionReceipt = false
