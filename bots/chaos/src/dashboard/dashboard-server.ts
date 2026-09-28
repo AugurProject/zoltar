@@ -1,3 +1,4 @@
+import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
 import { join } from 'node:path'
 import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
@@ -449,17 +450,6 @@ function groupedPublicEvaluations(value: unknown) {
 		else if (previous['enabled'] === false || source['enabled'] === false) previous['enabled'] = false
 	}
 	return [...grouped.values()]
-}
-
-function publicWorkflowStep(value: unknown) {
-	const source = record(value)
-	if (source === undefined) return undefined
-	return compact({
-		confirmedAt: stringField(source, 'confirmedAt'),
-		label: stringField(source, 'label'),
-		status: stringField(source, 'status'),
-		txHash: stringField(source, 'txHash') ?? stringField(source, 'transactionHash') ?? stringField(source, 'hash'),
-	})
 }
 
 function publicWorkflow(value: unknown) {
