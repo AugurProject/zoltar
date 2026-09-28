@@ -112,7 +112,7 @@ export function useZoltarUniverse(
 	const nextQuestionCountLoad = useRequestGuard()
 	const nextQuestionsLoad = useRequestGuard()
 	const nextQuestionByIdLoad = useRequestGuard()
-	// Foreground loads bump these, so a slower background read never overwrites a newer committed answer.
+	// Each background request and foreground commit retires older background answers.
 	const universeCommitVersionRef = useRef(0)
 	const questionPageCommitVersionRef = useRef(0)
 	const universeQueryKey = zoltarDeployed ? `${environmentRefreshKey}:${activeUniverseId}` : undefined
@@ -388,7 +388,7 @@ export function useZoltarUniverse(
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const tasks: Promise<void>[] = []
 		if (universeQueryKey !== undefined && zoltarUniverseLoadedId.value === activeUniverseId && !universeLoad.isLoading.peek()) {
-			const commitVersion = universeCommitVersionRef.current
+			const commitVersion = ++universeCommitVersionRef.current
 			tasks.push(
 				zoltarUniverseQueries
 					.fetch(universeQueryKey, async () => await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), activeUniverseId))
@@ -400,7 +400,7 @@ export function useZoltarUniverse(
 		}
 		const page = zoltarQuestionPage.value
 		if (questionPageQueryKey !== undefined && page !== undefined && !questionsLoad.isLoading.peek()) {
-			const commitVersion = questionPageCommitVersionRef.current
+			const commitVersion = ++questionPageCommitVersionRef.current
 			tasks.push(
 				zoltarQuestionPageQueries
 					.fetch(questionPageQueryKey, async () => await dependencies.loadZoltarQuestionPage(dependencies.createConnectedReadClient(), page.pageIndex, page.pageSize))

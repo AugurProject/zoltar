@@ -4,7 +4,6 @@ import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
-import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { ZoltarView } from '../../types.js'
@@ -74,8 +73,7 @@ export function ZoltarRoutes({ view }: { view: ZoltarView }) {
 		const titles = { fork: zoltarCopy.forkZoltar, migrate: zoltarCopy.migrateRep, universes: zoltarCopy.universesTitle }
 		return (
 			<>
-				{/* The universes view reserves its freshness line while loading, so the summary does not move when it arrives. */}
-				<RouteHeader actions={view === 'universes' ? <UpdatedAgo updatedAt={undefined} /> : undefined} title={titles[view]} />
+				<RouteHeader title={titles[view]} />
 				<ZoltarRouteGateState gate={gate === 'ready' ? 'loading' : gate} onRetryUniverse={onRetryUniverse} onViewChange={onViewChange} />
 			</>
 		)

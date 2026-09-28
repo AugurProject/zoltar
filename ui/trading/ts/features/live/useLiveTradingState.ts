@@ -33,16 +33,18 @@ export function useQuestionClock(configuration: DeploymentConfiguration | undefi
 		})
 		if (simulationController !== undefined) setNowSeconds(simulationController.currentTimestamp)
 		if (configuration === undefined) return unsubscribeSimulation
+		let active = true
 		const client = services.createTradingPublicClient(configuration)
 		const stopWatcher = appBlockWatcher.start(
 			async () => {
 				const block = await client.getBlock()
-				if (simulationController === undefined) setNowSeconds(block.timestamp)
+				if (active && simulationController === undefined) setNowSeconds(block.timestamp)
 				return block.number ?? undefined
 			},
 			blockPollIntervalMilliseconds(simulationController !== undefined),
 		)
 		return () => {
+			active = false
 			stopWatcher()
 			unsubscribeSimulation?.()
 		}

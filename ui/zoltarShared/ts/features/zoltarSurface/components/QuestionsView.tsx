@@ -1,3 +1,4 @@
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -15,20 +16,18 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import type { MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { ZoltarView } from '../../types.js'
 import { QUESTION_PAGE_SIZE, formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 
 type QuestionsViewProps = {
+	zoltarQuestionsFreshness: DataFreshness
 	loadingZoltarQuestions: boolean
 	onActiveViewChange: (view: ZoltarView) => void
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarQuestionPage: MarketDetailsPage | undefined
 	zoltarQuestionsError: string | undefined
-	/** The page's age; it refreshes in place on each new block. */
-	zoltarQuestionsFreshness?: DataFreshness | undefined
 	canFork: boolean
 	hasForked: boolean
 	requestContextKey: number
@@ -64,7 +63,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 			<SectionBlock
 				actions={
 					<>
-						<UpdatedAgo refreshing={zoltarQuestionsFreshness?.refreshing === true} updatedAt={zoltarQuestionsFreshness?.updatedAt} />
+						<UpdatedAgo {...zoltarQuestionsFreshness} />
 						<PaginationControls
 							hasNextPage={getHasNextPaginationPage(resolvedPageIndex, pageCount)}
 							hasPreviousPage={resolvedPageIndex > 0}

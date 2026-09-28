@@ -132,7 +132,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
 	})
 
-	void test('refreshes the loaded pool lineage in place, and a slow refresh never overwrites a newer explicit load', async () => {
+	void test.each(['explicit load', 'background refresh'])('a slow lineage refresh never overwrites a newer %s', async newerRead => {
 		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const staleRefresh = createDeferred<ListedSecurityPool[]>()
 		let lineageReads = 0
@@ -164,13 +164,17 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x02'])
 		expect(requireHookState(hookState).loadingSecurityPools).toBe(false)
 
-		// A refresh still in flight when a newer explicit load commits is discarded.
+		// A refresh still in flight when a newer read commits is discarded.
 		let pendingRefresh: Promise<void> | undefined
 		await act(() => {
 			pendingRefresh = requireHookState(hookState).refreshSecurityPools()
 		})
 		await act(async () => {
-			await requireHookState(hookState).loadSecurityPools(selectedAddress)
+			if (newerRead === 'explicit load') await requireHookState(hookState).loadSecurityPools(selectedAddress)
+			else {
+				appQueryCache.invalidateAll()
+				await requireHookState(hookState).refreshSecurityPools()
+			}
 		})
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
 		await act(async () => {
@@ -178,6 +182,47 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			await pendingRefresh
 		})
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		appQueryCache.clear()
+	})
+
+	void test('an older background browse response cannot replace a newer page', async () => {
+		const firstPage = { pageIndex: 0, pageSize: 10, poolCount: 0n, pools: [] }
+		const newerPage = { ...firstPage, poolCount: 2n }
+		const olderRead = createDeferred<typeof firstPage>()
+		let reads = 0
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			loadSecurityPoolPage: mock(async () => {
+				reads += 1
+				if (reads === 1) return firstPage
+				if (reads === 2) return await olderRead.promise
+				return newerPage
+			}),
+		})
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		const state = () => requireHookState(hookState)
+		await act(async () => await state().loadBrowseSecurityPoolPage(0, 10, 'page'))
+		let pending: Promise<void> | undefined
+		await act(() => {
+			appQueryCache.invalidateAll()
+			pending = state().refreshBrowseSecurityPoolPage()
+		})
+		await act(async () => {
+			appQueryCache.invalidateAll()
+			await state().refreshBrowseSecurityPoolPage()
+		})
+		expect(state().securityPoolBrowseCount).toBe(2n)
+		await act(async () => {
+			olderRead.resolve(firstPage)
+			await pending
+		})
+		expect(state().securityPoolBrowseCount).toBe(2n)
 		appQueryCache.clear()
 	})
 

@@ -11,6 +11,7 @@ export function ZoltarQuestionsRoute() {
 	const { environmentRefreshKey, onViewChange, operations } = useZoltarWorkspace()
 	return (
 		<QuestionsView
+			zoltarQuestionsFreshness={operations.zoltarQuestionsFreshness}
 			canFork={operations.zoltarUniverse !== undefined}
 			hasForked={operations.zoltarUniverse?.hasForked === true}
 			loadingZoltarQuestions={operations.loadingZoltarQuestions}
@@ -20,7 +21,6 @@ export function ZoltarQuestionsRoute() {
 			requestContextKey={environmentRefreshKey}
 			zoltarQuestionPage={operations.zoltarQuestionPage}
 			zoltarQuestionsError={operations.zoltarQuestionsError}
-			zoltarQuestionsFreshness={operations.zoltarQuestionsFreshness}
 		/>
 	)
 }

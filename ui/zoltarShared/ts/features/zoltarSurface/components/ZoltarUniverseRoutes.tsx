@@ -1,9 +1,9 @@
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { UniverseBrowser } from '@zoltar/ui-core-shared/components/UniverseBrowser.js'
-import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
@@ -34,8 +34,17 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 	}
 	return (
 		<>
-			<RouteHeader actions={<UpdatedAgo {...operations.zoltarUniverseFreshness} />} description={zoltarCopy.universesDescription} title={zoltarCopy.universesTitle} />
-			<UniverseBrowser actions={actions} activeUniverseId={activeUniverseId} universe={universe}>
+			<RouteHeader description={zoltarCopy.universesDescription} title={zoltarCopy.universesTitle} />
+			<UniverseBrowser
+				actions={
+					<>
+						<UpdatedAgo {...operations.zoltarUniverseFreshness} />
+						{actions}
+					</>
+				}
+				activeUniverseId={activeUniverseId}
+				universe={universe}
+			>
 				{universe.forkQuestionDetails === undefined ? undefined : (
 					<div className='loaded-question-preview'>
 						<Question question={universe.forkQuestionDetails} variant='preview' />
