@@ -528,6 +528,15 @@ void describe('TradingSection', () => {
 		expect(button.disabled).toBe(false)
 	})
 
+	void test('keeps mint submission independent of the UI price setting', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ oraclePriceUsable: true, repPerEthPrice: undefined, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' })
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
+		expect(dialog.textContent).not.toContain('Request a new price in Price Oracle before minting.')
+	})
+
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup

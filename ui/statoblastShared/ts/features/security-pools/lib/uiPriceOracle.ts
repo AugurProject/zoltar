@@ -34,7 +34,7 @@ type OpenOracleReading = {
 }
 
 /**
- * The single REP/ETH price resolver behind every capacity, exposure, and health figure in Statoblast.
+ * The single REP/ETH price resolver behind every price-derived Statoblast figure: vault health, withdrawable REP, and liquidation.
  * Oracle-manager details are fresher than the pool listing, so they win when both are present.
  */
 export function resolveRepPrice({ now, oracleManager, poolOracle, setting, uniswapPrice }: { now: bigint | undefined; oracleManager?: OpenOracleReading | undefined; poolOracle?: OpenOracleReading | undefined; setting: UiPriceOracle; uniswapPrice: bigint | undefined }): ResolvedRepPrice {

@@ -138,7 +138,6 @@ export function TradingSection({
 			mintingCapacityAttoEth,
 			hasSelectedPool,
 			isOnActiveAppChain,
-			isPriceValid: repPerEthPrice !== undefined && repPerEthPrice > 0n,
 			mintAmountInput: tradingForm.completeSetAmount,
 			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
 			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
@@ -178,7 +177,7 @@ export function TradingSection({
 			if (!isOnActiveAppChain) return getWrongNetworkReason()
 			if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
 			if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
-			if (remainingMintCapacity === undefined) return repPerEthPrice === undefined || repPerEthPrice <= 0n ? tradingCopy.mintPriceUnavailable : tradingCopy.mintCapacityUnavailable
+			if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 			if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 
 			return (() => {

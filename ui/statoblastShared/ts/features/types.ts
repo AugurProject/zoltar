@@ -205,7 +205,7 @@ export type SecurityPoolsSectionProps = {
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined
-	/** The one REP price every capacity, exposure, and health figure of the selected pool uses. */
+	/** The one REP price behind the selected pool's vault health, withdrawable REP, and liquidation figures. */
 	selectedPoolRepPrice?: import('./security-pools/lib/uiPriceOracle.js').ResolvedRepPrice | undefined
 	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps

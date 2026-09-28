@@ -25,7 +25,7 @@ function formatRepPerCapacityBps(value: bigint) {
 	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`} REP/ETH`
 }
 
-/** Static pool parameters. Capacity is shown by `PoolCapacitySummary`, which labels the REP price it uses. */
+/** Static pool parameters. Settlement collateral against standing commitments is shown by `PoolCapacitySummary`. */
 export function SecurityPoolSummaryMetrics({ children, className = '', metricVariant = 'default', pool, showTotalBacking = false }: SecurityPoolSummaryMetricsProps) {
 	const resolvedPoolHeldRepPerCapacityBps = pool.totalUnderwritingLimitAttoEth === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalUnderwritingLimitAttoEth
 	return (
