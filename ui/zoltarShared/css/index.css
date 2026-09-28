@@ -193,11 +193,9 @@
 .question-type-options .question-type-options-label {
 	margin-bottom: 0.5rem;
 	padding: 0;
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--muted);
+	font-weight: 600;
+	color: var(--text-secondary);
 }
 
 .question-type-option-list {
