@@ -3,7 +3,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 export const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
-		case 'adjustVaultBackingFactor':
+		case 'setVaultUnderwritingLimit':
 			return 'Adjusting backing factor'
 		case 'approveRep':
 			return 'Approving REP'
@@ -15,6 +15,7 @@ export const getPendingTitle = (actionName: SecurityVaultActionResult['action'])
 			return 'Claiming fees'
 		case 'redeemRepFromVault':
 			return 'Redeeming REP'
+		case 'certifyVaultCoverage':
 		case 'updateVaultFees':
 			return 'Refreshing vault fees'
 		default:
@@ -23,7 +24,7 @@ export const getPendingTitle = (actionName: SecurityVaultActionResult['action'])
 }
 export const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
-		case 'adjustVaultBackingFactor':
+		case 'setVaultUnderwritingLimit':
 			return 'Vault target change submitted'
 		case 'approveRep':
 			return 'REP approved'
@@ -35,6 +36,7 @@ export const getSuccessTitle = (actionName: SecurityVaultActionResult['action'])
 			return 'Fees claimed'
 		case 'redeemRepFromVault':
 			return 'REP redeemed'
+		case 'certifyVaultCoverage':
 		case 'updateVaultFees':
 			return 'Vault fees refreshed'
 		default:
@@ -43,7 +45,7 @@ export const getSuccessTitle = (actionName: SecurityVaultActionResult['action'])
 }
 export const getFailureTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
-		case 'adjustVaultBackingFactor':
+		case 'setVaultUnderwritingLimit':
 			return 'Backing factor adjustment failed'
 		case 'approveRep':
 			return 'REP approval failed'
@@ -55,6 +57,7 @@ export const getFailureTitle = (actionName: SecurityVaultActionResult['action'])
 			return 'Fee claim failed'
 		case 'redeemRepFromVault':
 			return 'REP redemption failed'
+		case 'certifyVaultCoverage':
 		case 'updateVaultFees':
 			return 'Vault fee refresh failed'
 		default:

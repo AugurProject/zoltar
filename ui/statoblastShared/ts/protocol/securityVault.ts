@@ -53,3 +53,14 @@ export async function redeemRepFromVaultFromSecurityPool(client: WriteClient, se
 		hash,
 	} satisfies SecurityVaultActionResult
 }
+
+export async function certifyVaultCoverage(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address) {
+	const hash = await writeContractAndWait(client, () => ({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'certifyVaultCoverage', args: [vaultAddress] }))
+	return { action: 'certifyVaultCoverage', hash } satisfies SecurityVaultActionResult
+}
+
+export async function setUnderwritingLimit(client: WriteClient, securityPoolAddress: Address, limitAttoEth: bigint) {
+	if (limitAttoEth < 0n) throw new Error('Commitment limit cannot be negative')
+	const hash = await writeContractAndWait(client, () => ({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'setUnderwritingLimit', args: [limitAttoEth] }))
+	return { action: 'setVaultUnderwritingLimit', hash } satisfies SecurityVaultActionResult
+}

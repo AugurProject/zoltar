@@ -117,7 +117,7 @@
 								<td><code>SecurityPool</code></td>
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td>Risk operations</td>
-								<td>Reads the coordinator's last valid REP/ETH price. Vault owners and liquidation operators stage withdrawals, target changes, and liquidations on the coordinator before restricted pool execution. Deposits use the saved vault target directly at the pool.</td>
+								<td>Reads the coordinator's last valid REP/ETH price. Vault owners and liquidation operators stage withdrawals, commitment-limit changes, and liquidations on the coordinator before restricted pool execution. Owners may also set their limit directly at the pool. REP deposits add backing without changing that limit.</td>
 							</tr>
 							<tr data-edge-id="coordinator-oracle-report" data-source="Price Coordinator" data-receiver="OpenOracle" data-phase="Price discovery">
 								<td><code>OpenOraclePriceCoordinator</code></td>
@@ -135,7 +135,7 @@
 								<td><code>OpenOraclePriceCoordinator</code></td>
 								<td><code>SecurityPool</code></td>
 								<td>Risk execution</td>
-								<td>After price and snapshot checks, calls the pool-only liquidation or REP-withdrawal entrypoint. Those operations update capacity ownership internally when REP backing or liquidation ownership moves.</td>
+								<td>After price and snapshot checks, calls the pool-only liquidation or REP-withdrawal entrypoint. Liquidation transfers standing ETH commitments together with REP backing; withdrawal preserves the commitment and checks its full backing.</td>
 							</tr>
 							<tr data-edge-id="share-token-forker-migration" data-source="Share Token" data-receiver="Pool Forker" data-phase="Share migration">
 								<td><code>ShareToken</code></td>

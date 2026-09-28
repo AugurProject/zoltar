@@ -23,6 +23,12 @@ function openTradingSnapshot() {
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 10_000n).toString()
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Trading pool fixture is missing')
+	pool.escalationGame = '0x0000000000000000000000000000000000000000'
+	pool.totalUnderwritingLimitAttoEth = (2n * 10n ** 18n).toString()
+	const vault = pool.vaults[0]
+	if (vault === undefined) throw new Error('Missing underwriting vault')
+	vault.underwritingLimitAttoEth = pool.totalUnderwritingLimitAttoEth
+	pool.currentMintingCapacityAttoEth = pool.totalUnderwritingLimitAttoEth
 	pool.shareTokenSupplyAttoShares = '1000000000000000000'
 	shares.isApprovedForAll = Object.fromEntries(Object.keys(shares.isApprovedForAll).map(operator => [operator, true]))
 	const lp = snapshot.wallet.lpTokens[0]

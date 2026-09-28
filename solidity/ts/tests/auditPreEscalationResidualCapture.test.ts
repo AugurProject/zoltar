@@ -74,7 +74,7 @@ describe('Audit: pre-escalation residual capture', () => {
 		await assert.rejects(depositRepToVault(attacker, securityPoolAddresses.securityPool, attackerDeposit, (1n << 256n) - 1n))
 		const attackerVaultBeforeDispute = await getSecurityVault(client, securityPoolAddresses.securityPool, attacker.account.address)
 		strictEqualTypeSafe(attackerVaultBeforeDispute.repBackingUnits, 0n, 'the rejected attacker should receive no residual-eligible backing units')
-		strictEqualTypeSafe(attackerVaultBeforeDispute.capacityOwnershipAttoRep, 0n, 'the rejected attacker should assume no open-interest allocation')
+		strictEqualTypeSafe(attackerVaultBeforeDispute.underwritingLimitAttoEth, 0n, 'the rejected attacker should assume no open-interest allocation')
 		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, lowLosingPrincipal)
 		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.No, bindingLosingPrincipal)
 		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningPrincipal)

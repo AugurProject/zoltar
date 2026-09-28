@@ -1,6 +1,6 @@
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, test } from 'bun:test'
-import { HeaderMetricGroup, HeaderMetricStrip } from '../components/HeaderMetricStrip.js'
+import { HeaderMetricGroup } from '../components/HeaderMetricStrip.js'
 import { HeaderToolbar } from '../components/HeaderToolbar.js'
 import { ToolbarField } from '../components/ToolbarField.js'
 import { WalletChip, WalletChipLabel, WalletChipPlaceholder } from '../components/WalletChip.js'
@@ -17,11 +17,11 @@ describe('header toolbar primitives', () => {
 		},
 	})
 
-	test('lays out brand, badges, controls, and settings in fixed toolbar slots', async () => {
-		const rendered = await renderIntoDocument(<HeaderToolbar brand='Zoltar' badges={<span className='badge'>Simulation</span>} controls={<ToolbarField label='Universe'>Genesis</ToolbarField>} settings={<button type='button'>Settings</button>} />)
+	test('lays out brand, badges, navigation, controls, and settings in one toolbar row', async () => {
+		const rendered = await renderIntoDocument(<HeaderToolbar brand='Zoltar' badges={<span className='badge'>Simulation</span>} navigation={<nav aria-label='Sections' />} controls={<ToolbarField label='Universe'>Genesis</ToolbarField>} settings={<button type='button'>Settings</button>} />)
 		cleanupRenderedComponent = rendered.cleanup
 		const toolbar = rendered.container.querySelector('.header-toolbar')
-		expect([...(toolbar?.children ?? [])].map(child => child.className)).toEqual(['header-toolbar-brand', 'header-toolbar-controls', 'header-toolbar-settings'])
+		expect([...(toolbar?.children ?? [])].map(child => child.className)).toEqual(['header-toolbar-brand', 'header-toolbar-navigation', 'header-toolbar-controls', 'header-toolbar-settings'])
 		expect(toolbar?.querySelector('.header-toolbar-brand > h2.application-brand')?.textContent).toBe('Zoltar')
 		expect(toolbar?.querySelector('.header-toolbar-brand > .environment-badge-row .badge')?.textContent).toBe('Simulation')
 		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-label')?.textContent).toBe('Universe')
@@ -60,29 +60,27 @@ describe('header toolbar primitives', () => {
 		expect(rendered.container.querySelector('.wallet-chip.is-placeholder')?.textContent).toBe('Loading…')
 	})
 
-	test('sizes each metric group from its cells and rejects an empty group', async () => {
+	test('labels each metric group, keeps its action in the caption, and rejects an empty group', async () => {
 		const rendered = await renderIntoDocument(
-			<HeaderMetricStrip expanded>
+			<div className='account-menu-metrics'>
 				<HeaderMetricGroup label='Balances'>
 					<div>ETH</div>
 					<div>REP</div>
 					{undefined}
 				</HeaderMetricGroup>
-				<HeaderMetricGroup label='Prices' secondary action={<button type='button'>Refresh</button>}>
+				<HeaderMetricGroup label='Prices' action={<button type='button'>Refresh</button>}>
 					<div>REP/ETH</div>
 				</HeaderMetricGroup>
-			</HeaderMetricStrip>,
+			</div>,
 		)
 		cleanupRenderedComponent = rendered.cleanup
-		const strip = rendered.container.querySelector('.overview-inline-metrics')
-		expect(strip?.classList.contains('mobile-expanded')).toBe(true)
-		const groups = [...(strip?.querySelectorAll(':scope > .overview-metric-group') ?? [])]
-		if (!groups.every(group => group instanceof HTMLElement)) throw new Error('Expected metric groups')
-		expect(groups.map(group => [group.getAttribute('role'), group.getAttribute('aria-label'), group.style.getPropertyValue('--overview-metric-columns'), group.classList.contains('is-secondary')])).toEqual([
-			['group', 'Balances', '2', false],
-			['group', 'Prices', '1', true],
+		const metrics = rendered.container.querySelector('.account-menu-metrics')
+		const groups = [...(metrics?.querySelectorAll(':scope > .overview-metric-group') ?? [])]
+		expect(groups.map(group => [group.getAttribute('role'), group.getAttribute('aria-label'), group.querySelectorAll('.overview-metric-group-items > div').length])).toEqual([
+			['group', 'Balances', 2],
+			['group', 'Prices', 1],
 		])
-		expect(strip?.querySelector('section')).toBeNull()
+		expect(metrics?.querySelector('section')).toBeNull()
 		expect(groups[1]?.querySelector('.overview-metric-group-caption button')?.textContent).toBe('Refresh')
 		expect(() => HeaderMetricGroup({ children: undefined, label: 'Empty' })).toThrow('at least one metric cell')
 	})

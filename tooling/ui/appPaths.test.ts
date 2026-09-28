@@ -106,7 +106,7 @@ describe('split development server paths', () => {
 		['trading', 4163],
 	] as const) {
 		test(`serves the ${appId} application root`, async () => {
-			const titles: Record<UiAppId, string> = { statoblast: '<title>Augur Statoblast</title>', trading: '<title>Statoblast trading</title>', zoltar: '<title>Zoltar</title>' }
+			const titles: Record<UiAppId, string> = { statoblast: '<title>Augur Statoblast</title>', trading: '<title>Augur Trading</title>', zoltar: '<title>Zoltar</title>' }
 			const paths = getUiAppPaths(appId)
 			const processHandle = Bun.spawn([process.execPath, paths.devServerScript, appId], { stderr: 'pipe', stdout: 'pipe' })
 			try {
