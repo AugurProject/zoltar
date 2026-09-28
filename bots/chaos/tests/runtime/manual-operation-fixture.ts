@@ -7,7 +7,7 @@ import type { ConfigurationState } from '../../src/runtime/dashboard-controller.
 import { hash, snapshotFixture } from '../operations/fixture.ts'
 import type { OperationPlan } from '../../src/operations/types.ts'
 
-export function manualOperationFixture(definitionId = 'open-oracle.weth.wrap') {
+export function manualOperationFixture(definitionId = 'open-oracle.weth.wrap', preflight: (plan: OperationPlan) => Promise<void> = async () => {}) {
 	const snapshot = snapshotFixture()
 	const settings = parseSettings({ ...example, privateKey: `0x${'11'.repeat(32)}`, runtime: { ...example.runtime, execute: false }, strategy: { ...example.strategy, selectableOperationAllowlist: [definitionId] } })
 	const configuration: ConfigurationState = { path: '/unused', rememberSigner: false, revision: 'revision-1', settings }
@@ -25,6 +25,7 @@ export function manualOperationFixture(definitionId = 'open-oracle.weth.wrap') {
 	const gate = createSignerOperationGate()
 	const controller = createManualOperationController({
 		configuration,
+		preflight,
 		execute: async plan => {
 			executed.push(plan)
 		},
