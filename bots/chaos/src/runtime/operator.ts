@@ -1,8 +1,9 @@
+import { preflightOperationPreview } from '../execution/operation-preview.ts'
 import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
-import { createWalletClient, privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
+import { privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { errorMessage as formatErrorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
@@ -16,7 +17,7 @@ import { startDashboardServer } from '../dashboard/dashboard-server.ts'
 import { recoverPendingTransactions } from '../execution/recovery.ts'
 import { recordPreflightFailure } from '../execution/preflight-failure.ts'
 import { executeOperationPlan, TransactionAwaitingRecovery } from '../execution/transaction-executor.ts'
-import { type ExecutionEnvironment } from '../execution/execution-context.ts'
+import { executionEnvironment } from './execution-environment.ts'
 import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-context.ts'
 import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
 import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
@@ -24,7 +25,7 @@ import type { OperationPlan } from '../operations/types.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
-import { applyExecutionPolicy, blockExecutableEvaluations, chaosChain, chaosReadClients, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
+import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
 import { restartSafeSettings } from './configuration-candidates.ts'
 import { createChaosDashboardController, type ChaosProcessLocks, type ConfigurationState } from './dashboard-controller.ts'
 import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
@@ -36,7 +37,7 @@ import { retirementPlanAllowed } from './retirement-operation-policy.ts'
 import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
 import { closeInterruptedSchedulerRun, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
 import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
-import { assertSubmissionPreflightFresh, ensureReadPreflight, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
+import { ensureReadPreflight, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
 import { runtimeTopologySummary } from './topology-summary.ts'
 import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
 import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
@@ -85,34 +86,6 @@ async function ensureSubmissionPreflight(resources: RuntimeResources, settings: 
 
 function resourceHealth(resources: RuntimeResources) {
 	return [...resources.readPreflightChecks, ...resources.submissionPreflightChecks, ...resources.pool.snapshot()]
-}
-
-function executionEnvironment(settings: OperatorSettings, state: RuntimeState, resources: RuntimeResources, recoverySender?: Address | undefined, refreshSubmissionPreflight?: (() => Promise<void>) | undefined, executionCancelled?: (() => boolean) | undefined): ExecutionEnvironment {
-	const account = settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey)
-	const sender = recoverySender ?? account?.address
-	if (sender === undefined) throw new Error('Transaction execution requires the configured signer')
-	if (account !== undefined && account.address.toLowerCase() !== sender.toLowerCase()) {
-		throw new Error('The configured signer does not match the pending transaction recovery signer')
-	}
-	return {
-		assertSubmissionReady: () => assertSubmissionPreflightFresh(resources.submissionPreflightChecks, settings),
-		...(refreshSubmissionPreflight === undefined ? {} : { beforeBroadcast: refreshSubmissionPreflight, beforeSign: refreshSubmissionPreflight }),
-		chain: chaosChain(settings),
-		...(executionCancelled === undefined ? {} : { executionCancelled }),
-		pool: resources.pool,
-		sender,
-		settings,
-		state,
-		...(account === undefined
-			? {}
-			: {
-					wallet: createWalletClient({
-						account,
-						chain: chaosChain(settings),
-						transport: resources.pool.transport,
-					}),
-				}),
-	}
 }
 
 async function executeLifecyclePlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
@@ -512,6 +485,10 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 			)
 			await persistState(configuration, state)
 			return scan
+		},
+		preflight: async plan => {
+			if (resources === undefined) throw new Error('Operation RPC resources are unavailable')
+			await preflightOperationPreview(executionEnvironment(configuration.settings, state, resources), plan)
 		},
 		execute: async plan => {
 			if (resources === undefined) throw new Error('Operation RPC resources are unavailable')
