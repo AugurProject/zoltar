@@ -32,11 +32,21 @@ export interface OperationsDetailDeps {
 	readonly pageUrl: URL
 	readonly demoRiskHistoryAutoLoadConsumed: boolean
 	readonly consumeDemoRiskHistoryAutoLoad: () => void
-	readonly setDetailState: (state: { readonly chainId: string; readonly routeKey: string; readonly items: readonly JsonRecord[]; readonly decisionItems: readonly JsonRecord[]; readonly riskHistoryOffset: number }) => void
+	readonly setDetailState: (state: { readonly chainId: string; readonly routeKey: string; readonly items: readonly JsonRecord[]; readonly decisionItems: readonly JsonRecord[]; readonly activityItems: readonly JsonRecord[]; readonly riskHistoryOffset: number }) => void
 	readonly requiredChainId: () => string
 	readonly operationsDetailRouteKey: (route: OperationsDetailRoute) => string
 	readonly detailEvidenceRowsFor: (kind: OperationsDetailRoute['kind'], items: readonly JsonRecord[]) => HTMLElement[]
-	readonly loadOperations: (options?: { live?: boolean; catalogTargetCount?: number; riskPoolTargetCount?: number; riskVaultTargetCount?: number; detailTargetCount?: number; decisionTargetCount?: number; historyTargetOffset?: number; preservedContext?: OperationsRenderContext }) => Promise<boolean>
+	readonly loadOperations: (options?: {
+		live?: boolean
+		catalogTargetCount?: number
+		riskPoolTargetCount?: number
+		riskVaultTargetCount?: number
+		detailTargetCount?: number
+		decisionTargetCount?: number
+		activityTargetCount?: number
+		historyTargetOffset?: number
+		preservedContext?: OperationsRenderContext
+	}) => Promise<boolean>
 	readonly components: Components
 }
 
@@ -108,6 +118,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	let loadedRiskHistoryOffset = 0
 	const decisionPage = route.kind === 'report' ? detailPageRecord(data, 'coordinatorDecisions') : {}
 	const decisionItems = operationRecords(decisionPage['items'])
+	const activityPage = detailPageRecord(data, 'activity')
+	const activityItems = operationRecords(activityPage['items'])
 	const approvalEvents = operationRecords(data['approvalEvents']).sort(compareCanonicalEventPosition)
 	if (approvalEvents.length > 0)
 		panels.push(
@@ -176,7 +188,26 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			),
 		)
 		panels.push(operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits' }))
-		panels.push(tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref }))
+		const activityPanel = tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref })
+		if (activityPage['hasMore'] === true && typeof activityPage['nextCursor'] === 'string') {
+			const more = element('button', 'secondary compact', 'Show older market activity')
+			more.type = 'button'
+			const status = element('p', 'activity-summary')
+			status.setAttribute('role', 'status')
+			more.addEventListener('click', async () => {
+				more.disabled = true
+				more.setAttribute('aria-busy', 'true')
+				status.textContent = 'Loading older market activity…'
+				const loaded = await loadOperations({ live: true, activityTargetCount: activityItems.length + 100, preservedContext: captureOperationsRenderContext() })
+				if (!loaded && more.isConnected) {
+					more.disabled = false
+					more.removeAttribute('aria-busy')
+					status.textContent = 'Older market activity could not be loaded. Try again.'
+				}
+			})
+			activityPanel.append(more, status)
+		}
+		panels.push(activityPanel)
 		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
 		panels.push(
 			operationsPanel(
@@ -390,6 +421,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		routeKey: operationsDetailRouteKey(route),
 		items: evidenceItems,
 		decisionItems,
+		activityItems,
 		riskHistoryOffset: loadedRiskHistoryOffset,
 	})
 	const evidenceHasMore = evidencePage['hasMore'] === true && typeof evidencePage['nextCursor'] === 'string'

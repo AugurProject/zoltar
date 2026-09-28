@@ -340,6 +340,7 @@ export interface AccountTransactionState {
 	loaded: AccountTransaction[]
 	total: number
 	nextPageCursor?: string
+	snapshotCursor?: string
 	snapshotBlock?: string
 	pageError?: string
 	pageErrorAppend: boolean
@@ -413,6 +414,7 @@ export interface ItemsPage<T> {
 	total?: number
 	limit?: number
 	offset?: number
+	snapshotCursor?: string
 	snapshotBlock?: string
 }
 

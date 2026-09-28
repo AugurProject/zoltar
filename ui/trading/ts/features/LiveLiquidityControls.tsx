@@ -108,7 +108,7 @@ export function LiveLiquidityControls({
 	if (operation === 'initialize') actionLabel = liquidityCopy.initializeLiquidityAction
 	else if (operation === 'remove') actionLabel = liquidityCopy.removeLiquidityAction
 	let amountHint: string | undefined
-	if (operation === 'remove' && balances !== undefined) amountHint = liquidityCopy.lpHeld(formatLpQuantity(balances.lp))
+	if (operation === 'remove' && balances !== undefined) amountHint = liquidityCopy.lpHeld(formatLpQuantity(balances.lp, 4, 'down'))
 	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = liquidityCopy.walletEth(formatTrimmedUnits(walletEthAttoEth))
 	return (
 		<div className='liquidity-controls'>

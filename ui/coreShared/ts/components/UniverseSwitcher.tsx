@@ -41,8 +41,16 @@ export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: Uni
 			details.removeAttribute('open')
 		}
 		document.addEventListener('pointerdown', onPointerDown)
-		return () => document.removeEventListener('pointerdown', onPointerDown)
+		window.addEventListener('hashchange', close)
+		window.addEventListener('popstate', close)
+		return () => {
+			document.removeEventListener('pointerdown', onPointerDown)
+			window.removeEventListener('hashchange', close)
+			window.removeEventListener('popstate', close)
+		}
 	}, [])
+
+	useEffect(close, [activeUniverseId])
 
 	return (
 		<details

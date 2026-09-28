@@ -81,7 +81,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		disputeOccurred: false,
 		escalationHalt: 0n,
 		exactToken1Report: 100n,
-		fee: 0n,
+
 		feePercentage: 0n,
 		initialReporter: zeroAddress,
 		isDistributed: false,

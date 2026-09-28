@@ -412,7 +412,7 @@ void describe('fork auction helpers', () => {
 				maxAttoRepBeingSold: 100n * ethUnit,
 			}),
 			[
-				createTickSummary({ active: true, currentTotalBidAttoEth: 8n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 12n }),
+				createTickSummary({ active: true, currentTotalBidAttoEth: 8n * ethUnit, price: 2n * TRUTH_AUCTION_PRICE_PRECISION, tick: 12n }),
 				createTickSummary({ active: true, currentTotalBidAttoEth: 6n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 10n }),
 				createTickSummary({ active: true, currentTotalBidAttoEth: 5n * ethUnit, price: TRUTH_AUCTION_PRICE_PRECISION, tick: 8n }),
 			],
@@ -424,7 +424,7 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('derives provisional truth auction progress from the synthetic underfunded winner prefix', () => {
+	void test('does not count below-reserve bids as underfunded sales', () => {
 		const ethUnit = 10n ** 18n
 		const progress = getTruthAuctionOverviewProgress(
 			createTruthAuction({
@@ -436,8 +436,8 @@ void describe('fork auction helpers', () => {
 		)
 
 		expect(progress).toEqual({
-			attoEthRaised: 16n * ethUnit,
-			attoRepSold: 4n * ethUnit,
+			attoEthRaised: 0n,
+			attoRepSold: 0n,
 		})
 	})
 
@@ -496,6 +496,11 @@ void describe('fork auction helpers', () => {
 			attoEthRaised: 0n,
 			attoRepSold: 0n,
 		})
+	})
+
+	void test('does not offer refunds before finalization', () => {
+		const auction = createTruthAuction({ finalized: false, hitCap: true, clearingTick: 10n, clearingPrice: TRUTH_AUCTION_PRICE_PRECISION, bidAtClearingTickAttoEth: 0n })
+		for (const tick of [9n, 10n]) expect(getTruthAuctionBidDisposition(createBid({ tick }), auction).canPrefillRefund).toBe(false)
 	})
 
 	void test('sorts auction bids by price priority and bid index', () => {

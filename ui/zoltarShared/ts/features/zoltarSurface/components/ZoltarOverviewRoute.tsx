@@ -135,6 +135,7 @@ export function ZoltarOverviewRoute() {
 			address: accountState.address,
 			isOnActiveChain: isActiveAppChain(accountState.chainId),
 			preparedMigrationRepAttoRep: operations.zoltarMigrationPreparedRepBalanceAttoRep,
+			childMigratedAttoRep: operations.zoltarMigrationChildSplitAmountsAttoRep,
 			repBalanceAttoRep: operations.zoltarForkRepBalanceAttoRep,
 		},
 		activeUniverseId,

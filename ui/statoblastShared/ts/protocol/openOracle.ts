@@ -49,8 +49,8 @@ function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: 
 	return { decimals, symbol }
 }
 
-function calculateOpenOraclePrice(amount1: bigint, amount2: bigint) {
-	return amount2 === 0n ? 0n : (amount1 * 10n ** OPEN_ORACLE_PRICE_UNITS) / amount2
+function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decimals1: number, decimals2: number) {
+	return amount2 === 0n ? 0n : (amount1 * 10n ** (OPEN_ORACLE_PRICE_UNITS + BigInt(decimals2))) / (amount2 * 10n ** BigInt(decimals1))
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('@zoltar/ui-core-shared/types/contracts.js').OpenOracleReportDetails> {
@@ -106,7 +106,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		currentBlockNumber: block.number,
 		exactToken1Report: storedState.initialAmount1,
 		escalationHalt: game.escalationHalt,
-		fee: 0n,
+
 		settlerRewardAttoEth: game.settlerRewardAttoEth,
 		token1: game.token1,
 		settlementTime: game.settlementTime,
@@ -118,7 +118,7 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		disputeDelay: game.disputeDelay,
 		currentAmount1: game.currentAmount1,
 		currentAmount2: game.currentAmount2,
-		price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2),
+		price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2, token1Metadata.decimals, token2Metadata.decimals),
 		currentReporter: game.currentReporter,
 		reportTimestamp: game.reportTimestamp,
 		settlementTimestamp: game.settlementTimestamp,
@@ -241,7 +241,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			disputeOccurred: state.reportCount > 1n,
 			exactToken1Report: state.initialAmount1,
 			isDistributed: state.settled,
-			price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2),
+			price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2, token1Metadata.decimals, token2Metadata.decimals),
 			reportId,
 			reportTimestamp: game.reportTimestamp,
 			settlementTimestamp: game.settlementTimestamp,

@@ -156,7 +156,7 @@ export function useZoltarFork(
 	const forkAccessLoad = useLoadController()
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
-	const forkQuestionScopeKey = `${accountAddress ?? 'disconnected'}:${environmentRefreshKey}:${activeUniverseId.toString()}`
+	const forkQuestionScopeKey = `${environmentRefreshKey}:${activeUniverseId.toString()}`
 	const forkQuestionSelection = useSignal({ questionId: '', scopeKey: forkQuestionScopeKey })
 	const zoltarForkQuestionId = forkQuestionSelection.value.scopeKey === forkQuestionScopeKey ? forkQuestionSelection.value.questionId : ''
 	const zoltarForkResult = useSignal<ZoltarForkActionResult | undefined>(undefined)
@@ -180,7 +180,7 @@ export function useZoltarFork(
 	const resolveActionResultName = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'approveForkRep' : 'forkZoltar')
 	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Approving REP for fork' : 'Forking universe')
 	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Universe fork submitted')
-	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Universe fork failed')
+	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approval failed' : 'Universe fork failed')
 
 	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = currentUniverseRef.current) => {
 		const isCurrent = nextForkAccessLoad()

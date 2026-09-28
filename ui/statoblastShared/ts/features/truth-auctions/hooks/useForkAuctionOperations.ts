@@ -165,6 +165,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 		const isCurrentSelection = () => !shouldRefreshCurrentSelection || isForkAuctionSelectionCurrent(actionSelectionKey)
 		const shouldApplyCurrentSelection = () => (securityPoolAddressOverride === undefined ? isForkAuctionSelectionCurrent(actionSelectionKey) : overrideSelectionKey !== undefined && isForkAuctionSelectionCurrent(overrideSelectionKey))
 		try {
+			forkAuctionError.value = undefined
 			forkAuctionActiveAction.value = actionName
 			forkAuctionFeedback.value = createPendingActionFeedback(actionName, getPendingTitle(actionName, displayTitleOverride))
 			await runWriteAction(
@@ -184,9 +185,11 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						if (result !== undefined) onTransactionPresented(createForkAuctionWarningPresentation(result, message))
 					},
 					onWriteCanceled: () => {
+						forkAuctionError.value = 'Transaction canceled'
 						forkAuctionFeedback.value = undefined
 					},
 					onWriteError: message => {
+						forkAuctionError.value = message
 						forkAuctionFeedback.value = createErrorActionFeedback(actionName, getFailureTitle(actionName, displayTitleOverride), message)
 					},
 					refreshState: async () => {

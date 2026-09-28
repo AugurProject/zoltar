@@ -253,7 +253,7 @@ describe('useZoltarFork', () => {
 		expect(requireHookState(hookState).zoltarForkPending).toBe(false)
 	})
 
-	test('scopes mutable pre-fork question selection by account, environment, and universe', async () => {
+	test('preserves question selection across accounts but scopes it by environment and universe', async () => {
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness({ accountAddress, activeUniverseId, environmentRefreshKey }: { accountAddress: Address | undefined; activeUniverseId: bigint; environmentRefreshKey: number }) {
 			hookState = useZoltarFork(
@@ -299,7 +299,7 @@ describe('useZoltarFork', () => {
 			requireHookState(hookState).setZoltarForkQuestionId('0x03')
 			render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 1 }), renderedComponent.container)
 		})
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('0x03')
 	})
 
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {

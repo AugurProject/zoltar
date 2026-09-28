@@ -122,7 +122,7 @@ export function useQuotedTransaction<Quote>({
 		}
 	}, [quoteKey])
 
-	// Parents may pass a new lock callback on every render, so only a real unmount releases the lock.
+	// Active submissions retain their market locks across tab unmounts until their promises settle.
 	const lockChangeRef = useRef(onWorkflowLockChange)
 	lockChangeRef.current = onWorkflowLockChange
 	const knownReceiptRef = useRef(onKnownReceipt)
@@ -132,9 +132,11 @@ export function useQuotedTransaction<Quote>({
 		return () => {
 			mounted.current = false
 			quoteRequests.invalidate()
-			activeMarkets.clear()
-			for (const locked of lockedMarkets) lockChangeRef.current(false, locked)
-			lockedMarkets.clear()
+			for (const locked of lockedMarkets) {
+				if (activeMarkets.has(locked)) continue
+				lockChangeRef.current(false, locked)
+				lockedMarkets.delete(locked)
+			}
 		}
 	}, [])
 

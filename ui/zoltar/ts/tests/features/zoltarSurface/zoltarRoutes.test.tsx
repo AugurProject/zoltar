@@ -3,14 +3,14 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZoltarRoutes } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarRoutes.js'
 import { ZoltarWorkspaceProvider } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -96,7 +96,7 @@ describe('ZoltarRoutes', () => {
 		},
 	})
 
-	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined) {
+	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined, overrides: Partial<ReturnType<typeof createOperations>> = {}) {
 		const viewChanges: ZoltarView[] = []
 		const retries: string[] = []
 		const workspace = {
@@ -110,7 +110,7 @@ describe('ZoltarRoutes', () => {
 			onRetryUniverse: () => retries.push('universe'),
 			onSwitchNetwork: () => undefined,
 			onViewChange: (nextView: ZoltarView) => viewChanges.push(nextView),
-			operations: createOperations(universe),
+			operations: { ...createOperations(universe), ...overrides },
 			universeError,
 			universeState,
 		}
@@ -123,6 +123,12 @@ describe('ZoltarRoutes', () => {
 		).cleanup
 		return { queries: within(document.body), retries, viewChanges }
 	}
+
+	test('automatically looks up a pasted fork question on the fork route', async () => {
+		const loadZoltarQuestion = mock(async () => undefined)
+		await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: '0x01', loadZoltarQuestion })
+		await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledWith('0x01'))
+	})
 
 	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {
 		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false }))

@@ -109,3 +109,5 @@ export const accountingDetails = 'Accounting breakdown'
 export const estimatedReceiverHealth = 'Estimated receiver health'
 export const meetsRequiredHealth = 'Meets required health'
 export const belowRequiredHealth = 'Below required health'
+
+export const liquidationTimeoutMaximumReason = 'Enter a liquidation timeout of 5 minutes or less.'

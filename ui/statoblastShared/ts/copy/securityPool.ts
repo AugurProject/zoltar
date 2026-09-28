@@ -275,3 +275,9 @@ export const oracleOperationExecutesImmediately = 'Executes immediately with the
 export const oracleOperationQueuesForSettlement = 'Queues for execution after oracle settlement.'
 export const oracleOperationMayNeedManualExecution = 'Queues; manual execution may be needed after oracle settlement.'
 export const oracleOperationExecutionLoading = 'Checking whether this operation will execute immediately or queue.'
+
+export const liquidationWalletRequiredReason = 'Connect a wallet to review liquidation.'
+export const liquidationUnavailableReason = 'Liquidation is unavailable in this pool state.'
+export const liquidationOwnVaultReason = 'Choose another vault to liquidate.'
+export const withdrawalUnavailableReason = 'REP withdrawal is unavailable in this pool state.'
+export const noWithdrawableRepReason = 'No REP is available to withdraw.'

@@ -51,18 +51,10 @@ function ceilDiv(dividend: bigint, divisor: bigint) {
 	return divideUp(dividend, divisor)
 }
 
-function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], maxAttoRepBeingSold: bigint) {
-	if (maxAttoRepBeingSold <= 0n) return 0n
-
-	let winningAttoEth = 0n
-	for (const tickSummary of tickSummaries) {
-		const candidateWinningAttoEth = winningAttoEth + tickSummary.currentTotalBidAttoEth
-		const thresholdPrice = ceilDiv(candidateWinningAttoEth * TRUTH_AUCTION_PRICE_PRECISION, maxAttoRepBeingSold)
-		if (thresholdPrice > tickSummary.price) break
-		winningAttoEth = candidateWinningAttoEth
-	}
-
-	return winningAttoEth
+function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], auction: TruthAuctionMetrics) {
+	if (auction.maxAttoRepBeingSold <= 0n) return 0n
+	const reserve = auction.underfundedThreshold ?? ceilDiv(auction.attoEthRaiseCap * TRUTH_AUCTION_PRICE_PRECISION, auction.maxAttoRepBeingSold)
+	return tickSummaries.reduce((total, tick) => total + (tick.price >= reserve ? tick.currentTotalBidAttoEth : 0n), 0n)
 }
 
 function assertValidUnderfundedTruthAuctionMetrics(truthAuction: TruthAuctionMetrics) {
@@ -182,7 +174,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 		return {
 			label: 'Below clearing',
 			tone: 'danger',
-			canPrefillRefund: !truthAuction.finalized,
+			canPrefillRefund: false,
 			canPrefillSettle: false,
 			settlementKind: 'none',
 			summaryKind: 'losing',
@@ -199,7 +191,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 		return {
 			label: 'Below clearing',
 			tone: 'danger',
-			canPrefillRefund: true,
+			canPrefillRefund: false,
 			canPrefillSettle: false,
 			settlementKind: 'none',
 			summaryKind: 'losing',
@@ -391,7 +383,7 @@ export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetric
 	let provisionalRepSoldAttoRep = 0n
 
 	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
-		const underfundedWinningAttoEth = findUnderfundedWinningAttoEth(activeTickSummaries, truthAuction.maxAttoRepBeingSold)
+		const underfundedWinningAttoEth = findUnderfundedWinningAttoEth(activeTickSummaries, truthAuction)
 		if (underfundedWinningAttoEth > 0n) {
 			provisionalEthRaisedAttoEth = underfundedWinningAttoEth
 			provisionalRepSoldAttoRep = truthAuction.maxAttoRepBeingSold
@@ -409,7 +401,7 @@ export function getTruthAuctionOverviewProgress(truthAuction: TruthAuctionMetric
 			if (acceptedAttoEth > remainingCap) acceptedAttoEth = remainingCap
 
 			provisionalEthRaisedAttoEth += acceptedAttoEth
-			provisionalRepSoldAttoRep += estimateRepPurchased(acceptedAttoEth, tickSummary.price)
+			provisionalRepSoldAttoRep += estimateRepPurchased(acceptedAttoEth, truthAuction.clearingPrice)
 			remainingCap -= acceptedAttoEth
 		}
 	}

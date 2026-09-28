@@ -191,6 +191,31 @@ describe('useForkAuctionOperations', () => {
 		},
 	})
 
+	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const) {
+		test(`${action} exposes failures so pending controls recover`, async () => {
+			const fail = async () => {
+				throw new Error('Wallet rejected transaction')
+			}
+			const dependencies = createForkAuctionOperationsDependencies({ startTruthAuctionForSecurityPool: fail, settleTruthAuctionBids: fail })
+			let hookState: UseForkAuctionOperationsState | undefined
+			const Harness = createHarness(
+				dependencies,
+				state => {
+					hookState = state
+				},
+				() => undefined,
+			)
+			const rendered = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = rendered.cleanup
+			await act(async () => {
+				if (action === 'startTruthAuction') await requireHookState(hookState).startTruthAuction()
+				else await requireHookState(hookState).claimAuctionProceeds(SECURITY_POOL_ADDRESS, [{ tick: 0n, bidIndex: 0n }], [], 1n)
+			})
+			expect(requireHookState(hookState).forkAuctionActiveAction).toBeUndefined()
+			expect(requireHookState(hookState).forkAuctionError).toContain('Wallet rejected transaction')
+		})
+	}
+
 	test('refundLosingBids preserves negative settlement ticks from the selection list', async () => {
 		const selectedBids: readonly SettlementSelectedBid[] = [{ bidIndex: 4n, tick: -3n }]
 		const onTransactionFailed = mock(() => undefined)

@@ -86,13 +86,13 @@ function useLiveSettlementTime(report: OpenOracleReportDetails | undefined, load
 	useEffect(() => {
 		if (report === undefined || !report.timeType || report.isDistributed || report.reportTimestamp === 0n || !visible) return
 		const readyAt = report.reportTimestamp + report.settlementTime
-		const refreshKey = `${report.reportId}:${report.reportTimestamp}`
+		const refreshKey = `${report.reportId}:${report.reportTimestamp}:${report.settlementTime}`
 		const tick = () => {
 			const now = Date.now()
 			const elapsedSeconds = BigInt(Math.floor((now - startedAt.current.at) / 1000))
 			setClock(current => (current.key === reportKey && current.elapsedSeconds === elapsedSeconds ? current : { key: reportKey, elapsedSeconds }))
 			if (report.currentTime + elapsedSeconds < readyAt || refresh.current.loading) return
-			if (lastRefresh.current?.key === refreshKey && now - lastRefresh.current.at < 5000) return
+			if (lastRefresh.current?.key === refreshKey) return
 			lastRefresh.current = { key: refreshKey, at: now }
 			refresh.current.onLoadReport(report.reportId.toString())
 		}
@@ -328,10 +328,6 @@ export function OpenOracleReportDetailsCard({
 						{
 							label: openOracleCopy.price,
 							value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
-						},
-						{
-							label: openOracleCopy.fee,
-							value: <CurrencyValue value={openOracleReportDetails.fee} suffix={commonCopy.eth} />,
 						},
 						{
 							label: openOracleCopy.settlerReward,

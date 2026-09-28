@@ -461,3 +461,8 @@
 		width: 100%;
 	}
 }
+
+.simulation-banner .badge.pending {
+	color: var(--simulation-text);
+	border-color: var(--simulation-border-hover);
+}

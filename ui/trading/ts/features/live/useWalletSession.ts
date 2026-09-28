@@ -409,9 +409,12 @@ export function useWalletSummaryEffects({
 	}, [session.account, networkMismatchReason, session.walletChainId, onWalletSummaryChange, session.walletEthAttoEth, session.walletRepAttoRep, session.walletSummaryError, session.walletSummaryErrorLabel, session.walletSummaryStatus, session.walletSummaryUniverseId])
 
 	useEffect(() => {
-		const request = requests.begin()
 		session.setWalletEthAttoEth(undefined)
 		session.setWalletRepAttoRep(undefined)
+	}, [session.account, session.walletChainId, configuration, selectedUniverseId])
+
+	useEffect(() => {
+		const request = requests.begin()
 		session.setWalletSummaryError(undefined)
 		session.setWalletSummaryErrorLabel(undefined)
 		session.setWalletSummaryUniverseId(selectedUniverseId)

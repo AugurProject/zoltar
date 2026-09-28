@@ -3336,10 +3336,12 @@ postgresTest(
 		`
 			const largePageResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10`), sql), 8_000)
 			if (largePageResponse === undefined) throw new Error('large rich-list page did not return a response')
-			const largePage = (await largePageResponse.json()) as { items: Array<{ address: string }>; total: number }
+			const largePage = (await largePageResponse.json()) as { items: Array<{ address: string }>; total: number; snapshotCursor: string; snapshotBlock: string }
+			expect(largePage.snapshotCursor).toBeString()
+			expect(largePage.snapshotBlock).toBe('3')
 			expect(largePage).toMatchObject({ total: 5002 })
 			expect(largePage.items).toHaveLength(10)
-			const secondLargePageResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=10`), sql), 8_000)
+			const secondLargePageResponse = await database.read(sql => handleApi(new Request(`http://localhost/api/v1/richlist?chainId=${chainId}&limit=10&offset=10&snapshot=${encodeURIComponent(largePage.snapshotCursor)}`), sql), 8_000)
 			if (secondLargePageResponse === undefined) throw new Error('second large rich-list page did not return a response')
 			const secondLargePage = (await secondLargePageResponse.json()) as { items: Array<{ address: string }>; total: number; offset: number }
 			expect(secondLargePage).toMatchObject({ total: 5002, offset: 10 })

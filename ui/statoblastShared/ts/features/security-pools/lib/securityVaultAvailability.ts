@@ -158,7 +158,7 @@ export function buildVaultReadinessActions({
 			...(repExitReady ? { onAction: () => onOpenModal('withdraw-rep') } : {}),
 			readiness: repExitReady ? 'ready' : 'blocked',
 			...(repExitDisabledReasonId === undefined ? {} : { disabledReasonId: repExitDisabledReasonId }),
-			...(repExitEnabled ? withBlocker(visibleRepExitLauncherBlocker) : {}),
+			...withBlocker(visibleRepExitLauncherBlocker ?? (!repExitEnabled && repExitDisabledReasonId === undefined ? securityPoolCopy.withdrawalUnavailableReason : undefined)),
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,

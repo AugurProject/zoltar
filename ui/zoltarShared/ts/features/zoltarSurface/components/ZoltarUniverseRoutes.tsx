@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -59,8 +60,13 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 
 /** Mounts the existing fork workflow for an unforked universe. */
 export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
-	const { accountState, operations, universeState } = useZoltarWorkspace()
+	const { accountState, environmentRefreshKey, operations, universeState } = useZoltarWorkspace()
 	const forkQuestionId = operations.zoltarForkQuestionId.trim()
+	const lookup = useRef(operations.loadZoltarQuestion)
+	lookup.current = operations.loadZoltarQuestion
+	useEffect(() => {
+		if (forkQuestionId !== '') void lookup.current(forkQuestionId)
+	}, [forkQuestionId, environmentRefreshKey, universe.universeId])
 	return (
 		<>
 			<RouteHeader description={zoltarCopy.forkRouteDescription} title={zoltarCopy.forkZoltar} />

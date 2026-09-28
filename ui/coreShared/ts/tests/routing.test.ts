@@ -36,6 +36,9 @@ describe('routing', () => {
 		expect(getCurrentRouteHash()).toBe(ZOLTAR_ROUTE)
 		expect(getRouteHashSearch('')).toBe('')
 
+		window.location.hash = '#/'
+		expect(getCurrentRoute()).toBe('zoltar')
+
 		window.location.hash = '#/does-not-exist?simulate=1'
 		expect(getCurrentRoute()).toBe('not-found')
 	})

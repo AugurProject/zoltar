@@ -135,6 +135,7 @@ export function LiveSettlementControls({
 		executeWithCurrentWalletContext,
 		createGuardedWalletWrite,
 		onWorkflowLockChange,
+		onRedemptionConfirmed: () => setAmount(''),
 		onMigrationConfirmed: () => setForkContextNonce(current => current + 1),
 		services,
 	})

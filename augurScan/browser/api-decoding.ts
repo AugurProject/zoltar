@@ -81,6 +81,8 @@ export const decodeItemsPage = <T>(value: unknown, itemGuard: (item: unknown) =>
 	const limit = value['limit']
 	const offset = value['offset']
 	const snapshotBlock = value['snapshotBlock']
+	const snapshotCursor = value['snapshotCursor']
+	if (snapshotCursor !== undefined && !isString(snapshotCursor)) throw new Error(`${label} snapshot cursor is malformed`)
 	if (nextCursor !== undefined && !isString(nextCursor)) throw new Error(`${label} next cursor is malformed`)
 	if (total !== undefined && typeof total !== 'number') throw new Error(`${label} total is malformed`)
 	if (limit !== undefined && typeof limit !== 'number') throw new Error(`${label} limit is malformed`)
@@ -93,6 +95,7 @@ export const decodeItemsPage = <T>(value: unknown, itemGuard: (item: unknown) =>
 		...(limit === undefined ? {} : { limit }),
 		...(offset === undefined ? {} : { offset }),
 		...(snapshotBlock === undefined ? {} : { snapshotBlock }),
+		...(snapshotCursor === undefined ? {} : { snapshotCursor }),
 	}
 }
 

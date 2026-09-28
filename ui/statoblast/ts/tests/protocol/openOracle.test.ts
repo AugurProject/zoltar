@@ -63,6 +63,19 @@ function readStoredOracleFixture(functionName: string, preimage: OpenOracleState
 }
 
 describe('openOracle protocol client', () => {
+	test('normalizes displayed report prices for different token decimals', async () => {
+		const preimage = createOpenOraclePreimage()
+		preimage.game.currentAmount1 = 10n ** 18n
+		preimage.game.currentAmount2 = 3000n * 10n ** 6n
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ number: 1n, timestamp: 2n }),
+			multicall: async () => [18n, 6n, 'ONE', 'TWO'],
+			readContract: async request => readStoredOracleFixture(request.functionName, preimage),
+		})
+		const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+		expect(report.price).toBe(10n ** 30n / 3000n)
+	})
+
 	test('loads stored oracle reports with log access disabled', async () => {
 		const preimage = createOpenOraclePreimage()
 		preimage.game.flags |= OPEN_ORACLE_FLAG_STORE_ALL | OPEN_ORACLE_FLAG_TRACK_DISPUTES

@@ -168,8 +168,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 			const row = setLiveRecord(element('button', 'entity-row'), entityKey(systemRouteState.activeType, item), item)
 			row.type = 'button'
 			row.dataset.key = entityKey(systemRouteState.activeType, item)
-			row.setAttribute('role', 'option')
-			row.setAttribute('aria-selected', String(row.dataset.key === systemRouteState.selectedKey))
+			row.setAttribute('aria-pressed', String(row.dataset.key === systemRouteState.selectedKey))
 			row.append(element('span', 'entity-row-title', title), element('span', 'entity-row-meta', meta))
 			row.addEventListener('click', () => {
 				if (location.pathname === '/system') void selectEntity(item)

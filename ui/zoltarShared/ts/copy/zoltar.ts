@@ -107,3 +107,5 @@ export const forkUnavailableTitle = 'Already forked'
 export const forkUnavailableDetail = 'This universe has forked and cannot fork again. Migrate REP instead.'
 export const migrateUnavailableTitle = 'No fork yet'
 export const migrateUnavailableDetail = 'REP migrates only after this universe forks.'
+
+export const migrationWalletBalancesReason = 'Connect a wallet to read migration balances.'

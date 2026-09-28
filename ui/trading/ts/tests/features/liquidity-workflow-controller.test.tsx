@@ -239,6 +239,43 @@ describe('liquidity workflow controller state', () => {
 		await rendered.cleanup()
 	})
 
+	test('retains the market lock when its tab unmounts during wallet approval', async () => {
+		const signature = deferred<Hash>()
+		const signatureRequested = deferred<void>()
+		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const walletClient = { ...baseWalletClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
+		const services: LiveLiquidityServices = {
+			publicErrorMessage: String,
+			simulateLiquidity: async (_client, _configuration, _market, _account, _operation, amount) => liquidityQuote(amount),
+			submitFreshLiquidity: async (_client, _configuration, _account, _quote, guardedWrite) =>
+				await guardedWrite(async () => {
+					signatureRequested.resolve()
+					return await signature.promise
+				}),
+		}
+		const locks: boolean[] = []
+		let controller: Controller | undefined
+		const rendered = await renderIntoDocument(
+			controllerProbe(
+				walletClient,
+				services,
+				value => {
+					controller = value
+				},
+				locked => locks.push(locked),
+			),
+		)
+		await act(() => controller?.updateAmount('0.01'))
+		await settleQuote()
+		const submission = controller?.submit()
+		await signatureRequested.promise
+		await rendered.cleanup()
+		expect(locks.at(-1)).toBe(true)
+		signature.reject(new Error('User rejected request'))
+		await submission
+		expect(locks.at(-1)).toBe(false)
+	})
+
 	test('simulates again before signing and represents a broadcast with an unknown receipt as one locked uncertain state', async () => {
 		const receiptFailure = deferred<{ status: 'success' | 'reverted' }>()
 		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })

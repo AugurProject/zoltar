@@ -160,7 +160,6 @@ export function useLiveTradingController({
 		executeWithCurrentWalletContext,
 		// A trade can confirm after navigation; its refresh must load the route now on screen, not the one it started on.
 		refresh: refreshCurrentRoute,
-		marketPageStart: marketPage.start,
 	})
 
 	return {

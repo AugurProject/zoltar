@@ -194,6 +194,7 @@ export function getLiquidationBlockers({
 		{ reason: sameVaultWarning },
 		{ reason: liquidationDebtEthAmount.trim() === '' ? liquidationCopy.liquidationAmountRequired : undefined },
 		{ reason: liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds === undefined ? liquidationCopy.liquidationTimeoutMinimumReason : undefined },
+		{ reason: liquidationExecutionMode === 'queue' && liquidationTimeoutSeconds !== undefined && liquidationTimeoutSeconds > 300n ? liquidationCopy.liquidationTimeoutMaximumReason : undefined },
 		{ loading: true, reason: liquidationExecutionMode === 'queue' && loadingLiquidationFundingPreview ? liquidationCopy.loadingQueueFunding : undefined },
 		{ reason: liquidationExecutionMode === 'queue' && liquidationFundingPreviewError !== undefined ? liquidationFundingPreviewError : undefined },
 		{ loading: true, reason: liquidationExecutionMode === 'queue' && !liquidationFundingPreviewLoaded ? liquidationCopy.loadingQueueFunding : undefined },

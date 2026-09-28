@@ -69,7 +69,7 @@ function resolveRoutingStateRoute<TRoute extends AppRoute>(routing: RoutingState
 	const { routeHash } = parseRouteHash(hash)
 	const exactRoute = routing.routeByHash[routeHash]
 	if (exactRoute !== undefined) return exactRoute
-	if (routeHash === '') return routing.config.defaultRoute
+	if (routeHash === '' || routeHash === '#/') return routing.config.defaultRoute
 	for (const matchRoute of routing.routeMatchers) {
 		const matchedRoute = matchRoute(routeHash)
 		if (matchedRoute !== undefined) return matchedRoute

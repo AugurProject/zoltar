@@ -1242,10 +1242,16 @@ button.tx-action-wallet-fix {
 		border-radius: var(--radius-control);
 	}
 
-	/* A network-switch action is the only control that can push the bar to a second row. */
+	/* Keep the account adjacent to the universe on phones. */
 	.header-toolbar-controls {
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		gap: 0.3rem;
+	}
+
+	.header-toolbar .universe-switcher > summary {
+		box-sizing: border-box;
+		width: 100%;
+		max-width: 26vw;
 	}
 
 	.header-toolbar-controls .toolbar-field-value,
