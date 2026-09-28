@@ -33,7 +33,7 @@ const market: LiveMarket = {
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
 	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 10n * 10n ** 36n,
+	shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 	settlementCollateralAttoEth: 10n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
 	totalUnderwritingLimitAttoEth: 1n,
@@ -43,9 +43,9 @@ const market: LiveMarket = {
 	feeBps: 30n,
 	tradingStatus: 0,
 	questionOutcome: 3,
-	yesReserve: 50n * 10n ** 36n,
-	noReserve: 50n * 10n ** 36n,
-	lpTotalSupply: 50n * 10n ** 36n,
+	yesReserve: 50n * 10n ** 18n,
+	noReserve: 50n * 10n ** 18n,
+	lpTotalSupply: 50n * 10n ** 18n,
 }
 
 // Stands in for the chain: reports a new block every interval so the block-driven background refresh runs.
@@ -105,7 +105,7 @@ describe('live market refresh', () => {
 		let discoveredMarket = market
 		let discoveries = 0
 		let balanceLoads = 0
-		let yesBalance = 3n * 10n ** 36n
+		let yesBalance = 3n * 10n ** 18n
 		const exitRequests: bigint[] = []
 		let failExitSimulation = false
 		Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
@@ -131,7 +131,7 @@ describe('live market refresh', () => {
 			loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
-				return { scope: shareBalanceScope(selected), invalid: 3n * 10n ** 36n, yes: yesBalance, no: 3n * 10n ** 36n, lp: 0n }
+				return { scope: shareBalanceScope(selected), invalid: 3n * 10n ** 18n, yes: yesBalance, no: 3n * 10n ** 18n, lp: 0n }
 			},
 			simulateEntry: async () => ({
 				blockNumber: 1n,
@@ -142,7 +142,7 @@ describe('live market refresh', () => {
 				deadline: 2n ** 40n,
 				slippageBps: 50n,
 				minimumLongShares: 1n,
-				result: { completeSetShares: 10n ** 34n, oppositeSharesSwapped: 10n ** 34n, additionalLongShares: 10n ** 34n, totalLongShares: 2n * 10n ** 34n, invalidInsurance: 10n ** 34n, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
+				result: { completeSetShares: 10n ** 16n, oppositeSharesSwapped: 10n ** 16n, additionalLongShares: 10n ** 16n, totalLongShares: 2n * 10n ** 16n, invalidInsurance: 10n ** 16n, feeAmount: 1n, conditionalYesBpsBefore: 5_000n, conditionalYesBpsAfter: 5_001n },
 			}),
 			simulateExit: async (_client: unknown, _configuration: unknown, selected: LiveMarket, _account: unknown, _side: unknown, completeSets: bigint) => {
 				exitRequests.push(completeSets)
@@ -178,7 +178,7 @@ describe('live market refresh', () => {
 		// Background refreshes keep the loaded balances on screen and pick up market changes.
 		const discoveriesBeforeBackgroundRefresh = discoveries
 		const balanceLoadsBeforeBackgroundRefresh = balanceLoads
-		discoveredMarket = { ...market, yesReserve: 25n * 10n ** 36n, noReserve: 75n * 10n ** 36n }
+		discoveredMarket = { ...market, yesReserve: 25n * 10n ** 18n, noReserve: 75n * 10n ** 18n }
 		const observedBalanceLabels = new Set<string | undefined>()
 		await waitForDom(() => {
 			observedBalanceLabels.add(walletHolding('Wallet YES'))
@@ -203,7 +203,7 @@ describe('live market refresh', () => {
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
 		expect(button('Buy YES').disabled).toBeFalse()
 		const estimateBeforeMove = document.querySelector('.transaction-review-primary')?.textContent
-		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 36n }
+		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 18n }
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent !== estimateBeforeMove, 'estimate re-priced after reserve change')
 
 		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
@@ -213,7 +213,7 @@ describe('live market refresh', () => {
 		expect(['25%', '50%', 'Max'].every(label => button(label) instanceof HTMLButtonElement)).toBeTrue()
 		await typeAmount('0.5')
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell') === true, 'exit estimate')
-		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 35n })
+		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 17n })
 		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
 		const discoveriesBeforeSubmit = discoveries
 		await act(async () => button('Sell YES').click())
@@ -221,8 +221,8 @@ describe('live market refresh', () => {
 		expect(exitRequests).toEqual([expectedCompleteSets])
 		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('The price moved since your estimate')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
-		await typeAmount('0.0000000000000000000000000000000000001')
-		expect(actionFeedback()).toContain('Enter a share amount with at most 36 decimal places.')
+		await typeAmount('0.0000000000000000001')
+		expect(actionFeedback()).toContain('Enter a share amount with at most 18 decimal places.')
 		expect(button('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
 		expect(button('Sell YES').disabled).toBeTrue()
 		await typeAmount('9')
@@ -237,7 +237,7 @@ describe('live market refresh', () => {
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error')?.textContent?.includes('receiver rejected tokens') === true, 'simulation failure beside the action')
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
-		yesBalance = 4n * 10n ** 36n
+		yesBalance = 4n * 10n ** 18n
 		await waitForDom(() => walletHolding('Wallet YES') === '4 YES', 'refreshed balance after failure')
 	})
 
@@ -260,7 +260,7 @@ describe('live market refresh', () => {
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
 				await gate
-				return { scope: shareBalanceScope(selected), invalid: 2n * 10n ** 36n, yes: 2n * 10n ** 36n, no: 2n * 10n ** 36n, lp: 0n }
+				return { scope: shareBalanceScope(selected), invalid: 2n * 10n ** 18n, yes: 2n * 10n ** 18n, no: 2n * 10n ** 18n, lp: 0n }
 			},
 		}
 		stopBlocks?.()
@@ -380,8 +380,17 @@ describe('live market refresh', () => {
 			validateLiveDeployment: async () => undefined,
 			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }], universeIds: [1n], selectedUniverseId: 1n }),
 		}
+		// The desktop layout keeps the ticket beside the market, so the compact-ticket media query must not match.
+		const originalMatchMedia = window.matchMedia
+		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		cleanupRendered = async () => {
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
-		cleanupRendered = rendered.cleanup
+		cleanupRendered = async () => {
+			await rendered.cleanup()
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
+		}
 		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
 		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('NO')
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)

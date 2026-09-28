@@ -1,4 +1,4 @@
-import { createCertifiedCompleteSetFixture, depositRepToVault, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRepToVault, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getTotalTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { migrateRepToZoltar, migrateVault } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
@@ -68,7 +68,7 @@ describe('Statoblast: receive guards', () => {
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
-		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		// Fork and migrate
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -116,7 +116,7 @@ describe('Statoblast: receive guards', () => {
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
-		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

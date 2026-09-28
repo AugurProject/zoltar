@@ -8,7 +8,7 @@ import { readCoreSharedCssSource } from './testUtils/coreSharedCss.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { readFileSync } from 'node:fs'
 
-const readFeatureCssSource = (owner: 'statoblastShared' | 'zoltarShared') => readFileSync(`ui/${owner}/css/index.css`, 'utf8')
+const readFeatureCssSource = (owner: 'statoblastShared' | 'zoltarShared', stylesheet = 'index.css') => readFileSync(`ui/${owner}/css/${stylesheet}`, 'utf8')
 
 describe('flat nested surfaces', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
@@ -40,7 +40,7 @@ describe('flat nested surfaces', () => {
 
 	test('keeps loaded question previews and timeline rows flat', () => {
 		const cssSource = readCoreSharedCssSource()
-		const zoltarCssSource = readFeatureCssSource('zoltarShared')
+		const zoltarCssSource = readFeatureCssSource('zoltarShared', 'questions.css')
 		const loadedPreviewRule = cssSource.slice(cssSource.indexOf('.loaded-question-preview {'), cssSource.indexOf('.field-inline {'))
 		const timelineItemRule = zoltarCssSource.slice(zoltarCssSource.indexOf('.question-preview-timeline-item {'), zoltarCssSource.indexOf('.question-preview-timeline-label,'))
 
@@ -52,7 +52,8 @@ describe('flat nested surfaces', () => {
 
 	test('aligns workflow actions as rows and keeps share totals with the distribution', () => {
 		const cssSource = readFeatureCssSource('statoblastShared')
-		const totalRule = cssSource.slice(cssSource.indexOf('.trading-share-callouts-total {'), cssSource.indexOf('.security-pool-strip-meter {'))
+		const totalRuleStart = cssSource.indexOf('.trading-share-callouts-total {')
+		const totalRule = cssSource.slice(totalRuleStart, cssSource.indexOf('.security-pool-strip-meter {', totalRuleStart))
 
 		expect(cssSource).toContain('.vault-action-launcher-grid {\n\tgrid-template-columns: minmax(0, 1fr)')
 		expect(cssSource).toContain('.vault-action-launcher-grid .action-launcher-card {')

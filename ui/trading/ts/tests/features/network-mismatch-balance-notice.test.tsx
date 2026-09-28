@@ -49,7 +49,7 @@ function positionControls(networkMismatchReason: string | undefined) {
 			nowSeconds={1n}
 			settings={DEFAULT_TRADE_SETTINGS}
 			ticket={positionTicket()}
-			wallet={{ connected: true, networkMismatchReason, actionLabel: networkMismatchReason === undefined ? 'Connect wallet' : 'Switch to Browser Simulation', walletEthAttoEth: undefined, connect: async () => undefined }}
+			wallet={{ connected: true, networkMismatchReason, actionLabel: networkMismatchReason === undefined ? 'Connect wallet' : 'Switch to Browser simulation', walletEthAttoEth: undefined, connect: async () => undefined }}
 			holdings={{ balances: undefined, balanceState: 'error', balanceError: 'Balance refresh failed.', retry: async () => undefined }}
 			externallyLocked={false}
 		/>
@@ -61,10 +61,10 @@ describe('trading balance notices during a network mismatch', () => {
 	installDomTestLifecycle({ afterTest: async () => cleanup?.(), url: 'http://localhost/#/market' })
 
 	test('hides the balance failure while the wallet is on another chain and restores the retry once it is back', async () => {
-		const rendered = await renderIntoDocument(positionControls('Switch to Browser Simulation.'))
+		const rendered = await renderIntoDocument(positionControls('Switch to Browser simulation.'))
 		cleanup = rendered.cleanup
 
-		expect(rendered.container.textContent).toContain('Switch to Browser Simulation')
+		expect(rendered.container.textContent).toContain('Switch to Browser simulation')
 		expect(rendered.container.textContent).not.toContain('Balance refresh failed.')
 		expect(rendered.container.textContent).not.toContain('Retry balances')
 

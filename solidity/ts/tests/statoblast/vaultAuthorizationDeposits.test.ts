@@ -53,9 +53,7 @@ describe('Vault authorization deposit accounting', () => {
 			if (existingOwner) {
 				const ownerClient = createWriteClient(mockWindow, BigInt(owner))
 				await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'setUnderwritingLimit', args: [amount / 2n] }) })
-				await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'certifyVaultCoverage', args: [owner] }) })
 			}
-			await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'certifyVaultCoverage', args: [client.account.address] }) })
 			await createCompleteSet(client, pool, 10n ** 18n)
 		}
 		const nonce = toHex(1n, { size: 32 })

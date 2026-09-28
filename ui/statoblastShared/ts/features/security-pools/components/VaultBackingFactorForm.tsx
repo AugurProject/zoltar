@@ -1,12 +1,11 @@
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import type { OperationModalProps } from '@zoltar/ui-core-shared/types/components.js'
 import { useId, useState } from 'preact/hooks'
 import { formatCurrencyInputBalance, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -23,8 +22,6 @@ export function VaultBackingFactorForm({
 	pending,
 	executionRepPerEthPrice,
 	poolSecurityMultiplierBps,
-	onCertify,
-	certificatePending,
 	onAdjust,
 }: {
 	details: SecurityVaultDetails | undefined
@@ -34,16 +31,14 @@ export function VaultBackingFactorForm({
 	increaseBlocker?: string | undefined
 	busy: boolean
 	pending: boolean
-	onCertify?: (() => void) | undefined
-	certificatePending: boolean
 	onAdjust: (limit: string) => void
 }) {
 	const [limitInput, setLimit] = useState<string | undefined>(undefined)
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
 	const currentLimit = details?.underwritingLimitAttoEth
 	const limit = limitInput ?? (currentLimit !== undefined ? formatCurrencyInputBalance(currentLimit, 18) : '0')
-	const descriptionId = useId()
-	const sharedReasonId = useId()
+	const errorId = useId()
+	const [errorRevealed, setErrorRevealed] = useState(false)
 	let nextLimit: bigint | undefined
 	let limitAttoEth: bigint | undefined
 	let error: string | undefined
@@ -55,19 +50,10 @@ export function VaultBackingFactorForm({
 	}
 	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	const reason = prerequisite ?? error
-	let certificationBlocker = blocker ?? increaseBlocker
-	if (certificationBlocker === undefined && executionRepPerEthPrice === undefined) certificationBlocker = securityPoolCopy.certificationNeedsPrice
-	if (certificationBlocker === undefined && (details?.underwritingLimitAttoEth ?? 0n) === 0n) certificationBlocker = securityPoolCopy.certificationNeedsLimit
-	const sharedReason = certificationBlocker === reason ? reason : undefined
+	const fieldErrorShown = prerequisite === undefined && errorRevealed && error !== undefined
 	return (
 		<>
-			<label className='field'>
-				<span>{securityPoolCopy.vaultBackingFactor}</span>
-				<FormInput value={limit} inputMode='decimal' disabled={busy} onInput={event => setLimit(event.currentTarget.value)} invalid={error !== undefined} aria-describedby={descriptionId} />
-			</label>
-			<p className='detail' id={descriptionId}>
-				{error ?? securityPoolCopy.vaultBackingFactorHelp}
-			</p>
+			<AmountField allowZero disabled={busy} error={error} errorId={errorId} errorRevealed={errorRevealed} hint={securityPoolCopy.vaultBackingFactorHelp} label={securityPoolCopy.commitmentLimit} onChange={setLimit} onErrorRevealedChange={setErrorRevealed} unit={commonCopy.eth} value={limit} />
 			<MetricGrid>
 				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>
 				<MetricField label={securityPoolCopy.currentCapacity}>
@@ -77,26 +63,13 @@ export function VaultBackingFactorForm({
 					<VaultExposureValue capacity={nextLimit} />
 				</MetricField>
 			</MetricGrid>
-			{sharedReason === undefined ? undefined : <InlineHint id={sharedReasonId} message={sharedReason} />}
 			<div className='actions'>
-				<TransactionActionButton
-					idleLabel={securityPoolCopy.certifyCoverage}
-					pendingLabel={securityPoolCopy.certifyingCoverage}
-					pending={certificatePending}
-					showDisabledReason={sharedReason === undefined}
-					disabledReasonElementId={sharedReason === undefined ? undefined : sharedReasonId}
-					onClick={() => onCertify?.()}
-					availability={{
-						disabled: busy || onCertify === undefined || certificationBlocker !== undefined,
-						reason: certificationBlocker,
-					}}
-				/>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}
 					pendingLabel={securityPoolCopy.adjustingVaultBackingFactor}
 					pending={pending}
-					showDisabledReason={prerequisite !== undefined && sharedReason === undefined}
-					disabledReasonElementId={sharedReason === undefined ? descriptionId : sharedReasonId}
+					showDisabledReason={!fieldErrorShown}
+					disabledReasonElementId={fieldErrorShown ? errorId : undefined}
 					onClick={() => onAdjust(limit)}
 					availability={{ disabled: busy || reason !== undefined, reason }}
 				/>

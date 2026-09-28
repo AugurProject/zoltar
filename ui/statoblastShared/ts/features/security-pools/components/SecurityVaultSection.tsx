@@ -42,6 +42,7 @@ import {
 } from '../lib/securityVaultAvailability.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
@@ -68,7 +69,6 @@ export function SecurityVaultSection({
 	loadingSecurityVault,
 	modalFirst = false,
 	onApproveRep,
-	onCertifyVaultCoverage,
 	onSetVaultUnderwritingLimit,
 	onDepositRepToVault,
 	onLoadSecurityVault,
@@ -287,8 +287,6 @@ export function SecurityVaultSection({
 			blocker={adjustmentBlocker ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })}
 			busy={securityVaultActiveAction !== undefined}
 			pending={securityVaultActiveAction === 'setVaultUnderwritingLimit'}
-			onCertify={onCertifyVaultCoverage}
-			certificatePending={securityVaultActiveAction === 'certifyVaultCoverage'}
 			onAdjust={onSetVaultUnderwritingLimit}
 		/>
 	)
@@ -313,10 +311,20 @@ export function SecurityVaultSection({
 			vaultExistsOnchain,
 			visibleDepositLauncherBlocker,
 			visibleRepExitLauncherBlocker,
+			walletBlocker: getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain }),
 		}),
 		...extraReadinessActions,
 	])
-	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
+	const depositAmountField = (
+		<VaultDepositAmountField
+			disabled={!depositRepToVaultEnabled}
+			onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })}
+			repTokenSymbol={repTokenSymbol}
+			value={normalizedSecurityVaultForm.depositAmount}
+			walletRepBalanceAttoRep={walletRepBalanceAttoRep}
+			walletRepBalanceLoading={walletRepBalanceLoading}
+		/>
+	)
 	const depositApprovalControlProps = {
 		approveRepEnabled,
 		canUseLoadedVaultActions,
@@ -335,7 +343,9 @@ export function SecurityVaultSection({
 		securityVaultRepApproval,
 	}
 	const repWithdrawAmountField =
-		effectiveRepExitMode === 'redeem' ? null : <VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+		effectiveRepExitMode === 'redeem' ? null : (
+			<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
+		)
 	const repExitActionButton = (
 		<VaultRepExitActionButton
 			canUseLoadedVaultActions={canUseLoadedVaultActions}
@@ -374,10 +384,6 @@ export function SecurityVaultSection({
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
 						{depositAmountField}
-
-						<MetricGrid>
-							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
-						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
 						<VaultDepositApprovalControl {...depositApprovalControlProps} onCancel={closeVaultActionModal} />
 					</>

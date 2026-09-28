@@ -313,7 +313,6 @@ function createMockedBootstrapDependencies({ accounts, scenario, profile }: { ac
 			underwritingLimitAttoEths[poolAddress][client.account] = limitAttoEth
 			return { action: 'setVaultUnderwritingLimit', hash: '0x01' }
 		}),
-		certifyVaultCoverage: mock(async () => ({ action: 'certifyVaultCoverage', hash: '0x01' })),
 		executeOracleManagerStagedOperation: mock(
 			async (client: { writeContract: (request: { address: Address; args?: unknown[]; functionName: string; gas?: bigint }) => Promise<`0x${string}`>; waitForTransactionReceipt: (request: { hash: `0x${string}` }) => Promise<unknown> }, managerAddress: Address, operationId: bigint) => {
 				const hash = await client.writeContract({

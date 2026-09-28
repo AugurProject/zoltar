@@ -103,7 +103,6 @@ main {
 }
 
 .app-settings-menu label > span {
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	color: var(--muted);
 }
@@ -121,6 +120,12 @@ main {
 
 .app-settings-menu input[aria-invalid="true"] {
 	border-color: var(--danger-border);
+}
+
+.app-settings-menu .app-settings-theme {
+	margin-top: var(--space-3);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--divider-subtle);
 }
 
 /* Recent transactions share the settings popover geometry; the pending count badge keeps the trigger width stable. */
@@ -172,7 +177,7 @@ main {
 }
 
 /* On narrow screens the list spans the toolbar instead of overflowing the viewport edge. */
-@media (max-width: 42rem) {
+@media (max-width: 40rem) {
 	.header-toolbar {
 		position: relative;
 	}
@@ -523,13 +528,6 @@ button.quiet:disabled {
 	box-shadow: none;
 }
 
-.hero-status {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.5rem;
-	margin-top: 0.25rem;
-}
-
 .status-chip {
 	display: inline-flex;
 	align-items: center;
@@ -559,9 +557,6 @@ button.quiet:disabled {
 .panel-label,
 .metric-label,
 .workflow-section-label {
-	font-family: var(--font-family-mono);
-	text-transform: uppercase;
-	letter-spacing: 0.07em;
 	font-size: var(--font-label);
 	opacity: 1;
 	color: var(--muted);
@@ -662,10 +657,7 @@ button.quiet:disabled {
 }
 
 .toolbar-field-label {
-	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	white-space: nowrap;
 	color: var(--muted);
 }
@@ -1600,7 +1592,7 @@ a.transaction-hash-link {
 	min-height: 4rem;
 }
 
-@media (max-width: 37.5rem) {
+@media (max-width: 40rem) {
 	.migration-amount-hint {
 		min-block-size: 2.9em;
 	}
@@ -1648,17 +1640,15 @@ a.transaction-hash-link {
 	color: var(--muted);
 	font-size: var(--font-xs);
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 }
 
-@media (max-width: 56.25rem) {
+@media (max-width: 64rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 32.5rem) {
+@media (max-width: 40rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: minmax(0, 1fr);
 	}

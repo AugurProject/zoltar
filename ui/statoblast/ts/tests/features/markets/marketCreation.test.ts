@@ -88,7 +88,7 @@ void describe('market creation helpers', () => {
 		expect(validation.fieldErrors.title).toBe('Title is required')
 		expect(validation.fieldErrors.endTime).toBe('End time is required')
 		expect(validation.fieldErrors.scalarMin).toBe('Scalar min, max, and increment do not produce a whole number of ticks')
-		expect(validation.notice).toContain('Missing required fields: Title, End Time')
+		expect(validation.notice).toContain('Missing required fields: Title, End time')
 		expect(validation.notice).toContain('Fix invalid fields: Scalar min, max, and increment do not produce a whole number of ticks')
 	})
 
@@ -332,9 +332,9 @@ void describe('market creation helpers', () => {
 		})
 
 		expect(validation.isValid).toBe(false)
-		expect(validation.fieldErrors.scalarMin).toBe('Scalar Min is required')
-		expect(validation.fieldErrors.scalarMax).toBe('Scalar Max is required')
-		expect(validation.fieldErrors.scalarIncrement).toBe('Scalar Increment is required')
+		expect(validation.fieldErrors.scalarMin).toBe('Scalar min is required')
+		expect(validation.fieldErrors.scalarMax).toBe('Scalar max is required')
+		expect(validation.fieldErrors.scalarIncrement).toBe('Scalar increment is required')
 	})
 
 	test('validates scalar questions with malformed numeric constraints across non-keyword paths', () => {

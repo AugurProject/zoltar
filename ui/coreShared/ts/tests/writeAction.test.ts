@@ -389,7 +389,7 @@ describe('runWriteAction', () => {
 		)
 
 		expect(transactionRequested).toBe(false)
-		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum Mainnet and try again')
+		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum mainnet and try again')
 	})
 
 	test('passes the validated active chain to the write action', async () => {

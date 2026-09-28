@@ -261,7 +261,6 @@ async function seedSecurityPool({
 	if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${poolSpec.poolLabel}`)
 
 	for (const vault of poolSpec.vaults) await getScenarioProtocol().setUnderwritingLimit(createWriteClient(vault.accountAddress), poolResult.securityPoolAddress, vault.underwritingLimitAttoEth)
-	for (const vault of poolSpec.vaults) await getScenarioProtocol().certifyVaultCoverage(createWriteClient(primaryVaultAccount), poolResult.securityPoolAddress, vault.accountAddress)
 
 	const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, poolResult.securityPoolAddress, primaryVaultAccount, primaryVaultAccount)
 	if (primaryVaultAfterSettlement.underwritingLimitAttoEth !== primaryVaultSpec.underwritingLimitAttoEth) {
@@ -433,7 +432,6 @@ async function seedSecurityPoolX2Scenario({
 		if (!seededReport.isDistributed) throw new Error(`Expected the seeded oracle report to be settled for ${preparedPool.poolLabel}`)
 
 		for (const vault of preparedPool.vaults) await getScenarioProtocol().setUnderwritingLimit(createWriteClient(vault.accountAddress), preparedPool.securityPoolAddress, vault.underwritingLimitAttoEth)
-		for (const vault of preparedPool.vaults) await getScenarioProtocol().certifyVaultCoverage(createWriteClient(primaryAccount), preparedPool.securityPoolAddress, vault.accountAddress)
 
 		const primaryVaultAfterSettlement = await loadRequiredSecurityVault(readClient, preparedPool.securityPoolAddress, primaryAccount, primaryAccount)
 		if (primaryVaultAfterSettlement.underwritingLimitAttoEth !== preparedPool.primaryVault.underwritingLimitAttoEth) {
@@ -501,8 +499,6 @@ async function seedSecurityPoolX2AuctionScenario({
 	const secondaryWriteClient = createWriteClient(secondaryAccount)
 	await getScenarioProtocol().approveErc20(secondaryWriteClient, profile.genesisRepTokenAddress, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, 'approveRep')
 	await getScenarioProtocol().depositRepToVaultToSecurityPool(secondaryWriteClient, parentPool.securityPoolAddress, SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT, STATOBLAST_SECURITY_MULTIPLIER_BPS)
-	await getScenarioProtocol().certifyVaultCoverage(writeClient, parentPool.securityPoolAddress, primaryAccount)
-	await getScenarioProtocol().certifyVaultCoverage(writeClient, parentPool.securityPoolAddress, secondaryAccount)
 	await getScenarioProtocol().createCompleteSetInSecurityPool(createWriteClient(secondaryAccount), parentPool.securityPoolAddress, 20n * 10n ** 18n)
 
 	const universeSummary = await getScenarioProtocol().loadZoltarUniverseSummary(readClient, parentPool.universeId)

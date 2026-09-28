@@ -4,7 +4,7 @@ import { getTotalRepPurchasedAttoRep } from '../testSupport/simulator/utils/cont
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
-import { createCertifiedCompleteSetFixture, getTotalRepBackingUnits, getSecurityVault, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getTotalRepBackingUnits, getSecurityVault, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 import { claimAuctionProceeds, finalizeTruthAuction, getMigratedAttoRep, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -58,7 +58,7 @@ describe('Truth-auction ownership overflow regression', () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
 		await setUnderwritingLimit(attacker, securityPoolAddresses.securityPool, 1n)
-		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
 
 		await triggerExternalForkForSecurityPool(universeForker, 'audit ownership overflow source')
 		await migrateVault(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes)

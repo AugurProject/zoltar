@@ -14,7 +14,7 @@ import type { ComponentChild } from 'preact'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingAwareText, LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -33,6 +33,7 @@ import { getEscalationPhase, getReportingMaxProfitContribution, getReportingMini
 import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from '../lib/reportingGuards.js'
 import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getReportingStagePresentation } from '../lib/reportingStagePresentation.js'
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
+import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
 import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 function formatKnownAmount(amount: bigint | undefined) {
@@ -234,7 +235,6 @@ export function ReportingSection({
 		}
 	})()
 	const presetReasons = [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && !isRedundantPresetReason(reason) && reason !== presetBlocker && reasons.indexOf(reason) === index)
-	const reportAmountError = selectedAmount === undefined && reportingForm.reportAmount.trim() !== '' ? reportingCopy.reportAmountPreviewRequired : undefined
 	const vaultFundingLoadingReason = usesWalletFunding && activeReportingDetails?.forkContinuation && actualReportDepositAmount !== undefined && walletDepositAmount === undefined ? reportingCopy.loadingVaultFunding : undefined
 	const reportGuardMessage =
 		vaultFundingLoadingReason ??
@@ -422,7 +422,7 @@ export function ReportingSection({
 			{showFullReporting && reportingReady !== false ? (
 				<SectionBlock className='reporting-metrics-section' title={reportingCopy.escalationMetrics} variant='embedded'>
 					<div className='escalation-metrics'>
-						<MetricField label={reportingCopy.nonDecisionThresholdAttoRep}>
+						<MetricField label={<GlossaryTerm id='non-decision-threshold'>{reportingCopy.nonDecisionThresholdAttoRep}</GlossaryTerm>}>
 							<CurrencyValue precision='exact' value={effectiveReportingDetails?.nonDecisionThresholdAttoRep} suffix={commonCopy.rep} />
 						</MetricField>
 						<MetricField label={reportingCopy.startBondAttoRep}>
@@ -478,26 +478,16 @@ export function ReportingSection({
 									{reportOutcomeSelectionMessage}
 								</p>
 							)}
-							<div className='field'>
-								<label htmlFor='reporting-contribution-amount'>
-									<span>{reportingCopy.contributionAmountRep}</span>
-								</label>
-								<div className='field-inline'>
-									<FormInput placeholder={reportingCopy.reportAmountPlaceholder} id='reporting-contribution-amount' className='field-inline-input' value={reportingForm.reportAmount} onInput={event => onReportingFormChange({ reportAmount: event.currentTarget.value })} disabled={reportControlsLocked} />
-									<button
-										className='quiet field-inline-action'
-										type='button'
-										onClick={() => {
-											if (maxContributionAmount.amountAttoRep === undefined) return
-											onReportingFormChange({ reportAmount: formatCurrencyInputBalance(maxContributionAmount.amountAttoRep) })
-										}}
-										disabled={reportControlsLocked || maxContributionAmount.amountAttoRep === undefined}
-										title={reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason}
-									>
-										{commonCopy.max}
-									</button>
-								</div>
-							</div>
+							<AmountField
+								disabled={reportControlsLocked}
+								id='reporting-contribution-amount'
+								label={reportingCopy.contributionAmount}
+								fillMax={{ amount: maxContributionAmount.amountAttoRep, unavailableReason: reportControlsLocked ? reportControlsLockedReason : maxContributionAmount.reason }}
+								onChange={reportAmount => onReportingFormChange({ reportAmount })}
+								placeholder={reportingCopy.reportAmountPlaceholder}
+								unit={commonCopy.rep}
+								value={reportingForm.reportAmount}
+							/>
 
 							<div className='actions'>
 								<button
@@ -533,7 +523,6 @@ export function ReportingSection({
 								</p>
 							)}
 
-							{reportAmountError === undefined ? undefined : <p className='detail'>{reportAmountError}</p>}
 							{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
 								<p className='detail'>
 									{reportingCopy.currentEscalationDisputeStakeLead}

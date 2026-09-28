@@ -70,7 +70,7 @@ test('Trading refreshes the active environment when history changes the simulati
 	let environmentInitializations = 0
 	const configuration: DeploymentConfiguration = {
 		chainId: 31_337,
-		chainName: 'Browser Simulation',
+		chainName: 'Browser simulation',
 		factory: `0x${'22'.repeat(20)}`,
 		feeBps: 30,
 		router: `0x${'33'.repeat(20)}`,
@@ -260,7 +260,7 @@ test('the removed demo query cannot select a parallel simulated-data application
 	const dom = installDomEnvironment('http://localhost/?demo=1&scenario=baseline#/market')
 	const configuration: DeploymentConfiguration = {
 		chainId: 31_337,
-		chainName: 'Browser Simulation',
+		chainName: 'Browser simulation',
 		factory: `0x${'22'.repeat(20)}`,
 		feeBps: 30,
 		router: `0x${'33'.repeat(20)}`,

@@ -37,8 +37,8 @@ function LivePortfolioBalanceMetrics({ market, balances, valuation }: { market: 
 					{availability.completeSets === 0n ? undefined : (
 						<div className='portfolio-position-value is-secondary'>
 							<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
-							<strong>{market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable}</strong>
-							<small className='payout-caption'>{formatCompleteSetQuantity(availability.completeSets)}</small>
+							<strong>{formatCompleteSetQuantity(availability.completeSets)}</strong>
+							<small className='payout-caption'>({market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable})</small>
 						</div>
 					)}
 				</div>

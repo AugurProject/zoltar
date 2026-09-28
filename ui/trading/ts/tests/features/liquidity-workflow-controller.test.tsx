@@ -186,7 +186,7 @@ describe('liquidity workflow controller state', () => {
 			submitFreshLiquidity: async () => transactionHash,
 		}
 		let controller: Controller | undefined
-		// 0.01 LP uses fixed genesis normalization, independently of ETH backing.
+		// 0.01 LP uses 18 decimal places, independently of ETH backing.
 		const ratedMarket: LiveMarket = { ...market, shareTokenSupplyAttoShares: 1_000n, settlementCollateralAttoEth: 100n }
 		const rendered = await renderIntoDocument(
 			controllerProbe(
@@ -200,7 +200,7 @@ describe('liquidity workflow controller state', () => {
 		await act(() => controller?.selectOperation('remove'))
 		await act(() => controller?.updateAmount('0.01'))
 		await settleQuote()
-		expect(removals).toEqual([10n ** 34n])
+		expect(removals).toEqual([10n ** 16n])
 		expect(controller?.transaction.quoteState).toBe('ready')
 		// A background refresh that only rebuilds the market object keeps the quote.
 		await act(() =>
@@ -217,7 +217,7 @@ describe('liquidity workflow controller state', () => {
 		)
 		await settleQuote()
 		expect(removals).toHaveLength(1)
-		expect(controller?.transaction.quote?.amount).toBe(10n ** 34n)
+		expect(controller?.transaction.quote?.amount).toBe(10n ** 16n)
 		// Moving the pool rate retires the quote at once and prices the same LP amount again.
 		await act(() =>
 			render(
@@ -234,7 +234,7 @@ describe('liquidity workflow controller state', () => {
 		expect(controller?.transaction.quote).toBeUndefined()
 		expect(controller?.transaction.quoteState).toBe('loading')
 		await settleQuote()
-		expect(removals).toEqual([10n ** 34n, 10n ** 34n])
+		expect(removals).toEqual([10n ** 16n, 10n ** 16n])
 		expect(controller?.transaction.quoteState).toBe('ready')
 		await rendered.cleanup()
 	})

@@ -17,7 +17,7 @@ export const nextParentDeposits = 'Next parent deposits'
 export const parentDepositNumber = 'Parent deposit #'
 export const previousDeposits = 'Previous deposits'
 export const previousParentDeposits = 'Previous parent deposits'
-export const settleForkCarriedEscalationDeposits = 'Settle Fork-Carried Escalation Deposits'
+export const settleForkCarriedEscalationDeposits = 'Settle fork-carried escalation deposits'
 export const worthNowLead = 'Worth now: '
 export const worthNowPendingFinalSettlement = 'Worth now: Pending final settlement'
 

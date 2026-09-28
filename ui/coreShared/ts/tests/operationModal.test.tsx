@@ -129,7 +129,7 @@ function TransactionFeedbackOperationModalHarness() {
 		<GlobalTransactionPresentationProvider transaction={transaction}>
 			<OperationModal
 				context={[
-					{ identityKey: 'security-pool', label: 'Security Pool Address', value: '0xpool' },
+					{ identityKey: 'security-pool', label: 'Security pool address', value: '0xpool' },
 					{ identityKey: 'outcome', label: 'Outcome', value: 'Yes' },
 				]}
 				isOpen={isOpen}
@@ -144,7 +144,7 @@ function TransactionFeedbackOperationModalHarness() {
 							dismissKey: 'transaction-request-2',
 							rows: [
 								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
-								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
+								{ identityKey: 'outcome', label: 'Share outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
 							technicalRows: [{ label: 'Function', value: 'approve' }],
@@ -163,7 +163,7 @@ function TransactionFeedbackOperationModalHarness() {
 							dismissKey: 'transaction-request-2',
 							rows: [
 								{ identityKey: 'security-pool', label: 'Pool', value: '0xpool' },
-								{ identityKey: 'outcome', label: 'Share Outcome', value: 'Yes' },
+								{ identityKey: 'outcome', label: 'Share outcome', value: 'Yes' },
 								{ label: 'Approval Amount', value: '2 REP' },
 							],
 							technicalRows: [{ label: 'Function', value: 'approve' }],
@@ -466,7 +466,7 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
+		expect(dialog.textContent?.includes('Security pool address')).toBe(false)
 		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Complete prerequisite' }))
@@ -474,7 +474,7 @@ describe('OperationModal', () => {
 
 		expect(documentQueries.getByRole('dialog', { name: 'Migrate Shares' })).not.toBeNull()
 		expect(within(dialog).queryByRole('status')).toBeNull()
-		expect(dialog.textContent?.includes('Security Pool Address')).toBe(false)
+		expect(dialog.textContent?.includes('Security pool address')).toBe(false)
 		expect(dialog.textContent?.includes('Outcome')).toBe(false)
 		expect(within(dialog).getByText('Fail transaction')).not.toBeNull()
 		await act(() => {
@@ -974,7 +974,7 @@ describe('OperationModal', () => {
 		container.remove()
 	})
 
-	test('closes on Escape and closes when the backdrop is clicked', async () => {
+	test('closes on Escape but keeps a dialog with form fields open when the backdrop is clicked', async () => {
 		const container = document.createElement('div')
 		document.body.appendChild(container)
 
@@ -993,12 +993,43 @@ describe('OperationModal', () => {
 			render(<DismissibleOperationModalHarness />, container)
 		})
 
-		const backdrop = container.querySelector('.modal-backdrop') as HTMLDivElement
-		if (backdrop === null) throw new Error('Modal backdrop should be visible')
+		const backdrop = container.querySelector('.modal-backdrop')
+		if (!(backdrop instanceof HTMLElement)) throw new Error('Modal backdrop should be visible')
 		await act(() => {
 			fireEvent.click(backdrop)
 		})
+		// A stray click outside must not discard the values entered in the form.
+		const dialogAfterBackdropClick = within(container).getByRole('dialog', { name: 'Edit amount' })
+		await act(() => {
+			fireEvent.click(within(dialogAfterBackdropClick).getByRole('button', { name: 'Close' }))
+		})
 		expect(within(container).queryByRole('dialog', { name: 'Edit amount' })).toBeNull()
+
+		render(null, container)
+		container.remove()
+	})
+
+	test('closes a dialog without form fields when the backdrop is clicked', async () => {
+		const container = document.createElement('div')
+		document.body.appendChild(container)
+		function ConfirmationHarness() {
+			const [isOpen, setIsOpen] = useState(true)
+			return (
+				<OperationModal isOpen={isOpen} onClose={() => setIsOpen(false)} title='Delete saved state'>
+					<button type='button'>Delete</button>
+				</OperationModal>
+			)
+		}
+
+		await act(() => {
+			render(<ConfirmationHarness />, container)
+		})
+		const backdrop = container.querySelector('.modal-backdrop')
+		if (!(backdrop instanceof HTMLElement)) throw new Error('Modal backdrop should be visible')
+		await act(() => {
+			fireEvent.click(backdrop)
+		})
+		expect(within(container).queryByRole('dialog', { name: 'Delete saved state' })).toBeNull()
 
 		render(null, container)
 		container.remove()

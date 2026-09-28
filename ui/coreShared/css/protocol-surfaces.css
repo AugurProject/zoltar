@@ -277,8 +277,6 @@ strong.metric-value-danger {
 
 .transaction-object-context > strong {
 	font-size: var(--font-caption);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 }
 
 .transaction-object-context dl {
@@ -296,10 +294,7 @@ strong.metric-value-danger {
 
 .transaction-object-context dt {
 	color: var(--muted);
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
 }
 
 .transaction-object-context dd {
@@ -358,8 +353,6 @@ strong.metric-value-danger {
 .transaction-review-detail-row > span {
 	color: var(--muted);
 	font-size: var(--font-caption);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 }
 
 .transaction-review-row > strong,
@@ -373,25 +366,16 @@ strong.metric-value-danger {
 }
 
 .trading-minted-outcomes {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.35rem 0.75rem;
+	display: grid;
+	gap: 0.6rem;
 }
 
 .trading-minted-outcome {
-	display: inline-flex;
+	display: grid;
+	grid-template-columns: 5rem minmax(0, 1fr);
 	align-items: baseline;
-	gap: 0.3rem;
-	white-space: nowrap;
-}
-
-.trading-minted-outcome .currency-value.copyable {
-	white-space: nowrap;
-}
-
-.trading-minted-outcome:not(:first-child)::before {
-	content: "·";
-	margin-right: 0.45rem;
+	min-width: 0;
+	gap: 0.5rem;
 }
 
 .transaction-review-details {
@@ -446,6 +430,7 @@ strong.metric-value-danger {
 .form-grid {
 	display: grid;
 	gap: 1.1rem;
+	max-width: var(--form-max);
 }
 
 .field-row {
@@ -484,8 +469,6 @@ strong.metric-value-danger {
 
 .notice-title {
 	font-size: var(--font-caption);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .environment-gate,
@@ -800,7 +783,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	font-size: var(--font-caption);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
 	.global-transaction-dialog-backdrop {
 		padding: 0.5rem;
 		padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0rem));
@@ -907,8 +890,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .global-transaction-notice-row dt {
 	color: var(--muted);
 	font-size: var(--font-label);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .global-transaction-notice-row dd {
@@ -1011,8 +992,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .panel-label {
 	font-size: var(--font-label);
 	color: var(--muted);
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
 }
 
 .sticky-object-context-item strong {
@@ -1308,7 +1287,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	gap: 0.75rem;
 }
 
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.sticky-object-context {
 		top: 0;
 	}
@@ -1389,12 +1368,10 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .lookup-field-row {
 	width: 100%;
+	max-width: var(--form-max);
 }
 
 .lookup-field-label {
-	font-family: var(--font-family-mono);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
 	font-size: var(--font-label);
 	color: var(--muted);
 }
@@ -1451,8 +1428,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	flex: 0 0 auto;
 	color: var(--muted);
 	font-size: var(--font-label);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 }
 
 .loaded-question-preview {
@@ -1510,11 +1485,20 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .field span {
-	font-family: var(--font-family-mono);
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
 	font-size: var(--font-label);
 	color: var(--muted);
+}
+
+/* Field labels are sentence-case sans text; a dropdown value inside a field reads like any other control value. */
+.field > span,
+.field > label > span {
+	color: var(--text-secondary);
+	font-weight: 600;
+}
+
+.field .enum-dropdown-trigger span {
+	color: inherit;
+	font-size: inherit;
 }
 
 .field-help,
@@ -1569,6 +1553,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .form-input-adorned[aria-invalid="true"],
 .form-input-adorned.is-invalid {
 	border-color: var(--danger);
+	box-shadow: inset 0 -2px 0 var(--danger);
 }
 
 .form-input-adorned[aria-invalid="true"]:focus-within,
@@ -1587,6 +1572,29 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	font-size: var(--font-label);
 	letter-spacing: 0.04em;
 	white-space: nowrap;
+}
+
+.form-input-adornment .form-input-adornment-symbol {
+	color: var(--text);
+	font-size: var(--font-body);
+	letter-spacing: 0;
+}
+
+.field-inline > .form-input-adorned,
+.field-inline > .form-input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Keeps an empty polite live region mounted without adding a flex or grid gap. */
+.field-error-live-region {
+	display: contents;
+}
+
+.amount-field-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
 }
 
 .empty-state {
@@ -1762,7 +1770,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		0.35rem 0.35rem;
 	background-repeat: no-repeat;
 	color: var(--text);
-	color-scheme: dark;
 	padding-right: 2.1rem;
 }
 
@@ -1770,7 +1777,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .field select optgroup {
 	background-color: var(--bg-deep);
 	color: var(--text);
-	color-scheme: dark;
 	forced-color-adjust: none;
 }
 
@@ -1799,6 +1805,24 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 .form-input[aria-invalid="true"]:focus {
 	border-color: var(--danger);
 	box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.field .form-input-adorned {
+	background-color: var(--surface-overlay);
+}
+
+/* The adorned wrapper owns the frame, focus ring, and invalid state; these selectors outrank the generic field input rules above. */
+.form-input-adorned > input.form-input,
+.form-input-adorned > input.form-input:focus,
+.form-input-adorned > input.form-input.is-invalid,
+.form-input-adorned > input.form-input.is-invalid:focus,
+.field .form-input-adorned > input.form-input,
+.field .form-input-adorned > input.form-input:focus,
+.field .form-input-adorned > input.form-input.is-invalid,
+.field .form-input-adorned > input.form-input.is-invalid:focus {
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .field textarea {
@@ -1840,7 +1864,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
 }
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
 	.entity-card.directory-record {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -1922,7 +1946,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	color: var(--muted);
 	font-size: 1.5rem;
 }
-@media (max-width: 42rem) {
+@media (max-width: 40rem) {
 	.exchange-preview {
 		flex-direction: column;
 		align-items: stretch;
@@ -2040,7 +2064,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	align-self: end;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
 	.transaction-approval-editor .form-grid {
 		grid-template-columns: minmax(0, 1fr);
 	}
@@ -2118,7 +2142,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	width: 100%;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
 	.modal-panel:has(.transaction-step-actions) {
 		max-height: calc(100dvh - 2rem);
 		gap: 0.75rem;
@@ -2235,8 +2259,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	color: var(--accent);
 	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
 }
 
 .fork-target-scalar-picker {
@@ -2260,10 +2282,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .fork-target-shortcuts > span {
 	color: var(--muted);
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
 }
 
 .fork-target-shortcut[aria-pressed="true"] {
@@ -2389,10 +2408,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .universe-switcher-heading {
 	margin: 0;
-	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	color: var(--muted);
 }
 

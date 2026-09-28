@@ -160,6 +160,7 @@ export function App() {
 				routeContentDisabled={routeContentBlocked}
 				transactionRouteKey={transactionRouteKey}
 				transactionState={transactionState.value}
+				walletActions={overviewWalletProps}
 			>
 				<ZoltarWorkspaceProvider workspace={zoltarWorkspace}>
 					<AppRouteContent deploy={deployRouteContentProps} readBackendMessage={readBackendMessage} route={activeRoute} zoltarView={activeZoltarView} />

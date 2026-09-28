@@ -1,7 +1,5 @@
 import type { PoolSnapshot } from './types.ts'
 
-const PRECISION = 10n ** 18n
-
 const value = (input: string) => BigInt(input)
 
 export function sharesToProjectedEth(pool: PoolSnapshot, attoShares: bigint) {
@@ -13,16 +11,13 @@ export function projectedEthToShares(pool: PoolSnapshot, attoEth: bigint) {
 	const supply = value(pool.shareTokenSupplyAttoShares)
 	const collateral = value(pool.projectedSettlementCollateralAttoEth)
 	if (attoEth === 0n) return 0n
-	if (supply === 0n) return collateral === 0n ? attoEth * PRECISION : 0n
+	if (supply === 0n) return collateral === 0n ? attoEth : 0n
 	return collateral === 0n ? 0n : (attoEth * supply) / collateral
 }
 
 export function canCreateCompleteSet(pool: PoolSnapshot, spend: bigint) {
 	if (spend === 0n || projectedEthToShares(pool, spend) === 0n) return false
 	const nextCollateral = value(pool.projectedSettlementCollateralAttoEth) + spend
-	// Minting requires the current on-chain certificate for every commitment.
-	// A truncated registry or pending auction entitlement cannot satisfy this sum.
 	if (pool.escalationGame !== '0x0000000000000000000000000000000000000000') return false
-	const total = value(pool.totalUnderwritingLimitAttoEth)
-	return value(pool.currentMintingCapacityAttoEth) === total && nextCollateral <= total && pool.vaults.reduce((sum, vault) => sum + value(vault.underwritingLimitAttoEth), 0n) === total
+	return nextCollateral <= value(pool.currentMintingCapacityAttoEth) && nextCollateral <= value(pool.totalUnderwritingLimitAttoEth)
 }

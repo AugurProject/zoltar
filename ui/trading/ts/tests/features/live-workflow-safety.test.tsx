@@ -150,7 +150,7 @@ describe('live workflow safety boundary', () => {
 			awaitingForkContinuation: false,
 			universeForkTime: 0n,
 			vaultCount: 1n,
-			shareTokenSupplyAttoShares: 100n * 10n ** 36n,
+			shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 			settlementCollateralAttoEth: 100n * 10n ** 18n,
 			currentRetentionRate: 10n ** 18n,
 			totalUnderwritingLimitAttoEth: 1n,
@@ -160,9 +160,9 @@ describe('live workflow safety boundary', () => {
 			feeBps: 30n,
 			tradingStatus: 0,
 			questionOutcome: 3,
-			yesReserve: 50n * 10n ** 36n,
-			noReserve: 50n * 10n ** 36n,
-			lpTotalSupply: 50n * 10n ** 36n,
+			yesReserve: 50n * 10n ** 18n,
+			noReserve: 50n * 10n ** 18n,
+			lpTotalSupply: 50n * 10n ** 18n,
 		}
 		const secondMarket: LiveMarket = { ...market, pool: secondPool, shareToken: secondShareToken, questionId: 3n, title: 'Second rendered workflow market' }
 		const childMarket: LiveMarket = { ...market, pool: childPool, shareToken: childShareToken, universeId: 2n, questionId: 4n, title: 'Child-universe workflow market' }
@@ -222,7 +222,7 @@ describe('live workflow safety boundary', () => {
 				if (rejectBalanceRefresh) throw new Error('balance RPC unavailable')
 				if (deferSecondPortfolioBalance && selectedMarket.pool === secondPool) await secondPortfolioBalance.promise
 				const multiplier = selectedMarket.pool === secondPool ? 4n : 1n
-				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 36n, yes: multiplier * 10n ** 36n, no: multiplier * 10n ** 36n, lp: multiplier * 10n ** 36n }
+				return { scope: actualLive.shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 18n, yes: multiplier * 10n ** 18n, no: multiplier * 10n ** 18n, lp: multiplier * 10n ** 18n }
 			},
 			// Prices like the router so the pre-signing check agrees with the ticket's local estimate.
 			simulateEntry: async (_client: unknown, _configuration: unknown, quotedMarket: LiveMarket, _account: unknown, side: 'YES' | 'NO', amount: bigint) => {

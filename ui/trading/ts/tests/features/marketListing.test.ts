@@ -31,9 +31,9 @@ describe('market odds and liquidity', () => {
 		// Genesis rate: 10^18 attoShares per attoETH. Balanced 1-token reserves are worth one token of collateral.
 		expect(marketLiquidityAttoEth(market({ pool: address('01') }))).toBe(10n ** 18n)
 		// 2·Y·N / (Y + N) with Y = 1, N = 3 tokens is 1.5 tokens.
-		expect(marketLiquidityAttoEth(market({ pool: address('01'), yesReserve: 10n ** 36n, noReserve: 3n * 10n ** 36n }))).toBe(15n * 10n ** 17n)
+		expect(marketLiquidityAttoEth(market({ pool: address('01'), yesReserve: 10n ** 18n, noReserve: 3n * 10n ** 18n }))).toBe(15n * 10n ** 17n)
 		// Once collateral exists, the pool's own share rate applies.
-		expect(marketLiquidityAttoEth(market({ pool: address('01'), shareTokenSupplyAttoShares: 4n * 10n ** 36n, settlementCollateralAttoEth: 2n * 10n ** 18n }))).toBe(5n * 10n ** 17n)
+		expect(marketLiquidityAttoEth(market({ pool: address('01'), shareTokenSupplyAttoShares: 4n * 10n ** 18n, settlementCollateralAttoEth: 2n * 10n ** 18n }))).toBe(5n * 10n ** 17n)
 		expect(marketLiquidityAttoEth(market({ pool: address('01'), yesReserve: 0n, noReserve: 0n }))).toBe(0n)
 		expect(marketLiquidityAttoEth(market({ pool: address('01'), pair: undefined }))).toBeUndefined()
 	})
@@ -80,9 +80,9 @@ describe('market filters and search', () => {
 })
 
 describe('market ordering', () => {
-	const first = market({ pool: address('01'), endTime: NOW + 20n * DAY, yesReserve: 10n ** 36n, noReserve: 10n ** 36n })
-	const second = market({ pool: address('02'), endTime: NOW + 2n * DAY, yesReserve: 5n * 10n ** 36n, noReserve: 5n * 10n ** 36n })
-	const third = market({ pool: address('03'), endTime: NOW - DAY, yesReserve: 3n * 10n ** 36n, noReserve: 3n * 10n ** 36n })
+	const first = market({ pool: address('01'), endTime: NOW + 20n * DAY, yesReserve: 10n ** 18n, noReserve: 10n ** 18n })
+	const second = market({ pool: address('02'), endTime: NOW + 2n * DAY, yesReserve: 5n * 10n ** 18n, noReserve: 5n * 10n ** 18n })
+	const third = market({ pool: address('03'), endTime: NOW - DAY, yesReserve: 3n * 10n ** 18n, noReserve: 3n * 10n ** 18n })
 	const unpaired = market({ pool: address('04'), pair: undefined, endTime: NOW + DAY })
 	const loaded = [first, second, third, unpaired]
 	const pools = (markets: readonly LiveMarket[]) => markets.map(candidate => candidate.pool)

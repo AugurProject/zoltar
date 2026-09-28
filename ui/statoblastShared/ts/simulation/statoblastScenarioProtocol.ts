@@ -6,7 +6,7 @@ import { loadReportingDetails, reportOutcomeInSecurityPool } from '../protocol/r
 import { createMarket, loadZoltarUniverseSummary } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 import { getDeploymentSteps } from '../protocol/deployment.js'
 import { createSecurityPool, loadAllSecurityPools, loadSecurityVaultDetails } from '../protocol/securityPools.js'
-import { depositRepToVaultToSecurityPool, setUnderwritingLimit, certifyVaultCoverage } from '../protocol/securityVault.js'
+import { depositRepToVaultToSecurityPool, setUnderwritingLimit } from '../protocol/securityVault.js'
 import { createCompleteSetInSecurityPool } from '../protocol/trading.js'
 import { startTruthAuctionForSecurityPool, submitTruthAuctionBid } from '../protocol/truthAuctionActions.js'
 
@@ -18,7 +18,6 @@ const defaultScenarioProtocol = {
 	createSecurityPool,
 	depositRepToVaultToSecurityPool,
 	setUnderwritingLimit,
-	certifyVaultCoverage,
 	forkZoltarWithOwnEscalation,
 	getDeploymentSteps,
 	loadAllSecurityPools,
