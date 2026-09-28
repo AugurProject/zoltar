@@ -31,12 +31,12 @@ const swap = (sender: string, yesForNo: boolean, exactOutput: boolean, amountIn:
 
 // Router-funded liquidity, a router enter and exit, a direct share swap, and a settlement redemption.
 const poolAndShareLogs: readonly LogFixture[] = [
-	{ block: 1, tx: 1, logIndex: 0, emitter: pool, name: 'CompleteSetCreated', data: { creator: router, settlementCollateralProvidedAttoEth: '100', completeSetsMintedAttoShares: '100', resultingShareTokenSupplyAttoShares: '100', resultingSettlementCollateralAttoEth: '100' } },
+	{ block: 1, tx: 1, logIndex: 0, emitter: pool, name: 'CompleteSetCreated', data: { creator: router, settlementCollateralProvidedAttoEth: String(100n), completeSetsMintedAttoShares: String(100n), resultingShareTokenSupplyAttoShares: String(100n), resultingSettlementCollateralAttoEth: String(100n) } },
 	{ block: 1, tx: 1, logIndex: 1, emitter: shareToken, name: 'TransferBatch', data: batch(zero, router, [0, 1, 2], [100, 100, 100]) },
 	{ block: 1, tx: 1, logIndex: 2, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 1, 100) },
 	{ block: 1, tx: 1, logIndex: 3, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 2, 100) },
 	{ block: 1, tx: 1, logIndex: 6, emitter: shareToken, name: 'TransferBatch', data: batch(router, liquidityProvider, [0, 1, 2], [100, 0, 0]) },
-	{ block: 1, tx: 2, logIndex: 10, emitter: pool, name: 'CompleteSetCreated', data: { creator: router, settlementCollateralProvidedAttoEth: '10', completeSetsMintedAttoShares: '10', resultingShareTokenSupplyAttoShares: '110', resultingSettlementCollateralAttoEth: '110' } },
+	{ block: 1, tx: 2, logIndex: 10, emitter: pool, name: 'CompleteSetCreated', data: { creator: router, settlementCollateralProvidedAttoEth: String(10n), completeSetsMintedAttoShares: String(10n), resultingShareTokenSupplyAttoShares: String(110n), resultingSettlementCollateralAttoEth: String(110n) } },
 	{ block: 1, tx: 2, logIndex: 11, emitter: shareToken, name: 'TransferBatch', data: batch(zero, router, [0, 1, 2], [10, 10, 10]) },
 	{ block: 1, tx: 2, logIndex: 12, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 2, 10) },
 	{ block: 1, tx: 2, logIndex: 13, emitter: shareToken, name: 'TransferSingle', data: single(pair, router, 1, 6) },
@@ -45,7 +45,7 @@ const poolAndShareLogs: readonly LogFixture[] = [
 	{ block: 2, tx: 3, logIndex: 21, emitter: shareToken, name: 'TransferSingle', data: single(router, pair, 1, 6) },
 	{ block: 2, tx: 3, logIndex: 22, emitter: shareToken, name: 'TransferSingle', data: single(pair, router, 2, 4) },
 	{ block: 2, tx: 3, logIndex: 24, emitter: shareToken, name: 'TransferBatch', data: batch(router, zero, [0, 1, 2], [4, 4, 4]) },
-	{ block: 2, tx: 3, logIndex: 25, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: '4', settlementCollateralRedeemedAttoEth: '4', resultingShareTokenSupplyAttoShares: '1000', resultingSettlementCollateralAttoEth: '1000' } },
+	{ block: 2, tx: 3, logIndex: 25, emitter: pool, name: 'CompleteSetRedeemed', data: { redeemer: router, completeSetsBurnedAttoShares: String(4n), settlementCollateralRedeemedAttoEth: String(4n), resultingShareTokenSupplyAttoShares: String(1000n), resultingSettlementCollateralAttoEth: String(1000n) } },
 	{ block: 2, tx: 3, logIndex: 26, emitter: shareToken, name: 'TransferSingle', data: single(router, trader, 1, 6) },
 	{ block: 1, tx: 6, logIndex: 50, emitter: shareToken, name: 'TransferSingle', data: single(zero, settler, 1, 2) },
 ]
@@ -53,7 +53,7 @@ const poolAndShareLogs: readonly LogFixture[] = [
 // The settlement redemption closes trading, so it is inserted after the open-market valuation is checked.
 const settlementLogs: readonly LogFixture[] = [
 	{ block: 2, tx: 5, logIndex: 40, emitter: shareToken, name: 'TransferSingle', data: single(settler, zero, 1, 2) },
-	{ block: 2, tx: 5, logIndex: 41, emitter: pool, name: 'SharesRedeemed', data: { redeemer: settler, winningSharesBurnedAttoShares: '2', settlementCollateralRedeemedAttoEth: '2', resultingShareTokenSupplyAttoShares: '1000', resultingSettlementCollateralAttoEth: '1000' } },
+	{ block: 2, tx: 5, logIndex: 41, emitter: pool, name: 'SharesRedeemed', data: { redeemer: settler, winningSharesBurnedAttoShares: String(2n), settlementCollateralRedeemedAttoEth: String(2n), resultingShareTokenSupplyAttoShares: String(1000n), resultingSettlementCollateralAttoEth: String(1000n) } },
 ]
 
 const pairLogs: readonly LogFixture[] = [
