@@ -336,6 +336,10 @@
 			"bun": "./ts/features/open-oracle/lib/openOracleReadiness.ts",
 			"default": "./js/features/open-oracle/lib/openOracleReadiness.js"
 		},
+		"./features/open-oracle/lib/reportBrowse.js": {
+			"bun": "./ts/features/open-oracle/lib/reportBrowse.ts",
+			"default": "./js/features/open-oracle/lib/reportBrowse.js"
+		},
 		"./features/open-oracle/lib/openOracleStage.js": {
 			"bun": "./ts/features/open-oracle/lib/openOracleStage.ts",
 			"default": "./js/features/open-oracle/lib/openOracleStage.js"

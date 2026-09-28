@@ -3,15 +3,12 @@ import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { ComparisonRecord } from '@zoltar/ui-core-shared/components/ComparisonRecord.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
@@ -19,31 +16,17 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import { getOpenOracleDisputeAvailability, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/openOracle.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 export const BROWSE_PAGE_SIZE = 10
 export const OPEN_ORACLE_PRICE_UNITS = 30
 type WithdrawalBalanceKey = keyof OpenOracleWithdrawableBalances
 export type SelectedReportModal = 'dispute' | 'settle' | `withdraw-${WithdrawalBalanceKey}` | undefined
-export type BrowseLoadState =
-	| {
-			requestKey: string | undefined
-			status: 'loading'
-	  }
-	| {
-			requestKey: string
-			status: 'ready'
-	  }
-	| {
-			message: string
-			requestKey: string
-			status: 'error'
-	  }
 export const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
 export const SETTLE_REPORT_MODAL: SelectedReportModal = 'settle'
 const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> = {
@@ -97,7 +80,6 @@ export function getSelectedWithdrawalBalance(modal: SelectedReportModal): Withdr
 	if (modal === 'withdraw-token2') return 'token2'
 	return undefined
 }
-export type BrowseStatusFilter = 'all' | 'Pending' | 'Disputed' | 'Settled'
 export function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
 	if (report === undefined) return undefined
 	if ((currentTimestamp === undefined || report.currentTime === currentTimestamp) && (currentBlockNumber === undefined || report.currentBlockNumber === currentBlockNumber)) return report
@@ -105,17 +87,6 @@ export function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDeta
 		...report,
 		currentBlockNumber: currentBlockNumber ?? report.currentBlockNumber,
 		currentTime: currentTimestamp ?? report.currentTime,
-	}
-}
-export function resolveBrowseStatusFilter(value: string): BrowseStatusFilter {
-	switch (value) {
-		case 'Pending':
-		case 'Disputed':
-		case 'Settled':
-		case 'all':
-			return value
-		default:
-			return 'all'
 	}
 }
 export async function loadBrowseReportPage(pageIndex: number, pageSize: number) {
@@ -160,47 +131,6 @@ export function getOpenOracleClockLabel(timeType: boolean, timestampLabel: strin
 	return timeType ? timestampLabel : blockLabel
 }
 
-export function renderReportSummaryCard(report: OpenOracleReportSummary, onSelectReport: (reportId: bigint) => void) {
-	const status = getOpenOracleReportStatus(report)
-	const statusTone = getOpenOracleReportStatusTone(status)
-	const reportTitle = openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())
-	return (
-		<ComparisonRecord
-			key={report.reportId.toString()}
-			title={reportTitle}
-			badge={<Badge tone={statusTone}>{status}</Badge>}
-			action={
-				<button aria-label={openOracleCopy.formatOpenReportLabel(reportTitle)} className='secondary' type='button' onClick={() => onSelectReport(report.reportId)}>
-					{openOracleCopy.openReport}
-				</button>
-			}
-			metrics={[
-				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
-				{ label: openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), value: <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} /> },
-				{ label: openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), value: <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} /> },
-				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.reportTimestamp, openOracleCopy.reportBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.reportTimestamp} /> },
-				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.settlementTimestamp, openOracleCopy.settlementBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.settlementTimestamp} zeroText={openOracleCopy.notSettled} /> },
-			]}
-		>
-			<ReadOnlyDetailAccordion title={commonCopy.technicalDetails}>
-				{renderReportFields([
-					{
-						label: report.token1Symbol,
-						value: <AddressValue address={report.token1} />,
-					},
-					{
-						label: report.token2Symbol,
-						value: <AddressValue address={report.token2} />,
-					},
-					{
-						label: openOracleCopy.currentReporter,
-						value: report.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={report.currentReporter} />,
-					},
-				])}
-			</ReadOnlyDetailAccordion>
-		</ComparisonRecord>
-	)
-}
 export function renderSelectedReportActionSection({
 	actionMode,
 	disputeSubmission,
