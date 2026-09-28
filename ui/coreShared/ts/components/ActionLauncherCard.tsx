@@ -2,7 +2,7 @@ import * as commonCopy from '../copy/common.js'
 import type { ComponentChildren } from 'preact'
 import { ActionLauncherButton } from './ActionLauncherButton.js'
 import type { ReadinessAction } from '../types/components.js'
-import { withWalletBlocker } from '../transactions/actionGuards.js'
+import { getActiveAppChainWalletBlocker, withWalletBlocker } from '../transactions/actionGuards.js'
 
 type ActionLauncherCardProps = {
 	action: ReadinessAction
@@ -10,9 +10,11 @@ type ActionLauncherCardProps = {
 	pending?: boolean
 	pendingLabel?: string
 	tone?: 'primary' | 'secondary'
+	/** Wallet state for launchers whose guards check the wallet before anything else, so a shown blocker offers the connect or switch fix while the wallet blocks. */
+	wallet?: { accountAddress: string | undefined; isOnActiveAppChain: boolean } | undefined
 }
 
-export function ActionLauncherCard({ action, children, pending = false, pendingLabel = commonCopy.opening, tone = 'secondary' }: ActionLauncherCardProps) {
+export function ActionLauncherCard({ action, children, pending = false, pendingLabel = commonCopy.opening, tone = 'secondary', wallet }: ActionLauncherCardProps) {
 	if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 	const disabled = action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined
 	const showTitle = action.title.trim().toLowerCase() !== action.actionLabel.trim().toLowerCase()
@@ -34,7 +36,7 @@ export function ActionLauncherCard({ action, children, pending = false, pendingL
 					onClick={() => action.onAction?.()}
 					pending={pending}
 					tone={tone}
-					availability={withWalletBlocker({ disabled, reason: action.blocker }, action.walletBlocker)}
+					availability={withWalletBlocker({ disabled, reason: action.blocker }, action.walletBlocker ?? (wallet === undefined || action.blocker === undefined ? undefined : getActiveAppChainWalletBlocker(wallet)))}
 					showDisabledReason
 				/>
 			</div>

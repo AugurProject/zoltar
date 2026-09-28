@@ -4,6 +4,7 @@ import { signal } from '@preact/signals'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { ActionLauncherButton } from '../components/ActionLauncherButton.js'
+import { ActionLauncherCard } from '../components/ActionLauncherCard.js'
 import { TransactionActionButton, TransactionActionGroup } from '../components/TransactionActionButton.js'
 import { WalletActionsProvider, type WalletActions } from '../components/WalletActionFix.js'
 import type { ActionAvailability } from '../types/components.js'
@@ -200,5 +201,20 @@ describe('wallet action fix', () => {
 		cleanupRenderedComponent = rendered.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Connect wallet' })))
 		expect(calls).toEqual(['connect'])
+	})
+
+	test('offers the fix on a launcher card only while its wallet state blocks a shown blocker', async () => {
+		const { walletActions } = createWalletActions()
+		const action = { actionLabel: 'Mint', blocker: 'Connect a wallet before minting complete sets.', key: 'mint', readiness: 'blocked' as const, title: 'Mint complete sets' }
+		const rendered = await renderIntoDocument(
+			<WalletActionsProvider walletActions={walletActions}>
+				<ActionLauncherCard action={action} wallet={{ accountAddress: undefined, isOnActiveAppChain: true }} />
+				<ActionLauncherCard action={{ ...action, blocker: 'Select a pool.', key: 'no-wallet-state', title: 'Without wallet state' }} />
+			</WalletActionsProvider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		expect(page.getAllByRole('button', { name: 'Connect wallet' })).toHaveLength(1)
+		expect(page.getByRole('note', { name: 'Mint details' }).textContent).toContain('Select a pool.')
 	})
 })
