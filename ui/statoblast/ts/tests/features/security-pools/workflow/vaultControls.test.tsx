@@ -110,10 +110,9 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const depositQueries = within(depositDialog)
 		const depositAmountInput = depositQueries.getByText('REP backing').parentElement?.querySelector('input')
 		const approvalAmountInput = depositQueries.getByText('REP approval amount').parentElement?.querySelector('input')
-		const approvalMaxButton = depositQueries.getByText('REP approval amount').parentElement?.querySelector('button')
 		expect(depositAmountInput?.disabled).toBe(true)
 		expect(approvalAmountInput?.disabled).toBe(true)
-		expect(approvalMaxButton?.disabled).toBe(true)
+		expect(depositQueries.getByText('REP approval amount').parentElement?.querySelector('button')).toBeNull()
 		expectTransactionButtonDisabled(depositDialog, 'Approve 1 REP')
 
 		await act(() => {
