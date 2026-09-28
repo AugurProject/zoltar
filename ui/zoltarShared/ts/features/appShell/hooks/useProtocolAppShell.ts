@@ -1,6 +1,7 @@
 import type { UseOnchainStateDependencies } from '@zoltar/ui-core-shared/app/hooks/useOnchainState.js'
 import { useProtocolOnchainRuntime } from '@zoltar/ui-core-shared/app/hooks/useProtocolOnchainRuntime.js'
 import { getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useDeploymentFlow } from '../../deployment/hooks/useDeploymentFlow.js'
 import { buildDeploymentRouteContentProps } from '../../deployment/lib/deploymentRoute.js'
 import type { OverviewPanelsProps } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
@@ -64,6 +65,8 @@ export function useProtocolAppShell({ deploymentRoute = {}, initializeEnvironmen
 	const simulationController = getActiveSimulationController()
 	const refreshSimulationView = async () => {
 		await refreshState()
+		// Simulation controls change chain state without a transaction; visible lists refresh in place.
+		invalidateAppData()
 		onRefresh?.()
 	}
 	const refreshActiveEnvironment = async () => {

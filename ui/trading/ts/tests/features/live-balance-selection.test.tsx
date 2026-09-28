@@ -135,7 +135,6 @@ describe('live balance selection', () => {
 				walletSummaryRetryNonce: 0,
 				defaultSlippage: '0.5',
 				defaultValidityMinutes: '20',
-				refreshIntervalMilliseconds: 60_000,
 				services,
 			})
 			return null
