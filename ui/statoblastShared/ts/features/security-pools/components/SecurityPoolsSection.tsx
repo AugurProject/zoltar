@@ -64,8 +64,9 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 	return (
 		<div className='route-view-flow'>
 			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
-			{view === 'open' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
+			{/* The role guide follows the address entry so the landing's primary action stays first on narrow screens. */}
+			{view === 'open' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}
