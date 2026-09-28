@@ -6,17 +6,12 @@ type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined
 	reason: string | undefined
 }
-const REP_UNIT = 10n ** 18n
 export const ESCALATION_GAME_ACTIVATION_DELAY = 3n * 24n * 60n * 60n
 const LOAD_REPORTING_PRESETS_REASON = 'Loading reporting details.'
 const MAX_PROFIT_NOT_STARTED_REASON = reportingCopy.maxProfitPrestartReason
 const SELECTED_SIDE_ALREADY_LEADS_REASON = reportingCopy.selectedSideLeadsReason
 const ESCALATION_RESOLVED_REASON = 'Escalation is already resolved.'
 type EscalationPhase = 'Resolved' | 'Fork Triggered' | 'Pending Start' | 'Timed Out' | 'Active'
-function roundUpToRepUnit(value: bigint) {
-	if (value <= 0n) return 0n
-	return ((value + REP_UNIT - 1n) / REP_UNIT) * REP_UNIT
-}
 function getSelectedAndOtherSides(details: ActiveReportingDetails, selectedOutcome: ReportingOutcomeKey) {
 	const selectedSide = details.sides.find(side => side.key === selectedOutcome)
 	const largestOtherBalance = details.sides.filter(side => side.key !== selectedOutcome).reduce((maxBalance, side) => (side.balance > maxBalance ? side.balance : maxBalance), 0n)
@@ -113,8 +108,7 @@ function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, se
 	if (selectedSide === undefined) return { amountAttoRep: undefined, reason: 'Selected side is unavailable.' }
 	if ((isPoolQuestionFinalized(details) && details.questionOutcome === selectedOutcome) || isUniqueWinner(selectedSide.balance, largestOtherBalance)) return { amountAttoRep: 0n, reason: undefined }
 	const requiredLeadAmount = largestOtherBalance + 1n - selectedSide.balance
-	const enteredAmount = details.startBondAttoRep > requiredLeadAmount ? details.startBondAttoRep : requiredLeadAmount
-	const amountAttoRep = roundUpToRepUnit(enteredAmount)
+	const amountAttoRep = details.startBondAttoRep > requiredLeadAmount ? details.startBondAttoRep : requiredLeadAmount
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
 	const effectiveAmount = amountAttoRep > availableRoom ? availableRoom : amountAttoRep
 	if (availableRoom === 0n)
@@ -125,7 +119,7 @@ function getMinimumOutcomeChangeContribution(details: ActiveReportingDetails, se
 	if (selectedSide.balance + effectiveAmount <= largestOtherBalance) {
 		const cappedEnteredAmount = details.startBondAttoRep > availableRoom ? details.startBondAttoRep : availableRoom
 		return {
-			amountAttoRep: roundUpToRepUnit(cappedEnteredAmount),
+			amountAttoRep: cappedEnteredAmount,
 			reason: undefined,
 		}
 	}
@@ -173,8 +167,7 @@ function getMaxProfitContribution(details: ActiveReportingDetails, selectedOutco
 		}
 	const requiredWindowAmount = targetFinalBalance > selectedSide.balance ? targetFinalBalance - selectedSide.balance : 0n
 	const minimumEnteredAmount = minContribution.amountAttoRep > requiredWindowAmount ? minContribution.amountAttoRep : requiredWindowAmount
-	const enteredAmount = details.startBondAttoRep > minimumEnteredAmount ? details.startBondAttoRep : minimumEnteredAmount
-	const amountAttoRep = roundUpToRepUnit(enteredAmount)
+	const amountAttoRep = details.startBondAttoRep > minimumEnteredAmount ? details.startBondAttoRep : minimumEnteredAmount
 	const availableRoom = getAvailableRoom(details, selectedSide.balance)
 	const effectiveAmount = amountAttoRep > availableRoom ? availableRoom : amountAttoRep
 	if (selectedSide.balance + effectiveAmount < targetFinalBalance)
