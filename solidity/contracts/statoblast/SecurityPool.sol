@@ -407,7 +407,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
 		if (shareTokenSupplyAttoShares == 0) {
 			require(settlementCollateralAttoEth == 0, 'Exchange rate undefined');
-			return amountAttoEth * SecurityPoolUtils.PRICE_PRECISION;
+			return amountAttoEth;
 		}
 		require(settlementCollateralAttoEth > 0, 'Exchange rate undefined');
 		return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth;

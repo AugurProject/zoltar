@@ -13,7 +13,7 @@ export const notSelected = 'Not selected'
 export const selectAll = 'Select all'
 export const childTargetsLockedReason = 'Child-universe targets unlock after this universe forks.'
 export const formatActionUnavailableReason = (actionLabel: string) => `${actionLabel} is not available right now.`
-export const redeemCompleteSetsAmount = 'Redeem Complete Sets Amount'
+export const redeemCompleteSetsAmount = 'ETH to Redeem'
 export const shareMigrationWalletRequiredReason = 'Connect a wallet before migrating shares.'
 export const completeSetMintWalletRequiredReason = 'Connect a wallet before minting complete sets.'
 export const completeSetBurnWalletRequiredReason = 'Connect a wallet before redeeming complete sets.'
@@ -76,3 +76,5 @@ export const shareBalancesUnavailable = 'Share balances unavailable. Refresh poo
 
 export const staleOraclePrice = 'Request a new price in Price Oracle before minting.'
 export const loadingOraclePrice = 'Loading price oracle details.'
+
+export const shareBackingDetail = 'ETH values assume the outcome wins; they are not sale quotes.'

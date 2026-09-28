@@ -27,6 +27,15 @@ describe('Statoblast: continuous proportional commitments', () => {
 		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })).toBe(unit)
 	})
 
+	test('initial shares use the same 18-decimal denomination as ETH', async () => {
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'attoEthToAttoShares', args: [1n] })).toBe(1n)
+		await freshPrice()
+		await setLimit(10n * unit)
+		await createCompleteSet(fixture.client, pool(), unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'shareTokenSupplyAttoShares' })).toBe(unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'attoSharesToAttoEth', args: [unit] })).toBe(unit)
+	})
+
 	test('wallet-funded escalation closes minting without changing standing commitments', async () => {
 		await freshPrice()
 		await setLimit(10n * unit)

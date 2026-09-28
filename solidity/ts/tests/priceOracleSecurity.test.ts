@@ -1884,7 +1884,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			totalFeeLiabilities: await getTotalAccruedFees(client, securityPool),
 		})
 		const stateBefore = await readRedemptionState()
-		assert.deepStrictEqual(stateBefore.receiverShares, [collateral * 10n ** 18n, collateral * 10n ** 18n, collateral * 10n ** 18n], 'rejecting receiver must hold one complete set before redemption')
+		assert.deepStrictEqual(stateBefore.receiverShares, [collateral, collateral, collateral], 'rejecting receiver must hold one complete set before redemption')
 
 		await assert.rejects(
 			executeThroughRejectingReceiver(
@@ -1893,7 +1893,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				encodeFunctionData({
 					abi: statoblast_SecurityPool_SecurityPool.abi,
 					functionName: 'redeemCompleteSet',
-					args: [collateral * 10n ** 18n],
+					args: [collateral],
 				}),
 			),
 			/ETH failed/,

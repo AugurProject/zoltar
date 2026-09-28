@@ -49,7 +49,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '558961bed36d8853ae910ff32b92cb20366ca2e038b7a2aad2e2e4785a5c5a3e'
+export const expectedProductionSoliditySourceFingerprint = 'f59fe8d895f71895cf78e078a28ca285e2a70365d4f96c500749f35955d53502'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{

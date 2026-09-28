@@ -1,7 +1,5 @@
 import type { PoolSnapshot } from './types.ts'
 
-const PRECISION = 10n ** 18n
-
 const value = (input: string) => BigInt(input)
 
 export function sharesToProjectedEth(pool: PoolSnapshot, attoShares: bigint) {
@@ -13,7 +11,7 @@ export function projectedEthToShares(pool: PoolSnapshot, attoEth: bigint) {
 	const supply = value(pool.shareTokenSupplyAttoShares)
 	const collateral = value(pool.projectedSettlementCollateralAttoEth)
 	if (attoEth === 0n) return 0n
-	if (supply === 0n) return collateral === 0n ? attoEth * PRECISION : 0n
+	if (supply === 0n) return collateral === 0n ? attoEth : 0n
 	return collateral === 0n ? 0n : (attoEth * supply) / collateral
 }
 

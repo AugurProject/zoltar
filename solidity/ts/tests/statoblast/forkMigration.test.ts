@@ -1249,7 +1249,7 @@ describe('Statoblast: fork migration', () => {
 				await createCompleteSet(depositor, securityPoolAddresses.securityPool, depositAmount)
 
 				const depositorShares = await balanceOfShares(depositor, securityPoolAddresses.shareToken, genesisUniverse, depositor.account.address)
-				const expectedShares = depositAmount * PRICE_PRECISION
+				const expectedShares = depositAmount
 				strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), expectedShares, 'the first positive deposit should bootstrap positive complete-set supply')
 				strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), depositAmount, 'only the depositor ETH should become complete-set collateral')
 				strictEqualTypeSafe(await getETHBalance(client, securityPoolAddresses.securityPool), forcedBalance + depositAmount, 'the forced balance should remain isolated from complete-set accounting')
@@ -2588,7 +2588,7 @@ describe('Statoblast: fork migration', () => {
 			const childShareSupplyBeforeMint = await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(childShareSupplyBeforeMint, parentForkTimeShareSupply, 'child exchange-rate supply should reserve every fork-time parent claim')
 			const outcomeSuppliesBeforeMint = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
-			const migratedCompleteSetSupply = migratedParentMintAmount * PRICE_PRECISION
+			const migratedCompleteSetSupply = migratedParentMintAmount
 			assert.deepStrictEqual(outcomeSuppliesBeforeMint, [migratedCompleteSetSupply, migratedCompleteSetSupply, migratedCompleteSetSupply], 'partial migration should materialize only the migrated ERC-1155 claims')
 
 			await createCompleteSet(newMinter, yesSecurityPool.securityPool, childMintAmount)
@@ -2597,7 +2597,7 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(childCollateralAfterMint > childCollateralBeforeMint, 'child complete-set mint should increase collateral after fork accounting is settled')
 			assert.ok(childCollateralAfterMint <= childCollateralBeforeMint + childMintAmount, 'child complete-set mint should accrue fees before adding new collateral')
 			const updatedCollateralBeforeMint = childCollateralAfterMint - childMintAmount
-			const expectedMintedShares = updatedCollateralBeforeMint === 0n ? childMintAmount * PRICE_PRECISION : (childMintAmount * childShareSupplyBeforeMint) / updatedCollateralBeforeMint
+			const expectedMintedShares = updatedCollateralBeforeMint === 0n ? childMintAmount : (childMintAmount * childShareSupplyBeforeMint) / updatedCollateralBeforeMint
 			const childShareSupplyAfterMint = await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(childShareSupplyAfterMint, childShareSupplyBeforeMint + expectedMintedShares, 'child complete-set mint should add shares at the settled exchange rate')
 			const materializedSupplyAfterMint = migratedCompleteSetSupply + expectedMintedShares
@@ -2650,11 +2650,11 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.None, 'unrelated fork should leave the child question unresolved')
 			assert.ok((await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)) > 0n, 'test setup requires preexisting child collateral')
 			const migratedBalances = await balanceOfShares(client, yesSecurityPool.shareToken, yesUniverse, client.account.address)
-			strictEqualTypeSafe(ensureDefined(migratedBalances[0], 'invalid child balance missing'), parentMintAmount * PRICE_PRECISION, 'balanced holder should migrate invalid shares')
-			strictEqualTypeSafe(ensureDefined(migratedBalances[1], 'yes child balance missing'), parentMintAmount * PRICE_PRECISION, 'yes supply should migrate unevenly')
-			strictEqualTypeSafe(ensureDefined(migratedBalances[2], 'no child balance missing'), parentMintAmount * PRICE_PRECISION, 'balanced holder should migrate no shares')
+			strictEqualTypeSafe(ensureDefined(migratedBalances[0], 'invalid child balance missing'), parentMintAmount, 'balanced holder should migrate invalid shares')
+			strictEqualTypeSafe(ensureDefined(migratedBalances[1], 'yes child balance missing'), parentMintAmount, 'yes supply should migrate unevenly')
+			strictEqualTypeSafe(ensureDefined(migratedBalances[2], 'no child balance missing'), parentMintAmount, 'balanced holder should migrate no shares')
 			const economicSupplyBeforeMint = await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool)
-			const migratedBalancedSupply = parentMintAmount * PRICE_PRECISION
+			const migratedBalancedSupply = parentMintAmount
 			const migratedOutcomeSupplies = await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse)
 			const migratedMaximumSupply = ensureDefined(migratedOutcomeSupplies[1], 'yes child supply missing')
 			strictEqualTypeSafe(migratedOutcomeSupplies[0], migratedBalancedSupply, 'invalid supply should belong to the balanced holder')
@@ -2705,7 +2705,7 @@ describe('Statoblast: fork migration', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'child pool should be operational after fork accounting settles')
 			assert.ok((await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)) > 0n, 'test setup requires collateral without migrated shares')
-			const forkTimeShareSupply = 10n * 10n ** 18n * PRICE_PRECISION
+			const forkTimeShareSupply = 10n * 10n ** 18n
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), forkTimeShareSupply, 'zero migration should preserve the parent fork-time economic claims')
 			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [0n, 0n, 0n], 'economic claims should not require materialized child ERC-1155 balances')
 
@@ -2745,8 +2745,8 @@ describe('Statoblast: fork migration', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkTruthAuction, 'an uncollateralized child must remain in its repair phase')
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool), 0n, 'test setup requires a zero-collateral child')
-			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), parentMintAmount * PRICE_PRECISION, 'test setup requires migrated child complete-set shares')
-			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [parentMintAmount * PRICE_PRECISION, parentMintAmount * PRICE_PRECISION, parentMintAmount * PRICE_PRECISION], 'balanced migrated shares should match nominal supply even when collateral is still zero')
+			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, yesSecurityPool.securityPool), parentMintAmount, 'test setup requires migrated child complete-set shares')
+			assert.deepStrictEqual(await getOutcomeShareSupplies(yesSecurityPool.shareToken, yesUniverse), [parentMintAmount, parentMintAmount, parentMintAmount], 'balanced migrated shares should match nominal supply even when collateral is still zero')
 			strictEqualTypeSafe(await getTotalUnderwritingLimitAttoEth(client, yesSecurityPool.securityPool), 0n, 'inactive child financials must not expose parent mint capacity before repair')
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
@@ -2900,7 +2900,7 @@ describe('Statoblast: fork migration', () => {
 
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Yes])
 			const lateMigratedBalances = await balanceOfShares(client, securityPoolAddresses.shareToken, migratedYesUniverse, openInterestHolder.account.address)
-			strictEqualTypeSafe(ensureDefined(lateMigratedBalances[2], 'late migrated no balance missing'), openInterestAmount * PRICE_PRECISION, 'unredeemed source shares should materialize in an existing child after the fork deadline')
+			strictEqualTypeSafe(ensureDefined(lateMigratedBalances[2], 'late migrated no balance missing'), openInterestAmount, 'unredeemed source shares should materialize in an existing child after the fork deadline')
 		})
 
 		test('migrateRepToZoltar should fund an already-created child pool with pool-held vault REP backing in own-fork mode', async () => {

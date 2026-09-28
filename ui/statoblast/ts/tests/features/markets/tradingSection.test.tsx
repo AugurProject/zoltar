@@ -409,13 +409,13 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(document.body, '0.00041').length).toBeGreaterThanOrEqual(2)
 	})
 
-	void test('renders first-mint share balances as complete-set collateral amounts', async () => {
-		const firstMintShareAmount = 10n ** 36n
+	void test('keeps share quantities fixed while displaying their reduced ETH backing', async () => {
+		const firstMintShareAmount = 10n ** 18n
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
-						settlementCollateralAttoEth: 1n * 10n ** 18n,
+						settlementCollateralAttoEth: 900_000_000_000_000_000n,
 						shareTokenSupplyAttoShares: firstMintShareAmount,
 					}),
 					tradingDetails: createTradingDetails({
@@ -438,6 +438,41 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getAllByText('1.00').length).toBeGreaterThanOrEqual(4)
 		expect(getExactValueTitles(document.body, '1').length).toBeGreaterThanOrEqual(4)
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
+		expect(getExactValueTitles(document.body, '0.9 ETH')).toHaveLength(4)
+		expect(document.body.textContent).toContain('(0.9000 ETH)')
+	})
+
+	void test('keeps losing share quantities visible with zero ETH value after resolution', async () => {
+		const unit = 10n ** 18n
+		const renderedComponent = await renderIntoDocument(
+			<TradingSection
+				{...createTradingSectionProps({
+					selectedPool: createSelectedPool({ questionOutcome: 'yes', settlementCollateralAttoEth: 900_000_000_000_000_000n, shareTokenSupplyAttoShares: unit }),
+					tradingDetails: createTradingDetails({ maxRedeemableCompleteSetsAttoShares: unit, shareBalances: createShareBalances({ yesAttoShares: unit, noAttoShares: unit, invalidAttoShares: unit }) }),
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const outcomes = document.querySelector('.trading-share-distribution')
+		if (outcomes === null) throw new Error('Missing holdings')
+		expect(getExactValueTitles(outcomes, '1')).toHaveLength(3)
+		expect(getExactValueTitles(outcomes, '0 ETH')).toHaveLength(2)
+		expect(getExactValueTitles(outcomes, '0.9 ETH')).toHaveLength(1)
+	})
+
+	void test('labels each first-mint outcome separately and preserves its full share amount', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const outcomes = within(dialog.getByRole('list', { name: 'Estimated Shares Received' })).getAllByRole('listitem')
+		expect(outcomes).toHaveLength(3)
+		for (const [index, label] of ['Yes', 'No', 'Invalid'].entries()) {
+			const outcome = outcomes[index]
+			if (outcome === undefined) throw new Error(`Missing ${label} share estimate`)
+			expect(within(outcome).getByText(label, { exact: true })).not.toBeNull()
+			expect(getExactValueTitles(outcome, '1')).toHaveLength(1)
+		}
 	})
 
 	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
@@ -636,9 +671,8 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(estimatedFeeRow, '1')).toHaveLength(1)
 		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(3)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
-		expect(document.body.textContent?.includes('Yes +')).toBe(true)
-		expect(document.body.textContent?.includes('No +')).toBe(true)
-		expect(document.body.textContent?.includes('Invalid +')).toBe(true)
+		const receivedShares = dialog.getByRole('list', { name: 'Estimated Shares Received' })
+		for (const label of ['Yes', 'No', 'Invalid']) expect(within(receivedShares).getByText(label, { exact: true })).not.toBeNull()
 	})
 
 	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {

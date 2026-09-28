@@ -125,29 +125,29 @@ describe('standalone trading UI model', () => {
 	})
 
 	test('separates fixed share quantities from settlement-collateral values', () => {
-		// Quantities use fixed genesis normalization; only ETH values use the current backing.
+		// Quantities use 18 decimal places; only ETH values use the current backing.
 		const genesis = { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }
-		expect(attoSharesToCollateralAttoEth(5n * 10n ** 33n, genesis)).toBe(5n * 10n ** 15n)
-		expect(collateralAttoEthToAttoShares(5n * 10n ** 15n, genesis)).toBe(5n * 10n ** 33n)
-		const rate = { settlementCollateralAttoEth: 9n * 10n ** 18n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
-		expect(attoSharesToCollateralAttoEth(10n ** 36n, rate)).toBe(9n * 10n ** 17n)
-		expect(collateralAttoEthToAttoShares(9n * 10n ** 17n, rate)).toBe(10n ** 36n)
-		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1_111_111_111_111_111_111n)
+		expect(attoSharesToCollateralAttoEth(5n * 10n ** 15n, genesis)).toBe(5n * 10n ** 15n)
+		expect(collateralAttoEthToAttoShares(5n * 10n ** 15n, genesis)).toBe(5n * 10n ** 15n)
+		const rate = { settlementCollateralAttoEth: 9n * 10n ** 18n, shareTokenSupplyAttoShares: 10n * 10n ** 18n }
+		expect(attoSharesToCollateralAttoEth(10n ** 18n, rate)).toBe(9n * 10n ** 17n)
+		expect(collateralAttoEthToAttoShares(9n * 10n ** 17n, rate)).toBe(10n ** 18n)
+		expect(collateralAttoEthToAttoShares(1n, rate)).toBe(1n)
 		expect(collateralAttoEthToAttoShares(1n, { settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 1n })).toBeUndefined()
 		expect(() => attoSharesToCollateralAttoEth(-1n, rate)).toThrow('cannot be negative')
-		expect(formatOutcomeQuantity(10n ** 36n, 'YES')).toBe('1 YES')
-		expect(formatCompleteSetQuantity(10n ** 36n)).toBe('1 complete set')
+		expect(formatOutcomeQuantity(10n ** 18n, 'YES')).toBe('1 YES')
+		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1 complete set')
 		// Exactly 0.005 ETH of shares under a rate that no longer divides evenly still reads as 0.005, while limits round down.
-		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 36n }
+		const drifted = { settlementCollateralAttoEth: 9_999_999_999_999_999n, shareTokenSupplyAttoShares: 10n * 10n ** 18n }
 		const shares = collateralAttoEthToAttoShares(5n * 10n ** 15n, drifted)
 		if (shares === undefined) throw new Error('Drifted rate must convert')
 		expect(formatOutcomeQuantity(shares, 'YES')).toBe('5 YES')
 		expect(formatOutcomeQuantity(shares, 'YES', 4, 'down')).toBe('5 YES')
 		expect(formatCollateralEth(shares, drifted, 'down')).toBe('0.0049 ETH')
 		expect(formatCollateralEth(shares, drifted)).toBe('0.005 ETH')
-		expect(formatCompleteSetQuantity(10n ** 36n)).toBe('1 complete set')
-		expect(formatLpQuantity(10n ** 36n)).toBe('1 LP')
-		expect(averagePriceBps(6n * 10n ** 17n, 10n ** 36n, rate)).toBe(6_666n)
+		expect(formatCompleteSetQuantity(10n ** 18n)).toBe('1 complete set')
+		expect(formatLpQuantity(10n ** 18n)).toBe('1 LP')
+		expect(averagePriceBps(6n * 10n ** 17n, 10n ** 18n, rate)).toBe(6_666n)
 		expect(averagePriceBps(1n, 0n, rate)).toBeUndefined()
 	})
 
@@ -353,7 +353,7 @@ describe('standalone trading UI model', () => {
 		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
 		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a valid positive complete-set value')
 		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 36n, 10n ** 17n, [], 'YES', 1n, { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 36n })).toBe('Amount too small to redeem any ETH')
+		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any ETH')
 		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child branch')
 		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('The selected YES balance is zero')
 		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n, unit)).toContain('unavailable')
@@ -365,9 +365,9 @@ describe('standalone trading UI model', () => {
 		expect(settlementBalanceLabel('loading', 0n, unit)).toBe('Loading…')
 		expect(settlementBalanceLabel('error', 0n, unit)).toBe('Unavailable')
 		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit)).toBe('5 ETH')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'YES')).toBe('5 YES')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'NO')).toBe('5 NO')
-		expect(settlementBalanceLabel('ready', 5n * 10n ** 36n, unit, 'INVALID')).toBe('5 INVALID')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'YES')).toBe('5 YES')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'NO')).toBe('5 NO')
+		expect(settlementBalanceLabel('ready', 5n * 10n ** 18n, unit, 'INVALID')).toBe('5 INVALID')
 	})
 
 	test('blocks duplicate submission when a broadcast receipt is uncertain', () => {

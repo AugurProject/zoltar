@@ -105,11 +105,7 @@ void describe('pool browse rows', () => {
 	})
 
 	void test('unknown capacity and either escalation game keep minting closed', () => {
-		const rows = toRows([
-			createPool(1, { mintingCapacityAttoEth: undefined }),
-			createPool(2, { ordinaryEscalationGameStarted: true }),
-			createPool(3, { hasForkContinuationEscalationGame: true }),
-		])
+		const rows = toRows([createPool(1, { mintingCapacityAttoEth: undefined }), createPool(2, { ordinaryEscalationGameStarted: true }), createPool(3, { hasForkContinuationEscalationGame: true })])
 		expect(rows.map(row => row.remainingCapacity)).toEqual([0n, 0n, 0n])
 	})
 

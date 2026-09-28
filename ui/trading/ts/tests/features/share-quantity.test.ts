@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { attoSharesToCollateralAttoEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
 
 test('holding fees change backing without changing displayed token quantities', () => {
-	const amount = 10n ** 36n
+	const amount = 10n ** 18n
 	for (const settlementCollateralAttoEth of [10n ** 18n, 984_200_000_000_000_000n, 0n]) {
 		const rate = { shareTokenSupplyAttoShares: amount, settlementCollateralAttoEth }
 		expect(attoSharesToCollateralAttoEth(amount, rate)).toBe(settlementCollateralAttoEth)
