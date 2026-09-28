@@ -2689,7 +2689,7 @@ span.rep-price-status.stale,
 
 .open-oracle-report-updated {
 	color: var(--muted);
-	font-size: 0.8125rem;
+	font-size: var(--font-label);
 }
 
 .open-oracle-report-badges .favorite-toggle {

@@ -609,20 +609,26 @@ void describe('OpenOracleSection', () => {
 
 	void test('ignores a report page that arrives after the environment changed', async () => {
 		const lateLoad = createDeferred<OpenOracleReportSummaryPage>()
-		const loadBrowseReports = () => lateLoad.promise
-		const browse = await renderBrowseSection({ loadBrowseReports })
+		const staleMessage = 'Oracle report #5 is unavailable in the earlier environment'
+		const currentMessage = 'Oracle report #3 is unavailable in the current environment'
+		const loadEarlierReports = () => lateLoad.promise
+		const loadCurrentReports = async () => ({ ...createReportPage(0, 1n, []), unavailableReports: [{ reportId: 3n, message: currentMessage }] })
+		const browse = await renderBrowseSection({ loadBrowseReports: loadEarlierReports })
 		try {
 			await clickButton('Discover reports')
 			await act(() => {
-				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports })} />, browse.container)
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports: loadCurrentReports })} />, browse.container)
 			})
+			await clickButton('Discover reports')
+			expect(browse.container.textContent).toContain(currentMessage)
 			await act(async () => {
-				lateLoad.resolve(createReportPage(0, 1n, [createReportSummary(1n)]))
+				lateLoad.resolve({ ...createReportPage(0, 1n, [createReportSummary(1n)]), unavailableReports: [{ reportId: 5n, message: staleMessage }] })
 				await lateLoad.promise
 			})
 			await flushAsyncWork()
 			expect(getRenderedReportTitles()).toEqual([])
-			expect(within(document.body).getByRole('button', { name: 'Discover reports' })).not.toBeNull()
+			expect(browse.container.textContent).toContain(currentMessage)
+			expect(browse.container.textContent).not.toContain(staleMessage)
 			expect(openOracleReportDownloadStore.read(getLocalEntityScope('statoblast', 'oracleReport'))).toEqual([])
 		} finally {
 			await browse.cleanup()
@@ -658,6 +664,10 @@ void describe('OpenOracleSection', () => {
 				fireEvent.click(star)
 			})
 			expect(readFavoriteEntries(scope)).toEqual([])
+			// A refresh keeps the loaded details while the lookup is loading, then replaces them.
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ ...selectedProps, openOracleReportLookupState: 'loading' })} />, browse.container)
+			})
 			await act(() => {
 				render(<OpenOracleSection {...createOpenOracleSectionProps({ ...selectedProps, openOracleReportDetails: { ...openedReport, currentAmount1: 5n } })} />, browse.container)
 			})

@@ -145,8 +145,10 @@ export function OpenOracleSection({
 			cancelled = true
 		}
 	}, [environmentReady, loadBrowseReports, successfulCreateKey])
-	// Opening a report favorites it once per visit and keeps its cached summary current for browsing.
-	const openedReportSummary = useMemo(() => (view === 'selected-report' && openOracleReportLookupState === 'ready' && openOracleReportDetails !== undefined ? toCachedOpenOracleReportSummary(openOracleReportDetails) : undefined), [openOracleReportDetails, openOracleReportLookupState, view])
+	// Opening a report favorites it once per visit and keeps its cached summary current for browsing. A refresh keeps the
+	// loaded details while it is loading, so the opened report stays the same entity and an un-star is not undone.
+	const openedReportIsLoaded = openOracleReportDetails !== undefined && openOracleReportLookupState !== 'missing' && openOracleReportLookupState !== 'load-failed'
+	const openedReportSummary = useMemo(() => (view === 'selected-report' && openedReportIsLoaded && openOracleReportDetails !== undefined ? toCachedOpenOracleReportSummary(openOracleReportDetails) : undefined), [openOracleReportDetails, openedReportIsLoaded, view])
 	useRememberOpenedEntity('statoblast', 'oracleReport', openOracleReportDownloadStore, openedReportSummary === undefined ? undefined : getOpenOracleReportEntityId(openedReportSummary.reportId), openedReportSummary)
 	const openBrowseReport = async (reportId: bigint) => {
 		onOpenOracleFormChange({ reportId: reportId.toString() })

@@ -1,6 +1,6 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import { useMemo, useState } from 'preact/hooks'
+import { useMemo, useRef, useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -86,6 +86,8 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 	const favorites = useFavorites('statoblast', 'oracleReport')
 	const downloaded = useDownloadedEntities('statoblast', 'oracleReport', openOracleReportDownloadStore)
 	const contextKey = environmentRefreshKey.toString()
+	const liveContextKeyRef = useRef(contextKey)
+	liveContextKeyRef.current = contextKey
 	const discoveredPage = useMemo((): DiscoveredPage<OpenOracleReportSummary> | undefined => {
 		if (receivedPage === undefined) return undefined
 		return { items: receivedPage.page.reports, pageIndex: receivedPage.page.pageIndex, pageSize: receivedPage.page.pageSize, requestKey: receivedPage.requestKey, totalCount: receivedPage.page.reportCount }
@@ -94,6 +96,8 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 		contextKey,
 		loadPage: async (pageIndex, requestKey) => {
 			const page = await loadBrowseReports(pageIndex, BROWSE_PAGE_SIZE)
+			// A page for an earlier environment must not replace anything collected for the current one.
+			if (liveContextKeyRef.current !== contextKey) return
 			setReceivedPage({ page, requestKey })
 			const pageUnavailable = page.unavailableReports ?? []
 			if (pageUnavailable.length === 0) return
