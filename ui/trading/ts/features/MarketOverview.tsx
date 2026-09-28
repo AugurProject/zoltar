@@ -1,5 +1,6 @@
 import type { RefObject } from 'preact'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -25,7 +26,12 @@ export function MarketFacts({ market, nowSeconds, headingRef, showPool = true }:
 			sticky={false}
 			title={market.title}
 			titleRef={headingRef}
-			badge={<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>}
+			badge={
+				<>
+					{market.loadError === undefined ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' /> : undefined}
+					<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
+				</>
+			}
 			items={[
 				...(showPool ? [{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} /> }] : []),
 				...(market.loadError === undefined

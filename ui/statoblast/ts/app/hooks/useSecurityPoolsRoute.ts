@@ -1,5 +1,5 @@
 import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
@@ -13,6 +13,8 @@ import { applyReportingFormUpdate } from '@zoltar/ui-statoblast-shared/features/
 import { getCurrentPoolOracleManagerDetails } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
+import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
@@ -141,7 +143,6 @@ export function useSecurityPoolsRoute({
 	const {
 		checkedSecurityPoolAddress,
 		closeLiquidationModal,
-		hasLoadedSecurityPoolPage,
 		hasLoadedUniverseDirectoryPools,
 		liquidationDebtEthAmount,
 		maximumLiquidationDebtAttoEth,
@@ -179,7 +180,6 @@ export function useSecurityPoolsRoute({
 		securityPoolOverviewError,
 		securityPoolLiquidationError,
 		securityPoolOverviewResult,
-		securityPoolBrowseCount,
 		securityPoolPage,
 		securityPools,
 		securityPoolUniverseDirectoryError,
@@ -194,6 +194,8 @@ export function useSecurityPoolsRoute({
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
 	useBlockRefresh(() => void refreshSecurityPools(), route === 'security-pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
+	const openedPoolSummary = useMemo(() => (selectedPool === undefined ? undefined : toCachedSecurityPool(selectedPool)), [selectedPool])
+	useRememberOpenedEntity('statoblast', 'pool', securityPoolDownloadStore, selectedPool?.securityPoolAddress, openedPoolSummary)
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
@@ -358,12 +360,10 @@ export function useSecurityPoolsRoute({
 			activeUniverseId,
 			currentTimestamp,
 			environmentRefreshKey: activeEnvironmentNonce,
-			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
 			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
 			onRefreshSecurityPoolPage: () => void refreshBrowseSecurityPoolPage(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
-			securityPoolBrowseCount,
 			securityPoolPage,
 			securityPoolPageFreshness,
 			securityPoolOverviewError,
