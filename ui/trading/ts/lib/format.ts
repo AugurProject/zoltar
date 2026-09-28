@@ -9,14 +9,8 @@ export function formatRoundedUnits(value: bigint, decimals = 18, maximumFraction
 	return formatTrimmedUnits(value < 0n ? -rounded : rounded, decimals, maximumFractionDigits)
 }
 
-export function formatBpsMultiplier(value: bigint) {
-	const whole = value / 10_000n
-	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole}${fraction.length > 0 ? `.${fraction}` : ''}×`
-}
-
-export function formatCapacityOwnership(totalAttoRep: bigint, feeEligibleAttoRep: bigint) {
-	return `${formatTrimmedUnits(totalAttoRep)} / ${formatTrimmedUnits(feeEligibleAttoRep)} REP`
+export function formatUnderwritingLimits(totalAttoEth: bigint, feeEligibleAttoEth: bigint) {
+	return `${formatTrimmedUnits(totalAttoEth)} / ${formatTrimmedUnits(feeEligibleAttoEth)} ETH`
 }
 
 export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: bigint) {

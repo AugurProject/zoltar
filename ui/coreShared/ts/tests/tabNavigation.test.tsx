@@ -2,10 +2,10 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { h } from 'preact'
-import { TabNavigation } from '../components/TabNavigation.js'
+import { TabNavigation, TabNavigationUnavailableReasons } from '../components/TabNavigation.js'
 import type { RouteTabDefinition } from '../types/components.js'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
-import { fireEvent, within } from './testUtils/queries'
+import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { installTestRouting } from './testUtils/testRouting.js'
 
@@ -53,37 +53,48 @@ describe('TabNavigation', () => {
 		expect(documentQueries.getByRole('link', { name: 'Security Pools' }).getAttribute('href')).toBe('#/security-pools?universe=7&simulate=1')
 		expect(documentQueries.getByRole('link', { name: 'Open Oracle' }).getAttribute('href')).toBe('#/open-oracle?universe=7&simulate=1')
 		expect(documentQueries.queryByRole('combobox')).toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/documentation.html')
+		expect(documentQueries.queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
 	})
 
-	test('omits route controls when only one application section is available', async () => {
-		const rendered = await renderIntoDocument(
-			h(
-				TabNavigation,
-				createProps({
-					tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }],
-				}),
-			),
-		)
+	test('omits an empty navigation landmark when only one application section is available', async () => {
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }] })))
 		cleanupRenderedComponent = rendered.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Questions' })).toBeNull()
-		expect(documentQueries.getByRole('link', { name: 'Protocol Guide' })).not.toBeNull()
+		expect(documentQueries.queryByRole('navigation', { name: 'Application sections' })).toBeNull()
 	})
 
-	test('omits the shared protocol guide when the application does not own that documentation', async () => {
-		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false })))
+	test('lists secondary sections under a More disclosure that marks the current section', async () => {
+		const routeChanges: string[] = []
+		const moreTabs: RouteTabDefinition[] = [
+			{ hash: '#/liquidity', label: 'Liquidity', route: 'liquidity' },
+			{ hash: '#/help', label: 'Help', route: 'help' },
+		]
+		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ moreTabs, route: 'help', onRouteChange: route => void routeChanges.push(route) })))
 		cleanupRenderedComponent = rendered.cleanup
 
-		expect(within(document.body).queryByRole('link', { name: 'Protocol Guide' })).toBeNull()
-	})
+		const documentQueries = within(document.body)
+		const moreButton = documentQueries.getByRole('button', { name: 'More' })
+		expect(moreButton.getAttribute('aria-expanded')).toBe('false')
+		expect(moreButton.classList.contains('active')).toBe(true)
+		expect(documentQueries.queryByRole('link', { name: 'Help' })).toBeNull()
 
-	test('omits an empty navigation landmark when no route chooser or guide is available', async () => {
-		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ showProtocolGuide: false, tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }] })))
-		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(moreButton)
+		expect(moreButton.getAttribute('aria-expanded')).toBe('true')
+		const menu = document.getElementById(moreButton.getAttribute('aria-controls') ?? '')
+		if (menu === null) throw new Error('Expected the More menu')
+		expect(within(menu).getByRole('link', { name: 'Help' }).getAttribute('aria-current')).toBe('page')
+		expect(within(menu).getByRole('link', { name: 'Liquidity' }).getAttribute('href')).toBe('#/liquidity?universe=7&simulate=1')
 
-		expect(within(document.body).queryByRole('navigation', { name: 'Application sections' })).toBeNull()
+		fireEvent.keyDown(document, { key: 'Escape' })
+		await waitFor(() => expect(moreButton.getAttribute('aria-expanded')).toBe('false'))
+		expect(document.activeElement).toBe(moreButton)
+
+		fireEvent.click(moreButton)
+		fireEvent.click(documentQueries.getByRole('link', { name: 'Liquidity' }))
+		expect(routeChanges).toEqual(['liquidity'])
+		await waitFor(() => expect(documentQueries.queryByRole('link', { name: 'Liquidity' })).toBeNull())
 	})
 
 	test('keeps the first tab current when the route is unknown', async () => {
@@ -95,6 +106,7 @@ describe('TabNavigation', () => {
 
 	test('uses the disabled reason copy for disabled application sections', async () => {
 		const disabledReason = 'Deploy the application contracts before using this section.'
+		const disabledTabs = DEFAULT_TABS.map(tab => (tab.route === 'zoltar' ? { ...tab, disabled: true, disabledReason } : tab))
 		const routeChanges: string[] = []
 		const rendered = await renderIntoDocument(
 			h(
@@ -103,10 +115,11 @@ describe('TabNavigation', () => {
 					onRouteChange: route => {
 						routeChanges.push(route)
 					},
-					tabs: DEFAULT_TABS.map(tab => (tab.route === 'zoltar' ? { ...tab, disabled: true, disabledReason } : tab)),
+					tabs: disabledTabs,
 				}),
 			),
 		)
+		const reasons = await renderIntoDocument(h(TabNavigationUnavailableReasons, { tabs: disabledTabs }))
 		cleanupRenderedComponent = rendered.cleanup
 
 		const documentQueries = within(document.body)
@@ -122,11 +135,12 @@ describe('TabNavigation', () => {
 		expect(document.activeElement).toBe(zoltarTab)
 		fireEvent.click(zoltarTab)
 		expect(routeChanges).toEqual([])
+		await reasons.cleanup()
 	})
 
 	test('explains a shared lock once instead of repeating it per tab', async () => {
 		const disabledReason = 'Transaction in progress.'
-		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ tabs: DEFAULT_TABS.map(tab => ({ ...tab, disabled: true, disabledReason })) })))
+		const rendered = await renderIntoDocument(h(TabNavigationUnavailableReasons, { tabs: DEFAULT_TABS.map(tab => ({ ...tab, disabled: true, disabledReason })) }))
 		cleanupRenderedComponent = rendered.cleanup
 
 		const reasons = document.body.querySelectorAll('.tab-nav-unavailable .disabled-reason')

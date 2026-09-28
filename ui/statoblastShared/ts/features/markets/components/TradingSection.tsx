@@ -106,11 +106,15 @@ export function TradingSection({
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
 	const calculationRepPerEthPrice = calculationPriceConfigured ? repPerEthPrice : (repPerEthPrice ?? selectedPool?.lastOraclePrice)
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, calculationRepPerEthPrice, selectedPool?.statoblastSecurityMultiplierBps)
+	const mintingCapacityAttoEth =
+		selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame
+			? calculateMintingCapacityAttoEth(selectedPool.totalUnderwritingLimitAttoEth, calculationRepPerEthPrice, selectedPool.statoblastSecurityMultiplierBps)
+			: 0n
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
-		feeEligibleCapacityOwnershipAttoRep: selectedPool?.feeEligibleCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
+		feeEligibleUnderwritingLimitAttoEth: selectedPool?.feeEligibleUnderwritingLimitAttoEth,
 		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
 		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
 		lastUpdatedFeeAccumulator: selectedPool?.feeAccrualState?.lastUpdatedFeeAccumulator,
@@ -182,7 +186,7 @@ export function TradingSection({
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleCapacityOwnershipAttoRep)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
+					if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleUnderwritingLimitAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
 					return tradingCopy.mintCapacityEmpty
 				}

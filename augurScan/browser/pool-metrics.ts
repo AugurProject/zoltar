@@ -25,7 +25,7 @@ export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>): Re
 	const used = atomic(state['settlementCollateralAttoEth'])
 	const capacity = atomic(state['currentMintingCapacityAttoEth'])
 	const backing = atomic(state['totalPoolHeldAttoRep'])
-	const ownership = atomic(state['totalCapacityOwnershipAttoRep'])
+	const ownership = atomic(state['totalUnderwritingLimitAttoEth'])
 	const multiplier = atomic(state['securityMultiplierBps'])
 	const display = (value: bigint | undefined, decimals: number, unit: string) => (value === undefined ? 'Unavailable' : exactUnit(value, decimals, unit))
 	return [
@@ -34,7 +34,7 @@ export const poolSummaryMetrics = (state: Readonly<Record<string, unknown>>): Re
 		['Minting capacity', display(capacity, 18, 'ETH')],
 		['Capacity used', display(used === undefined || capacity === undefined || capacity === 0n ? undefined : (used * 10_000n) / capacity, 2, '%')],
 		['Pool-held REP', display(backing, 18, 'REP')],
-		['REP per capacity', display(backing === undefined || ownership === undefined || ownership === 0n ? undefined : (backing * 10_000n) / ownership, 4, '×')],
+		['REP per committed ETH', display(backing === undefined || ownership === undefined || ownership === 0n ? undefined : (backing * 10_000n) / ownership, 4, 'REP/ETH')],
 		['Security multiplier', display(multiplier, 4, '×')],
 	]
 }

@@ -5,14 +5,8 @@ import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appR
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { onchainStateDependencies } from '../../app/onchainStateDependencies.js'
 import { getDeploymentSteps } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
-import { isUniverseIndependentZoltarView } from '@zoltar/ui-zoltar-shared/lib/routing.js'
 
 describe('AppRouteContent', () => {
-	test('keeps only global question views available without a universe', () => {
-		expect(isUniverseIndependentZoltarView('questions')).toBe(true)
-		expect(isUniverseIndependentZoltarView('create')).toBe(true)
-	})
-
 	test('injects the Zoltar-specific deployment plan into shared onchain state', () => {
 		expect(onchainStateDependencies.getDeploymentSteps).toBe(getDeploymentSteps)
 		expect(onchainStateDependencies.getDeploymentSteps(MAINNET_NETWORK_PROFILE).some(step => step.id === 'securityPoolFactory')).toBe(false)

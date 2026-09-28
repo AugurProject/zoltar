@@ -404,7 +404,7 @@ async function runBrowserSmokeUnlocked(appId: UiAppId, baseUrl: string, options:
 	const session = await createDevToolsSession(chromiumPath, pageUrl, viewport)
 	try {
 		const { send, issues } = session
-		const applicationTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Statoblast trading', zoltar: 'Zoltar' }
+		const applicationTitles: Record<UiAppId, string> = { statoblast: 'Augur Statoblast', trading: 'Augur Trading', zoltar: 'Zoltar' }
 		const applicationTitle = applicationTitles[appId]
 		const readyText = process.env['UI_BROWSER_READY_TEXT']
 		await send('Runtime.enable')

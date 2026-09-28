@@ -38,7 +38,7 @@ function stagedFixture(operation: 0 | 1 | 2): { pool: ReturnType<typeof snapshot
 		receiverVault: snapshot.wallet.address,
 		reservedLiquidationDebtAttoEth: 0n.toString(),
 		snapshotTargetBackingUnits: '10',
-		snapshotTargetCapacityOwnershipAttoRep: 20n.toString(),
+		snapshotTargetUnderwritingLimitAttoEth: 20n.toString(),
 		snapshotTargetDisputeStakedAttoRep: 0n.toString(),
 		snapshotTargetOpenInterestAttoEth: operation === 0 ? '100' : '0',
 		snapshotTotalPoolHeldAttoRep: 1_000n.toString(),
@@ -96,7 +96,7 @@ describe('safe liquidation operations', () => {
 		const preflight = plan?.steps[0]?.preflightCalls?.[0]
 		if (preflight === undefined) throw new Error('Target adjustment preflight missing')
 		expect(preflight.caller).toBe(pool.coordinator)
-		expect(decodeFunctionData({ abi: securityPoolAbi, data: preflight.data })).toEqual({ args: [snapshot.wallet.address, 30_000n], functionName: 'adjustVaultBackingFactor' })
+		expect(decodeFunctionData({ abi: securityPoolAbi, data: preflight.data })).toEqual({ args: [snapshot.wallet.address, 30_000n], functionName: 'setVaultUnderwritingLimit' })
 		expect(canonicalLifecyclePresence(snapshot, options).some(item => item.definitionId === 'statoblast.staged.execute' && item.blocksNovelty)).toBe(true)
 		staged.executionExpectedSuccess = false
 		expect(urgentOperationPlans(snapshot, options).some(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBe(false)

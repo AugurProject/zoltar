@@ -55,7 +55,7 @@ import {
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '../lib/securityVault.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
-import { DepositBackingFactorField, VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
+import { VaultBackingFactorForm, VaultBackingFactorModal } from './VaultBackingFactorForm.js'
 import { SelectedVaultSummarySection } from './SelectedVaultSummarySection.js'
 import { VaultQueuedOperationStatusCards } from './VaultQueuedOperationStatusCard.js'
 import { VaultActionLaunchers, VaultDepositAmountField, VaultDepositApprovalControl, VaultRepExitActionButton, VaultRepWithdrawAmountField } from './SecurityVaultActionFields.js'
@@ -68,7 +68,8 @@ export function SecurityVaultSection({
 	loadingSecurityVault,
 	modalFirst = false,
 	onApproveRep,
-	onAdjustVaultBackingFactor,
+	onCertifyVaultCoverage,
+	onSetVaultUnderwritingLimit,
 	onDepositRepToVault,
 	onLoadSecurityVault,
 	onRedeemFees,
@@ -94,7 +95,7 @@ export function SecurityVaultSection({
 	selectedPoolStatoblastSecurityMultiplierBps,
 	selectedMarketTitle,
 	selectedPoolTotalPoolHeldAttoRep,
-	selectedPoolTotalCapacityOwnershipAttoRep,
+	selectedPoolTotalUnderwritingLimitAttoEth,
 	showHeader = true,
 	showLookupSection = true,
 	showSecurityPoolAddressInput = true,
@@ -125,7 +126,7 @@ export function SecurityVaultSection({
 		? securityVaultDetails
 		: undefined
 	const minimumBps = selectedPoolStatoblastSecurityMultiplierBps
-	const depositTargetHealthFactor = currentSelectedVaultDetails?.targetBackingFactorBps ? formatCurrencyInputBalance(currentSelectedVaultDetails.targetBackingFactorBps, 4) : normalizedSecurityVaultForm.targetHealthFactor
+	const depositTargetHealthFactor = formatCurrencyInputBalance(minimumBps ?? 10_000n, 4)
 	const selectedVaultIsOwnedByAccount = isSelectedVaultOwnedByAccountHelper(selectedVaultOwner, accountState.address)
 	const repTokenSymbol = currentSelectedVaultDetails?.repTokenSymbol ?? commonCopy.rep
 	const depositRepActionLabel = securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
@@ -137,7 +138,7 @@ export function SecurityVaultSection({
 	const depositAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
 	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
 	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
-	const capacityOwnershipAttoRep = currentSelectedVaultDetails?.capacityOwnershipAttoRep ?? 0n
+	const underwritingLimitAttoEth = currentSelectedVaultDetails?.underwritingLimitAttoEth ?? 0n
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
 	const hasValidOraclePrice = hasValidSecurityVaultOraclePrice(currentSelectedVaultDetails?.managerAddress, oracleManagerDetails, currentTimestamp)
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
@@ -147,7 +148,7 @@ export function SecurityVaultSection({
 			: isVaultHealthyAtFactor({
 					disputeStakedAttoRep: currentSelectedVaultDetails.disputeStakedAttoRep,
 					healthFactorBps: 10_000n,
-					openInterestAttoEth: currentSelectedVaultDetails.openInterestAttoEth,
+					openInterestAttoEth: currentSelectedVaultDetails.underwritingLimitAttoEth,
 					poolHeldVaultRepBackingAttoRep: currentSelectedVaultDetails.vaultAttoRepBacking,
 					poolSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
 					repPerEthPrice,
@@ -158,10 +159,10 @@ export function SecurityVaultSection({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		vaultAttoRepBacking: currentSelectedVaultDetails?.vaultAttoRepBacking,
 		repPerEthPrice,
-		capacityOwnershipAttoRep: currentSelectedVaultDetails?.capacityOwnershipAttoRep,
+		underwritingLimitAttoEth: currentSelectedVaultDetails?.underwritingLimitAttoEth,
 		statoblastSecurityMultiplierBps: selectedPoolStatoblastSecurityMultiplierBps,
 		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
-		totalCapacityOwnershipAttoRep: selectedPoolTotalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth: selectedPoolTotalUnderwritingLimitAttoEth,
 	})
 	const maximumWithdrawableAttoRep = getMaximumWithdrawableAttoRep({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
@@ -275,9 +276,10 @@ export function SecurityVaultSection({
 		lastAutoLoadKey.current = autoLoadKey
 		void onLoadSecurityVault()
 	}, [autoLoadKey, autoLoadVault, hasLoadedCurrentVault, loadingSecurityVault, normalizedSecurityVaultForm.securityPoolAddress, onLoadSecurityVault, selectedVaultOwner])
-	const adjustmentBlocker = repExitLauncherBlocker ?? vaultLifecycleBlocker ?? (!depositRepToVaultEnabled ? securityPoolCopy.vaultDepositAdmissionClosedDetail : undefined)
+	const adjustmentBlocker = repExitLauncherBlocker ?? (poolState !== undefined && poolState.lifecycleState !== 'operational' && poolState.lifecycleState !== 'ended' ? vaultLifecycleBlocker : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
 			repPerEthPrice={repPerEthPrice}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
@@ -285,8 +287,10 @@ export function SecurityVaultSection({
 			details={currentSelectedVaultDetails}
 			blocker={adjustmentBlocker ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })}
 			busy={securityVaultActiveAction !== undefined}
-			pending={securityVaultActiveAction === 'adjustVaultBackingFactor'}
-			onAdjust={onAdjustVaultBackingFactor}
+			pending={securityVaultActiveAction === 'setVaultUnderwritingLimit'}
+			onCertify={onCertifyVaultCoverage}
+			certificatePending={securityVaultActiveAction === 'certifyVaultCoverage'}
+			onAdjust={onSetVaultUnderwritingLimit}
 		/>
 	)
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
@@ -315,9 +319,6 @@ export function SecurityVaultSection({
 		...extraReadinessActions,
 	])
 	const depositAmountField = <VaultDepositAmountField disabled={!depositRepToVaultEnabled} onChange={depositAmount => onSecurityVaultFormChange({ depositAmount })} value={normalizedSecurityVaultForm.depositAmount} walletRepBalanceAttoRep={walletRepBalanceAttoRep} />
-	const savedBackingFactor = !!currentSelectedVaultDetails?.targetBackingFactorBps
-	const depositBackingFactorField = <DepositBackingFactorField minimumBps={minimumBps} value={depositTargetHealthFactor} error={targetHealthFactorGuardMessage} disabled={!depositRepToVaultEnabled} onChange={targetHealthFactor => onSecurityVaultFormChange({ targetHealthFactor })} />
-	const savedBackingFactorMetric = <MetricField label={securityPoolCopy.vaultBackingFactor}>{depositTargetHealthFactor}×</MetricField>
 	const depositApprovalControlProps = {
 		approveRepEnabled,
 		canUseLoadedVaultActions,
@@ -370,14 +371,13 @@ export function SecurityVaultSection({
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
-							<SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
+							<SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={currentSelectedVaultDetails.underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						) : (
 							<StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} />
 						)}
 						{depositAmountField}
-						{savedBackingFactor ? undefined : depositBackingFactorField}
+
 						<MetricGrid>
-							{savedBackingFactor ? savedBackingFactorMetric : undefined}
 							<MetricField label={securityPoolCopy.walletRep}>{walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : <CurrencyValue value={walletRepBalanceAttoRep} suffix={repTokenSymbol} />}</MetricField>
 						</MetricGrid>
 						<ErrorNotice message={walletRepBalanceError} />
@@ -396,7 +396,7 @@ export function SecurityVaultSection({
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}
-						<SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={currentSelectedVaultDetails.capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
+						<SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={currentSelectedVaultDetails.underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} variant='embedded' />
 						<MetricGrid>
 							<MetricField label={repExitAmountLabel}>
 								{(() => {
@@ -453,7 +453,7 @@ export function SecurityVaultSection({
 		</>
 	) : (
 		<>
-			<SectionBlock title={securityPoolCopy.adjustVaultBackingFactor} variant='embedded'>
+			<SectionBlock title={securityPoolCopy.setVaultUnderwritingLimit} variant='embedded'>
 				{adjustmentForm}
 			</SectionBlock>
 			<SectionBlock title={securityPoolCopy.claimFeesTitle} variant='embedded'>
@@ -473,7 +473,7 @@ export function SecurityVaultSection({
 
 			<SectionBlock title={depositRepActionLabel} variant='embedded'>
 				{depositAmountField}
-				{savedBackingFactor ? <MetricGrid>{savedBackingFactorMetric}</MetricGrid> : depositBackingFactorField}
+
 				<VaultDepositApprovalControl {...depositApprovalControlProps} />
 			</SectionBlock>
 
@@ -537,9 +537,9 @@ export function SecurityVaultSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} capacityOwnershipAttoRep={capacityOwnershipAttoRep} securityVaultDetails={currentSelectedVaultDetails} /> : undefined}
+			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} /> : undefined}
 
-			<VaultQueuedOperationStatusCards {...operationStatusProps} operation='adjustVaultBackingFactor' />
+			<VaultQueuedOperationStatusCards {...operationStatusProps} operation='setVaultUnderwritingLimit' />
 
 			{actionSections}
 		</>
