@@ -122,12 +122,12 @@ describe('reportingDomain', () => {
 
 	test('getReportingMinimumOutcomeChangeContribution returns the smallest strict lead', () => {
 		expect(getReportingMinimumOutcomeChangeContribution(createReportingDetails(), 'yes')).toEqual({
-			amountAttoRep: rep(4n),
+			amountAttoRep: rep(3n) + 1n,
 			reason: undefined,
 		})
 	})
 
-	test('getReportingMinimumOutcomeChangeContribution returns 1001 REP for 1000 REP on yes and no selected', () => {
+	test('getReportingMinimumOutcomeChangeContribution returns 1000 REP plus one attoREP for 1000 REP on yes and no selected', () => {
 		const details = createReportingDetails({
 			currentRequiredBond: rep(1_000n),
 			nonDecisionThresholdAttoRep: rep(2_000n),
@@ -140,9 +140,37 @@ describe('reportingDomain', () => {
 		})
 
 		expect(getReportingMinimumOutcomeChangeContribution(details, 'no')).toEqual({
-			amountAttoRep: rep(1_001n),
+			amountAttoRep: rep(1_000n) + 1n,
 			reason: undefined,
 		})
+	})
+
+	test('presets preserve fractional REP when disputing 1.1 REP', () => {
+		const details = createReportingDetails({
+			sides: [
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(11n) / 10n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+			startBondAttoRep: rep(1n),
+		})
+		expect(getReportingMinimumOutcomeChangeContribution(details, 'no')).toEqual({ amountAttoRep: rep(11n) / 10n + 1n, reason: undefined })
+		expect(getReportingMaxProfitContribution(details, 'no')).toEqual({ amountAttoRep: rep(165n) / 100n, reason: undefined })
+	})
+
+	test('presets preserve fractional start bonds and remaining threshold room', () => {
+		const details = createReportingDetails({
+			startBondAttoRep: rep(11n) / 10n,
+			nonDecisionThresholdAttoRep: rep(21n) / 10n,
+			sides: [
+				{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+				{ balance: rep(21n) / 10n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+				{ balance: rep(2n), deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+			],
+		})
+		for (const suggest of [getReportingMinimumOutcomeChangeContribution, getReportingMaxProfitContribution]) {
+			expect(suggest(details, 'no')).toEqual({ amountAttoRep: rep(11n) / 10n, reason: undefined })
+		}
 	})
 
 	test('getReportingMinimumOutcomeChangeContribution respects startBondAttoRep when the lead delta is smaller than the minimum report', () => {
