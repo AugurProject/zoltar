@@ -27,7 +27,7 @@ const market: LiveMarket = {
 	awaitingForkContinuation: false,
 	universeForkTime: 0n,
 	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 10n * 10n ** 36n,
+	shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 	settlementCollateralAttoEth: 10n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
 	totalUnderwritingLimitAttoEth: 1n,
@@ -37,9 +37,9 @@ const market: LiveMarket = {
 	feeBps: 30n,
 	tradingStatus: 0,
 	questionOutcome: 3,
-	yesReserve: 50n * 10n ** 36n,
-	noReserve: 50n * 10n ** 36n,
-	lpTotalSupply: 50n * 10n ** 36n,
+	yesReserve: 50n * 10n ** 18n,
+	noReserve: 50n * 10n ** 18n,
+	lpTotalSupply: 50n * 10n ** 18n,
 }
 
 /** Card-like surfaces: entity cards and section blocks that draw their own border or background. */
@@ -88,7 +88,7 @@ describe('trading surface nesting', () => {
 		connectWallet: async () => account,
 		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
 		loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
-		loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 10n ** 36n, yes: 10n ** 36n, no: 10n ** 36n, lp: 10n ** 36n }),
+		loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 10n ** 18n }),
 	}
 
 	test('keeps the market workspace, list, portfolio, and help routes free of cards inside cards', async () => {

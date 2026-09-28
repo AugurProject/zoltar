@@ -103,7 +103,6 @@ main {
 }
 
 .app-settings-menu label > span {
-	font-family: var(--font-family-mono);
 	font-size: var(--font-label);
 	color: var(--muted);
 }
@@ -121,6 +120,131 @@ main {
 
 .app-settings-menu input[aria-invalid="true"] {
 	border-color: var(--danger-border);
+}
+
+.app-settings-menu .app-settings-theme {
+	margin-top: var(--space-3);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--divider-subtle);
+}
+
+/* Recent transactions share the settings popover geometry; the pending count badge keeps the trigger width stable. */
+.transaction-activity-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+}
+
+.transaction-activity-count {
+	display: inline-grid;
+	place-items: center;
+	min-width: 1.35rem;
+	height: 1.35rem;
+	padding: 0 0.3rem;
+	border: 1px solid var(--status-pending-border);
+	border-radius: var(--radius-pill);
+	background: var(--status-pending-soft);
+	color: var(--status-pending);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+}
+
+.transaction-activity-menu {
+	width: min(26rem, calc(100vw - 2rem));
+	max-height: min(28rem, calc(100vh - 8rem));
+	overflow-y: auto;
+}
+
+.transaction-activity-icon {
+	flex: none;
+}
+
+/* Like the settings control, the activity control keeps only its icon and count below wide desktops. */
+@media (max-width: 80rem) {
+	.header-toolbar-settings .transaction-activity-trigger {
+		min-width: 2.5rem;
+		padding-inline: 0.6rem;
+	}
+
+	.header-toolbar .transaction-activity-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+}
+
+/* On narrow screens the list spans the toolbar instead of overflowing the viewport edge. */
+@media (max-width: 40rem) {
+	.header-toolbar {
+		position: relative;
+	}
+
+	.header-toolbar .transaction-activity {
+		position: static;
+	}
+
+	.header-toolbar .transaction-activity-menu {
+		left: 0;
+		right: 0;
+		z-index: var(--z-dropdown);
+		width: auto;
+	}
+}
+
+.transaction-activity-title {
+	margin: 0 0 0.75rem;
+	font-size: var(--font-body);
+}
+
+.transaction-activity-list {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.transaction-activity-item {
+	display: grid;
+	gap: 0.3rem;
+	padding: 0.65rem 0;
+	border-top: 1px solid var(--divider-subtle);
+}
+
+.transaction-activity-item:first-child {
+	border-top: 0;
+	padding-top: 0;
+}
+
+.transaction-activity-item-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.transaction-activity-item-heading strong {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+button.quiet.transaction-activity-dismiss {
+	justify-self: start;
+	min-height: var(--touch-target-min);
+	margin-inline-start: -0.45rem;
+	font-size: var(--font-label);
+}
+
+.transaction-activity-item-meta {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 0.25rem 0.75rem;
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
 }
 
 .page-notices {
@@ -433,9 +557,6 @@ button.quiet:disabled {
 .panel-label,
 .metric-label,
 .workflow-section-label {
-	font-family: var(--font-family-mono);
-	text-transform: uppercase;
-	letter-spacing: 0.07em;
 	font-size: var(--font-label);
 	opacity: 1;
 	color: var(--muted);
@@ -536,10 +657,7 @@ button.quiet:disabled {
 }
 
 .toolbar-field-label {
-	font-family: var(--font-family-mono);
 	font-size: var(--font-xs);
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
 	white-space: nowrap;
 	color: var(--muted);
 }
@@ -1474,7 +1592,7 @@ a.transaction-hash-link {
 	min-height: 4rem;
 }
 
-@media (max-width: 37.5rem) {
+@media (max-width: 40rem) {
 	.migration-amount-hint {
 		min-block-size: 2.9em;
 	}
@@ -1522,17 +1640,15 @@ a.transaction-hash-link {
 	color: var(--muted);
 	font-size: var(--font-xs);
 	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
 }
 
-@media (max-width: 56.25rem) {
+@media (max-width: 64rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 }
 
-@media (max-width: 32.5rem) {
+@media (max-width: 40rem) {
 	.migration-outcome-metrics {
 		grid-template-columns: minmax(0, 1fr);
 	}

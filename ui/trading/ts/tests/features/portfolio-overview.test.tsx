@@ -5,7 +5,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { LivePortfolio } from '../../features/LivePortfolio.js'
 import type { LiveMarket } from '../../protocol/live.js'
 
-const SET = 10n ** 36n
+const SET = 10n ** 18n
 const NOW = 1_000_000n
 const openPool: Address = `0x${'12'.repeat(20)}`
 const resolvedPool: Address = `0x${'56'.repeat(20)}`

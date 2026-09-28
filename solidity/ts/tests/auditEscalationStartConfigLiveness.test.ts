@@ -10,7 +10,7 @@ import { describe, test } from 'bun:test'
 import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { balanceOfShares } from '../testSupport/simulator/utils/contracts/statoblast'
-import { createCertifiedCompleteSetFixture, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getShareTokenSupplyAttoShares, redeemShares } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool, Zoltar_Zoltar } from '../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 
@@ -48,7 +48,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBeforeResolution = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vaultBeforeResolution.repBackingUnits)

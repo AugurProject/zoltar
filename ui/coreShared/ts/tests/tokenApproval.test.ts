@@ -35,15 +35,9 @@ describe('token approval helpers', () => {
 		expect(parseTokenApprovalAmountInput('   ', 'Approval amount', 18)).toEqual({ kind: 'default' })
 	})
 
-	test('parses max approval input as unlimited allowance', () => {
-		expect(parseTokenApprovalAmountInput('max', 'Approval amount', 18)).toEqual({
-			amount: maxUint256,
-			kind: 'max',
-		})
-		expect(parseTokenApprovalAmountInput('MAX', 'Approval amount', 18)).toEqual({
-			amount: maxUint256,
-			kind: 'max',
-		})
+	test('rejects max approval input instead of requesting an unlimited allowance', () => {
+		expect(() => parseTokenApprovalAmountInput('max', 'Approval amount', 18)).toThrow('Approval amount must be a decimal number.')
+		expect(() => parseTokenApprovalAmountInput('MAX', 'Approval amount', 18)).toThrow('Approval amount must be a decimal number.')
 	})
 
 	test.each([

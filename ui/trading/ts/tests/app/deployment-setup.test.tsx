@@ -317,7 +317,7 @@ describe('trading deployment setup', () => {
 
 	test('verifies the canonical deployment against the active network RPC chain and falls back to setup on a mismatch', async () => {
 		const plan = getTradingDeploymentPlan(core, 30)
-		const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum Mainnet', id: 'mainnet' }
+		const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum mainnet', id: 'mainnet' }
 		let rpcChainId = '0x1'
 		let contractReadCount = 0
 		const client = createPublicClient({
@@ -609,7 +609,7 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toContain(`The connected wallet must use ${core.chainName}`)
 	})
 
-	test('keeps the app route locked while a deployment transaction is pending', async () => {
+	test('lets navigation leave a pending deployment and keeps the deploy action locked until it settles', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), 'https://rpc.example/')
 		let resolveConfiguration: ((configuration: typeof loadedConfiguration) => void) | undefined
@@ -671,11 +671,22 @@ describe('trading deployment setup', () => {
 			window.location.hash = '#/help'
 			window.dispatchEvent(new Event('hashchange'))
 		})
-		expect(window.location.hash).toBe('#/deploy')
+		expect(window.location.hash).toBe('#/help')
+		const activityTrigger = rendered.container.querySelector('.transaction-activity-trigger')
+		expect(activityTrigger?.getAttribute('aria-label')).toBe('Activity, 1 pending')
+		await act(async () => {
+			window.location.hash = '#/deploy'
+			window.dispatchEvent(new Event('hashchange'))
+			await Bun.sleep(20)
+		})
+		const lockedAction = Array.from(rendered.container.querySelectorAll('.deployment-setup button.tx-action-button')).find(button => button.textContent?.includes('Deploy') === true)
+		if (!(lockedAction instanceof HTMLButtonElement)) throw new Error('Deploy action is unavailable after returning')
+		expect(lockedAction.disabled).toBe(true)
 		expect(deployCount).toBe(1)
 		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
 		resolveDeployment()
-		await act(async () => await Bun.sleep(0))
+		await act(async () => await Bun.sleep(20))
+		expect(rendered.container.querySelector('.transaction-activity-trigger')?.getAttribute('aria-label')).toBe('Activity')
 	})
 
 	test('hydrates the deploy route from asynchronously resolved configuration', async () => {

@@ -38,7 +38,7 @@ docker compose up --build --force-recreate</code></pre>
 				<ol>
 					<li>In another terminal, run <code>bun run app:serve:statoblast</code>, open <code>http://localhost:12347/?rpcUrl=http://127.0.0.1:8545#/deploy</code>, connect an Anvil account, and use the Statoblast deployment screen to install the core contracts and security pool factory. Wait until its deployment plan is complete.</li>
 					<li>Start the Trading Docker UI from <code>ui/trading</code> with the Compose command above.</li>
-					<li>Open <code>http://localhost:4163/#/deploy</code> and follow the public-network steps with <strong>Ethereum Mainnet</strong> and <code>http://127.0.0.1:8545</code>. The browser deploys the trading factory and router through the same deterministic proxy.</li>
+					<li>Open <code>http://localhost:4163/#/deploy</code> and follow the public-network steps with <strong>Ethereum mainnet</strong> and <code>http://127.0.0.1:8545</code>. The browser deploys the trading factory and router through the same deterministic proxy.</li>
 				</ol>
 				<p>For script or integration testing, run the local deployment script against the matching root manifest from the repository root:</p>
 				<pre class="code-scroll" tabindex="0"><code>ZOLTAR_DEPLOYMENT_MANIFEST=docs/mainnet-deployment-addresses.json \

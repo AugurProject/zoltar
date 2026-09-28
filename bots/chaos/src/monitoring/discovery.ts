@@ -526,7 +526,7 @@ async function discoverPools(
 			deployment.parent === zeroAddress ? Promise.resolve(undefined) : client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [deployment.parent], blockNumber, functionName: 'forkData' }),
 			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getOwnForkMigrationStatus' }),
 			wallet === undefined ? Promise.resolve([false, 0n, [false, false, false]] as const) : client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address, wallet], blockNumber, functionName: 'getEscalationMigrationEntitlementStatus' }),
-			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getCertifiedUnderwritingLimitAttoEth' }),
+			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'getCurrentMintingCapacityAttoEth' }),
 			client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'statoblastSecurityMultiplierBps' }),
 			client.readContract({ abi: abis.securityPoolForkerAbi, address: deployments.securityPoolForker, args: [address], blockNumber, functionName: 'getUnassignedPosition' }),
 			cachedDeployment ? Promise.resolve(deployments.securityPoolFactory) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'securityPoolFactory' }),

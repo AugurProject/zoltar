@@ -6,7 +6,21 @@ import { useQuotedTransaction } from './useQuotedTransaction.js'
 export type TradeMode = 'entry' | 'exit'
 
 /** Trade-ticket inputs plus the shared quoted-transaction engine; the position and liquidity locks are tracked together so neither can start while the other runs. */
-export function useTransactionWorkflow({ onWorkflowLockChange, account, chainId, market, walletClient }: { onWorkflowLockChange(locked: boolean): void; account: Address | undefined; chainId: number | undefined; market: Address | undefined; walletClient: WalletClient | undefined }) {
+export function useTransactionWorkflow({
+	onWorkflowLockChange,
+	account,
+	chainId,
+	market,
+	marketTitle,
+	walletClient,
+}: {
+	onWorkflowLockChange(locked: boolean): void
+	account: Address | undefined
+	chainId: number | undefined
+	market: Address | undefined
+	marketTitle?: string | undefined
+	walletClient: WalletClient | undefined
+}) {
 	const [mode, setMode] = useState<TradeMode>('entry')
 	const [side, setSide] = useState<'YES' | 'NO'>('YES')
 	// Amount fields start empty: a prefilled value reads like a recommendation.
@@ -38,6 +52,7 @@ export function useTransactionWorkflow({ onWorkflowLockChange, account, chainId,
 	const transaction = useQuotedTransaction({
 		operation: 'trade',
 		label: workflowCopy.tradeLabel,
+		activityTitle: marketTitle === undefined ? undefined : workflowCopy.formatTradeActivity(marketTitle),
 		account,
 		chainId,
 		market,

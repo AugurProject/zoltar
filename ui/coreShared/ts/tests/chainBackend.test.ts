@@ -492,6 +492,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 		const backend = createInjectedBackend({ provider })
 		const restore = installActiveEnvironmentForTesting(backend)
 		let state = createInitialTransactionTrayState()
+		const lockedScope = ['question:0x1']
 		const statuses: Array<string | undefined> = []
 		const client = createWalletWriteClient(zeroAddress, {
 			onTransactionSubmitted: (submittedHash, status?: 'pending' | 'uncertain') => {
@@ -500,7 +501,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 			},
 		})
 		const failed = mock((message: string) => {
-			state = markTransactionFailed(state, message)
+			state = markTransactionFailed(state, { kind: 'error', message })
 		})
 		const succeeded = mock(() => undefined)
 		const action = runWriteAction(
@@ -508,7 +509,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 				accountAddress: zeroAddress,
 				missingWalletMessage: 'Connect wallet',
 				onTransactionRequested: () => {
-					state = markTransactionRequested(state, { action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
+					state = markTransactionRequested(state, { action: 'createMarket', scope: lockedScope, source: 'zoltar', submittedTitle: 'Creating question' })
 					return true
 				},
 				onTransactionFailed: failed,
@@ -530,7 +531,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 		try {
 			await outage
 			await Bun.sleep(20)
-			expect(isTransactionActionLocked(state)).toBe(true)
+			expect(isTransactionActionLocked(state, lockedScope)).toBe(true)
 			expect(state.active?.tone).toBe('pending')
 			expect(state.active?.hash).toBe(hash)
 			expect(statuses).toContain('uncertain')
@@ -541,7 +542,7 @@ for (const receiptStatus of ['0x1', '0x0']) {
 			restore()
 		}
 		expect(broadcasts).toBe(1)
-		expect(isTransactionActionLocked(state)).toBe(false)
+		expect(isTransactionActionLocked(state, lockedScope)).toBe(false)
 		expect(succeeded).toHaveBeenCalledTimes(receiptStatus === '0x1' ? 1 : 0)
 		expect(failed).toHaveBeenCalledTimes(receiptStatus === '0x0' ? 1 : 0)
 	})

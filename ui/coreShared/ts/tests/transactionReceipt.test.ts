@@ -29,7 +29,7 @@ describe('submitted transaction receipts', () => {
 		const result = await waitForSubmittedTransactionReceipt(replacementClient('repriced', onTransactionSubmitted), originalHash, { onKnownReceipt, onTransactionReplaced })
 
 		expect(result.hash).toBe(replacementHash)
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', originalHash)
 		expect(onTransactionReplaced).toHaveBeenCalledWith(replacementHash, 'repriced')
 		expect(onKnownReceipt).toHaveBeenCalledTimes(1)
 	})

@@ -1,11 +1,20 @@
 import type { ComponentChildren } from 'preact'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
+import type { TransactionScope } from '../transactions/transactionScope.js'
+
+/** A wallet prerequisite the user can resolve from the blocked action itself by connecting or switching the wallet. */
+export type WalletActionBlocker = { kind: 'wallet-disconnected' } | { kind: 'wrong-network'; targetChainName: string }
+
+/** Why an action is unavailable: a wallet prerequisite with an inline fix, or any other reason shown as text. */
+export type ActionAvailabilityReason = WalletActionBlocker | { kind: 'other'; message: string }
 
 export type ActionAvailability = {
 	disabled: boolean
 	/** Marks the reason as an in-progress state so it renders with loading feedback. */
 	loading?: boolean
 	reason: string | undefined
+	/** Set when the wallet connection or network blocks the action, so the action offers the connect or switch fix in place of its reason. */
+	walletBlocker?: WalletActionBlocker | undefined
 }
 
 /** Shared status vocabulary for badges and user-message presentations. */
@@ -36,6 +45,8 @@ export type TransactionIntent = {
 	failedTitle?: ComponentChildren
 	requiresWalletConfirmation?: boolean | undefined
 	rows?: GlobalTransactionRow[]
+	/** Objects the transaction touches; only actions on these objects wait for it. */
+	scope?: TransactionScope | undefined
 	technicalRows?: GlobalTransactionRow[]
 	source: string
 	submittedDetail?: ComponentChildren
@@ -78,6 +89,8 @@ export type LifecycleStagePresentation = {
 export type ReadinessAction = {
 	actionLabel: string
 	blocker?: string
+	/** The wallet prerequisite behind `blocker`, so the launcher offers the connect or switch fix. */
+	walletBlocker?: WalletActionBlocker | undefined
 	description?: string
 	disabledReasonId?: string
 	onAction?: () => void
@@ -213,6 +226,8 @@ export type TransactionActionButtonProps = {
 	onClick: () => void
 	pending?: boolean
 	pendingLabel: ComponentChildren
+	/** Objects this action touches; defaults to the nearest `TransactionScopeProvider`. */
+	scope?: TransactionScope | undefined
 	showDisabledReason?: boolean
 	tone?: 'primary' | 'secondary'
 	type?: 'button' | 'submit'
@@ -221,8 +236,11 @@ export type TransactionActionButtonProps = {
 export type OperationModalProps = {
 	/** The form already presents the full review and its submit is the final confirmation. */
 	confirmSingleStepFromForm?: boolean
+	/** False when the dialog renders the review of its own workflow itself. */
 	embedTransactionSteps?: boolean
-	children: ComponentChildren
+	/** Hosts the review of a transaction started outside any dialog instead of reviews started inside this one. */
+	hostsExternalReview?: boolean
+	children?: ComponentChildren
 	closeDisabled?: boolean
 	closeOnSuccessKey?: string | undefined
 	getReturnFocusTarget?: (() => HTMLElement | null) | undefined

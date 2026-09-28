@@ -6,7 +6,7 @@ import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contrac
 import { getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
-import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
@@ -57,7 +57,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)
 		const totalUnderwritingLimitAttoEth = underwritingLimitAttoEthPerVault * BigInt(vaultClients.length)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
-		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, totalUnderwritingLimitAttoEth / 10n)
+		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, totalUnderwritingLimitAttoEth / 10n)
 
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), totalVaultRep, 'test setup should start with exactly six equal vault deposits')
 

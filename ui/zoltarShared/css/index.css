@@ -1,4 +1,4 @@
-/* Zoltar feature styles: rules only the Zoltar app renders, such as categorical question outcomes. Loaded after questions.css and deployment.css, which hold the question and deployment rules other apps share. */
+/* Zoltar feature styles: rules only the Zoltar app renders, such as categorical question outcomes, the migration wizard, and the overview. Loaded after questions.css and deployment.css, which hold the question and deployment rules other apps share. */
 
 .categorical-outcomes {
 	display: grid;
@@ -18,7 +18,7 @@
 }
 
 /* Narrow-viewport collapse for grids this sheet owns; kept after the base rules so the override wins at equal specificity. */
-@media (max-width: 50rem) {
+@media (max-width: 64rem) {
 	.categorical-outcome-row {
 		grid-template-columns: 1fr;
 	}

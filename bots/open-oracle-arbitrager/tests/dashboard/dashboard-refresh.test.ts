@@ -953,7 +953,10 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 		expect(settings.runtime[field]).toBe(previous)
 		await acceptOperatorDialog(window)
 		await page.waitUntilComplete()
-		for (let attempt = 0; attempt < 100 && settings.runtime[field] === previous; attempt++) await Bun.sleep(10)
+		// Wait for the client save to finish, not only the server write: its response reloads every input, which would otherwise overwrite the next edit.
+		// The pending status is set before the request, so once the server holds the new value, "saved" can only come from this save.
+		for (let attempt = 0; attempt < 100 && (settings.runtime[field] === previous || element(window, 'runtime-status', window.HTMLElement).textContent !== 'Risk limits saved.'); attempt++) await Bun.sleep(10)
+		expect(element(window, 'runtime-status', window.HTMLElement).textContent).toBe('Risk limits saved.')
 		expect(settings.runtime[field]).toBe(BigInt(value))
 	}
 	runtimeInput('maxHedgeSlippageBps').value = ''

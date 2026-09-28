@@ -194,14 +194,14 @@ export function useMarketCreation(
 						marketCreatingScopes.value = new Set([...marketCreatingScopes.value, submittedMarketActionScopeKey])
 						return accepted
 					},
-					onTransactionFinished: () => {
+					onTransactionFinished: requestKey => {
 						const nextCreatingScopes = new Set(marketCreatingScopes.value)
 						nextCreatingScopes.delete(submittedMarketActionScopeKey)
 						marketCreatingScopes.value = nextCreatingScopes
-						onTransactionFinished()
+						onTransactionFinished(requestKey)
 					},
-					onTransactionFailed: message => {
-						if (isCurrentMarketActionScope()) onTransactionFailed?.(message)
+					onTransactionFailed: (message, details) => {
+						if (isCurrentMarketActionScope()) onTransactionFailed?.(message, details)
 					},
 					onWriteError: message => {
 						marketFeedback.value = { storageKey: submittedMarketActionScopeKey, value: createErrorActionFeedback('createMarket', 'Question creation failed', message) }
@@ -210,7 +210,7 @@ export function useMarketCreation(
 					refreshState: async () => {
 						if (!isCurrentMarketActionScope()) return
 						await refreshWalletStateOnly(refreshState)
-						if (refreshQuestionList) await zoltar.loadZoltarQuestions()
+						if (refreshQuestionList && createdResult !== undefined) await zoltar.loadCreatedZoltarQuestion(createdResult.questionId)
 					},
 					setErrorMessage: message => {
 						marketError.value = { storageKey: submittedMarketActionScopeKey, value: message }

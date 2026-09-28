@@ -4,7 +4,7 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getLastPrice, getQuestionEndDate, OperationType, requestPriceIfNeededAndStageOperation } from '../testSupport/simulator/utils/contracts/statoblast'
 import { forkUniverse, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createCertifiedCompleteSetFixture, depositRepToVault, getSecurityVault, getSystemState, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, depositRepToVault, getSecurityVault, getSystemState, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { createChildUniverse, getQuestionOutcome, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
@@ -44,7 +44,7 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
-		await createCertifiedCompleteSetFixture(client, securityPoolAddresses.securityPool, (repDeposit * 7n) / 10n)
+		await createCompleteSet(client, securityPoolAddresses.securityPool, (repDeposit * 7n) / 10n)
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)

@@ -135,19 +135,19 @@ const terminalOrdinaryGameCases = [
 		universeHasForked: false,
 	},
 	{
-		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.',
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.',
 		lifecycleState: 'poolForked',
 		name: 'pool-forked',
 		universeHasForked: true,
 	},
 	{
-		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.',
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.',
 		lifecycleState: 'forkMigration',
 		name: 'fork-migration',
 		universeHasForked: true,
 	},
 	{
-		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.',
+		expectedReason: 'REP-backing deposits and REP withdrawals are unavailable while this pool is in a truth auction. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.',
 		lifecycleState: 'forkTruthAuction',
 		name: 'truth-auction',
 		universeHasForked: true,
@@ -304,7 +304,8 @@ describe('SecurityVaultSection', () => {
 		expect(sharedReason).toHaveLength(1)
 		const sharedReasonId = sharedReason[0]?.id
 		expect(sharedReasonId).toBeTruthy()
-		for (const label of ['Confirm backing for minting', 'Set commitment limit']) expect(within(dialog).getByRole('button', { name: label }).getAttribute('aria-describedby')?.split(' ')).toContain(sharedReasonId)
+		expect(within(dialog).getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')?.split(' ')).toContain(sharedReasonId)
+		expect(within(dialog).queryByRole('button', { name: 'Confirm backing for minting' })).toBeNull()
 		fireEvent.input(input, { target: { value: '0' } })
 		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Set commitment limit' }))
@@ -692,7 +693,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Claim fees', 'No fees are available to claim.')
 		expect(claimFeesButton.getAttribute('aria-describedby')).toBe(claimFeesReason.id)
 		fireEvent.click(claimFeesButton)
-		expect(documentQueries.queryByRole('dialog', { name: 'Claim Fees' })).toBeNull()
+		expect(documentQueries.queryByRole('dialog', { name: 'Claim fees' })).toBeNull()
 	})
 
 	test('labels withdrawable REP with the source and staleness of the price it uses', async () => {
@@ -839,7 +840,7 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const lifecycleReason = documentQueries.getByText('REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & Migration. Fee claiming remains available only when this vault has accrued fees.')
+		const lifecycleReason = documentQueries.getByText('REP-backing deposits and REP withdrawals are unavailable while this pool is in fork migration. Continue in Fork & migration. Fee claiming remains available only when this vault has accrued fees.')
 		for (const actionLabel of ['Deposit REP', 'Withdraw REP']) {
 			const button = documentQueries.getByRole('button', { name: actionLabel })
 			expect(button.getAttribute('aria-describedby')).toBe(lifecycleReason.id)
@@ -874,8 +875,8 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
 		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
-		const withdrawAmountInput = within(withdrawDialog).getByText('REP Withdraw Amount').parentElement?.querySelector('input')
-		const timeoutInput = within(withdrawDialog).getByText('Manual Execution Timeout').parentElement?.querySelector('input')
+		const withdrawAmountInput = within(withdrawDialog).getByText('REP withdraw amount').parentElement?.querySelector('input')
+		const timeoutInput = within(withdrawDialog).getByText('Manual execution timeout').parentElement?.querySelector('input')
 		expect(withdrawAmountInput?.disabled).toBe(false)
 		expect(timeoutInput?.disabled).toBe(false)
 	})
@@ -1012,7 +1013,7 @@ describe('SecurityVaultSection', () => {
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositDialogQueries = within(depositDialog)
 		expect(depositDialog.querySelector('.transaction-object-context')).toBeNull()
-		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault Summary' })).toBeNull()
+		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()
 	})
@@ -1457,7 +1458,7 @@ test('deposit submits from the approval form without replacing it with another r
 		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
 		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Deposit REP' })))
 		expect(dialog.querySelector('.operation-modal-steps')?.textContent).toBeUndefined()
-		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 		expect(await review).toBeUndefined()
 		expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
 	} finally {
@@ -1495,9 +1496,9 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 		const rendered = await renderIntoDocument(<Harness />)
 		try {
 			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
-			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim Fees' : label })
+			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim fees' : label })
 			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
-			expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 			await review
 			const scope = transactionSteps.value?.reviewSignal
 			expect(scope).toBeDefined()
@@ -1508,7 +1509,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 			expect(dialog.isConnected).toBe(true)
 			expect(scope?.aborted).toBe(false)
 			await act(() => {
-				controller?.failed('Action canceled in wallet.')
+				controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
 				active.value = undefined
 			})
 			expect(cancel.hasAttribute('disabled')).toBe(false)

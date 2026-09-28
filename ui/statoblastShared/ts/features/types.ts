@@ -144,7 +144,6 @@ type SecurityPoolsOverviewRouteContentProps = {
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
 	environmentRefreshKey: number
-	hasLoadedSecurityPoolPage: boolean
 	loadingSecurityPoolPage: boolean
 	onCreateSecurityPool?: () => void
 	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
@@ -152,7 +151,6 @@ type SecurityPoolsOverviewRouteContentProps = {
 	onRefreshSecurityPoolPage?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
 	securityPoolOverviewError: string | undefined
-	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
 	securityPoolPageFreshness?: DataFreshness | undefined
 	securityPools: ListedSecurityPool[]
@@ -219,7 +217,6 @@ type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
-	onCertifyVaultCoverage?: (() => void) | undefined
 	onSetVaultUnderwritingLimit: (factor: string) => void
 	onDepositRepToVault: () => void
 	onLoadSecurityVault: (vaultAddress?: string) => void

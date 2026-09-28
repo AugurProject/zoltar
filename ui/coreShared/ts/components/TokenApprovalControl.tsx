@@ -35,7 +35,6 @@ type TokenApprovalControlProps = {
 function resolveApprovalButtonLabel({
 	guardMessage,
 	isCustomAmount,
-	isMaxAmount,
 	nextApprovalAmount,
 	pending,
 	pendingLabel,
@@ -45,7 +44,6 @@ function resolveApprovalButtonLabel({
 }: {
 	guardMessage: string | undefined
 	isCustomAmount: boolean
-	isMaxAmount: boolean
 	nextApprovalAmount: bigint | undefined
 	pending: boolean
 	pendingLabel: string
@@ -55,8 +53,7 @@ function resolveApprovalButtonLabel({
 }) {
 	if (pending) return <LoadingText>{pendingLabel}</LoadingText>
 	if (guardMessage !== undefined || nextApprovalAmount === undefined) return commonCopy.formatApproveValue(tokenSymbol)
-	if (requirementSatisfied && !isCustomAmount && !isMaxAmount) return commonCopy.approvalSatisfied
-	if (isMaxAmount) return commonCopy.formatApproveMaxValue(tokenSymbol)
+	if (requirementSatisfied && !isCustomAmount) return commonCopy.approvalSatisfied
 	return commonCopy.formatApproveTokenAmount(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
 }
 export function TokenApprovalControl({
@@ -133,7 +130,6 @@ export function TokenApprovalControl({
 		resolveApprovalButtonLabel({
 			guardMessage,
 			isCustomAmount: parsedAmount.kind === 'custom',
-			isMaxAmount: parsedAmount.kind === 'max',
 			nextApprovalAmount,
 			pending,
 			pendingLabel,
@@ -191,9 +187,6 @@ export function TokenApprovalControl({
 						invalid={amountValidationMessage !== undefined}
 						disabled={controlsDisabled}
 					/>
-					<button className='quiet field-inline-action' type='button' onClick={() => setDraftAmount('max')} disabled={controlsDisabled}>
-						{commonCopy.max}
-					</button>
 				</div>
 			</label>
 			{renderActions !== undefined || amountValidationMessage === undefined ? undefined : (

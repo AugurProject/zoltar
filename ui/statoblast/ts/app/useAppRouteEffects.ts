@@ -152,7 +152,7 @@ export function useAppRouteEffects({
 	useEffect(() => {
 		if (!environmentReady) return
 		if (route !== 'pools') return
-		if (tradingResultHash === undefined) return
+		if (tradingResultHash === undefined || !isHexAddressInput(securityPoolAddress)) return
 		void loadSecurityPoolsRef.current(securityPoolAddress)
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
 }

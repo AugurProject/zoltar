@@ -9,6 +9,8 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniversePoolDirectorySection } from './UniversePoolDirectorySection.js'
+import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { SelectedPoolRepPriceContext } from './RepPriceStatusLabel.js'
 import { FirstRunRoleGuide } from './FirstRunRoleGuide.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
@@ -97,10 +99,13 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 				<UniversePoolDirectorySection activeUniverseId={overview.activeUniverseId} loadingSecurityPools={loadingUniverseDirectoryPools} onRetry={onLoadUniverseDirectoryPools} securityPoolError={securityPoolUniverseDirectoryError} securityPools={universeDirectoryPools} zoltarUniverse={zoltarUniverse} />
 			) : undefined}
 
+			{/* A pending transaction on this pool locks only this pool's actions. */}
 			{view === 'operate' ? (
-				<SelectedPoolRepPriceContext.Provider value={selectedPoolRepPrice}>
-					<SecurityPoolWorkflowSection {...workflow} showHeader={false} />
-				</SelectedPoolRepPriceContext.Provider>
+				<TransactionScopeProvider scope={securityPoolTransactionScope(workflow.securityPoolAddress)}>
+					<SelectedPoolRepPriceContext.Provider value={selectedPoolRepPrice}>
+						<SecurityPoolWorkflowSection {...workflow} showHeader={false} />
+					</SelectedPoolRepPriceContext.Provider>
+				</TransactionScopeProvider>
 			) : undefined}
 		</div>
 	)

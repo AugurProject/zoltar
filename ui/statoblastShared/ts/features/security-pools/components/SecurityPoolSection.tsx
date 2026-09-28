@@ -29,6 +29,7 @@ import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/
 import type { SecurityPoolSectionProps } from '../../types.js'
 import { useUniverseName } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
@@ -127,6 +128,7 @@ export function SecurityPoolSection({
 	// The reason is the in-progress duplicate check exactly when clearing that flag would change it.
 	const createDisabledReasonLoading = checkingDuplicateOriginPool && createDisabledReason !== getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool: false })
 	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
+	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const createQuestionAndPoolDisabledReason = (() => {
 		if (questionAndPoolCreating || marketCreating || securityPoolCreating) return undefined
 		if (accountState.address === undefined) return marketCopy.questionCreationWalletRequired
@@ -330,7 +332,7 @@ export function SecurityPoolSection({
 												pendingLabel={securityPoolCopy.creatingPool}
 												onClick={() => onCreateSecurityPool()}
 												pending={securityPoolCreating}
-												availability={{ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }}
+												availability={withWalletBlocker({ disabled: isCreateDisabled, loading: createDisabledReasonLoading, reason: createDisabledReason }, walletBlocker)}
 												disabledReasonElementId={visibleFieldErrorId}
 												showDisabledReason={!securityPoolCreating && visibleFieldErrorId === undefined}
 											/>
@@ -364,10 +366,13 @@ export function SecurityPoolSection({
 										? {}
 										: {
 												submitActionOverride: {
-													availability: {
-														disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
-														reason: createQuestionAndPoolDisabledReason,
-													},
+													availability: withWalletBlocker(
+														{
+															disabled: questionAndPoolCreating || securityPoolCreating || marketCreating || createQuestionAndPoolDisabledReason !== undefined,
+															reason: createQuestionAndPoolDisabledReason,
+														},
+														walletBlocker,
+													),
 													idleLabel: securityPoolCopy.createQuestionAndPool,
 													onSubmit: onCreateQuestionAndSecurityPool,
 													pending: questionAndPoolCreating,
@@ -443,11 +448,14 @@ export function SecurityPoolSection({
 												onClick={() => onCreateSecurityPool(marketResult.questionId)}
 												pending={questionAndPoolCreating || securityPoolCreating}
 												showDisabledReason={!questionAndPoolCreating && !securityPoolCreating}
-												availability={{
-													disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
-													loading: questionAndPoolCreating || securityPoolCreating,
-													reason: questionAndPoolCreating || securityPoolCreating ? securityPoolCopy.poolCreationInProgress : createDisabledReason,
-												}}
+												availability={withWalletBlocker(
+													{
+														disabled: questionAndPoolCreating || securityPoolCreating || createDisabledReason !== undefined,
+														loading: questionAndPoolCreating || securityPoolCreating,
+														reason: questionAndPoolCreating || securityPoolCreating ? securityPoolCopy.poolCreationInProgress : createDisabledReason,
+													},
+													walletBlocker,
+												)}
 											/>
 										</div>
 									)

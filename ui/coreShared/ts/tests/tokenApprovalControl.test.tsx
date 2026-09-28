@@ -177,6 +177,36 @@ describe('TokenApprovalControl', () => {
 		expect(approveCalls).toBe(0)
 	})
 
+	test('approves exactly the required amount by default and offers no unlimited approval', async () => {
+		const approvals: (bigint | undefined)[] = []
+		const renderedComponent = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={amount => approvals.push(amount)}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={1200n * 10n ** 18n}
+				resetKey='rep-approval-exact'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByRole('button', { name: /max/i })).toBeNull()
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 1 200 REP' })))
+		expect(approvals).toEqual([1200n * 10n ** 18n])
+
+		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Leave blank for required total'), { target: { value: 'max' } }))
+		expect(documentQueries.getByText('Approval amount must be a decimal number.')).not.toBeNull()
+		expect((documentQueries.getByRole('button', { name: 'Approve REP' }) as HTMLButtonElement).disabled).toBe(true)
+	})
+
 	test('reports and blocks an invalid custom approval input', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TokenApprovalControl
