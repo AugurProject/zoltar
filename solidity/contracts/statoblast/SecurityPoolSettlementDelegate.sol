@@ -11,6 +11,7 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	function createCompleteSet() external payable returns (uint256 completeSetsToMintAttoShares) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(!awaitingForkContinuation, 'Fork await');
+		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
 		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
 		pool.updateSettlementCollateral();
@@ -33,14 +34,7 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 	}
 
 	function _validateSettlementCollateral(ISecurityPool pool, uint256 nextSettlementCollateralAttoEth) private view {
-		uint256 repEthPrice = pool.priceOracleManagerAndOperatorQueuer().lastPrice();
-		require(SecurityPoolUtils.calculateMintingCapacityAttoEth(totalCapacityOwnershipAttoRep, repEthPrice, statoblastSecurityMultiplierBps) >= nextSettlementCollateralAttoEth, 'Over capacity');
-		uint256 activeOpenInterestAttoEth =
-			nextSettlementCollateralAttoEth > totalBadDebtAttoEth
-				? nextSettlementCollateralAttoEth - totalBadDebtAttoEth
-				: 0;
-		uint256 disputeStakedAttoRep =
-			address(escalationGame) == address(0x0) ? 0 : escalationGame.totalDisputeStakedAttoRep();
-		require(SecurityPoolUtils.isVaultHealthy(pool.getTotalPoolHeldAttoRep(), disputeStakedAttoRep, activeOpenInterestAttoEth, repEthPrice, statoblastSecurityMultiplierBps), 'Pool backing insufficient');
+		require(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity');
+		require(pool.getCertifiedUnderwritingLimitAttoEth() == totalUnderwritingLimitAttoEth, 'Commitments not certified');
 	}
 }

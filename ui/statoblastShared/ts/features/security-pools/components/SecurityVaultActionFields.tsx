@@ -5,6 +5,7 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
+import { formatAmountForDisplay } from '@zoltar/ui-core-shared/forms/amountInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -30,7 +31,11 @@ export function VaultDepositAmountField({
 	walletRepBalanceAttoRep: bigint | undefined
 	walletRepBalanceLoading: boolean
 }) {
-	return <AmountField balance={walletRepBalanceAttoRep} disabled={disabled} hint={walletRepBalanceLoading ? <LoadingText>{commonCopy.loading}</LoadingText> : undefined} label={securityPoolCopy.repBackingLabel} fillMax={{ amount: walletRepBalanceAttoRep }} onChange={onChange} unit={repTokenSymbol} value={value} />
+	// The balance is a hint only: the approval control already reports a shortfall with its exact amount.
+	let hint: ComponentChildren = undefined
+	if (walletRepBalanceLoading) hint = <LoadingText>{commonCopy.loading}</LoadingText>
+	else if (walletRepBalanceAttoRep !== undefined) hint = commonCopy.formatAmountHint(commonCopy.balance, formatAmountForDisplay(walletRepBalanceAttoRep, 18, repTokenSymbol))
+	return <AmountField disabled={disabled} fillMax={{ amount: walletRepBalanceAttoRep }} hint={hint} label={securityPoolCopy.repBackingLabel} onChange={onChange} unit={repTokenSymbol} value={value} />
 }
 
 export function VaultRepWithdrawAmountField({ disabled, maximumWithdrawableAttoRep, onChange, repTokenSymbol, value }: { disabled: boolean; maximumWithdrawableAttoRep: bigint | undefined; onChange: (repWithdrawAmount: string) => void; repTokenSymbol: string; value: string }) {

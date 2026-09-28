@@ -13,6 +13,17 @@ import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+
+let nextBlockNumber = 5_000n
+// Stands in for the chain producing a block: queued operations are re-read on each new block until they resolve.
+async function announceNewBlock() {
+	await act(() => {
+		appBlockWatcher.reportBlock(nextBlockNumber)
+		appBlockWatcher.reportBlock(nextBlockNumber + 1n)
+		nextBlockNumber += 2n
+	})
+}
 
 type UseSecurityVaultOperationsState = ReturnType<typeof useSecurityVaultOperations>
 type TestSecurityVaultWriteClient = { kind: 'injected-write-client' }
@@ -32,9 +43,9 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 		totalRepBackingUnits: 1n,
 		vaultAttoRepBacking: 10n * 10n ** 18n,
 		repToken: REP_TOKEN_ADDRESS,
-		capacityOwnershipAttoRep: 0n,
+		underwritingLimitAttoEth: 0n,
 		securityPoolAddress: SECURITY_POOL_ADDRESS,
-		totalCapacityOwnershipAttoRep: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
 		claimableFeesAttoEth: 0n,
 		universeId: 1n,
 		vaultAddress: WALLET_ADDRESS,
@@ -159,7 +170,7 @@ describe('useSecurityVaultOperations', () => {
 		let committed = false
 		const dependencies = createSecurityVaultOperationsDependencies({
 			queueOracleManagerOperation,
-			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ capacityOwnershipAttoRep: 5n * 10n ** 18n, totalCapacityOwnershipAttoRep: 5n * 10n ** 18n, settlementCollateralAttoEth: committed ? 1n : 0n })),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 5n * 10n ** 18n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: committed ? 1n : 0n })),
 		})
 		let hookState: UseSecurityVaultOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -170,18 +181,45 @@ describe('useSecurityVaultOperations', () => {
 		await waitFor(() => expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1))
 		await requireHookState(hookState).adjustBackingFactor('3')
 		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
-		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'adjustVaultBackingFactor', WALLET_ADDRESS, 20_000n, 300n)
+		expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setVaultUnderwritingLimit', WALLET_ADDRESS, 2n * 10n ** 18n, 300n)
 		write.resolve({ hash: '0x01' })
 		await first
 		expect(requireHookState(hookState).securityVaultFeedback?.status.tone).toBe('success')
 		committed = true
-		await act(async () => await requireHookState(hookState).adjustBackingFactor('100'))
+		await act(async () => await requireHookState(hookState).adjustBackingFactor('0'))
 		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).securityVaultError).toContain('committed settlement collateral')
+		expect(requireHookState(hookState).securityVaultError).toContain('Total commitments must cover outstanding settlement collateral')
+	})
+
+	test.each([
+		['zero exit', '0', 0n, undefined],
+		['partial reduction', '2', 2n * 10n ** 18n, undefined],
+		['uncovered reduction', '0', 1n, 'Total commitments must cover outstanding settlement collateral'],
+		['increase', '6', 0n, 'New vault REP backing is unavailable'],
+	] as const)('closed admission permits only safe commitment reductions: %s', async (_name, limit, collateral, error) => {
+		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			queueOracleManagerOperation,
+			isSecurityPoolVaultAdmissionClosed: mock(async () => true),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 5n * 10n ** 18n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: collateral })),
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		await act(async () => await requireHookState(state).adjustBackingFactor(limit))
+		if (error === undefined) {
+			expect(requireHookState(state).securityVaultError).toBeUndefined()
+			expect(queueOracleManagerOperation).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, 'setVaultUnderwritingLimit', WALLET_ADDRESS, BigInt(limit) * 10n ** 18n, 300n)
+		} else {
+			expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+			expect(requireHookState(state).securityVaultError).toContain(error)
+		}
 	})
 
 	test('preserves the existing on-chain queue result for a target change', async () => {
-		const queuedOperation = { isPendingSlot: true, operation: 'adjustVaultBackingFactor' as const, operationId: 7n }
+		const queuedOperation = { isPendingSlot: true, operation: 'setVaultUnderwritingLimit' as const, operationId: 7n }
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: 40_000n, settlementCollateralAttoEth: 0n })),
 			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
@@ -199,8 +237,8 @@ describe('useSecurityVaultOperations', () => {
 
 	test.each(['executed', 'failed', 'expired', 'superseded'] as const)('reconciles a queued target to %s without replacing its submission receipt', async terminal => {
 		let completed = false
-		const queuedOperation = { isPendingSlot: false, operation: 'adjustVaultBackingFactor' as const, operationId: 7n }
-		const execution = { operation: 'adjustVaultBackingFactor' as const, operationId: 7n, success: terminal === 'executed', errorMessage: terminal === 'executed' ? undefined : terminal }
+		const queuedOperation = { isPendingSlot: false, operation: 'setVaultUnderwritingLimit' as const, operationId: 7n }
+		const execution = { operation: 'setVaultUnderwritingLimit' as const, operationId: 7n, success: terminal === 'executed', errorMessage: terminal === 'executed' ? undefined : terminal }
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
 			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
@@ -225,7 +263,7 @@ describe('useSecurityVaultOperations', () => {
 		let completed = false
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, targetBackingFactorBps: completed ? 20_000n : 40_000n })),
-			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation: { isPendingSlot: true, operation: 'adjustVaultBackingFactor' as const, operationId: 7n } })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation: { isPendingSlot: true, operation: 'setVaultUnderwritingLimit' as const, operationId: 7n } })),
 			loadQueuedVaultOperationState: mock(async () => ({ status: completed ? ('executed' as const) : ('queued' as const) })),
 		})
 		let state: UseSecurityVaultOperationsState | undefined
@@ -236,18 +274,19 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('queued'))
 		completed = true
-		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('executed'))
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
 
 	test.each(['failed', 'canceled'] as const)('keeps tracking an adjustment after a fee claim is %s', async outcome => {
 		let completed = false
-		const queuedOperation = { isPendingSlot: false, operation: 'adjustVaultBackingFactor' as const, operationId: 42n }
+		const queuedOperation = { isPendingSlot: false, operation: 'setVaultUnderwritingLimit' as const, operationId: 42n }
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, targetBackingFactorBps: completed ? 20_000n : 40_000n })),
 			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
-			loadQueuedVaultOperationState: mock(async () => (completed ? { status: 'executed' as const, execution: { operation: 'adjustVaultBackingFactor' as const, operationId: 42n, success: true } } : { status: 'manual-queued' as const })),
+			loadQueuedVaultOperationState: mock(async () => (completed ? { status: 'executed' as const, execution: { operation: 'setVaultUnderwritingLimit' as const, operationId: 42n, success: true } } : { status: 'manual-queued' as const })),
 			updateSecurityVaultFees: mock(async () => ({ action: 'updateVaultFees' as const, hash: '0x02' as const })),
 			redeemSecurityVaultFees: mock(async () => {
 				throw Object.assign(new Error(outcome === 'canceled' ? 'User rejected the request' : 'Fee claim reverted'), { code: outcome === 'canceled' ? 4001 : -32000 })
@@ -264,7 +303,8 @@ describe('useSecurityVaultOperations', () => {
 		expect(dependencies.redeemSecurityVaultFees).toHaveBeenCalled()
 		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperation).toEqual(queuedOperation)
 		completed = true
-		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.queuedOperationState?.status).toBe('executed'))
 		expect(requireHookState(state).securityVaultQueuedOperations?.[0]?.hash).toBe('0x01')
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
 		expect(requireHookState(state).securityVaultResult).toBeUndefined()
@@ -274,7 +314,7 @@ describe('useSecurityVaultOperations', () => {
 		let targetExecuted = false
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, targetBackingFactorBps: targetExecuted ? 20_000n : 40_000n })),
-			queueOracleManagerOperation: mock(async (_client: TestSecurityVaultWriteClient, _manager: Address, operation: 'withdrawRep' | 'adjustVaultBackingFactor') => ({
+			queueOracleManagerOperation: mock(async (_client: TestSecurityVaultWriteClient, _manager: Address, operation: 'withdrawRep' | 'setVaultUnderwritingLimit') => ({
 				hash: operation === 'withdrawRep' ? ('0x02' as const) : ('0x01' as const),
 				queuedOperation: { isPendingSlot: false, operation, operationId: operation === 'withdrawRep' ? 43n : 42n },
 			})),
@@ -290,7 +330,8 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => await requireHookState(state).withdrawRep())
 		expect(requireHookState(state).securityVaultQueuedOperations.map(result => result.queuedOperation?.operationId)).toEqual([42n, 43n])
 		targetExecuted = true
-		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultQueuedOperations[0]?.queuedOperationState?.status).toBe('executed'))
 		expect(requireHookState(state).securityVaultQueuedOperations[1]?.queuedOperationState?.status).toBe('manual-queued')
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x02')
 		await waitFor(() => expect(requireHookState(state).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n))
@@ -299,7 +340,7 @@ describe('useSecurityVaultOperations', () => {
 	test('retains the queued receipt through a delayed failed read and retry', async () => {
 		const delayed = createDeferred<{ status: 'manual-queued' }>()
 		let reads = 0
-		const queuedOperation = { isPendingSlot: false, operation: 'adjustVaultBackingFactor' as const, operationId: 42n }
+		const queuedOperation = { isPendingSlot: false, operation: 'setVaultUnderwritingLimit' as const, operationId: 42n }
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
 			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation })),
@@ -322,7 +363,8 @@ describe('useSecurityVaultOperations', () => {
 		})
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('missing'))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
-		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'), { timeout: 5_000 })
+		await announceNewBlock()
+		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'))
 		expect(requireHookState(state).securityVaultResult?.hash).toBe('0x01')
 	})
 
@@ -331,7 +373,7 @@ describe('useSecurityVaultOperations', () => {
 		const loadQueuedVaultOperationState = mock(async () => await pendingRead.promise)
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
-			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation: { isPendingSlot: true, operation: 'adjustVaultBackingFactor' as const, operationId: 7n } })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, queuedOperation: { isPendingSlot: true, operation: 'setVaultUnderwritingLimit' as const, operationId: 7n } })),
 			loadQueuedVaultOperationState,
 		})
 		let state: UseSecurityVaultOperationsState | undefined
@@ -352,7 +394,7 @@ describe('useSecurityVaultOperations', () => {
 	test('reports a rejected target execution as an error instead of success', async () => {
 		const dependencies = createSecurityVaultOperationsDependencies({
 			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ settlementCollateralAttoEth: 0n })),
-			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, stagedExecution: { operation: 'adjustVaultBackingFactor' as const, operationId: 8n, success: false, errorMessage: 'Vault backing insufficient' } })),
+			queueOracleManagerOperation: mock(async () => ({ hash: '0x01' as const, stagedExecution: { operation: 'setVaultUnderwritingLimit' as const, operationId: 8n, success: false, errorMessage: 'Vault backing insufficient' } })),
 		})
 		let state: UseSecurityVaultOperationsState | undefined
 		const Harness = createHarness(dependencies, next => {
@@ -701,13 +743,13 @@ describe('useSecurityVaultOperations', () => {
 		expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1)
 	})
 
-	test.each(['', 'invalid', '1.5'])('deposits with the fresh saved target despite hidden input %s', async targetHealthFactor => {
-		let onchainTarget = 20_000n
+	test.each(['', 'invalid', '1.5'])('deposits REP independently of the commitment form input %s', async targetHealthFactor => {
+		let onchainLimit = 10n ** 18n
 		const deposit = mock(async () => ({ action: 'depositRepToVault' as const, hash: '0x06' as const }))
 		const dependencies = createSecurityVaultOperationsDependencies({
 			depositRepToVaultToSecurityPool: deposit,
 			loadErc20Balance: mock(async () => 10n ** 18n),
-			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ targetBackingFactorBps: onchainTarget })),
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: onchainLimit, totalUnderwritingLimitAttoEth: onchainLimit, statoblastSecurityMultiplierBps: 20_000n })),
 		})
 		let hookState: UseSecurityVaultOperationsState | undefined
 		const Harness = createHarness(dependencies, state => {
@@ -721,12 +763,12 @@ describe('useSecurityVaultOperations', () => {
 		await act(async () => {
 			await requireHookState(hookState).loadSecurityVault()
 		})
-		expect(requireHookState(hookState).securityVaultDetails?.targetBackingFactorBps).toBe(20_000n)
-		onchainTarget = 30_000n
+		expect(requireHookState(hookState).securityVaultDetails?.underwritingLimitAttoEth).toBe(10n ** 18n)
+		onchainLimit = 2n * 10n ** 18n
 		await act(async () => {
 			await requireHookState(hookState).depositRepToVault()
 		})
-		expect(deposit).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, 10n ** 18n, 30_000n)
+		expect(deposit).toHaveBeenCalledWith({ kind: 'injected-write-client' }, SECURITY_POOL_ADDRESS, 10n ** 18n, 20_000n)
 	})
 
 	test('closing during deposit details loading cancels before creating a write client', async () => {

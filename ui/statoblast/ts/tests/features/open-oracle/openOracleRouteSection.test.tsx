@@ -425,6 +425,48 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-7')).toBeNull()
 	})
 
+	test('hides a revealed dispute amount error when another report is selected', async () => {
+		const tokenUnits = 10n ** 18n
+		const createDisputedReport = (reportId: bigint) =>
+			createOpenOracleReportDetails({
+				currentAmount1: 10n * tokenUnits,
+				currentAmount2: 5n * tokenUnits,
+				currentReporter: '0x3000000000000000000000000000000000000000',
+				currentTime: 200n,
+				disputeDelay: 10n,
+				escalationHalt: 20n * tokenUnits,
+				multiplier: 20_000n,
+				reportId,
+				reportTimestamp: 100n,
+				settlementTime: 200n,
+			})
+		const renderReport = (openOracleReportDetails: OpenOracleReportDetails) => (
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), disputeNewAmount1: 'not-a-number', disputeNewAmount2: '7', reportId: openOracleReportDetails.reportId.toString() },
+					openOracleReportDetails,
+				})}
+			/>
+		)
+		const renderedComponent = await renderIntoDocument(renderReport(createDisputedReport(7n)))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
+		const firstInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & Swap' })).getByLabelText('New REPv2 Amount')
+		await act(() => {
+			firstInput.dispatchEvent(new Event('blur'))
+		})
+		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-7')).not.toBeNull()
+
+		await act(() => {
+			render(renderReport(createDisputedReport(8n)), renderedComponent.container)
+		})
+		const nextInput = within(documentQueries.getByRole('dialog', { name: 'Dispute & Swap' })).getByLabelText('New REPv2 Amount')
+		expect(nextInput.hasAttribute('aria-invalid')).toBe(false)
+		expect(document.getElementById('open-oracle-dispute-new-amount-1-error-8')).toBeNull()
+	})
+
 	test('keeps blank and unsubmitted report lookups quiet', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(

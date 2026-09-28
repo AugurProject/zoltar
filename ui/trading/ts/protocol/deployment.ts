@@ -82,9 +82,21 @@ export function deploymentConfigurationForPlan(plan: TradingDeploymentPlan, rpcU
 	}
 }
 
+const tradingDeploymentMissingCause = 'trading-deployment-missing'
+
+/** An error meaning the chain answered and the contracts the trading UI needs are not installed there. */
+export function tradingDeploymentMissingError(message: string) {
+	return new Error(message, { cause: tradingDeploymentMissingCause })
+}
+
+/** Separates "not deployed on this chain" from failures to reach or verify the chain, which a retry may fix. */
+export function isTradingDeploymentMissingError(error: unknown) {
+	return error instanceof Error && error.cause === tradingDeploymentMissingCause
+}
+
 async function requireCode(client: Pick<PublicClient, 'getCode'>, address: Address, label: string) {
 	const code = await client.getCode({ address })
-	if (code === undefined || code === '0x') throw new Error(`${label} has no code at ${address}`)
+	if (code === undefined || code === '0x') throw tradingDeploymentMissingError(`${label} has no code at ${address}`)
 }
 
 async function validateTradingFactory(client: Pick<PublicClient, 'readContract'>, plan: TradingDeploymentPlan) {
@@ -100,7 +112,8 @@ async function validateTradingRouter(client: Pick<PublicClient, 'readContract'>,
 
 export async function loadTradingDeploymentStatus(client: Pick<PublicClient, 'getCode' | 'readContract'>, plan: TradingDeploymentPlan) {
 	const [proxyCode] = await Promise.all([client.getCode({ address: plan.core.proxyDeployer }), requireCode(client, plan.core.securityPoolFactory, 'SecurityPoolFactory')])
-	if (proxyCode === undefined || proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Canonical proxy deployer has unexpected code at ${plan.core.proxyDeployer}`)
+	if (proxyCode === undefined || proxyCode === '0x') throw tradingDeploymentMissingError(`Canonical proxy deployer has no code at ${plan.core.proxyDeployer}`)
+	if (proxyCode.toLowerCase() !== PROXY_DEPLOYER_RUNTIME_CODE.toLowerCase()) throw new Error(`Canonical proxy deployer has unexpected code at ${plan.core.proxyDeployer}`)
 	const factoryCode = await client.getCode({ address: plan.factory.address })
 	const factoryDeployed = factoryCode !== undefined && factoryCode !== '0x'
 	if (factoryDeployed) await validateTradingFactory(client, plan)
@@ -125,8 +138,8 @@ export async function resolveInstalledTradingDeployment(client: Pick<PublicClien
 	const plan = getTradingDeploymentPlan(core, feeBps)
 	const status = await loadTradingDeploymentStatus(client, plan)
 	if (isTradingDeploymentComplete(plan, status)) return deploymentConfigurationForPlan(plan, rpcUrl)
-	if (hasInstalledTradingStep(status)) throw new Error('The trading deployment is incomplete')
-	throw new Error('Trading contracts have not been deployed')
+	if (hasInstalledTradingStep(status)) throw tradingDeploymentMissingError('The trading deployment is incomplete')
+	throw tradingDeploymentMissingError('Trading contracts have not been deployed')
 }
 
 export function nextTradingDeploymentStep(plan: TradingDeploymentPlan, status: Readonly<{ factory: boolean; router: boolean }>) {

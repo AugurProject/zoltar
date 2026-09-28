@@ -302,8 +302,8 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(documentQueries.getByText('Failed to load security vault')).toBeTruthy()
 		expect(documentQueries.queryByText('Refresh the vault to use these actions.')).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Deposit REP' }).getAttribute('aria-describedby')).toBe(retryReason.id)
-		expect(documentQueries.getByRole('button', { name: 'Adjust backing ratio' }).getAttribute('aria-describedby')).toBe(retryReason.id)
-		expectTransactionButtonDisabled(document.body, 'Adjust backing ratio')
+		expect(documentQueries.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBe(retryReason.id)
+		expectTransactionButtonDisabled(document.body, 'Set commitment limit')
 
 		await act(() => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
@@ -397,6 +397,62 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(modalQueries.getByText('REP Approval Amount')).not.toBeNull()
 	})
 
+	test('states an over-balance deposit once, in the approval control', async () => {
+		const selectedPoolAddress = zeroAddress
+		const renderedComponent = await renderIntoDocument(
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					accountState: createAccountState(),
+					securityPoolAddress: selectedPoolAddress,
+					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
+					securityVault: createSecurityVaultProps({
+						securityVaultDetails: createSecurityVaultDetails({
+							securityPoolAddress: selectedPoolAddress,
+						}),
+						securityVaultForm: {
+							depositAmount: '30',
+							repWithdrawAmount: '',
+							targetHealthFactor: '',
+							securityPoolAddress: selectedPoolAddress,
+							selectedVaultOwner: zeroAddress,
+						},
+						walletRepBalanceAttoRep: 25n * 10n ** 18n,
+						securityVaultRepApproval: {
+							error: undefined,
+							loading: false,
+							value: 0n,
+						},
+					}),
+					selectedPoolView: 'vaults',
+				})}
+				showHeader={false}
+			/>,
+		)
+		setCleanup(renderedComponent.cleanup)
+
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(
+				documentQueries.getAllByRole('button', {
+					name: 'Deposit REP',
+				})[0] as HTMLElement,
+			)
+		})
+
+		const depositDialog = documentQueries.getByRole('dialog', {
+			name: 'Deposit REP',
+		})
+		const modalQueries = within(depositDialog)
+		const depositInput = modalQueries.getByLabelText('REP backing')
+		await act(() => {
+			depositInput.dispatchEvent(new Event('blur'))
+		})
+		expect(depositDialog.querySelector('.field-error')).toBeNull()
+		expect(depositInput.getAttribute('aria-invalid')).toBeNull()
+		expect(modalQueries.getByText(/^Balance: 25/, { selector: 'p.field-hint' })).not.toBeNull()
+		expect(depositDialog.textContent?.match(/exceeds your wallet balance/gi)).toHaveLength(1)
+	})
+
 	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {
 		const selectedPoolAddress = zeroAddress
 		const renderedComponent = await renderIntoDocument(
@@ -413,7 +469,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
 							totalPoolHeldAttoRep: 20_000n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 2_500n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
@@ -421,7 +477,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 						securityVaultDetails: createSecurityVaultDetails({
 							vaultAttoRepBacking: 20_000n * 10n ** 18n,
-							capacityOwnershipAttoRep: 2_500n * 10n ** 18n,
+							underwritingLimitAttoEth: 2_500n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
 						}),
 						securityVaultForm: {
@@ -473,7 +529,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 							managerAddress: zeroAddress,
 							securityPoolAddress: selectedPoolAddress,
 							totalPoolHeldAttoRep: 9n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 						}),
 					],
 					securityVault: createSecurityVaultProps({
@@ -482,9 +538,9 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 						}),
 						securityVaultDetails: createSecurityVaultDetails({
 							vaultAttoRepBacking: 12n * 10n ** 18n,
-							capacityOwnershipAttoRep: 1n * 10n ** 18n,
+							underwritingLimitAttoEth: 1n * 10n ** 18n,
 							securityPoolAddress: selectedPoolAddress,
-							totalCapacityOwnershipAttoRep: 2n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
 						}),
 						securityVaultForm: {
 							depositAmount: '',

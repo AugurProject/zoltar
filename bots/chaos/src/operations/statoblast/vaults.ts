@@ -11,6 +11,7 @@ import {
 	exactPreviousPoolApproval,
 	feeCheckpointDue,
 	operationalPools,
+	safeOraclePriceDeadline,
 	poolAccountingCurrentEvidence,
 	poolApprovalPrepared,
 	poolApprovalStep,
@@ -153,7 +154,7 @@ export const depositVault: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: securityPoolAbi,
-				args: [spend, amount(pool.walletVaultTargetBackingFactorBps) || amount(pool.statoblastSecurityMultiplierBps)],
+				args: [spend, amount(pool.statoblastSecurityMultiplierBps)],
 				evidence: [eventEvidence(pool.address, 'RepDepositedToVault(address,uint256,uint256,uint256)')],
 				functionName: 'depositRepToVault',
 				id: 'deposit-rep',
@@ -198,7 +199,7 @@ export const depositVault: OperationDefinition = {
 		steps.push(
 			encodeStep({
 				abi: securityPoolAbi,
-				args: [spend, amount(pool.walletVaultTargetBackingFactorBps) || amount(pool.statoblastSecurityMultiplierBps)],
+				args: [spend, amount(pool.statoblastSecurityMultiplierBps)],
 				evidence: [eventEvidence(poolAddress, 'RepDepositedToVault(address,uint256,uint256,uint256)')],
 				functionName: 'depositRepToVault',
 				id: 'deposit-rep',
@@ -257,8 +258,8 @@ export function vaultActionDefinition(kind: 'update-fees' | 'redeem-fees' | 'red
 					const vault = walletVault(snapshot, candidate)
 					if (vault === undefined) return false
 					if (kind === 'redeem-fees') return amount(vault.claimableFeesAttoEth) > 0n
-					if (kind === 'redeem-rep') return amount(vault.repBackingAttoRep) > 0n && amount(vault.disputeStakedAttoRep) === 0n && candidate.questionOutcome !== BINARY_OUTCOME_NONE && candidate.systemState === 0
-					return (amount(vault.repBackingUnits) > 0n || amount(vault.capacityOwnershipAttoRep) > 0n) && (feeCheckpointDue(snapshot, candidate) || amount(vault.feeIndex) < amount(candidate.feeIndex))
+					if (kind === 'redeem-rep') return amount(vault.underwritingLimitAttoEth) === 0n && amount(vault.repBackingAttoRep) > 0n && amount(vault.disputeStakedAttoRep) === 0n && candidate.questionOutcome !== BINARY_OUTCOME_NONE && candidate.systemState === 0
+					return (amount(vault.repBackingUnits) > 0n || amount(vault.underwritingLimitAttoEth) > 0n) && (feeCheckpointDue(snapshot, candidate) || amount(vault.feeIndex) < amount(candidate.feeIndex))
 				}),
 				mixSeed(options.seed, id),
 			)
@@ -287,8 +288,8 @@ export function vaultActionDefinition(kind: 'update-fees' | 'redeem-fees' | 'red
 				const vault = walletVault(snapshot, pool)
 				if (vault === undefined) return false
 				if (kind === 'redeem-fees') return amount(vault.claimableFeesAttoEth) > 0n
-				if (kind === 'redeem-rep') return amount(vault.repBackingAttoRep) > 0n && amount(vault.disputeStakedAttoRep) === 0n && pool.questionOutcome !== BINARY_OUTCOME_NONE && pool.systemState === 0
-				return (amount(vault.repBackingUnits) > 0n || amount(vault.capacityOwnershipAttoRep) > 0n) && (feeCheckpointDue(snapshot, pool) || amount(vault.feeIndex) < amount(pool.feeIndex))
+				if (kind === 'redeem-rep') return amount(vault.underwritingLimitAttoEth) === 0n && amount(vault.repBackingAttoRep) > 0n && amount(vault.disputeStakedAttoRep) === 0n && pool.questionOutcome !== BINARY_OUTCOME_NONE && pool.systemState === 0
+				return (amount(vault.repBackingUnits) > 0n || amount(vault.underwritingLimitAttoEth) > 0n) && (feeCheckpointDue(snapshot, pool) || amount(vault.feeIndex) < amount(pool.feeIndex))
 			})
 			return eligible(possible ? undefined : 'No wallet vault has an eligible balance')
 		},
@@ -297,4 +298,119 @@ export function vaultActionDefinition(kind: 'update-fees' | 'redeem-fees' | 'red
 		method,
 		risk: 'low',
 	}
+}
+
+function commitmentCandidates(snapshot: EcosystemSnapshot) {
+	return operationalPools(snapshot).flatMap(pool => {
+		const vault = walletVault(snapshot, pool)
+		const price = amount(pool.lastRepPerEthPrice)
+		const multiplier = amount(pool.statoblastSecurityMultiplierBps)
+		if (!pool.oraclePriceValid || price === 0n || multiplier < 10_000n || vault === undefined || amount(vault.disputeStakedAttoRep) !== 0n) return []
+		// Invert both nested rounded backing checks and retain half the available backing.
+		const requiredMultiplier = multiplier < 10_500n ? 10_500n : multiplier
+		const limit = (((amount(vault.repBackingAttoRep) * 10_000n) / requiredMultiplier) * ONE_TOKEN) / price / 2n
+		return limit > amount(vault.underwritingLimitAttoEth) ? [{ pool, limit }] : []
+	})
+}
+
+export const setCommitmentLimit: OperationDefinition = {
+	buildPlan(snapshot, options) {
+		const candidate = choose(commitmentCandidates(snapshot), mixSeed(options.seed, setCommitmentLimit.id))
+		if (candidate === undefined) return undefined
+		return planBase({
+			definitionId: setCommitmentLimit.id,
+			ecosystem: 'statoblast',
+			label: setCommitmentLimit.label,
+			metadata: { pool: candidate.pool.address, limitAttoEth: candidate.limit.toString() },
+			postconditions: ['The wallet authorizes a fully backed standing ETH commitment'],
+			risk: 'medium',
+			snapshot,
+			steps: [encodeStep({ abi: securityPoolAbi, args: [candidate.limit], evidence: [eventEvidence(candidate.pool.address, 'UnderwritingLimitSet(address,uint256,uint256)')], functionName: 'setUnderwritingLimit', id: 'set-limit', label: 'Authorize standing ETH commitment', to: candidate.pool.address })],
+		})
+	},
+	classification: 'selectable',
+	contract: 'SecurityPool',
+	description: 'Authorizes a standing ETH limit using at most half the wallet vault backing at the current price.',
+	discoveryInputs: ['wallet vault backing', 'current oracle price', 'standing commitments'],
+	ecosystem: 'statoblast',
+	evaluate: snapshot => eligible(commitmentCandidates(snapshot).length > 0 ? undefined : 'No backed wallet vault can increase its commitment'),
+	id: 'statoblast.vault.set-limit',
+	label: 'Set commitment limit',
+	method: 'setUnderwritingLimit',
+	risk: 'medium',
+}
+
+function commitmentExitCandidates(snapshot: EcosystemSnapshot) {
+	return snapshot.pools.filter(pool => {
+		const vault = walletVault(snapshot, pool)
+		if (vault === undefined || amount(vault.underwritingLimitAttoEth) === 0n || pool.systemState !== 0) return false
+		const universe = snapshot.universes.find(candidate => candidate.id === pool.universeId)
+		if (universe === undefined || (universe.forkTime !== '0' && pool.questionOutcome === BINARY_OUTCOME_NONE)) return false
+		return amount(pool.totalUnderwritingLimitAttoEth) >= amount(vault.underwritingLimitAttoEth) + amount(pool.settlementCollateralAttoEth)
+	})
+}
+
+export const exitCommitmentLimit: OperationDefinition = {
+	buildPlan(snapshot, options) {
+		const pool = choose(commitmentExitCandidates(snapshot), mixSeed(options.seed, exitCommitmentLimit.id))
+		if (pool === undefined) return undefined
+		return planBase({
+			definitionId: exitCommitmentLimit.id,
+			ecosystem: 'statoblast',
+			label: exitCommitmentLimit.label,
+			metadata: { pool: pool.address, limitAttoEth: 0n.toString() },
+			postconditions: ['The wallet exits its commitment while aggregate commitments still cover collateral'],
+			risk: 'low',
+			snapshot,
+			steps: [encodeStep({ abi: securityPoolAbi, args: [0n], evidence: [eventEvidence(pool.address, 'UnderwritingLimitSet(address,uint256,uint256)')], functionName: 'setUnderwritingLimit', id: 'exit-limit', label: 'Exit standing commitment', to: pool.address })],
+		})
+	},
+	classification: 'selectable',
+	contract: 'SecurityPool',
+	description: 'Exits the wallet commitment only when the remaining aggregate covers outstanding collateral.',
+	discoveryInputs: ['wallet commitment', 'aggregate commitments', 'settlement collateral'],
+	ecosystem: 'statoblast',
+	evaluate: snapshot => eligible(commitmentExitCandidates(snapshot).length > 0 ? undefined : 'Outstanding collateral prevents commitment exit'),
+	id: 'statoblast.vault.exit-limit',
+	label: 'Exit commitment limit',
+	method: 'setUnderwritingLimit',
+	risk: 'low',
+}
+
+function certificationCandidates(snapshot: EcosystemSnapshot, options: PlanningOptions) {
+	return operationalPools(snapshot).flatMap(pool => {
+		const deadline = safeOraclePriceDeadline(snapshot, pool, options)
+		if (deadline === undefined || pool.escalationGame !== '0x0000000000000000000000000000000000000000') return []
+		return pool.vaults.filter(vault => amount(vault.underwritingLimitAttoEth) > 0n && vault.coverageCertified === false).map(vault => ({ pool, vault, deadline }))
+	})
+}
+
+export const certifyCommitment: OperationDefinition = {
+	buildPlan(snapshot, options) {
+		const candidate = choose(certificationCandidates(snapshot, options), mixSeed(options.seed, certifyCommitment.id))
+		if (candidate === undefined) return undefined
+		return planBase({
+			definitionId: certifyCommitment.id,
+			ecosystem: 'statoblast',
+			label: certifyCommitment.label,
+			deadlineTimestamp: candidate.deadline.toString(),
+			metadata: { pool: candidate.pool.address, vault: candidate.vault.address },
+			postconditions: ['The vault full-limit backing is certified against the current pool snapshot'],
+			risk: 'low',
+			snapshot,
+			steps: [
+				encodeStep({ abi: securityPoolAbi, args: [candidate.vault.address], evidence: [eventEvidence(candidate.pool.address, 'VaultCoverageCertified(address,uint256,bytes32,uint256)')], functionName: 'certifyVaultCoverage', id: 'certify-commitment', label: 'Certify commitment backing', to: candidate.pool.address }),
+			],
+		})
+	},
+	classification: 'selectable',
+	contract: 'SecurityPool',
+	description: 'Certifies one standing commitment on chain as an independent keeper action.',
+	discoveryInputs: ['per-vault certificate status', 'current oracle price'],
+	ecosystem: 'statoblast',
+	evaluate: (snapshot, options) => eligible(certificationCandidates(snapshot, options).length > 0 ? undefined : 'No uncertified commitment has a safely fresh price'),
+	id: 'statoblast.vault.certify',
+	label: 'Certify commitment',
+	method: 'certifyVaultCoverage',
+	risk: 'low',
 }

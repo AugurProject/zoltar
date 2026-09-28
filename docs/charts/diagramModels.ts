@@ -161,7 +161,7 @@ export const diagramGraphSpecs = {
 	'fig-liquidation-punitive-flow': diagram(
 		{
 			ariaDescription:
-				'Floor-rounded proportional capacity ownership and ceiling-rounded REP backing units leave the target vault. The authorized receiver incurs the exact reported security-bond debt increase and receives those ownership and backing units. The operator only submits the transaction. Escalation claims, fees, surplus, and unmatched ownership remain with the target; only on a full-target request does debt left by the award cap or integer allocation rounding become target-local bad debt.',
+				'An authorized receiver accepts a standing ETH commitment and capped REP award. Total commitments remain constant. Remaining commitments, escalation claims and earned fees stay with the target. A funded receiver can accept the entire commitment even when the nominal REP award exceeds target backing.',
 			ariaLabel: 'Liquidation accounting transfer from target vault to authorized receiver',
 			height: 230,
 			width: 900,
@@ -169,8 +169,8 @@ export const diagramGraphSpecs = {
 		[
 			section(
 				'liquidation-transfer',
-				[node('target', 'Target vault', 'red', ['claims and fees remain', 'full-target residual → bad debt'], 240), node('receiver', 'Receiver vault', 'green', ['incurs exact reported debt', 'receives ownership + backing'], 240)],
-				[edge('liquidation-target-receiver', 'target', 'receiver', 'floor ownership · ceil backing units')],
+				[node('target', 'Target vault', 'red', ['claims and fees remain', 'residual commitment retained'], 240), node('receiver', 'Receiver vault', 'green', ['authorizes transferred limit', 'receives capped REP award'], 240)],
+				[edge('liquidation-target-receiver', 'target', 'receiver', 'ETH commitment + capped REP')],
 			),
 		],
 		'RIGHT',
