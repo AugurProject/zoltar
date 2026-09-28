@@ -58,6 +58,7 @@ function MarketListControls({ options, onChange }: { options: MarketListOptions;
 export function LiveMarketBrowser({
 	lookupRoute,
 	markets,
+	favoriteMarkets = [],
 	pageMarketCount,
 	discoveryState,
 	discoveryError,
@@ -70,6 +71,8 @@ export function LiveMarketBrowser({
 }: {
 	lookupRoute: TradingLookupRoute
 	markets: readonly LiveMarket[]
+	/** Favorites come from the browser cache, so they show before (and independently of) the paged chain scan. */
+	favoriteMarkets?: readonly LiveMarket[]
 	pageMarketCount: number
 	discoveryState: 'loading' | 'ready' | 'error'
 	discoveryError: string | undefined
@@ -130,6 +133,17 @@ export function LiveMarketBrowser({
 	return (
 		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'} actions={<UpdatedAgo {...freshness} />}>
 			<OpenPoolForm disabled={false} target={lookupRoute} />
+			{listKind === 'markets' && favoriteMarkets.length > 0 ? (
+				<>
+					<h3 className='eyebrow market-list-heading'>{liveCopy.favoriteMarkets}</h3>
+					<div className='entity-card-list market-list'>
+						{favoriteMarkets.map(market => (
+							<MarketCard key={market.pool} listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />
+						))}
+					</div>
+					<h3 className='eyebrow market-list-heading'>{liveCopy.discoveredMarkets}</h3>
+				</>
+			) : undefined}
 			{content}
 			<PaginationControls
 				hasNextPage={marketPage.nextStart !== undefined}

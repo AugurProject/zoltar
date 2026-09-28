@@ -1,6 +1,7 @@
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
+import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { MarketOddsBar } from '../components/MarketOddsBar.js'
@@ -67,7 +68,14 @@ export function MarketCard({ listKind, lookupRoute, market, nowSeconds }: { list
 			surface={listKind === 'markets' ? 'card' : 'flat'}
 			variant='compact'
 			title={<a href={getTradingRouteHref(actions.primary.href)}>{market.title}</a>}
-			badge={listKind === 'markets' ? <Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge> : undefined}
+			badge={
+				listKind === 'markets' ? (
+					<>
+						<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
+						{loaded ? <FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' /> : undefined}
+					</>
+				) : undefined
+			}
 			actions={
 				<>
 					{outcomeButtons ? undefined : (
