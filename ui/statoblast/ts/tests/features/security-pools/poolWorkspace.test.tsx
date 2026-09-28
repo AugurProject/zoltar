@@ -3,6 +3,11 @@ import { expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
@@ -116,6 +121,41 @@ test('keeps the pool oracle request visible but disabled with its reason when no
 	expect(row?.querySelector('.tx-action-feedback')?.textContent).toContain('Connect a wallet')
 	await act(() => fireEvent.click(button))
 	expect(opened).toEqual([])
+})
+
+async function renderLoadedPoolWithWalletActions(overrides: Partial<SecurityPoolWorkflowRouteContentProps>) {
+	const walletFix = createWalletActions()
+	const props = createSecurityPoolWorkflowProps({ checkedSecurityPoolAddress: zeroAddress, securityPoolAddress: zeroAddress, securityPools: [createSelectedPool()], ...overrides })
+	setCleanup(
+		(
+			await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletFix.walletActions}>
+					<SecurityPoolWorkflowSection {...props} showHeader={false} />
+				</WalletActionsProvider>,
+			)
+		).cleanup,
+	)
+	return walletFix
+}
+
+const expiredPriceManager = () => createOracleManagerDetails({ isPriceValid: false, lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 0n })
+
+for (const [accountState, fixLabel] of [
+	[createAccountState({ address: undefined }), 'Connect wallet'],
+	[createAccountState({ address: '0x0000000000000000000000000000000000000001', chainId: '0x1', ethBalanceAttoEth: 10n ** 21n }), 'Switch to Sepolia'],
+] as const)
+	test(`offers the ${fixLabel} fix on the pool price requests the wallet blocks`, async () => {
+		const { calls } = await renderLoadedPoolWithWalletActions({ accountState, poolOracleManagerDetails: expiredPriceManager(), selectedPoolView: 'price-oracle' })
+		expectWalletFixDescribesAction(document.body, 'Request new price', fixLabel)
+		const fix = expectWalletFixDescribesAction(document.body, 'Request new price…', fixLabel)
+		await act(() => fireEvent.click(fix))
+		expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+	})
+
+test('keeps the load-oracle reason as text on the price row while the wallet is disconnected', async () => {
+	await renderLoadedPoolWithWalletActions({ accountState: createAccountState({ address: undefined }), poolOracleManagerDetails: undefined, poolOracleManagerError: 'Oracle unavailable.', poolOracleManagerErrorAddress: zeroAddress })
+	expect(within(document.body).queryByRole('button', { name: 'Connect wallet' })).toBeNull()
+	expect(getTransactionButtonState(document.body, 'Request new price')).toEqual({ disabled: true, reason: 'Loading price oracle details…' })
 })
 
 test('requests a new price straight from the pool oracle row', async () => {

@@ -32,11 +32,11 @@ Useful Operations routes include:
 - `/operations/reports`, `/operations/escalations`, and `/operations/auctions` for OpenOracle and dispute resolution;
 - `/operations/risk` for tagged pool and vault observations;
 - `/operations/forks` for Zoltar fork and Statoblast migration evidence;
-- `/operations/trading` for AMM price, liquidity, volume, and fee history;
+- `/operations/trading` for AMM price, liquidity, share and ETH volume, fee history, and recent market activity;
 - `/operations/timeline` for cross-protocol semantic history;
 - `/operations/integrity` for reorgs, replay causes, migrations, indexer provenance, and canonical decode coverage by destination and selector.
 
-Detail routes are deep-linkable. Preserve `chainId` when constructing a link and preserve `atBlock` on a historical risk link. Address links stay inside augurScan; `/address?chainId=:chainId&address=:address` summarizes balances, REP tokens, pools, vaults, interactions, and recent transactions, with the external explorer as a secondary link.
+Detail routes are deep-linkable. Preserve `chainId` when constructing a link and preserve `atBlock` on a historical risk link. Address links stay inside augurScan; `/address?chainId=:chainId&address=:address` summarizes balances, REP tokens, pools, vaults, trading profit and loss, interactions, and recent transactions, with the external explorer as a secondary link.
 
 Every visible route refreshes after a committed block notification and on the status cycle. Activity preserves the reader's scroll position while new rows arrive. Paged Operations views restore the visible depth at one canonical boundary instead of mixing results from different heads.
 

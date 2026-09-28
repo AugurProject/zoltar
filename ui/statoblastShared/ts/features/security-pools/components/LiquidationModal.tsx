@@ -37,7 +37,7 @@ import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFoc
 import { shouldCloseOnBackdropClick } from '@zoltar/ui-core-shared/lib/modalBackdrop.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
 import { LiquidationApprovalSummary, LiquidationContextSummary, LiquidationTransactionReview, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
 type LiquidationModalProps = {
@@ -289,7 +289,8 @@ export function LiquidationModal({
 					walletBalanceAttoEth,
 				})
 	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
-	const canUseLiquidationAction = accountAddress !== undefined && isOnActiveAppChain
+	const walletGuard = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain })
+	const canUseLiquidationAction = !walletGuard.blocked
 	const liquidationBlockers = getLiquidationBlockers({
 		delegatedApprovalReason,
 		delegatedReceiver,
@@ -313,12 +314,11 @@ export function LiquidationModal({
 		trimmedLiquidationTargetVault,
 	})
 	const liquidationBlocker = liquidationBlockers.find(blocker => blocker.reason !== undefined)
-	let disabledReasonElementId = delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
-	if (initialPriceError !== undefined) disabledReasonElementId = initialPriceFieldId
+	// The wallet prerequisite comes before every other blocker, so a disconnected wallet or wrong network offers its connect or switch fix.
+	let disabledReasonElementId = !walletGuard.blocked && delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
+	if (!walletGuard.blocked && initialPriceError !== undefined) disabledReasonElementId = initialPriceFieldId
 	const liquidationActionReason = initialPriceError ?? liquidationBlocker?.reason
-	let liquidationButtonDisabledReason = liquidationEnabled ? liquidationActionReason : undefined
-	if (accountAddress === undefined) liquidationButtonDisabledReason = commonCopy.walletConnectionRequired
-	if (!isOnActiveAppChain) liquidationButtonDisabledReason = getWrongNetworkReason()
+	const liquidationButtonDisabledReason = walletGuard.reason ?? (liquidationEnabled ? liquidationActionReason : undefined)
 	const queuedLiquidationOperation = getQueuedLiquidationOperation({ currentPoolOracleManagerDetails, liquidationTargetVault, securityPoolOverviewResult })
 	const queuedLiquidationStatus = getQueuedLiquidationStatus({ currentPoolOracleManagerDetails, currentTimestamp, loadingPoolOracleManager, queuedLiquidationOperation, securityPoolOverviewResult })
 	return (
@@ -469,8 +469,9 @@ export function LiquidationModal({
 							disabled: !liquidationEnabled || !canUseLiquidationAction || liquidationActionReason !== undefined,
 							loading: canUseLiquidationAction && liquidationEnabled && liquidationBlocker?.loading === true,
 							reason: liquidationButtonDisabledReason,
+							walletBlocker: walletGuard.walletBlocker,
 						}}
-						showDisabledReason={initialPriceError === undefined && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary)}
+						showDisabledReason={walletGuard.blocked || (initialPriceError === undefined && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary))}
 					/>
 					<button className='secondary' onClick={closeLiquidationModal}>
 						{commonCopy.cancel}

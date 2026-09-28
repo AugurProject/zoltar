@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { getActionAvailabilityReason, getWalletActionBlocker, getWalletActiveAppChainActionAvailability, getWalletActiveAppChainGuardState, getWalletConnectionActiveAppChainGuardState, withWalletBlocker } from '../transactions/actionGuards.js'
+import { getActionAvailabilityReason, getWalletActionBlocker, getWalletActiveAppChainActionAvailability, getWalletActiveAppChainGuardState, getWalletConnectionActiveAppChainGuardState, withWalletBlocker, withWalletGuardFirst } from '../transactions/actionGuards.js'
 import type { WalletActionBlocker } from '../types/components.js'
 
 describe('actionGuards', () => {
@@ -77,5 +77,13 @@ describe('actionGuards', () => {
 		expect(getActionAvailabilityReason({ disabled: false, reason: undefined, walletBlocker: { kind: 'wallet-disconnected' } })).toBeUndefined()
 		expect(getActionAvailabilityReason({ disabled: true, reason: undefined })).toBeUndefined()
 		expect(getActionAvailabilityReason(undefined)).toBeUndefined()
+	})
+
+	test('puts a blocking wallet ahead of every other prerequisite and leaves availability alone otherwise', () => {
+		const walletBlocker: WalletActionBlocker = { kind: 'wallet-disconnected' }
+		expect(withWalletGuardFirst({ disabled: true, loading: true, reason: 'Loading vault.' }, { reason: 'Connect a wallet before depositing REP.', walletBlocker })).toEqual({ disabled: true, reason: 'Connect a wallet before depositing REP.', walletBlocker })
+		expect(withWalletGuardFirst({ disabled: false, reason: undefined }, { reason: 'Connect a wallet before depositing REP.', walletBlocker })).toEqual({ disabled: true, reason: 'Connect a wallet before depositing REP.', walletBlocker })
+		const availability = { disabled: true, reason: 'Enter an amount.' }
+		expect(withWalletGuardFirst(availability, { reason: undefined, walletBlocker: undefined })).toBe(availability)
 	})
 })

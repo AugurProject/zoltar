@@ -21,6 +21,8 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
+import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getPendingOperationAmountPresentation, getPendingOperationLabel, getStagedOperationExecutionModeLabel } from './SecurityPoolWorkflowPresentation.js'
@@ -50,6 +52,8 @@ export type RequestPriceModalProps = {
 	canRequest: boolean
 	closeOnSuccessKey: string | undefined
 	confirmationGuardMessage: string | undefined
+	/** The wallet prerequisite, when it is the confirmation guard's reason. */
+	confirmationWalletBlocker?: WalletActionBlocker | undefined
 	getReturnFocusTarget?: () => HTMLElement | null
 	onClose: () => void
 	onConfirm: (review: RequestPriceReview, signal?: AbortSignal) => void | Promise<void>
@@ -57,7 +61,7 @@ export type RequestPriceModalProps = {
 	review: RequestPriceReview | undefined
 }
 
-export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
+export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, confirmationGuardMessage, confirmationWalletBlocker, getReturnFocusTarget, onClose, onConfirm, pending, review }: RequestPriceModalProps) {
 	const manualPriceErrorId = useId()
 	const [priceSource, setPriceSource] = useState<'automatic' | 'manual'>('automatic')
 	const [manualPrice, setManualPrice] = useState('')
@@ -108,7 +112,7 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 						if (review !== undefined && manualPriceError === undefined && !pending && canRequest && confirmationGuardMessage === undefined) void onConfirm({ ...review, proposedRepPerEthPrice })
 					}}
 					pending={pending}
-					availability={{ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError) : undefined }}
+					availability={withWalletBlocker({ disabled: review === undefined || !canRequest || confirmationGuardMessage !== undefined || manualPriceError !== undefined, reason: canRequest ? (confirmationGuardMessage ?? manualPriceError) : undefined }, canRequest ? confirmationWalletBlocker : undefined)}
 				/>
 				<button className='secondary' type='button' onClick={onClose} disabled={pending}>
 					{commonCopy.cancel}
@@ -248,6 +252,7 @@ export function SecurityPoolPriceOracleSection({
 	requestGuardMessage,
 	requestPending,
 	requestValueAttoEth,
+	requestWalletBlocker,
 }: {
 	canRequest: boolean
 	currentTimestamp: bigint | undefined
@@ -262,6 +267,8 @@ export function SecurityPoolPriceOracleSection({
 	requestGuardMessage: string | undefined
 	requestPending: boolean
 	requestValueAttoEth: bigint | undefined
+	/** The wallet prerequisite, when it is the request guard's reason. */
+	requestWalletBlocker?: WalletActionBlocker | undefined
 }) {
 	const priceValues = managerDetails ?? metricValues
 	return (
@@ -294,7 +301,7 @@ export function SecurityPoolPriceOracleSection({
 					onClick={onOpenRequestReview}
 					pending={requestPending}
 					tone='primary'
-					availability={{ disabled: !canRequest || requestValueAttoEth === undefined || requestGuardMessage !== undefined, reason: canRequest ? requestGuardMessage : undefined }}
+					availability={withWalletBlocker({ disabled: !canRequest || requestValueAttoEth === undefined || requestGuardMessage !== undefined, reason: canRequest ? requestGuardMessage : undefined }, canRequest ? requestWalletBlocker : undefined)}
 				/>
 			</div>
 		</SectionBlock>

@@ -4,7 +4,7 @@ import { ForkAuctionSection } from '../../truth-auctions/components/ForkAuctionS
 import { ReportingSection } from '../../reporting/components/ReportingSection.js'
 import { TradingSection } from '../../markets/components/TradingSection.js'
 import type { ForkAuctionDetails, ListedSecurityPool, MarketDetails, OpenOracleActionResult, OracleManagerDetails, ReportingDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
+import type { ActionAvailability, WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import type { ForkAuctionSectionProps, SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import type { SecurityPoolLifecycleState, SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { getSelectedPoolOracleMetricValues } from '../lib/securityPoolWorkflow.js'
@@ -195,6 +195,7 @@ export function SelectedPoolPriceOraclePanel({
 	poolState,
 	requestPriceGuardMessage,
 	requestPriceOpenGuardMessage,
+	requestPriceOpenWalletBlocker,
 	requestPriceTransactionValueAttoEth,
 	selectedPoolOracleMetricValues,
 }: {
@@ -210,6 +211,7 @@ export function SelectedPoolPriceOraclePanel({
 	poolState: SecurityPoolStateModel
 	requestPriceGuardMessage: string | undefined
 	requestPriceOpenGuardMessage: string | undefined
+	requestPriceOpenWalletBlocker: WalletActionBlocker | undefined
 	requestPriceTransactionValueAttoEth: bigint | undefined
 	selectedPoolOracleMetricValues: ReturnType<typeof getSelectedPoolOracleMetricValues> | undefined
 }) {
@@ -230,6 +232,7 @@ export function SelectedPoolPriceOraclePanel({
 			onViewPendingReport={onViewPendingReport}
 			requestGuardMessage={requestPriceOpenGuardMessage ?? requestPriceGuardMessage}
 			requestPending={poolOracleActiveAction === 'requestPrice'}
+			requestWalletBlocker={requestPriceOpenWalletBlocker}
 			requestValueAttoEth={requestPriceTransactionValueAttoEth}
 		/>
 	)
