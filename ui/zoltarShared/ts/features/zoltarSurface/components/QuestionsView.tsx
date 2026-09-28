@@ -1,11 +1,13 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
-import { useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { DiscoveryControl, LocalCollectionSwitcher } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
@@ -23,6 +25,7 @@ import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { questionDownloadStore, questionMatchesSearch } from '../../../lib/questionBrowse.js'
 
 type QuestionsViewProps = {
+	zoltarQuestionsFreshness: DataFreshness
 	loadingZoltarQuestions: boolean
 	onActiveViewChange: (view: ZoltarView) => void
 	onLoadZoltarQuestionPage: (pageIndex: number, pageSize: number) => Promise<void>
@@ -35,7 +38,7 @@ type QuestionsViewProps = {
 }
 
 /** Questions are browsed from this browser's favorites and downloaded summaries; the registry is scanned one page at a time on request. */
-export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError }: QuestionsViewProps) {
+export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError, zoltarQuestionsFreshness }: QuestionsViewProps) {
 	const [collection, setCollection] = useState<LocalBrowseCollection>('favorites')
 	const [searchText, setSearchText] = useState('')
 	const favorites = useFavorites('zoltar', 'question')
@@ -52,6 +55,13 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 		receivedPage,
 	})
 	const discoveryLoading = discovery.loading || loadingZoltarQuestions
+	// After a scan, block refreshes of the last scanned page keep its cached questions current; the recorder is read through a ref.
+	const recordQuestionsRef = useRef(downloaded.record)
+	recordQuestionsRef.current = downloaded.record
+	useEffect(() => {
+		if (zoltarQuestionPage === undefined || !discovery.hasScanned) return
+		recordQuestionsRef.current(zoltarQuestionPage.questions.map(question => ({ data: question, id: question.questionId })))
+	}, [zoltarQuestionPage, discovery.hasScanned])
 	const discover = () => {
 		setCollection('downloaded')
 		discovery.discoverNext()
@@ -144,6 +154,7 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 			<SectionBlock title={marketCopy.questions} variant='plain'>
 				<div className='local-browse-bar'>
 					<LocalCollectionSwitcher collection={collection} downloadedCount={downloaded.entries.length} favoritesCount={favoriteEntries.length} onChange={setCollection} />
+					{discovery.hasScanned ? <UpdatedAgo {...zoltarQuestionsFreshness} /> : undefined}
 					<DiscoveryControl discovery={{ ...discovery, discoverNext: discover, loading: discoveryLoading }} discoverLabel={marketCopy.discoverQuestions} emphasize={downloaded.entries.length === 0} nounPlural={marketCopy.questionsNoun} />
 				</div>
 				<label className='field'>

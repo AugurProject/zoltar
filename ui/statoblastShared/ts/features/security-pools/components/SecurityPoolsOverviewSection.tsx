@@ -3,13 +3,15 @@ import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { DiscoveryControl, LocalCollectionSwitcher } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { usePagedDiscovery, type DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
@@ -55,8 +57,10 @@ export function SecurityPoolsOverviewSection({
 	loadingSecurityPoolPage,
 	onCreateSecurityPool,
 	onLoadSecurityPoolPage,
+	onRefreshSecurityPoolPage,
 	onSelectSecurityPool,
 	securityPoolPage,
+	securityPoolPageFreshness,
 	securityPoolOverviewError,
 	repPerEthPrice,
 	uiPriceOracle = 'open-oracle',
@@ -80,6 +84,16 @@ export function SecurityPoolsOverviewSection({
 		receivedPage,
 	})
 	const discoveryLoading = discovery.loading || loadingSecurityPoolPage
+	const discoveryContextKey = `${environmentRefreshKey.toString()}:${scopedAccountAddress?.toLowerCase() ?? 'no-account'}`
+	// Once the user has scanned, the last scanned page (one bounded read) refreshes on new blocks and keeps its cached pools current.
+	useBlockRefresh(() => onRefreshSecurityPoolPage?.(), onRefreshSecurityPoolPage !== undefined && discovery.hasScanned)
+	// Only a new page object (a completed scan or a block refresh) is recorded; the recorder is read through a ref.
+	const recordPoolsRef = useRef(downloaded.record)
+	recordPoolsRef.current = downloaded.record
+	useEffect(() => {
+		if (securityPoolPage === undefined || !discovery.hasScanned || !securityPoolPage.requestKey.startsWith(`${discoveryContextKey}:`)) return
+		recordPoolsRef.current(securityPoolPage.pools.map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress })))
+	}, [securityPoolPage, discovery.hasScanned, discoveryContextKey])
 	const discover = () => {
 		setCollection('downloaded')
 		discovery.discoverNext()
@@ -167,6 +181,7 @@ export function SecurityPoolsOverviewSection({
 			)}
 			<div className='local-browse-bar'>
 				<LocalCollectionSwitcher collection={collection} downloadedCount={downloaded.entries.length} favoritesCount={favoriteEntries.length} onChange={setCollection} />
+				{discovery.hasScanned && securityPoolPageFreshness !== undefined ? <UpdatedAgo {...securityPoolPageFreshness} /> : undefined}
 				<DiscoveryControl discovery={{ ...discovery, discoverNext: discover, loading: discoveryLoading }} discoverLabel={securityPoolCopy.discoverPools} emphasize={downloaded.entries.length === 0} nounPlural={securityPoolCopy.poolCountPlural} />
 			</div>
 			<div className='filter-toolbar pool-browse-toolbar'>

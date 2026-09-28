@@ -55,6 +55,7 @@ type ViewOverrides = {
 function view({ canFork = false, loadPage = async () => undefined, onActiveViewChange = () => undefined, onZoltarForkQuestionIdChange = () => undefined, requestContextKey = 0, zoltarQuestionPage, zoltarQuestionsError }: ViewOverrides = {}) {
 	return (
 		<QuestionsView
+			zoltarQuestionsFreshness={{ refreshing: false, updatedAt: undefined }}
 			canFork={canFork}
 			hasForked={false}
 			loadingZoltarQuestions={false}

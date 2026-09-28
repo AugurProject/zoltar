@@ -1396,8 +1396,13 @@
 	margin-bottom: var(--space-4);
 }
 
-.local-browse-bar .discovery-control {
+.local-browse-bar .discovery-control,
+.local-browse-bar .freshness-indicator {
 	margin-left: auto;
+}
+
+.local-browse-bar .freshness-indicator + .discovery-control {
+	margin-left: 0;
 }
 
 @media (pointer: coarse) {

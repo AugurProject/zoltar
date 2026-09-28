@@ -80,6 +80,8 @@ function createOperations(universe: ZoltarUniverseSummary | undefined) {
 		zoltarQuestions: [],
 		zoltarQuestionsError: undefined,
 		zoltarUniverse: universe,
+		zoltarUniverseFreshness: { refreshing: false, updatedAt: undefined },
+		zoltarQuestionsFreshness: { refreshing: false, updatedAt: undefined },
 	}
 }
 

@@ -5,6 +5,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
@@ -781,6 +782,50 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(getRenderedPoolTitles()).toHaveLength(8)
 		expect(documentQueries.queryByText(/pools scanned/)).toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Scan again' })).not.toBeNull()
+	})
+
+	test('refreshes the last scanned page on new blocks, records it, and shows its age', async () => {
+		let requestKey = ''
+		const onRefreshSecurityPoolPage = mock(() => undefined)
+		const props = createProps({
+			onLoadSecurityPoolPage: (_pageIndex, _pageSize, key) => {
+				requestKey = key
+			},
+			onRefreshSecurityPoolPage,
+			securityPoolPage: undefined,
+			securityPoolPageFreshness: { refreshing: false, updatedAt: Date.now() - 15_000 },
+			securityPools: [],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		await act(() => {
+			appBlockWatcher.reportBlock(3_000n)
+			appBlockWatcher.reportBlock(3_001n)
+		})
+		// Nothing is read on new blocks until the user has scanned.
+		expect(onRefreshSecurityPoolPage).not.toHaveBeenCalled()
+		expect(document.querySelector('.local-browse-bar .freshness-indicator')).toBeNull()
+
+		await act(async () => {
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Discover pools' }))
+			await Promise.resolve()
+		})
+		const page = { pageIndex: 0, pageSize: 6, poolCount: 1n, pools: [createNumberedPool(1)], requestKey }
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={page} />, renderedComponent.container)
+		})
+		expect(document.querySelector('.local-browse-bar .freshness-indicator')?.textContent).toContain('Updated 15s ago')
+		await act(() => {
+			appBlockWatcher.reportBlock(3_002n)
+			appBlockWatcher.reportBlock(3_003n)
+		})
+		expect(onRefreshSecurityPoolPage).toHaveBeenCalled()
+
+		const refreshed = { ...page, pools: [createNumberedPool(1, { marketDetails: createMarketDetails({ title: 'Refreshed pool title' }) })] }
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={refreshed} />, renderedComponent.container)
+		})
+		expect(getRenderedPoolTitles()).toEqual(['Refreshed pool title'])
 	})
 
 	test('ignores a page that answers a different request', async () => {
