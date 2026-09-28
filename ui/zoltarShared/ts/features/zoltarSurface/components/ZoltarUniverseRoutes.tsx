@@ -1,3 +1,4 @@
+import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -15,7 +16,7 @@ type UniverseRouteProps = { universe: ZoltarUniverseSummary }
 
 /** The universe tree around the selected universe; Fork or Migrate appears only when that workflow applies. */
 export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
-	const { activeUniverseId, onViewChange } = useZoltarWorkspace()
+	const { activeUniverseId, onViewChange, operations } = useZoltarWorkspace()
 	const { canFork, canMigrate } = getZoltarUniverseActions(universe)
 	let actions
 	if (canMigrate) {
@@ -34,7 +35,16 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 	return (
 		<>
 			<RouteHeader description={zoltarCopy.universesDescription} title={zoltarCopy.universesTitle} />
-			<UniverseBrowser actions={actions} activeUniverseId={activeUniverseId} universe={universe}>
+			<UniverseBrowser
+				actions={
+					<>
+						<UpdatedAgo {...operations.zoltarUniverseFreshness} />
+						{actions}
+					</>
+				}
+				activeUniverseId={activeUniverseId}
+				universe={universe}
+			>
 				{universe.forkQuestionDetails === undefined ? undefined : (
 					<div className='loaded-question-preview'>
 						<Question question={universe.forkQuestionDetails} variant='preview' />

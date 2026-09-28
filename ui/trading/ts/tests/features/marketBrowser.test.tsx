@@ -9,7 +9,21 @@ const page = { start: 0n, total: 2n, previousStart: undefined, nextStart: undefi
 
 function renderBrowser(lookupRoute: 'market' | 'liquidity') {
 	const markets = [liveMarketFixture({ pool: fixtureAddress('01'), title: 'Will it rain in Paris?', yesReserve: 38n * 10n ** 34n, noReserve: 62n * 10n ** 34n }), liveMarketFixture({ pool: fixtureAddress('02'), title: 'Will the bridge open?', endTime: FIXTURE_NOW + 2n * FIXTURE_DAY })]
-	return renderIntoDocument(<LiveMarketBrowser lookupRoute={lookupRoute} markets={markets} pageMarketCount={markets.length} discoveryState='ready' discoveryError={undefined} marketPage={page} workflowLocked={false} nowSeconds={FIXTURE_NOW} retry={() => undefined} loadMarketPage={() => undefined} />)
+	return renderIntoDocument(
+		<LiveMarketBrowser
+			freshness={{ refreshing: false, updatedAt: undefined }}
+			lookupRoute={lookupRoute}
+			markets={markets}
+			pageMarketCount={markets.length}
+			discoveryState='ready'
+			discoveryError={undefined}
+			marketPage={page}
+			workflowLocked={false}
+			nowSeconds={FIXTURE_NOW}
+			retry={() => undefined}
+			loadMarketPage={() => undefined}
+		/>,
+	)
 }
 
 function cardTitles(container: HTMLElement) {

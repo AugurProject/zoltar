@@ -6,7 +6,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient, normalizeAccount } from '../../wallet/clients.js'
 import type { ChainBackend, ReadBackendStatus } from '../../wallet/chainBackend.js'
 import { getErrorMessage } from '../../lib/errors.js'
-import { getActiveBackend } from '../../lib/activeEnvironment.js'
+import { getActiveBackend, getActiveSimulationController } from '../../lib/activeEnvironment.js'
+import { appBlockWatcher, blockPollIntervalMilliseconds } from '../../lib/dataRefresh.js'
 import { getNetworkSwitchTarget, getPublicNetworkProfileForChainId } from '../../wallet/networkProfile.js'
 import { useRequestGuard } from '../../lib/requestGuard.js'
 import type { AccountState, RefreshStateOptions } from '../../types/app.js'
@@ -15,8 +16,6 @@ import { useLoadController } from '../../hooks/useLoadController.js'
 import { sameChainId } from '../../wallet/chainId.js'
 import { type ChainClock, getReadBackendStatus, validateConfiguredReadBackend, loadBackendChainClock } from './readBackendValidation.js'
 import { loadWalletState } from './loadWalletState.js'
-
-const CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS = 12_000
 
 export type UseOnchainStateOptions = {
 	activeEnvironmentNonce?: number
@@ -133,6 +132,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 					chainClockError.value = undefined
 				})
 				updateReadBackendStatus(backend, nextChainClock)
+				appBlockWatcher.reportBlock(nextChainClock.currentBlockNumber)
 			} catch (error) {
 				if (!isCurrentChainClockRequest()) return
 				clearChainClock()
@@ -558,15 +558,15 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (backend.isBootstrapped === false) return
 		if (!isReadBackendReady()) return
 
-		void refreshChainClock(backend)
-		const intervalId = window.setInterval(() => {
-			if (!isReadBackendReady()) return
-			void refreshChainClock(backend)
-		}, CHAIN_CLOCK_POLL_INTERVAL_MILLISECONDS)
-
-		return () => {
-			window.clearInterval(intervalId)
-		}
+		// The chain clock is the application's block poller: it pauses in a hidden tab and every new block refreshes cached queries.
+		return appBlockWatcher.start(
+			async () => {
+				if (!isReadBackendReady()) return undefined
+				await refreshChainClock(backend)
+				return currentBlockNumber.peek()
+			},
+			blockPollIntervalMilliseconds(getActiveSimulationController() !== undefined),
+		)
 	}, [activeEnvironmentNonce, enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
 	const isBootstrappingEnvironment = useComputed(() => environmentReadyLoad.isLoading.value || getActiveBackend().isBootstrapping === true)

@@ -3,7 +3,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
-import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
 import type { ZoltarView } from '../../types.js'
@@ -19,7 +19,7 @@ function ZoltarRouteGateState({ gate, onRetryUniverse, onViewChange }: { gate: E
 		case 'universe-unavailable':
 			return <RetryableNotice onRetry={onRetryUniverse} retryLabel={commonCopy.retry} presentation={{ key: 'load_failed', badgeLabel: commonCopy.error, badgeTone: 'blocked', detail: zoltarCopy.universeUnavailableDetail }} />
 		case 'loading':
-			return <StateHint presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
+			return <SkeletonList label={commonCopy.loadingUniverseDetails} rows={2} />
 		case 'universe-missing':
 			return (
 				<EmptyState
