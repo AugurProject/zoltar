@@ -16,43 +16,57 @@ type TransactionTrayEntry = Readonly<{
 	presentation?: GlobalTransactionPresentation | undefined
 }>
 
+/** One status presentation and the request it belongs to; `sequence` orders them by arrival. */
+type PresentationRecord = Readonly<{ key: string | undefined; presentation: GlobalTransactionPresentation; sequence: number }>
+
 export type TransactionTrayState = Readonly<{
-	/** The status shown to the user; while a prompt is open it always belongs to that prompt's request. */
+	/** The status shown to the user, derived from `presentations`: the open prompt's own status, else the newest. */
 	active: GlobalTransactionPresentation | undefined
-	/** An outcome of another request that arrived while a prompt was open; shown once the prompt closes. */
-	deferred?: GlobalTransactionPresentation | undefined
 	entries: readonly TransactionTrayEntry[]
+	/** Recent statuses, one per request, newest last; kept after a request finishes so its outcome stays visible. */
+	presentations?: readonly PresentationRecord[] | undefined
 	requestSequence: number
 }>
+
+const MAX_PRESENTATIONS = 10
 
 export function createInitialTransactionTrayState(): TransactionTrayState {
 	return {
 		active: undefined,
 		entries: [],
+		presentations: [],
 		requestSequence: 1,
 	}
 }
 
-/**
- * Records a request's presentation and shows it unless another request's review or wallet prompt is open, in which
- * case the outcome waits so it cannot replace or cancel the review the user is working in.
- */
-function present(state: TransactionTrayState, ownerKey: string | undefined, presentation: GlobalTransactionPresentation): TransactionTrayState {
-	const withEntry = ownerKey === undefined ? state : { ...state, entries: state.entries.map(entry => (entry.key === ownerKey ? { ...entry, presentation } : entry)) }
-	const foreground = getForegroundEntry(withEntry)
-	if (foreground !== undefined && foreground.key !== ownerKey) return { ...withEntry, deferred: presentation }
-	return { ...withEntry, active: presentation }
+function isPromptPresentation(presentation: GlobalTransactionPresentation) {
+	return presentation.tone === 'awaiting-wallet' || presentation.tone === 'preparing'
 }
 
-/** After a prompt closes, show a waiting outcome, or bring back the status of a request that is still running. */
-function settleActive(state: TransactionTrayState): TransactionTrayState {
-	if (getForegroundEntry(state) !== undefined) return state
-	if (state.deferred !== undefined) return { ...state, active: state.deferred, deferred: undefined }
-	const activeOwner = state.active?.operationKey
-	const ownerRunning = activeOwner !== undefined && state.entries.some(entry => entry.key === activeOwner)
-	if (state.active !== undefined && (ownerRunning || (state.active.tone !== 'awaiting-wallet' && state.active.tone !== 'preparing'))) return state
-	const running = [...state.entries].reverse().find(entry => entry.presentation?.tone === 'pending')
-	return { ...state, active: running?.presentation }
+/**
+ * The shown status: while a review or wallet prompt is open it is always that prompt's own status, so another
+ * request's outcome cannot replace or cancel the review the user is working in; otherwise it is the newest status.
+ */
+function deriveActive(state: TransactionTrayState): TransactionTrayState {
+	const records = state.presentations ?? []
+	const foreground = getForegroundEntry(state)
+	if (foreground !== undefined) return { ...state, active: records.findLast(record => record.key === foreground.key)?.presentation ?? state.active }
+	return { ...state, active: records.at(-1)?.presentation }
+}
+
+/** Records a request's latest status (replacing its previous one) and re-derives the shown status. */
+function present(state: TransactionTrayState, ownerKey: string | undefined, presentation: GlobalTransactionPresentation): TransactionTrayState {
+	const records = state.presentations ?? []
+	const sequence = (records.at(-1)?.sequence ?? 0) + 1
+	const kept = ownerKey === undefined ? records.filter(record => record.presentation.hash === undefined || record.presentation.hash !== presentation.hash) : records.filter(record => record.key !== ownerKey)
+	const entries = ownerKey === undefined ? state.entries : state.entries.map(entry => (entry.key === ownerKey ? { ...entry, presentation } : entry))
+	return deriveActive({ ...state, entries, presentations: [...kept, { key: ownerKey, presentation, sequence }].slice(-MAX_PRESENTATIONS) })
+}
+
+/** A request that ends without broadcasting drops its review or wallet prompt status. */
+function dropPromptPresentation(state: TransactionTrayState, key: string): TransactionTrayState {
+	const records = state.presentations ?? []
+	return deriveActive({ ...state, presentations: records.filter(record => record.key !== key || !isPromptPresentation(record.presentation)) })
 }
 
 function applyActiveBackendTransactionIntentDefaults(intent: TransactionIntent): TransactionIntent {
@@ -189,11 +203,7 @@ export function markTransactionFailed(state: TransactionTrayState, failure: Tran
 export function markTransactionCanceled(state: TransactionTrayState, key?: string): TransactionTrayState {
 	const entry = key === undefined ? getForegroundEntry(state) : state.entries.find(candidate => candidate.key === key)
 	if (entry === undefined) return state
-	return settleActive({
-		...state,
-		active: state.active?.dismissKey === entry.key ? undefined : state.active,
-		entries: state.entries.filter(candidate => candidate.key !== entry.key),
-	})
+	return dropPromptPresentation({ ...state, entries: state.entries.filter(candidate => candidate.key !== entry.key) }, entry.key)
 }
 
 export function markTransactionPresented(state: TransactionTrayState, active: GlobalTransactionPresentation): TransactionTrayState {
@@ -224,5 +234,5 @@ export function isTransactionActionLocked(state: TransactionTrayState, scope?: T
 export function markTransactionFinished(state: TransactionTrayState, key?: string): TransactionTrayState {
 	const entry = resolveTransactionTrayEntry(state, key)
 	if (entry === undefined) return state
-	return settleActive({ ...state, entries: state.entries.filter(candidate => candidate.key !== entry.key) })
+	return dropPromptPresentation({ ...state, entries: state.entries.filter(candidate => candidate.key !== entry.key) }, entry.key)
 }

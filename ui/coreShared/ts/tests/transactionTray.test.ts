@@ -127,22 +127,41 @@ describe('transactionTray', () => {
 		const aFailed = markTransactionFailed(promptB, { kind: 'reverted', message: 'Transaction reverted' }, 'transaction-request-1')
 		const aSucceeded = markTransactionPresented(promptB, { hash: transactionHash, title: 'REP deposited', tone: 'success' })
 
-		// A's outcome waits instead of replacing B's open prompt.
+		// A's outcome never replaces B's open prompt.
 		expect(aFailed.active?.operationKey).toBe('transaction-request-2')
 		expect(aFailed.active?.tone).toBe('awaiting-wallet')
-		expect(aFailed.deferred).toMatchObject({ hash: transactionHash, tone: 'error' })
 		expect(aSucceeded.active?.operationKey).toBe('transaction-request-2')
-		// Once B's prompt closes the waiting outcome is shown.
+		// Once B's prompt closes without a broadcast, A's outcome is the newest status.
 		const bCanceled = markTransactionCanceled(aFailed, 'transaction-request-2')
 		expect(bCanceled.active).toMatchObject({ hash: transactionHash, tone: 'error' })
-		expect(bCanceled.deferred).toBeUndefined()
-		// Without a waiting outcome, canceling B brings back A's pending status.
+		// Canceling B before A reported anything brings back A's pending status.
 		const restored = markTransactionCanceled(promptB, 'transaction-request-2')
 		expect(restored.active).toMatchObject({ hash: transactionHash, tone: 'pending', operationKey: 'transaction-request-1' })
-		// B's broadcast shows B's pending status; the waiting outcome is shown when B finishes.
+		// B's broadcast and outcome are newer than A's, so B's own success is not replaced when B finishes.
 		const bPending = markTransactionSubmitted(aFailed, otherHash)
 		expect(bPending.active).toMatchObject({ hash: otherHash, tone: 'pending' })
-		expect(markTransactionFinished(bPending, 'transaction-request-2').active).toMatchObject({ hash: transactionHash, tone: 'error' })
+		const bSucceeded = markTransactionPresented(bPending, { hash: otherHash, title: 'REP withdrawn', tone: 'success' })
+		const bFinished = markTransactionFinished(bSucceeded, 'transaction-request-2')
+		expect(bFinished.active).toMatchObject({ hash: otherHash, tone: 'success' })
+		// A's outcome is kept alongside B's rather than overwritten.
+		expect(bFinished.presentations?.map(record => [record.presentation.hash, record.presentation.tone])).toEqual([
+			[transactionHash, 'error'],
+			[otherHash, 'success'],
+		])
+	})
+
+	test('keeps every outcome that arrives while a prompt is open', () => {
+		const secondHash = '0x7777000000000000000000000000000000000000000000000000000000000000'
+		const request = (state: ReturnType<typeof createInitialTransactionTrayState>, scope: string) => markTransactionRequested(state, { action: 'depositRepToVault', scope: [scope], source: 'security-vault', submittedTitle: 'Depositing REP' })
+		const aPending = markTransactionSubmitted(request(createInitialTransactionTrayState(), 'security-pool:0xa'), transactionHash)
+		const bPending = markTransactionSubmitted(request(aPending, 'security-pool:0xb'), secondHash)
+		const cPrompt = request(bPending, 'security-pool:0xc')
+		const bothFailed = markTransactionFailed(markTransactionFailed(cPrompt, { kind: 'reverted', message: 'A reverted' }, 'transaction-request-1'), { kind: 'reverted', message: 'B reverted' }, 'transaction-request-2')
+
+		expect(bothFailed.active?.operationKey).toBe('transaction-request-3')
+		const closed = markTransactionCanceled(bothFailed, 'transaction-request-3')
+		expect(closed.active).toMatchObject({ hash: secondHash, tone: 'error', detail: 'B reverted' })
+		expect(closed.presentations?.filter(record => record.presentation.tone === 'error').map(record => record.presentation.detail)).toEqual(['A reverted', 'B reverted'])
 	})
 
 	test('ignores outcomes for an unknown request key', () => {

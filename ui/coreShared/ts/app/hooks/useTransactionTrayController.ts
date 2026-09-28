@@ -75,7 +75,8 @@ export function useTransactionTrayController({ onFinished }: TransactionTrayCont
 			if (entry?.lifecycle.phase === 'pending') {
 				// Only a presented success confirms the row; otherwise the activity watcher settles it from the receipt.
 				const hash = entry.lifecycle.hash
-				const succeeded = previous.active?.hash === hash && (previous.active.tone === 'success' || previous.active.tone === 'warning')
+				const outcome = entry.presentation
+				const succeeded = outcome?.hash === hash && (outcome.tone === 'success' || outcome.tone === 'warning')
 				if (succeeded) recordTransactionSettled(hash, { status: 'confirmed' })
 				else releaseTransactionActivityWatch(hash)
 			}
