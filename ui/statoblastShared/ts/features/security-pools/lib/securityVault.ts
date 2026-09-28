@@ -135,7 +135,3 @@ export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetai
 	}
 	return undefined
 }
-
-export function getVaultExposure(capacity: bigint | undefined, _multiplierBps: bigint | undefined, _repPerEthPrice: bigint | undefined) {
-	return capacity === undefined ? undefined : { amount: capacity, priced: true }
-}
