@@ -67,6 +67,7 @@ function transitionStep(step: TransactionStep, event: TransactionLifecycleEvent)
 }
 
 type TransactionSteps = {
+	showReviewDialog: boolean
 	reviewSignal: AbortSignal | undefined
 	steps: TransactionStep[]
 	activeIndex: number
@@ -88,7 +89,7 @@ export function cancelTransactionReview(reviewSignal: AbortSignal) {
 	return { trackingSubmitted, steps: owned?.steps }
 }
 
-export function createTransactionStepController(signal = getTransactionReviewSignal()) {
+export function createTransactionStepController(signal = getTransactionReviewSignal(), showReviewDialog = true) {
 	transactionStepOutcome.value = undefined
 	let canceled = false
 	let rejectReview: ((reason: Error) => void) | undefined
@@ -116,6 +117,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 	const publish = (confirmStep: (index: number, amount?: bigint) => void = () => undefined) => {
 		if (canceled) return
 		transactionSteps.value = {
+			showReviewDialog,
 			reviewSignal: signal,
 			steps: [...steps],
 			activeIndex,
@@ -175,7 +177,8 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		startWithoutReview(index: number) {
 			claimWorkflow()
 			const step = steps[index]
-			if (steps.length !== 1 || index !== 0 || step?.phase !== 'upcoming' || step.approval !== undefined || (step.tokenFunding?.length ?? 0) > 0) throw new Error('Only a single transaction without approvals can skip app review.')
+			if (step?.phase !== 'upcoming' || step.approval !== undefined || (step.tokenFunding?.length ?? 0) > 0) throw new Error('Only transactions without approval choices can skip app review.')
+			if (steps.slice(0, index).some(previous => previous.phase !== 'confirmed')) throw new Error('Wait for preceding transactions to confirm.')
 			activeIndex = index
 			step.phase = 'wallet'
 			publish()

@@ -11,7 +11,7 @@ import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionF
 import { createZoltarMigrationSuccessPresentation, createZoltarMigrationTransactionIntent, createZoltarMigrationWarningPresentation } from '../../zoltarTransactionPresentations.js'
 import { requireWallet } from '@zoltar/ui-core-shared/wallet/requireWalletConnection.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWallet.js'
-import { parseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { getOutcomeLabelForIndex, getSubmittableOutcomeIndexes } from '../lib/migrationWizard.js'
 import { getDefaultZoltarMigrationFormState } from '../../../lib/formDefaults.js'
 import { parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -26,6 +26,8 @@ type UseZoltarMigrationParameters = TransactionLifecycleParameters &
 		ensureZoltarUniverse: () => Promise<ZoltarUniverseSummary>
 		refreshZoltarForkAccess: (universe?: ZoltarUniverseSummary) => Promise<void>
 		refreshZoltarUniverse: () => Promise<ZoltarUniverseSummary | undefined>
+		/** Names the selected outcomes in the transaction dialog before the universe preflight resolves. */
+		zoltarUniverse?: ZoltarUniverseSummary | undefined
 	}
 
 export function useZoltarMigration({
@@ -42,6 +44,7 @@ export function useZoltarMigration({
 	refreshState,
 	refreshZoltarForkAccess,
 	refreshZoltarUniverse,
+	zoltarUniverse,
 }: UseZoltarMigrationParameters) {
 	const zoltarMigrationError = useSignal<string | undefined>(undefined)
 	const zoltarMigrationPending = useSignal(false)
@@ -56,6 +59,10 @@ export function useZoltarMigration({
 		zoltarMigrationResult.value = undefined
 		zoltarMigrationActiveAction.value = undefined
 	}, [environmentRefreshKey])
+	// Outcome indexes belong to one universe; never carry a selection over to another universe.
+	useEffect(() => {
+		setZoltarMigrationForm(() => getDefaultZoltarMigrationFormState())
+	}, [activeUniverseId])
 
 	const migrateInternalRep = useCallback(
 		async (preparationAttoRep: bigint) => {
@@ -78,14 +85,15 @@ export function useZoltarMigration({
 			zoltarMigrationPending.value = true
 			zoltarMigrationActiveAction.value = 'split'
 			zoltarMigrationError.value = undefined
-			zoltarMigrationFeedback.value = createPendingActionFeedback('splitMigrationRep', 'Splitting REP')
+			zoltarMigrationFeedback.value = createPendingActionFeedback('splitMigrationRep', 'Migrating REP')
 			zoltarMigrationResult.value = undefined
 			const submittedForm = zoltarMigrationForm.value
+			let outcomeLabels = submittedForm.outcomeIndexes.map(outcomeIndex => getOutcomeLabelForIndex(zoltarUniverse?.childUniverses, outcomeIndex))
 
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				const request = onTransactionRequested(createZoltarMigrationTransactionIntent('split', { amount: submittedForm.amount, outcomeIndexes: submittedForm.outcomeIndexes, universeId: activeUniverseId }))
+				const request = onTransactionRequested(createZoltarMigrationTransactionIntent({ amount: submittedForm.amount, outcomeLabels, universeId: activeUniverseId }))
 				if (request === false) {
 					writeFailed = true
 					zoltarMigrationFeedback.value = undefined
@@ -97,18 +105,22 @@ export function useZoltarMigration({
 				if (!environmentGuard.isCurrent()) return
 				const amount = parseRepAmountInput(submittedForm.amount, 'Migration amount')
 				if (amount <= 0n) throw new Error('Migration amount must be greater than zero')
-				const outcomeIndexes = parseBigIntListInput(submittedForm.outcomeIndexes, 'Outcome indexes')
+				const outcomeIndexes = getSubmittableOutcomeIndexes(universe.childUniverses, submittedForm.outcomeIndexes)
+				if (outcomeIndexes.length === 0 || outcomeIndexes.length !== submittedForm.outcomeIndexes.length) throw new Error('Select outcomes of this universe again before migrating')
+				outcomeLabels = outcomeIndexes.map(outcomeIndex => getOutcomeLabelForIndex(universe.childUniverses, outcomeIndex))
 				const result = await migrateInternalRepInZoltar(createWalletWriteClient(accountAddress, { onTransactionPrepared, onTransactionSubmitted }), universe.universeId, amount, outcomeIndexes, preparationAttoRep)
 				if (!environmentGuard.isCurrent()) return
 				zoltarMigrationResult.value = result
-				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, 'REP split', result.hash)
-				onTransactionPresented(createZoltarMigrationSuccessPresentation(result))
+				zoltarMigrationFeedback.value = createSuccessActionFeedback(result.action, 'REP migrated', result.hash)
+				// Clear the amount so the wizard returns to the amount step with refreshed balances instead of re-offering the same migration.
+				setZoltarMigrationForm(current => (current === submittedForm ? { ...current, amount: '' } : current))
+				onTransactionPresented(createZoltarMigrationSuccessPresentation(result, outcomeLabels))
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
 				const message = formatWriteErrorMessage(error, 'Failed to migrate REP')
 				writeFailed = true
 				if (ownsTransaction) onTransactionFailed?.(message, { kind: getTransactionFailureKind(error), requestKey })
-				zoltarMigrationFeedback.value = createErrorActionFeedback('splitMigrationRep', 'REP split failed', message)
+				zoltarMigrationFeedback.value = createErrorActionFeedback('splitMigrationRep', 'REP migration failed', message)
 			} finally {
 				if (environmentGuard.isCurrent()) {
 					zoltarMigrationPending.value = false
@@ -128,8 +140,8 @@ export function useZoltarMigration({
 				if (!environmentGuard.isCurrent()) return
 				const message = formatRefreshErrorMessage(error, 'Migration succeeded, but refreshing the UI failed')
 				const latestResult = zoltarMigrationResult.value
-				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? 'splitMigrationRep', 'REP split', message, latestResult?.hash)
-				if (latestResult !== undefined) onTransactionPresented(createZoltarMigrationWarningPresentation(latestResult, message))
+				zoltarMigrationFeedback.value = createWarningActionFeedback(latestResult?.action ?? 'splitMigrationRep', 'REP migrated', message, latestResult?.hash)
+				if (latestResult !== undefined) onTransactionPresented(createZoltarMigrationWarningPresentation(latestResult, outcomeLabels, message))
 			}
 		},
 		[
@@ -149,6 +161,7 @@ export function useZoltarMigration({
 			zoltarMigrationPending,
 			zoltarMigrationResult,
 			zoltarMigrationActiveAction,
+			zoltarUniverse,
 		],
 	)
 

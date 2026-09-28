@@ -57,7 +57,7 @@ export function ReportingSides({
 					<div className='escalation-sides-legend-item escalation-sides-legend-item-binding'>
 						<span aria-hidden='true' className='escalation-sides-legend-marker' />
 						<span className='panel-label'>{reportingCopy.leadHoldingCapital}</span>
-						<CurrencyValue copyable={false} value={displayBindingCapital} suffix={commonCopy.rep} />
+						<CurrencyValue value={displayBindingCapital} suffix={commonCopy.rep} />
 					</div>
 				) : undefined}
 			</div>

@@ -11,7 +11,7 @@ import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/tran
 import { securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL } from './truth-auctions/lib/forkAuction.js'
+import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 
 type SecurityPoolCreationTransactionContext = {
@@ -28,7 +28,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 	return [
 		...(context.questionTitle === undefined || context.questionTitle.trim() === '' ? [] : [{ label: commonCopy.question, value: context.questionTitle.trim() }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
-		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps)}x` }]),
+		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps) }]),
 		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeEth.trim(), commonCopy.eth) }]),
 	]
 }
@@ -51,7 +51,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 		rows: [
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
-			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: `${formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps)}x` },
+			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps) },
 			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18) },
 		],
 		title: transactionCopy.securityPoolCreated,
@@ -80,7 +80,7 @@ function getSecurityVaultTransactionRows(context: SecurityVaultTransactionContex
 }
 
 function getSecurityVaultActionTitle(actionName: SecurityVaultActionResult['action'], repTokenSymbol = commonCopy.rep) {
-	if (actionName === 'adjustVaultBackingFactor') return securityPoolCopy.adjustVaultBackingFactor
+	if (actionName === 'setVaultUnderwritingLimit') return securityPoolCopy.setVaultUnderwritingLimit
 	if (actionName === 'depositRepToVault') return securityPoolCopy.formatDepositRepToVault(repTokenSymbol)
 	if (actionName === 'queueWithdrawRep') return securityPoolCopy.formatWithdrawRep(repTokenSymbol)
 	if (actionName === 'redeemRepFromVault') return securityPoolCopy.formatRedeemRepFromVault(repTokenSymbol)
@@ -248,12 +248,12 @@ export function createForkAuctionSuccessPresentation(result: ForkAuctionActionRe
 		switch (result.action) {
 			case 'claimAuctionProceeds':
 				if (result.settlementMode === 'refund') {
-					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+					return transactionCopy.formatFinalizedRefundSettlementResultDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 				}
 				if (result.settlementMode === 'claim') {
-					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+					return transactionCopy.formatWinningBidSettlementResultDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 				}
-				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_CAPACITY_OWNERSHIP_ATTO_REP_LABEL)
+				return transactionCopy.formatMixedBidSettlementResultDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
 			case 'createChildUniverse':
 				return transactionCopy.childUniverseLinkedToForkPathDetail
 			case 'forkWithOwnEscalation':

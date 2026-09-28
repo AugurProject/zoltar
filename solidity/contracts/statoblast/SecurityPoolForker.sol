@@ -48,7 +48,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			UniformPriceDualCapBatchAuction truthAuction,
 			uint256 truthAuctionStarted,
 			uint256 migratedAttoRep,
-			uint256 auctionedCapacityOwnershipAttoRep,
+			uint256 auctionedUnderwritingLimitAttoEth,
 			uint256 escalationElapsedAtFork,
 			uint256 escalationStartBondAtForkAttoRep,
 			uint256 escalationNonDecisionThresholdAtForkAttoRep,
@@ -64,7 +64,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			data.truthAuction,
 			data.truthAuctionStarted,
 			data.migratedAttoRep,
-			data.auctionedCapacityOwnershipAttoRep,
+			data.auctionedUnderwritingLimitAttoEth,
 			data.escalationElapsedAtFork,
 			data.escalationStartBondAtForkAttoRep,
 			data.escalationNonDecisionThresholdAtForkAttoRep,
@@ -79,7 +79,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
 			data.unassignedRepBackingUnitsAtFinalization - data.claimedAuctionRepBackingUnits,
-			data.auctionedCapacityOwnershipAttoRep - data.claimedAuctionedCapacityOwnershipAttoRep,
+			data.auctionedUnderwritingLimitAttoEth - data.claimedAuctionedUnderwritingLimitAttoEth,
 			auctionedBadDebtByPool[securityPool] - claimedAuctionedBadDebtByPool[securityPool],
 			data.auctionBadDebtGeneration,
 			data.auctionFeeIndexAtFinalization
@@ -210,8 +210,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	function _snapshotEscalationAtFork(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, EscalationGame escalationGame, uint256 forkTime) private {
 		if (!_forkOccurredBeforeEscalationSettled(escalationGame, forkTime)) return;
 		EscalationForkSnapshot storage snapshot = escalationForkSnapshotByPool[securityPool];
-		// Keep this unreachable double-initialization guard data-free so the forker
-		// remains deployable under the EIP-170 runtime bytecode limit.
+		// Keep this unreachable initialization guard data-free for the EIP-170 size limit.
 		if (snapshot.initialized) revert();
 		(
 			bytes32[64][3] memory carryPeaks,
@@ -269,9 +268,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, initCodeHash)))));
 	}
 
-	// Lazily deploy one proxy per parent pool so that all Zoltar migration calls for
-	// that pool use a unique `msg.sender`. CREATE2 keeps the proxy address stable
-	// and predictable from the pool address before deployment.
+	// A deterministic proxy gives each parent pool a unique caller for Zoltar migration.
 	function _getOrDeployMigrationProxy(ISecurityPool securityPool) private returns (SecurityPoolMigrationProxy migrationProxy) {
 		migrationProxy = migrationProxyByPool[securityPool];
 		if (address(migrationProxy) != address(0x0)) return migrationProxy;
@@ -330,7 +327,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			revert('Incorrect migration balance');
 		data.auctionableAttoRepAtFork = previousMigrationBalanceAttoRep + poolRepToLockAttoRep;
 		_emitForkSnapshotEvents(securityPool, address(migrationProxy), address(escalationGame), poolRepToLockAttoRep, disputeStakedRepToLockAttoRep, migrationBalanceAttoRep);
-		// TODO: we could pay the caller basefee*2 out of Open interest. We have to reward caller
 	}
 
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external {
@@ -375,7 +371,6 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		_delegateMigrationCall(escalationGameForkerDelegate, abi.encodeCall(EscalationGameForker.claimForkedEscalationDeposits, (securityPool, vault, outcomeIndex, depositIndexes)));
 	}
 
-	// migrates vault into outcome universe after fork
 	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) public {
 		_migrateVaultAndReturnChild(securityPool, outcomeIndex);
 	}
@@ -616,6 +611,11 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	// corresponding share of auctioned capacity ownership. Finalized losing bids may still
 	// settle here as ETH-only refunds, in which case no vault accounting changes.
 	// Anyone can call this so that settlement is not blocked on the bidder.
+	/// @notice Accept the entire orphaned position of a finalized zero-purchase auction.
+	function takeOverUnassignedCommitment(ISecurityPool securityPool, uint256 maximumCommitmentAttoEth) external {
+		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.takeOverUnassignedCommitment, (securityPool, maximumCommitmentAttoEth)));
+	}
+
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		_claimAuctionProceeds(securityPool, vault, tickIndices);
 	}
@@ -647,11 +647,11 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		(
 			uint256 amountAttoRep,
 			,
-			uint256 newCapacityOwnershipAttoRep,
+			uint256 newUnderwritingLimitAttoEth,
 			uint256 badDebtToAssignAttoEth,
 			uint256 auctionRepBackingUnits
-		) = data.truthAuction.withdrawBids(vault, tickIndices, data.auctionedCapacityOwnershipAttoRep, auctionedBadDebtByPool[securityPool], data.auctionRepBackingUnits);
-		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.creditAuctionProceeds, (securityPool, vault, amountAttoRep, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, data.truthAuction.totalAttoRepPurchased(), auctionRepBackingUnits)));
+		) = data.truthAuction.withdrawBids(vault, tickIndices, data.auctionedUnderwritingLimitAttoEth, auctionedBadDebtByPool[securityPool], data.auctionRepBackingUnits);
+		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.creditAuctionProceeds, (securityPool, vault, amountAttoRep, newUnderwritingLimitAttoEth, badDebtToAssignAttoEth, data.truthAuction.totalAttoRepPurchased(), auctionRepBackingUnits)));
 	}
 
 	function _refundLosingAuctionBidsForSettlement(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) private {

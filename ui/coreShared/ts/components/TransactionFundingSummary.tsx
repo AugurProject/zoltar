@@ -1,7 +1,7 @@
 import { CurrencyValue } from './CurrencyValue.js'
 import * as commonCopy from '../copy/common.js'
 import * as copy from '../copy/transactionSteps.js'
-import { formatCurrencyBalance, formatRoundedCurrencyBalance } from '../lib/formatters.js'
+import { formatAmountDisplay, formatCurrencyBalance } from '../lib/formatters.js'
 
 function formatFundingAmount(amount: string) {
 	const match = /^(-?\d+)(?:\.(\d+))?(\s+\S+)$/.exec(amount)
@@ -9,13 +9,13 @@ function formatFundingAmount(amount: string) {
 	const [, whole, fraction, unit] = match
 	if (whole === undefined || fraction === undefined || unit === undefined || fraction.length <= 4) return amount
 	const value = BigInt(`${whole}${fraction}`)
-	return `≈ ${formatRoundedCurrencyBalance(value, fraction.length, 4)}${unit}`
+	return `${formatAmountDisplay(value, { decimals: 4, units: fraction.length })}${unit}`
 }
 
 export function EthAmount({ value }: { value: bigint | undefined }) {
 	const exact = formatCurrencyBalance(value, 18)
 	const needsRounding = (exact.split('.')[1]?.length ?? 0) > 4
-	return <CurrencyValue precision={needsRounding ? 'rounded' : 'exact'} decimals={4} copyable={false} value={value} units={18} suffix={commonCopy.eth} />
+	return <CurrencyValue precision={needsRounding ? 'rounded' : 'exact'} decimals={4} value={value} units={18} suffix={commonCopy.eth} />
 }
 
 export function TransactionFundingSummary({ funding, totalAttoEth, outcome }: { funding: readonly { amount: string }[]; totalAttoEth: bigint | undefined; outcome?: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined }) {

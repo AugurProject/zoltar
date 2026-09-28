@@ -60,7 +60,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('Settlement collateral', exactUnit(poolItem.settlement_collateral_atto_eth ?? poolItem.initial_settlement_collateral_atto_eth, 18, poolNativeSymbol)),
-		metricCard('Capacity ownership', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, 'REP')),
+		metricCard('Underwriting commitments', exactUnit(poolItem.total_capacity_ownership_atto_rep, 18, 'ETH')),
 		metricCard('Claimable vault fees', exactUnit(poolItem.total_claimable_vault_fees_atto_eth, 18, poolNativeSymbol)),
 		metricCard('Vaults', number(poolItem.vault_count)),
 		metricCard('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
@@ -77,17 +77,17 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 			history.snapshots,
 			[
 				{ key: 'settlement_collateral_atto_eth', label: 'Collateral', unit: poolNativeSymbol },
-				{ key: 'total_capacity_ownership_atto_rep', label: 'Capacity ownership', unit: 'REP', className: 'secondary' },
+				{ key: 'total_capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: 'ETH', className: 'secondary' },
 				{ key: 'total_claimable_vault_fees_atto_eth', label: 'Claimable fees', unit: poolNativeSymbol, className: 'tertiary' },
 			],
-			'Authoritative PoolAccountingCheckpoint results. Collateral and fees are shown in whole ETH; capacity ownership is shown in whole REP.',
+			'Collateral, commitments, and fees are shown in ETH.',
 			{ zeroBaseline: true },
 		),
 		chartCard(
 			'Fee accrual history',
 			history.snapshots,
 			[
-				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/REP` },
+				{ key: 'fee_index', label: 'Fee index', unit: `${poolNativeSymbol}/committed ETH` },
 				{ key: 'unallocated_accrued_fees_atto_eth', label: 'Unallocated accrued fees', unit: poolNativeSymbol },
 			],
 			'Checkpoint fee accumulator and unallocated fees; balances may fall when fees are claimed.',
@@ -155,7 +155,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 		staticField('Awaiting fork continuation', yesNoCheckpoint(currentState.awaitingForkContinuation)),
 		staticField('Total REP backing units', currentState.totalRepBackingUnits === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.totalRepBackingUnits), 18, '')),
 		staticField('Share-token supply', currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.shareTokenSupplyAttoShares), 18, 'shares')),
-		staticField('Fee-eligible capacity ownership', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'REP')),
+		staticField('Fee-eligible commitments', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'ETH')),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol)),
 		staticField('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
 		typeof currentState.escalationGame === 'string' && currentState.escalationGame !== '' ? staticAddressField('Escalation game', currentState.escalationGame, poolItem.chain_id) : staticField('Escalation game', 'Not set'),
@@ -203,7 +203,7 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 	const metrics = element('div', 'metric-grid')
 	metrics.append(
 		metricCard('REP backing units', exactUnit(vaultItem.rep_backing_units, 18, '')),
-		metricCard('Capacity ownership', exactUnit(vaultItem.capacity_ownership_atto_rep, 18, 'REP')),
+		metricCard('Underwriting commitment', exactUnit(vaultItem.capacity_ownership_atto_rep, 18, 'ETH')),
 		metricCard('Claimable fees', exactUnit(vaultItem.claimable_fees_atto_eth, 18, vaultNativeSymbol)),
 		metricCard('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
 	)
@@ -214,10 +214,10 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 			history.snapshots,
 			[
 				{ key: 'rep_backing_units', label: 'REP backing units', unit: 'units' },
-				{ key: 'capacity_ownership_atto_rep', label: 'Capacity ownership', unit: 'REP', className: 'secondary' },
+				{ key: 'capacity_ownership_atto_rep', label: 'Underwriting commitment', unit: 'ETH', className: 'secondary' },
 				{ key: 'claimable_fees_atto_eth', label: 'Claimable fees', unit: vaultNativeSymbol, className: 'tertiary' },
 			],
-			'VaultAccountingCheckpoint history. REP backing units are protocol accounting units; capacity ownership and fees are shown in whole REP and ETH.',
+			'Commitments and fees are shown in ETH; REP backing units are protocol accounting units.',
 			{ zeroBaseline: true },
 		),
 	)
@@ -231,7 +231,7 @@ export const renderVaultDetailPage = async (deps: StateRiskDeps, vaultItem: Vaul
 		staticField('Last block', `#${number(vaultItem.block_number)}`),
 		staticField('Fee remainder (1e18 denominator)', vaultItem.vault_fee_remainder),
 		staticField('Resulting pool-held REP backing units', exactUnit(vaultItem.resulting_total_rep_backing_units, 18, '')),
-		staticField('Resulting fee-eligible capacity', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, 18, 'REP')),
+		staticField('Resulting fee-eligible commitments', exactUnit(vaultItem.resulting_fee_eligible_capacity_ownership_atto_rep, 18, 'ETH')),
 		staticField('Fee index', exactUnit(vaultItem.fee_index, 18, '')),
 	)
 	staticCard.append(grid)

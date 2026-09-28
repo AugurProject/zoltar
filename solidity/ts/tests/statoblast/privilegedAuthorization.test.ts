@@ -9,7 +9,7 @@ import { encodeDeployData, encodeFunctionData, getAddress, zeroAddress, type Add
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../../testSupport/deployContract'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { getCurrentRetentionRate, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getTotalCapacityOwnershipAttoRep, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { getCurrentRetentionRate, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getTotalUnderwritingLimitAttoEth, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/utils/utilities'
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
@@ -132,7 +132,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 			backingUnitsDenominator: await getTotalRepBackingUnits(client, securityPool),
 			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
 			retentionRate: await getCurrentRetentionRate(client, securityPool),
-			totalCapacityOwnershipAttoRep: await getTotalCapacityOwnershipAttoRep(client, securityPool),
+			totalUnderwritingLimitAttoEth: await getTotalUnderwritingLimitAttoEth(client, securityPool),
 		})
 		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => {
 			const before = await readSnapshot()
@@ -178,7 +178,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 								receiverVault: attacker.account.address,
 								targetVault: client.account.address,
 								requestedDebtAttoEth: 1n,
-								snapshot: { targetBackingUnits: 0n, targetCapacityOwnershipAttoRep: 0n },
+								snapshot: { targetBackingUnits: 0n, targetUnderwritingLimitAttoEth: 0n },
 								minimumReceiverHealthFactorBps: 10_000n,
 								minLiquidationPriceDistanceBps: 0n,
 							},
@@ -188,9 +188,9 @@ describe('Statoblast: privileged authorization matrix', () => {
 			/Unauthorized/,
 		)
 
-		const authorizedCapacityOwnershipAttoRep = repDeposit / 5n
-		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, authorizedCapacityOwnershipAttoRep)
-		assert.strictEqual(await getTotalCapacityOwnershipAttoRep(client, securityPool), authorizedCapacityOwnershipAttoRep)
+		const authorizedUnderwritingLimitAttoEth = repDeposit / 5n
+		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, authorizedUnderwritingLimitAttoEth)
+		assert.strictEqual(await getTotalUnderwritingLimitAttoEth(client, securityPool), authorizedUnderwritingLimitAttoEth)
 
 		const rawFactory = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -222,7 +222,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 			settlementCollateralAttoEth: await getSettlementCollateralAttoEth(client, securityPool),
 			totalRepBackingUnits: await getTotalRepBackingUnits(client, securityPool),
 			poolHeldRepBalanceAttoRep: await getTotalPoolHeldAttoRep(client, securityPool),
-			totalCapacityOwnershipAttoRep: await getTotalCapacityOwnershipAttoRep(client, securityPool),
+			totalUnderwritingLimitAttoEth: await getTotalUnderwritingLimitAttoEth(client, securityPool),
 			vault: await getSecurityVault(client, securityPool, attacker.account.address),
 		})
 		const calls = [
@@ -230,8 +230,9 @@ describe('Statoblast: privileged authorization matrix', () => {
 			{ name: 'initializeForkedEscalationGame', data: encodeFunctionData({ abi: poolAbi, functionName: 'initializeForkedEscalationGame', args: [1n, 2n, 0n, QuestionOutcome.None] }) },
 			{ name: 'setAwaitingForkContinuation', data: encodeFunctionData({ abi: poolAbi, functionName: 'setAwaitingForkContinuation', args: [true] }) },
 			{ name: 'setSystemState', data: encodeFunctionData({ abi: poolAbi, functionName: 'setSystemState', args: [1] }) },
-			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n, 10_000n, 0n, 0n] }) },
-			{ name: 'configureFinalizedAuctionVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureFinalizedAuctionVault', args: [attacker.account.address, 1n, 1n, 1n, 10_000n, 0n, 0n] }) },
+			{ name: 'configureVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureVault', args: [attacker.account.address, 1n, 1n, 1n, 0n, 0n] }) },
+			{ name: 'configureFinalizedAuctionVault', data: encodeFunctionData({ abi: poolAbi, functionName: 'configureFinalizedAuctionVault', args: [attacker.account.address, 1n, 1n, 1n, 0n, 0n] }) },
+			{ name: 'activateRecoveredCommitment', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateRecoveredCommitment', args: [attacker.account.address, 1n] }) },
 			{ name: 'assignFinalizedAuctionFees', data: encodeFunctionData({ abi: poolAbi, functionName: 'assignFinalizedAuctionFees', args: [attacker.account.address, 1n, 0n] }) },
 			{ name: 'setTotalRepBackingUnits', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalRepBackingUnits', args: [1n] }) },
 			{ name: 'setTotalSharesAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalSharesAttoShares', args: [1n] }) },

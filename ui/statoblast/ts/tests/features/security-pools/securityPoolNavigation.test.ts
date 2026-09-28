@@ -2,42 +2,34 @@
 
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
 import { describe, expect, test } from 'bun:test'
 
-installTestRouting()
+installStatoblastRouting()
 describe('securityPoolNavigation', () => {
 	installDomTestLifecycle({
-		url: 'http://localhost/#/security-pools?selectedPoolView=vaults&universe=11&simulate=1&simScenario=securitypoolx2',
+		url: 'http://localhost/#/pools/0x0000000000000000000000000000000000000100/vaults?universe=11&simulate=1&simScenario=securitypoolx2',
 	})
 
-	test('builds an operate-route href for a selected security pool', () => {
+	test('links to the pool page path with the requested tab and universe', () => {
 		const securityPoolAddress = getAddress('0x0000000000000000000000000000000000000200')
 		const href = getSecurityPoolLinkHref(securityPoolAddress, 'fork-workflow', 12n)
 		const hrefUrl = new URL(href, 'http://localhost')
-		const hrefSearch = hrefUrl.hash.includes('?') ? hrefUrl.hash.slice(hrefUrl.hash.indexOf('?')) : ''
-		const hrefSearchParams = new URLSearchParams(hrefSearch)
+		const [path = '', search = ''] = hrefUrl.hash.split('?')
+		const hrefSearchParams = new URLSearchParams(search)
 
-		expect(hrefUrl.hash.startsWith('#/security-pools')).toBe(true)
-		expect(hrefSearchParams.get('securityPool')).toBe(securityPoolAddress)
-		expect(hrefSearchParams.get('securityPoolsView')).toBe('operate')
-		expect(hrefSearchParams.get('selectedPoolView')).toBe('fork-workflow')
+		expect(path).toBe(`#/pools/${securityPoolAddress}/fork-workflow`)
 		expect(hrefSearchParams.get('universe')).toBe('12')
 		expect(hrefSearchParams.get('simulate')).toBe('1')
 		expect(hrefSearchParams.get('simScenario')).toBe('securitypoolx2')
+		expect(hrefSearchParams.has('securityPool')).toBe(false)
 	})
 
-	test('preserves the current selected pool view when the caller does not provide one', () => {
+	test('keeps the current pool tab when the caller does not provide one, and omits it when asked', () => {
 		const securityPoolAddress = getAddress('0x0000000000000000000000000000000000000201')
-		const href = getSecurityPoolLinkHref(securityPoolAddress)
-		const hrefUrl = new URL(href, 'http://localhost')
-		const hrefSearch = hrefUrl.hash.includes('?') ? hrefUrl.hash.slice(hrefUrl.hash.indexOf('?')) : ''
-		const hrefSearchParams = new URLSearchParams(hrefSearch)
-
-		expect(hrefSearchParams.get('securityPool')).toBe(securityPoolAddress)
-		expect(hrefSearchParams.get('securityPoolsView')).toBe('operate')
-		expect(hrefSearchParams.get('selectedPoolView')).toBe('vaults')
-		expect(hrefSearchParams.get('universe')).toBe('11')
+		expect(getSecurityPoolLinkHref(securityPoolAddress).split('?')[0]).toBe(`#/pools/${securityPoolAddress}/vaults`)
+		expect(getSecurityPoolLinkHref(securityPoolAddress).split('?')[1]).toContain('universe=11')
+		expect(getSecurityPoolLinkHref(securityPoolAddress, '').split('?')[0]).toBe(`#/pools/${securityPoolAddress}`)
 	})
 })

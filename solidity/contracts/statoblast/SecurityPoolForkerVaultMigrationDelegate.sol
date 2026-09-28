@@ -18,8 +18,19 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 {
 	constructor(Zoltar _zoltar) SecurityPoolForkerAuctionSettlementBase(_zoltar) {}
 
-	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amountAttoRep, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased, uint256 auctionRepBackingUnits) public {
-		_creditAuctionProceeds(securityPool, vault, forkDataByPool[securityPool], amountAttoRep, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, totalAttoRepPurchased, auctionRepBackingUnits);
+	function takeOverUnassignedCommitment(ISecurityPool securityPool, uint256 maximumCommitmentAttoEth) public {
+		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
+		(uint256 commitment, uint256 units) = SecurityPoolUtils.consumeUnassignedCommitment(securityPool, data, maximumCommitmentAttoEth);
+		uint256 debt = auctionedBadDebtByPool[securityPool] - claimedAuctionedBadDebtByPool[securityPool];
+		claimedAuctionedBadDebtByPool[securityPool] += debt;
+		securityPool.updateVaultFees(msg.sender);
+		SecurityPoolUtils.creditForkAuctionVault(securityPool, msg.sender, units, commitment, debt, data.auctionBadDebtGeneration, securityPool.feeIndex());
+		securityPool.activateRecoveredCommitment(msg.sender, commitment);
+		emit UnassignedCommitmentTakenOver(securityPool, msg.sender, commitment, units);
+	}
+
+	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amountAttoRep, uint256 newUnderwritingLimitAttoEth, uint256 badDebtToAssignAttoEth, uint256 totalAttoRepPurchased, uint256 auctionRepBackingUnits) public {
+		_creditAuctionProceeds(securityPool, vault, forkDataByPool[securityPool], amountAttoRep, newUnderwritingLimitAttoEth, badDebtToAssignAttoEth, totalAttoRepPurchased, auctionRepBackingUnits);
 	}
 
 	function _initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) internal override returns (EscalationGame) {
@@ -49,18 +60,18 @@ contract SecurityPoolForkerVaultMigrationDelegate is
 		uint256 settlementCollateralAttoEth =
 			data.forkSettlementCollateralReceivedAttoEth + auctionSettlementCollateralReceivedAttoEth;
 		require(settlementCollateralAttoEth <= parentSettlementCollateralAtForkAttoEth, 'Repair');
-		uint256 parentTotalCapacityOwnershipAttoRep = securityPool.parent().totalCapacityOwnershipAttoRep();
-		uint256 unmigratedCapacityOwnershipAttoRep =
-			parentTotalCapacityOwnershipAttoRep - data.migratedCapacityOwnershipAttoRep;
-		data.auctionedCapacityOwnershipAttoRep = unmigratedCapacityOwnershipAttoRep;
+		uint256 parentTotalUnderwritingLimitAttoEth = securityPool.parent().totalUnderwritingLimitAttoEth();
+		uint256 unmigratedUnderwritingLimitAttoEth =
+			parentTotalUnderwritingLimitAttoEth - data.migratedUnderwritingLimitAttoEth;
+		data.auctionedUnderwritingLimitAttoEth = unmigratedUnderwritingLimitAttoEth;
 		uint256 totalAttoRepPurchased = data.truthAuction.totalAttoRepPurchased();
 		uint256 parentBadDebtAtForkAttoEth = badDebtAtForkByPool[securityPool.parent()];
 		uint256 migratedBadDebtAttoEth = migratedBadDebtByPool[securityPool];
 		require(migratedBadDebtAttoEth <= parentBadDebtAtForkAttoEth, 'Bad debt high');
 		auctionedBadDebtByPool[securityPool] = parentBadDebtAtForkAttoEth - migratedBadDebtAttoEth;
-		uint256 feeEligibleAuctionCapacityOwnershipAttoRep =
-			totalAttoRepPurchased == 0 ? 0 : data.auctionedCapacityOwnershipAttoRep;
-		securityPool.setPoolFinancials(settlementCollateralAttoEth, parentTotalCapacityOwnershipAttoRep, data.migratedCapacityOwnershipAttoRep + feeEligibleAuctionCapacityOwnershipAttoRep, parentBadDebtAtForkAttoEth);
+		uint256 feeEligibleAuctionUnderwritingLimitAttoEth =
+			totalAttoRepPurchased == 0 ? 0 : data.auctionedUnderwritingLimitAttoEth;
+		securityPool.setPoolFinancials(settlementCollateralAttoEth, parentTotalUnderwritingLimitAttoEth, data.migratedUnderwritingLimitAttoEth + feeEligibleAuctionUnderwritingLimitAttoEth, parentBadDebtAtForkAttoEth);
 		data.auctionBadDebtGeneration = SecurityPoolUtils.getBadDebtGeneration(securityPool);
 		data.auctionFeeIndexAtFinalization = securityPool.feeIndex();
 		securityPool.setSystemState(SystemState.Operational);

@@ -76,7 +76,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		client.readContract({ abi: securityPoolAbi, address, args: [], blockNumber, functionName: 'getTotalPoolHeldAttoRep' }),
 	])
 	const settlementCollateralAttoEth = poolAccountingSnapshot.settlementCollateralAttoEth
-	const totalCapacityOwnershipAttoRep = poolAccountingSnapshot.totalCapacityOwnershipAttoRep
+	const totalUnderwritingLimitAttoEth = poolAccountingSnapshot.totalUnderwritingLimitAttoEth
 	const forkData = await client.readContract({ abi: securityPoolForkerAbi, address: securityPoolForker, args: [address], blockNumber, functionName: 'forkData' })
 	const forkActivationTime = forkData[11]
 	const forkOutcomeIndex = deployment.parent === zeroAddress ? undefined : forkData[10]
@@ -86,7 +86,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		vaultIndex = createVaultStateIndex<VaultPosition>()
 		monitorIndex.vaultsByPool.set(address.toLowerCase(), vaultIndex)
 	}
-	const vaultRefresh = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, { hash: block.hash, number: blockNumber })
+	const vaultRefresh = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalUnderwritingLimitAttoEth, { hash: block.hash, number: blockNumber })
 	const vaults = vaultRefresh.vaults
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
 		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getActiveStagedOperationCount' }),
@@ -105,7 +105,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 			if (target === undefined) {
 				const loadedTarget = (await loadVaultPage(client, address, normalizedEscalationGame, [targetAddress], blockNumber))[0]
 				if (loadedTarget === undefined) throw new Error('Security pool returned no staged-operation target state')
-				target = currentVaultPositionForPoolAccounting(loadedTarget, totalAttoRep, denominator, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep)
+				target = currentVaultPositionForPoolAccounting(loadedTarget, totalAttoRep, denominator, settlementCollateralAttoEth, totalUnderwritingLimitAttoEth)
 				stagedTargetVaults.set(targetAddress.toLowerCase(), target)
 			}
 			stagedOperations.push({
@@ -119,7 +119,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 				receiverVault: getAddress(operation.receiverVault),
 				reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth,
 				snapshotTotalRepBackingUnits: denominator,
-				snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
+				snapshotTargetUnderwritingLimitAttoEth: operation.snapshotTargetUnderwritingLimitAttoEth,
 				snapshotTargetDisputeStakedAttoRep: target.disputeStakedAttoRep,
 				snapshotTargetOpenInterestAttoEth: target.openInterestAttoEth,
 				snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits,
@@ -129,7 +129,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 			})
 		}
 	}
-	const botVault = await resolveOperatorVault(monitorIndex, address, wallet, vaultRefresh, { denominator, settlementCollateralAttoEth, totalAttoRep, totalCapacityOwnershipAttoRep }, async operator => {
+	const botVault = await resolveOperatorVault(monitorIndex, address, wallet, vaultRefresh, { denominator, settlementCollateralAttoEth, totalAttoRep, totalUnderwritingLimitAttoEth }, async operator => {
 		const position = (await loadVaultPage(client, address, normalizedEscalationGame, [operator], blockNumber))[0]
 		if (position === undefined) throw new Error('Security pool returned no operator vault state')
 		return position
@@ -139,7 +139,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 	const riskContext = {
 		address,
 		denominator,
-		feeEligibleCapacityOwnershipAttoRep: poolAccountingSnapshot.feeEligibleCapacityOwnershipAttoRep,
+		feeEligibleUnderwritingLimitAttoEth: poolAccountingSnapshot.feeEligibleUnderwritingLimitAttoEth,
 		manager,
 		minLiquidationPriceDistanceBps,
 		minimumSecurityBondDebtAttoEth,
@@ -148,7 +148,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		price: candidateScreeningPrice(lastPrice, settings.strategy.fallbackRepPerEthPrice),
 		settlementCollateralAttoEth: poolAccountingSnapshot.settlementCollateralAttoEth,
 		totalAttoRep,
-		totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth,
 	}
 	const candidates = !isPoolExecutionEligible({ approvedUniverse, selected, systemState })
 		? []
@@ -192,7 +192,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		securityPoolForker: getAddress(securityPoolForker),
 		stagedOperations,
 		systemState,
-		totalCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth,
 		totalAttoRep,
 		universeId: deployment.universeId,
 		vaults,

@@ -1,3 +1,4 @@
+import { PoolEntrySection } from './PoolEntrySection.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
@@ -5,6 +6,7 @@ import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensit
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '../../types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { UniversePoolDirectorySection } from './UniversePoolDirectorySection.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -17,10 +19,11 @@ function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, n
 }
 
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
+	if (view === 'open') return { description: undefined, title: securityPoolCopy.openPool }
 	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
 	if (view === 'create') return { description: securityPoolCopy.createPoolDescription, title: commonCopy.createPool }
 	if (view === 'universes') return { description: securityPoolCopy.universesDescription, title: commonCopy.universe }
-	return { description: undefined, title: commonCopy.managePool }
+	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
 }
 
 export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
@@ -39,7 +42,8 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 
 	return (
 		<div className='route-view-flow'>
-			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={commonCopy.securityPools} title={routeHeader.title} />}
+			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
+			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
 			{view === 'browse' ? (
 				<SecurityPoolsOverviewSection
 					{...overview}

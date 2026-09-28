@@ -86,6 +86,46 @@ test('a wallet-only pool action starts the wallet request without a page confirm
 	}
 })
 
+test('wallet-only reporting advances to the report after the deposit receipt without app confirmations', async () => {
+	const { client, receipt, sendTransaction, replacementHash } = setup()
+	sendTransaction.mockResolvedValueOnce(hash).mockResolvedValueOnce(replacementHash)
+	const depositReceipt = createDeferred<typeof receipt>()
+	const reviewed = createReviewedClient({ ...client, sendTransaction, waitForTransactionReceipt: async parameters => ({ ...(await depositReceipt.promise), transactionHash: parameters.hash }) }, undefined, undefined, true)
+	const steps = ['depositRepToVault', 'depositToEscalationGame'].map(functionName => ({ functionName, contractAddress: account, args: [1n, 1n], data: '0x1234' as const }))
+	reviewed.onTransactionPlan?.(steps)
+	const action = (async () => {
+		for (const step of steps) {
+			reviewed.onTransactionPrepared?.({ ...step, account, chainName: client.chain.name, value: undefined })
+			const submittedHash = await reviewed.sendTransaction({ to: account, data: step.data })
+			await reviewed.waitForTransactionReceipt({ hash: submittedHash })
+		}
+	})()
+	const settled = action.catch(error => error)
+	await new Promise(resolve => setTimeout(resolve, 10))
+	try {
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['pending', 'upcoming'])
+		expect(transactionSteps.value?.showReviewDialog).toBe(false)
+	} finally {
+		depositReceipt.resolve({ ...receipt, transactionHash: hash })
+		expect(await settled).toBeUndefined()
+	}
+	expect(sendTransaction).toHaveBeenCalledTimes(2)
+	expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['confirmed', 'confirmed'])
+})
+
+test('wallet-only steps cannot skip an unconfirmed deposit', () => {
+	const controller = createTransactionStepController()
+	const step = { title: 'Deposit REP', description: undefined, contractAddress: account, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }
+	controller.setPlan([step, step])
+	expect(() => controller.startWithoutReview(1)).toThrow()
+	controller.startWithoutReview(0)
+	expect(() => controller.startWithoutReview(1)).toThrow()
+	controller.submitted(hash)
+	controller.receipt(hash, 'reverted')
+	expect(() => controller.startWithoutReview(1)).toThrow()
+})
+
 test('a wallet-only pool action reports a wallet rejection without waiting for a page confirmation', async () => {
 	const { client, sendTransaction } = setup()
 	sendTransaction.mockRejectedValueOnce(new Error('User rejected the request'))
@@ -136,6 +176,7 @@ test('titles the review from the prepared transaction labels instead of the cont
 
 for (const [functionName, title, args] of [
 	['depositToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
+	['depositWalletRepToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
 	['depositRepOnOutcome', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
 	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
@@ -149,6 +190,8 @@ for (const [functionName, title, args] of [
 		const sending = reviewed.sendTransaction({ to: account, data: '0x' })
 		await waitForReview()
 		expect(transactionSteps.value?.steps[0]?.title).toBe(title)
+		if (functionName === 'depositToEscalationGame') expect(transactionSteps.value?.steps[0]?.paidFrom).toBe('Pool vault REP')
+		if (functionName === 'depositWalletRepToEscalationGame') expect(transactionSteps.value?.steps[0]?.paidFrom).toBe('Wallet REP')
 		confirm()
 		await sending
 	})

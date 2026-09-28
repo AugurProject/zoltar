@@ -1152,6 +1152,36 @@ describe('useOnchainState (integration)', () => {
 		resetEnvironment()
 	})
 
+	test('neither reads nor reports WETH for an application that does not use it', async () => {
+		const account = getAddress('0x00000000000000000000000000000000000000a9')
+		const readClient = {
+			getBalance: async () => 7n,
+			getBlock: async () => ({ number: 1n, timestamp: 2n }),
+			getChainId: async () => 1,
+			readContract: async () => 0n,
+			getCode: async () => '0x',
+		} as unknown as ReadClient
+		const { backend } = createBackend({ accountAddress: account, readClient })
+		const loadErc20Balance = mock(async () => {
+			throw new Error('weth RPC failed')
+		})
+		const dependencies = createOnchainStateDependencies({ loadErc20Balance })
+		delete dependencies.getWethAddress
+		const resetEnvironment = installActiveEnvironmentForTesting(backend)
+		let hookState: UseOnchainStateState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(requireHookState(hookState).accountState.ethBalanceAttoEth).toBe(7n))
+		expect(loadErc20Balance).not.toHaveBeenCalled()
+		expect(requireHookState(hookState).accountState.wethBalanceAttoEth).toBeUndefined()
+		expect(requireHookState(hookState).errorMessages).toEqual([])
+		resetEnvironment()
+	})
+
 	test('handles bootstrap wait-success and bootstrap wait-failure paths', async () => {
 		const readySignal = createDeferred<void>()
 		const { backend } = createBackend({

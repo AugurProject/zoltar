@@ -1,24 +1,18 @@
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
-import type { RefObject } from 'preact'
-import { useEffect, useRef, useState } from 'preact/hooks'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
+import { marketAcceptsNewRisk } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
 import { getTradingRouteHref, isTradingLookupRoute, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { useLiveTradingController } from './liveTradingController.js'
 import { liveTradingControllerServices } from './liveTradingControllerHelpers.js'
@@ -27,13 +21,18 @@ import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
 import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
-import { DEFAULT_SLIPPAGE_PERCENT, DEFAULT_TRANSACTION_VALIDITY_MINUTES } from './LiveTradingTransactionUi.js'
+import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { liveRouteLoadingPresentation, liveWorkflowRoutePresentation } from './live/routePresentation.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from './LiveSecurityPoolDetails.js'
-import { UniverseDirectory, type LoadUniverseSummary } from './UniverseDirectory.js'
+import { UniverseDirectory } from './UniverseDirectory.js'
+import type { LoadUniverseSummary } from './useUniverseSummary.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
-import { LiveMarketBrowser, marketStatusLabel, marketStatusTone } from './LiveMarketBrowser.js'
+import { LiveMarketBrowser } from './LiveMarketBrowser.js'
+import { MarketContracts, MarketFacts, MarketOverview } from './MarketOverview.js'
+import { MarketTicketSheet } from './MarketTicketSheet.js'
+import { marketOddsPercent } from '../lib/marketListing.js'
+import { hashWithoutTicketSide, readTicketSideParam } from '../lib/ticketSide.js'
 import { liveCopy } from '../copy/live.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
@@ -43,28 +42,6 @@ const ignoreWalletSummaryChange = () => undefined
 type MarketWorkspaceView = 'trade' | 'liquidity' | 'settlement'
 
 const MARKET_WORKSPACE_PANEL_ID = 'market-workspace-panel'
-
-function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMarket; nowSeconds: bigint; headingRef: RefObject<HTMLHeadingElement> }) {
-	return (
-		<StickyObjectContext
-			variant='embedded-context-strip'
-			sticky={false}
-			title={market.title}
-			titleRef={headingRef}
-			badge={<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>}
-			items={[
-				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} /> },
-				...(market.loadError === undefined
-					? [
-							{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> },
-							{ label: liveCopy.ammFee, value: `${formatTrimmedUnits(market.feeBps, 2, 2)}%` },
-							{ label: liveCopy.pair, value: market.pair === undefined ? liveCopy.notDeployed : <ReadOnlyAddressValue address={market.pair} responsiveAbbreviation /> },
-						]
-					: []),
-			]}
-		/>
-	)
-}
 
 export function LiveTrading({
 	route,
@@ -81,6 +58,7 @@ export function LiveTrading({
 	walletSummaryRetryNonce = 0,
 	walletConnectRequestNonce,
 	refreshIntervalMilliseconds,
+	tradeSettings = DEFAULT_TRADE_SETTINGS,
 	controllerServices = liveTradingControllerServices,
 	liquidityServices = liveLiquidityServices,
 	settlementServices = liveSettlementServices,
@@ -103,6 +81,8 @@ export function LiveTrading({
 	walletSummaryRetryNonce?: number
 	walletConnectRequestNonce?: number
 	refreshIntervalMilliseconds?: number | undefined
+	/** Slippage and validity from the application Settings menu; every Trading transaction uses them. */
+	tradeSettings?: TradeSettings
 	controllerServices?: LiveTradingControllerServices
 	liquidityServices?: LiveLiquidityServices
 	settlementServices?: LiveSettlementServices
@@ -117,15 +97,14 @@ export function LiveTrading({
 		onWorkflowLockChange,
 		onWalletSummaryChange,
 		walletSummaryRetryNonce,
-		defaultSlippage: DEFAULT_SLIPPAGE_PERCENT,
-		defaultValidityMinutes: DEFAULT_TRANSACTION_VALIDITY_MINUTES,
+		settings: tradeSettings,
 		refreshIntervalMilliseconds,
 		services: controllerServices,
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
 	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
-	const { parsedAmount, mode, setMode, side, setSide, amount, setAmount, slippage, setSlippage, transactionValidityMinutes, setTransactionValidityMinutes, quote, state, positionHash, message, positionReceiptWarning, simulate, submit } = position
+	const { setMode, setSide } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
 	const creatingMarket = workflowRoute === 'create-market'
@@ -136,6 +115,22 @@ export function LiveTrading({
 	useEffect(() => setClosedMarketView('settlement'), [routePool])
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
+	// A market-card outcome button opens the ticket on that side once; the parameter is then dropped from the hash so later navigation does not carry it.
+	const [ticketOpenRequested, setTicketOpenRequested] = useState(false)
+	const positionInputRef = useRef({ setMode, setSide })
+	positionInputRef.current = { setMode, setSide }
+	useEffect(() => {
+		// A request left unconsumed by a market that never loaded must not open the sheet on the next market.
+		setTicketOpenRequested(false)
+		if (routePool === undefined || workflowRoute !== 'market') return
+		const requestedSide = readTicketSideParam(parseRouteHash(window.location.hash).search)
+		if (requestedSide === undefined) return
+		positionInputRef.current.setMode('entry')
+		positionInputRef.current.setSide(requestedSide)
+		window.history.replaceState(window.history.state, '', hashWithoutTicketSide(window.location.hash))
+		setTicketOpenRequested(true)
+	}, [routePool, workflowRoute])
+	const handleTicketOpenRequest = useCallback(() => setTicketOpenRequested(false), [])
 	const previousWalletConnectRequestNonce = useRef(walletConnectRequestNonce)
 	useEffect(() => onDiscoveryStateChange?.(discoveryState), [discoveryState, onDiscoveryStateChange])
 	useEffect(() => {
@@ -144,8 +139,8 @@ export function LiveTrading({
 		previousWalletConnectRequestNonce.current = walletConnectRequestNonce
 		void connect()
 	}, [connect, walletConnectRequestNonce])
-	// A failed deployment lookup switches the application to the deployment setup route, which owns the
-	// error surface, so this route only ever renders while the deployment is still resolving.
+	// A failed deployment lookup switches the application to the deployment setup or the connection error,
+	// which own the error surface, so this route only ever renders while the deployment is still resolving.
 	if (configuration === undefined) {
 		const loadingPresentation = liveRouteLoadingPresentation(route)
 		return (
@@ -158,6 +153,15 @@ export function LiveTrading({
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
 	let walletActionLabel = account === undefined ? appCopy.connectWallet : abbreviateAddress(account, 6, 4)
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
+	// The workflow panels' first step: connect, or switch a connected wallet back to the deployment chain.
+	const ticketWallet = {
+		connected: account !== undefined && walletClient !== undefined,
+		networkMismatchReason,
+		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : availabilityCopy.formatSwitchNetworkAction(configuration.chainName),
+		walletEthAttoEth,
+		connect,
+	}
+	const ticketHoldings = { balances: selectedBalances, balanceState: selectedBalanceState, balanceError, retry: retryBalances }
 	const walletAction =
 		walletConnectRequestNonce === undefined ? (
 			<button className='secondary wallet-button' type='button' disabled={workflowLocked} onClick={connect}>
@@ -238,6 +242,19 @@ export function LiveTrading({
 		{ value: 'liquidity' as const, id: viewTabId('liquidity'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.liquidity },
 		...(marketOpen ? [] : [{ value: 'settlement' as const, id: viewTabId('settlement'), panelId: MARKET_WORKSPACE_PANEL_ID, label: appCopy.settlement }]),
 	]
+	const odds = selected === undefined ? undefined : marketOddsPercent(selected)
+	// On narrow screens the collapsed ticket offers one-tap YES / NO entry while the trade view can take a new position.
+	const quickPick =
+		odds !== undefined && marketOpen && activeView === 'trade' && selectedPairInitialized
+			? {
+					yesPercent: odds.yes,
+					noPercent: odds.no,
+					pick: (pickedSide: 'YES' | 'NO') => {
+						setMode('entry')
+						setSide(pickedSide)
+					},
+				}
+			: undefined
 	// The route header names the workflow; the object header below carries the market question, status, and facts, so
 	// neither repeats the other. Focus lands on the object header when the addressed market changes.
 	return (
@@ -265,6 +282,7 @@ export function LiveTrading({
 								<p className='detail'>
 									{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
 								</p>
+								<MarketContracts market={selected} />
 							</SectionBlock>
 						)
 					if (selected.loadError !== undefined)
@@ -287,6 +305,8 @@ export function LiveTrading({
 									account={account}
 									walletClient={walletClient}
 									networkMismatchReason={networkMismatchReason}
+									wallet={ticketWallet}
+									settings={tradeSettings}
 									walletEthAttoEth={walletEthAttoEth}
 									externallyLocked={ticketLocked}
 									nowSeconds={nowSeconds}
@@ -303,9 +323,8 @@ export function LiveTrading({
 								/>
 							</SectionBlock>
 						)
-					return (
-						<SectionBlock key={selected.pool} className='market-workspace'>
-							<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
+					const ticket = (
+						<SectionBlock className='market-workspace'>
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? (
@@ -318,6 +337,8 @@ export function LiveTrading({
 										account={account}
 										walletClient={walletClient}
 										networkMismatchReason={networkMismatchReason}
+										wallet={ticketWallet}
+										settings={tradeSettings}
 										externallyLocked={ticketLocked}
 										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
 										onKnownReceipt={refreshWalletSummaryAfterReceipt}
@@ -338,6 +359,8 @@ export function LiveTrading({
 										account={account}
 										walletClient={walletClient}
 										networkMismatchReason={networkMismatchReason}
+										wallet={ticketWallet}
+										settings={tradeSettings}
 										walletEthAttoEth={walletEthAttoEth}
 										externallyLocked={ticketLocked}
 										nowSeconds={nowSeconds}
@@ -351,40 +374,19 @@ export function LiveTrading({
 									/>
 								) : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
-								{activeView === 'trade' && selectedPairInitialized ? (
-									<LivePositionControls
-										market={selected}
-										balances={selectedBalances}
-										balanceState={selectedBalanceState}
-										balanceError={balanceError}
-										walletConnected={account !== undefined && walletClient !== undefined}
-										networkMismatchReason={networkMismatchReason}
-										walletEthAttoEth={walletEthAttoEth}
-										mode={mode}
-										side={side}
-										amount={amount}
-										amountError={parsedAmount.error}
-										slippage={slippage}
-										transactionValidityMinutes={transactionValidityMinutes}
-										quote={quote}
-										state={state}
-										message={message}
-										receiptWarning={positionReceiptWarning}
-										transactionHash={positionHash}
-										externallyLocked={ticketLocked}
-										nowSeconds={nowSeconds}
-										setMode={setMode}
-										setSide={setSide}
-										setAmount={setAmount}
-										setSlippage={setSlippage}
-										setTransactionValidityMinutes={setTransactionValidityMinutes}
-										simulate={simulate}
-										submit={submit}
-										retryBalances={retryBalances}
-									/>
-								) : null}
+								{activeView === 'trade' && selectedPairInitialized ? <LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={ticketLocked} /> : null}
 							</div>
 						</SectionBlock>
+					)
+					return (
+						<div key={selected.pool} className='market-layout'>
+							<SectionBlock className='market-layout__main' variant='plain'>
+								<MarketOverview market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
+							</SectionBlock>
+							<MarketTicketSheet viewLabel={viewOptions.find(option => option.value === activeView)?.label ?? appCopy.trade} quickPick={quickPick} openRequested={ticketOpenRequested} onOpenRequestHandled={handleTicketOpenRequest}>
+								{ticket}
+							</MarketTicketSheet>
+						</div>
 					)
 				})()}
 			</div>

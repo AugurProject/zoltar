@@ -21,7 +21,8 @@ export function TransactionStepsModal({ contextKey }: { contextKey: string }) {
 		if (workflow === undefined || embedded) return
 		if (completed || workflow.steps[workflow.activeIndex]?.phase === 'failed') workflow.cancel()
 	}, [workflow, embedded, completed])
-	if (workflow === undefined || embedded || workflow.reviewSignal?.aborted) return undefined
+	// A wallet-only workflow keeps its pending status in the status notice instead of a review dialog.
+	if (workflow === undefined || embedded || !workflow.showReviewDialog || workflow.reviewSignal?.aborted) return undefined
 	const current = workflow.steps[workflow.activeIndex]
 	if (current === undefined) return undefined
 	return <OperationModal hostsExternalReview isOpen title={workflow.steps.at(-1)?.title ?? current.title} onClose={workflow.cancel} />

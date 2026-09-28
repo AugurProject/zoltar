@@ -11,6 +11,7 @@ import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } f
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createChildUniverseSuccessPresentation, createChildUniverseTransactionIntent, createChildUniverseWarningPresentation } from '../../zoltarTransactionPresentations.js'
+import { getOutcomeLabelForIndex } from '../lib/migrationWizard.js'
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { requireWallet } from '@zoltar/ui-core-shared/wallet/requireWalletConnection.js'
@@ -384,10 +385,11 @@ export function useZoltarUniverse(
 		try {
 			let refreshRequired = false
 			let result: ZoltarChildUniverseActionResult | undefined
+			let outcomeLabel = getOutcomeLabelForIndex(zoltarUniverse.value?.childUniverses, outcomeIndex)
 			try {
 				await assertActiveWallet(accountAddress)
 				if (!environmentGuard.isCurrent()) return
-				const request = onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeIndex, universeId: activeUniverseId }))
+				const request = onTransactionRequested(createChildUniverseTransactionIntent('zoltar', { outcomeLabel, universeId: activeUniverseId }))
 				if (request === false) {
 					zoltarChildUniverseFeedback.value = undefined
 					return
@@ -406,7 +408,8 @@ export function useZoltarUniverse(
 					universeId: universe.universeId,
 				}
 				zoltarChildUniverseFeedback.value = createSuccessActionFeedback('createChildUniverse', 'Child universe deployed', result.hash)
-				onTransactionPresented(createChildUniverseSuccessPresentation(result))
+				outcomeLabel = getOutcomeLabelForIndex(universe.childUniverses, outcomeIndex)
+				onTransactionPresented(createChildUniverseSuccessPresentation(result, outcomeLabel))
 				refreshRequired = true
 			} catch (error) {
 				if (!environmentGuard.isCurrent()) return
@@ -424,7 +427,7 @@ export function useZoltarUniverse(
 				if (!environmentGuard.isCurrent()) return
 				const message = formatRefreshErrorMessage(error, 'Child universe transaction succeeded, but refreshing the UI failed')
 				zoltarChildUniverseFeedback.value = createWarningActionFeedback('createChildUniverse', 'Child universe deployed', message, result?.hash)
-				if (result !== undefined) onTransactionPresented(createChildUniverseWarningPresentation(result, message))
+				if (result !== undefined) onTransactionPresented(createChildUniverseWarningPresentation(result, outcomeLabel, message))
 			}
 		} finally {
 			if (environmentGuard.isCurrent()) {
