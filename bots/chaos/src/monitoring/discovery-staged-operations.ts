@@ -21,11 +21,10 @@ function isStagedRouteIneligible(error: unknown) {
 }
 
 export async function discoverVault(client: ChaosReadClient, pool: Address, escalationGame: Address, vault: Address, blockNumber: bigint): Promise<VaultSnapshot> {
-	const [state, openInterest, badDebt, coverageCertified] = await drainConcurrent([
+	const [state, openInterest, badDebt] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'securityVaults' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'getVaultOpenInterestAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'vaultBadDebtAttoEth' }),
-		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'isVaultCoverageCertified' }),
 	])
 	const [repBackingUnits, underwritingLimitAttoEth, claimableFeesAttoEth, feeIndex] = state
 	const [repBackingAttoRep, disputeStakedAttoRep] = await drainConcurrent([
@@ -34,7 +33,6 @@ export async function discoverVault(client: ChaosReadClient, pool: Address, esca
 	])
 	return {
 		address: vault,
-		coverageCertified,
 		badDebtAttoEth: badDebt.toString(),
 		underwritingLimitAttoEth: underwritingLimitAttoEth.toString(),
 		claimableFeesAttoEth: claimableFeesAttoEth.toString(),

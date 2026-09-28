@@ -68,7 +68,6 @@ export function SecurityVaultSection({
 	loadingSecurityVault,
 	modalFirst = false,
 	onApproveRep,
-	onCertifyVaultCoverage,
 	onSetVaultUnderwritingLimit,
 	onDepositRepToVault,
 	onLoadSecurityVault,
@@ -287,8 +286,6 @@ export function SecurityVaultSection({
 			blocker={adjustmentBlocker ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })}
 			busy={securityVaultActiveAction !== undefined}
 			pending={securityVaultActiveAction === 'setVaultUnderwritingLimit'}
-			onCertify={onCertifyVaultCoverage}
-			certificatePending={securityVaultActiveAction === 'certifyVaultCoverage'}
 			onAdjust={onSetVaultUnderwritingLimit}
 		/>
 	)

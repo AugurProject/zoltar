@@ -1,6 +1,6 @@
 import { OperationDefinition } from '../types.ts'
 
-import { certifyCommitment, checkpointDefinition, deployPool, depositVault, exitCommitmentLimit, setCommitmentLimit, vaultActionDefinition } from './vaults.ts'
+import { checkpointDefinition, deployPool, depositVault, exitCommitmentLimit, setCommitmentLimit, vaultActionDefinition } from './vaults.ts'
 
 import { completeSetDefinition } from './complete-sets.ts'
 
@@ -19,7 +19,6 @@ import { auctionDefinition, finalizeTruthAuctionRoute, refundLosingAuctionBids, 
 import { sweepResidualEscalation, withdrawForkedCarry } from './carry.ts'
 
 export const STATOBLAST_OPERATIONS: readonly OperationDefinition[] = [
-	certifyCommitment,
 	deployPool,
 	checkpointDefinition('collateral'),
 	checkpointDefinition('retention'),

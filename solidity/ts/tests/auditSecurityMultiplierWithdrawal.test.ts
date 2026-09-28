@@ -6,7 +6,7 @@ import { depositToEscalationGame } from '../testSupport/simulator/utils/contract
 import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
-import { createCertifiedCompleteSetFixture, getSettlementCollateralAttoEth, getSecurityVault, getTotalPoolHeldAttoRep, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
+import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getTotalPoolHeldAttoRep, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 
 const PRICE_PRECISION = 10n ** 18n
 const BPS_DENOMINATOR = 10_000n
@@ -22,7 +22,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 
 		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
 		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
-		await createCertifiedCompleteSetFixture(client, securityPool, 1n * 10n ** 18n)
+		await createCompleteSet(client, securityPool, 1n * 10n ** 18n)
 
 		const getVaultRep = async (vault: typeof client.account.address) => {
 			const state = await getSecurityVault(client, securityPool, vault)

@@ -86,7 +86,7 @@ describe('trading header', () => {
 			awaitingForkContinuation: false,
 			universeForkTime: 0n,
 			vaultCount: 1n,
-			shareTokenSupplyAttoShares: 10n * 10n ** 36n,
+			shareTokenSupplyAttoShares: 10n * 10n ** 18n,
 			settlementCollateralAttoEth: 10n * 10n ** 18n,
 			currentRetentionRate: 10n ** 18n,
 			totalUnderwritingLimitAttoEth: 1n,
@@ -96,9 +96,9 @@ describe('trading header', () => {
 			feeBps: 30n,
 			tradingStatus: 0,
 			questionOutcome: 3,
-			yesReserve: 50n * 10n ** 36n,
-			noReserve: 50n * 10n ** 36n,
-			lpTotalSupply: 50n * 10n ** 36n,
+			yesReserve: 50n * 10n ** 18n,
+			noReserve: 50n * 10n ** 18n,
+			lpTotalSupply: 50n * 10n ** 18n,
 		}
 		const services = {
 			...liveTradingControllerServices,

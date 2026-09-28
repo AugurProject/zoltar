@@ -439,14 +439,12 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 				case 'pendingReportId':
 				case 'getTotalPoolHeldAttoRep':
 				case 'getQuestionOutcome':
-				case 'getCertifiedUnderwritingLimitAttoEth':
+				case 'getCurrentMintingCapacityAttoEth':
 				case 'getVaultOpenInterestAttoEth':
 				case 'vaultBadDebtAttoEth':
 				case 'backingUnitsToAttoRep':
 				case 'getActiveStagedOperationCount':
 					return 0n
-				case 'isVaultCoverageCertified':
-					return false
 				case 'isPriceValid':
 					return true
 				case 'getRequestPriceCostAttoEth':
@@ -1542,8 +1540,6 @@ describe('anchored ecosystem discovery', () => {
 						return [10n, 20n, 0n, 0n]
 					case 'getVaultOpenInterestAttoEth':
 						return 100n
-					case 'isVaultCoverageCertified':
-						return false
 					case 'vaultBadDebtAttoEth':
 						return 0n
 					case 'backingUnitsToAttoRep':

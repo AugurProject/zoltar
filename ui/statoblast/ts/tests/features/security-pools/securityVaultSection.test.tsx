@@ -304,7 +304,8 @@ describe('SecurityVaultSection', () => {
 		expect(sharedReason).toHaveLength(1)
 		const sharedReasonId = sharedReason[0]?.id
 		expect(sharedReasonId).toBeTruthy()
-		for (const label of ['Confirm backing for minting', 'Set commitment limit']) expect(within(dialog).getByRole('button', { name: label }).getAttribute('aria-describedby')?.split(' ')).toContain(sharedReasonId)
+		expect(within(dialog).getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')?.split(' ')).toContain(sharedReasonId)
+		expect(within(dialog).queryByRole('button', { name: 'Confirm backing for minting' })).toBeNull()
 		fireEvent.input(input, { target: { value: '0' } })
 		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Set commitment limit' }))
