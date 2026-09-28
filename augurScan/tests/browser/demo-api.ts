@@ -379,7 +379,7 @@ export function createDemoApi(context: DemoContext) {
 				poolAddress: `0x${(BigInt(index + 1) * 100n + BigInt(vaultIndex + 1)).toString(16).padStart(40, 'a')}`,
 				questionTitle: network.id === 'sepolia' ? 'Which client ships the next protocol release first?' : 'Will the 2030 global mean temperature anomaly exceed 1.5°C?',
 				repBackingUnits: String(BigInt(120 + vaultIndex) * 10n ** 18n),
-				capacityOwnershipAttoRep: String(BigInt(85 + vaultIndex) * 10n ** 18n),
+				underwritingLimitAttoEth: String(BigInt(85 + vaultIndex) * 10n ** 18n),
 				claimableFeesAttoEth: String(BigInt(3 + vaultIndex) * 10n ** 16n),
 				blockNumber: network.indexed_block,
 			})),
@@ -952,7 +952,7 @@ export function createDemoApi(context: DemoContext) {
 						settlementCollateralAttoEth: String(42n * 10n ** 18n),
 						currentMintingCapacityAttoEth: String(50n * 10n ** 18n),
 						totalPoolHeldAttoRep: String(120n * 10n ** 18n),
-						totalCapacityOwnershipAttoRep: String(100n * 10n ** 18n),
+						totalUnderwritingLimitAttoEth: String(100n * 10n ** 18n),
 						securityMultiplierBps: '25000',
 					},
 					capacity: {

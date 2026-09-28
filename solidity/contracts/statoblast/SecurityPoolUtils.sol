@@ -2,9 +2,11 @@
 pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
-import { ISecurityPool } from './interfaces/ISecurityPool.sol';
+import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
+
+import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 
 library SecurityPoolUtils {
 	event VaultBadDebtMigrated(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 migratedBadDebtAttoEth, uint256 resultingParentTotalBadDebtAttoEth, uint256 resultingChildTotalBadDebtAttoEth);
@@ -29,7 +31,7 @@ library SecurityPoolUtils {
 		return configuredMinimumAttoRep == 0 ? theoreticalSupplyAttoRep / 100_000 : configuredMinimumAttoRep;
 	}
 
-	function configureForkMigratedVault(ISecurityPool parent, ISecurityPool child, address vault, uint256 childRepBackingUnits, uint256 childCapacityOwnershipAttoRep, uint256 childFeeIndex, uint256 parentFeeIndex)
+	function configureForkMigratedVault(ISecurityPool parent, ISecurityPool child, address vault, uint256 childRepBackingUnits, uint256 childUnderwritingLimitAttoEth, uint256 childFeeIndex, uint256 parentFeeIndex)
 		external
 		returns (
 			uint256 migratedBadDebtAttoEth,
@@ -40,16 +42,27 @@ library SecurityPoolUtils {
 		migratedBadDebtAttoEth = parent.vaultBadDebtAttoEth(vault);
 		resultingParentTotalBadDebtAttoEth = parent.totalBadDebtAttoEth() - migratedBadDebtAttoEth;
 		resultingChildTotalBadDebtAttoEth = child.totalBadDebtAttoEth() + migratedBadDebtAttoEth;
-		child.configureVault(vault, childRepBackingUnits, childCapacityOwnershipAttoRep, childFeeIndex, child.vaultBadDebtAttoEth(vault) + migratedBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
+		child.configureVault(vault, childRepBackingUnits, childUnderwritingLimitAttoEth, childFeeIndex, child.vaultBadDebtAttoEth(vault) + migratedBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
 		parent.configureVault(vault, 0, 0, parentFeeIndex, 0, resultingParentTotalBadDebtAttoEth);
 		emit VaultBadDebtMigrated(parent, child, vault, migratedBadDebtAttoEth, resultingParentTotalBadDebtAttoEth, resultingChildTotalBadDebtAttoEth);
 	}
 
-	function creditForkAuctionVault(ISecurityPool securityPool, address vault, uint256 auctionRepBackingUnits, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth, uint256 auctionBadDebtGeneration, uint256 auctionFeeIndexAtFinalization) external returns (uint256 resultingTotalRepBackingUnits) {
+	function consumeUnassignedCommitment(ISecurityPool securityPool, SecurityPoolForkerForkData storage data, uint256 maximumCommitmentAttoEth) external returns (uint256 commitment, uint256 units) {
+		require(securityPool.systemState() == SystemState.Operational, 'Pool inactive');
+		commitment = data.auctionedUnderwritingLimitAttoEth - data.claimedAuctionedUnderwritingLimitAttoEth;
+		require(commitment != 0, 'No commitment');
+		require(commitment <= maximumCommitmentAttoEth, 'Commitment exceeds authorization');
+		require(data.truthAuction.totalAttoRepPurchased() == 0, 'Auction claims reserved');
+		units = data.unassignedRepBackingUnitsAtFinalization - data.claimedAuctionRepBackingUnits;
+		data.claimedAuctionedUnderwritingLimitAttoEth += commitment;
+		data.claimedAuctionRepBackingUnits += units;
+	}
+
+	function creditForkAuctionVault(ISecurityPool securityPool, address vault, uint256 auctionRepBackingUnits, uint256 newUnderwritingLimitAttoEth, uint256 badDebtToAssignAttoEth, uint256 auctionBadDebtGeneration, uint256 auctionFeeIndexAtFinalization) external returns (uint256 resultingTotalRepBackingUnits) {
 		securityPool.updateVaultFees(vault);
 		(
 			uint256 currentVaultRepBackingUnits,
-			uint256 currentCapacityOwnershipAttoRep,
+			uint256 currentUnderwritingLimitAttoEth,
 			,
 			uint256 currentFeeIndex
 		) = securityPool.securityVaults(vault);
@@ -57,8 +70,8 @@ library SecurityPoolUtils {
 			auctionBadDebtGeneration == securityPool.getPoolAccountingSnapshot().badDebtGeneration
 				? badDebtToAssignAttoEth
 				: 0;
-		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentCapacityOwnershipAttoRep + newCapacityOwnershipAttoRep, currentFeeIndex, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
-		securityPool.assignFinalizedAuctionFees(vault, newCapacityOwnershipAttoRep, auctionFeeIndexAtFinalization);
+		securityPool.configureFinalizedAuctionVault(vault, currentVaultRepBackingUnits + auctionRepBackingUnits, currentUnderwritingLimitAttoEth + newUnderwritingLimitAttoEth, currentFeeIndex, securityPool.vaultBadDebtAttoEth(vault) + currentBadDebtToAssignAttoEth, securityPool.totalBadDebtAttoEth());
+		securityPool.assignFinalizedAuctionFees(vault, newUnderwritingLimitAttoEth, auctionFeeIndexAtFinalization);
 		return securityPool.totalRepBackingUnits();
 	}
 
@@ -72,7 +85,7 @@ library SecurityPoolUtils {
 		}
 	}
 
-	function calculateFeeAccrual(uint256 settlementCollateralAttoEth, uint256 retentionRate, uint256 timeDelta, uint256 indexRemainder, uint256 feeEligibleCapacityOwnershipAttoRep, uint256 feesOwedRemainder)
+	function calculateFeeAccrual(uint256 settlementCollateralAttoEth, uint256 retentionRate, uint256 timeDelta, uint256 indexRemainder, uint256 feeEligibleUnderwritingLimitAttoEth, uint256 feesOwedRemainder)
 		external
 		pure
 		returns (
@@ -91,60 +104,69 @@ library SecurityPoolUtils {
 			(decayingCollateralAttoEth * _rpow(retentionRate, timeDelta, PRICE_PRECISION)) / PRICE_PRECISION;
 		uint256 scaledFeeDelta =
 			(decayingCollateralAttoEth - resultingCollateralAttoEth) * PRICE_PRECISION + indexRemainder;
-		feeIndexDelta = scaledFeeDelta / feeEligibleCapacityOwnershipAttoRep;
-		nextIndexRemainder = scaledFeeDelta % feeEligibleCapacityOwnershipAttoRep;
-		uint256 feesOwedDelta = feeIndexDelta * feeEligibleCapacityOwnershipAttoRep + feesOwedRemainder;
+		feeIndexDelta = scaledFeeDelta / feeEligibleUnderwritingLimitAttoEth;
+		nextIndexRemainder = scaledFeeDelta % feeEligibleUnderwritingLimitAttoEth;
+		uint256 feesOwedDelta = feeIndexDelta * feeEligibleUnderwritingLimitAttoEth + feesOwedRemainder;
 		creditedFeesAttoEth = feesOwedDelta / PRICE_PRECISION;
 		nextFeesOwedRemainder = feesOwedDelta % PRICE_PRECISION;
 	}
 
-	function calculateVaultFee(uint256 capacityOwnershipAttoRep, uint256 feeIndexDelta, uint256 remainder) external pure returns (uint256 feesAttoEth, uint256 nextRemainder) {
-		uint256 numerator = capacityOwnershipAttoRep * feeIndexDelta + remainder;
+	function calculateVaultFee(uint256 underwritingLimitAttoEth, uint256 feeIndexDelta, uint256 remainder) external pure returns (uint256 feesAttoEth, uint256 nextRemainder) {
+		uint256 numerator = underwritingLimitAttoEth * feeIndexDelta + remainder;
 		return (numerator / PRICE_PRECISION, numerator % PRICE_PRECISION);
 	}
 
 	function getUnassignedPositionFeeAccounting(address securityPoolAddress) external view returns (uint256 feeIndexAtFinalization, uint256 claimableFeesAttoEth) {
 		ISecurityPool securityPool = ISecurityPool(payable(securityPoolAddress));
 		ISecurityPoolForker forker = ISecurityPoolForker(securityPool.securityPoolForker());
-		(, uint256 capacityOwnershipAttoRep, , , uint256 unassignedFeeIndexAtFinalization) = forker.getUnassignedPosition(securityPool);
+		(, uint256 underwritingLimitAttoEth, , , uint256 unassignedFeeIndexAtFinalization) = forker.getUnassignedPosition(securityPool);
 		feeIndexAtFinalization = unassignedFeeIndexAtFinalization;
 		address truthAuction = securityPool.truthAuction();
 		if (truthAuction == address(0) || IUniformPriceDualCapBatchAuction(truthAuction).totalAttoRepPurchased() == 0)
 			return (feeIndexAtFinalization, 0);
-		claimableFeesAttoEth = Math.mulDiv(capacityOwnershipAttoRep, securityPool.feeIndex() - feeIndexAtFinalization, PRICE_PRECISION);
+		claimableFeesAttoEth = Math.mulDiv(underwritingLimitAttoEth, securityPool.feeIndex() - feeIndexAtFinalization, PRICE_PRECISION);
 	}
 
 	function getBadDebtGeneration(ISecurityPool securityPool) external view returns (uint256) {
 		return securityPool.getPoolAccountingSnapshot().badDebtGeneration;
 	}
 
-	function calculateMintingCapacityAttoEth(uint256 capacityOwnershipAttoRep, uint256 repEthPrice, uint256 securityMultiplierBps) external pure returns (uint256) {
-		if (repEthPrice == 0 || capacityOwnershipAttoRep == 0) return 0;
-		uint256 capacityValueAttoEth = Math.mulDiv(capacityOwnershipAttoRep, PRICE_PRECISION, repEthPrice);
-		return Math.mulDiv(capacityValueAttoEth, BPS_DENOMINATOR, securityMultiplierBps);
-	}
-
-	function calculateVaultOpenInterestAttoEth(uint256 activeOpenInterestAttoEth, uint256 vaultCapacityOwnershipAttoRep, uint256 totalCapacityOwnershipAttoRep) external pure returns (uint256) {
-		if (totalCapacityOwnershipAttoRep == 0 || vaultCapacityOwnershipAttoRep == 0) return 0;
+	/// @dev Local mutations increment the revision; price and backing conversion are read live.
+	/// Minting is closed whenever an escalation game exists, so changing dispute claims cannot bypass this certificate.
+	function coverageSnapshot(ISecurityPool pool) external view returns (bytes32) {
 		return
-			Math.mulDiv(activeOpenInterestAttoEth, vaultCapacityOwnershipAttoRep, totalCapacityOwnershipAttoRep, Math.Rounding.Ceil);
+			keccak256(abi.encode(pool.coverageRevision(), pool.priceOracleManagerAndOperatorQueuer().lastPrice(), pool.getTotalPoolHeldAttoRep(), pool.totalRepBackingUnits(), pool.totalUnderwritingLimitAttoEth(), pool.systemState()));
 	}
 
-	function calculateUnassignedPositionHealth(ISecurityPool securityPool, uint256 settlementCollateralAttoEth, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 badDebtAttoEth) private view returns (uint256 openInterestAttoEth, bool healthy) {
-		if (capacityOwnershipAttoRep == 0) return (0, true);
-		uint256 grossOpenInterestAttoEth = Math.mulDiv(settlementCollateralAttoEth, capacityOwnershipAttoRep, securityPool.totalCapacityOwnershipAttoRep(), Math.Rounding.Ceil);
+	/// @notice Maximum fully backed limit supported by pool-held REP with no dispute stake.
+	function calculateBackingSupportedLimitAttoEth(uint256 backingAttoRep, uint256 repEthPrice, uint256 securityMultiplierBps) external pure returns (uint256) {
+		if (repEthPrice == 0 || securityMultiplierBps < BPS_DENOMINATOR) return 0;
+		uint256 requiredMultiplierBps = Math.max(securityMultiplierBps, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
+		uint256 supportedBaseAttoRep = Math.mulDiv(backingAttoRep, BPS_DENOMINATOR, requiredMultiplierBps);
+		return Math.mulDiv(supportedBaseAttoRep, PRICE_PRECISION, repEthPrice);
+	}
+
+	function calculateVaultOpenInterestAttoEth(uint256 activeOpenInterestAttoEth, uint256 vaultUnderwritingLimitAttoEth, uint256 totalUnderwritingLimitAttoEth) external pure returns (uint256) {
+		if (totalUnderwritingLimitAttoEth == 0 || vaultUnderwritingLimitAttoEth == 0) return 0;
+		return
+			Math.mulDiv(activeOpenInterestAttoEth, vaultUnderwritingLimitAttoEth, totalUnderwritingLimitAttoEth, Math.Rounding.Ceil);
+	}
+
+	function calculateUnassignedPositionHealth(ISecurityPool securityPool, uint256 settlementCollateralAttoEth, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 badDebtAttoEth) private view returns (uint256 openInterestAttoEth, bool healthy) {
+		if (underwritingLimitAttoEth == 0) return (0, true);
+		uint256 grossOpenInterestAttoEth = Math.mulDiv(settlementCollateralAttoEth, underwritingLimitAttoEth, securityPool.totalUnderwritingLimitAttoEth(), Math.Rounding.Ceil);
 		openInterestAttoEth = grossOpenInterestAttoEth > badDebtAttoEth ? grossOpenInterestAttoEth - badDebtAttoEth : 0;
-		healthy = isVaultHealthyAtFactor(securityPool.backingUnitsToAttoRep(repBackingUnits), 0, openInterestAttoEth, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), securityPool.statoblastSecurityMultiplierBps(), BPS_DENOMINATOR);
+		healthy = isVaultHealthyAtFactor(securityPool.backingUnitsToAttoRep(repBackingUnits), 0, underwritingLimitAttoEth, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), securityPool.statoblastSecurityMultiplierBps(), BPS_DENOMINATOR);
 	}
 
 	function _isUnassignedPositionHealthy(ISecurityPool securityPool, address securityPoolForker, uint256 settlementCollateralAttoEth) private view returns (bool) {
 		uint256 repBackingUnits;
-		uint256 capacityOwnershipAttoRep;
+		uint256 underwritingLimitAttoEth;
 		uint256 badDebtAttoEth;
 		uint256 debtGeneration;
-		(repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth, debtGeneration, ) = ISecurityPoolForker(securityPoolForker).getUnassignedPosition(securityPool);
+		(repBackingUnits, underwritingLimitAttoEth, badDebtAttoEth, debtGeneration, ) = ISecurityPoolForker(securityPoolForker).getUnassignedPosition(securityPool);
 		if (debtGeneration != securityPool.getPoolAccountingSnapshot().badDebtGeneration) badDebtAttoEth = 0;
-		(, bool healthy) = calculateUnassignedPositionHealth(securityPool, settlementCollateralAttoEth, repBackingUnits, capacityOwnershipAttoRep, badDebtAttoEth);
+		(, bool healthy) = calculateUnassignedPositionHealth(securityPool, settlementCollateralAttoEth, repBackingUnits, underwritingLimitAttoEth, badDebtAttoEth);
 		return healthy;
 	}
 
@@ -152,56 +174,38 @@ library SecurityPoolUtils {
 		require(_isUnassignedPositionHealthy(securityPool, securityPoolForker, settlementCollateralAttoEth), 'Unassigned position unhealthy');
 	}
 
-	function calculateBundledLiquidationTransfer(uint256 targetBackingUnits, uint256 targetCapacityOwnershipAttoRep, uint256 targetOpenInterestAttoEth, uint256 requestedDebtAttoEth, uint256 repEthPrice, uint256 currentPoolHeldAttoRepBalance, uint256 currentTotalRepBackingUnits, uint256 minimumRemainingAttoRep)
+	function calculateBundledLiquidationTransfer(uint256 targetBackingUnits, uint256 targetUnderwritingLimitAttoEth, uint256 targetOpenInterestAttoEth, uint256 requestedDebtAttoEth, uint256 repEthPrice, uint256 currentPoolHeldAttoRepBalance, uint256 currentTotalRepBackingUnits, uint256 minimumRemainingAttoRep)
 		external
 		pure
 		returns (
 			uint256 debtToMoveAttoEth,
-			uint256 capacityOwnershipToMoveAttoRep,
+			uint256 underwritingLimitToMoveAttoEth,
 			uint256 vaultAttoRepBackingToTransfer,
 			uint256 backingUnitsToTransfer
 		)
 	{
 		if (
-			targetCapacityOwnershipAttoRep == 0 ||
+			targetUnderwritingLimitAttoEth == 0 ||
 			targetOpenInterestAttoEth == 0 ||
 			requestedDebtAttoEth == 0 ||
 			repEthPrice == 0
 		) return (0, 0, 0, 0);
+		require(targetOpenInterestAttoEth == targetUnderwritingLimitAttoEth, 'Liquidation uses commitment exposure');
+		debtToMoveAttoEth = Math.min(requestedDebtAttoEth, targetUnderwritingLimitAttoEth);
+		underwritingLimitToMoveAttoEth = debtToMoveAttoEth;
 		uint256 reservedBackingUnits;
-		if (minimumRemainingAttoRep != 0) {
-			if (currentTotalRepBackingUnits == 0 || currentPoolHeldAttoRepBalance == 0) {
-				reservedBackingUnits = Math.mulDiv(minimumRemainingAttoRep, PRICE_PRECISION, 1);
-			} else {
-				reservedBackingUnits = Math.mulDiv(minimumRemainingAttoRep, currentTotalRepBackingUnits, currentPoolHeldAttoRepBalance, Math.Rounding.Ceil);
-			}
+		if (minimumRemainingAttoRep != 0 && debtToMoveAttoEth < targetUnderwritingLimitAttoEth) {
+			reservedBackingUnits =
+				currentPoolHeldAttoRepBalance == 0 || currentTotalRepBackingUnits == 0
+					? targetBackingUnits
+					: Math.mulDiv(minimumRemainingAttoRep, currentTotalRepBackingUnits, currentPoolHeldAttoRepBalance, Math.Rounding.Ceil);
 		}
-		if (reservedBackingUnits >= targetBackingUnits) return (0, 0, 0, 0);
-		uint256 transferableBackingUnits = targetBackingUnits - reservedBackingUnits;
-		uint256 transferableVaultRepBackingAttoRep =
-			currentTotalRepBackingUnits == 0
-				? transferableBackingUnits / PRICE_PRECISION
-				: Math.mulDiv(transferableBackingUnits, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
-		uint256 maximumFundedDebtAttoEth = Math.mulDiv(transferableVaultRepBackingAttoRep, PRICE_PRECISION * BPS_DENOMINATOR, repEthPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS));
-		uint256 boundedRequestedDebtAttoEth =
-			requestedDebtAttoEth > targetOpenInterestAttoEth ? targetOpenInterestAttoEth : requestedDebtAttoEth;
-		debtToMoveAttoEth =
-			boundedRequestedDebtAttoEth < maximumFundedDebtAttoEth
-				? boundedRequestedDebtAttoEth
-				: maximumFundedDebtAttoEth;
-		if (debtToMoveAttoEth == 0) return (0, 0, 0, 0);
-		capacityOwnershipToMoveAttoRep =
-			debtToMoveAttoEth == targetOpenInterestAttoEth
-				? targetCapacityOwnershipAttoRep
-				: Math.mulDiv(targetCapacityOwnershipAttoRep, debtToMoveAttoEth, targetOpenInterestAttoEth);
-		if (capacityOwnershipToMoveAttoRep == 0) return (0, 0, 0, 0);
-		if (capacityOwnershipToMoveAttoRep > targetCapacityOwnershipAttoRep)
-			capacityOwnershipToMoveAttoRep = targetCapacityOwnershipAttoRep;
-		backingUnitsToTransfer = calculateLiquidationBackingUnitsAward(debtToMoveAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
-		require(backingUnitsToTransfer <= transferableBackingUnits, 'Award unfunded');
+		uint256 transferableBackingUnits =
+			targetBackingUnits > reservedBackingUnits ? targetBackingUnits - reservedBackingUnits : 0;
+		backingUnitsToTransfer = Math.min(transferableBackingUnits, calculateLiquidationBackingUnitsAward(debtToMoveAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits));
 		vaultAttoRepBackingToTransfer =
 			currentTotalRepBackingUnits == 0
-				? backingUnitsToTransfer / PRICE_PRECISION
+				? 0
 				: Math.mulDiv(backingUnitsToTransfer, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits);
 	}
 

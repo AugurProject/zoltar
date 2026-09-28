@@ -291,7 +291,10 @@ test('shared header navigation preserves hash settings once and keeps addressed 
 		/>,
 	)
 	try {
-		const link = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav a')).find(anchor => anchor.textContent === 'Liquidity')
+		const moreButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
+		if (moreButton === undefined) throw new Error('The More menu is missing')
+		await act(() => moreButton.click())
+		const link = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Liquidity')
 		if (link === undefined) throw new Error('Liquidity link is unavailable')
 		const href = link.getAttribute('href')
 		expect(href).toBe(`#/liquidity/${pool}?${search}`)
@@ -302,7 +305,7 @@ test('shared header navigation preserves hash settings once and keeps addressed 
 			window.dispatchEvent(new Event('hashchange'))
 		})
 		expect(tradingRouting.resolve(window.location.hash)).toBe(`liquidity/${pool}`)
-		expect(rendered.container.querySelector('.app-nav-stack select')).toBeNull()
+		expect(rendered.container.querySelector('.header-toolbar-navigation select')).toBeNull()
 		expect(window.location.hash).toBe(`#/liquidity/${pool}?${search}`)
 		const parameters = new URLSearchParams(window.location.hash.split('?')[1])
 		for (const [key, value] of new URLSearchParams(search)) expect(parameters.getAll(key)).toEqual([value])

@@ -17,11 +17,11 @@ import { installTestRouting } from '../testUtils/testRouting.js'
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
 
 registerSimulationScenario('security-pool', {
-	description: 'One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.',
+	description: 'One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.',
 	label: 'Security pool',
 })
 registerSimulationScenario('securitypoolx2', {
-	description: 'Two security pools sharing a vault with capacity ownership split between them. Use it to test cross-pool liquidation and settlement paths.',
+	description: 'Two security pools sharing a vault with underwriting commitments split between them. Use it to test cross-pool liquidation and settlement paths.',
 	label: 'Security Pool x2',
 })
 registerSimulationScenario('securitypoolx2-auction', {
@@ -121,7 +121,7 @@ describe('SimulationBanner', () => {
 			const documentQueries = within(renderedComponent.container)
 			expect(documentQueries.getByRole('heading', { name: 'Browser Simulation' })).not.toBeNull()
 			expect(documentQueries.queryByText('Simulation Mode')).toBeNull()
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -148,7 +148,7 @@ describe('SimulationBanner', () => {
 		}
 	})
 
-	test('expands while a replacement controller bootstraps and collapses when it completes', async () => {
+	test('keeps details collapsed while a replacement controller bootstraps and shows its progress in the strip', async () => {
 		const domEnvironment = installDomEnvironment()
 		const readyController = createSimulationController({ currentScenario: 'deployed' })
 		let notifyControllerChanged: () => void = () => undefined
@@ -172,8 +172,12 @@ describe('SimulationBanner', () => {
 			await act(() => {
 				render(<SimulationBanner controller={bootstrappingController} onRefresh={async () => undefined} />, renderedComponent.container)
 			})
-			expect(disclosure.open).toBe(true)
-			expect(within(disclosure).getByText('Preparing replacement scenario')).not.toBeNull()
+			expect(disclosure.open).toBe(false)
+			const summary = disclosure.querySelector('summary')
+			if (!(summary instanceof HTMLElement)) throw new Error('Expected simulation strip summary')
+			expect(within(summary).getByText('Preparing replacement scenario')).not.toBeNull()
+			expect(summary.querySelector('.simulation-strip-progress-track')).not.toBeNull()
+			expect(summary.textContent).toContain('Bootstrapping')
 
 			bootstrappingController.isBootstrapped = true
 			bootstrappingController.isBootstrapping = false
@@ -181,6 +185,24 @@ describe('SimulationBanner', () => {
 				notifyControllerChanged()
 			})
 			expect(disclosure.open).toBe(false)
+			expect(summary.querySelector('.simulation-strip-progress-track')).toBeNull()
+			expect(summary.textContent).toContain('QA account 1')
+		} finally {
+			await renderedComponent.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	test('opens the details when the scenario fails to boot', async () => {
+		const domEnvironment = installDomEnvironment()
+		const controller = createSimulationController({ bootstrapError: 'Scenario deployment failed', isBootstrapped: false, isBootstrapping: false })
+		const renderedComponent = await renderIntoDocument(<SimulationBanner controller={controller} onRefresh={async () => undefined} />)
+
+		try {
+			const disclosure = renderedComponent.container.querySelector('.simulation-banner-details')
+			if (!isDetailsElement(disclosure)) throw new Error('Expected simulation banner disclosure')
+			expect(disclosure.open).toBe(true)
+			expect(disclosure.querySelector('summary')?.textContent).toContain('Error')
 		} finally {
 			await renderedComponent.cleanup()
 			domEnvironment.cleanup()
@@ -272,7 +294,7 @@ describe('SimulationBanner', () => {
 
 		try {
 			const documentQueries = within(renderedComponent.container)
-			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active capacity ownership. Use it to test pool actions and liquidation paths.')).not.toBeNull()
+			expect(documentQueries.getByText('One seeded question, one security pool, and one funded vault with an active underwriting commitments. Use it to test pool actions and liquidation paths.')).not.toBeNull()
 			expect(documentQueries.getByText('Deploying seeded security pool')).not.toBeNull()
 		} finally {
 			await renderedComponent.cleanup()

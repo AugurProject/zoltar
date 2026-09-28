@@ -13,8 +13,6 @@ import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimest
 import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
@@ -22,11 +20,19 @@ import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 
+/** Amounts are plain text by default; their exact value (plus any unit) lives in the title. */
+function getExactValueTitles(root: ParentNode, exactValue: string) {
+	return Array.from(root.querySelectorAll('.currency-value')).filter(element => {
+		const title = element.getAttribute('title')
+		return title === exactValue || title?.startsWith(`${exactValue} `) === true
+	})
+}
+
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const selectedPool: ListedSecurityPool = {
 		settlementCollateralAttoEth: 0n,
 		currentRetentionRate: 10n,
-		feeEligibleCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		feeEligibleUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
 		hasForkActivity: false,
 		forkOutcome: 'none',
 		forkOwnSecurityPool: false,
@@ -46,7 +52,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		shareTokenSupplyAttoShares: 0n,
 		systemState: 'operational',
 		totalPoolHeldAttoRep: 0n,
-		totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+		certifiedUnderwritingLimitAttoEth: overrides.totalUnderwritingLimitAttoEth ?? 5n * 10n ** 18n,
+		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 		truthAuctionAddress: zeroAddress,
 		truthAuctionStartedAt: 0n,
 		universeHasForked: false,
@@ -376,7 +383,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' })).not.toBeNull()
 	})
 
-	void test('renders your share metrics using rounded values with exact copy affordances', async () => {
+	void test('renders your share metrics using rounded values with exact value titles', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
@@ -395,11 +402,11 @@ void describe('TradingSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getAllByText('≈ 1.23').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('≈ 0.023').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('≈ 0.00041').length).toBeGreaterThanOrEqual(2)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1.234' }).length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.023' }).length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 0.00041' }).length).toBeGreaterThanOrEqual(2)
+		expect(documentQueries.getAllByText('0.023').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('0.00041').length).toBeGreaterThanOrEqual(2)
+		expect(getExactValueTitles(document.body, '1.234').length).toBeGreaterThan(0)
+		expect(getExactValueTitles(document.body, '0.023').length).toBeGreaterThan(0)
+		expect(getExactValueTitles(document.body, '0.00041').length).toBeGreaterThanOrEqual(2)
 	})
 
 	void test('renders first-mint share balances as complete-set collateral amounts', async () => {
@@ -428,20 +435,20 @@ void describe('TradingSection', () => {
 		expect(documentQueries.getByText('Total Across Outcomes')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
-		expect(documentQueries.getAllByText('≈ 1.00').length).toBeGreaterThanOrEqual(4)
-		expect(documentQueries.getAllByRole('button', { name: 'Copy exact value 1' }).length).toBeGreaterThanOrEqual(4)
+		expect(documentQueries.getAllByText('1.00').length).toBeGreaterThanOrEqual(4)
+		expect(getExactValueTitles(document.body, '1').length).toBeGreaterThanOrEqual(4)
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 	})
 
-	void test('shows the minting disabled reason when total capacity ownership remains unclaimed and none is fee eligible', async () => {
+	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
-						feeEligibleCapacityOwnershipAttoRep: 0n,
+						feeEligibleUnderwritingLimitAttoEth: 0n,
 						totalPoolHeldAttoRep: 20n * 10n ** 18n,
-						totalCapacityOwnershipAttoRep: 0n,
+						totalUnderwritingLimitAttoEth: 0n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '100' }),
@@ -463,7 +470,7 @@ void describe('TradingSection', () => {
 					accountState: createAccountState({ ethBalanceAttoEth: 1_250_000_000_000_000_000n }),
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
-						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+						totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 					}),
 				})}
 			/>,
@@ -479,8 +486,8 @@ void describe('TradingSection', () => {
 		const walletMetric = modalQueries.getByText('Wallet ETH').parentElement
 		const mintableMetric = modalQueries.getByText('Available to Mint').parentElement
 		if (walletMetric === null || mintableMetric === null) throw new Error('Expected mint balance metrics')
-		expect(within(walletMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
-		expect(within(mintableMetric).getByRole('button', { name: 'Copy exact value 1.25' })).not.toBeNull()
+		expect(getExactValueTitles(walletMetric, '1.25')).toHaveLength(1)
+		expect(getExactValueTitles(mintableMetric, '1.25')).toHaveLength(1)
 	})
 
 	void test('fills the mint amount with the lesser of wallet ETH and remaining capacity', async () => {
@@ -492,7 +499,7 @@ void describe('TradingSection', () => {
 					onTradingFormChange: ({ completeSetAmount }) => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
-					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 5n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n }),
 				})}
 			/>,
 		)
@@ -511,24 +518,24 @@ void describe('TradingSection', () => {
 		expect(mintedAmount).toBe('1.25')
 	})
 
-	void test('shows unavailable price instead of indefinite mint-capacity loading', async () => {
+	void test('uses certified commitments when the optional UI price is unavailable', async () => {
 		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined })} />)
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('Unavailable (no price)')
+		expect(document.body.textContent).not.toContain('Unavailable (no price)')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
 		const button = within(document.body).getByRole('button', { name: 'Mint complete sets' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected mint button')
-		expect(button.disabled).toBe(true)
+		expect(button.disabled).toBe(false)
 	})
 
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalCapacityOwnershipAttoRep: 0n, feeEligibleCapacityOwnershipAttoRep: 0n }) })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('No mint capacity remaining.')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
 	})
 
-	void test('uses the configured UI price for mint capacity and maximum mint amount', async () => {
+	void test('uses certified ETH limits independently of the configured UI price', async () => {
 		let mintedAmount: string | undefined
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
@@ -538,7 +545,7 @@ void describe('TradingSection', () => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
 					repPerEthPrice: 10n * 10n ** 18n,
-					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalCapacityOwnershipAttoRep: 10n * 10n ** 18n }),
+					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n }),
 				})}
 			/>,
 		)
@@ -550,22 +557,7 @@ void describe('TradingSection', () => {
 			if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected mint max button')
 			fireEvent.click(maxButton)
 		})
-		expect(mintedAmount).toBe('0.5')
-	})
-
-	void test('labels the amount available to mint with the selected pool price source', async () => {
-		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle', uniswapPrice: undefined })
-		const renderedComponent = await renderIntoDocument(
-			<SelectedPoolRepPriceContext.Provider value={repPrice}>
-				<TradingSection {...createTradingSectionProps({ repPerEthPrice: repPrice.price })} />
-			</SelectedPoolRepPriceContext.Provider>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Mint complete sets' })))
-		const label = documentQueries.getByRole('dialog', { name: 'Mint Complete Sets' }).querySelector('.rep-price-status')
-		expect(label?.classList.contains('stale')).toBe(true)
-		expect(label?.textContent).toContain('Stale')
+		expect(mintedAmount).toBe('10')
 	})
 
 	void test('keeps minting disabled off Sepolia and explains how to recover after the modal is already open', async () => {
@@ -605,7 +597,7 @@ void describe('TradingSection', () => {
 							feeAccrualState: { feeEndTimestamp: 200n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 1n, totalFeesOwedRemainder: 0n },
 							settlementCollateralAttoEth: 10n * 10n ** 18n,
 							shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-							totalCapacityOwnershipAttoRep: 50n * 10n ** 18n,
+							totalUnderwritingLimitAttoEth: 50n * 10n ** 18n,
 						}),
 						tradingForm: createTradingForm({ completeSetAmount: '1' }),
 					})}
@@ -618,7 +610,8 @@ void describe('TradingSection', () => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
 		})
 
-		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' }))
+		const dialogElement = within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' })
+		const dialog = within(dialogElement)
 		expect(dialog.queryByRole('heading', { name: 'Transaction Review' })).toBeNull()
 		expect(document.body.querySelector('.transaction-review')).toBeNull()
 		expect(dialog.getByText('You Pay')).not.toBeNull()
@@ -628,8 +621,8 @@ void describe('TradingSection', () => {
 		expect(dialog.getByText('Resulting ETH Balance')).not.toBeNull()
 		const estimatedFeeRow = dialog.getByText('Estimated Retention Fee').parentElement
 		if (estimatedFeeRow === null) throw new Error('Expected estimated retention fee row')
-		expect(within(estimatedFeeRow).getByRole('button', { name: 'Copy exact value 1' })).not.toBeNull()
-		expect(dialog.getAllByRole('button', { name: 'Copy exact value 1.111111111111111111' })).toHaveLength(3)
+		expect(getExactValueTitles(estimatedFeeRow, '1')).toHaveLength(1)
+		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(3)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
 		expect(document.body.textContent?.includes('Yes +')).toBe(true)
 		expect(document.body.textContent?.includes('No +')).toBe(true)
@@ -643,7 +636,7 @@ void describe('TradingSection', () => {
 					selectedPool: createSelectedPool({
 						settlementCollateralAttoEth: 0n,
 						shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-						totalCapacityOwnershipAttoRep: 5n * 10n ** 18n,
+						totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
 						universeHasForked: false,
 					}),
 					tradingForm: createTradingForm({ completeSetAmount: '1' }),

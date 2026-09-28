@@ -80,6 +80,7 @@ export function useZoltarOperations({
 		refreshState,
 		refreshZoltarForkAccess,
 		refreshZoltarUniverse,
+		zoltarUniverse: universe.zoltarUniverse,
 	})
 
 	const createChildUniverse = useCallback(

@@ -1,6 +1,5 @@
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
-import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -12,14 +11,14 @@ import { VaultMetricGrid } from './VaultMetricGrid.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
 
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
-	capacityOwnershipAttoRep: bigint
+	underwritingLimitAttoEth: bigint
 	currentVaultIsHealthy?: boolean | undefined
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
 	variant?: 'embedded' | 'record'
 }
 
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, capacityOwnershipAttoRep, currentVaultIsHealthy, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, underwritingLimitAttoEth, currentVaultIsHealthy, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 	const embeddedContent = (
 		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
@@ -35,9 +34,8 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{securityPoolCopy.exposureSupported}</span>
 						<strong>
-							<VaultExposureValue capacity={capacityOwnershipAttoRep} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
+							<VaultExposureValue capacity={underwritingLimitAttoEth} multiplierBps={selectedPoolStatoblastSecurityMultiplierBps} repPerEthPrice={repPerEthPrice} />
 						</strong>
-						<RepPriceStatusLabel />
 					</div>
 					<div className='security-pool-browse-vault-row-kpi'>
 						<span>{commonCopy.poolHeldVaultRepBackingAttoRep}</span>
@@ -65,7 +63,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	)
 	const gridContent = (
 		<VaultMetricGrid
-			targetBackingFactorBps={securityVaultDetails.targetBackingFactorBps}
+			openInterestAttoEth={securityVaultDetails.openInterestAttoEth}
 			associatedRepPerCapacityBps={securityVaultDetails.associatedRepPerCapacityBps}
 			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'
@@ -77,7 +75,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			repPerEthSource={repPerEthSource}
 			repPerEthSourceUrl={repPerEthSourceUrl}
 			selectedPoolStatoblastSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
-			capacityOwnershipAttoRep={capacityOwnershipAttoRep}
+			underwritingLimitAttoEth={underwritingLimitAttoEth}
 			claimableFeesAttoEth={securityVaultDetails.claimableFeesAttoEth}
 		/>
 	)

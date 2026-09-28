@@ -6,21 +6,30 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
-import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
-installTestRouting()
+installStatoblastRouting()
 const { renderLoadedPool, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
 
-test('updates pool selection immediately and never shows contents for a different address', async () => {
+test('opens a typed pool once its address is complete and never shows contents for a different address', async () => {
 	const pool = createSelectedPool()
+	const addressChanges: string[] = []
 	function Harness() {
 		const [address, setAddress] = useState(pool.securityPoolAddress.toString())
-		return <SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: address, securityPools: [pool], onSecurityPoolAddressChange: setAddress })} />
+		return (
+			<SecurityPoolWorkflowSection
+				{...createSecurityPoolWorkflowProps({
+					securityPoolAddress: address,
+					securityPools: [pool],
+					onSecurityPoolAddressChange: nextAddress => {
+						addressChanges.push(nextAddress)
+						setAddress(nextAddress)
+					},
+				})}
+			/>
+		)
 	}
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
 	const page = within(document.body)
@@ -28,9 +37,12 @@ test('updates pool selection immediately and never shows contents for a differen
 	const input = page.getByRole('textbox', { name: 'Security Pool Address' })
 	expect(page.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
 	expect(page.queryByRole('button', { name: 'Open pool' }) === null).toBe(true)
+	// A partial address stays in the field without leaving the current pool page.
 	await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
-	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
+	expect(addressChanges).toEqual([])
+	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
 	await act(() => fireEvent.input(input, { target: { value: '0x1111111111111111111111111111111111111111' } }))
+	expect(addressChanges).toEqual(['0x1111111111111111111111111111111111111111'])
 	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
 	await act(() => fireEvent.input(input, { target: { value: pool.securityPoolAddress } }))
 	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
@@ -70,9 +82,10 @@ test('surfaces actionable pool exceptions independently of the selected tab', as
 		poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 7n, activeStagedOperationCount: 2n }),
 		onViewPendingReport: id => reports.push(id),
 		onSelectedPoolViewChange: view => views.push(view),
+		selectedPoolView: 'vaults',
 	})
 	const page = within(document.body)
-	for (const name of ['View report', 'Review operations', 'Review fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
+	for (const name of ['View report', 'Review operations', 'Open fork & migration']) await act(() => fireEvent.click(page.getByRole('button', { name })))
 	expect(reports).toEqual([7n])
 	expect(views).toEqual(['staged-operations', 'fork-workflow'])
 })
@@ -121,12 +134,22 @@ test('requests a new price straight from the pool oracle row', async () => {
 	expect(opened.length > 0).toBe(true)
 })
 
-test('shows unknown capacity without a progress gauge or implied zero capacity', async () => {
+test('shows the stage and offers only controls that leave the open tab', async () => {
+	const views: SelectedPoolView[] = []
+	await renderLoadedPool({ onSelectedPoolViewChange: view => views.push(view) })
+	const card = document.querySelector('.pool-action-card')
+	if (!(card instanceof HTMLElement)) throw new Error('Expected the action card')
+	expect(document.querySelector('.pool-lifecycle [aria-current="step"]')?.textContent).toContain('Operational')
+	expect(within(card).queryByRole('button', { name: 'Open vaults' })).toBeNull()
+	await act(() => fireEvent.click(within(card).getByRole('button', { name: 'Open shares' })))
+	expect(views).toEqual(['trading'])
+})
+
+test('shows known standing commitments independently of a missing price', async () => {
 	await renderLoadedPool({ uiPriceOracle: 'uniswap', repPerEthPrice: undefined })
 	const header = document.body.querySelector('.pool-overview-header')
-	expect(header?.textContent).toContain('/ Unavailable')
-	expect(header?.textContent).toContain('/ Unavailable')
-	expect(header?.querySelector('.progress-meter-track')).toBeNull()
+	expect(header?.textContent).toContain('/ 5.00 ETH')
+	expect(header?.querySelector('.progress-meter-track') !== null).toBe(true)
 })
 
 for (const timestamp of [undefined, 100000n]) {
@@ -141,8 +164,8 @@ for (const timestamp of [undefined, 100000n]) {
 				)
 			).cleanup,
 		)
-		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ Unavailable')
-		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Open interest / estimated capacity')
+		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ 5.00 ETH')
+		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Settlement collateral / standing commitments')
 	})
 }
 test('keeps the pending report reachable while the pool universe differs', async () => {
@@ -153,37 +176,20 @@ test('keeps the pending report reachable while the pool universe differs', async
 	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
 })
 
-const settledPriceValidUntil = getOracleManagerPriceValidUntilTimestamp(1n) ?? 0n
-for (const { now, label } of [
-	{ now: 2n, label: 'via Open Oracle · less than a minute ago' },
-	{ now: settledPriceValidUntil + 660n, label: '⚠Stale · Open Oracle price expired 11m ago' },
-]) {
-	test(`labels the single capacity summary with the resolved price source at chain time ${now.toString()}`, async () => {
-		const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
-		const oracleManager = createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n })
-		const repPrice = resolveRepPrice({
-			now,
-			oracleManager: { isPriceValid: oracleManager.isPriceValid, price: oracleManager.lastPrice, settlementTimestamp: oracleManager.lastSettlementTimestamp },
-			poolOracle: { price: pool.lastOraclePrice, settlementTimestamp: pool.lastOracleSettlementTimestamp },
-			setting: 'open-oracle',
-			uniswapPrice: undefined,
-		})
-		setCleanup(
-			(
-				await renderIntoDocument(
-					<ChainTimestampContext.Provider value={now}>
-						<SelectedPoolRepPriceContext.Provider value={repPrice}>
-							<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], poolOracleManagerDetails: oracleManager, repPerEthPrice: repPrice.price })} />
-						</SelectedPoolRepPriceContext.Provider>
-					</ChainTimestampContext.Provider>,
-				)
-			).cleanup,
-		)
-		expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('1.25 ETH')
-		expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
-		expect(document.querySelector('.pool-overview-header .rep-price-status')?.textContent).toBe(label)
-	})
-}
+test('uses the refreshed manager price for the single capacity summary', async () => {
+	const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
+	setCleanup(
+		(
+			await renderIntoDocument(
+				<ChainTimestampContext.Provider value={2n}>
+					<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n }) })} />
+				</ChainTimestampContext.Provider>,
+			)
+		).cleanup,
+	)
+	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('5.00 ETH')
+	expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
+})
 
 test('shows the pending report countdown in selected pool price fields', async () => {
 	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })

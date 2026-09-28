@@ -273,7 +273,7 @@ const isTokenBalanceValue = (value: unknown): boolean =>
 const isPoolAssociationValue = (value: unknown): boolean => isRecord(value) && isString(value['address']) && isNullableString(value['label']) && isNullableString(value['questionTitle'])
 
 const isVaultPositionValue = (value: unknown): boolean =>
-	isRecord(value) && isString(value['poolAddress']) && isNullableString(value['questionTitle']) && isString(value['repBackingUnits']) && isStringOrNumber(value['capacityOwnershipAttoRep']) && isStringOrNumber(value['claimableFeesAttoEth']) && isString(value['blockNumber'])
+	isRecord(value) && isString(value['poolAddress']) && isNullableString(value['questionTitle']) && isString(value['repBackingUnits']) && isStringOrNumber(value['underwritingLimitAttoEth']) && isStringOrNumber(value['claimableFeesAttoEth']) && isString(value['blockNumber'])
 
 const isNativeBalanceDetailValue = (value: unknown): boolean => isRecord(value) && isString(value['balance']) && isString(value['blockNumber'])
 

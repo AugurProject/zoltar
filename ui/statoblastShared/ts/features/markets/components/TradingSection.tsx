@@ -11,7 +11,6 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { RepPriceStatusLabel } from '../../security-pools/components/RepPriceStatusLabel.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { RankedBarList } from '@zoltar/ui-core-shared/components/RankedBarList.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
@@ -104,11 +103,15 @@ export function TradingSection({
 	const totalShareCount = displayShareBalances === undefined ? undefined : displayShareBalances.invalid + displayShareBalances.no + displayShareBalances.yes
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintAmount = tryParseTradingAmountInput(tradingForm.completeSetAmount)
-	const mintingCapacityAttoEth = calculateMintingCapacityAttoEth(selectedPool?.totalCapacityOwnershipAttoRep, repPerEthPrice, selectedPool?.statoblastSecurityMultiplierBps)
+	const mintingCapacityAttoEth =
+		selectedPool !== undefined && selectedPool.certifiedUnderwritingLimitAttoEth === selectedPool.totalUnderwritingLimitAttoEth && !selectedPool.ordinaryEscalationGameStarted && !selectedPool.hasForkContinuationEscalationGame
+			? calculateMintingCapacityAttoEth(selectedPool.totalUnderwritingLimitAttoEth, repPerEthPrice, selectedPool.statoblastSecurityMultiplierBps)
+			: 0n
 	const mintCheckpoint = estimateMintCheckpoint({
 		currentRetentionRate: selectedPool?.currentRetentionRate,
 		currentTimestamp,
-		feeEligibleCapacityOwnershipAttoRep: selectedPool?.feeEligibleCapacityOwnershipAttoRep,
+		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
+		feeEligibleUnderwritingLimitAttoEth: selectedPool?.feeEligibleUnderwritingLimitAttoEth,
 		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
 		feeIndexRemainder: selectedPool?.feeAccrualState?.feeIndexRemainder,
 		lastUpdatedFeeAccumulator: selectedPool?.feeAccrualState?.lastUpdatedFeeAccumulator,
@@ -180,7 +183,7 @@ export function TradingSection({
 
 			return (() => {
 				if (remainingMintCapacity === 0n) {
-					if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleCapacityOwnershipAttoRep)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
+					if (hasRepBackedPoolWithNoActiveCapacityOwnership(selectedPool?.totalPoolHeldAttoRep, selectedPool?.feeEligibleUnderwritingLimitAttoEth)) return NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE
 
 					return tradingCopy.mintCapacityEmpty
 				}
@@ -390,7 +393,6 @@ export function TradingSection({
 					</MetricField>
 					<MetricField label={tradingCopy.availableToMint}>
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
-						<RepPriceStatusLabel />
 					</MetricField>
 				</MetricGrid>
 				<label className='field'>

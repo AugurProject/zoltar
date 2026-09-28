@@ -186,9 +186,9 @@ export function SecurityPoolsOverviewSection({
 				return (
 					<div className='comparison-record-list'>
 						{filteredSecurityPools.map(({ pool, poolState }) => {
-							const repPrice = resolveRepPrice({ now: currentTimestamp, poolOracle: { price: pool.lastOraclePrice, settlementTimestamp: pool.lastOracleSettlementTimestamp }, setting: uiPriceOracle, uniswapPrice: repPerEthPrice })
-							const capacity = calculateMintingCapacityAttoEth(pool.totalCapacityOwnershipAttoRep, repPrice.price, pool.statoblastSecurityMultiplierBps)
-							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} repPrice={repPrice} />
+							const calculationPrice = resolveRepPrice({ now: currentTimestamp, poolOracle: { price: pool.lastOraclePrice, settlementTimestamp: pool.lastOracleSettlementTimestamp }, setting: uiPriceOracle, uniswapPrice: repPerEthPrice }).price
+							const capacity = calculateMintingCapacityAttoEth(pool.totalUnderwritingLimitAttoEth, calculationPrice, pool.statoblastSecurityMultiplierBps)
+							return <PoolDirectoryRow key={pool.securityPoolAddress} pool={pool} activeUniverseId={activeUniverseId} lifecycleState={poolState.lifecycleState} capacity={capacity} currentTimestamp={currentTimestamp} onSelect={onSelectSecurityPool} />
 						})}
 					</div>
 				)

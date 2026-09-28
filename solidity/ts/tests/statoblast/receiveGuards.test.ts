@@ -1,4 +1,4 @@
-import { createCompleteSet, depositRepToVault, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
+import { createCertifiedCompleteSetFixture, depositRepToVault, getRepToken } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { getTotalTheoreticalSupply } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { migrateRepToZoltar, migrateVault } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
@@ -64,11 +64,11 @@ describe('Statoblast: receive guards', () => {
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		// Fork and migrate
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
@@ -112,11 +112,11 @@ describe('Statoblast: receive guards', () => {
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
-		const securityPoolCapacityOwnershipAttoRep = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolCapacityOwnershipAttoRep)
+		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const openInterestAmount = 10n * 10n ** 18n
-		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
+		await createCertifiedCompleteSetFixture(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])

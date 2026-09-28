@@ -152,7 +152,7 @@ export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: s
 				COALESCE((SELECT jsonb_agg(jsonb_build_object(
 					'poolAddress', position.pool_address, 'questionTitle', question.title,
 					'repBackingUnits', position.rep_backing_units::text,
-					'capacityOwnershipAttoRep', position.capacity_ownership_atto_rep::text,
+					'underwritingLimitAttoEth', position.capacity_ownership_atto_rep::text,
 					'claimableFeesAttoEth', position.claimable_fees_atto_eth::text,
 					'blockNumber', position.block_number::text
 				) ORDER BY position.pool_address)

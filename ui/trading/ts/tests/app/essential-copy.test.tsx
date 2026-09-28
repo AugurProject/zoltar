@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { App } from '../../app/App.js'
-import { ExecutionProtectionFields, renderLiveTradeSummary } from '../../features/LiveTradingTransactionUi.js'
+import { TradeEstimatePanel } from '../../features/TradeEstimatePanel.js'
+import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { liveMarketFixture, ticketEstimateFor } from '../support/liveMarketFixture.js'
+import { shareBalanceScope } from '../../protocol/live.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -30,37 +33,34 @@ describe('essential trading copy', () => {
 		for (const phrase of forbiddenCopy) expect(rendered.container.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
 	})
 
-	test('shows the deployed fee and stable quantities separately from conditional payouts', async () => {
-		const market = { feeBps: 125n, settlementCollateralAttoEth: 984_200_000_000_000_000n, shareTokenSupplyAttoShares: 10n ** 36n }
-		const entry = await renderIntoDocument(renderLiveTradeSummary({ kind: 'entry', value: { amount: 10n ** 18n, market, result: { totalLongShares: 2n * 10n ** 36n, invalidInsurance: 3n * 10n ** 35n } } }, 'YES'))
-		expect(entry.container.textContent).toContain('Trading fee')
-		expect(entry.container.textContent).toContain('1.25%')
-		expect(entry.container.textContent).toContain('INVALID received')
-		expect(entry.container.textContent).toContain('2 YES')
-		expect(entry.container.textContent).toContain('0.3 INVALID')
-		expect(entry.container.textContent).toContain('1.9684 ETH if YES wins')
-		expect(entry.container.textContent).toContain('0 ETH otherwise')
+	test('always shows the pool fee, minimum received, and price impact beside the conditional payout', async () => {
+		const market = liveMarketFixture({ feeBps: 125n, settlementCollateralAttoEth: 984_200_000_000_000_000n })
+		const buy = ticketEstimateFor(market, 'entry', '1')
+		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n * 10n ** 36n, no: 0n, invalid: 10n * 10n ** 36n, lp: 0n })
+		const entry = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
+		for (const phrase of ['You receive ≈', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'INVALID insurance', 'ETH if YES wins', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
+		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
+		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()
-		const exit = await renderIntoDocument(renderLiveTradeSummary({ kind: 'exit', value: { market, result: { totalLongShares: 2n * 10n ** 36n, invalidInsurance: 3n * 10n ** 35n, ethOut: 8n * 10n ** 17n } } }, 'YES'))
+		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
-		expect(exit.container.textContent).toContain('Trading fee')
-		expect(exit.container.textContent).toContain('1.25%')
-		expect(exit.container.textContent).toContain('INVALID required')
-		expect(exit.container.textContent).toContain('2 YES')
-		expect(exit.container.textContent).toContain('0.3 INVALID')
-		expect(exit.container.textContent).toContain('0.8 ETH')
+		for (const phrase of ['You sell', 'You receive ≈', 'Minimum received', 'INVALID used', 'Pool fee']) expect(exit.container.textContent).toContain(phrase)
 		expect(exit.container.textContent).not.toContain('if YES wins')
 	})
 
-	test('shows configurable execution-protection controls', async () => {
-		const rendered = await renderIntoDocument(<ExecutionProtectionFields slippage='5.01' validityMinutes='0' disabled={false} onSlippageInput={() => undefined} onValidityInput={() => undefined} />)
-		cleanupRendered = rendered.cleanup
-		const inputs = rendered.container.querySelectorAll<HTMLInputElement>('input')
-		const errors = rendered.container.querySelectorAll<HTMLElement>('.field-error')
-		expect(errors).toHaveLength(2)
-		expect(inputs[0]?.getAttribute('aria-invalid')).toBe('true')
-		expect(inputs[0]?.getAttribute('aria-describedby')?.split(' ')).toContain(errors[0]?.id)
-		expect(inputs[1]?.getAttribute('aria-describedby')?.split(' ')).toContain(errors[1]?.id)
+	test('escalates price-impact warnings and asks for acknowledgment before a high-impact trade', async () => {
+		const market = liveMarketFixture()
+		const buy = ticketEstimateFor(market, 'entry', '20')
+		const acknowledgements: boolean[] = []
+		const warning = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='warning' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={value => acknowledgements.push(value)} />)
+		expect(warning.container.querySelector('[role="alert"]')?.textContent).toContain('High price impact')
+		warning.container.querySelector<HTMLInputElement>('.trade-impact-acknowledge input')?.click()
+		expect(acknowledgements).toEqual([true])
+		await warning.cleanup()
+		const blocked = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='blocked' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
+		cleanupRendered = blocked.cleanup
+		expect(blocked.container.textContent).toContain('above the 15% limit')
+		expect(blocked.container.querySelector('.trade-impact-acknowledge')).toBeNull()
 	})
 
 	test('resolves the retired browse hashes to their lookup landings and defaults to the market lookup', () => {

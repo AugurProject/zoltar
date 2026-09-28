@@ -22,16 +22,16 @@ type SecurityPoolSummaryMetricsProps = {
 function formatRepPerCapacityBps(value: bigint) {
 	const whole = value / 10_000n
 	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`}×`
+	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`} REP/ETH`
 }
 
 /** Static pool parameters. Capacity is shown by `PoolCapacitySummary`, which labels the REP price it uses. */
 export function SecurityPoolSummaryMetrics({ children, className = '', metricVariant = 'default', pool, showTotalBacking = false }: SecurityPoolSummaryMetricsProps) {
-	const resolvedPoolHeldRepPerCapacityBps = pool.totalCapacityOwnershipAttoRep === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalCapacityOwnershipAttoRep
+	const resolvedPoolHeldRepPerCapacityBps = pool.totalUnderwritingLimitAttoEth === 0n ? undefined : (pool.totalPoolHeldAttoRep * 10_000n) / pool.totalUnderwritingLimitAttoEth
 	return (
 		<MetricGrid className={className} variant={metricVariant}>
 			<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
-			<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}x</MetricField>
+			<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}</MetricField>
 			<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
 			<MetricField label={securityPoolCopy.openInterestFeeYear}>
 				<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />

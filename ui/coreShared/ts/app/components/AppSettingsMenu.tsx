@@ -56,7 +56,10 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 	return (
 		<div className='app-settings' ref={menuRef}>
 			<button ref={triggerRef} className='app-settings-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' onClick={() => setOpen(value => !value)}>
-				{appCopy.settings}
+				<svg className='app-settings-icon' viewBox='0 0 24 24' width='16' height='16' aria-hidden='true' focusable='false'>
+					<path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4' />
+				</svg>
+				<span className='app-settings-label'>{appCopy.settings}</span>
 			</button>
 			{open ? (
 				<div className='app-settings-menu' role='dialog' aria-label={appCopy.applicationSettings}>

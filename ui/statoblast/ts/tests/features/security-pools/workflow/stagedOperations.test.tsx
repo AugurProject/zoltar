@@ -356,7 +356,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 								action: 'queueWithdrawRep',
 								hash: '0x00000000000000000000000000000000000000000000000000000000000000be',
 								stagedExecution: {
-									errorMessage: 'Local Capacity ownership broken',
+									errorMessage: 'Local Underwriting commitments broken',
 									operation: 'withdrawRep',
 									operationId: 8n,
 									success: false,
@@ -378,7 +378,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
 			const dialogQueries = within(withdrawDialog)
 			expect(dialogQueries.getByRole('heading', { name: 'REP withdrawal failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
+			expect(dialogQueries.getByText('Local Underwriting commitments broken')).not.toBeNull()
 			expect(dialogQueries.queryByRole('button', { name: 'View in staged operations' })).toBeNull()
 		})
 
@@ -435,7 +435,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000c2',
 							securityPoolAddress: selectedPoolAddress,
 							stagedExecution: {
-								errorMessage: 'Local Capacity ownership broken',
+								errorMessage: 'Local Underwriting commitments broken',
 								operation: 'liquidation',
 								operationId: 13n,
 								success: false,
@@ -451,7 +451,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const dialog = within(document.body).getByRole('dialog', { name: 'Execute Vault Liquidation' })
 			const dialogQueries = within(dialog)
 			expect(dialogQueries.getByRole('heading', { name: 'Liquidation failed' })).not.toBeNull()
-			expect(dialogQueries.getByText('Local Capacity ownership broken')).not.toBeNull()
+			expect(dialogQueries.getByText('Local Underwriting commitments broken')).not.toBeNull()
 		})
 	})
 
@@ -735,7 +735,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000d3',
 							securityPoolAddress: selectedPoolAddress,
 							stagedExecution: {
-								errorMessage: 'Local Capacity ownership broken',
+								errorMessage: 'Local Underwriting commitments broken',
 								operation: 'liquidation',
 								operationId: 14n,
 								success: false,
@@ -890,7 +890,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 							action: 'executeStagedOperation',
 							hash: '0x00000000000000000000000000000000000000000000000000000000000000ce',
 							stagedExecution: {
-								errorMessage: 'Local Capacity ownership broken',
+								errorMessage: 'Local Underwriting commitments broken',
 								operation: 'withdrawRep',
 								operationId: 12n,
 								success: false,

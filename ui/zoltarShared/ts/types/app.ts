@@ -49,6 +49,7 @@ export type ReportingWithdrawDepositIndexesByOutcome = {
 }
 
 export type ReportingFormState = {
+	contributionFunding?: 'vault' | 'wallet' | undefined
 	reportAmount: string
 	securityPoolAddress: string
 	selectedOutcome: ReportingOutcomeKey | undefined
@@ -57,5 +58,6 @@ export type ReportingFormState = {
 
 export type ZoltarMigrationFormState = {
 	amount: string
-	outcomeIndexes: string
+	/** Selected outcome indexes in the order the user picked them. */
+	outcomeIndexes: readonly bigint[]
 }

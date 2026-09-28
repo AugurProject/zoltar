@@ -40,7 +40,7 @@ function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
 export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	const { currentTimestamp, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
-	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalCapacityOwnershipAttoRep, props.repPerEthPrice, summaryPool.statoblastSecurityMultiplierBps)
+	const capacity = calculateMintingCapacityAttoEth(summaryPool.totalUnderwritingLimitAttoEth, props.repPerEthPrice, summaryPool.statoblastSecurityMultiplierBps)
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>
@@ -56,7 +56,7 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 				</div>
 			</div>
 
-			<PoolCapacitySummary capacity={capacity} currentTimestamp={currentTimestamp} minted={summaryPool.settlementCollateralAttoEth} />
+			<PoolCapacitySummary showUnavailableReason={false} capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
 		</div>
 	)
 }
