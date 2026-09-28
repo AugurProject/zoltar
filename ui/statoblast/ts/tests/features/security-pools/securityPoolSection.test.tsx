@@ -533,10 +533,8 @@ describe('SecurityPoolSection', () => {
 		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.')
 		fireEvent.click(button)
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(0)
-		const marketTypeTrigger = within(document.body).getByRole('button', { name: /Question Type/ })
-		fireEvent.click(marketTypeTrigger)
-		expect(marketTypeTrigger.hasAttribute('disabled')).toBe(true)
-		expect(within(document.body).queryByRole('listbox', { name: 'Dropdown options' }) === null).toBe(true)
+		expect(document.querySelector('.question-type-fixed')?.textContent).toContain('Binary')
+		expect(within(document.body).queryByRole('radio', { name: 'Scalar' })).toBeNull()
 	})
 
 	test('submits the combined question-and-pool action instead of standalone question creation', async () => {

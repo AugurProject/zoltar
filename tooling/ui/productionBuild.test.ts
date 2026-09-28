@@ -940,6 +940,20 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 				}
 				if (!selected) throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
 			}
+			// Pool browsing lists favorites and downloaded pools only; scanning the registry is an explicit action.
+			const discoverPools = async () => {
+				await driver.waitForBodyWithoutText('BOOTSTRAPPING')
+				// A scan started while the simulation environment is still settling is discarded when the environment changes, so retry until one completes.
+				await driver.evaluate('window.__zoltarDiscoveryClicked = false')
+				for (let attempt = 0; attempt < 2400; attempt += 1) {
+					const state = await driver.evaluate(
+						`(() => { const button = [...document.querySelectorAll('.discovery-control button')].find(candidate => ['Discover pools', 'Discover more', 'Scan again', 'Discovering…'].includes(candidate.textContent?.trim() ?? '')); if (!(button instanceof HTMLButtonElement)) return 'missing'; const label = button.textContent?.trim(); if (window.__zoltarDiscoveryClicked && label !== 'Discover pools' && !button.disabled) return 'scanned'; if (button.disabled || (window.__zoltarDiscoveryClicked && label !== 'Discover pools')) return 'waiting'; window.__zoltarDiscoveryClicked = true; button.click(); return 'clicked' })()`,
+					)
+					if (state === 'scanned') return
+					await Bun.sleep(state === 'clicked' ? 250 : 50)
+				}
+				throw new Error(`Unable to discover pools: ${String(await driver.evaluate('document.body.innerText'))}`)
+			}
 			await driver.evaluate('document.body.focus()')
 			await driver.pressTab()
 			expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
@@ -951,6 +965,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 
 			await driver.resize({ height: 844, width: 390 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/pools?simulate=1&simScenario=security-pool`)
+			await discoverPools()
 			await driver.waitForBodyText('Will this resolve?')
 			const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 			expect(poolOpened).toBe(true)
@@ -987,7 +1002,8 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/pools?simulate=1&simScenario=securitypoolx2`)
-			await driver.waitForBodyText('Will this resolve?')
+			await discoverPools()
+			await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
 			const reportingPoolOpened = await driver.evaluate(
 				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
 			)
@@ -1197,6 +1213,7 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 
 			await driver.resize({ height: 900, width: 1440 })
 			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/pools?simulate=1&simScenario=securitypoolx2-auction`)
+			await discoverPools()
 			await driver.waitForBodyText('Will this resolve?')
 			const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 			expect(universeDirectoryOpened).toBe(true)
@@ -1207,11 +1224,17 @@ productionWorkflowTest('production bundle executes deployment, reporting, fork m
 			expect(yesUniverseSelected).toBe(true)
 			const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse Pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 			expect(childPoolBrowserOpened).toBe(true)
-			await driver.waitForBodyText('Will this resolve?')
 			await driver.clickButton('+1 month')
-			const auctionPoolOpened = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-			)
+			// Downloaded summaries are snapshots, so scan again after time travel to list the pools' current states.
+			await discoverPools()
+			let auctionPoolOpened = false
+			for (let attempt = 0; attempt < 600 && !auctionPoolOpened; attempt += 1) {
+				auctionPoolOpened =
+					(await driver.evaluate(
+						`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+					)) === true
+				if (!auctionPoolOpened) await Bun.sleep(50)
+			}
 			expect(auctionPoolOpened).toBe(true)
 			const auctionPoolBody = await driver.waitForBodyText('All pools')
 			if (auctionPoolBody.includes('Universe Mismatch')) {
