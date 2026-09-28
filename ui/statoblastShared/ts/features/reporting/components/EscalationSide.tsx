@@ -102,12 +102,12 @@ export function EscalationSide({ bindingCapital, chartScaleMax, disabled = false
 				</div>
 				<div className='escalation-side-values'>
 					<div className='escalation-side-value'>
-						<CurrencyValue copyable={false} value={side.balance} suffix={commonCopy.rep} />
+						<CurrencyValue value={side.balance} suffix={commonCopy.rep} />
 					</div>
 					{(side.userStake ?? 0n) > 0n ? (
 						<div className='escalation-side-value detail'>
 							<span>{forkAuctionCopy.you}</span>
-							<CurrencyValue copyable={false} value={side.userStake} suffix={commonCopy.rep} />
+							<CurrencyValue value={side.userStake} suffix={commonCopy.rep} />
 						</div>
 					) : undefined}
 				</div>

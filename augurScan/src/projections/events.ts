@@ -40,14 +40,14 @@ type PoolSnapshotProjection = {
 	reason: number
 	vaultAddress: string
 	settlementCollateralAttoEth: AtomicValue
-	totalCapacityOwnershipAttoRep: AtomicValue
-	feeEligibleCapacityOwnershipAttoRep: AtomicValue
+	totalUnderwritingLimitAttoEth: AtomicValue
+	feeEligibleUnderwritingLimitAttoEth: AtomicValue
 	totalClaimableVaultFeesAttoEth: AtomicValue
 	unallocatedAccruedFeesAttoEth: AtomicValue
 	feeIndex: string
 	feeIndexRemainder: string
 	totalFeesOwedRemainder: string
-	uncheckpointedFeeEligibleCapacityOwnershipAttoRep: AtomicValue
+	uncheckpointedFeeEligibleUnderwritingLimitAttoEth: AtomicValue
 	lastUpdatedFeeAccumulator: Date
 	currentRetentionRate: string
 }
@@ -57,12 +57,12 @@ type VaultSnapshotProjection = {
 	poolAddress: string
 	vaultAddress: string
 	repBackingUnits: string
-	capacityOwnershipAttoRep: AtomicValue
+	underwritingLimitAttoEth: AtomicValue
 	claimableFeesAttoEth: AtomicValue
 	feeIndex: string
 	vaultFeeRemainder: string
 	resultingTotalRepBackingUnits: string
-	resultingFeeEligibleCapacityOwnershipAttoRep: AtomicValue
+	resultingFeeEligibleUnderwritingLimitAttoEth: AtomicValue
 }
 
 type PoolStateProjection = { type: 'poolState'; poolAddress: string; eventName: string; state: Readonly<Record<string, unknown>> }
@@ -374,14 +374,14 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				reason: Number(integerString(args['reason'], 'reason')),
 				vaultAddress: address(args['vault'], 'vault'),
 				settlementCollateralAttoEth: integerString(args['settlementCollateralAttoEth'], 'settlementCollateralAttoEth'),
-				totalCapacityOwnershipAttoRep: integerString(args['totalCapacityOwnershipAttoRep'], 'totalCapacityOwnershipAttoRep'),
-				feeEligibleCapacityOwnershipAttoRep: integerString(args['feeEligibleCapacityOwnershipAttoRep'], 'feeEligibleCapacityOwnershipAttoRep'),
+				totalUnderwritingLimitAttoEth: integerString(args['totalUnderwritingLimitAttoEth'], 'totalUnderwritingLimitAttoEth'),
+				feeEligibleUnderwritingLimitAttoEth: integerString(args['feeEligibleUnderwritingLimitAttoEth'], 'feeEligibleUnderwritingLimitAttoEth'),
 				totalClaimableVaultFeesAttoEth: integerString(args['totalClaimableVaultFeesAttoEth'], 'totalClaimableVaultFeesAttoEth'),
 				unallocatedAccruedFeesAttoEth: integerString(args['unallocatedAccruedFeesAttoEth'], 'unallocatedAccruedFeesAttoEth'),
 				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
 				feeIndexRemainder: integerString(args['feeIndexRemainder'], 'feeIndexRemainder'),
 				totalFeesOwedRemainder: integerString(args['totalFeesOwedRemainder'], 'totalFeesOwedRemainder'),
-				uncheckpointedFeeEligibleCapacityOwnershipAttoRep: integerString(args['uncheckpointedFeeEligibleCapacityOwnershipAttoRep'], 'uncheckpointedFeeEligibleCapacityOwnershipAttoRep'),
+				uncheckpointedFeeEligibleUnderwritingLimitAttoEth: integerString(args['uncheckpointedFeeEligibleUnderwritingLimitAttoEth'], 'uncheckpointedFeeEligibleUnderwritingLimitAttoEth'),
 				lastUpdatedFeeAccumulator: timestamp(args['lastUpdatedFeeAccumulator'], 'lastUpdatedFeeAccumulator'),
 				currentRetentionRate: integerString(args['currentRetentionRate'], 'currentRetentionRate'),
 			},
@@ -393,12 +393,12 @@ export const eventProjectionsFrom = (log: StoredLog): readonly Projection[] => {
 				poolAddress: log.address.toLowerCase(),
 				vaultAddress: address(args['vault'], 'vault'),
 				repBackingUnits: integerString(args['repBackingUnits'], 'repBackingUnits'),
-				capacityOwnershipAttoRep: integerString(args['capacityOwnershipAttoRep'], 'capacityOwnershipAttoRep'),
+				underwritingLimitAttoEth: integerString(args['underwritingLimitAttoEth'], 'underwritingLimitAttoEth'),
 				claimableFeesAttoEth: integerString(args['claimableFeesAttoEth'], 'claimableFeesAttoEth'),
 				feeIndex: integerString(args['feeIndex'], 'feeIndex'),
 				vaultFeeRemainder: integerString(args['vaultFeeRemainder'], 'vaultFeeRemainder'),
 				resultingTotalRepBackingUnits: integerString(args['resultingTotalRepBackingUnits'], 'resultingTotalRepBackingUnits'),
-				resultingFeeEligibleCapacityOwnershipAttoRep: integerString(args['resultingFeeEligibleCapacityOwnershipAttoRep'], 'resultingFeeEligibleCapacityOwnershipAttoRep'),
+				resultingFeeEligibleUnderwritingLimitAttoEth: integerString(args['resultingFeeEligibleUnderwritingLimitAttoEth'], 'resultingFeeEligibleUnderwritingLimitAttoEth'),
 			},
 			{
 				type: 'poolState',

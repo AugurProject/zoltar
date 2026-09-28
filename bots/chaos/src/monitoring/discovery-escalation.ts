@@ -20,7 +20,8 @@ function fixedPointPower(value: bigint, exponent: bigint) {
 export function projectSettlementCollateral(
 	accounting: {
 		settlementCollateralAttoEth: bigint
-		feeEligibleCapacityOwnershipAttoRep: bigint
+		feeEligibleUnderwritingLimitAttoEth: bigint
+		totalUnderwritingLimitAttoEth: bigint
 		feeIndexRemainder: bigint
 		totalFeesOwedRemainder: bigint
 		lastUpdatedFeeAccumulator: bigint
@@ -31,12 +32,16 @@ export function projectSettlementCollateral(
 ) {
 	if (feeEndTimestamp === undefined) return 0n
 	const clamped = anchorTimestamp < feeEndTimestamp ? anchorTimestamp : feeEndTimestamp
-	if (accounting.lastUpdatedFeeAccumulator >= clamped || accounting.feeEligibleCapacityOwnershipAttoRep === 0n) return accounting.settlementCollateralAttoEth
+	if (accounting.lastUpdatedFeeAccumulator >= clamped || accounting.feeEligibleUnderwritingLimitAttoEth === 0n) return accounting.settlementCollateralAttoEth
 	const timeDelta = clamped - accounting.lastUpdatedFeeAccumulator
-	const resultingCollateral = (accounting.settlementCollateralAttoEth * fixedPointPower(accounting.currentRetentionRate, timeDelta)) / 10n ** 18n
-	const scaledFeeDelta = (accounting.settlementCollateralAttoEth - resultingCollateral) * 10n ** 18n + accounting.feeIndexRemainder
-	const feeIndexDelta = scaledFeeDelta / accounting.feeEligibleCapacityOwnershipAttoRep
-	const feesOwedDelta = feeIndexDelta * accounting.feeEligibleCapacityOwnershipAttoRep + accounting.totalFeesOwedRemainder
+	if (accounting.totalUnderwritingLimitAttoEth === 0n) return accounting.settlementCollateralAttoEth
+	const feeBearingCollateral = (accounting.settlementCollateralAttoEth * accounting.feeEligibleUnderwritingLimitAttoEth) / accounting.totalUnderwritingLimitAttoEth
+	const pendingDecay = (accounting.feeIndexRemainder + accounting.totalFeesOwedRemainder) / 10n ** 18n
+	const decayingCollateral = feeBearingCollateral > pendingDecay ? feeBearingCollateral - pendingDecay : 0n
+	const resultingCollateral = (decayingCollateral * fixedPointPower(accounting.currentRetentionRate, timeDelta)) / 10n ** 18n
+	const scaledFeeDelta = (decayingCollateral - resultingCollateral) * 10n ** 18n + accounting.feeIndexRemainder
+	const feeIndexDelta = scaledFeeDelta / accounting.feeEligibleUnderwritingLimitAttoEth
+	const feesOwedDelta = feeIndexDelta * accounting.feeEligibleUnderwritingLimitAttoEth + accounting.totalFeesOwedRemainder
 	const creditedFees = feesOwedDelta / 10n ** 18n
 	return creditedFees > accounting.settlementCollateralAttoEth ? 0n : accounting.settlementCollateralAttoEth - creditedFees
 }

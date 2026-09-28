@@ -9,15 +9,15 @@ import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
 
 /// @notice Delegate-called event encoder that keeps verbose checkpoint schemas out of SecurityPool runtime code.
 contract SecurityPoolEventEmitter is SecurityPoolStorage {
-	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalCapacityOwnershipAttoRep, uint256 feeEligibleCapacityOwnershipAttoRep, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleCapacityOwnershipAttoRep, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
-	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleCapacityOwnershipAttoRep);
+	event PoolAccountingCheckpoint(AccountingReason reason, address indexed vault, uint256 settlementCollateralAttoEth, uint256 totalUnderwritingLimitAttoEth, uint256 feeEligibleUnderwritingLimitAttoEth, uint256 totalClaimableVaultFeesAttoEth, uint256 unallocatedAccruedFeesAttoEth, uint256 feeIndex, uint256 feeIndexRemainder, uint256 totalFeesOwedRemainder, uint256 uncheckpointedFeeEligibleUnderwritingLimitAttoEth, uint256 lastUpdatedFeeAccumulator, uint256 currentRetentionRate);
+	event VaultAccountingCheckpoint(address indexed vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 claimableFeesAttoEth, uint256 feeIndex, uint256 vaultFeeRemainder, uint256 resultingTotalRepBackingUnits, uint256 resultingFeeEligibleUnderwritingLimitAttoEth);
 
 	function emitPoolAccountingCheckpoint(AccountingReason reason, address vault) external payable {
-		emit PoolAccountingCheckpoint(reason, vault, settlementCollateralAttoEth, totalCapacityOwnershipAttoRep, feeEligibleCapacityOwnershipAttoRep, totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth, feeIndex, feeIndexRemainder, totalFeesOwedRemainder, uncheckpointedFeeEligibleCapacityOwnershipAttoRep, lastUpdatedFeeAccumulator, currentRetentionRate);
+		emit PoolAccountingCheckpoint(reason, vault, settlementCollateralAttoEth, totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth, totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth, feeIndex, feeIndexRemainder, totalFeesOwedRemainder, uncheckpointedFeeEligibleUnderwritingLimitAttoEth, lastUpdatedFeeAccumulator, currentRetentionRate);
 	}
 
 	function emitVaultAccountingCheckpoint(address vault) external payable {
-		emit VaultAccountingCheckpoint(vault, securityVaults[vault].repBackingUnits, securityVaults[vault].capacityOwnershipAttoRep, securityVaults[vault].claimableFeesAttoEth, securityVaults[vault].feeIndex, vaultFeeRemainders[vault], totalRepBackingUnits, feeEligibleCapacityOwnershipAttoRep);
+		emit VaultAccountingCheckpoint(vault, securityVaults[vault].repBackingUnits, securityVaults[vault].underwritingLimitAttoEth, securityVaults[vault].claimableFeesAttoEth, securityVaults[vault].feeIndex, vaultFeeRemainders[vault], totalRepBackingUnits, feeEligibleUnderwritingLimitAttoEth);
 	}
 }
 

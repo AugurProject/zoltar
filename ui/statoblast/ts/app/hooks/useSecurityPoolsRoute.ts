@@ -14,6 +14,7 @@ import { getCurrentPoolOracleManagerDetails } from '@zoltar/ui-statoblast-shared
 import { isUiOpenOraclePriceUsed, resolveUiRepPerEthPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
 import type { ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
@@ -103,11 +104,12 @@ export function useSecurityPoolsRoute({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData,
+		enabled: route === 'pools' && canReadOnchainData,
 		newQuestionForm: marketForm,
 		zoltarUniverseHasForked,
 	})
 	const {
+		certifyCoverage,
 		adjustBackingFactor,
 		approveRep,
 		depositRepToVault,
@@ -128,7 +130,7 @@ export function useSecurityPoolsRoute({
 		securityVaultResult,
 		setSecurityVaultForm,
 		withdrawRep,
-	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'security-pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
+	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
 	const { loadingReportingDetails, loadReporting, onApproveReportingRep, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
 		...walletScopedHookConfig,
 		selectedSecurityPoolAddress: securityPoolAddress,
@@ -164,6 +166,8 @@ export function useSecurityPoolsRoute({
 		loadingSecurityPoolPage,
 		loadingUniverseDirectoryPools,
 		loadBrowseSecurityPoolPage,
+		refreshBrowseSecurityPoolPage,
+		securityPoolPageFreshness,
 		loadUniverseDirectoryPools,
 		loadSecurityPools,
 		loadLiquidationFundingPreview,
@@ -184,12 +188,16 @@ export function useSecurityPoolsRoute({
 		setLiquidationReceiverVault,
 		setLiquidationApprovalId,
 		setLiquidationTimeoutMinutes,
+		refreshSecurityPools,
+		securityPoolsFreshness,
 	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
+	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
+	useBlockRefresh(() => void refreshSecurityPools(), route === 'security-pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
-		enabled: route === 'security-pools' && canReadOnchainData && selectedPool !== undefined,
+		enabled: route === 'pools' && canReadOnchainData && selectedPool !== undefined,
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const {
@@ -243,7 +251,7 @@ export function useSecurityPoolsRoute({
 		return repPerEthSource
 	})()
 	const uiRepPerEthSourceUrl = uiRepPerEthSource === 'open-oracle' ? undefined : repPerEthSourceUrl
-	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+	const securityPoolsViews: readonly SecurityPoolsView[] = ['open', 'browse', 'create', 'operate', 'universes']
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],
@@ -261,7 +269,7 @@ export function useSecurityPoolsRoute({
 	}
 	useEffect(() => {
 		const securityVaultRepRefreshHash =
-			securityVaultResult?.action === 'adjustVaultBackingFactor' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
+			securityVaultResult?.action === 'setVaultUnderwritingLimit' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
 				? securityVaultResult.hash
 				: undefined
 		if (securityVaultRepRefreshHash === undefined) {
@@ -359,9 +367,11 @@ export function useSecurityPoolsRoute({
 			hasLoadedSecurityPoolPage,
 			loadingSecurityPoolPage,
 			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
+			onRefreshSecurityPoolPage: () => void refreshBrowseSecurityPoolPage(),
 			onCreateSecurityPool: () => setSecurityPoolsView('create'),
 			securityPoolBrowseCount,
 			securityPoolPage,
+			securityPoolPageFreshness,
 			securityPoolOverviewError,
 			securityPools,
 			repPerEthPrice,
@@ -449,6 +459,7 @@ export function useSecurityPoolsRoute({
 			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) =>
 				requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId, proposedRepPerEthPrice, signal),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
+			securityPoolsFreshness,
 			onSelectedPoolViewChange: setSelectedPoolView,
 			onViewPendingReport,
 			...(inlineOracle === undefined ? {} : { inlineOracle }),
@@ -491,7 +502,8 @@ export function useSecurityPoolsRoute({
 				accountState,
 				loadingSecurityVault,
 				onApproveRep: amount => void approveRep(amount),
-				onAdjustVaultBackingFactor: factor => void adjustBackingFactor(factor),
+				onCertifyVaultCoverage: () => void certifyCoverage(),
+				onSetVaultUnderwritingLimit: factor => void adjustBackingFactor(factor),
 				onDepositRepToVault: () => void depositRepToVault(),
 				onLoadSecurityVault: (vaultAddress?: string) => {
 					void loadSecurityVault(vaultAddress)

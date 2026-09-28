@@ -1,10 +1,11 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { useEffect, useRef } from 'preact/hooks'
+import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
-import { discoveryCommitAllowed, quoteBasisChanged, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import { discoveryCommitAllowed, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import { liveCopy } from '../../copy/live.js'
 import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
@@ -16,9 +17,6 @@ import type { useWalletSession } from './useWalletSession.js'
 import type { LiveTradingControllerServices } from './liveTradingTypes.js'
 
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
-
-/** Cadence of the automatic background refresh that replaces manual refresh controls. */
-const LIVE_REFRESH_INTERVAL_MILLISECONDS = 15_000
 
 function discoveryScope(route: string) {
 	return securityPoolAddressFromRoute(route) ?? tradingListKindFor(route) ?? route
@@ -43,8 +41,6 @@ export function useMarketDiscoveryController({
 	discoveryRequests,
 	balanceRequests,
 	portfolioBalanceRequests,
-	simulationRequests,
-	refreshIntervalMilliseconds = LIVE_REFRESH_INTERVAL_MILLISECONDS,
 }: {
 	route: string
 	configuration: DeploymentConfiguration | undefined
@@ -65,12 +61,10 @@ export function useMarketDiscoveryController({
 	discoveryRequests: RequestGuard
 	balanceRequests: RequestGuard
 	portfolioBalanceRequests: RequestGuard
-	simulationRequests: RequestGuard
-	refreshIntervalMilliseconds?: number | undefined
 }) {
 	const previousRoute = useRef(route)
 	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
-	// A background discovery slower than the refresh interval is left to finish instead of being restarted each tick.
+	// A background discovery slower than the block interval is left to finish instead of being restarted on each block.
 	const backgroundDiscovery = useRef<RequestIdentity>()
 
 	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean) {
@@ -89,7 +83,7 @@ export function useMarketDiscoveryController({
 
 	/**
 	 * Explicit refreshes reset transient workflow state and show the discovery loading state. Background refreshes
-	 * keep the last successful result visible and only retire a quote whose market basis changed. Neither touches
+	 * keep the last successful result visible; trade estimates recompute from the refreshed reserves. Neither touches
 	 * loaded balances directly: the balance effects revalidate them from the refreshed market objects and keep the
 	 * previous values visible until the new reads resolve.
 	 */
@@ -102,11 +96,10 @@ export function useMarketDiscoveryController({
 		// It records the application's request (the `universe` parameter), not the resolved universe discovery is asked for.
 		const scope: UniverseDiscoveryScope = { requestedUniverseId: urlUniverseId, addressedPool: routePool?.toLowerCase() }
 		backgroundDiscovery.current = background ? request : undefined
+		if (background) market.setFreshness(current => ({ ...current, refreshing: true }))
 		if (!background) {
-			simulationRequests.invalidate()
 			// Retire any in-flight balance read so the effects re-read after this refresh commits, without hiding current values.
 			balanceRequests.invalidate()
-			transaction.setQuote(undefined)
 			if (!transaction.positionWorkflowLockedRef.current && owner !== 'position') transaction.dispatchWorkflow({ type: 'reset' })
 			if (route === 'portfolio') {
 				portfolioBalanceRequests.invalidate()
@@ -124,20 +117,12 @@ export function useMarketDiscoveryController({
 				market.setDiscoveryState('ready')
 				return
 			}
-			const quote = transaction.quote
-			if (background && quote !== undefined && !transaction.positionWorkflowLockedRef.current) {
-				const refreshed = discovered.markets.find(candidate => candidate.pool === quote.value.market.pool)
-				if (refreshed !== undefined && quoteBasisChanged(quote.value.market, refreshed)) {
-					simulationRequests.invalidate()
-					transaction.setQuote(undefined)
-					transaction.dispatchWorkflow({ type: 'reset' })
-				}
-			}
 			market.setMarkets(discovered.markets)
 			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 			market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			market.setDiscoveryError(undefined)
 			market.setDiscoveryState('ready')
+			market.setFreshness({ refreshing: false, updatedAt: Date.now() })
 		} catch (error) {
 			if (!discoveryRequests.isCurrent(request)) return
 			if (!discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)) {
@@ -157,7 +142,10 @@ export function useMarketDiscoveryController({
 				portfolio.setBalanceError('Market refresh failed before wallet balances could be revalidated')
 			}
 		} finally {
-			if (backgroundDiscovery.current === request) backgroundDiscovery.current = undefined
+			if (backgroundDiscovery.current === request) {
+				backgroundDiscovery.current = undefined
+				market.setFreshness(current => (current.refreshing ? { ...current, refreshing: false } : current))
+			}
 		}
 	}
 	const refreshRef = useRef(refresh)
@@ -167,7 +155,6 @@ export function useMarketDiscoveryController({
 		if (configuration === undefined) {
 			discoveryRequests.invalidate()
 			balanceRequests.invalidate()
-			simulationRequests.invalidate()
 			transaction.dispatchWorkflow(configurationError === undefined ? { type: 'reset' } : { type: 'failed', message: configurationError })
 			return
 		}
@@ -183,8 +170,6 @@ export function useMarketDiscoveryController({
 
 	useEffect(() => {
 		if (transaction.positionWorkflowLockedRef.current) return
-		simulationRequests.invalidate()
-		transaction.setQuote(undefined)
 		transaction.dispatchWorkflow({ type: 'reset' })
 		wallet.setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
 		if (previousRoute.current !== route) {
@@ -197,20 +182,15 @@ export function useMarketDiscoveryController({
 
 	useEffect(() => {
 		if (selected === undefined || marketAcceptsNewRisk(selected, nowSeconds)) return
-		simulationRequests.invalidate()
-		transaction.setQuote(undefined)
 		if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) transaction.dispatchWorkflow({ type: 'reset' })
 	}, [nowSeconds, selected])
 
-	const periodicRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
-	useEffect(() => {
-		if (!periodicRefreshActive) return
-		const timer = setInterval(() => {
-			if (transaction.positionWorkflowLockedRef.current || transaction.liquidityWorkflowLockedRef.current) return
-			void refreshRef.current(undefined, undefined, undefined, { background: true })
-		}, refreshIntervalMilliseconds)
-		return () => clearInterval(timer)
-	}, [periodicRefreshActive, refreshIntervalMilliseconds, route, routePool])
+	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
+	const blockRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
+	useBlockRefresh(() => {
+		if (transaction.positionWorkflowLockedRef.current || transaction.liquidityWorkflowLockedRef.current) return
+		void refreshRef.current(undefined, undefined, undefined, { background: true })
+	}, blockRefreshActive)
 
 	return {
 		refresh,

@@ -1,11 +1,11 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
 import * as zoltarCopy from '../../../copy/zoltar.js'
-import type { ComponentChildren } from 'preact'
-import { useMemo } from 'preact/hooks'
+import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
+import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -13,26 +13,28 @@ import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadO
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApprovalControl.js'
-import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
+import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { WalletAssetControl } from '@zoltar/ui-core-shared/components/WalletAssetControl.js'
-import { getMigrationOutcomeSplitLimit, MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
+import { MigrationOutcomeUniversesSection } from './MigrationOutcomeUniversesSection.js'
+import { getMigrationStepTitle, MigrationWizardProgress } from './MigrationWizardProgress.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
-import { tryParseRepAmountInput as parseMigrationAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { deriveTokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { getMigrationGuardMessage } from '../lib/zoltarMigrationGuards.js'
+import { deriveMigrationWizard, formatOutcomeList, migrationWizardStepIds, resolveMigrationWizardStep, toggleMigrationOutcome, type MigrationWizardOutcome, type MigrationWizardStepId } from '../lib/migrationWizard.js'
 import type { ZoltarMigrationFormState } from '../../../types/app.js'
-import type { ZoltarChildUniverseSummary, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 
-function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForked, isOnActiveAppChain }: { accountAddress: Address | undefined; exists?: boolean | undefined; hasForked: boolean; isOnActiveAppChain: boolean }) {
+function getChildDeploymentAvailabilityReason({ accountAddress, exists, hasForked, isOnActiveAppChain }: { accountAddress: Address | undefined; exists: boolean; hasForked: boolean; isOnActiveAppChain: boolean }) {
 	if (accountAddress === undefined) return marketCopy.childDeploymentWalletRequiredReason
 	if (!isOnActiveAppChain) return getWrongNetworkReason()
 	if (!hasForked) return marketCopy.childUniversesNotForkedReason
-	if (exists === true) return marketCopy.childUniverseDeployedReason
+	if (exists) return marketCopy.childUniverseDeployedReason
 	return undefined
 }
 
@@ -61,23 +63,17 @@ type ZoltarMigrationSectionProps = {
 	onApproveZoltarForkRep: (amount?: bigint) => void
 }
 
-function getMigrationAmount(value: string) {
-	return parseMigrationAmountInput(value)
+function formatRep(value: bigint) {
+	return `${formatCurrencyBalance(value)} ${commonCopy.rep}`
 }
 
-function getMigrationOutcomeIndexes(value: string) {
-	return tryParseBigIntListInput(value) ?? []
-}
-
-function getMigrationAmountSource(preparedRepBalanceAttoRep: bigint | undefined, repBalanceAttoRep: bigint | undefined) {
-	return (preparedRepBalanceAttoRep ?? 0n) + (repBalanceAttoRep ?? 0n)
-}
-
-function getMissingPreparationAmount(targetAmount: bigint, preparedRepBalanceAttoRep: bigint | undefined) {
-	const currentPreparedBalance = preparedRepBalanceAttoRep ?? 0n
-	return targetAmount > currentPreparedBalance ? targetAmount - currentPreparedBalance : 0n
-}
-
+/**
+ * REP migration wizard: choose outcomes → amount → approve → review.
+ *
+ * One `prepareAndSplitMigrationRep` transaction burns any wallet REP the amount needs into the
+ * migration balance, then mints the amount in every chosen outcome universe (creating universes
+ * that do not exist yet).
+ */
 export function ZoltarMigrationSection({
 	onDeployChildUniverse,
 	pendingChildUniverseOutcomeIndex,
@@ -103,112 +99,48 @@ export function ZoltarMigrationSection({
 	onApproveZoltarForkRep,
 }: ZoltarMigrationSectionProps) {
 	const rootUniverse = zoltarUniverse
-	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
-	const selectedOutcomeIndexes = useMemo(() => getMigrationOutcomeIndexes(zoltarMigrationForm.outcomeIndexes), [zoltarMigrationForm.outcomeIndexes])
-	const selectedOutcomeIndexSet = useMemo(() => new Set(selectedOutcomeIndexes.map(index => index.toString())), [selectedOutcomeIndexes])
-	const selectedChildUniverses = useMemo(() => rootUniverse?.childUniverses.filter(child => selectedOutcomeIndexSet.has(child.outcomeIndex.toString())) ?? [], [rootUniverse?.childUniverses, selectedOutcomeIndexSet])
-	const heldChildUniverses = useMemo(() => rootUniverse?.childUniverses.filter(child => child.exists && (zoltarMigrationChildRepBalancesAttoRep[child.universeId.toString()] ?? 0n) > 0n) ?? [], [rootUniverse?.childUniverses, zoltarMigrationChildRepBalancesAttoRep])
-	const migrationAmount = getMigrationAmount(zoltarMigrationForm.amount)
-	const hasValidAmount = migrationAmount !== undefined && migrationAmount > 0n
-	const isMigrationAmountInvalid = zoltarMigrationForm.amount.trim() !== '' && migrationAmount === undefined
-	const splitLimit = useMemo(
-		() => getMigrationOutcomeSplitLimit(rootUniverse?.childUniverses ?? [], zoltarMigrationChildSplitAmountsAttoRep, zoltarMigrationPreparedRepBalanceAttoRep, selectedOutcomeIndexSet),
-		[rootUniverse?.childUniverses, selectedOutcomeIndexSet, zoltarMigrationChildSplitAmountsAttoRep, zoltarMigrationPreparedRepBalanceAttoRep],
-	)
-	const missingPreparationAmount = hasValidAmount && migrationAmount !== undefined ? getMissingPreparationAmount(migrationAmount, splitLimit) : 0n
-	const totalAvailableAttoRep = (splitLimit ?? 0n) + (zoltarForkRepBalanceAttoRep ?? 0n)
-	const amountExceedsAvailableRep = hasValidAmount && migrationAmount !== undefined && migrationAmount > totalAvailableAttoRep
-	const hasEnoughRep = hasValidAmount && (missingPreparationAmount === 0n || (zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= missingPreparationAmount))
-	const approvalRequirement = deriveTokenApprovalRequirement(missingPreparationAmount, zoltarForkApproval.value)
 	const requiresApproval = rootUniverse?.reputationTokenKind !== 'child'
-	const hasSufficientAllowance = !requiresApproval || approvalRequirement.hasSufficientApproval
-	const hasValidOutcomeIndexes = selectedOutcomeIndexes.length > 0
-	const needsAdditionalPreparation = missingPreparationAmount > 0n
-	const hasUnavailableRequiredBalance = splitLimit === undefined || (needsAdditionalPreparation && zoltarForkRepBalanceAttoRep === undefined)
-	const hasUnavailableOutcomeBalance = rootUniverse?.childUniverses.some(child => child.exists && (zoltarMigrationChildRepBalancesAttoRep[child.universeId.toString()] === undefined || zoltarMigrationChildSplitAmountsAttoRep[child.universeId.toString()] === undefined)) === true
-	const canSplit = accountAddress !== undefined && isOnActiveAppChain && rootUniverse !== undefined && hasForked && !loadingZoltarForkAccess && !loadingZoltarUniverse && !zoltarMigrationPending && hasValidAmount && hasEnoughRep && hasSufficientAllowance && hasValidOutcomeIndexes && splitLimit !== undefined
-	const migrationAmountSource = getMigrationAmountSource(splitLimit, zoltarForkRepBalanceAttoRep)
-	const splitRepReceivedAttoRep = migrationAmount === undefined ? undefined : migrationAmount * BigInt(selectedChildUniverses.length)
-	const selectedDestinationsContent =
-		selectedChildUniverses.length === 0
-			? zoltarCopy.outcomeSelectionRequired
-			: selectedChildUniverses.map((child, index) => (
-					<span key={child.universeId.toString()}>
-						{index === 0 ? undefined : ', '}
-						{child.outcomeLabel}
-					</span>
-				))
-	const approvalGuardMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
-		if (guard !== undefined) return guard
-		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
-		return undefined
-	})()
-	const getAlreadyPreparedHint = () => {
-		if (hasValidOutcomeIndexes && splitLimit === 0n) return zoltarCopy.migrationAmountAlreadySplitDetail
-		return zoltarCopy.migrationBalanceReadyDetail
-	}
-	const splitHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
-		if (guard !== undefined) return guard
-		if (!hasValidAmount || migrationAmount === undefined) return commonCopy.positiveAmountRequired
-		if (!hasForked) return zoltarCopy.migrationForkRequired
-		if (!hasValidOutcomeIndexes) return zoltarCopy.outcomeSelectionRequired
-		if (hasUnavailableRequiredBalance) return loadingZoltarForkAccess ? zoltarCopy.outcomeBalancesLoading : zoltarCopy.migrationBalancesReadFailed
-		if (!hasEnoughRep) return zoltarCopy.formatMigrationRepShortfall(formatCurrencyBalance(missingPreparationAmount))
-		if (!hasSufficientAllowance) return zoltarCopy.migrationApprovalPendingDetail
-		if (splitLimit + missingPreparationAmount === 0n) return zoltarCopy.migrationAmountAlreadySplitDetail
-		return undefined
-	})()
-	const migrationAmountHintMessage = (() => {
-		const guard = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
-		if (guard !== undefined) return guard
-		if (!hasValidAmount || migrationAmount === undefined) return undefined
-		if (hasUnavailableRequiredBalance) return undefined
-		if (amountExceedsAvailableRep) return zoltarCopy.formatMigrationBalanceExceeded(formatCurrencyBalance(totalAvailableAttoRep), formatCurrencyBalance(splitLimit ?? 0n), formatCurrencyBalance(zoltarForkRepBalanceAttoRep ?? 0n))
-		if (missingPreparationAmount === 0n) return getAlreadyPreparedHint()
-		return zoltarCopy.formatAddMigrationRepDetail(formatCurrencyBalance(missingPreparationAmount))
-	})()
-	const renderMigrationActions = (approvalButton?: ComponentChildren, approvalNotice?: string, noticeId?: string) => (
-		<TransactionActionGroup id={noticeId} message={approvalNotice ?? splitHintMessage}>
-			{approvalButton}
-			{accountAddress !== undefined && hasForked && !loadingZoltarForkAccess && !loadingZoltarUniverse && (hasUnavailableRequiredBalance || hasUnavailableOutcomeBalance) ? (
-				<button className='quiet' type='button' onClick={onRetryMigrationBalances} disabled={zoltarMigrationPending || !isOnActiveAppChain}>
-					{commonCopy.retry}
-				</button>
-			) : undefined}
-			<TransactionActionButton
-				idleLabel={zoltarCopy.splitRep}
-				pendingLabel={zoltarCopy.splittingRepPending}
-				onClick={() => onMigrateInternalRep(missingPreparationAmount)}
-				pending={zoltarMigrationActiveAction === 'split'}
-				availability={{ disabled: !canSplit, reason: isOnActiveAppChain ? splitHintMessage : getWrongNetworkReason() }}
-			/>
-		</TransactionActionGroup>
+	const tokenSymbol = rootUniverse?.reputationTokenSymbol ?? commonCopy.rep
+	const wizard = useMemo(
+		() =>
+			deriveMigrationWizard({
+				amountInput: zoltarMigrationForm.amount,
+				approvalLoading: zoltarForkApproval.loading,
+				approvedAttoRep: zoltarForkApproval.value,
+				balancesLoading: loadingZoltarForkAccess,
+				childHeldAttoRep: zoltarMigrationChildRepBalancesAttoRep,
+				childMigratedAttoRep: zoltarMigrationChildSplitAmountsAttoRep,
+				childUniverses: rootUniverse?.childUniverses ?? [],
+				migrationBalanceAttoRep: zoltarMigrationPreparedRepBalanceAttoRep,
+				requiresApproval,
+				selectedOutcomeIndexes: zoltarMigrationForm.outcomeIndexes,
+				walletRepAttoRep: zoltarForkRepBalanceAttoRep,
+			}),
+		[
+			loadingZoltarForkAccess,
+			requiresApproval,
+			rootUniverse?.childUniverses,
+			zoltarForkApproval.loading,
+			zoltarForkApproval.value,
+			zoltarForkRepBalanceAttoRep,
+			zoltarMigrationChildRepBalancesAttoRep,
+			zoltarMigrationChildSplitAmountsAttoRep,
+			zoltarMigrationForm.amount,
+			zoltarMigrationForm.outcomeIndexes,
+			zoltarMigrationPreparedRepBalanceAttoRep,
+		],
 	)
-	const selectAllAmount = () => {
-		onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(migrationAmountSource) })
-	}
-	const addNextOutcome = () => {
-		const nextOutcome = rootUniverse?.childUniverses.find(child => !selectedOutcomeIndexSet.has(child.outcomeIndex.toString()))
-		if (nextOutcome === undefined) return
-		toggleOutcomeIndex(nextOutcome.outcomeIndex)
-	}
-	const toggleOutcomeIndex = (outcomeIndex: bigint) => {
-		if (selectedOutcomeIndexSet.has(outcomeIndex.toString())) {
-			onZoltarMigrationFormChange({
-				outcomeIndexes: selectedOutcomeIndexes
-					.filter((index: bigint) => index !== outcomeIndex)
-					.map((index: bigint) => index.toString())
-					.join(', '),
-			})
-			return
-		}
-		onZoltarMigrationFormChange({ outcomeIndexes: [...selectedOutcomeIndexes, outcomeIndex].map((index: bigint) => index.toString()).join(', ') })
-	}
-	const deploymentDisabledReason = (child: ZoltarChildUniverseSummary) => getChildDeploymentAvailabilityReason({ accountAddress, exists: child.exists, hasForked, isOnActiveAppChain })
-	if (universeMissing) {
+	const [requestedStepId, setRequestedStepId] = useState<MigrationWizardStepId>('outcomes')
+	const currentStepId = resolveMigrationWizardStep(requestedStepId, wizard.reachableStepId)
+	// When balances or input change so that the open step is no longer reachable, stay on the earlier
+	// step instead of jumping forward again once it becomes reachable.
+	useEffect(() => {
+		if (currentStepId !== requestedStepId) setRequestedStepId(currentStepId)
+	}, [currentStepId, requestedStepId])
+	const navigationHintId = useId()
+
+	if (zoltarUniverseState === 'missing') {
 		const presentation = getUniversePresentation(zoltarUniverseState)
 		return (
 			<>
@@ -218,112 +150,207 @@ export function ZoltarMigrationSection({
 		)
 	}
 
+	const guardMessage = getMigrationGuardMessage(accountAddress, isOnActiveAppChain, rootUniverse, loadingZoltarForkAccess, hasForked, loadingZoltarUniverse, '')
+	const currentStepIndex = migrationWizardStepIds.indexOf(currentStepId)
+	const currentStep = wizard.steps[currentStepIndex]
+	const currentStepSatisfied = currentStep?.status === 'complete' || currentStep?.status === 'notNeeded' || currentStep?.status === 'ready'
+	const nextStepId = wizard.steps.slice(currentStepIndex + 1).find(step => step.status !== 'notNeeded')?.id
+	const previousStepId = wizard.steps
+		.slice(0, currentStepIndex)
+		.filter(step => step.status !== 'notNeeded')
+		.at(-1)?.id
+	const hasUnreadBalance =
+		wizard.outcomes.some(outcome => outcome.exists && (outcome.alreadyMigratedAttoRep === undefined || outcome.heldAttoRep === undefined)) ||
+		zoltarMigrationPreparedRepBalanceAttoRep === undefined ||
+		(wizard.walletRepToBurnAttoRep !== undefined && wizard.walletRepToBurnAttoRep > 0n && zoltarForkRepBalanceAttoRep === undefined)
+	const showRetry = accountAddress !== undefined && hasForked && !loadingZoltarForkAccess && !loadingZoltarUniverse && hasUnreadBalance
+	const selectedOutcomeNames = formatOutcomeList(wizard.selectedOutcomes)
+	const amount = wizard.amountAttoRep
+	const summaries: Partial<Record<MigrationWizardStepId, string>> = {
+		outcomes: selectedOutcomeNames,
+		...(amount === undefined ? {} : { amount: formatRep(amount) }),
+	}
+	const migrateReason = (() => {
+		if (guardMessage !== undefined) return guardMessage
+		if (!hasForked) return zoltarCopy.migrationForkRequired
+		if (loadingZoltarUniverse || loadingZoltarForkAccess) return zoltarCopy.outcomeBalancesLoading
+		return wizard.steps[3]?.reason
+	})()
+	const canMigrate = migrateReason === undefined && isOnActiveAppChain && wizard.steps[3]?.status === 'ready' && !zoltarMigrationPending && wizard.walletRepToBurnAttoRep !== undefined
+	const migrateHint = isOnActiveAppChain ? migrateReason : getWrongNetworkReason()
+	// One reason line beside the forward action. The approval control states its own requirement, so the approve step does not repeat it.
+	const navigationHint = (() => {
+		if (currentStepId === 'review') return migrateHint
+		if (currentStepSatisfied || (currentStepId === 'approve' && currentStep?.status === 'incomplete')) return undefined
+		return currentStep?.reason
+	})()
+	const heldOutcomes = wizard.outcomes.filter(outcome => outcome.exists && (outcome.heldAttoRep ?? 0n) > 0n)
+	const deploymentDisabledReason = (outcome: MigrationWizardOutcome) => getChildDeploymentAvailabilityReason({ accountAddress, exists: outcome.exists, hasForked, isOnActiveAppChain })
+	const retryButton = showRetry ? (
+		<button className='quiet' type='button' onClick={onRetryMigrationBalances} disabled={zoltarMigrationPending || !isOnActiveAppChain}>
+			{commonCopy.retry}
+		</button>
+	) : undefined
+
+	const renderStepBody = () => {
+		switch (currentStepId) {
+			case 'outcomes':
+				return (
+					<>
+						<p className='detail'>{zoltarCopy.chooseOutcomesDetail}</p>
+						<MigrationOutcomeUniversesSection
+							deploymentDisabledReason={deploymentDisabledReason}
+							disabled={zoltarMigrationPending}
+							loadingBalances={loadingZoltarForkAccess}
+							onDeployChildUniverse={onDeployChildUniverse}
+							onToggleOutcomeIndex={outcomeIndex => onZoltarMigrationFormChange({ outcomeIndexes: toggleMigrationOutcome(zoltarMigrationForm.outcomeIndexes, outcomeIndex) })}
+							outcomes={wizard.outcomes}
+							pendingOutcomeIndex={pendingChildUniverseOutcomeIndex}
+						/>
+					</>
+				)
+			case 'amount': {
+				const maxAmount = wizard.maxAmountAttoRep
+				const amountStep = wizard.steps[1]
+				// The step reason is shown once, next to Continue; the input only points at it.
+				const amountInvalid = amountStep?.status === 'blocked' || (amountStep?.reason === zoltarCopy.migrationAmountInvalid && zoltarMigrationForm.amount.trim() !== '')
+				const showBreakdown = amountStep?.status === 'complete'
+				return (
+					<>
+						<div className='field'>
+							<label htmlFor='zoltar-migration-amount'>{zoltarCopy.migrationAmountLabel}</label>
+							<div className='field-inline'>
+								<FormInput
+									aria-describedby={amountInvalid ? navigationHintId : undefined}
+									id='zoltar-migration-amount'
+									className='field-inline-input'
+									invalid={amountInvalid}
+									inputMode='decimal'
+									onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })}
+									placeholder={commonCopy.zeroDecimalPlaceholder}
+									value={zoltarMigrationForm.amount}
+									disabled={zoltarMigrationPending}
+								/>
+								<button className='quiet field-inline-action' type='button' onClick={() => (maxAmount === undefined ? undefined : onZoltarMigrationFormChange({ amount: formatCurrencyInputBalance(maxAmount) }))} disabled={zoltarMigrationPending || maxAmount === undefined || maxAmount <= 0n}>
+									{maxAmount === undefined ? commonCopy.max : zoltarCopy.formatUseAllRep(formatCurrencyBalance(maxAmount))}
+								</button>
+							</div>
+							{zoltarMigrationPreparedRepBalanceAttoRep === undefined || zoltarMigrationPreparedRepBalanceAttoRep === 0n ? undefined : <p className='detail'>{zoltarCopy.migrationBalanceExplainer}</p>}
+						</div>
+						<DataGrid dense>
+							<MetricField label={zoltarCopy.migrationFromBalance}>
+								<CurrencyValue value={showBreakdown ? wizard.fromMigrationBalanceAttoRep : undefined} suffix={commonCopy.rep} />
+							</MetricField>
+							<MetricField label={zoltarCopy.migrationFromWallet}>
+								<CurrencyValue value={showBreakdown ? wizard.walletRepToBurnAttoRep : undefined} suffix={commonCopy.rep} />
+							</MetricField>
+						</DataGrid>
+					</>
+				)
+			}
+			case 'approve': {
+				const approveStep = wizard.steps[2]
+				if (approveStep?.status === 'notNeeded') return <p className='detail'>{approveStep.reason}</p>
+				return (
+					<TokenApprovalControl
+						actionLabel={zoltarCopy.migrationApprovalActionLabel}
+						allowanceError={zoltarForkApproval.error}
+						allowanceLoading={zoltarForkApproval.loading}
+						approvedAmount={zoltarForkApproval.value}
+						disabled={!isOnActiveAppChain || wizard.walletRepToBurnAttoRep === undefined}
+						guardMessage={guardMessage}
+						onApprove={approvalAmount => onApproveZoltarForkRep(approvalAmount)}
+						pending={zoltarForkActiveAction === 'approve'}
+						pendingLabel={commonCopy.approvingRep}
+						requiredAmount={wizard.walletRepToBurnAttoRep}
+						resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${(wizard.walletRepToBurnAttoRep ?? 0n).toString()}`}
+						tokenSymbol={tokenSymbol}
+						tokenUnits={18}
+					/>
+				)
+			}
+			case 'review':
+				return (
+					<>
+						<p className='migration-review-summary'>{amount === undefined ? undefined : zoltarCopy.formatMigrationSummary(formatCurrencyBalance(amount), selectedOutcomeNames)}</p>
+						<TransactionReview
+							variant='inline'
+							primary={[
+								{ label: zoltarCopy.migrationFromBalance, value: <CurrencyValue value={wizard.fromMigrationBalanceAttoRep} suffix={commonCopy.rep} /> },
+								{ label: zoltarCopy.migrationFromWallet, value: <CurrencyValue value={wizard.walletRepToBurnAttoRep} suffix={commonCopy.rep} /> },
+							]}
+							risks={[zoltarCopy.migrationIrreversible, zoltarCopy.migrationMintsPerOutcome]}
+						/>
+					</>
+				)
+			default:
+				return assertNever(currentStepId)
+		}
+	}
+
 	return (
 		<>
 			<SectionBlock variant='plain'>
+				<p className='detail'>{zoltarCopy.migrationIntro}</p>
 				<DataGrid>
-					<MetricField label={zoltarCopy.migrationAvailableRep}>
-						<CurrencyValue value={loadingZoltarForkAccess ? undefined : migrationAmountSource} suffix={commonCopy.rep} />
+					<MetricField label={zoltarCopy.walletRep}>
+						<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
+					<MetricField label={zoltarCopy.migrationBalance}>
+						<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalanceAttoRep === undefined} value={zoltarMigrationPreparedRepBalanceAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
-				<ReadOnlyDetailAccordion title={zoltarCopy.balanceDetails}>
-					<DataGrid>
-						<MetricField label={zoltarCopy.walletRepBalance}>
-							<CurrencyValue loading={loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-						<MetricField label={zoltarCopy.migrationRepBalance}>
-							<CurrencyValue loading={loadingZoltarForkAccess && zoltarMigrationPreparedRepBalanceAttoRep === undefined} value={zoltarMigrationPreparedRepBalanceAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-					</DataGrid>
-				</ReadOnlyDetailAccordion>
-				<div className='form-grid'>
-					{rootUniverse === undefined ? undefined : (
-						<MigrationOutcomeUniversesSection
-							onDeployChildUniverse={onDeployChildUniverse}
-							pendingOutcomeIndex={pendingChildUniverseOutcomeIndex}
-							deploymentDisabledReason={deploymentDisabledReason}
-							childUniverseRepBalances={zoltarMigrationChildRepBalancesAttoRep}
-							childUniverseSplitAmounts={zoltarMigrationChildSplitAmountsAttoRep}
-							childUniverses={rootUniverse.childUniverses}
-							loadingBalances={loadingZoltarForkAccess}
-							disabled={zoltarMigrationPending}
-							isScalarFork={rootUniverse.forkQuestionDetails?.marketType === 'scalar'}
-							migrationBalance={zoltarMigrationPreparedRepBalanceAttoRep}
-							onAddNextOutcome={addNextOutcome}
-							onToggleOutcomeIndex={toggleOutcomeIndex}
-							selectedOutcomeIndexSet={selectedOutcomeIndexSet}
-						/>
-					)}
-					<div className='field'>
-						<label htmlFor='zoltar-migration-amount'>{zoltarCopy.migrationAmount}</label>
-						<div className='field-inline'>
-							<FormInput
-								id='zoltar-migration-amount'
-								className='field-inline-input'
-								invalid={isMigrationAmountInvalid}
-								inputMode='decimal'
-								onInput={event => onZoltarMigrationFormChange({ amount: event.currentTarget.value })}
-								placeholder={commonCopy.zeroDecimalPlaceholder}
-								value={zoltarMigrationForm.amount}
-								disabled={zoltarMigrationPending}
-							/>
-							<button className='quiet field-inline-action' type='button' onClick={selectAllAmount} disabled={zoltarMigrationPending || migrationAmountSource <= 0n}>
-								{commonCopy.max}
-							</button>
-						</div>
-						<p className='detail'>{zoltarCopy.migrationMaxIncludesPrepared}</p>
-						<p className='detail migration-amount-hint'>{migrationAmountHintMessage}</p>
+				{wizard.migrationComplete ? (
+					<EmptyState detail={zoltarCopy.migrationCompleteDetail} title={zoltarCopy.migrationCompleteTitle} />
+				) : (
+					<div className='migration-wizard'>
+						<MigrationWizardProgress currentStepId={currentStepId} disabled={zoltarMigrationPending} onSelectStep={setRequestedStepId} reachableStepId={wizard.reachableStepId} steps={wizard.steps} summaries={summaries} />
+						<WorkflowSubsection className='migration-wizard-panel' title={getMigrationStepTitle(currentStepId)}>
+							{renderStepBody()}
+							<div className='migration-wizard-nav'>
+								{previousStepId === undefined ? undefined : (
+									<button className='quiet' type='button' onClick={() => setRequestedStepId(previousStepId)} disabled={zoltarMigrationPending}>
+										{zoltarCopy.migrationBack}
+									</button>
+								)}
+								{retryButton}
+								<p aria-live='polite' className='detail migration-wizard-nav-hint' id={navigationHintId}>
+									{navigationHint}
+								</p>
+								{nextStepId === undefined ? (
+									<TransactionActionButton
+										idleLabel={zoltarCopy.migrateRepAction}
+										pendingLabel={zoltarCopy.migratingRepPending}
+										onClick={() => onMigrateInternalRep(wizard.walletRepToBurnAttoRep ?? 0n)}
+										pending={zoltarMigrationActiveAction === 'split'}
+										availability={{ disabled: !canMigrate, reason: migrateHint }}
+										disabledReasonElementId={navigationHintId}
+										showDisabledReason={false}
+									/>
+								) : (
+									<button aria-describedby={currentStepSatisfied || navigationHint === undefined ? undefined : navigationHintId} className='primary' type='button' onClick={() => setRequestedStepId(nextStepId)} disabled={zoltarMigrationPending || !currentStepSatisfied}>
+										{zoltarCopy.migrationContinue}
+									</button>
+								)}
+							</div>
+						</WorkflowSubsection>
 					</div>
-
-					<WorkflowSubsection title={zoltarCopy.reviewMigration}>
+				)}
+				{heldOutcomes.length === 0 ? undefined : (
+					<ReadOnlyDetailAccordion title={zoltarCopy.outcomeRepInWallet}>
 						<DataGrid dense>
-							<MetricField label={commonCopy.question}>{rootUniverse?.forkQuestionDetails?.title ?? commonCopy.unavailable}</MetricField>
-							<MetricField label={zoltarCopy.selectedDestinations}>{selectedDestinationsContent}</MetricField>
-							<MetricField label={zoltarCopy.migrationAmount}>
-								<CurrencyValue value={migrationAmount} suffix={commonCopy.rep} />
-							</MetricField>
-							<MetricField label={zoltarCopy.walletRepUsed}>
-								<CurrencyValue value={hasUnavailableRequiredBalance ? undefined : missingPreparationAmount} suffix={commonCopy.rep} />
-							</MetricField>
-							<MetricField label={zoltarCopy.childUniverseRepReceived}>
-								<CurrencyValue value={splitRepReceivedAttoRep} suffix={commonCopy.rep} />
-							</MetricField>
-						</DataGrid>
-					</WorkflowSubsection>
-
-					{requiresApproval ? (
-						<TokenApprovalControl
-							renderActions={({ button, notice, noticeId }) => renderMigrationActions(button, notice, noticeId)}
-							actionLabel={zoltarCopy.preparingCurrentAmountLabel}
-							allowanceError={zoltarForkApproval.error}
-							allowanceLoading={zoltarForkApproval.loading}
-							approvedAmount={zoltarForkApproval.value}
-							disabled={!isOnActiveAppChain || hasUnavailableRequiredBalance}
-							guardMessage={approvalGuardMessage}
-							onApprove={amount => onApproveZoltarForkRep(amount)}
-							pending={zoltarForkActiveAction === 'approve'}
-							pendingLabel={commonCopy.approvingRep}
-							requiredAmount={hasUnavailableRequiredBalance ? undefined : missingPreparationAmount}
-							resetKey={`${rootUniverse?.reputationToken ?? ''}:${rootUniverse?.universeId.toString() ?? ''}:${missingPreparationAmount.toString()}`}
-							tokenSymbol={rootUniverse?.reputationTokenSymbol ?? 'REP'}
-							tokenUnits={18}
-						/>
-					) : (
-						renderMigrationActions()
-					)}
-
-					{heldChildUniverses.length === 0 ? undefined : (
-						<ReadOnlyDetailAccordion title={zoltarCopy.walletRepTokens}>
-							<DataGrid dense>
-								{heldChildUniverses.map(child => (
-									<MetricField key={child.universeId.toString()} label={child.outcomeLabel}>
-										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${child.outcomeLabel} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
+							{heldOutcomes.map(outcome => {
+								const child = rootUniverse?.childUniverses.find(candidate => candidate.universeId === outcome.universeId)
+								if (child === undefined) return undefined
+								return (
+									<MetricField key={outcome.universeId.toString()} label={outcome.label}>
+										<WalletAssetControl accountAddress={accountAddress} address={child.reputationToken} isSupportedChain={isOnActiveAppChain} tokenLabel={`${outcome.label} ${child.reputationTokenSymbol ?? commonCopy.rep}`} />
 									</MetricField>
-								))}
-							</DataGrid>
-						</ReadOnlyDetailAccordion>
-					)}
-				</div>
+								)
+							})}
+						</DataGrid>
+					</ReadOnlyDetailAccordion>
+				)}
 			</SectionBlock>
 
 			<ErrorNotice message={zoltarMigrationError} />

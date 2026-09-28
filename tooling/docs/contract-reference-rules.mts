@@ -26,10 +26,9 @@ export const retentionRules = {
 	dipUtilizationPercent: 80n,
 } as const
 
-export const liquidationRules: { repBonusBps: bigint; bpsDenominator: bigint; capacityOwnershipRounding: RoundingDirection; repBackingUnitsRounding: RoundingDirection } = {
+export const liquidationRules: { repBonusBps: bigint; bpsDenominator: bigint; repBackingUnitsRounding: RoundingDirection } = {
 	repBonusBps: 500n,
 	bpsDenominator: 10_000n,
-	capacityOwnershipRounding: 'down',
 	repBackingUnitsRounding: 'up',
 }
 

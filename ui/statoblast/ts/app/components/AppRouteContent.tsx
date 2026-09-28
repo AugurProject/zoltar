@@ -9,10 +9,10 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 
 const STATOBLAST_NOT_FOUND_LINKS = [
-	{ href: '#/deploy', label: commonCopy.deploy },
-	{ href: '#/security-pools', label: commonCopy.securityPools },
-	{ href: '#/security-pools?securityPoolsView=universes', label: commonCopy.universe },
+	{ href: '#/pools', label: statoblastAppCopy.pools },
+	{ href: '#/pools/universes', label: commonCopy.universe },
 	{ href: '#/open-oracle', label: statoblastAppCopy.openOracle },
+	{ href: '#/deploy', label: commonCopy.deploy },
 ] as const
 
 type Props = {
@@ -33,7 +33,7 @@ export function AppRouteContent({ deploy, openOracle, readBackendMessage, route,
 	switch (route) {
 		case 'deploy':
 			return <DeploymentRouteContent {...deploy} />
-		case 'security-pools':
+		case 'pools':
 			return <SecurityPoolsSection {...securityPools} />
 		case 'open-oracle':
 			return <OpenOracleSection {...openOracle} />
