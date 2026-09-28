@@ -14,6 +14,7 @@ import type { LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
 import { isMarketTransactionPending } from '../../features/live/marketTransactionActivity.js'
+import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -459,6 +460,11 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(document.querySelectorAll('[data-portfolio-pool]').length).toBeGreaterThan(0)
 		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
+		// Other routes keep refreshing while the trade runs; only the trade's own market waits for it.
+		const discoveriesBeforePortfolioRefresh = discoveredUniverseIds.length
+		await act(async () => invalidateAppData())
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforePortfolioRefresh)
 		// Another market's ticket shows none of this trade's status or hash and stays locked while it runs.
 		await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await waitForDom(() => document.body.textContent?.includes('Second rendered workflow market') === true, 'second market during a pending trade')
@@ -468,6 +474,10 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
+		const discoveriesOnPendingMarket = discoveredUniverseIds.length
+		await act(async () => invalidateAppData())
+		await settleAsyncWorkflow()
+		expect(discoveredUniverseIds.length).toBe(discoveriesOnPendingMarket)
 		positionReceipt.resolve({ status: 'success' })
 		await settleAsyncWorkflow()
 		// The replacement settles the same activity row and releases the market's ticket.

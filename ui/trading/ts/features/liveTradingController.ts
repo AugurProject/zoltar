@@ -70,7 +70,7 @@ export function useLiveTradingController({
 	const workflowMarket = transactionWorkflow.transaction.workflowState.kind === 'idle' ? undefined : transactionWorkflow.transaction.workflowState.context?.market
 	const otherMarketWorkflow = workflowMarket !== undefined && selected !== undefined && workflowMarket.toLowerCase() !== selected.pool.toLowerCase()
 	const selectedPairInitialized = selected === undefined ? false : livePairInitialized(selected)
-	const { refresh, refreshCurrentRoute, refreshFromControl, loadMarketPage } = useMarketDiscoveryController({
+	const { refresh, refreshCurrentRoute, refreshFromControl, refreshLocked, loadMarketPage } = useMarketDiscoveryController({
 		route,
 		configuration,
 		configurationError,
@@ -200,6 +200,7 @@ export function useLiveTradingController({
 			nowSeconds,
 			refresh,
 			refreshFromControl,
+			refreshLocked,
 			loadMarketPage,
 		},
 		position: {

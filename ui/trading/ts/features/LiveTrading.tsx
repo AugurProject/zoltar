@@ -100,7 +100,7 @@ export function LiveTrading({
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, loadMarketPage } = discovery
+	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, refreshLocked, loadMarketPage } = discovery
 	const { setMode, setSide } = position
 	const { workflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -173,7 +173,7 @@ export function LiveTrading({
 					<RouteHeader title={appCopy.universe} description={appCopy.universeRouteDescription} />
 					<ErrorNotice message={connectionMessage} />
 					{discoveryState === 'error' ? (
-						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={workflowLocked} />
+						<RetryableNotice message={liveCopy.describeDiscoveryFailure(liveCopy.discoveryFailureLead(route), discoveryError)} retryLabel={commonCopy.retry} onRetry={refreshFromControl} disabled={refreshLocked} />
 					) : (
 						<StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: commonCopy.loadingUniverseDetails, detailIsLoading: true }} />
 					)}
@@ -195,7 +195,7 @@ export function LiveTrading({
 					discoveryError={discoveryError}
 					freshness={discoveryFreshness}
 					marketPage={marketPage}
-					workflowLocked={workflowLocked}
+					workflowLocked={refreshLocked}
 					nowSeconds={nowSeconds}
 					retry={refreshFromControl}
 					loadMarketPage={loadMarketPage}
@@ -206,14 +206,14 @@ export function LiveTrading({
 	if (routePool !== undefined && route.startsWith('security-pool/')) {
 		if (selected !== undefined)
 			return (
-				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={workflowLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
+				<LiveSecurityPoolDetails market={selected} refreshError={discoveryState === 'error' ? (discoveryError ?? liveCopy.unknownDiscovery) : undefined} refreshing={discoveryState === 'loading'} retry={refreshFromControl} workflowLocked={refreshLocked} nowSeconds={nowSeconds} connectionMessage={connectionMessage} />
 			)
 		return (
 			<div className='route-view-flow'>
 				<RouteHeader title={appCopy.securityPool} description={appCopy.securityPoolRouteDescription} />
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
+					<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} />
 				</SectionBlock>
 			</div>
 		)
@@ -281,7 +281,7 @@ export function LiveTrading({
 			<div className='market-stack'>
 				{selected === undefined ? (
 					<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
-						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={workflowLocked} retry={refreshFromControl} />
+						<SecurityPoolRouteEmptyState discoveryState={discoveryState} discoveryError={discoveryError} workflowLocked={refreshLocked} retry={refreshFromControl} />
 					</SectionBlock>
 				) : null}
 				{(() => {

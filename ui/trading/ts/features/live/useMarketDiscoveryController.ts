@@ -87,11 +87,20 @@ export function useMarketDiscoveryController({
 	 * loaded balances directly: the balance effects revalidate them from the refreshed market objects and keep the
 	 * previous values visible until the new reads resolve.
 	 */
+	// A trade keeps running after navigation; only the route showing that trade's market waits for it. Other routes
+	// (lists, portfolio, other markets) keep refreshing. A liquidity or settlement lock only exists on its own market.
+	const positionMarketRef = useRef<string | undefined>(undefined)
+	positionMarketRef.current = transaction.transaction.workflowState.kind === 'idle' ? undefined : transaction.transaction.workflowState.context?.market
+	const routePoolRef = useRef(routePool)
+	routePoolRef.current = routePool
+	const positionLockOnScreen = () => transaction.positionWorkflowLockedRef.current && positionMarketRef.current !== undefined && routePoolRef.current !== undefined && positionMarketRef.current.toLowerCase() === routePoolRef.current.toLowerCase()
+	const refreshHeldByWorkflow = () => transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen()
+
 	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean; navigation?: boolean }> = {}) {
 		if (nextConfiguration === undefined) return
 		const background = options.background === true
 		// A route change always shows its own data; a pending transaction keeps its captured context and stays in the activity list.
-		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, transaction.positionWorkflowLockedRef.current, transaction.liquidityWorkflowLockedRef.current)
+		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, positionLockOnScreen(), transaction.liquidityWorkflowLockedRef.current)
 		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
@@ -190,7 +199,7 @@ export function useMarketDiscoveryController({
 	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
 	const blockRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
 	useBlockRefresh(() => {
-		if (transaction.positionWorkflowLockedRef.current || transaction.liquidityWorkflowLockedRef.current) return
+		if (refreshHeldByWorkflow()) return
 		void refreshRef.current(undefined, undefined, undefined, { background: true })
 	}, blockRefreshActive)
 
@@ -198,11 +207,13 @@ export function useMarketDiscoveryController({
 		refresh,
 		/** Refreshes whatever route is on screen when it runs, for work that finishes after the user navigated away. */
 		refreshCurrentRoute: async (...args: Parameters<typeof refresh>) => await refreshRef.current(...args),
+		/** True while the route on screen shows a market whose own transaction is still running. */
+		refreshLocked: transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen(),
 		refreshFromControl: () => {
-			if (!transaction.positionWorkflowLockedRef.current && !transaction.liquidityWorkflowLockedRef.current) void refresh()
+			if (!refreshHeldByWorkflow()) void refresh()
 		},
 		loadMarketPage: (start: bigint | undefined) => {
-			if (start !== undefined && !transaction.workflowLocked) void refresh(configuration, start)
+			if (start !== undefined && !refreshHeldByWorkflow()) void refresh(configuration, start)
 		},
 	}
 }
