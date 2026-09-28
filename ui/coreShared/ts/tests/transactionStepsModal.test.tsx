@@ -528,3 +528,46 @@ test('uses past tense for shared deployment, transfer and dispute actions', () =
 test('every known reviewed action has an explicit success tense', () => {
 	for (const { title } of Object.values(reviewedActions)) expect(completedAction(title)).not.toStartWith('Completed:')
 })
+
+test('sends a standalone page approval directly and keeps rejection retryable', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	controller.setPlan([{ title: 'Approve 1.1 REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: '0x00000000000000000000000000000000000000a1', amount: '1.1 REP', ethValueAttoEth: 0n }])
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='approval' />)
+	let review: Promise<bigint | undefined> | undefined
+	try {
+		await act(() => {
+			review = controller.review()
+		})
+		expect(within(document.body).queryByRole('dialog')).toBeNull()
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
+		expect(await review).toBeUndefined()
+		await act(() => controller.failed({ kind: 'rejected', message: 'Action canceled in wallet.' }))
+		expect(transactionSteps.value).toBeUndefined()
+	} finally {
+		review?.catch(() => undefined)
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('retains review when an approval still needs a funding choice', async () => {
+	const dom = installDomEnvironment()
+	const controller = createTransactionStepController()
+	controller.setPlan([{ title: 'Approve REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: '0x00000000000000000000000000000000000000a1', amount: '3 REP', ethValueAttoEth: 0n, approval: { requiredAmount: 3n, approvedAmount: 0n, tokenSymbol: 'REP', tokenUnits: 0 } }])
+	const rendered = await renderIntoDocument(<TransactionStepsModal contextKey='funding' />)
+	let review: Promise<bigint | undefined> | undefined
+	try {
+		await act(() => {
+			review = controller.review()
+			review.catch(() => undefined)
+		})
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+		expect(within(document.body).getByRole('dialog')).toBeTruthy()
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
