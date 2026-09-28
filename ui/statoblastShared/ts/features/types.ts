@@ -151,8 +151,6 @@ type SecurityPoolsOverviewRouteContentProps = {
 	/** Re-reads the visible page in place on each new block. */
 	onRefreshSecurityPoolPage?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	repPerEthPrice: bigint | undefined
-	uiPriceOracle: import('./security-pools/lib/uiPriceOracle.js').UiPriceOracle
 	securityPoolOverviewError: string | undefined
 	securityPoolBrowseCount: bigint | undefined
 	securityPoolPage: SecurityPoolBrowsePage | undefined
@@ -210,6 +208,8 @@ export type SecurityPoolsSectionProps = {
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined
+	/** The one REP price behind the selected pool's vault health, withdrawable REP, and liquidation figures. */
+	selectedPoolRepPrice?: import('./security-pools/lib/uiPriceOracle.js').ResolvedRepPrice | undefined
 	universeDirectoryPools?: ListedSecurityPool[] | undefined
 	workflow: SecurityPoolWorkflowRouteContentProps
 	zoltarUniverse: ZoltarUniverseSummary | undefined
@@ -285,7 +285,6 @@ type TradingRouteContentProps = {
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	oraclePriceUsable: boolean | undefined
-	calculationPriceConfigured?: boolean
 	embedInCard?: boolean
 	poolState?: SecurityPoolStateModel | undefined
 	showSecurityPoolAddressInput?: boolean

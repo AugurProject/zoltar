@@ -24,7 +24,6 @@ export function VaultBackingFactorForm({
 	increaseBlocker,
 	busy,
 	pending,
-	repPerEthPrice,
 	executionRepPerEthPrice,
 	poolSecurityMultiplierBps,
 	onCertify,
@@ -34,7 +33,6 @@ export function VaultBackingFactorForm({
 	details: SecurityVaultDetails | undefined
 	oracleManagerDetails: OracleManagerDetails | undefined
 	executionRepPerEthPrice?: bigint | undefined
-	repPerEthPrice?: bigint | undefined
 	poolSecurityMultiplierBps?: bigint | undefined
 	blocker: string | undefined
 	increaseBlocker?: string | undefined
@@ -91,10 +89,10 @@ export function VaultBackingFactorForm({
 			<MetricGrid>
 				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>
 				<MetricField label={securityPoolCopy.currentCapacity}>
-					<VaultExposureValue capacity={details?.underwritingLimitAttoEth} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
+					<VaultExposureValue capacity={details?.underwritingLimitAttoEth} />
 				</MetricField>
 				<MetricField label={securityPoolCopy.resultingCapacity}>
-					<VaultExposureValue capacity={nextLimit} multiplierBps={minimumBps} repPerEthPrice={repPerEthPrice} />
+					<VaultExposureValue capacity={nextLimit} />
 				</MetricField>
 			</MetricGrid>
 			<InlineHint message={executionMessage} />
