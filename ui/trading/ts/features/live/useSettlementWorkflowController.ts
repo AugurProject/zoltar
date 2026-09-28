@@ -1,3 +1,4 @@
+import * as workflowCopy from '../../copy/workflows.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
@@ -64,6 +65,7 @@ export function useSettlementWorkflowController({
 	const transaction = useQuotedTransaction<SettlementSimulation>({
 		operation: 'settlement',
 		label: settlementCopy.settlementTransaction,
+		activityTitle: workflowCopy.formatSettlementActivity(market.title),
 		account,
 		chainId: configuration.chainId,
 		market: market.pool,

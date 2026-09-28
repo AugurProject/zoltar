@@ -1,5 +1,7 @@
 /// <reference types="bun-types" />
 
+import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { signal } from '@preact/signals'
 import { act } from 'preact/test-utils'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
@@ -1435,3 +1437,89 @@ describe('SecurityVaultSection', () => {
 		})
 	}
 })
+
+test('deposit submits from the approval form without replacing it with another review', async () => {
+	const dom = installDomEnvironment()
+	const props = createSecurityVaultSectionProps({ modalFirst: true })
+	let review: Promise<bigint | undefined> | undefined
+	const rendered = await renderIntoDocument(
+		<SecurityVaultSection
+			{...props}
+			securityVaultForm={{ ...props.securityVaultForm, depositAmount: '1' }}
+			onDepositRepToVault={() => {
+				const controller = createTransactionStepController()
+				controller.setPlan([{ title: 'Deposit REP', description: undefined, contractAddress: zeroAddress, contractLabel: undefined, spender: undefined, amount: '1 REP', ethValueAttoEth: 0n }])
+				review = controller.review()
+			}}
+		/>,
+	)
+	try {
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Deposit REP' })))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
+		await act(() => fireEvent.click(within(dialog).getByRole('button', { name: 'Deposit REP' })))
+		expect(dialog.querySelector('.operation-modal-steps')?.textContent).toBeUndefined()
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
+		expect(await review).toBeUndefined()
+		expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+	} finally {
+		review?.catch(() => undefined)
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault', 'redeemFees'] as const) {
+	test(`${action} keeps its form and review scope open when Cancel is pressed while pending`, async () => {
+		const dom = installDomEnvironment()
+		const active = signal<SecurityVaultSectionProps['securityVaultActiveAction']>(undefined)
+		const label = { depositRepToVault: 'Deposit REP', queueWithdrawRep: 'Withdraw REP', redeemRepFromVault: 'Redeem REP', redeemFees: 'Claim fees' }[action]
+		let controller: ReturnType<typeof createTransactionStepController> | undefined
+		let review: Promise<bigint | undefined> | undefined
+		const submit = () => {
+			active.value = action
+			controller = createTransactionStepController()
+			controller.setPlan([{ title: label, description: undefined, contractAddress: zeroAddress, contractLabel: undefined, spender: undefined, amount: '1 REP', ethValueAttoEth: 0n }])
+			review = controller.review()
+		}
+		function Harness() {
+			const props = createSecurityVaultSectionProps({
+				modalFirst: true,
+				securityVaultActiveAction: active.value,
+				securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+				oracleManagerDetails: createOracleManagerDetails(),
+				accountState: createAccountState({ ethBalanceAttoEth: 10n ** 18n }),
+				...(action === 'redeemRepFromVault' ? { poolState: createEndedPoolState() } : {}),
+			})
+			return <SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: '1', repWithdrawAmount: '1' }} onDepositRepToVault={submit} onWithdrawRep={submit} onRedeemRepFromVault={submit} onRedeemFees={submit} />
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		try {
+			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
+			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim Fees' : label })
+			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
+			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
+			await review
+			const scope = transactionSteps.value?.reviewSignal
+			expect(scope).toBeDefined()
+			const cancel = within(dialog).getByRole('button', { name: 'Cancel' })
+			expect(cancel.hasAttribute('disabled')).toBe(true)
+			if (!(cancel instanceof HTMLButtonElement)) throw new Error('Expected Cancel button')
+			await act(() => cancel.click())
+			expect(dialog.isConnected).toBe(true)
+			expect(scope?.aborted).toBe(false)
+			await act(() => {
+				controller?.failed({ kind: 'rejected', message: 'Action canceled in wallet.' })
+				active.value = undefined
+			})
+			expect(cancel.hasAttribute('disabled')).toBe(false)
+			await act(() => cancel.click())
+			expect(dialog.isConnected).toBe(false)
+		} finally {
+			review?.catch(() => undefined)
+			transactionSteps.value?.cancel()
+			await rendered.cleanup()
+			dom.cleanup()
+		}
+	})
+}

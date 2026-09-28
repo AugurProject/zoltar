@@ -361,7 +361,7 @@ export function SecurityVaultSection({
 				vaultReadinessActions={vaultReadinessActions}
 				walletRepBalanceError={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError}
 			/>
-			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={closeVaultActionModal} title={depositRepActionLabel}>
+			<OperationModal confirmSingleStepFromForm closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={closeVaultActionModal} title={depositRepActionLabel}>
 				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
@@ -381,6 +381,7 @@ export function SecurityVaultSection({
 				)}
 			</OperationModal>
 			<OperationModal
+				confirmSingleStepFromForm
 				closeOnSuccessKey={(securityVaultResult?.action === 'queueWithdrawRep' || securityVaultResult?.action === 'redeemRepFromVault') && securityVaultResult.stagedExecution?.success !== false ? securityVaultResult.hash : undefined}
 				context={vaultTransactionContext}
 				isOpen={vaultActionModal === 'withdraw-rep'}
@@ -418,7 +419,7 @@ export function SecurityVaultSection({
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
 						<div className='actions'>
 							{repExitActionButton}
-							<button className='secondary' type='button' onClick={closeVaultActionModal}>
+							<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
 								{commonCopy.cancel}
 							</button>
 						</div>
@@ -428,7 +429,7 @@ export function SecurityVaultSection({
 			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
 			</VaultBackingFactorModal>
-			<OperationModal closeOnSuccessKey={securityVaultResult?.action === 'redeemFees' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
+			<OperationModal confirmSingleStepFromForm closeOnSuccessKey={securityVaultResult?.action === 'redeemFees' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
 				<MetricGrid>
 					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>
@@ -441,7 +442,7 @@ export function SecurityVaultSection({
 						pending={securityVaultActiveAction === 'redeemFees'}
 						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }}
 					/>
-					<button className='secondary' type='button' onClick={closeVaultActionModal}>
+					<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
 						{commonCopy.cancel}
 					</button>
 				</div>

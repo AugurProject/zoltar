@@ -237,7 +237,7 @@ describe('contract core helpers', () => {
 		}))
 
 		expect(result.hash).toBe(replacementHash)
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', expect.any(String))
 	})
 
 	test('writeContractAndWaitForReceipt rejects cancelled replacement transactions', async () => {
@@ -265,7 +265,7 @@ describe('contract core helpers', () => {
 				functionName: 'cancelled',
 			})),
 		).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(cancellationHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(cancellationHash, 'pending', expect.any(String))
 	})
 
 	test('writeContractAndWaitForReceipt rejects replaced transactions that change the original call', async () => {
@@ -293,6 +293,6 @@ describe('contract core helpers', () => {
 				functionName: 'replaced',
 			})),
 		).rejects.toThrow('Transaction was replaced in the wallet before confirmation.')
-		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash)
+		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', expect.any(String))
 	})
 })
