@@ -13,6 +13,8 @@ import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contract
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { SecurityVaultSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityVaultSection.js'
 import { SelectedVaultSummarySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SelectedVaultSummarySection.js'
+import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
+import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -689,6 +691,19 @@ describe('SecurityVaultSection', () => {
 		expect(claimFeesButton.getAttribute('aria-describedby')).toBe(claimFeesReason.id)
 		fireEvent.click(claimFeesButton)
 		expect(documentQueries.queryByRole('dialog', { name: 'Claim fees' })).toBeNull()
+	})
+
+	test('labels withdrawable REP with the source and staleness of the price it uses', async () => {
+		const repPrice = resolveRepPrice({ now: 10n ** 6n, poolOracle: { price: 3n * 10n ** 18n, settlementTimestamp: 1n }, setting: 'open-oracle', uniswapPrice: undefined })
+		const renderedComponent = await renderIntoDocument(
+			<SelectedPoolRepPriceContext.Provider value={repPrice}>
+				<SecurityVaultSection {...createSecurityVaultSectionProps({ modalFirst: true, repPerEthPrice: repPrice.price, selectedPoolStatoblastSecurityMultiplierBps: 20_000n })} />
+			</SelectedPoolRepPriceContext.Provider>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Withdraw REP' }))
+		const label = within(document.body).getByRole('dialog', { name: 'Withdraw REP' }).querySelector('.rep-price-status')
+		expect(label?.classList.contains('stale')).toBe(true)
 	})
 
 	test('uses neutral missing-state copy when a queued withdrawal succeeds before manager state is visible', async () => {

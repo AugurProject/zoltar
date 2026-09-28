@@ -120,7 +120,7 @@ function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {})
 		onRedeemCompleteSet: () => undefined,
 		onRedeemShares: () => undefined,
 		onTradingFormChange: () => undefined,
-		repPerEthPrice: undefined,
+		repPerEthPrice: 10n ** 18n,
 		repPerEthSource: undefined,
 		repPerEthSourceUrl: undefined,
 		selectedPool: createSelectedPool(),
@@ -519,7 +519,7 @@ void describe('TradingSection', () => {
 	})
 
 	void test('uses certified commitments when the optional UI price is unavailable', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).not.toContain('Unavailable (no price)')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
@@ -528,8 +528,17 @@ void describe('TradingSection', () => {
 		expect(button.disabled).toBe(false)
 	})
 
+	void test('keeps mint submission independent of the UI price setting', async () => {
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ oraclePriceUsable: true, repPerEthPrice: undefined, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Mint Complete Sets' })
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
+		expect(dialog.textContent).not.toContain('Request a new price in Price Oracle before minting.')
+	})
+
 	void test('shows zero mint capacity without waiting for an unavailable price', async () => {
-		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ calculationPriceConfigured: true, repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
+		const rendered = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ repPerEthPrice: undefined, selectedPool: createSelectedPool({ totalUnderwritingLimitAttoEth: 0n, feeEligibleUnderwritingLimitAttoEth: 0n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
 		expect(document.body.textContent).toContain('No mint capacity remaining.')
 		expect(document.body.textContent).not.toContain('Loading mint capacity.')
@@ -545,7 +554,6 @@ void describe('TradingSection', () => {
 						if (completeSetAmount !== undefined) mintedAmount = completeSetAmount
 					},
 					repPerEthPrice: 10n * 10n ** 18n,
-					calculationPriceConfigured: true,
 					selectedPool: createSelectedPool({ lastOraclePrice: 10n ** 18n, settlementCollateralAttoEth: 0n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n }),
 				})}
 			/>,

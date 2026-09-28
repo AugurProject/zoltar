@@ -25,7 +25,6 @@ export const completeSetBurnPoolRequiredReason = 'Select a pool before redeeming
 export const shareRedemptionPoolRequiredReason = 'Select a pool before redeeming shares.'
 export const loadingForkTargetUniversesReason = 'Loading fork target universes.'
 export const forkTargetsRefreshRequired = 'Refresh the fork target universes.'
-export const mintPriceUnavailable = 'Unavailable (no price)'
 export const mintCapacityUnavailable = 'Mint capacity unavailable. Refresh pool to retry.'
 export const migrateForkedShares = 'Migrate forked shares'
 export const shareMigrationDescription = 'Use parent-pool shares for one outcome to materialize claims across selected child universes.'

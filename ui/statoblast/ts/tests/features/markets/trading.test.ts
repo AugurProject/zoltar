@@ -3,7 +3,6 @@
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
-	calculateMintingCapacityAttoEth,
 	estimateMintCheckpoint,
 	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
@@ -151,14 +150,6 @@ void describe('trading helpers', () => {
 				totalFeesOwedRemainder: 0n,
 			}),
 		).toEqual({ estimatedRetentionFeeAttoEth: TOKEN_PRECISION, settlementCollateralAfterFeesAttoEth: 9n * TOKEN_PRECISION })
-	})
-
-	void test('reports standing ETH commitments independently of REP pricing', () => {
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 3n * 10n ** 18n, 20_000n)).toBe(80n * 10n ** 18n)
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, 6n * 10n ** 18n, 20_000n)).toBe(80n * 10n ** 18n)
-		expect(calculateMintingCapacityAttoEth(0n, 3n * 10n ** 18n, 20_000n)).toBe(0n)
-		expect(calculateMintingCapacityAttoEth(0n, undefined, 20_000n)).toBe(0n)
-		expect(calculateMintingCapacityAttoEth(80n * 10n ** 18n, undefined, 20_000n)).toBe(80n * 10n ** 18n)
 	})
 
 	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {
