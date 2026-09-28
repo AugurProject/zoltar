@@ -1,4 +1,4 @@
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, RefObject } from 'preact'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionScope } from '../transactions/transactionScope.js'
 
@@ -215,6 +215,8 @@ export type ViewTabsProps<TValue extends string> = {
 }
 
 export type TransactionActionButtonProps = {
+	/** The action's button element, for a shared reason elsewhere that returns focus to it after a wallet fix. */
+	actionButtonRef?: RefObject<HTMLButtonElement> | undefined
 	ariaLabel?: string
 	availability?: ActionAvailability
 	className?: string

@@ -13,6 +13,8 @@ import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkPr
 import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { RequestPriceModal } from '../../app/transactions/RequestPriceModal.js'
 import { TransactionStepsModal, embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
@@ -1078,6 +1080,37 @@ test('does not announce submission while preparing an unconfirmed price review',
 		await settle()
 		expect(dialog.textContent).not.toContain('Submitting in browser simulation')
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('offers the switch fix in place of a wrong-network confirmation guard', async () => {
+	const dom = installDomEnvironment()
+	const { calls, walletActions } = createWalletActions()
+	let attempts = 0
+	const rendered = await renderIntoDocument(
+		<WalletActionsProvider walletActions={walletActions}>
+			<RequestPriceModal
+				{...props}
+				confirmationGuardMessage='Switch to Sepolia.'
+				confirmationWalletBlocker={{ kind: 'wrong-network', targetChainName: 'Sepolia' }}
+				onConfirm={() => {
+					attempts += 1
+				}}
+			/>
+		</WalletActionsProvider>,
+	)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP/ETH starting price' }), { target: { value: '3' } }))
+		await settle()
+		const fix = expectWalletFixDescribesAction(document.body, /^Request new price/, 'Switch to Sepolia')
+		expect(queries.queryByRole('alert')).toBeNull()
+		await act(() => fireEvent.click(fix))
+		expect(calls).toEqual(['switch'])
+		expect(attempts).toBe(0)
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

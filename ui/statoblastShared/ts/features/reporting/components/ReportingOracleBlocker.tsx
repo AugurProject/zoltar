@@ -10,6 +10,8 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { getOpenOracleSettleAvailability } from '../../open-oracle/lib/openOracle.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
+import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
+import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 export function ReportingOracleBlocker({
 	blocked,
@@ -17,6 +19,7 @@ export function ReportingOracleBlocker({
 	now,
 	onRequest,
 	requestReason,
+	requestWalletBlocker,
 	onRefresh,
 	oracle,
 	onViewReport,
@@ -26,6 +29,8 @@ export function ReportingOracleBlocker({
 	now: bigint | undefined
 	onRequest: () => void
 	requestReason: string | undefined
+	/** The wallet prerequisite, when it is the request's disabled reason. */
+	requestWalletBlocker?: WalletActionBlocker | undefined
 	onRefresh: () => void
 	oracle: OpenOracleSectionProps | undefined
 	onViewReport: (id: bigint) => void
@@ -66,7 +71,9 @@ export function ReportingOracleBlocker({
 			{blocked ? (
 				<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
 					<p>{status}</p>
-					{pendingId === 0n ? <TransactionActionButton idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequest} availability={{ disabled: requestReason !== undefined, reason: requestReason }} /> : undefined}
+					{pendingId === 0n ? (
+						<TransactionActionButton idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequest} availability={withWalletBlocker({ disabled: requestReason !== undefined, reason: requestReason }, requestWalletBlocker)} />
+					) : undefined}
 					{pendingId > 0n && ready ? (
 						<button
 							className='primary'

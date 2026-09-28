@@ -4,19 +4,20 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { readFavoriteEntries, resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { OpenOracleReportDetails, OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import { renderSelectedReportActionSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleReportContent.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { openOracleReportDownloadStore } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
 import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 
@@ -228,21 +229,76 @@ async function flushAsyncWork() {
 	})
 }
 
-function createEmptyBrowsePage(pageIndex = 0): OpenOracleReportSummaryPage {
+function createReportSummary(reportId: bigint, overrides: Partial<OpenOracleReportSummary> = {}): OpenOracleReportSummary {
 	return {
-		nextReportId: 1n,
-		pageIndex,
-		pageSize: 10,
-		reportCount: 0n,
-		reports: [],
+		currentAmount1: 10n ** 18n,
+		currentAmount2: 2n * 10n ** 18n,
+		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+		disputeOccurred: false,
+		exactToken1Report: 10n ** 18n,
+		isDistributed: false,
+		price: 2n * 10n ** 30n,
+		reportId,
+		reportTimestamp: 123n,
+		settlementTimestamp: 0n,
+		timeType: true,
+		token1: getAddress('0x2000000000000000000000000000000000000000'),
+		token1Decimals: 18,
+		token1Symbol: 'REPv2',
+		token2: getAddress('0x4000000000000000000000000000000000000000'),
+		token2Decimals: 18,
+		token2Symbol: 'WETH',
+		...overrides,
 	}
 }
 
-function createCountedBrowsePage(pageIndex: number, reportCount: bigint): OpenOracleReportSummaryPage {
+function createReportPage(pageIndex: number, reportCount: bigint, reports: OpenOracleReportSummary[]): OpenOracleReportSummaryPage {
+	return { nextReportId: reportCount + 1n, pageIndex, pageSize: 10, reportCount, reports }
+}
+
+/** Each browse test starts with an empty browser store; `seed` runs against the fresh document before rendering. */
+async function renderBrowseSection(overrides: Partial<OpenOracleSectionProps> = {}, seed?: () => void) {
+	const domEnvironment = installDomEnvironment()
+	resetLocalEntityStoreForTesting()
+	seed?.()
+	const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps(overrides)} />)
 	return {
-		...createEmptyBrowsePage(pageIndex),
-		reportCount,
+		cleanup: async () => {
+			await rendered.cleanup()
+			resetLocalEntityStoreForTesting()
+			domEnvironment.cleanup()
+		},
+		container: rendered.container,
 	}
+}
+
+function getRenderedReportTitles() {
+	return [...document.querySelectorAll('.comparison-record h3')].map(heading => heading.textContent)
+}
+
+async function clickButton(name: string) {
+	await act(() => {
+		fireEvent.click(within(document.body).getByRole('button', { name }))
+	})
+	await flushAsyncWork()
+}
+
+async function typeSearch(value: string) {
+	const input = within(document.body).getByLabelText('Search downloaded reports')
+	if (!(input instanceof window.HTMLInputElement)) throw new Error('Expected report search input')
+	input.value = value
+	await act(() => {
+		input.dispatchEvent(new window.Event('input', { bubbles: true }))
+	})
+}
+
+async function selectStatus(value: string) {
+	const select = within(document.body).getByLabelText('Status')
+	if (!(select instanceof window.HTMLSelectElement)) throw new Error('Expected status select')
+	select.value = value
+	await act(() => {
+		select.dispatchEvent(new window.Event('change', { bubbles: true }))
+	})
 }
 
 function createOpenOracleDisputeSubmission({
@@ -385,212 +441,246 @@ void describe('OpenOracleSection', () => {
 		}
 	})
 
-	void test('renders block-based browse summary clocks as blocks instead of timestamps', async () => {
-		const domEnvironment = installDomEnvironment()
-		const reporter = getAddress('0x3000000000000000000000000000000000000000')
-		const rendered = await renderIntoDocument(
-			<OpenOracleSection
-				{...createOpenOracleSectionProps({
-					loadBrowseReports: async pageIndex => ({
-						nextReportId: 2n,
-						pageIndex,
-						pageSize: 10,
-						reportCount: 1n,
-						reports: [
-							{
-								currentAmount1: 10n ** 18n,
-								currentAmount2: 2n * 10n ** 18n,
-								currentReporter: reporter,
-								disputeOccurred: false,
-								exactToken1Report: 10n ** 18n,
-								isDistributed: true,
-								price: 2n * 10n ** 30n,
-								reportId: 1n,
-								reportTimestamp: 123n,
-								settlementTimestamp: 234n,
-								timeType: false,
-								token1: getAddress('0x2000000000000000000000000000000000000000'),
-								token1Decimals: 18,
-								token1Symbol: 'REPv2',
-								token2: getAddress('0x4000000000000000000000000000000000000000'),
-								token2Decimals: 18,
-								token2Symbol: 'WETH',
-							},
-						],
-					}),
-				})}
-			/>,
-		)
-
+	void test('renders block-based browse summary clocks as blocks after discovering reports', async () => {
+		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 1n, [createReportSummary(1n, { settlementTimestamp: 234n, timeType: false })]) })
 		try {
-			await flushAsyncWork()
 			const documentQueries = within(document.body)
-			const searchInput = documentQueries.getByRole('textbox', { name: 'Search this page' }) as HTMLInputElement
-			expect(searchInput.placeholder).toBe('Filter this page by report ID, token symbol, or token address')
+			const searchInput = documentQueries.getByLabelText('Search downloaded reports')
+			if (!(searchInput instanceof window.HTMLInputElement)) throw new Error('Expected report search input')
+			expect(searchInput.placeholder).toBe('Report ID, token symbol, or token address')
+			await clickButton('Discover reports')
 			expect(documentQueries.getByText('Report block')).not.toBeNull()
 			expect(documentQueries.getByText('Settlement block')).not.toBeNull()
 			expect(documentQueries.getByText('123 blocks')).not.toBeNull()
 			expect(documentQueries.getByText('234 blocks')).not.toBeNull()
 		} finally {
-			await rendered.cleanup()
-			domEnvironment.cleanup()
+			await browse.cleanup()
 		}
 	})
 
-	void test('waits for the active environment before loading browse reports', async () => {
-		const domEnvironment = installDomEnvironment()
+	void test('opens on favorite reports from the browser cache without reading Open Oracle', async () => {
 		let browseLoadAttempts = 0
-		const restoreActiveEnvironment = installActiveEnvironmentForTesting({
-			...createFakeBackend(),
-			createReadClient: () => {
-				browseLoadAttempts += 1
-				throw new Error('Browse reports must not load before the environment is ready')
+		const browse = await renderBrowseSection(
+			{
+				loadBrowseReports: async pageIndex => {
+					browseLoadAttempts += 1
+					return createReportPage(pageIndex, 0n, [])
+				},
+			},
+			() => {
+				const scope = getLocalEntityScope('statoblast', 'oracleReport')
+				openOracleReportDownloadStore.record(
+					scope,
+					[createReportSummary(4n), createReportSummary(3n)].map(report => ({ data: report, id: report.reportId.toString() })),
+				)
+				setEntityFavorite(scope, '3', true)
+			},
+		)
+		try {
+			expect(browseLoadAttempts).toBe(0)
+			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #3'])
+			expect(within(document.body).getByRole('button', { name: 'Favorite: REPv2 / WETH · report #3' }).getAttribute('aria-pressed')).toBe('true')
+			await clickButton('Downloaded (2)')
+			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #4', 'REPv2 / WETH · report #3'])
+			expect(within(document.body).getByRole('button', { name: 'Favorite: REPv2 / WETH · report #4' }).getAttribute('aria-pressed')).toBe('false')
+			expect(browseLoadAttempts).toBe(0)
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('discovers one report page per click and searches and filters every downloaded report', async () => {
+		const requestedPages: number[] = []
+		const reports = Array.from({ length: 12 }, (_, index) => {
+			const reportId = BigInt(12 - index)
+			if (reportId === 5n) return createReportSummary(reportId, { token1Symbol: 'DAI' })
+			if (reportId === 2n) return createReportSummary(reportId, { isDistributed: true })
+			return createReportSummary(reportId)
+		})
+		const browse = await renderBrowseSection({
+			loadBrowseReports: async (pageIndex, pageSize) => {
+				requestedPages.push(pageIndex)
+				return createReportPage(pageIndex, 12n, reports.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize))
 			},
 		})
-		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} environmentReady={false} />)
-
 		try {
-			await Promise.resolve()
-			expect(browseLoadAttempts).toBe(0)
-			expect(within(document.body).getByText('Preparing report summaries.')).not.toBeNull()
-			expect(within(document.body).getByRole('status', { name: 'Preparing report summaries.' })).not.toBeNull()
-			expect(within(document.body).queryByText('No Open Oracle reports found.')).toBeNull()
-		} finally {
-			await rendered.cleanup()
-			restoreActiveEnvironment()
-			domEnvironment.cleanup()
-		}
-	})
-
-	void test('clamps the browse page after an environment reports a smaller result set', async () => {
-		const domEnvironment = installDomEnvironment()
-		const requestedPages: number[] = []
-		let environmentRefreshKey = 0
-		const loadBrowseReports = (pageIndex: number) => {
-			requestedPages.push(pageIndex)
-			return Promise.resolve(createCountedBrowsePage(pageIndex, environmentRefreshKey === 0 ? 21n : 1n))
-		}
-		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey, loadBrowseReports })} />)
-
-		try {
-			await flushAsyncWork()
 			const documentQueries = within(document.body)
-			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Next page' }))
-			})
-			await flushAsyncWork()
-			expect(documentQueries.getByText('Page 2 of 3')).not.toBeNull()
-			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Next page' }))
-			})
-			await flushAsyncWork()
-			expect(documentQueries.getByText('Page 3 of 3')).not.toBeNull()
+			expect(documentQueries.getByText('No favorite reports yet')).not.toBeNull()
+			await clickButton('Discover reports')
+			expect(getRenderedReportTitles()).toHaveLength(10)
+			expect(documentQueries.getByText('10 of 12 reports scanned')).not.toBeNull()
+			await clickButton('Discover more')
+			expect(requestedPages).toEqual([0, 1])
+			expect(getRenderedReportTitles()).toHaveLength(12)
+			expect(documentQueries.getByRole('button', { name: 'Scan again' })).not.toBeNull()
 
-			environmentRefreshKey = 1
-			await act(() => {
-				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey, loadBrowseReports })} />, rendered.container)
-			})
-			await flushAsyncWork()
-			await flushAsyncWork()
-
-			expect(requestedPages.at(-1)).toBe(0)
-			expect(documentQueries.queryByText('Page 1 of 1')).toBeNull()
+			await typeSearch('dai')
+			expect(getRenderedReportTitles()).toEqual(['DAI / WETH · report #5'])
+			expect(documentQueries.getByText('1 of 12 reports shown.')).not.toBeNull()
+			await typeSearch('no such token')
+			expect(documentQueries.queryByText(/reports shown/)).toBeNull()
+			expect(documentQueries.getByText('No downloaded reports match the current search and status filters.')).not.toBeNull()
+			await typeSearch('')
+			await selectStatus('Settled')
+			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #2'])
+			expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'oracleReport'))).toEqual([])
 		} finally {
-			await rendered.cleanup()
-			domEnvironment.cleanup()
+			await browse.cleanup()
 		}
 	})
 
-	test('shows an unavailable stored-state report without claiming the directory is empty', async () => {
-		const domEnvironment = installDomEnvironment()
-		const message = 'Oracle report #2 is unavailable: it did not enable stored state and dispute history'
-		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ loadBrowseReports: async () => ({ ...createEmptyBrowsePage(), reportCount: 1n, unavailableReports: [{ reportId: 2n, message }] }) })} />)
+	void test('offers to open a report ID that is not downloaded', async () => {
+		const onOpenOracleFormChange = mock((_update: Partial<OpenOracleFormState>) => undefined)
+		const onActiveViewChange = mock((_view: string) => undefined)
+		const browse = await renderBrowseSection({ onActiveViewChange, onOpenOracleFormChange })
 		try {
-			await flushAsyncWork()
-			expect(rendered.container.textContent).toContain(message)
-			expect(rendered.container.textContent).not.toContain('No Open Oracle reports found.')
+			await typeSearch('#42')
+			await clickButton('Open report #42')
+			expect(onOpenOracleFormChange).toHaveBeenCalledWith({ reportId: '42' })
+			expect(onActiveViewChange).toHaveBeenCalledWith('selected-report')
 		} finally {
-			await rendered.cleanup()
-			domEnvironment.cleanup()
+			await browse.cleanup()
 		}
 	})
 
-	void test('shows failed browse loads with retry instead of a confirmed empty state', async () => {
-		const domEnvironment = installDomEnvironment()
+	void test('keeps Discover disabled until the active environment is ready', async () => {
 		let browseLoadAttempts = 0
-		const restoreActiveEnvironment = installActiveEnvironmentForTesting({
-			...createFakeBackend(),
-			createReadClient: () => {
+		const browse = await renderBrowseSection({
+			environmentReady: false,
+			loadBrowseReports: async pageIndex => {
+				browseLoadAttempts += 1
+				return createReportPage(pageIndex, 0n, [])
+			},
+		})
+		try {
+			const discover = within(document.body).getByRole('button', { name: 'Discover reports' })
+			if (!(discover instanceof window.HTMLButtonElement)) throw new Error('Expected Discover button')
+			expect(discover.disabled).toBe(true)
+			expect(within(document.body).getByText('No favorite reports yet')).not.toBeNull()
+			expect(browseLoadAttempts).toBe(0)
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('confirms an empty registry only after a scan', async () => {
+		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 0n, []) })
+		try {
+			expect(within(document.body).queryByText('No Open Oracle reports found.')).toBeNull()
+			await clickButton('Discover reports')
+			expect(within(document.body).getByRole('status').textContent).toContain('No Open Oracle reports found.')
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('shows an unavailable stored-state report without claiming the directory is empty', async () => {
+		const message = 'Oracle report #2 is unavailable: it did not enable stored state and dispute history'
+		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => ({ ...createReportPage(pageIndex, 1n, []), unavailableReports: [{ reportId: 2n, message }] }) })
+		try {
+			await clickButton('Discover reports')
+			expect(browse.container.textContent).toContain(message)
+			expect(browse.container.textContent).not.toContain('No Open Oracle reports found.')
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('shows failed report discovery with retry instead of a confirmed empty state', async () => {
+		let browseLoadAttempts = 0
+		const browse = await renderBrowseSection({
+			loadBrowseReports: async () => {
 				browseLoadAttempts += 1
 				throw new Error('Report summary service unavailable')
 			},
 		})
-		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps()} />)
-
 		try {
-			await flushAsyncWork()
 			const documentQueries = within(document.body)
-			expect(documentQueries.getByRole('alert', { name: /Report summary service unavailable.*Retry/ })).not.toBeNull()
+			await clickButton('Discover reports')
+			expect(documentQueries.getByRole('alert', { name: /Failed to load Open Oracle reports/ })).not.toBeNull()
 			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
-
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
-			await flushAsyncWork()
+			await clickButton('Retry')
 			expect(browseLoadAttempts).toBe(2)
 			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
 		} finally {
-			await rendered.cleanup()
-			restoreActiveEnvironment()
-			domEnvironment.cleanup()
+			await browse.cleanup()
 		}
 	})
 
-	void test('invalidates ready browse state across environment changes and ignores late responses', async () => {
-		const domEnvironment = installDomEnvironment()
-		const secondEnvironmentLoad = createDeferred<OpenOracleReportSummaryPage>()
-		const thirdEnvironmentLoad = createDeferred<OpenOracleReportSummaryPage>()
-		let browseLoadAttempts = 0
-		const loadBrowseReports = () => {
-			browseLoadAttempts += 1
-			if (browseLoadAttempts === 1) return Promise.resolve(createEmptyBrowsePage())
-			if (browseLoadAttempts === 2) return secondEnvironmentLoad.promise
-			return thirdEnvironmentLoad.promise
-		}
-		const rendered = await renderIntoDocument(<OpenOracleSection {...createOpenOracleSectionProps({ loadBrowseReports })} />)
-
+	void test('ignores a report page that arrives after the environment changed', async () => {
+		const lateLoad = createDeferred<OpenOracleReportSummaryPage>()
+		const staleMessage = 'Oracle report #5 is unavailable in the earlier environment'
+		const currentMessage = 'Oracle report #3 is unavailable in the current environment'
+		const loadEarlierReports = () => lateLoad.promise
+		const loadCurrentReports = async () => ({ ...createReportPage(0, 1n, []), unavailableReports: [{ reportId: 3n, message: currentMessage }] })
+		const browse = await renderBrowseSection({ loadBrowseReports: loadEarlierReports })
 		try {
-			await act(async () => {
-				await new Promise(resolve => setTimeout(resolve, 0))
-			})
-			const documentQueries = within(document.body)
-			await flushAsyncWork()
-			expect(documentQueries.getByRole('status').textContent).toContain('No Open Oracle reports found.')
-
+			await clickButton('Discover reports')
 			await act(() => {
-				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports })} />, rendered.container)
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 1, loadBrowseReports: loadCurrentReports })} />, browse.container)
 			})
-			expect(documentQueries.getByRole('status', { name: 'Refreshing report summaries.' })).not.toBeNull()
-			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
-
-			await act(() => {
-				render(<OpenOracleSection {...createOpenOracleSectionProps({ environmentRefreshKey: 2, loadBrowseReports })} />, rendered.container)
-			})
+			await clickButton('Discover reports')
+			expect(browse.container.textContent).toContain(currentMessage)
 			await act(async () => {
-				secondEnvironmentLoad.resolve(createEmptyBrowsePage())
-				await secondEnvironmentLoad.promise
-			})
-			expect(documentQueries.getByRole('status', { name: 'Refreshing report summaries.' })).not.toBeNull()
-			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
-
-			await act(async () => {
-				thirdEnvironmentLoad.resolve(createEmptyBrowsePage())
-				await thirdEnvironmentLoad.promise
+				lateLoad.resolve({ ...createReportPage(0, 1n, [createReportSummary(1n)]), unavailableReports: [{ reportId: 5n, message: staleMessage }] })
+				await lateLoad.promise
 			})
 			await flushAsyncWork()
-			expect(documentQueries.getByRole('status').textContent).toContain('No Open Oracle reports found.')
-			expect(browseLoadAttempts).toBe(3)
+			expect(getRenderedReportTitles()).toEqual([])
+			expect(browse.container.textContent).toContain(currentMessage)
+			expect(browse.container.textContent).not.toContain(staleMessage)
+			expect(openOracleReportDownloadStore.read(getLocalEntityScope('statoblast', 'oracleReport'))).toEqual([])
 		} finally {
-			await rendered.cleanup()
-			domEnvironment.cleanup()
+			await browse.cleanup()
+		}
+	})
+
+	void test('adds a newly created report to the downloaded reports without favoriting it', async () => {
+		const browse = await renderBrowseSection({
+			activeView: 'create',
+			loadBrowseReports: async pageIndex => createReportPage(pageIndex, 9n, [createReportSummary(9n)]),
+			openOracleResult: { action: 'createReportInstance', hash: '0x1234000000000000000000000000000000000000000000000000000000000000' },
+		})
+		try {
+			await flushAsyncWork()
+			const scope = getLocalEntityScope('statoblast', 'oracleReport')
+			expect(openOracleReportDownloadStore.read(scope).map(entry => entry.id)).toEqual(['9'])
+			expect(readFavoriteEntries(scope)).toEqual([])
+		} finally {
+			await browse.cleanup()
+		}
+	})
+
+	void test('favorites an opened report once and keeps an un-star after the report refreshes', async () => {
+		const openedReport = createOpenOracleReportDetails({ currentReporter: getAddress('0x3000000000000000000000000000000000000000'), reportTimestamp: 100n })
+		const selectedProps = { activeView: 'selected-report' as const, openOracleReportDetails: openedReport, openOracleReportLookupState: 'ready' as const }
+		const browse = await renderBrowseSection(selectedProps)
+		try {
+			const scope = getLocalEntityScope('statoblast', 'oracleReport')
+			const star = within(document.body).getByRole('button', { name: 'Favorite: Report #7' })
+			expect(star.getAttribute('aria-pressed')).toBe('true')
+			expect(readFavoriteEntries(scope).map(entry => entry.id)).toEqual(['7'])
+			await act(() => {
+				fireEvent.click(star)
+			})
+			expect(readFavoriteEntries(scope)).toEqual([])
+			// A refresh keeps the loaded details while the lookup is loading, then replaces them.
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ ...selectedProps, openOracleReportLookupState: 'loading' })} />, browse.container)
+			})
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps({ ...selectedProps, openOracleReportDetails: { ...openedReport, currentAmount1: 5n } })} />, browse.container)
+			})
+			expect(readFavoriteEntries(scope)).toEqual([])
+			expect(openOracleReportDownloadStore.read(scope).map(entry => entry.data.currentAmount1)).toEqual([5n])
+			await act(() => {
+				render(<OpenOracleSection {...createOpenOracleSectionProps()} />, browse.container)
+			})
+			expect(within(document.body).getByText('No favorite reports yet')).not.toBeNull()
+			await clickButton('Show downloaded reports')
+			expect(getRenderedReportTitles()).toEqual(['REPv2 / WETH · report #7'])
+		} finally {
+			await browse.cleanup()
 		}
 	})
 

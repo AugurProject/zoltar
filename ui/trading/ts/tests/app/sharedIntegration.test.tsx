@@ -272,7 +272,7 @@ test('the removed demo query cannot select a parallel simulated-data application
 	expect(rendered.container.querySelector('.demo-banner')).toBeNull()
 	expect(rendered.container.textContent).not.toContain('SIMULATED DATA')
 	expect(rendered.container.textContent).not.toContain('Demo mode')
-	expect(rendered.container.querySelector('.route-header h2')?.textContent).toBe(appCopy.market)
+	expect(rendered.container.querySelector('.route-header h2')?.textContent).toBe(appCopy.markets)
 	expect(rendered.container.querySelector('.market-browser')).not.toBeNull()
 	await rendered.cleanup()
 	dom.cleanup()

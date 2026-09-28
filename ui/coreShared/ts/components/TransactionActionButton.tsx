@@ -68,7 +68,24 @@ export function TransactionActionGroup({ children, id, loading = false, message 
 	)
 }
 
-export function TransactionActionButton({ ariaLabel, availability, className = '', disabled = false, disabledReasonElementId, idleLabel, inlineHint, inlineHintAriaLabel, onClick, pending = false, pendingLabel, scope, showDisabledReason = true, tone = 'primary', type = 'button' }: TransactionActionButtonProps) {
+export function TransactionActionButton({
+	actionButtonRef: sharedActionButtonRef,
+	ariaLabel,
+	availability,
+	className = '',
+	disabled = false,
+	disabledReasonElementId,
+	idleLabel,
+	inlineHint,
+	inlineHintAriaLabel,
+	onClick,
+	pending = false,
+	pendingLabel,
+	scope,
+	showDisabledReason = true,
+	tone = 'primary',
+	type = 'button',
+}: TransactionActionButtonProps) {
 	const group = useContext(TransactionActionGroupContext)
 	const disabledReasonId = useId()
 	const globalTransaction = useGlobalTransactionPresentation()
@@ -84,7 +101,8 @@ export function TransactionActionButton({ ariaLabel, availability, className = '
 	const isDisabled = disabled || pending || availability?.disabled === true || blockedByPendingRequest
 	let disabledReason = isDisabled ? availability?.reason : undefined
 	if (blockedByScopedTransaction) disabledReason = transactionStepsCopy.transactionPending
-	const actionButtonRef = useRef<HTMLButtonElement>(null)
+	const ownActionButtonRef = useRef<HTMLButtonElement>(null)
+	const actionButtonRef = sharedActionButtonRef ?? ownActionButtonRef
 	// A disconnected wallet or wrong network offers its connect or switch fix where the reason would be. Wallet blockers only exist on disabled availability, so they never coincide with a scoped transaction lock.
 	const renderWalletFix = useWalletActionFix({ actionButtonRef, actionDisabled: isDisabled, availability })
 	const walletFixId = renderWalletFix !== undefined && (group !== undefined || showDisabledReason) ? disabledReasonId : undefined

@@ -7,6 +7,7 @@ import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensit
 import { resolveRequestedLoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ForkAuctionDetails, ReportingDetails, SecurityPoolVaultSummary, SecurityVaultDetails, TradingShareBalances } from '@zoltar/ui-core-shared/types/contracts.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
@@ -155,6 +156,8 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const currentPoolOraclePriceUsable = currentPoolOracleManagerDetails === undefined ? undefined : isOracleManagerPriceUsable(currentPoolOracleManagerDetails, currentTimestamp)
 	const requestPriceTransactionValueAttoEth = currentPoolOracleManagerDetails === undefined ? undefined : addOpenOracleBountyBuffer(currentPoolOracleManagerDetails.requestPriceCostAttoEth)
 	const requestPriceGuardInput = { accountAddress: accountState.address, isOnActiveAppChain, isPriceValid: currentPoolOraclePriceUsable, pendingReportId: currentPoolOracleManagerDetails?.pendingReportId, walletBalanceAttoEth: accountState.ethBalanceAttoEth }
+	// The price request guards check the wallet first, so whenever the wallet blocks, their reason is the wallet reason.
+	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const requestPriceGuardMessage = getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, hasLoadedSelectedPool: effectiveSelectedPool !== undefined, requiredCostAttoEth: currentPoolOracleManagerDetails?.requestPriceCostAttoEth })
 	const selectedPendingOperationId = currentPoolOracleManagerDetails?.pendingOperationSlotId ?? 0n
 	const selectedPendingOperationInput = selectedPendingOperationId > 0n ? selectedPendingOperationId.toString() : ''
@@ -199,17 +202,17 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const currentPoolOraclePrice = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastPrice
 	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
 	const requestPriceOpenGuardMessage = requestPriceTransactionValueAttoEth === undefined ? securityPoolCopy.loadOracleBeforePriceReview : requestPriceGuardMessage
+	const requestPriceOpenWalletBlocker = requestPriceTransactionValueAttoEth === undefined ? undefined : walletBlocker
 	// A pool from another universe keeps its workspace hidden, but a pending report stays reachable from its price row.
 	const oracleStatus =
 		selectedPool !== undefined && (showSelectedPoolWorkflowDetails || (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n)
-			? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage }
+			? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage, requestWalletBlocker: requestPriceOpenWalletBlocker }
 			: undefined
 
 	return {
 		accountVault,
 		actionItems,
 		activeStagedOperationCount,
-		canUseOracleActions: accountState.address !== undefined && isOnActiveAppChain,
 		currentForkAuctionDetails,
 		currentForkStage,
 		currentForkWorkflowSelectionStage,
@@ -241,9 +244,11 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		reportingLockedReason,
 		reportingOracleGuardMessage,
 		reportingReady,
+		requestPriceConfirmationWalletBlocker: walletBlocker,
 		requestPriceConfirmationGuardMessage: getVaultRequestPriceGuardMessage({ ...requestPriceGuardInput, bufferRequiredEthCost: false, hasLoadedSelectedPool: input.requestPriceReview !== undefined, requiredCostAttoEth: input.requestPriceReview?.requestValueAttoEth }),
 		requestPriceGuardMessage,
 		requestPriceOpenGuardMessage,
+		requestPriceOpenWalletBlocker,
 		requestPriceTransactionValueAttoEth,
 		resolvedPendingOperationId,
 		selectedPendingOperationId,

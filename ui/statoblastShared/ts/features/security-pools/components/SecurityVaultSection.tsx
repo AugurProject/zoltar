@@ -1,3 +1,6 @@
+import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
+import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
+import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -42,7 +45,7 @@ import {
 } from '../lib/securityVaultAvailability.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { getActiveAppChainWalletBlocker, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
@@ -255,6 +258,8 @@ export function SecurityVaultSection({
 		vaultExistsOnchain,
 		walletRepBalanceAttoRep,
 	}
+	// The launcher blockers check the wallet first, so while the wallet blocks they hold the wallet reason for each dialog action too.
+	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
 	const depositLauncherBlocker = getVaultLauncherBlocker('deposit-rep', launcherBlockerContext)
 	const repExitLauncherBlocker = getVaultLauncherBlocker('rep-exit', launcherBlockerContext)
 	const claimFeesLauncherBlocker = getVaultLauncherBlocker('claim-fees', launcherBlockerContext)
@@ -279,6 +284,7 @@ export function SecurityVaultSection({
 	const adjustmentBlocker = repExitLauncherBlocker ?? (poolState !== undefined && poolState.lifecycleState !== 'operational' && poolState.lifecycleState !== 'ended' ? vaultLifecycleBlocker : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			oracleManagerDetails={oracleManagerDetails}
 			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
 			poolSecurityMultiplierBps={selectedPoolStatoblastSecurityMultiplierBps}
@@ -288,6 +294,7 @@ export function SecurityVaultSection({
 			busy={securityVaultActiveAction !== undefined}
 			pending={securityVaultActiveAction === 'setVaultUnderwritingLimit'}
 			onAdjust={onSetVaultUnderwritingLimit}
+			walletBlocker={repExitLauncherBlocker === undefined ? undefined : walletBlocker}
 		/>
 	)
 	const vaultReadinessActions = getSecurityPoolVaultReadinessActions([
@@ -311,7 +318,7 @@ export function SecurityVaultSection({
 			vaultExistsOnchain,
 			visibleDepositLauncherBlocker,
 			visibleRepExitLauncherBlocker,
-			walletBlocker: getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain }),
+			walletBlocker,
 		}),
 		...extraReadinessActions,
 	])
@@ -341,7 +348,20 @@ export function SecurityVaultSection({
 		repTokenSymbol,
 		securityVaultActiveAction,
 		securityVaultRepApproval,
+		walletGuard: { reason: depositLauncherBlocker, walletBlocker },
 	}
+	const [withdrawInitialPrice, setWithdrawInitialPrice] = useState<OracleInitialPriceInput>({ source: 'automatic', price: '' })
+	const withdrawPriceFieldId = useId()
+	useEffect(() => setWithdrawInitialPrice({ source: 'automatic', price: '' }), [autoLoadKey])
+	const needsWithdrawPrice = effectiveRepExitMode === 'withdraw' && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice)
+	const withdrawPrice = parseOracleInitialPrice(needsWithdrawPrice ? withdrawInitialPrice : { source: 'automatic', price: '' })
+	const withdrawPriceFields =
+		effectiveRepExitMode === 'redeem' ? undefined : (
+			<>
+				<InlineHint message={getOracleOperationExecutionMessage(oracleManagerDetails, hasValidOraclePrice)} />
+				{needsWithdrawPrice ? <OracleInitialPriceFields value={withdrawInitialPrice} onChange={setWithdrawInitialPrice} disabled={securityVaultActiveAction !== undefined} fieldId={withdrawPriceFieldId} /> : undefined}
+			</>
+		)
 	const repWithdrawAmountField =
 		effectiveRepExitMode === 'redeem' ? null : (
 			<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
@@ -352,12 +372,14 @@ export function SecurityVaultSection({
 			hasPositiveWithdrawAmount={hasPositiveWithdrawAmount}
 			hasWithdrawableRep={hasWithdrawableRep}
 			onRedeemRepFromVault={onRedeemRepFromVault}
-			onWithdrawRep={onWithdrawRep}
+			onWithdrawRep={() => onWithdrawRep(withdrawPrice.proposedRepPerEthPrice)}
 			repExitActionLabel={repExitActionLabel}
 			repExitEnabled={repExitEnabled}
-			repExitGuardMessage={repExitGuardMessage}
+			repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
+			disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined ? withdrawPriceFieldId : undefined}
 			repExitMode={effectiveRepExitMode}
 			securityVaultActiveAction={securityVaultActiveAction}
+			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 		/>
 	)
 	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
@@ -426,6 +448,7 @@ export function SecurityVaultSection({
 						</MetricGrid>
 						{repWithdrawAmountField}
 						{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
+						{withdrawPriceFields}
 						<div className='actions'>
 							{repExitActionButton}
 							<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
@@ -449,7 +472,7 @@ export function SecurityVaultSection({
 						pendingLabel={securityPoolCopy.claimingFees}
 						onClick={onRedeemFees}
 						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={{ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }}
+						availability={withWalletGuardFirst({ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }, { reason: claimFeesLauncherBlocker, walletBlocker })}
 					/>
 					<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
 						{commonCopy.cancel}
@@ -511,6 +534,7 @@ export function SecurityVaultSection({
 				)}
 				{repWithdrawAmountField}
 				{effectiveRepExitMode === 'redeem' ? null : stagedOperationTimeoutField}
+				{withdrawPriceFields}
 				<div className='actions'>{repExitActionButton}</div>
 				{effectiveRepExitMode === 'redeem' && currentSelectedVaultDetails?.disputeStakedAttoRep !== undefined && currentSelectedVaultDetails.disputeStakedAttoRep > 0n ? <p className='detail'>{securityPoolCopy.escalationWithdrawalRequiredDetail}</p> : undefined}
 			</SectionBlock>

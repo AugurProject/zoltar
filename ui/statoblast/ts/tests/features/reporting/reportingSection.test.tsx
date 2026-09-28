@@ -7,6 +7,8 @@ import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/form
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
+import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ActiveReportingDetails, EscalationDeposit, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
@@ -15,6 +17,7 @@ import { getReportingLockedUntilMessage } from '@zoltar/ui-statoblast-shared/fea
 import { ESCALATION_GAME_ACTIVATION_DELAY } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
 import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, spyOn, test } from 'bun:test'
+import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
@@ -2597,5 +2600,121 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).not.toContain('Claim before')
 		expect(document.body.textContent).not.toContain('Check back before')
 		expect(document.body.textContent).not.toContain('Progress to fork')
+	})
+
+	describe('wallet fixes', () => {
+		const settlementProps = (accountState: AccountState) =>
+			createProps({
+				accountState,
+				mode: 'withdraw-only',
+				reportingDetails: createReportingDetails({ questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }),
+				reportingForm: createReportingForm({ selectedWithdrawDepositIndexesByOutcome: createSelectedWithdrawDepositIndexesByOutcome({ yes: [0n] }) }),
+			})
+
+		test('offers the connect fix in place of the report reason and connects from it', async () => {
+			const { calls, walletActions } = createWalletActions()
+			const rendered = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection {...createProps({ accountState: createAccountState({ address: undefined }), reportingForm: createReportingForm({ reportAmount: '1', selectedOutcome: 'yes' }) })} />
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			const fix = expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Connect wallet')
+			expect(document.body.textContent).not.toContain('Connect a wallet before reporting on a question.')
+			await act(() => fireEvent.click(fix))
+			expect(calls).toEqual(['connect'])
+		})
+
+		test('describes the approval and the report by the one switch fix off Sepolia', async () => {
+			const { walletActions } = createWalletActions()
+			const rendered = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection
+						{...createProps({
+							accountState: createAccountState({ chainId: '0x1' }),
+							reportingDetails: createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: 0n, viewerWalletRepBalanceAttoRep: rep(10n) }),
+							reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '5', selectedOutcome: 'yes' }),
+						})}
+					/>
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(within(document.body).getAllByRole('button', { name: 'Switch to Sepolia' })).toHaveLength(1)
+			expectWalletFixDescribesAction(document.body, 'Approve 5 REP', 'Switch to Sepolia')
+			expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Switch to Sepolia')
+		})
+
+		test('returns focus to the report action once the connect fix unblocks it', async () => {
+			const accountState = signal<AccountState>(createAccountState({ address: undefined }))
+			const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
+			const props = createProps({
+				reportingDetails: createReportingDetails({ contributionFunding: 'vault', viewerPoolHeldVaultRepBackingAttoRep: rep(6n), viewerVaultExists: true }),
+				reportingForm: createReportingForm({ contributionFunding: 'vault', reportAmount: '5', selectedOutcome: 'yes' }),
+			})
+			const Harness = () => (
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection {...props} accountState={accountState.value} />
+				</WalletActionsProvider>
+			)
+			const rendered = await renderIntoDocument(<Harness />)
+			cleanupRenderedComponent = rendered.cleanup
+			const fix = expectWalletFixDescribesAction(document.body, reportingButtonLabel('Yes'), 'Connect wallet')
+			fix.focus()
+			await act(() => fireEvent.click(fix))
+			fix.blur()
+			await act(() => {
+				accountState.value = createAccountState()
+			})
+			expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
+			expect(document.activeElement).toBe(within(document.body).getByRole('button', { name: reportingButtonLabel('Yes') }))
+		})
+
+		test('returns focus to the first settle-all action once the shared connect fix unblocks it', async () => {
+			const accountState = signal<AccountState>(createAccountState({ address: undefined }))
+			const walletActions = { isConnectingWallet: false, isManagingWallet: false, onConnect: () => undefined, onSwitchNetwork: () => undefined }
+			const Harness = () => (
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection {...settlementProps(accountState.value)} />
+				</WalletActionsProvider>
+			)
+			const rendered = await renderIntoDocument(<Harness />)
+			cleanupRenderedComponent = rendered.cleanup
+			const fix = within(document.body).getByRole('button', { name: 'Connect wallet' })
+			fix.focus()
+			await act(() => fireEvent.click(fix))
+			fix.blur()
+			await act(() => {
+				accountState.value = createAccountState()
+			})
+			expect(document.activeElement).toBe(within(document.body).getByRole('button', { name: /^(Claim .* REP from Yes|Clear Yes deposits)/ }))
+		})
+
+		test('keeps an earlier reporting reason as text while the wallet is disconnected', async () => {
+			const { walletActions } = createWalletActions()
+			const rendered = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<ReportingSection {...createProps({ accountState: createAccountState({ address: undefined }), reportActionGuardMessage: 'Price expired', reportingForm: createReportingForm({ reportAmount: '1', selectedOutcome: 'yes' }) })} />
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(within(document.body).queryByRole('button', { name: 'Connect wallet' })).toBeNull()
+			expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'))
+		})
+
+		for (const [accountState, fixLabel] of [
+			[createAccountState({ address: undefined }), 'Connect wallet'],
+			[createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],
+		] as const)
+			test(`shares one ${fixLabel} fix across escalation settlement actions`, async () => {
+				const { walletActions } = createWalletActions()
+				const rendered = await renderIntoDocument(
+					<WalletActionsProvider walletActions={walletActions}>
+						<ReportingSection {...settlementProps(accountState)} />
+					</WalletActionsProvider>,
+				)
+				cleanupRenderedComponent = rendered.cleanup
+				expect(within(document.body).getAllByRole('button', { name: fixLabel })).toHaveLength(1)
+				expectWalletFixDescribesAction(document.body, /^(Settle selected Yes|Claim .* REP from Yes|Clear Yes deposits)/, fixLabel)
+			})
 	})
 })
