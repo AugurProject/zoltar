@@ -21,20 +21,22 @@ function isStagedRouteIneligible(error: unknown) {
 }
 
 export async function discoverVault(client: ChaosReadClient, pool: Address, escalationGame: Address, vault: Address, blockNumber: bigint): Promise<VaultSnapshot> {
-	const [state, openInterest, badDebt] = await drainConcurrent([
+	const [state, openInterest, badDebt, coverageCertified] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'securityVaults' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'getVaultOpenInterestAttoEth' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'vaultBadDebtAttoEth' }),
+		client.readContract({ abi: securityPoolAbi, address: pool, args: [vault], blockNumber, functionName: 'isVaultCoverageCertified' }),
 	])
-	const [repBackingUnits, capacityOwnershipAttoRep, claimableFeesAttoEth, feeIndex] = state
+	const [repBackingUnits, underwritingLimitAttoEth, claimableFeesAttoEth, feeIndex] = state
 	const [repBackingAttoRep, disputeStakedAttoRep] = await drainConcurrent([
 		client.readContract({ abi: securityPoolAbi, address: pool, args: [repBackingUnits], blockNumber, functionName: 'backingUnitsToAttoRep' }),
 		escalationGame === zeroAddress ? Promise.resolve(0n) : client.readContract({ abi: escalationGameAbi, address: escalationGame, args: [vault], blockNumber, functionName: 'disputeStakedRepByVaultAttoRep' }),
 	])
 	return {
 		address: vault,
+		coverageCertified,
 		badDebtAttoEth: badDebt.toString(),
-		capacityOwnershipAttoRep: capacityOwnershipAttoRep.toString(),
+		underwritingLimitAttoEth: underwritingLimitAttoEth.toString(),
 		claimableFeesAttoEth: claimableFeesAttoEth.toString(),
 		feeIndex: feeIndex.toString(),
 		disputeStakedAttoRep: disputeStakedAttoRep.toString(),
@@ -130,7 +132,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 							requestedDebtAttoEth: hasApproval ? operation.reservedLiquidationDebtAttoEth : operation.operationValue,
 							snapshot: {
 								targetBackingUnits: operation.snapshotTargetBackingUnits,
-								targetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep,
+								targetUnderwritingLimitAttoEth: operation.snapshotTargetUnderwritingLimitAttoEth,
 							},
 							targetVault: operation.targetVault,
 						},
@@ -155,7 +157,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 					address: pool.address,
 					args: [operation.operator, operation.operationValue],
 					blockNumber,
-					functionName: operationType === 1 ? 'withdrawRepFromVault' : 'adjustVaultBackingFactor',
+					functionName: operationType === 1 ? 'withdrawRepFromVault' : 'setVaultUnderwritingLimit',
 				})
 				executionExpectedSuccess = true
 			} catch (error) {
@@ -180,7 +182,7 @@ export async function discoverStagedOperations(client: ChaosReadClient, pool: Po
 			receiverVault: getAddress(operation.receiverVault),
 			reservedLiquidationDebtAttoEth: operation.reservedLiquidationDebtAttoEth.toString(),
 			snapshotTargetBackingUnits: operation.snapshotTargetBackingUnits.toString(),
-			snapshotTargetCapacityOwnershipAttoRep: operation.snapshotTargetCapacityOwnershipAttoRep.toString(),
+			snapshotTargetUnderwritingLimitAttoEth: operation.snapshotTargetUnderwritingLimitAttoEth.toString(),
 			snapshotTargetDisputeStakedAttoRep: targetVault.disputeStakedAttoRep,
 			snapshotTargetOpenInterestAttoEth: targetVault.openInterestAttoEth,
 			snapshotTotalPoolHeldAttoRep: pool.totalPoolHeldAttoRep,

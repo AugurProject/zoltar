@@ -6,7 +6,7 @@ import * as copy from '../../../copy/poolWorkspace.js'
 export function PoolCapacitySummary({ capacity, minted, showUnavailableReason = true }: { capacity: bigint | undefined; minted: bigint; showUnavailableReason?: boolean }) {
 	const value = (
 		<>
-			<CurrencyValue value={minted} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} copyable={false} exactWhenRoundedToZero />}</span>
+			<CurrencyValue value={minted} suffix={commonCopy.eth} exactWhenRoundedToZero /> <span className='pool-capacity-limit'>/ {capacity === undefined ? commonCopy.unavailable : <CurrencyValue value={capacity} suffix={commonCopy.eth} exactWhenRoundedToZero />}</span>
 		</>
 	)
 	return (

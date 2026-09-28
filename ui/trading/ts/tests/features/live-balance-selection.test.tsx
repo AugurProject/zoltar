@@ -59,8 +59,8 @@ const market: LiveMarket = {
 	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 	settlementCollateralAttoEth: 10n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
-	totalCapacityOwnershipAttoRep: 1n,
-	feeEligibleCapacityOwnershipAttoRep: 1n,
+	totalUnderwritingLimitAttoEth: 1n,
+	feeEligibleUnderwritingLimitAttoEth: 1n,
 	mintingCapacityCeilingAttoEth: 2n,
 	availableMintingCapacityAttoEth: 1n,
 	feeBps: 30n,
@@ -135,7 +135,6 @@ describe('live balance selection', () => {
 				walletSummaryRetryNonce: 0,
 				defaultSlippage: '0.5',
 				defaultValidityMinutes: '20',
-				refreshIntervalMilliseconds: 60_000,
 				services,
 			})
 			return null

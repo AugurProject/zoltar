@@ -9,7 +9,7 @@ import { SecurityPoolForkerForkData } from '../../statoblast/SecurityPoolForkerT
 contract AuctionSettlementPoolHarness {
 	struct Vault {
 		uint256 repBackingUnits;
-		uint256 capacityOwnershipAttoRep;
+		uint256 underwritingLimitAttoEth;
 		uint256 fees;
 		uint256 feeIndex;
 	}
@@ -17,7 +17,7 @@ contract AuctionSettlementPoolHarness {
 	mapping(address vault => Vault) public securityVaults;
 	mapping(address vault => uint256 badDebtAttoEth) public vaultBadDebtAttoEth;
 	uint256 public totalRepBackingUnits = 1e18;
-	uint256 public feeEligibleCapacityOwnershipAttoRep;
+	uint256 public feeEligibleUnderwritingLimitAttoEth;
 	uint256 public totalBadDebtAttoEth;
 	uint256 public badDebtGeneration;
 
@@ -31,10 +31,10 @@ contract AuctionSettlementPoolHarness {
 
 	function updateVaultFees(address) external {}
 
-	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 capacityOwnershipAttoRep, uint256 feeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external {
+	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 feeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external {
 		Vault storage current = securityVaults[vault];
 		current.repBackingUnits = repBackingUnits;
-		current.capacityOwnershipAttoRep = capacityOwnershipAttoRep;
+		current.underwritingLimitAttoEth = underwritingLimitAttoEth;
 		current.feeIndex = feeIndex;
 		vaultBadDebtAttoEth[vault] = newVaultBadDebtAttoEth;
 		totalBadDebtAttoEth = newTotalBadDebtAttoEth;
@@ -52,10 +52,10 @@ contract SecurityPoolForkerAuctionSettlementHarness is SecurityPoolForkerAuction
 			.badDebtGeneration;
 	}
 
-	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newCapacityOwnershipAttoRep, uint256 badDebtToAssignAttoEth) external {
+	function creditAuctionProceeds(ISecurityPool securityPool, address vault, uint256 amount, uint256 newUnderwritingLimitAttoEth, uint256 badDebtToAssignAttoEth) external {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		data.auctionRepBackingUnits = 10;
-		data.auctionedCapacityOwnershipAttoRep = 3;
-		_creditAuctionProceeds(securityPool, vault, data, amount, newCapacityOwnershipAttoRep, badDebtToAssignAttoEth, 1, amount == 0 ? 0 : data.auctionRepBackingUnits);
+		data.auctionedUnderwritingLimitAttoEth = 3;
+		_creditAuctionProceeds(securityPool, vault, data, amount, newUnderwritingLimitAttoEth, badDebtToAssignAttoEth, 1, amount == 0 ? 0 : data.auctionRepBackingUnits);
 	}
 }

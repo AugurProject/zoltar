@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { render } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -7,6 +8,8 @@ import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { largestExitForLongShares } from '@zoltar/trading-shared/trading/positions'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -33,8 +36,8 @@ const market: LiveMarket = {
 	shareTokenSupplyAttoShares: 10n * 10n ** 36n,
 	settlementCollateralAttoEth: 10n * 10n ** 18n,
 	currentRetentionRate: 10n ** 18n,
-	totalCapacityOwnershipAttoRep: 1n,
-	feeEligibleCapacityOwnershipAttoRep: 1n,
+	totalUnderwritingLimitAttoEth: 1n,
+	feeEligibleUnderwritingLimitAttoEth: 1n,
 	mintingCapacityCeilingAttoEth: 2n,
 	availableMintingCapacityAttoEth: 1n,
 	feeBps: 30n,
@@ -43,6 +46,17 @@ const market: LiveMarket = {
 	yesReserve: 50n * 10n ** 36n,
 	noReserve: 50n * 10n ** 36n,
 	lpTotalSupply: 50n * 10n ** 36n,
+}
+
+// Stands in for the chain: reports a new block every interval so the block-driven background refresh runs.
+function produceBlocks(milliseconds: number) {
+	let block = (appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n
+	appBlockWatcher.reportBlock(block)
+	const timer = setInterval(() => {
+		block += 1n
+		appBlockWatcher.reportBlock(block)
+	}, milliseconds)
+	return () => clearInterval(timer)
 }
 
 async function settle(milliseconds = 10) {
@@ -75,16 +89,19 @@ function walletHolding(label: string) {
 
 describe('live market refresh', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
+	let stopBlocks: (() => void) | undefined
 
 	installDomTestLifecycle({
 		afterTest: async () => {
+			stopBlocks?.()
+			stopBlocks = undefined
 			await cleanupRendered?.()
 			cleanupRendered = undefined
 		},
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
-	test('refreshes market data in the background without hiding loaded balances, retires stale quotes, and prices exits by collateral value', async () => {
+	test('refreshes market data in the background without hiding loaded balances, re-prices the live estimate, and stops a submission the chain prices differently', async () => {
 		let discoveredMarket = market
 		let discoveries = 0
 		let balanceLoads = 0
@@ -144,7 +161,9 @@ describe('live market refresh', () => {
 				}
 			},
 		}
-		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={40} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		stopBlocks?.()
+		stopBlocks = produceBlocks(40)
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
@@ -169,68 +188,60 @@ describe('live market refresh', () => {
 		expect([...observedBalanceLabels]).toEqual(['3 YES'])
 		expect(document.querySelector('[aria-busy="true"]')).toBeNull()
 
-		// A quote survives refreshes that do not change its basis and is retired when reserves move.
-		await act(async () => button('Preview trade').click())
-		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry quote')
-		expect(document.body.textContent).toContain('0.02 YES')
-		await settle(120)
-		expect(document.querySelector('.transaction-review-primary')).not.toBeNull()
-		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 36n }
-		await waitForDom(() => document.querySelector('.transaction-review-primary') === null, 'quote retired after reserve change')
-		expect(document.body.textContent).toContain('Preview trade')
-
-		// Exits are entered as collateral value and converted to the share amount the router redeems.
-		await act(async () => button('Exit').click())
+		// The estimate needs no preview step: it follows the typed amount and re-prices when the reserves move.
 		const amountInput = document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')
 		if (amountInput === null) throw new Error('Amount input is unavailable')
-		await act(() => {
-			amountInput.value = '0.5'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(document.body.textContent).toContain('Maximum insured YES exit')
-		await act(async () => button('Preview trade').click())
-		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'exit quote')
-		expect(exitRequests).toEqual([5n * 10n ** 35n])
-		expect(document.body.textContent).toContain('0.5 complete sets')
-		await act(() => {
-			amountInput.value = '0.0000000000000000001'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(actionFeedback()).toContain('Use no more than 18 decimal places')
-		expect(button('Preview trade').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
-		expect(button('Preview trade').disabled).toBeTrue()
-		// Guards resolve in priority order: an exit above the wallet balance is reported before the tighter insured-exit limit.
-		await act(() => {
-			amountInput.value = '9'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
+		expect(amountInput.value).toBe('')
+		const typeAmount = async (value: string) => {
+			await act(() => {
+				amountInput.value = value
+				amountInput.dispatchEvent(new Event('input', { bubbles: true }))
+			})
+			await settle(300)
+		}
+		await typeAmount('0.01')
+		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
+		expect(button('Buy YES').disabled).toBeFalse()
+		const estimateBeforeMove = document.querySelector('.transaction-review-primary')?.textContent
+		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 36n }
+		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent !== estimateBeforeMove, 'estimate re-priced after reserve change')
+
+		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
+		await act(async () => button('Sell').click())
+		expect(amountInput.value).toBe('')
+		expect(document.body.textContent).toContain('You hold 3 YES')
+		expect(['25%', '50%', 'Max'].every(label => button(label) instanceof HTMLButtonElement)).toBeTrue()
+		await typeAmount('0.5')
+		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell') === true, 'exit estimate')
+		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 35n })
+		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
+		const discoveriesBeforeSubmit = discoveries
+		await act(async () => button('Sell YES').click())
+		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error') !== null, 'price-moved notice')
+		expect(exitRequests).toEqual([expectedCompleteSets])
+		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('The price moved since your estimate')
+		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
+		await typeAmount('0.0000000000000000000000000000000000001')
+		expect(actionFeedback()).toContain('Enter a share amount with at most 36 decimal places.')
+		expect(button('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
+		expect(button('Sell YES').disabled).toBeTrue()
+		await typeAmount('9')
 		expect(actionFeedback()).toContain('Insufficient YES balance.')
-		expect(button('Preview trade').disabled).toBeTrue()
-		await act(() => {
-			amountInput.value = '2.5'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		expect(actionFeedback()).toContain('long-share balance and pair liquidity support an insured exit of at most')
 		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-notice')).toHaveLength(1)
-		expect(button('Preview trade').disabled).toBeTrue()
+		expect(button('Sell YES').disabled).toBeTrue()
 
 		// Simulation failures stay beside the action instead of only at the top of the route.
 		failExitSimulation = true
-		await act(() => {
-			amountInput.value = '0.25'
-			amountInput.dispatchEvent(new Event('input', { bubbles: true }))
-		})
-		await act(async () => button('Preview trade').click())
-		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error') !== null, 'simulation failure beside the action')
-		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('receiver rejected tokens')
+		await typeAmount('0.25')
+		await act(async () => button('Sell YES').click())
+		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error')?.textContent?.includes('receiver rejected tokens') === true, 'simulation failure beside the action')
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
-		expect(document.body.textContent).not.toContain('Transaction workflow needs attention')
 		yesBalance = 4n * 10n ** 36n
 		await waitForDom(() => walletHolding('Wallet YES') === '4 YES', 'refreshed balance after failure')
 	})
 
-	test('lets a balance read slower than the refresh interval finish instead of restarting it every cycle', async () => {
+	test('lets a balance read slower than the block interval finish instead of restarting it every cycle', async () => {
 		let balanceLoads = 0
 		let releaseBalances: () => void = () => undefined
 		const gate = new Promise<void>(resolve => {
@@ -252,7 +263,9 @@ describe('live market refresh', () => {
 				return { scope: shareBalanceScope(selected), invalid: 2n * 10n ** 36n, yes: 2n * 10n ** 36n, no: 2n * 10n ** 36n, lp: 0n }
 			},
 		}
-		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={30} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		stopBlocks?.()
+		stopBlocks = produceBlocks(30)
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
@@ -264,7 +277,7 @@ describe('live market refresh', () => {
 		expect(walletHolding('Wallet YES')).toBe('2 YES')
 	})
 
-	test('lets a background discovery slower than the refresh interval finish instead of starting another each tick', async () => {
+	test('lets a background discovery slower than the block interval finish instead of starting another on each block', async () => {
 		let discoveries = 0
 		let releaseDiscovery: () => void = () => undefined
 		let gate: Promise<void> | undefined
@@ -282,7 +295,9 @@ describe('live market refresh', () => {
 		gate = new Promise<void>(resolve => {
 			releaseDiscovery = resolve
 		})
-		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' refreshIntervalMilliseconds={30} onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		stopBlocks?.()
+		stopBlocks = produceBlocks(30)
+		const rendered = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		// While discovery is still running the route shows one live loading state and no terminal empty state.
 		await waitForDom(() => document.body.textContent?.includes('Discovering security pools…') === true, 'portfolio discovery status')
@@ -335,19 +350,71 @@ describe('live market refresh', () => {
 			['create-market', 'security-pools'],
 		] as const) {
 			const universes: Array<readonly bigint[]> = []
-			const rendered = await renderIntoDocument(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onUniversesChange={ids => universes.push(ids)} controllerServices={services} refreshIntervalMilliseconds={20} />)
+			stopBlocks?.()
+			stopBlocks = produceBlocks(20)
+			const rendered = await renderIntoDocument(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onUniversesChange={ids => universes.push(ids)} controllerServices={services} />)
 			cleanupRendered = rendered.cleanup
 			await waitForDom(() => rendered.container.querySelectorAll('.market-record').length === 1, `${route} candidate list`)
 			expect(universes.length).toBeGreaterThan(0)
 			expect(pagedRoutes.at(-1)).toBe(listRoute)
 			expect(rendered.container.querySelector('form.open-pool-form')).not.toBeNull()
 			expect(rendered.container.querySelector(`.market-record a[href="#/${route === 'create-market' ? 'create-market' : 'market'}/${pool}"]`)).not.toBeNull()
-			// The primary row action follows the workflow the landing names.
-			expect(rendered.container.querySelector('.market-record .button-link.primary')?.getAttribute('href')).toBe(`#/${route}/${pool}`)
+			// The primary row action follows the workflow the landing names: the trade landing leads with one-click outcome buttons.
+			if (route === 'market') {
+				expect(rendered.container.querySelector('.market-record .outcome-button--yes')?.getAttribute('href')).toBe(`#/market/${pool}?side=yes`)
+				expect(rendered.container.querySelector('.market-record .outcome-button--no')?.getAttribute('href')).toBe(`#/market/${pool}?side=no`)
+				expect(rendered.container.querySelector('.market-record .button-link.primary')).toBeNull()
+			} else expect(rendered.container.querySelector('.market-record .button-link.primary')?.getAttribute('href')).toBe(`#/${route}/${pool}`)
 			expect(universeDiscoveries).toBe(0)
 			await rendered.cleanup()
 			cleanupRendered = undefined
 			pagedRoutes.length = 0
+		}
+	})
+
+	test('a market-card outcome link opens the ticket on that side and drops the one-shot side from the hash', async () => {
+		window.location.hash = `#/market/${pool}?simulate=1&side=no`
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			validateLiveDeployment: async () => undefined,
+			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }], universeIds: [1n], selectedUniverseId: 1n }),
+		}
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
+		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('NO')
+		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)
+		// The reading column carries the question description as text, with contract addresses behind a disclosure.
+		expect(document.querySelector('.market-description__text')?.textContent).toBe('Resolves YES when the bridge opens.\n<b>not markup</b>')
+		expect(document.querySelector('.market-description b')).toBeNull()
+		expect(document.querySelector('details.read-only-detail-accordion')?.textContent).toContain(shareToken)
+		expect(document.querySelector('.market-ticket__panel')?.getAttribute('aria-label')).toBe('Trade ticket')
+	})
+
+	test('a side request for a market that never loads does not open the sheet on the next market', async () => {
+		const originalMatchMedia = window.matchMedia
+		Reflect.set(window, 'matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+		try {
+			const unavailablePool = `0x${'88'.repeat(20)}` as Address
+			window.location.hash = `#/market/${unavailablePool}?side=yes`
+			const addressedMarket = (address: Address) => (address.toLowerCase() === unavailablePool ? { ...market, pool: unavailablePool, loadError: 'market RPC unavailable' } : { ...market })
+			const services = {
+				...liveTradingControllerServices,
+				createTradingPublicClient: () => ({}),
+				validateLiveDeployment: async () => undefined,
+				discoverAddressedMarket: async (_client: unknown, _configuration: unknown, address: Address) => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [addressedMarket(address)], universeIds: [1n], selectedUniverseId: 1n }),
+			}
+			const rendered = await renderIntoDocument(<LiveTrading route={`market/${unavailablePool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+			cleanupRendered = rendered.cleanup
+			await waitForDom(() => document.body.textContent?.includes('This security pool could not be loaded') === true, 'unavailable market')
+			window.location.hash = `#/market/${pool}`
+			await act(() => render(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />, rendered.container))
+			await waitForDom(() => document.querySelector('.market-ticket-bar') !== null, 'collapsed ticket bar')
+			expect(document.querySelector('.market-ticket__panel')?.hasAttribute('hidden')).toBe(true)
+			expect(document.querySelector('[role="dialog"]')).toBeNull()
+		} finally {
+			Reflect.set(window, 'matchMedia', originalMatchMedia)
 		}
 	})
 })

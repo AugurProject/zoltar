@@ -21,6 +21,12 @@ function configureOpenQuestion(snapshot: ReturnType<typeof snapshotFixture>) {
 	const question = snapshot.questions[0]
 	if (question === undefined) throw new Error('Question fixture missing')
 	question.endTime = (BigInt(snapshot.anchor.timestamp) + 10_000n).toString()
+	const pool = snapshot.pools[0]
+	const vault = pool?.vaults[0]
+	if (pool === undefined || vault === undefined) throw new Error('Missing underwriting vault')
+	pool.totalUnderwritingLimitAttoEth = (2n * 10n ** 18n).toString()
+	vault.underwritingLimitAttoEth = pool.totalUnderwritingLimitAttoEth
+	pool.currentMintingCapacityAttoEth = pool.totalUnderwritingLimitAttoEth
 }
 
 describe('oracle-price expiry planning', () => {
@@ -32,14 +38,16 @@ describe('oracle-price expiry planning', () => {
 		pool.lastOracleSettlementTimestamp = (BigInt(snapshot.anchor.timestamp) - 100n).toString()
 		const expiry = (BigInt(pool.lastOracleSettlementTimestamp) + 300n).toString()
 
+		const existingGame = pool.escalationGame
 		for (const definitionId of ['statoblast.complete-set.create', 'statoblast.escalation.deposit', 'trading.liquidity.add-eth', 'trading.position.enter']) {
+			pool.escalationGame = definitionId === 'statoblast.escalation.deposit' ? existingGame : '0x0000000000000000000000000000000000000000'
 			expect(plan(snapshot, definitionId)?.deadlineTimestamp, definitionId).toBe(expiry)
 		}
 
 		pool.settlementCollateralAttoEth = '0'
 		expect(plan(snapshot, 'statoblast.staged.queue')?.deadlineTimestamp).toBe(expiry)
 
-		pool.totalCapacityOwnershipAttoRep = '0'
+		pool.totalUnderwritingLimitAttoEth = '0'
 		expect(plan(snapshot, 'statoblast.escalation.deposit')?.deadlineTimestamp).toBeUndefined()
 	})
 
@@ -57,7 +65,7 @@ describe('oracle-price expiry planning', () => {
 		pool.settlementCollateralAttoEth = '0'
 		expect(plan(snapshot, 'statoblast.staged.queue')).toBeUndefined()
 
-		pool.totalCapacityOwnershipAttoRep = '0'
+		pool.totalUnderwritingLimitAttoEth = '0'
 		expect(plan(snapshot, 'statoblast.escalation.deposit')).toBeDefined()
 	})
 })

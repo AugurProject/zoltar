@@ -61,7 +61,7 @@ const curatedAbiBindings = [
 	{ abi: zoltarAbi, artifactSource: 'contracts/Zoltar.sol', contract: 'Zoltar' },
 	{ abi: genesisReputationTokenAbi, artifactSource: 'contracts/GenesisReputationToken.sol', contract: 'GenesisReputationToken' },
 	{ abi: securityPoolFactoryAbi, artifactSource: 'contracts/statoblast/factories/SecurityPoolFactory.sol', contract: 'SecurityPoolFactory' },
-	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool', delegatedFunctions: [{ artifactSource: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contract: 'SecurityPoolOperationsDelegate', functions: ['adjustVaultBackingFactor'] }] },
+	{ abi: securityPoolAbi, artifactSource: 'contracts/statoblast/SecurityPool.sol', contract: 'SecurityPool', delegatedFunctions: [{ artifactSource: 'contracts/statoblast/SecurityPoolOperationsDelegate.sol', contract: 'SecurityPoolOperationsDelegate', functions: ['setVaultUnderwritingLimit'] }] },
 	{ abi: openOraclePriceCoordinatorAbi, artifactSource: 'contracts/statoblast/OpenOraclePriceCoordinator.sol', contract: 'OpenOraclePriceCoordinator' },
 	{ abi: liquidationApprovalRegistryAbi, artifactSource: 'contracts/statoblast/LiquidationApprovalRegistry.sol', contract: 'LiquidationApprovalRegistry' },
 	{ abi: securityPoolForkerAbi, artifactSource: 'contracts/statoblast/SecurityPoolForker.sol', contract: 'SecurityPoolForker' },
@@ -336,7 +336,7 @@ describe('contract operation classification', () => {
 				{ indexed: true, name: 'receiverVault', type: 'address' },
 				{ indexed: true, name: 'targetVault', type: 'address' },
 				{ indexed: false, name: 'securityBondDebtMovedAttoEth', type: 'uint256' },
-				{ indexed: false, name: 'capacityOwnershipMovedAttoRep', type: 'uint256' },
+				{ indexed: false, name: 'underwritingLimitMovedAttoEth', type: 'uint256' },
 				{ indexed: false, name: 'badDebtAttoEth', type: 'uint256' },
 			],
 		})
@@ -466,7 +466,7 @@ describe('contract operation classification', () => {
 
 	test('routes every prerequisite selector through workflow steps and validates semantic aliases', () => {
 		const stepSelectors = new Set<string>()
-		for (const file of ['open-oracle.ts', 'statoblast.ts', 'trading.ts', 'zoltar.ts']) {
+		for (const file of ['open-oracle.ts', 'statoblast.ts', 'statoblast/complete-sets.ts', 'trading.ts', 'zoltar.ts']) {
 			for (const selector of operationStepSelectors(path.resolve(import.meta.dir, '../../src/operations', file))) stepSelectors.add(selector)
 		}
 		for (const entry of MUTATING_CONTRACT_SURFACE.filter(candidate => candidate.classification === 'prerequisite')) {

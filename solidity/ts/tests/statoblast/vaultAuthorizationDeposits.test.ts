@@ -49,6 +49,13 @@ describe('Vault authorization deposit accounting', () => {
 		}
 		if (committed) {
 			await manipulatePriceOracle(client, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, 10n ** 18n)
+			await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'setUnderwritingLimit', args: [amount / 2n] }) })
+			if (existingOwner) {
+				const ownerClient = createWriteClient(mockWindow, BigInt(owner))
+				await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'setUnderwritingLimit', args: [amount / 2n] }) })
+				await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'certifyVaultCoverage', args: [owner] }) })
+			}
+			await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'certifyVaultCoverage', args: [client.account.address] }) })
 			await createCompleteSet(client, pool, 10n ** 18n)
 		}
 		const nonce = toHex(1n, { size: 32 })
@@ -102,7 +109,7 @@ describe('Vault authorization deposit accounting', () => {
 		assert.strictEqual(addedVault.repBackingUnits, quotedUnits)
 		assert.strictEqual(await backingUnitsToAttoRep(client, pool, addedVault.repBackingUnits), amount)
 		assert.strictEqual(await backingUnitsToAttoRep(client, pool, existingVault.repBackingUnits), amount)
-		assert.strictEqual(addedVault.capacityOwnershipAttoRep, amount)
+		assert.strictEqual(addedVault.underwritingLimitAttoEth, 0n)
 	})
 
 	test('credits an existing owner without redistributing its top-up to another vault', async () => {
@@ -110,7 +117,7 @@ describe('Vault authorization deposit accounting', () => {
 		await deposit()
 		assert.strictEqual(await backingUnitsToAttoRep(client, pool, (await getSecurityVault(client, pool, owner)).repBackingUnits), amount * 2n)
 		assert.strictEqual(await backingUnitsToAttoRep(client, pool, (await getSecurityVault(client, pool, client.account.address)).repBackingUnits), amount)
-		assert.strictEqual((await getSecurityVault(client, pool, owner)).capacityOwnershipAttoRep, amount * 2n)
+		assert.strictEqual((await getSecurityVault(client, pool, owner)).underwritingLimitAttoEth, 0n)
 	})
 
 	test('invalid authorization rolls back prepared vault state', async () => {
@@ -118,7 +125,7 @@ describe('Vault authorization deposit accounting', () => {
 		await assert.rejects(deposit(toHex(0n, { size: 32 })), /invalid|ECDSA/i)
 		assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'authorizationState', args: [owner, boundNonce] }), false)
 		assert.strictEqual((await getSecurityVault(client, pool, owner)).repBackingUnits, 0n)
-		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [owner] }), 0n)
+		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultUnderwritingLimitAttoEth', args: [owner] }), 0n)
 	})
 
 	test('initializes an empty pool through authorization and rejects replay', async () => {
@@ -128,13 +135,13 @@ describe('Vault authorization deposit accounting', () => {
 		await assert.rejects(deposit(), /already used/)
 	})
 
-	test('rejects zero-capacity authorization without consuming REP or its nonce', async () => {
+	test('REP authorization does not authorize an ETH commitment', async () => {
 		const { client, pool, token, owner, boundNonce, deposit } = await prepare(true, false, 2n ** 256n - 1n)
-		await assert.rejects(deposit(), /Capacity must be positive/)
-		assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'balanceOf', args: [owner] }), amount)
-		assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'authorizationState', args: [owner, boundNonce] }), false)
-		assert.strictEqual((await getSecurityVault(client, pool, owner)).repBackingUnits, 0n)
-		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [owner] }), 0n)
+		await deposit()
+		assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'balanceOf', args: [owner] }), 0n)
+		assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'authorizationState', args: [owner, boundNonce] }), true)
+		assert.strictEqual(await backingUnitsToAttoRep(client, pool, (await getSecurityVault(client, pool, owner)).repBackingUnits), amount)
+		assert.strictEqual(await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultUnderwritingLimitAttoEth', args: [owner] }), 0n)
 	})
 	test.each([false, true])('ordinary, permit, and authorization deposits produce identical accounting (accrued fees: %s)', async accruedFees => {
 		const depositAmount = amount + 37n
@@ -173,7 +180,7 @@ describe('Vault authorization deposit accounting', () => {
 			existing: await getSecurityVault(client, pool, client.account.address),
 			pool: await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getPoolAccountingSnapshot' }),
 			backing: await backingUnitsToAttoRep(client, pool, (await getSecurityVault(client, pool, owner)).repBackingUnits),
-			target: await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'vaultTargetBackingFactorBps', args: [owner] }),
+			target: await client.readContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'getVaultUnderwritingLimitAttoEth', args: [owner] }),
 		})
 		const depositTimestamp = (await fixture.mockWindow.getTime()) + 10n
 		const results = []
