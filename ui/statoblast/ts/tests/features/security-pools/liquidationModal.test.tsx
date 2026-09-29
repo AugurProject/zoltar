@@ -98,14 +98,6 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	}
 }
 
-function getTransactionReviewValue(label: string) {
-	const labelElement = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === label)
-	if (!(labelElement instanceof HTMLElement)) throw new Error(`Expected ${label} label`)
-	const valueElement = labelElement.nextElementSibling
-	if (!(valueElement instanceof HTMLElement)) throw new Error(`Expected ${label} value`)
-	return valueElement.textContent
-}
-
 function createEndedPoolState() {
 	return evaluateSecurityPoolState({
 		lifecycleState: 'ended',
@@ -284,7 +276,7 @@ describe('LiquidationModal', () => {
 		expect(submit).toHaveBeenCalledWith(zeroAddress, zeroAddress, 3n * ATTO_ETH_PER_ETH)
 	})
 
-	test('reviews the complete queued liquidation funding sequence and resulting balances', async () => {
+	test('keeps queued liquidation inputs without a funding review panel', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
 			liquidationFundingPreview: {
@@ -301,15 +293,8 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
-		const review = within(document.body).getByRole('heading', { name: 'Transaction review' }).closest('section')
-		if (review === null) throw new Error('Expected transaction review')
-		expect(review.textContent).toContain('Buffered queue cost1.20 ETH')
-		expect(review.textContent).toContain('ETH wrapped to WETH1.00 ETH')
-		expect(review.textContent).toContain('REP locked for initial report10.00 REP')
-		expect(review.textContent).toContain('WETH locked for initial report2.00 WETH')
-		expect(review.textContent).toContain('Total wallet ETH required2.20 ETH')
-		expect(review.textContent).toContain('Resulting wallet ETH2.80 ETH')
-		expect(review.textContent).toContain('request funding may require multiple wallet transactions')
+		expect(within(document.body).queryByRole('heading', { name: 'Transaction review' })).toBeNull()
+		expect(within(document.body).getByRole('button', { name: 'Queue liquidation' })).not.toBeNull()
 	})
 
 	test('uses neutral missing-state copy after a queued liquidation succeeds without visible manager state', async () => {
@@ -1475,11 +1460,7 @@ describe('LiquidationModal', () => {
 		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
 		expect(maxButton.disabled).toBe(true)
 
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'REP backing transferred')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
-		const repMovedValue = repMovedLabel.nextElementSibling
-		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
-		expect(repMovedValue.textContent).toBe('0.00 REP')
+		expect(document.querySelector('.transaction-review')).toBeNull()
 	})
 
 	test('allows an atomic bonus-priced liquidation', async () => {
@@ -1507,8 +1488,6 @@ describe('LiquidationModal', () => {
 		const documentQueries = within(document.body)
 		const button = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(button.disabled).toBe(false)
-		expect(documentQueries.getByText(/Residual commitments, escalation claims, and previously earned fees stay with the target/)).not.toBeNull()
-		expect(documentQueries.getByText(/no commitment is written off/)).not.toBeNull()
 	})
 
 	test('previews the exact post-backingUnits-conversion REP amount after a pool donation', () => {
@@ -1724,26 +1703,6 @@ describe('LiquidationModal', () => {
 		expect(simulation.callerAfter.disputeStakedAttoRep).toBe(0n)
 	})
 
-	test('renders the full pool-held vault REP backing award and retained fees', async () => {
-		const renderedComponent = await renderLiquidationModal({
-			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
-			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ATTO_ETH_PER_ETH }),
-			liquidationDebtEthAmount: '50',
-			selectedPool: createSelectedPool({ statoblastSecurityMultiplierBps: 20_000n }),
-			targetVaultSummary: createTargetVaultSummary({
-				disputeStakedAttoRep: 11n * ATTO_ETH_PER_ETH,
-				vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH,
-				underwritingLimitAttoEth: 100n * ATTO_ETH_PER_ETH,
-				claimableFeesAttoEth: 7n * ATTO_ETH_PER_ETH,
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('52.50 REP')
-		expect(getTransactionReviewValue('REP backing transferred')).toBe('52.50 REP')
-		expect(getTransactionReviewValue('Target accrued fees retained')).toBe('7.00 ETH')
-	})
-
 	test('does not offer liquidation when live pool-held and dispute REP keep the target healthy', async () => {
 		const renderedComponent = await renderLiquidationModal({
 			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
@@ -1757,9 +1716,7 @@ describe('LiquidationModal', () => {
 			}),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('0.00 REP')
-		expect(getTransactionReviewValue('REP backing transferred')).toBe('0.00 REP')
+		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation')
 	})
 
 	test('uses the shared chain timestamp context for oracle expiry text', async () => {
@@ -1971,7 +1928,7 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getAllByText('Select a target vault that is different from the receiver vault.')).toHaveLength(2)
 	})
 
-	test('shows the receiver vault and a post-liquidation simulation', async () => {
+	test('shows the receiver vault without a post-liquidation review panel', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({
 			accountAddress: callerVaultAddress,
@@ -1999,9 +1956,6 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Receiver vault REP backing')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
-		expect(documentQueries.getByText('Receiver vault REP backing after')).not.toBeNull()
-		expect(documentQueries.getByText('Resulting receiver underwriting commitments')).not.toBeNull()
-		expect(documentQueries.getByText('REP backing transferred')).not.toBeNull()
 	})
 
 	test('shows delegated receiver approval quota, reservation, expiry, and health limits', async () => {
@@ -2060,8 +2014,6 @@ describe('LiquidationModal', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation', 'The receiver vault would fall below the approved minimum post-liquidation health factor.')
-		expect(getTransactionReviewValue('Estimated receiver health')).toBe('Below required health')
-		expect(document.querySelector('.liquidation-outcome-review .transaction-review-primary')?.children).toHaveLength(3)
 	})
 
 	test('shows an invalidated approval nonce as unavailable and disables delegated submission', async () => {
@@ -2204,45 +2156,6 @@ describe('LiquidationModal', () => {
 		expect(onLoadLiquidationApproval).toHaveBeenCalledTimes(1)
 	})
 
-	test('shows the capped award without writing off commitments in a full takeover', async () => {
-		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
-		const renderedComponent = await renderLiquidationModal({
-			accountAddress: callerVaultAddress,
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: true,
-				lastPrice: 10n * 10n ** 18n,
-			}),
-			liquidationDebtEthAmount: '2',
-			selectedPool: createSelectedPool({
-				statoblastSecurityMultiplierBps: 20_000n,
-			}),
-			callerVaultSummary: createTargetVaultSummary({
-				vaultAttoRepBacking: 100n * 10n ** 18n,
-				underwritingLimitAttoEth: 2n * 10n ** 18n,
-				vaultAddress: callerVaultAddress,
-			}),
-			targetVaultSummary: createTargetVaultSummary({
-				vaultAttoRepBacking: 2n * 10n ** 18n,
-				underwritingLimitAttoEth: 2n * 10n ** 18n,
-				claimableFeesAttoEth: 25n * 10n ** 16n,
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'REP backing transferred')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
-		const repMovedValue = repMovedLabel.nextElementSibling
-		if (!(repMovedValue instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
-
-		expect(repMovedValue.textContent).toBe('2.00 REP')
-		expect(getTransactionReviewValue('Nominal REP award (before cap)')).toBe('21.00 REP')
-		expect(within(document.body).queryByText('Residual bad debt recorded')).toBeNull()
-		expect(getTransactionReviewValue('Commitment transferred')).toBe('2.00 ETH')
-		const accounting = within(document.body).getByText('Accounting breakdown').closest('details')
-		expect(accounting?.open).toBe(false)
-		expect(getTransactionReviewValue('Target accrued fees retained')).toBe('0.25 ETH')
-	})
-
 	test('allows execution when the entered amount exceeds the executable cap because execution will clamp it', async () => {
 		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const renderedComponent = await renderLiquidationModal({
@@ -2303,12 +2216,10 @@ describe('LiquidationModal', () => {
 		expect(executeButton.disabled).toBe(true)
 		expect(document.body.textContent?.includes('The target vault would fall below the minimum underwriting commitments after liquidation.')).toBe(false)
 		expect(within(document.body).getByText('The target vault would fall below the minimum commitment after liquidation.')).not.toBeNull()
-		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Commitment transferred')
-		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
-		expect(capacityOwnershipAssumedLabel.nextElementSibling?.textContent).toBe('99.60 ETH')
+		expect(document.querySelector('.transaction-review')).toBeNull()
 	})
 
-	test('uses simulation labels for mock prices and clamps the preview once the entered amount exceeds the executable cap', async () => {
+	test('uses simulation labels and permits amounts above the executable cap', async () => {
 		function LiquidationSimulationHarness() {
 			const [liquidationDebtEthAmount, setLiquidationAmount] = useState('5000')
 
@@ -2374,25 +2285,13 @@ describe('LiquidationModal', () => {
 		const executeButton = documentQueries.getByRole('button', { name: 'Execute vault liquidation' }) as HTMLButtonElement
 		expect(executeButton.disabled).toBe(false)
 		expect(documentQueries.getByText(/Simulation REP \/ ETH/)).not.toBeNull()
-		const repMovedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'REP backing transferred')
-		if (!(repMovedLabel instanceof HTMLElement)) throw new Error('Expected REP backing transferred label')
-		const repMovedValueBefore = repMovedLabel.nextElementSibling
-		if (!(repMovedValueBefore instanceof HTMLElement)) throw new Error('Expected Rep Moved value')
-		const clampedPreviewText = repMovedValueBefore.textContent
-		const capacityOwnershipAssumedLabel = Array.from(document.body.querySelectorAll('.transaction-review-row > span, .transaction-review-detail-row > span')).find(element => element.textContent === 'Commitment transferred')
-		if (!(capacityOwnershipAssumedLabel instanceof HTMLElement)) throw new Error('Expected security-bond debt moved label')
-		const capacityOwnershipAssumedValue = capacityOwnershipAssumedLabel.nextElementSibling
-		if (!(capacityOwnershipAssumedValue instanceof HTMLElement)) throw new Error('Expected Underwriting commitments assumed value')
-		expect(capacityOwnershipAssumedValue.textContent).toBe('2 500.00 ETH')
 
 		await act(() => {
 			fireEvent.input(amountInput, { target: { value: '2500' } })
 		})
 
-		const repMovedValueAfter = repMovedLabel.nextElementSibling
-		if (!(repMovedValueAfter instanceof HTMLElement)) throw new Error('Expected Rep Moved value after input')
-		expect(repMovedValueAfter.textContent).toBe(clampedPreviewText)
-		expect(capacityOwnershipAssumedValue.textContent).toBe('2 500.00 ETH')
+		expect(executeButton.disabled).toBe(false)
+		expect(document.querySelector('.transaction-review')).toBeNull()
 
 		render(null, container)
 		container.remove()

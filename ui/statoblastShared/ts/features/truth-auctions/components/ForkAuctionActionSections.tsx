@@ -1,16 +1,11 @@
 import type { ComponentChildren } from 'preact'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { renderTruthAuctionCapacityOwnershipNotice, renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
@@ -113,35 +108,19 @@ export function ForkAuctionBidsStatusSection({ error, loading, onRetry, retrying
 }
 
 export function ForkAuctionSubmitBidSection({
-	auctionSecurityPoolAddress,
-	enteredBidAmount,
-	enteredBidPrice,
-	estimatedAttoRep,
 	onBidAmountChange,
 	onBidPriceChange,
-	questionTitle,
-	resultingBidBalanceAttoEth,
-	selectedAuctionLabel,
 	submitBidAction,
 	submitBidAmount,
 	submitBidPreviewPrice,
 	submitBidPrice,
-	submittedBidPrice,
 }: {
-	auctionSecurityPoolAddress: Address | undefined
-	enteredBidAmount: bigint | undefined
-	enteredBidPrice: bigint | undefined
-	estimatedAttoRep: bigint | undefined
 	onBidAmountChange: (value: string) => void
 	onBidPriceChange: (value: string) => void
-	questionTitle: string | undefined
-	resultingBidBalanceAttoEth: bigint | undefined
-	selectedAuctionLabel: string
 	submitBidAction: ComponentChildren
 	submitBidAmount: string
 	submitBidPreviewPrice: bigint | undefined
 	submitBidPrice: string
-	submittedBidPrice: bigint | undefined
 }) {
 	return (
 		<SectionBlock title={forkAuctionCopy.submitBidTitle} variant='embedded'>
@@ -156,23 +135,6 @@ export function ForkAuctionSubmitBidSection({
 					<AmountField label={forkAuctionCopy.bidPrice} onChange={onBidPriceChange} unit={forkAuctionCopy.bidPriceUnit} value={submitBidPrice} />
 					<AmountField label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
 				</div>
-				<TransactionReview
-					context={[
-						{ label: commonCopy.question, value: questionTitle ?? commonCopy.unavailable },
-						{ label: commonCopy.securityPoolAddress, value: auctionSecurityPoolAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionSecurityPoolAddress} /> },
-						{ label: commonCopy.outcome, value: selectedAuctionLabel },
-					]}
-					primary={[
-						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={enteredBidAmount} suffix={commonCopy.eth} /> },
-						{ label: forkAuctionCopy.potentialRepIfFilled, value: <CurrencyValue value={estimatedAttoRep} suffix={commonCopy.rep} /> },
-					]}
-					details={[
-						{ label: forkAuctionCopy.enteredBidPrice, value: enteredBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(enteredBidPrice) },
-						{ label: forkAuctionCopy.submittedTickPrice, value: submittedBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(submittedBidPrice) },
-						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidBalanceAttoEth} suffix={commonCopy.eth} /> },
-					]}
-					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCapacityOwnershipRisk]}
-				/>
 				<div className='actions'>{submitBidAction}</div>
 			</div>
 		</SectionBlock>

@@ -48,7 +48,7 @@ for (const state of ['expired', 'pending', 'ready', 'valid']) {
 			expect(queries.queryByRole('button')).toBeNull()
 		} else if (state === 'ready') {
 			expect(rendered.container.textContent).toContain('Price report #7 is ready.')
-			fireEvent.click(queries.getByRole('button', { name: 'Settle report #7…' }))
+			fireEvent.click(queries.getByRole('button', { name: 'Settle report #7' }))
 			expect(viewed).toBe(7n)
 			expect(refreshed).toBe(1)
 		} else {

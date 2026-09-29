@@ -322,6 +322,39 @@ describe('SecurityVaultSection', () => {
 		expect(submitted).toBe('0')
 	})
 
+	test.each([false, true])('shows the oracle prerequisite before opening the commitment form: fresh=%s', async fresh => {
+		let openedOracle = false
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<ChainTimestampContext.Provider value={signal(2n)}>
+					<SecurityVaultSection
+						{...createSecurityVaultSectionProps({
+							modalFirst: true,
+							oracleManagerDetails: createOracleManagerDetails({ isPriceValid: fresh }),
+							securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+							onViewPriceOracle: () => {
+								openedOracle = true
+							},
+						})}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+		).cleanup
+		const page = within(document.body)
+		expect(page.queryByRole('dialog')).toBeNull()
+		const openOracle = page.queryByRole('button', { name: 'Open price oracle' })
+		expect(openOracle !== null).toBe(!fresh)
+		if (openOracle !== null) {
+			expect(document.body.textContent).toContain('A new Open Oracle report is needed')
+			fireEvent.click(openOracle)
+			expect(openedOracle).toBe(true)
+		}
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const fields = [...dialog.querySelectorAll('input')]
+		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }).id)
+	})
+
 	test.each([
 		[true, false, false, 'Executes immediately with the current oracle price.'],
 		[false, false, false, 'Queues for execution after oracle settlement.'],
@@ -1620,7 +1653,7 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 
-	for (const action of ['queueWithdrawRep', 'redeemFees', 'redeemRepFromVault'] as const) {
+	for (const action of ['queueWithdrawRep', 'redeemRepFromVault'] as const) {
 		test(`closes the vault dialog for a matching ${action} success`, async () => {
 			const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 			const result = signal<SecurityVaultSectionProps['securityVaultResult']>(undefined)
@@ -1689,7 +1722,7 @@ test('deposit submits from the approval form without replacing it with another r
 	}
 })
 
-for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault', 'redeemFees'] as const) {
+for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault'] as const) {
 	test(`${action} keeps its form and review scope open when Cancel is pressed while pending`, async () => {
 		const dom = installDomEnvironment()
 		const active = signal<SecurityVaultSectionProps['securityVaultActiveAction']>(undefined)
@@ -1716,7 +1749,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 		const rendered = await renderIntoDocument(<Harness />)
 		try {
 			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
-			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim fees' : label })
+			const dialog = within(document.body).getByRole('dialog', { name: label })
 			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 			await review

@@ -75,8 +75,7 @@ export const loadingOracleBalances = 'Loading oracle balances…'
 export const withdrawBalance = (tokenSymbol: string) => `Withdraw ${tokenSymbol}`
 export const withdrawingBalance = (tokenSymbol: string) => `Withdrawing ${tokenSymbol}…`
 export const checkingWithdrawalBalance = (tokenSymbol: string) => `Checking ${tokenSymbol} balance…`
-export const confirmWithdrawal = 'Confirm withdrawal'
-export const formatWithdrawalBalanceChanged = (tokenSymbol: CopyTemplateValue) => `Your withdrawable ${tokenSymbol} balance changed. Review the updated amount and confirm again`
+export const formatWithdrawalBalanceChanged = (tokenSymbol: CopyTemplateValue) => `Your withdrawable ${tokenSymbol} balance changed. Try withdrawing the updated balance again.`
 export const withdrawalBalanceRefreshFailed = 'Unable to refresh the withdrawable balance'
 export const numberOfReports = 'Number of reports'
 export const openReport = 'Open report'

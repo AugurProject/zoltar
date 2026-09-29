@@ -199,6 +199,7 @@ export function SecurityPoolVaultWorkspace({
 					]}
 					autoLoadVault
 					modalFirst
+					onViewPriceOracle={() => onSelectedPoolViewChange('price-oracle')}
 					onViewStagedOperations={() => onSelectedPoolViewChange('staged-operations')}
 					oracleManagerDetails={currentPoolOracleManagerDetails}
 					poolState={poolState}

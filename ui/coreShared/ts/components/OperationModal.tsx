@@ -47,7 +47,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = !hostsExternalReview && ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
 	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
-	const showSteps = activeStep !== undefined && !approvalOnly && !singleFormAction
+	const showSteps = ownedWorkflow?.showReviewDialog === true && activeStep !== undefined && !approvalOnly && !singleFormAction
 	useEffect(() => {
 		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)

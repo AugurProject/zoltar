@@ -12,14 +12,13 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/TransactionStatusCard.js'
-import { getLiquidationExecutionFailureDetail, type simulateLiquidation } from '../lib/liquidation.js'
-import { formatHealthFactorBps, getApprovalStatus, type LiquidationExecutionMode, type QueuedLiquidationOperationView, type QueuedLiquidationStatus } from '../lib/liquidationModalGuards.js'
+import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
+import { formatHealthFactorBps, getApprovalStatus, type QueuedLiquidationOperationView, type QueuedLiquidationStatus } from '../lib/liquidationModalGuards.js'
 import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
 import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
-import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export function QueuedLiquidationStatusCard({
 	onViewInStagedOperations,
@@ -202,93 +201,5 @@ export function LiquidationApprovalSummary({ approvalNonceInvalidated, currentTi
 				</MetricField>
 			</ReadOnlyDetailAccordion>
 		</div>
-	)
-}
-
-export function LiquidationTransactionReview({
-	receiverHealthy,
-	liquidationExecutionMode,
-	liquidationFundingPreview,
-	liquidationSimulation,
-	selectedPool,
-	walletBalanceAttoEth,
-}: {
-	receiverHealthy: boolean | undefined
-	liquidationExecutionMode: LiquidationExecutionMode
-	liquidationFundingPreview: LiquidationFundingPreview | undefined
-	liquidationSimulation: ReturnType<typeof simulateLiquidation> | undefined
-	selectedPool: ListedSecurityPool | undefined
-	walletBalanceAttoEth: bigint | undefined
-}) {
-	return (
-		<TransactionReview
-			context={[{ label: commonCopy.question, value: selectedPool?.marketDetails.title ?? commonCopy.unavailable }]}
-			className='liquidation-outcome-review'
-			primary={[
-				{ label: liquidationCopy.securityBondDebtMoved, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.debtMovedAttoEth} suffix={commonCopy.eth} /> },
-				{ label: liquidationCopy.repMoved, value: <CurrencyValue value={liquidationSimulation?.vaultAttoRepBackingToTransfer} suffix={commonCopy.rep} /> },
-				{ label: liquidationCopy.estimatedReceiverHealth, value: receiverHealthy === undefined ? commonCopy.unavailable : <Badge tone={receiverHealthy ? 'ok' : 'blocked'}>{receiverHealthy ? liquidationCopy.meetsRequiredHealth : liquidationCopy.belowRequiredHealth}</Badge> },
-			]}
-			details={[
-				...(liquidationSimulation !== undefined && liquidationSimulation.badDebtAttoEth > 0n ? [{ label: liquidationCopy.residualBadDebt, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation.badDebtAttoEth} suffix={commonCopy.eth} /> }] : []),
-				...(liquidationExecutionMode === 'queue' ? [{ label: liquidationCopy.totalWalletEthRequiredAttoEth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.totalWalletEthRequiredAttoEth} suffix={commonCopy.eth} /> }] : []),
-			]}
-			disclosures={[
-				{
-					title: liquidationCopy.accountingDetails,
-					rows: [
-						{ label: liquidationCopy.grossRepAwardAttoRep, value: <CurrencyValue value={liquidationSimulation?.grossRepAwardAttoRep} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.targetAccruedFeesRetained, value: <CurrencyValue exactWhenRoundedToZero value={liquidationSimulation?.targetAccruedFeesRetained} suffix={commonCopy.eth} /> },
-						{ label: liquidationCopy.resultingCallerRep, value: <CurrencyValue value={liquidationSimulation?.callerAfter.vaultAttoRepBacking} suffix={commonCopy.rep} /> },
-						{ label: liquidationCopy.resultingReceiverCapacityOwnership, value: <CurrencyValue value={liquidationSimulation?.callerAfter.underwritingLimitAttoEth} suffix={commonCopy.eth} /> },
-					],
-				},
-				...(liquidationExecutionMode === 'queue'
-					? [
-							{
-								title: liquidationCopy.fundingDetails,
-								rows: [
-									{ label: liquidationCopy.bufferedQueueCost, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.queueOperationValueAttoEth} suffix={commonCopy.eth} /> },
-									{ label: liquidationCopy.ethWrappedToWeth, value: <CurrencyValue exactWhenRoundedToZero value={liquidationFundingPreview?.wethShortfallAttoEth} suffix={commonCopy.eth} /> },
-									{ label: liquidationCopy.repLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportRepRequiredAttoRep} suffix={commonCopy.rep} /> },
-									{ label: liquidationCopy.wethLockedForInitialReport, value: <CurrencyValue value={liquidationFundingPreview?.initialReportWethRequiredAttoEth} suffix={commonCopy.weth} /> },
-									{
-										label: liquidationCopy.resultingWalletEth,
-										value: (
-											<CurrencyValue
-												value={liquidationFundingPreview === undefined || walletBalanceAttoEth === undefined || liquidationFundingPreview.totalWalletEthRequiredAttoEth > walletBalanceAttoEth ? undefined : walletBalanceAttoEth - liquidationFundingPreview.totalWalletEthRequiredAttoEth}
-												suffix={commonCopy.eth}
-											/>
-										),
-									},
-									{
-										label: liquidationCopy.resultingWalletRep,
-										value: (
-											<CurrencyValue
-												value={liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportRepRequiredAttoRep > liquidationFundingPreview.currentRepBalanceAttoRep ? undefined : liquidationFundingPreview.currentRepBalanceAttoRep - liquidationFundingPreview.initialReportRepRequiredAttoRep}
-												suffix={commonCopy.rep}
-											/>
-										),
-									},
-									{
-										label: liquidationCopy.resultingWalletWeth,
-										value: (
-											<CurrencyValue
-												value={
-													liquidationFundingPreview === undefined || liquidationFundingPreview.initialReportWethRequiredAttoEth > liquidationFundingPreview.currentWethBalanceAttoEth + liquidationFundingPreview.wethShortfallAttoEth
-														? undefined
-														: liquidationFundingPreview.currentWethBalanceAttoEth + liquidationFundingPreview.wethShortfallAttoEth - liquidationFundingPreview.initialReportWethRequiredAttoEth
-												}
-												suffix={commonCopy.weth}
-											/>
-										),
-									},
-								],
-							},
-						]
-					: []),
-			]}
-			risks={[liquidationCopy.liquidationStateRisk, ...(liquidationExecutionMode === 'queue' ? [liquidationCopy.queuedLiquidationRisk, liquidationCopy.queuedFundingSequenceRisk] : [])]}
-		/>
 	)
 }

@@ -79,6 +79,8 @@ export function VaultBackingFactorForm({
 	if (priceErrorShown) disabledReasonElementId = `${priceFieldId}-error`
 	return (
 		<>
+			{needsInitialPrice ? <InlineHint message={securityPoolCopy.commitmentNeedsOracleReport} /> : undefined}
+			{needsInitialPrice ? <OracleInitialPriceFields managerAddress={details?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={busy} fieldId={priceFieldId} /> : undefined}
 			<AmountField
 				fillMax={{ amount: maximum }}
 				allowZero
@@ -117,7 +119,6 @@ export function VaultBackingFactorForm({
 				</>
 			) : undefined}
 			<InlineHint message={executionMessage} />
-			{needsInitialPrice ? <OracleInitialPriceFields managerAddress={details?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={busy} fieldId={priceFieldId} /> : undefined}
 			<div className='actions'>
 				<TransactionActionButton
 					idleLabel={securityPoolCopy.setVaultUnderwritingLimit}

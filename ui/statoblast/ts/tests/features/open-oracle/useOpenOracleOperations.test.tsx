@@ -1143,7 +1143,7 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleWithdrawableBalances?.token1).toBe(125n)
 		expect(requireHookState(hookState).openOracleWithdrawalReviewMessage).toEqual({
 			balance: 'token1',
-			message: 'Your withdrawable REP balance changed. Review the updated amount and confirm again',
+			message: 'Your withdrawable REP balance changed. Try withdrawing the updated balance again.',
 		})
 		expect(requireHookState(hookState).openOracleActiveWithdrawalBalance).toBeUndefined()
 		expect(onTransactionRequested).not.toHaveBeenCalled()
