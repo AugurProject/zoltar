@@ -1294,3 +1294,88 @@ test.each(['edit', 'fetch', 'pending approval'] as const)('prepares again after 
 		dom.cleanup()
 	}
 })
+
+test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final wallet prompt through %s after editing the price', async outcome => {
+	const dom = installDomEnvironment()
+	const wallet = createDeferred<void>()
+	const mined = createDeferred<void>()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	const activeReview = signal<typeof review | undefined>(review)
+	const prices: Array<bigint | undefined> = []
+	const hash = '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
+	let closed = false
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal
+					{...props}
+					review={activeReview.value}
+					onClose={() => {
+						closed = true
+						activeReview.value = undefined
+					}}
+					onConfirm={async (request, signal) => {
+						prices.push(request.proposedRepPerEthPrice)
+						if (prices.length > 1) return
+						const controller = createTransactionStepController(signal)
+						controller.setPlan([{ ...step, title: 'Request new price' }])
+						await controller.review()
+						await wallet.promise
+						if (outcome === 'rejected') {
+							controller.failed({ kind: 'error', message: 'User rejected the request.' })
+							return
+						}
+						controller.submitted(hash)
+						presentation.value = { tone: 'pending', title: 'Requesting new price…', hash }
+						await mined.promise
+						controller.receipt(hash, outcome)
+						presentation.value = outcome === 'success' ? { tone: 'success', title: 'Price requested', hash } : { tone: 'error', title: 'Price request failed', detail: 'Transaction reverted.', hash }
+					}}
+				/>
+				<GlobalTransactionDialog transaction={presentation.value} />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
+		await settle()
+		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['wallet'])
+		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })
+		expect(priceInput.hasAttribute('disabled')).toBe(false)
+		await act(() => fireEvent.input(priceInput, { target: { value: '4' } }))
+		await settle()
+		await act(() => wallet.resolve())
+		await settle()
+		if (outcome === 'rejected') {
+			expect(prices).toEqual([2n * 10n ** 18n, 4n * 10n ** 18n])
+			expect(closed).toBe(false)
+			return
+		}
+		expect(prices).toHaveLength(1)
+		await act(() => mined.resolve())
+		await settle()
+		if (outcome === 'success') {
+			expect(closed).toBe(true)
+			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
+			expect(prices).toHaveLength(1)
+			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
+			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		} else {
+			expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
+			expect(queries.getByRole('dialog', { name: 'Request new price' }).textContent).toContain('Edit the price or fetch a quote to retry.')
+			expect(prices).toHaveLength(1)
+			await act(() => fireEvent.input(priceInput, { target: { value: '5' } }))
+			await settle()
+			expect(prices).toEqual([2n * 10n ** 18n, 5n * 10n ** 18n])
+		}
+	} finally {
+		wallet.resolve()
+		mined.resolve()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})

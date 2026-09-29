@@ -22,6 +22,18 @@ async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['rev
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
 }
 
+type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; submissionOutstanding?: boolean; steps?: NonNullable<typeof transactionSteps.value>['steps'] | undefined; plan?: FailedPricePlan }
+
+function getRunSubmission(run: PriceRequestRun | undefined) {
+	const workflow = transactionSteps.peek()
+	const steps = run?.steps ?? (run !== undefined && workflow?.reviewSignal === run.signal ? workflow.steps : undefined)
+	return {
+		submittedHash: steps?.findLast(step => step.hash !== undefined)?.hash ?? run?.submittedHash,
+		finalSubmittedHash: steps?.at(-1)?.hash ?? run?.finalSubmittedHash,
+		inFlight: steps?.some(isTransactionStepInFlight) ?? false,
+	}
+}
+
 export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, confirmationWalletBlocker, closeOnSuccessKey, getReturnFocusTarget, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
 	const [fetching, setFetching] = useState(false)
 	const [quoteError, setQuoteError] = useState<string>()
@@ -33,7 +45,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
-	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; submissionOutstanding?: boolean; steps?: NonNullable<typeof transactionSteps.value>['steps'] | undefined; plan?: FailedPricePlan }>()
+	const run = useRef<PriceRequestRun>()
 	const previousReviewKey = useRef<string>()
 	const priceControlsRef = useRef<HTMLDivElement>(null)
 	const mounted = useRef(true)
@@ -46,10 +58,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (!running) {
 			run.current?.cancel()
 			const tracked = run.current
-			const finalHash = tracked?.finalSubmittedHash
+			const { finalSubmittedHash: finalHash, inFlight } = getRunSubmission(tracked)
 			const failedSubmission = finalHash !== undefined && presentation?.tone === 'error' && presentation.hash === finalHash
 			const completedSubmission = finalHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalHash
-			if (tracked?.steps?.some(isTransactionStepInFlight) || (finalHash !== undefined && !failedSubmission && !completedSubmission)) {
+			if (inFlight || (finalHash !== undefined && !failedSubmission && !completedSubmission)) {
 				setPreparationPaused(true)
 				return
 			}
@@ -74,18 +86,17 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
 	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const finalSubmittedHash = run.current?.finalSubmittedHash ?? (ownsWorkflow ? workflow?.steps.at(-1)?.hash : undefined)
+	const { finalSubmittedHash, submittedHash } = getRunSubmission(run.current)
 	const completedRequest = finalSubmittedHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalSubmittedHash && (closeOnSuccessKey === undefined || closeOnSuccessKey === finalSubmittedHash)
 	const awaitingResult = (finalReceiptConfirmed || finalSubmittedHash !== undefined) && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
-	const submittedHash = run.current?.submittedHash ?? (ownsWorkflow ? workflow?.steps.findLast(step => step.hash !== undefined)?.hash : undefined)
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const failedCurrentAttempt =
 		(!running && presentation?.tone === 'error' && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
 	useEffect(() => {
 		const tracked = run.current
-		if (preparationPaused && !running && !failureLatched && !failedCurrentAttempt && tracked?.steps !== undefined && tracked.finalSubmittedHash === undefined && !tracked.steps.some(isTransactionStepInFlight)) retryPreparation()
-	}, [preparationPaused, running, failureLatched, failedCurrentAttempt])
+		if (preparationPaused && !running && !failureLatched && !failedCurrentAttempt && tracked?.steps !== undefined && finalSubmittedHash === undefined && !getRunSubmission(tracked).inFlight) retryPreparation()
+	}, [preparationPaused, running, failureLatched, failedCurrentAttempt, finalSubmittedHash])
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
