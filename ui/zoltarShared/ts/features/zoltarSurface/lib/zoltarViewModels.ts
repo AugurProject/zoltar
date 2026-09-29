@@ -52,6 +52,7 @@ export type ZoltarOverviewInput = {
 		isOnActiveChain: boolean
 		/** Unused REP already prepared for migration in this universe. */
 		preparedMigrationRepAttoRep: bigint | undefined
+		childMigratedAttoRep: Readonly<Record<string, bigint | undefined>>
 		/** Wallet REP of the selected universe. */
 		repBalanceAttoRep: bigint | undefined
 	}
@@ -110,7 +111,18 @@ export function deriveZoltarOverviewModel({ account, activeUniverseId, universe,
 	const status = getOverviewStatus(loadedUniverse, universeError, universeState)
 	const wallet = getWalletStatus(account)
 	const repBalanceAttoRep = wallet === 'connected' ? account.repBalanceAttoRep : undefined
-	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, account.preparedMigrationRepAttoRep]) : undefined
+	const prepared = account.preparedMigrationRepAttoRep
+	const remainingByChild =
+		loadedUniverse?.childUniverses.map(child => {
+			const migrated = child.exists ? account.childMigratedAttoRep[child.universeId.toString()] : 0n
+			if (prepared === undefined || migrated === undefined) return undefined
+			return prepared > migrated ? prepared - migrated : 0n
+		}) ?? []
+	let remainingPrepared = prepared
+	if (remainingByChild.length > 0) {
+		remainingPrepared = remainingByChild.some(value => value === undefined) ? undefined : remainingByChild.reduce<bigint>((maximum, value) => (value !== undefined && value > maximum ? value : maximum), 0n)
+	}
+	const migratableRepAttoRep = wallet === 'connected' && status === 'forked' ? sumKnown([account.repBalanceAttoRep, remainingPrepared]) : undefined
 	const forkTime = status === 'forked' && loadedUniverse !== undefined && loadedUniverse.forkTime > 0n ? loadedUniverse.forkTime : undefined
 	return {
 		forkTime,

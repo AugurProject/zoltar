@@ -1,3 +1,5 @@
+import { usePortfolioQueries, usePortfolioRefreshEffects } from '../../features/live/usePortfolioQueries.js'
+import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -86,6 +88,43 @@ describe('live balance selection', () => {
 			cleanupRendered = undefined
 		},
 		url: 'http://localhost/?demo=0#/market',
+	})
+
+	test('retains per-pool errors and other balances while portfolio reads revalidate', async () => {
+		const gate = deferred<void>()
+		let revalidating = false
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
+				if (revalidating) await gate.promise
+				if (selected.pool === secondPool) throw new Error('Second pool unavailable')
+				return { scope: shareBalanceScope(selected), invalid: 1n, yes: 2n, no: 3n, lp: 0n }
+			},
+		}
+		const portfolioBalanceRequests = createLatestRequestGuard()
+		const balanceRequests = createLatestRequestGuard()
+		const accountRef = { current: account }
+		let state: ReturnType<typeof usePortfolioQueries> | undefined
+		function Probe({ markets }: { markets: readonly LiveMarket[] }) {
+			const queries = usePortfolioQueries()
+			state = queries
+			usePortfolioRefreshEffects({ route: 'portfolio', configuration, account, selected: undefined, visibleMarkets: markets, marketRevision: markets, selectedUniverseId: '1', walletContextInvalidated: false, accountRef, queries, services, portfolioBalanceRequests, balanceRequests })
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Probe markets={[market, secondMarket]} />)
+		cleanupRendered = rendered.cleanup
+		await flush()
+		expect(state?.portfolioBalanceState).toBe('ready')
+		expect(state?.portfolioEntries[1]?.error).toContain('Second pool unavailable')
+		revalidating = true
+		await act(() => render(<Probe markets={[{ ...market }, { ...secondMarket }]} />, rendered.container))
+		await flush()
+		expect(state?.portfolioBalanceState).toBe('ready')
+		expect(state?.portfolioEntries[1]?.error).toContain('Second pool unavailable')
+		expect(state?.portfolioEntries[0]?.balances?.yes).toBe(2n)
+		gate.resolve()
+		await flush()
 	})
 
 	async function renderController(initialRoute: string) {

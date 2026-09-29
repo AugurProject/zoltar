@@ -37,6 +37,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 	const $ = deps.lookup
 	let richListItems: RichListRecord[] = []
 	let richListTotal = 0
+	let richListSnapshot: string | undefined
 	let richListRequestVersion = 0
 	let richListPaginationIntentVersion = 0
 	const renderRichList = () =>
@@ -88,10 +89,14 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 		$('#rich-sort').disabled = presentation.busy
 		$('#richlist-rows').setAttribute('aria-busy', String(presentation.busy))
 		try {
+			let snapshotCursor = append ? richListSnapshot : undefined
 			const fetchPage = async (offset: number, limit: number) => {
 				const query = new URLSearchParams({ sort: $('#rich-sort').value, offset: String(offset), limit: String(limit) })
 				query.set('chainId', requiredChainId())
-				return decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Rich list')
+				if (snapshotCursor !== undefined) query.set('snapshot', snapshotCursor)
+				const page = decodeItemsPage(await api(`/api/v1/richlist?${query}`), isRichListRecord, 'Rich list')
+				snapshotCursor = page.snapshotCursor
+				return page
 			}
 			const fetchSnapshot = async (requestedCount: number) => {
 				const firstLimit = Math.min(100, requestedCount)
@@ -111,6 +116,7 @@ export const createRichListRoute = (deps: RichListRouteDeps) => {
 				replace = true
 			}
 			richListItems = replace ? result.items : [...richListItems, ...result.items]
+			richListSnapshot = result.snapshotCursor
 			richListTotal = result.total ?? richListItems.length
 			renderRichList()
 			status.hidden = true

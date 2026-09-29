@@ -1,3 +1,4 @@
+import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import { OutcomeHolding } from '../../features/OutcomeHolding.js'
 import { BackingDetails } from '../../features/BackingDetails.js'
 import { TradeEstimatePanel } from '../../features/TradeEstimatePanel.js'
@@ -55,6 +56,19 @@ describe('live portfolio scope', () => {
 			cleanupRendered = undefined
 		},
 		url: 'http://localhost/#/portfolio',
+	})
+
+	test('describes a disabled portfolio wallet action', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[]} balanceState='disconnected' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} walletAction={{ label: 'Connect wallet', disabled: true, onClick: () => undefined }} />)
+		cleanupRendered = rendered.cleanup
+		expect(getTransactionButtonState(rendered.container, 'Connect wallet').reason).toBeTruthy()
+	})
+
+	test('describes why pair initialization is unavailable', async () => {
+		const rendered = await renderIntoDocument(<PairInitializationAction market={{ ...market, endTime: 1n }} nowSeconds={2n} />)
+		cleanupRendered = rendered.cleanup
+		const button = rendered.container.querySelector('button')
+		expect(button?.getAttribute('aria-describedby')).toBeTruthy()
 	})
 
 	for (const state of ['disconnected', 'loading', 'error'] as const) {

@@ -1,16 +1,18 @@
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 /// <reference types="bun-types" />
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import { fireEvent, within, waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZoltarRoutes } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarRoutes.js'
 import { ZoltarWorkspaceProvider } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
 	return {
@@ -42,6 +44,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined) {
 		createChildUniverse: async () => undefined,
 		createQuestion: async () => undefined,
 		forkZoltar: async () => undefined,
+		hasLoadedZoltarForkAccess: false,
 		hasLoadedZoltarQuestions: false,
 		loadZoltarForkAccess: async () => undefined,
 		loadZoltarQuestion: async () => undefined,
@@ -96,11 +99,11 @@ describe('ZoltarRoutes', () => {
 		},
 	})
 
-	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined) {
+	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined, overrides: Partial<ReturnType<typeof createOperations>> = {}, chainId = '0xaa36a7') {
 		const viewChanges: ZoltarView[] = []
 		const retries: string[] = []
 		const workspace = {
-			accountState: { address: zeroAddress, chainId: '0xaa36a7', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
+			accountState: { address: zeroAddress, chainId, ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
 			activeUniverseId: universe?.universeId ?? 9n,
 			currentTimestamp: 10n,
 			environmentRefreshKey: 0,
@@ -110,19 +113,71 @@ describe('ZoltarRoutes', () => {
 			onRetryUniverse: () => retries.push('universe'),
 			onSwitchNetwork: () => undefined,
 			onViewChange: (nextView: ZoltarView) => viewChanges.push(nextView),
-			operations: createOperations(universe),
+			operations: { ...createOperations(universe), ...overrides },
 			universeError,
 			universeState,
 		}
-		cleanupRenderedComponent = (
-			await renderIntoDocument(
-				<ZoltarWorkspaceProvider workspace={workspace}>
-					<ZoltarRoutes view={view} />
-				</ZoltarWorkspaceProvider>,
-			)
-		).cleanup
-		return { queries: within(document.body), retries, viewChanges }
+		const tree = () => (
+			<ZoltarWorkspaceProvider workspace={workspace}>
+				<ZoltarRoutes view={view} />
+			</ZoltarWorkspaceProvider>
+		)
+		const rendered = await renderIntoDocument(tree())
+		cleanupRenderedComponent = rendered.cleanup
+		return {
+			queries: within(document.body),
+			retries,
+			viewChanges,
+			update: async (next: Partial<ReturnType<typeof createOperations>>) => {
+				workspace.operations = { ...workspace.operations, ...next }
+				await act(() => render(tree(), rendered.container))
+			},
+		}
 	}
+
+	test('debounces valid fork questions while typing and ignores invalid input', async () => {
+		const loadZoltarQuestion = mock(async () => undefined)
+		const id = `0x${'12'.repeat(32)}`
+		const screen = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: '0xinvalid', loadZoltarQuestion })
+		await act(async () => {
+			await Bun.sleep(350)
+		})
+		expect(loadZoltarQuestion).not.toHaveBeenCalled()
+		expect(screen.queries.queryByText('Question not found')).toBeNull()
+		expect(document.body.textContent).not.toContain('retrieving…')
+		await screen.update({ zoltarForkQuestionId: id })
+		await act(async () => {
+			await Bun.sleep(100)
+		})
+		expect(loadZoltarQuestion).not.toHaveBeenCalled()
+		await screen.update({ zoltarForkQuestionId: `0x${'13'.repeat(32)}` })
+		await act(async () => {
+			await Bun.sleep(200)
+		})
+		expect(loadZoltarQuestion).not.toHaveBeenCalled()
+		await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledTimes(1))
+		expect(loadZoltarQuestion).toHaveBeenCalledWith(`0x${'13'.repeat(32)}`)
+	})
+
+	for (const id of [`0x${'a'.repeat(63)}`, '0x1a', `0x${'b'.repeat(64)}`])
+		test(`looks up valid unpadded question ${id} after the delay`, async () => {
+			const loadZoltarQuestion = mock(async () => undefined)
+			const screen = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: id, loadZoltarQuestion })
+			expect(loadZoltarQuestion).not.toHaveBeenCalled()
+			expect(screen.queries.queryByText('Question not found')).toBeNull()
+			await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledTimes(1))
+			expect(loadZoltarQuestion).toHaveBeenCalledWith(id)
+			await act(async () => {
+				await Bun.sleep(350)
+			})
+			expect(loadZoltarQuestion).toHaveBeenCalledTimes(1)
+		})
+
+	test('shows the switch-network state in the REP tile for a connected wrong-network wallet', async () => {
+		const { queries } = await renderRoute('overview', createUniverse({ hasForked: false }), 'ready', undefined, {}, '0x1')
+		expect(queries.queryByText('Connect a wallet') === null).toBe(true)
+		expect(document.body.textContent).toContain('Switch network')
+	})
 
 	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {
 		const { queries, viewChanges } = await renderRoute('universes', createUniverse({ childUniverses: [], hasForked: false }))

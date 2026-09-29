@@ -207,14 +207,14 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 			if (append) {
 				const visibleCount = visibleActivityLogCount(feed)
 				feedState.hidden = visibleCount > 0
-				$('#activity-summary').textContent = `${visibleCount} logs shown · could not load more`
+				$('#activity-summary').textContent = `${visibleCount} ${visibleCount === 1 ? 'log' : 'logs'} shown · could not load more`
 				renderRetryStatus(paginationStatus, `Could not load more activity; showing logs: ${errorMessage(error)}`, retryAction)
 				moreButton.hidden = true
 			} else {
 				feedState.hidden = false
 				const message = element('span', '', hadRows ? `Showing last known activity: ${errorMessage(error)}` : `Activity unavailable: ${errorMessage(error)}`)
 				const visibleCount = visibleActivityLogCount(feed)
-				$('#activity-summary').textContent = hadRows ? `${visibleCount} logs shown · refresh failed` : ''
+				$('#activity-summary').textContent = hadRows ? `${visibleCount} ${visibleCount === 1 ? 'log' : 'logs'} shown · refresh failed` : ''
 				const retry = element('button', 'state-retry', 'Retry')
 				retry.type = 'button'
 				retry.addEventListener('click', retryAction)

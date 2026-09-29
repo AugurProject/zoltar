@@ -309,7 +309,7 @@ export function SecurityPoolSection({
 									) : undefined}
 									{marketDetails === undefined ? undefined : (
 										<div className='loaded-question-preview'>
-											<Question question={marketDetails} variant='preview' />
+											<Question question={marketDetails} variant='preview' showIdentifier={false} />
 										</div>
 									)}
 

@@ -1,3 +1,4 @@
+import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
 import { formatMultiplier, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -24,9 +25,7 @@ export function PairInitializationAction({ market, nowSeconds }: { market: LiveM
 			<div className='pair-initialization'>
 				<p className='detail'>{liveCopy.conditionalPriceUnavailable}</p>
 				<div className='actions'>
-					<button className='primary' type='button' disabled>
-						{liveCopy.pairInitializationUnavailable(blocker)}
-					</button>
+					<ActionLauncherButton idleLabel={liveCopy.initializeTradingPool} pendingLabel={liveCopy.initializeTradingPool} availability={{ disabled: true, reason: liveCopy.pairInitializationUnavailable(blocker) }} onClick={() => undefined} />
 				</div>
 			</div>
 		)

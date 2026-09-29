@@ -163,6 +163,19 @@ describe('security vault availability', () => {
 		expect(sharedRefresh[3]?.blocker).toBeUndefined()
 	})
 
+	test('keeps the fallback withdrawal reason free of wallet recovery', () => {
+		const actions = buildVaultReadinessActions(
+			createReadinessInput({
+				repExitEnabled: false,
+				visibleRepExitLauncherBlocker: 'Switch to Sepolia.',
+				walletBlocker: { kind: 'wrong-network', targetChainName: 'Sepolia' },
+			}),
+		)
+		expect(actions[1]?.blocker).toBe(securityPoolCopy.withdrawalUnavailableReason)
+		expect(actions[1]?.walletBlocker).toBeUndefined()
+		expect(actions[1]?.onAction).toBeUndefined()
+	})
+
 	test('marks the launchers a wallet prerequisite blocks with the typed wallet blocker', () => {
 		const walletBlocker: WalletActionBlocker = { kind: 'wrong-network', targetChainName: 'Sepolia' }
 		const actions = buildVaultReadinessActions(
@@ -171,6 +184,7 @@ describe('security vault availability', () => {
 				canUseLoadedVaultActions: false,
 				claimFeesAvailabilityBlocker: 'Switch to Sepolia.',
 				repExitEnabled: false,
+				repExitDisabledReasonId: 'pool-state-reason',
 				visibleDepositLauncherBlocker: 'Switch to Sepolia.',
 				visibleRepExitLauncherBlocker: 'Switch to Sepolia.',
 				walletBlocker,

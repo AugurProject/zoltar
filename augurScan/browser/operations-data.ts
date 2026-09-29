@@ -62,9 +62,10 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		const atBlock = getPageUrl().searchParams.get('atBlock')
 		if ((route.kind === 'pool' || route.kind === 'vault') && atBlock !== null && atBlock !== '') query.set('atBlock', atBlock)
 		if (cursor !== undefined) query.set('cursor', cursor)
-		if (route.kind === 'report') {
-			query.set('decisionLimit', String(decisionLimit))
-			if (decisionCursor !== undefined) query.set('decisionCursor', decisionCursor)
+		if (route.kind === 'report' || route.kind === 'trading') {
+			const prefix = route.kind === 'trading' ? 'activity' : 'decision'
+			query.set(`${prefix}Limit`, String(decisionLimit))
+			if (decisionCursor !== undefined) query.set(`${prefix}Cursor`, decisionCursor)
 		}
 		return `/api/v1/state/${resource}/${chainId}/${identity}?${query.toString()}`
 	}
@@ -188,8 +189,10 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		}
 	}
 
-	const loadOperationsReportDetail = async (route: OperationsDetailRoute, roundTargetCount: number, decisionTargetCount: number): Promise<OperationsResponse> => {
+	const loadOperationsPairedDetail = async (route: OperationsDetailRoute, roundTargetCount: number, decisionTargetCount: number): Promise<OperationsResponse> => {
 		let first: OperationsResponse | undefined
+		const primaryKey = route.kind === 'trading' ? 'events' : 'rounds'
+		const secondaryKey = route.kind === 'trading' ? 'activity' : 'coordinatorDecisions'
 		let lastRoundPage: Record<string, unknown> = {}
 		let lastDecisionPage: Record<string, unknown> = {}
 		let snapshotIdentity: string | undefined
@@ -199,7 +202,7 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 			if (snapshotIdentity !== undefined && responseIdentity !== snapshotIdentity) throw new Error('Report evidence changed while older evidence was loading; retry from the latest available block')
 			snapshotIdentity ??= responseIdentity
 			first ??= response
-			const page = detailPageRecord(response.data, collection === 'rounds' ? 'rounds' : 'coordinatorDecisions')
+			const page = detailPageRecord(response.data, collection === 'rounds' ? primaryKey : secondaryKey)
 			if (collection === 'rounds') lastRoundPage = page
 			else lastDecisionPage = page
 			return {
@@ -213,13 +216,13 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 			...first,
 			data: {
 				...first.data,
-				rounds: {
+				[primaryKey]: {
 					...lastRoundPage,
 					items: rounds.items,
 					hasMore: rounds.nextCursor !== undefined,
 					...(rounds.nextCursor === undefined ? {} : { nextCursor: rounds.nextCursor }),
 				},
-				coordinatorDecisions: {
+				[secondaryKey]: {
 					...lastDecisionPage,
 					items: decisions.items,
 					hasMore: decisions.nextCursor !== undefined,
@@ -229,9 +232,10 @@ export const createOperationsData = (api: (path: string) => Promise<unknown>, re
 		}
 	}
 
-	const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount: number, riskHistoryThroughOffset = 0, decisionTargetCount = 0): Promise<OperationsResponse> => {
+	const loadOperationsDetail = async (route: OperationsDetailRoute, retainedCount: number, riskHistoryThroughOffset = 0, decisionTargetCount = 0, activityTargetCount = 0): Promise<OperationsResponse> => {
 		if (route.kind === 'pool' || route.kind === 'vault') return await loadOperationsRiskDetail(route, riskHistoryThroughOffset)
-		if (route.kind === 'report') return await loadOperationsReportDetail(route, retainedCount, decisionTargetCount)
+		if (route.kind === 'report') return await loadOperationsPairedDetail(route, retainedCount, decisionTargetCount)
+		if (route.kind === 'trading') return await loadOperationsPairedDetail(route, retainedCount, activityTargetCount)
 		const pageKey = 'events'
 		let first: OperationsResponse | undefined
 		let last: OperationsResponse | undefined

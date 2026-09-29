@@ -149,9 +149,11 @@ describe('truth auction hooks', () => {
 	test('hides bid-book data synchronously when the auction address changes', async () => {
 		let hookState: BookState | undefined
 		let setHarnessProps: HarnessSetter<BookProps> | undefined
+		let reads = 0
 		const nextTickCount = createDeferred<bigint>()
 		const readClient: Pick<ReadClient, 'readContract'> = {
 			readContract: (async request => {
+				reads++
 				if (request.functionName === 'activeTickCount') {
 					if (request.address === otherTruthAuctionAddress) return await nextTickCount.promise
 					return 1n
@@ -188,6 +190,18 @@ describe('truth auction hooks', () => {
 			expect(requireHookState(hookState).truthAuctionBookData.tickSummaries).toHaveLength(1)
 			expect(requireHookState(hookState).truthAuctionBookData.viewerBids).toHaveLength(1)
 		})
+
+		await act(async () => {
+			await Bun.sleep(20)
+		})
+		const loadedReads = reads
+		for (const enteredBidTick of [4n, 5n, 6n]) {
+			await act(async () => {
+				requireHarnessSetter(setHarnessProps)(current => ({ ...current, enteredBidTick }))
+				await Bun.sleep(20)
+			})
+		}
+		expect(reads).toBe(loadedReads)
 
 		await act(() => {
 			requireHarnessSetter(setHarnessProps)(currentProps => ({
@@ -434,6 +448,7 @@ describe('truth auction hooks', () => {
 		let hookState: SettlementState | undefined
 		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
 		const initialProps: SettlementProps = {
+			forkAuctionActiveAction: 'claimAuctionProceeds',
 			accountAddress: walletAddress,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,
@@ -492,6 +507,7 @@ describe('truth auction hooks', () => {
 		let hookState: SettlementState | undefined
 		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
 		const initialProps: SettlementProps = {
+			forkAuctionActiveAction: 'claimAuctionProceeds',
 			accountAddress: walletAddress,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,
@@ -548,6 +564,7 @@ describe('truth auction hooks', () => {
 		let hookState: SettlementState | undefined
 		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
 		const initialProps: SettlementProps = {
+			forkAuctionActiveAction: 'claimAuctionProceeds',
 			accountAddress: walletAddress,
 			forkAuctionError: undefined,
 			forkAuctionResult: createForkAuctionResult('claimAuctionProceeds', '0xdddd'),
@@ -598,6 +615,7 @@ describe('truth auction hooks', () => {
 		let hookState: SettlementState | undefined
 		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
 		const initialProps: SettlementProps = {
+			forkAuctionActiveAction: 'claimAuctionProceeds',
 			accountAddress: walletAddress,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,
@@ -653,6 +671,7 @@ describe('truth auction hooks', () => {
 		let hookState: SettlementState | undefined
 		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
 		const initialProps: SettlementProps = {
+			forkAuctionActiveAction: 'claimAuctionProceeds',
 			accountAddress: walletAddress,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,
@@ -720,6 +739,7 @@ describe('truth auction hooks', () => {
 		let hookState: SettlementState | undefined
 		let setHarnessProps: HarnessSetter<SettlementProps> | undefined
 		const initialProps: SettlementProps = {
+			forkAuctionActiveAction: 'claimAuctionProceeds',
 			accountAddress: walletAddress,
 			forkAuctionError: undefined,
 			forkAuctionResult: undefined,

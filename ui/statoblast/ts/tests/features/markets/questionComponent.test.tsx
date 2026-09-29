@@ -63,6 +63,19 @@ describe('Question component', () => {
 		for (const identifierButton of identifierButtons) expect(identifierButton.textContent).toBe(question.questionId)
 	})
 
+	for (const variant of ['full', 'preview'] as const)
+		test(`omits an identifier already shown by the containing form (${variant})`, async () => {
+			const question = createQuestion()
+			const rendered = await renderIntoDocument(<Question question={question} variant={variant} showIdentifier={false} />)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.querySelector('.identifier-value')).toBeNull()
+			expect(document.body.textContent).not.toContain('Question ID')
+			expect(document.body.textContent).toContain(question.title)
+			expect(document.body.textContent).toContain('End time')
+			expect(document.body.textContent).toContain('Yes')
+			expect(document.querySelector('.question-preview-meta')).toBeNull()
+		})
+
 	test('omits description copy when the question has no resolution context', async () => {
 		const renderedComponent = await renderIntoDocument(<Question question={createQuestion({ description: '' })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup

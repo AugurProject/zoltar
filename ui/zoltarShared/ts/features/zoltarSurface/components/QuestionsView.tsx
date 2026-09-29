@@ -112,13 +112,14 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 								<button
 									className='secondary'
 									disabled={hasForked}
+									aria-label={hasForked ? marketCopy.formatUniverseAlreadyForkedLabel(getQuestionTitle(question), question.questionId) : marketCopy.formatUseForForkLabel(getQuestionTitle(question), question.questionId)}
 									onClick={() => {
 										favorites.setFavorite(question.questionId, true)
 										onZoltarForkQuestionIdChange(question.questionId)
 										onActiveViewChange('fork')
 									}}
 								>
-									{hasForked ? marketCopy.alreadyForked : marketCopy.useForFork}
+									{hasForked ? marketCopy.universeAlreadyForked : marketCopy.useForFork}
 								</button>
 							) : undefined
 						}

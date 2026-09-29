@@ -58,7 +58,11 @@ export function useOpenOracleRoute({
 		onCancelOpenOracleWithdrawalBalanceCheck: () => cancelWithdrawalBalanceCheck(),
 		onCreateOpenOracleGame: () => void createOpenOracleGame(),
 		onDisputeReport: () => void disputeReport(),
-		onLoadOracleReport: reportId => void loadOracleReport(reportId),
+		onLoadOracleReport: reportId => {
+			const selectedReportId = (reportId ?? openOracleForm.reportId).trim()
+			if (selectedReportId !== '' && selectedReportId !== urlOpenOracleReportId) setOpenOracleReport(selectedReportId)
+			void loadOracleReport(selectedReportId)
+		},
 		onOpenOracleFormChange: update => setOpenOracleForm(current => ({ ...current, ...update })),
 		onOpenOracleCreateFormChange: update => setOpenOracleCreateForm(current => ({ ...current, ...update })),
 		onSettleReport: () => void settleReport(),

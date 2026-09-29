@@ -80,7 +80,7 @@ export function useForkAuctionInteractionState({ accountAddress, connectedWallet
 			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 			return
 		}
-		if (forkAuctionError !== undefined && forkAuctionActiveAction === undefined) {
+		if (forkAuctionActiveAction === undefined) {
 			setPendingStartTruthAuctionSecurityPoolAddress(undefined)
 		}
 	}, [forkAuctionActiveAction, forkAuctionError, hasStartedTruthAuction, isStartTruthAuctionInProgressState])

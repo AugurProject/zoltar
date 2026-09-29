@@ -439,6 +439,19 @@ describe('trading header', () => {
 		expect(loading.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('Loading')
 	})
 
+	test('retains known ETH while the same wallet is revalidating', async () => {
+		const walletSummary = { account: '0x8ba1f109551bD432803012645Ac136ddd64DBA72' as const, ethAttoEth: 10n ** 18n, repAttoRep: undefined, status: 'loading' as const, error: undefined, errorLabel: undefined, universeId: '1' }
+		const rendered = await renderIntoDocument(
+			<>
+				<TradingBalanceGroup walletSummary={walletSummary} />
+				<TradingOverviewPanel walletSummary={walletSummary} />
+			</>,
+		)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector('[data-wallet-asset="ETH"]')?.textContent).toContain('1.00')
+		expect(rendered.container.textContent).not.toContain('Loading')
+	})
+
 	test('keeps wallet balance failures visible with a retry', async () => {
 		const account = '0x8ba1f109551bD432803012645Ac136ddd64DBA72'
 		let retries = 0

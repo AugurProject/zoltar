@@ -85,7 +85,7 @@ function createBlockerInput(overrides: Partial<Parameters<typeof getLiquidationB
 		liquidationReceiverVaultSummaryError: undefined,
 		liquidationReceiverVaultSummaryResolved: true,
 		liquidationSecurityPoolAddress: POOL,
-		liquidationTimeoutSeconds: 600n,
+		liquidationTimeoutSeconds: 300n,
 		loadingLiquidationApproval: false,
 		loadingLiquidationFundingPreview: false,
 		loadingLiquidationReceiverVaultSummary: false,
@@ -185,6 +185,7 @@ describe('liquidation modal guards', () => {
 		expect(findBlockerReason(createBlockerInput({ sameVaultWarning: 'same' }))).toEqual({ reason: 'same' })
 		expect(findBlockerReason(createBlockerInput({ liquidationDebtEthAmount: ' ' }))).toEqual({ reason: liquidationCopy.liquidationAmountRequired })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: undefined }))).toEqual({ reason: liquidationCopy.liquidationTimeoutMinimumReason })
+		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: 301n }))?.reason).toBe('Enter a liquidation timeout of 5 minutes or less.')
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', loadingLiquidationFundingPreview: true }))).toEqual({ loading: true, reason: liquidationCopy.loadingQueueFunding })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationFundingPreviewError: 'funding' }))).toEqual({ reason: 'funding' })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationFundingPreviewLoaded: false }))).toEqual({ loading: true, reason: liquidationCopy.loadingQueueFunding })

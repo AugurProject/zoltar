@@ -175,8 +175,16 @@ export function SecurityPoolVaultWorkspace({
 					compactLayout
 					extraReadinessActions={[
 						(() => {
-							const canUseActions = walletAddress !== undefined && selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isOnActiveAppChain
-							const blocker = selectedVaultDetails !== undefined && !selectedVaultExistsOnchain ? securityPoolCopy.missingVaultDetail : undefined
+							const canUseActions = walletAddress !== undefined && !selectedVaultIsOwnedByAccount && selectedVaultDetails !== undefined && isOnActiveAppChain
+							const blocker = (() => {
+								if (walletAddress === undefined) return securityPoolCopy.liquidationWalletRequiredReason
+								if (!isOnActiveAppChain) return getWrongNetworkReason()
+								if (selectedVaultDetails === undefined) return securityPoolCopy.loadingVault
+								if (!selectedVaultExistsOnchain) return securityPoolCopy.missingVaultDetail
+								if (!liquidationEnabled) return securityPoolCopy.liquidationUnavailableReason
+								if (selectedVaultIsOwnedByAccount) return securityPoolCopy.liquidationOwnVaultReason
+								return undefined
+							})()
 							return {
 								actionLabel: securityPoolCopy.reviewLiquidation,
 								...(blocker === undefined ? {} : { blocker }),

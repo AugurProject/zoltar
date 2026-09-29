@@ -236,7 +236,7 @@ export function TradingSection({
 	const effectiveRedeemSharesLauncherBlocker = redeemSharesLauncherBlocker ?? (redeemSharesEnabled ? undefined : tradingCopy.formatActionUnavailableReason(tradingCopy.redeemSharesActionLabel))
 	const getModalActionReason = (actionEnabled: boolean, guardMessage: string | undefined) => {
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (!actionEnabled) return undefined
+		if (!actionEnabled) return tradingCopy.actionUnavailableReason
 		return guardMessage
 	}
 	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled and no reason precedes the guard (the mint dialog checks the oracle price first).
@@ -402,7 +402,14 @@ export function TradingSection({
 						<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maximumMintAmount} suffix={commonCopy.eth} />
 					</MetricField>
 				</MetricGrid>
-				<AmountField fillMax={{ amount: maximumMintAmount }} label={tradingCopy.mintCompleteSetsAmount} onChange={completeSetAmount => onTradingFormChange({ completeSetAmount })} unit={commonCopy.eth} value={tradingForm.completeSetAmount} />
+				<AmountField
+					hint={maximumMintAmount !== undefined && maximumMintAmount > 0n && maximumMintAmount === accountState.ethBalanceAttoEth ? tradingCopy.maxUsesWalletBalanceHint : undefined}
+					fillMax={{ amount: maximumMintAmount }}
+					label={tradingCopy.mintCompleteSetsAmount}
+					onChange={completeSetAmount => onTradingFormChange({ completeSetAmount })}
+					unit={commonCopy.eth}
+					value={tradingForm.completeSetAmount}
+				/>
 				<TransactionReview
 					variant='inline'
 					primary={[

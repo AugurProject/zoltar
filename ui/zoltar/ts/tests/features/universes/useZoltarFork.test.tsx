@@ -253,7 +253,7 @@ describe('useZoltarFork', () => {
 		expect(requireHookState(hookState).zoltarForkPending).toBe(false)
 	})
 
-	test('scopes mutable pre-fork question selection by account, environment, and universe', async () => {
+	test('preserves question selection across accounts but scopes it by environment and universe', async () => {
 		let hookState: UseZoltarForkState | undefined
 		const Harness = function ZoltarForkHarness({ accountAddress, activeUniverseId, environmentRefreshKey }: { accountAddress: Address | undefined; activeUniverseId: bigint; environmentRefreshKey: number }) {
 			hookState = useZoltarFork(
@@ -299,7 +299,7 @@ describe('useZoltarFork', () => {
 			requireHookState(hookState).setZoltarForkQuestionId('0x03')
 			render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 1 }), renderedComponent.container)
 		})
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('0x03')
 	})
 
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {
@@ -696,14 +696,17 @@ describe('useZoltarFork', () => {
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarForkAccess()
 		})
+		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(true)
 		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
 
 		render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS }), renderedComponent.container)
+		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(false)
 		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarForkAccess()
 		})
 
+		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(true)
 		expect(loadZoltarForkAccess.mock.calls[1]?.[0]).toBe(NEXT_WALLET_ADDRESS)
 		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 	})
@@ -740,11 +743,13 @@ describe('useZoltarFork', () => {
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
 		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(false)
 		const pendingLoad = requireHookState(hookState).loadZoltarForkAccess()
 		await act(async () => {
 			await Promise.resolve()
 		})
 
+		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(false)
 		render(h(Harness, { accountAddress: undefined }), renderedComponent.container)
 		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 
@@ -758,6 +763,7 @@ describe('useZoltarFork', () => {
 		})
 
 		const state = requireHookState(hookState)
+		expect(state.hasLoadedZoltarForkAccess).toBe(false)
 		expect(state.zoltarForkApproval.value).toBeUndefined()
 		expect(state.zoltarForkRepBalanceAttoRep).toBeUndefined()
 		expect(state.zoltarMigrationPreparedRepBalanceAttoRep).toBeUndefined()

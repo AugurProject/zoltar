@@ -1,3 +1,4 @@
+import * as availabilityCopy from '../copy/availability.js'
 import type { ComponentChildren } from 'preact'
 import { useRef } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
@@ -61,7 +62,7 @@ export function QuotedTransactionPanel({
 					{walletStep === undefined ? (
 						<TransactionActionButton availability={availability} idleLabel={actionLabel} pending={transactionInFlight(phase)} pendingLabel={transactionPendingLabel(phase)} onClick={onSubmit} />
 					) : (
-						<TransactionActionButton availability={walletStep.disabled ? { disabled: true, reason: undefined } : ALWAYS_AVAILABLE} idleLabel={walletStep.label} pendingLabel={walletStep.label} onClick={walletStep.onClick} />
+						<TransactionActionButton availability={walletStep.disabled ? { disabled: true, reason: status ?? availabilityCopy.transactionInProgressReason } : ALWAYS_AVAILABLE} idleLabel={walletStep.label} pendingLabel={walletStep.label} onClick={walletStep.onClick} />
 					)}
 				</TransactionActionGroup>
 			</div>

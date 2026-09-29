@@ -154,9 +154,10 @@ export function useZoltarFork(
 	const currentUniverseRef = useRef(zoltarUniverse)
 	currentUniverseRef.current = zoltarUniverse
 	const forkAccessLoad = useLoadController()
+	const completedForkAccessScopeGeneration = useSignal<number | undefined>(undefined)
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
-	const forkQuestionScopeKey = `${accountAddress ?? 'disconnected'}:${environmentRefreshKey}:${activeUniverseId.toString()}`
+	const forkQuestionScopeKey = `${environmentRefreshKey}:${activeUniverseId.toString()}`
 	const forkQuestionSelection = useSignal({ questionId: '', scopeKey: forkQuestionScopeKey })
 	const zoltarForkQuestionId = forkQuestionSelection.value.scopeKey === forkQuestionScopeKey ? forkQuestionSelection.value.questionId : ''
 	const zoltarForkResult = useSignal<ZoltarForkActionResult | undefined>(undefined)
@@ -180,7 +181,7 @@ export function useZoltarFork(
 	const resolveActionResultName = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'approveForkRep' : 'forkZoltar')
 	const getPendingTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Approving REP for fork' : 'Forking universe')
 	const getSuccessTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approved for fork' : 'Universe fork submitted')
-	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'Fork REP approval failed' : 'Universe fork failed')
+	const getFailureTitle = (actionName: 'approve' | 'fork') => (actionName === 'approve' ? 'REP approval failed' : 'Universe fork failed')
 
 	const loadZoltarForkAccess = async (universe: ZoltarUniverseSummary | undefined = currentUniverseRef.current) => {
 		const isCurrent = nextForkAccessLoad()
@@ -219,6 +220,7 @@ export function useZoltarFork(
 			})
 			const [repBalanceResult, approvalResult, preparedRepBalanceResult, ...childBalanceResults] = accessResults
 			if (!isCurrentScope()) return
+			completedForkAccessScopeGeneration.value = forkAccessScopeGeneration
 			loadedForkAccessScopeGeneration.current = forkAccessScopeGeneration
 			zoltarForkRepBalanceAttoRep.value = repBalanceResult?.status === 'success' ? repBalanceResult.result : undefined
 			if (approvalResult?.status === 'success') {
@@ -375,6 +377,7 @@ export function useZoltarFork(
 		approveZoltarForkRep,
 		forkZoltar,
 		loadZoltarForkAccess,
+		hasLoadedZoltarForkAccess: completedForkAccessScopeGeneration.value === forkAccessScopeGeneration,
 		loadingZoltarForkAccess: forkAccessLoad.isLoading.value,
 		zoltarForkActiveAction: zoltarForkActiveAction.value,
 		zoltarForkApproval: hasCurrentForkAccess

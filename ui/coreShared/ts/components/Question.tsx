@@ -19,6 +19,7 @@ type QuestionProps = {
 	className?: string
 	loading?: boolean
 	question: MarketDetails | undefined
+	showIdentifier?: boolean
 	showTitle?: boolean
 	showEndTime?: boolean
 	variant?: 'full' | 'preview'
@@ -61,12 +62,10 @@ function getDisplayRange(question: MarketDetails) {
 	return question.answerUnit === '' ? displayRange : `${displayRange}\u00a0${question.answerUnit}`
 }
 
-function getQuestionSummaryFields(question: MarketDetails, showEndTime: boolean): QuestionSummaryField[] {
-	const fields: QuestionSummaryField[] = [
-		{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) },
-		{ kind: 'identifier', label: commonCopy.questionId, value: question.questionId },
-		{ kind: 'timestamp', label: commonCopy.created, value: question.createdAt },
-	]
+function getQuestionSummaryFields(question: MarketDetails, showEndTime: boolean, showIdentifier: boolean): QuestionSummaryField[] {
+	const fields: QuestionSummaryField[] = [{ kind: 'text', label: commonCopy.questionType, value: getMarketTypeLabel(question.marketType) }]
+	if (showIdentifier) fields.push({ kind: 'identifier', label: commonCopy.questionId, value: question.questionId })
+	fields.push({ kind: 'timestamp', label: commonCopy.created, value: question.createdAt })
 
 	if (showEndTime) fields.push({ kind: 'timestamp', label: commonCopy.endTime, value: question.endTime })
 	fields.push({ kind: 'text', label: commonCopy.outcomes, value: getDisplayedOutcomes(question).join(', ') })
@@ -98,7 +97,7 @@ function renderQuestionSummaryField(field: QuestionSummaryField, abbreviateIdent
 	)
 }
 
-export function Question({ abbreviateIdentifier = false, additionalMetrics, className = '', loading = false, question, showTitle = true, showEndTime = true, variant = 'full' }: QuestionProps) {
+export function Question({ abbreviateIdentifier = false, additionalMetrics, className = '', loading = false, question, showIdentifier = true, showTitle = true, showEndTime = true, variant = 'full' }: QuestionProps) {
 	if (loading || question === undefined)
 		return (
 			<div className={`question-summary ${className}`}>
@@ -113,7 +112,7 @@ export function Question({ abbreviateIdentifier = false, additionalMetrics, clas
 	const description = getQuestionDescription(question)
 	const showHeading = showTitle || description !== ''
 	const descriptionNode = description === '' ? undefined : <p className='detail'>{description}</p>
-	const summaryFields = getQuestionSummaryFields(question, showEndTime)
+	const summaryFields = getQuestionSummaryFields(question, showEndTime, showIdentifier)
 	const outcomeItems = getDisplayedOutcomes(question).map(outcome => ({
 		key: outcome,
 		label: outcome,
@@ -159,20 +158,24 @@ export function Question({ abbreviateIdentifier = false, additionalMetrics, clas
 						</div>
 					) : undefined}
 				</div>
-				<div className='question-preview-meta'>
-					<div className='question-preview-meta-item question-preview-meta-item-primary-id'>
-						<span className='question-preview-meta-label'>{commonCopy.questionId}</span>
-						<strong>
-							<IdentifierValue value={question.questionId} />
-						</strong>
+				{showIdentifier || scalarFields.length > 0 ? (
+					<div className='question-preview-meta'>
+						{showIdentifier ? (
+							<div className='question-preview-meta-item question-preview-meta-item-primary-id'>
+								<span className='question-preview-meta-label'>{commonCopy.questionId}</span>
+								<strong>
+									<IdentifierValue value={question.questionId} />
+								</strong>
+							</div>
+						) : undefined}
+						{scalarFields.map(field => (
+							<div className='question-preview-meta-item' key={field.label}>
+								<span className='question-preview-meta-label'>{field.label}</span>
+								<strong>{field.value}</strong>
+							</div>
+						))}
 					</div>
-					{scalarFields.map(field => (
-						<div className='question-preview-meta-item' key={field.label}>
-							<span className='question-preview-meta-label'>{field.label}</span>
-							<strong>{field.value}</strong>
-						</div>
-					))}
-				</div>
+				) : undefined}
 			</div>
 		)
 

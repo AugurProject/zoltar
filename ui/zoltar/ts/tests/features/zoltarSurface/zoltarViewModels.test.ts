@@ -32,7 +32,7 @@ function createInput(overrides: Partial<ZoltarOverviewInput> = {}, account: Part
 		universeError: undefined,
 		universeState: 'ready',
 		...overrides,
-		account: { address: walletAddress, isOnActiveChain: true, preparedMigrationRepAttoRep: 0n, repBalanceAttoRep: 10n, ...account },
+		account: { childMigratedAttoRep: {}, address: walletAddress, isOnActiveChain: true, preparedMigrationRepAttoRep: 0n, repBalanceAttoRep: 10n, ...account },
 	}
 }
 
@@ -45,6 +45,13 @@ const forkedChild = createUniverse({
 	],
 	parentUniverseId: 0n,
 	universeId: childUniverseId,
+})
+
+test('completed child migrations do not leave REP stranded in the overview', () => {
+	const universe = createUniverse({ hasForked: true, childUniverses: [{ exists: true, universeId: 2n, parentUniverseId: 0n, outcomeIndex: 0n, outcomeLabel: 'Yes', reputationToken: zeroAddress, forkTime: 0n }] })
+	const model = deriveZoltarOverviewModel(createInput({ universe }, { preparedMigrationRepAttoRep: 10n, repBalanceAttoRep: 0n, childMigratedAttoRep: { '2': 10n } }))
+	expect(model.migratableRepAttoRep).toBe(0n)
+	expect(model.nextStep).toEqual({ kind: 'open-child-universe', view: 'universes' })
 })
 
 describe('getZoltarUniverseActions', () => {

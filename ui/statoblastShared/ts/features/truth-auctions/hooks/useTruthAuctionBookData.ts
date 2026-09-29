@@ -1,5 +1,5 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Address, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadTruthAuctionActiveTickPage, loadTruthAuctionBidderBidPage, loadTruthAuctionTickBidPage } from '../../../protocol/truthAuctions.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -91,6 +91,8 @@ async function loadAggregatedTruthAuctionBidPages(client: Pick<ReadClient, 'read
 }
 
 export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAuctionResultHash, selectedStage, shouldShowTruthAuctionVisualization, truthAuctionAddress, truthAuctionClearingTick, truthAuctionReadClient }: UseTruthAuctionBookDataParams) {
+	const enteredBidTickRef = useRef(enteredBidTick)
+	enteredBidTickRef.current = enteredBidTick
 	const [truthAuctionBookData, setTruthAuctionBookData] = useState<TruthAuctionBookData>({
 		tickSummaries: [],
 		tickCount: 0n,
@@ -207,7 +209,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 				setTickDataKey(truthAuctionKey)
 				setSelectedBookTick(currentSelection => {
 					if (currentSelection !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === currentSelection)) return currentSelection
-					if (enteredBidTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === enteredBidTick)) return enteredBidTick
+					if (enteredBidTickRef.current !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === enteredBidTickRef.current)) return enteredBidTickRef.current
 					if (truthAuctionClearingTick !== undefined && sortedTickSummaries.some(tickSummary => tickSummary.tick === truthAuctionClearingTick)) return truthAuctionClearingTick
 					return sortedTickSummaries[0]?.tick
 				})
@@ -224,7 +226,7 @@ export function useTruthAuctionBookData({ accountAddress, enteredBidTick, forkAu
 		return () => {
 			cancelled = true
 		}
-	}, [enteredBidTick, forkAuctionResultHash, isTruthAuctionBookVisible, levelRetryRequestNonce, loadedTickPageCount, truthAuctionAddress, truthAuctionClearingTick, truthAuctionKey, truthAuctionReadClient])
+	}, [forkAuctionResultHash, isTruthAuctionBookVisible, levelRetryRequestNonce, loadedTickPageCount, truthAuctionAddress, truthAuctionClearingTick, truthAuctionKey, truthAuctionReadClient])
 
 	useEffect(() => {
 		if (!isTruthAuctionBookVisible || truthAuctionAddress === undefined || truthAuctionAddress === zeroAddress) {

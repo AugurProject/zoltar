@@ -56,6 +56,7 @@ export function usePortfolioRefreshEffects({
 }) {
 	// Background refreshes commit fresh market objects every cycle. A read that is still current and in flight for
 	// the same account and pools is left to finish instead of being restarted, so slow RPCs still reach a ready state.
+	const portfolioScope = useRef<string>()
 	const portfolioRead = useRef<{ key: string; request: RequestIdentity }>()
 	const balanceRead = useRef<{ key: string; request: RequestIdentity }>()
 
@@ -68,10 +69,12 @@ export function usePortfolioRefreshEffects({
 			return
 		}
 		// Keep balances already loaded for the same pools visible while they revalidate so background refreshes do not flash cards empty.
-		const previousEntries = queries.portfolioEntries
+		const scopeKey = `${account ?? ''}|${configuration?.chainId ?? ''}|${selectedUniverseId ?? ''}`
+		const previousEntries = portfolioScope.current === scopeKey ? queries.portfolioEntries : []
+		portfolioScope.current = scopeKey
 		const retainedEntries = visibleMarkets.map(market => {
-			const previous = previousEntries.find(entry => entry.market.pool === market.pool)
-			return { market, balances: liveBalancesForMarket(previous?.balances, market), error: market.loadError }
+			const previous = previousEntries.find(entry => entry.market.pool === market.pool && entry.market.shareToken === market.shareToken && entry.market.universeId === market.universeId)
+			return { market, balances: liveBalancesForMarket(previous?.balances, market), error: market.loadError ?? previous?.error }
 		})
 		queries.setPortfolioEntries(retainedEntries)
 		if (configuration === undefined || account === undefined) {
