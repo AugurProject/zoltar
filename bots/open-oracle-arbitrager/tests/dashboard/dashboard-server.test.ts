@@ -4,9 +4,9 @@ import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type MutableStrategy } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
-import type { PositionRecord } from '#state/position-store'
 import { EndpointCheckFailure } from '#monitoring/connectivity'
 import { operatorStateFixture } from '../support/operator-state.ts'
+import { openPositionFixture } from '../support/position-record.ts'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -15,8 +15,8 @@ afterEach(() => {
 	for (const server of servers.splice(0)) server.stop(true)
 })
 
-test('serves dashboard state and protects mutable controls with same-origin JSON requests', async () => {
-	const strategy: MutableStrategy = {
+function strategyFixture(): MutableStrategy {
+	return {
 		maxSpotTwapTicks: 100n,
 		minimumProfitBps: 100n,
 		minimumProfitAttoWeth: 10n ** 16n,
@@ -25,6 +25,42 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		pollMilliseconds: 12_000,
 		twapSeconds: 1_800,
 	}
+}
+
+type DashboardControls = Parameters<typeof startDashboardServer>[1]
+
+/** Controls for a configured network where every required handler is unexpected unless the test overrides it. */
+function dashboardControls(overrides: Partial<DashboardControls> = {}): DashboardControls {
+	const notNeeded = () => {
+		throw new Error('Not needed')
+	}
+	return {
+		getSnapshot: notNeeded,
+		isNetworkConfigured: () => true,
+		setPaused: () => undefined,
+		updateConnectivity: notNeeded,
+		updateSigner: notNeeded,
+		updateSubmission: notNeeded,
+		updateStrategy: notNeeded,
+		...overrides,
+	}
+}
+
+function startServer(controls: DashboardControls) {
+	const server = startDashboardServer(0, controls)
+	servers.push(server)
+	return { origin: `http://${server.hostname}:${server.port}`, server }
+}
+
+/** Sends a same-origin JSON mutation to the dashboard. */
+function jsonRequest(origin: string, pathname: string, method: string, body: unknown) {
+	const encoded = JSON.stringify(body)
+	if (encoded === undefined) throw new Error('Test request body must be JSON serializable')
+	return fetch(`${origin}${pathname}`, { body: encoded, headers: { 'content-type': 'application/json', origin }, method })
+}
+
+test('serves dashboard state and protects mutable controls with same-origin JSON requests', async () => {
+	const strategy = strategyFixture()
 	const state = operatorStateFixture({ blockNumber: '100', blockTimestamp: '1000', status: 'running' })
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
@@ -33,7 +69,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let queuedWallet: Address | null | undefined
 	let savedWallet: Address | undefined
 	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
-	const server = startDashboardServer(0, {
+	const { origin } = startServer({
 		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
 		isNetworkConfigured: () => true,
 		setPaused: paused => {
@@ -93,8 +129,6 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			return value.map(String)
 		},
 	})
-	servers.push(server)
-	const origin = `http://${server.hostname}:${server.port}`
 	const health = await fetch(`${origin}/healthz`)
 	expect(health.status).toBe(200)
 	expect(await health.text()).toBe('ok')
@@ -252,33 +286,21 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		method: 'PUT',
 	})
 	expect(rebound.status).toBe(403)
-	const pause = await fetch(`${origin}/api/paused`, {
-		body: JSON.stringify({ paused: true }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const pause = await jsonRequest(origin, '/api/paused', 'PUT', { paused: true })
 	expect(pause.status).toBe(200)
 	expect(state.paused).toBe(true)
-	const update = await fetch(`${origin}/api/settings`, {
-		body: JSON.stringify({
-			maxSpotTwapTicks: '75',
-			minimumProfitBps: '200',
-			minimumProfitWeth: '0.025',
-			minimumRemainingBlocks: '4',
-			minimumRemainingSeconds: '48',
-			pollMilliseconds: 15_000,
-			twapSeconds: 2_400,
-		}),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
+	const update = await jsonRequest(origin, '/api/settings', 'PUT', {
+		maxSpotTwapTicks: '75',
+		minimumProfitBps: '200',
+		minimumProfitWeth: '0.025',
+		minimumRemainingBlocks: '4',
+		minimumRemainingSeconds: '48',
+		pollMilliseconds: 15_000,
+		twapSeconds: 2_400,
 	})
 	expect(update.status).toBe(200)
 	expect(strategy.minimumProfitAttoWeth).toBe(25n * 10n ** 15n)
-	const submissionUpdate = await fetch(`${origin}/api/submission`, {
-		body: JSON.stringify({ mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.example'] }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const submissionUpdate = await jsonRequest(origin, '/api/submission', 'PUT', { mode: 'private', relayUrls: ['https://relay.flashbots.net', 'https://relay.example'] })
 	expect(submissionUpdate.status).toBe(200)
 	expect(submission.mode).toBe('private')
 	expect(submission.relayUrls).toHaveLength(2)
@@ -293,21 +315,14 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			target: `https://operator:${relaySecret}@relay.example/private?key=${relaySecret}`,
 		},
 	])
-	const failedSubmissionUpdate = await fetch(`${origin}/api/submission`, {
-		body: JSON.stringify({ mode: 'private', relayUrls: ['https://relay.example'] }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const failedSubmissionUpdate = await jsonRequest(origin, '/api/submission', 'PUT', { mode: 'private', relayUrls: ['https://relay.example'] })
 	const failedSubmissionBody = await failedSubmissionUpdate.text()
 	expect(failedSubmissionUpdate.status).toBe(400)
 	expect(failedSubmissionBody).not.toContain(relaySecret)
 	expect(JSON.parse(failedSubmissionBody)).toEqual({ error: 'RPC https://relay.example failed while calling eth_sendPrivateTransaction: getaddrinfo ENOTFOUND relay.example' })
 	submissionFailure = undefined
-	const connectivityUpdate = await fetch(`${origin}/api/connectivity`, {
-		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const connectivityRequest = { connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }
+	const connectivityUpdate = await jsonRequest(origin, '/api/connectivity', 'PUT', connectivityRequest)
 	expect(connectivityUpdate.status).toBe(200)
 	expect(await connectivityUpdate.json()).toEqual({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' })
 	expect(connectivity.readRpcUrl).toBe('https://read.example')
@@ -315,11 +330,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	connectivityFailure = new EndpointCheckFailure(`RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${mutationCredentialMarker}`, [
 		{ chainId: undefined, checkedAt: '2026-09-01T00:00:00.000Z', error: `RPC https://rpc.example failed while calling eth_chainId: connection refused; project id ${mutationCredentialMarker}`, kind: 'read-rpc', status: 'failed', target: 'https://rpc.example' },
 	])
-	const failedConnectivityUpdate = await fetch(`${origin}/api/connectivity`, {
-		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const failedConnectivityUpdate = await jsonRequest(origin, '/api/connectivity', 'PUT', connectivityRequest)
 	expect(failedConnectivityUpdate.status).toBe(400)
 	const failedConnectivityBody = await failedConnectivityUpdate.json()
 	expect(JSON.stringify(failedConnectivityBody)).not.toContain(mutationCredentialMarker)
@@ -342,11 +353,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			target: 'http://reth:8545',
 		},
 	])
-	const unresolvedHostnameUpdate = await fetch(`${origin}/api/connectivity`, {
-		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const unresolvedHostnameUpdate = await jsonRequest(origin, '/api/connectivity', 'PUT', connectivityRequest)
 	expect(unresolvedHostnameUpdate.status).toBe(400)
 	const unresolvedHostnameBody = await unresolvedHostnameUpdate.json()
 	expect(JSON.stringify(unresolvedHostnameBody)).not.toContain(mutationCredentialMarker)
@@ -354,59 +361,31 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.',
 	})
 	connectivityFailure = new Error('RPC URLs must not exceed 2048 characters')
-	const oversizedUrlUpdate = await fetch(`${origin}/api/connectivity`, {
-		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const oversizedUrlUpdate = await jsonRequest(origin, '/api/connectivity', 'PUT', connectivityRequest)
 	expect(oversizedUrlUpdate.status).toBe(400)
 	expect(await oversizedUrlUpdate.json()).toEqual({ error: 'RPC URLs must not exceed 2048 characters' })
 	connectivityFailure = new Error('At most 8 read quorum RPC URLs are supported')
-	const readQuorumLimitUpdate = await fetch(`${origin}/api/connectivity`, {
-		body: JSON.stringify({ connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' }, network: 'mainnet' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const readQuorumLimitUpdate = await jsonRequest(origin, '/api/connectivity', 'PUT', connectivityRequest)
 	expect(readQuorumLimitUpdate.status).toBe(400)
 	expect(await readQuorumLimitUpdate.json()).toEqual({ error: 'At most 8 read quorum RPC URLs are supported' })
 	connectivityFailure = undefined
-	const universeUpdate = await fetch(`${origin}/api/approved-universes`, { body: JSON.stringify(['0']), headers: { 'content-type': 'application/json', origin }, method: 'PUT' })
+	const universeUpdate = await jsonRequest(origin, '/api/approved-universes', 'PUT', ['0'])
 	expect(universeUpdate.status).toBe(200)
 	expect(await universeUpdate.json()).toEqual({ approvedUniverses: ['0'] })
 	const rejectedUniverseUpdate = await fetch(`${origin}/api/approved-universes`, { body: '[]', headers: { 'content-type': 'application/json', origin: 'https://other.example' }, method: 'PUT' })
 	expect(rejectedUniverseUpdate.status).toBe(403)
-	const tokenUpdate = await fetch(`${origin}/api/tokens`, {
-		body: JSON.stringify([address]),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const tokenUpdate = await jsonRequest(origin, '/api/tokens', 'PUT', [address])
 	expect(tokenUpdate.status).toBe(200)
 	expect(await tokenUpdate.json()).toEqual({ tokenAddresses: [address] })
-	const deploymentUpdate = await fetch(`${origin}/api/deployment`, {
-		body: JSON.stringify({ executor: address }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const deploymentUpdate = await jsonRequest(origin, '/api/deployment', 'PUT', { executor: address })
 	expect(deploymentUpdate.status).toBe(200)
-	const executorDeployment = await fetch(`${origin}/api/executor-deployment`, {
-		body: JSON.stringify({ salt: `0x${'00'.repeat(32)}` }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'POST',
-	})
+	const executorDeployment = await jsonRequest(origin, '/api/executor-deployment', 'POST', { salt: `0x${'00'.repeat(32)}` })
 	expect(executorDeployment.status).toBe(200)
 	expect(await executorDeployment.json()).toMatchObject({ address, alreadyDeployed: false })
-	const executorPrediction = await fetch(`${origin}/api/executor-prediction`, {
-		body: JSON.stringify({ salt: `0x${'00'.repeat(32)}` }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'POST',
-	})
+	const executorPrediction = await jsonRequest(origin, '/api/executor-prediction', 'POST', { salt: `0x${'00'.repeat(32)}` })
 	expect(executorPrediction.status).toBe(200)
 	expect(await executorPrediction.json()).toMatchObject({ address })
-	const signerUpdate = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ privateKey: 'not returned by test controller', rememberSigner: true }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const signerUpdate = await jsonRequest(origin, '/api/signer', 'PUT', { privateKey: 'not returned by test controller', rememberSigner: true })
 	expect(signerUpdate.status).toBe(200)
 	expect(await signerUpdate.json()).toEqual({ wallet: address })
 	const credentialMarker = 'operator-secret'
@@ -420,19 +399,15 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const protectedSettingsFile = '/var/lib/zoltar/operator/mainnet/operator.json'
 	const transactionHash: Hex = `0x${'12'.repeat(32)}`
 	state.positions = [
-		{
+		openPositionFixture({
 			account: address,
-			actualEntryGasCostEth: '0.001',
 			capitalAtRiskWeth: '1',
-			closedAt: undefined,
 			direction: 'buy-rep',
 			entryTransactionHash: transactionHash,
 			entryTransactionHashes: [transactionHash],
 			entryTransactionIntent: { data: entryCalldataMarker, to: address, value: '0' },
 			gasExpenditures: [],
-			historyOutbox: undefined,
 			hedgeAmountToken: '1',
-			hedgeWeth: '1',
 			hedgedProfitBeforeGasEth: '0.02',
 			lifecycleGasCostEth: '0.0005',
 			lifecycleReceiptRecovered: true,
@@ -445,17 +420,10 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 			lifecycleWalletTokenBefore: '1',
 			lifecycleWalletWethBefore: '1',
 			lockedToken: '1',
-			lockedWeth: '1',
-			manualReconciliation: undefined,
 			openedAt: new Date(0).toISOString(),
-			realizedNetProfitEth: undefined,
 			reportId: '1',
-			status: 'open',
 			token: address,
-			tokenSymbol: 'REP',
-			withdrawnToken: '0',
-			withdrawnWeth: '0',
-		} satisfies PositionRecord,
+		}),
 	]
 	connectivity = { publicRpcUrls: [credentialEndpoint], readRpcUrl: credentialEndpoint }
 	submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [credentialEndpoint] }
@@ -578,47 +546,26 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	expect(quotedCredentialFailureState).toMatchObject({ lastError: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC provider returned {"password":"[redacted]","secret":"[redacted]"}. Automatic retry remains active.' })
 	expect(JSON.stringify(quotedCredentialFailureState)).not.toContain(credentialMarker)
 	expect(JSON.stringify(quotedCredentialFailureState)).not.toContain(endpointCredentialMarker)
-	const forgetSigner = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ forgetSavedSigner: true }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const forgetSigner = await jsonRequest(origin, '/api/signer', 'PUT', { forgetSavedSigner: true })
 	expect(forgetSigner.status).toBe(200)
 	const forgottenState = (await fetch(`${origin}/api/state`).then(response => response.json())) as Record<string, unknown>
 	expect(forgottenState).toMatchObject({ queuedWallet: address })
 	expect(forgottenState['savedWallet']).toBeUndefined()
-	const signerClear = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ privateKey: null, rememberSigner: false }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const signerClear = await jsonRequest(origin, '/api/signer', 'PUT', { privateKey: null, rememberSigner: false })
 	expect(signerClear.status).toBe(200)
 	const clearReloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
 	expect(clearReloadedState).toMatchObject({ queuedWallet: null })
 })
 
 test('returns a structured unavailable response when the initial state read fails', async () => {
-	const server = startDashboardServer(0, {
-		getSnapshot: () => {
-			throw new Error('RPC unavailable')
-		},
-		isNetworkConfigured: () => true,
-		setPaused: () => undefined,
-		updateConnectivity: () => {
-			throw new Error('Connectivity unavailable')
-		},
-		updateSigner: () => {
-			throw new Error('Signer unavailable')
-		},
-		updateSubmission: () => {
-			throw new Error('Submission unavailable')
-		},
-		updateStrategy: () => {
-			throw new Error('Settings unavailable')
-		},
-	})
-	servers.push(server)
-	const response = await fetch(`http://${server.hostname}:${server.port}/api/state`)
+	const { origin } = startServer(
+		dashboardControls({
+			getSnapshot: () => {
+				throw new Error('RPC unavailable')
+			},
+		}),
+	)
+	const response = await fetch(`${origin}/api/state`)
 	expect(response.status).toBe(503)
 	expect(await response.json()).toEqual({ error: 'The bot tried to load the latest operator state for the dashboard, but it failed: RPC unavailable. Automatic retry remains active.' })
 })
@@ -626,35 +573,19 @@ test('returns a structured unavailable response when the initial state read fail
 test('forwards operator-actionable pause and executor deployment refusals and hides everything else', async () => {
 	let pauseFailure: Error | undefined
 	let deploymentFailure: Error | undefined
-	const server = startDashboardServer(0, {
-		getSnapshot: () => {
-			throw new Error('Not needed')
-		},
-		isNetworkConfigured: () => true,
-		setPaused: () => {
-			if (pauseFailure !== undefined) throw pauseFailure
-		},
-		deployExecutor: () => {
-			if (deploymentFailure !== undefined) throw deploymentFailure
-			return { address, alreadyDeployed: true, transactionHash: undefined }
-		},
-		updateConnectivity: () => {
-			throw new Error('Not needed')
-		},
-		updateSigner: () => {
-			throw new Error('Not needed')
-		},
-		updateSubmission: () => {
-			throw new Error('Not needed')
-		},
-		updateStrategy: () => {
-			throw new Error('Not needed')
-		},
-	})
-	servers.push(server)
-	const origin = `http://${server.hostname}:${server.port}`
+	const { origin } = startServer(
+		dashboardControls({
+			setPaused: () => {
+				if (pauseFailure !== undefined) throw pauseFailure
+			},
+			deployExecutor: () => {
+				if (deploymentFailure !== undefined) throw deploymentFailure
+				return { address, alreadyDeployed: true, transactionHash: undefined }
+			},
+		}),
+	)
 	const request = async (pathname: string, method: string, body: unknown) => {
-		const response = await fetch(`${origin}${pathname}`, { body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin }, method })
+		const response = await jsonRequest(origin, pathname, method, body)
 		return { body: await response.json(), status: response.status }
 	}
 	pauseFailure = new Error('Recover the pending executor deployment before resuming execution')
@@ -678,16 +609,8 @@ test('rejects every chain-specific mutation until network connectivity is config
 	let configured = false
 	let chainSpecificMutations = 0
 	let pauseMutations = 0
-	const strategy: MutableStrategy = {
-		maxSpotTwapTicks: 100n,
-		minimumProfitBps: 100n,
-		minimumProfitAttoWeth: 10n ** 16n,
-		minimumRemainingBlocks: 3n,
-		minimumRemainingSeconds: 36n,
-		pollMilliseconds: 12_000,
-		twapSeconds: 1_800,
-	}
-	const server = startDashboardServer(0, {
+	const strategy = strategyFixture()
+	const { origin } = startServer({
 		getSnapshot: () => {
 			throw new Error('Not needed')
 		},
@@ -756,17 +679,7 @@ test('rejects every chain-specific mutation until network connectivity is config
 			throw new Error('Unexpected execution update')
 		},
 	})
-	servers.push(server)
-	const origin = `http://${server.hostname}:${server.port}`
-	const request = async (pathname: string, method: 'POST' | 'PUT' = 'PUT', body: unknown = {}) => {
-		const encoded = JSON.stringify(body)
-		if (encoded === undefined) throw new Error('Test request body must be JSON serializable')
-		return await fetch(`${origin}${pathname}`, {
-			body: encoded,
-			headers: { 'content-type': 'application/json', origin },
-			method,
-		})
-	}
+	const request = (pathname: string, method: 'POST' | 'PUT' = 'PUT', body: unknown = {}) => jsonRequest(origin, pathname, method, body)
 	for (const [pathname, method, body] of [
 		['/api/configuration', 'PUT', {}],
 		['/api/settings', 'PUT', {}],
@@ -800,51 +713,8 @@ test('rejects every chain-specific mutation until network connectivity is config
 test('supports loopback and configured network authorities for a container bind', async () => {
 	const password = 'correct horse battery staple'
 	const publicAuthority = 'dashboard.example'
-	expect(() =>
-		startDashboardServer(0, {
-			getSnapshot: () => {
-				throw new Error('Not needed')
-			},
-			hostname: '0.0.0.0',
-			isNetworkConfigured: () => true,
-			setPaused: () => undefined,
-			updateConnectivity: () => {
-				throw new Error('Not needed')
-			},
-			updateSigner: () => {
-				throw new Error('Not needed')
-			},
-			updateSubmission: () => {
-				throw new Error('Not needed')
-			},
-			updateStrategy: () => {
-				throw new Error('Not needed')
-			},
-		}),
-	).toThrow('ZOLTAR_BOT_DASHBOARD_PASSWORD')
-	const server = startDashboardServer(0, {
-		getSnapshot: () => {
-			throw new Error('Not needed')
-		},
-		hostname: '0.0.0.0',
-		isNetworkConfigured: () => true,
-		password,
-		publicAuthority,
-		setPaused: () => undefined,
-		updateConnectivity: () => {
-			throw new Error('Not needed')
-		},
-		updateSigner: () => {
-			throw new Error('Not needed')
-		},
-		updateSubmission: () => {
-			throw new Error('Not needed')
-		},
-		updateStrategy: () => {
-			throw new Error('Not needed')
-		},
-	})
-	servers.push(server)
+	expect(() => startDashboardServer(0, dashboardControls({ hostname: '0.0.0.0' }))).toThrow('ZOLTAR_BOT_DASHBOARD_PASSWORD')
+	const { server } = startServer(dashboardControls({ hostname: '0.0.0.0', password, publicAuthority }))
 	expect(server.hostname).toBe('0.0.0.0')
 	const origin = `http://127.0.0.1:${server.port}`
 	expect((await fetch(origin)).status).toBe(401)
