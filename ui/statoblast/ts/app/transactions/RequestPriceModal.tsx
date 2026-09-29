@@ -22,7 +22,7 @@ async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['rev
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
 }
 
-type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; submissionOutstanding?: boolean; steps?: NonNullable<typeof transactionSteps.value>['steps'] | undefined; plan?: FailedPricePlan }
+type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; failedHash?: string | undefined; submissionOutstanding?: boolean; steps?: NonNullable<typeof transactionSteps.value>['steps'] | undefined; plan?: FailedPricePlan }
 
 function getRunSubmission(run: PriceRequestRun | undefined) {
 	const workflow = transactionSteps.peek()
@@ -59,7 +59,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			run.current?.cancel()
 			const tracked = run.current
 			const { finalSubmittedHash: finalHash, inFlight } = getRunSubmission(tracked)
-			const failedSubmission = finalHash !== undefined && presentation?.tone === 'error' && presentation.hash === finalHash
+			const failedSubmission = finalHash !== undefined && (tracked?.failedHash === finalHash || (presentation?.tone === 'error' && presentation.hash === finalHash))
 			const completedSubmission = finalHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalHash
 			if (inFlight || (finalHash !== undefined && !failedSubmission && !completedSubmission)) {
 				setPreparationPaused(true)
@@ -107,6 +107,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const reviewKey = `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}`
 		if (previousReviewKey.current === reviewKey) return
 		previousReviewKey.current = reviewKey
+		if (run.current !== undefined) run.current.failedHash = undefined
 		quoteAttempt.current += 1
 		setFetching(false)
 		setQuoteError(undefined)
@@ -124,6 +125,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	}, [review])
 	useLayoutEffect(() => {
 		if (!failedCurrentAttempt) return
+		const failedHash = presentation?.tone === 'error' ? presentation.hash : undefined
+		if (run.current !== undefined && failedHash !== undefined && (failedHash === finalSubmittedHash || failedHash === submittedHash)) run.current.failedHash = failedHash
 		setFailureLatched(true)
 		setPreparationPaused(true)
 		if (workflow !== undefined) {
@@ -135,7 +138,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			setFailedPlan(plan)
 		} else if (run.current?.plan !== undefined) setFailedPlan(run.current.plan)
 		if (!running) run.current?.cancel()
-	}, [failedCurrentAttempt, running])
+	}, [failedCurrentAttempt, running, presentation?.tone, presentation?.hash, finalSubmittedHash, submittedHash])
 	useLayoutEffect(() => {
 		if (finalSubmittedHash !== undefined && run.current !== undefined) run.current.finalSubmittedHash = finalSubmittedHash
 	}, [finalSubmittedHash])

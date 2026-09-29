@@ -1295,7 +1295,7 @@ test.each(['edit', 'fetch', 'pending approval'] as const)('prepares again after 
 	}
 })
 
-test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final wallet prompt through %s after editing the price', async outcome => {
+async function checkDetachedRequestOutcome(outcome: 'success' | 'reverted' | 'rejected', presentationChange: 'unchanged' | 'cleared' | 'replaced' = 'unchanged', detached = true, retryAction: 'edit' | 'fetch' = 'edit') {
 	const dom = installDomEnvironment()
 	const wallet = createDeferred<void>()
 	const mined = createDeferred<void>()
@@ -1310,6 +1310,7 @@ test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final
 				<RequestPriceModal
 					{...props}
 					review={activeReview.value}
+					fetchPrice={async () => (prices.length === 0 ? 2n : 5n) * 10n ** 18n}
 					onClose={() => {
 						closed = true
 						activeReview.value = undefined
@@ -1346,8 +1347,10 @@ test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final
 		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(['wallet'])
 		const priceInput = queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })
 		expect(priceInput.hasAttribute('disabled')).toBe(false)
-		await act(() => fireEvent.input(priceInput, { target: { value: '4' } }))
-		await settle()
+		if (detached) {
+			await act(() => fireEvent.input(priceInput, { target: { value: '4' } }))
+			await settle()
+		}
 		await act(() => wallet.resolve())
 		await settle()
 		if (outcome === 'rejected') {
@@ -1364,13 +1367,28 @@ test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final
 			expect(prices).toHaveLength(1)
 			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
 			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+			await act(() => {
+				presentation.value = { tone: 'success', title: 'Other action', hash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd' }
+			})
+			await settle()
+			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
+			expect(prices).toHaveLength(1)
 		} else {
 			expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
 			expect(queries.getByRole('dialog', { name: 'Request new price' }).textContent).toContain('Edit the price or fetch a quote to retry.')
 			expect(prices).toHaveLength(1)
-			await act(() => fireEvent.input(priceInput, { target: { value: '5' } }))
+			if (presentationChange !== 'unchanged') {
+				await act(() => {
+					presentation.value = presentationChange === 'cleared' ? undefined : { tone: 'success', title: 'Other action', hash: '0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd' }
+				})
+				await settle()
+				expect(prices).toHaveLength(1)
+			}
+			if (retryAction === 'edit') await act(() => fireEvent.input(priceInput, { target: { value: '5' } }))
+			else await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 			await settle()
 			expect(prices).toEqual([2n * 10n ** 18n, 5n * 10n ** 18n])
+			if (presentationChange !== 'unchanged') expect(queries.queryByText('Edit the price or fetch a quote to retry.') === null).toBe(true)
 		}
 	} finally {
 		wallet.resolve()
@@ -1378,4 +1396,19 @@ test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final
 		await rendered.cleanup()
 		dom.cleanup()
 	}
+}
+
+test.each(['success', 'reverted', 'rejected'] as const)('tracks a detached final wallet prompt through %s after editing the price', async outcome => {
+	await checkDetachedRequestOutcome(outcome)
+})
+
+test.each([
+	['cleared', 'detached', 'edit'],
+	['replaced', 'detached', 'edit'],
+	['cleared', 'attached', 'edit'],
+	['replaced', 'attached', 'edit'],
+	['cleared', 'detached', 'fetch'],
+	['replaced', 'detached', 'fetch'],
+] as const)('retries a reverted request after the presentation is %s (%s) using %s', async (change, mode, action) => {
+	await checkDetachedRequestOutcome('reverted', change, mode === 'detached', action)
 })
