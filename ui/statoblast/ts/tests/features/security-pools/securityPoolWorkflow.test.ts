@@ -20,6 +20,7 @@ import {
 	shouldShowSelectedPoolWorkflowDetails,
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { createActiveReportingDetails, createEscalationSides } from './workflow/builders.js'
 
 // The oracle manager treats a settled price as usable for five minutes.
 const ORACLE_MANAGER_PRICE_VALID_FOR_SECONDS = 5n * 60n
@@ -207,37 +208,16 @@ void describe('selected pool workflow lookup state', () => {
 		).toBeUndefined()
 	})
 
-	void test('ignores stale non-operational reporting details once the selected pool is operational again', () => {
+	void test.each([
+		['ignores stale non-operational reporting details once the selected pool is operational again', { systemState: 'forkTruthAuction' }, { hasForkActivity: true, questionOutcome: 'yes', systemState: 'operational' }],
+		['ignores stale operational reporting details once the selected pool enters fork mode', { parentWithdrawalEnabled: true, questionOutcome: 'yes', settlementState: 'resolved', systemState: 'operational' }, { hasForkActivity: true, questionOutcome: 'yes', systemState: 'forkMigration' }],
+	] as const)('%s', (_name, reportingDetails, selectedPool) => {
 		expect(
 			getCurrentSelectedPoolReportingDetails({
-				reportingDetails: {
-					settlementCollateralAttoEth: 1n,
+				reportingDetails: createActiveReportingDetails({
 					currentTime: 5n,
 					forkThresholdAttoRep: 100n,
-					marketDetails: {
-						answerUnit: '',
-						createdAt: 1n,
-						description: 'Question description',
-						displayValueMax: 100n,
-						displayValueMin: 0n,
-						endTime: 2n,
-						exists: true,
-						marketType: 'binary',
-						numTicks: 2n,
-						outcomeLabels: ['Yes', 'No'],
-						questionId: '0x01',
-						startTime: 1n,
-						title: 'Will this resolve?',
-					},
 					nonDecisionThresholdAttoRep: 50n,
-					parentWithdrawalEnabled: false,
-					questionOutcome: 'none',
-					securityPoolAddress: zeroAddress,
-					settlementState: 'locked',
-					startBondAttoRep: 1n,
-					status: 'active',
-					systemState: 'forkTruthAuction',
-					universeId: 1n,
 					viewerPoolHeldVaultRepBackingAttoRep: 0n,
 					viewerVaultExists: false,
 					viewerVaultDisputeStakedAttoRep: 0n,
@@ -246,77 +226,11 @@ void describe('selected pool workflow lookup state', () => {
 					bindingCapital: 1n,
 					currentRequiredBond: 1n,
 					escalationEndTime: 10n,
-					escalationGameAddress: zeroAddress,
-					hasReachedNonDecision: false,
-					sides: [
-						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-					],
+					sides: createEscalationSides([0n, 0n, 0n]),
 					totalCostAttoRep: 1n,
-				},
-				selectedPool: {
-					hasForkActivity: true,
-					questionOutcome: 'yes',
-					systemState: 'operational',
-				},
-			}),
-		).toBeUndefined()
-	})
-
-	void test('ignores stale operational reporting details once the selected pool enters fork mode', () => {
-		expect(
-			getCurrentSelectedPoolReportingDetails({
-				reportingDetails: {
-					settlementCollateralAttoEth: 1n,
-					currentTime: 5n,
-					forkThresholdAttoRep: 100n,
-					marketDetails: {
-						answerUnit: '',
-						createdAt: 1n,
-						description: 'Question description',
-						displayValueMax: 100n,
-						displayValueMin: 0n,
-						endTime: 2n,
-						exists: true,
-						marketType: 'binary',
-						numTicks: 2n,
-						outcomeLabels: ['Yes', 'No'],
-						questionId: '0x01',
-						startTime: 1n,
-						title: 'Will this resolve?',
-					},
-					nonDecisionThresholdAttoRep: 50n,
-					parentWithdrawalEnabled: true,
-					questionOutcome: 'yes',
-					securityPoolAddress: zeroAddress,
-					settlementState: 'resolved',
-					startBondAttoRep: 1n,
-					status: 'active',
-					systemState: 'operational',
-					universeId: 1n,
-					viewerPoolHeldVaultRepBackingAttoRep: 0n,
-					viewerVaultExists: false,
-					viewerVaultDisputeStakedAttoRep: 0n,
-					viewerVaultRepBackingAttoRep: 0n,
-					activationTime: 1n,
-					bindingCapital: 1n,
-					currentRequiredBond: 1n,
-					escalationEndTime: 10n,
-					escalationGameAddress: zeroAddress,
-					hasReachedNonDecision: false,
-					sides: [
-						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-						{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-					],
-					totalCostAttoRep: 1n,
-				},
-				selectedPool: {
-					hasForkActivity: true,
-					questionOutcome: 'yes',
-					systemState: 'forkMigration',
-				},
+					...reportingDetails,
+				}),
+				selectedPool,
 			}),
 		).toBeUndefined()
 	})

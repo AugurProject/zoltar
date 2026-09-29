@@ -17,7 +17,7 @@ const shareToken: Address = `0x${'34'.repeat(20)}`
 const secondPool: Address = `0x${'56'.repeat(20)}`
 const secondShareToken: Address = `0x${'78'.repeat(20)}`
 
-const market: LiveMarket = {
+const market = liveMarketFixture({
 	pool,
 	pair: undefined,
 	shareToken,
@@ -25,27 +25,13 @@ const market: LiveMarket = {
 	questionId: 9n,
 	title: 'Scoped portfolio',
 	description: 'Scope fixture',
-	endTime: 2n ** 255n,
-	statoblastSecurityMultiplierBps: 20_000n,
 	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
 	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 	settlementCollateralAttoEth: 100n * 10n ** 18n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 1n,
-	availableMintingCapacityAttoEth: 1n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
 	yesReserve: 0n,
 	noReserve: 0n,
 	lpTotalSupply: 0n,
-}
+})
 
 describe('live portfolio scope', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined

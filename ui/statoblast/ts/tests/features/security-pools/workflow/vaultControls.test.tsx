@@ -1,110 +1,68 @@
 import { describe, expect, test } from 'bun:test'
-import { createVaultControlsFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
+import { act } from 'preact/test-utils'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { createMarketDetails } from './builders.js'
-import { render } from 'preact'
+import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
+import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import { createAccountState, createMarketDetails, createOracleManagerDetails, createSecurityPoolWorkflowProps, createSecurityVaultDetails, createSecurityVaultForm, createSecurityVaultProps, createSelectedPool } from './builders.js'
+import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
 installTestRouting()
 describe('SecurityPoolWorkflowSection: vault controls', () => {
-	const testDom = useSecurityPoolWorkflowSectionTestDom()
-	const { setCleanup } = testDom
-	const fixture = createVaultControlsFixture()
-	const { fireEvent, within, act, zeroAddress, SecurityPoolWorkflowSection, renderIntoDocument, expectTransactionButtonDisabled, expectTransactionButtonEnabled, createAccountState, createSecurityVaultProps, createSecurityVaultDetails, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } =
-		fixture
+	const { renderLoadedPool, renderWorkflow } = useSecurityPoolWorkflowSectionTestDom()
+	const admissionClosedReason = 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.'
+	const endedAtTwo = () => createMarketDetails({ endTime: 2n })
 
-	test('blocks origin vault deposits after the question ends before ordinary escalation starts', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={3n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						securityPoolAddress: selectedPoolAddress,
-						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
-						securityVault: createSecurityVaultProps({
-							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
-						}),
-						selectedPoolView: 'vaults',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
+	type VaultsViewOptions = Partial<Omit<SecurityPoolWorkflowRouteContentProps, 'securityVault'>> & { pool?: Partial<ListedSecurityPool>; vault?: Partial<SecurityVaultRouteContentProps> }
+	const createVaultsViewProps = ({ pool = {}, vault = {}, ...overrides }: VaultsViewOptions) =>
+		createSecurityPoolWorkflowProps({
+			securityPoolAddress: zeroAddress,
+			securityPools: [createSelectedPool(pool)],
+			securityVault: createSecurityVaultProps({ securityVaultDetails: createSecurityVaultDetails(), ...vault }),
+			selectedPoolView: 'vaults',
+			...overrides,
+		})
+	const renderVaultsView = async ({ chainTimestamp, ...options }: VaultsViewOptions & { chainTimestamp?: bigint }) => await renderWorkflow(createVaultsViewProps(options), chainTimestamp === undefined ? {} : { chainTimestamp })
+
+	const openDialog = async (name: string) => {
+		const documentQueries = within(document.body)
+		await act(() => {
+			fireEvent.click(documentQueries.getAllByRole('button', { name })[0] as HTMLElement)
+		})
+		return documentQueries.getByRole('dialog', { name })
+	}
+
+	test.each([
+		['blocks origin vault deposits after the question ends before ordinary escalation starts', 3n],
+		['blocks origin vault deposits at the exact question end timestamp', 2n],
+	])('%s', async (_name, chainTimestamp) => {
+		await renderVaultsView({ chainTimestamp, pool: { marketDetails: endedAtTwo() } })
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /^(My vault|Vault details)$/ })))
 
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		const depositButton = within(document.body).getByRole('button', { name: 'Deposit REP' })
 		const disabledReason = document.getElementById(depositButton.getAttribute('aria-describedby') ?? '')
-		expect(disabledReason?.textContent).toBe('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
-	})
-
-	test('blocks origin vault deposits at the exact question end timestamp', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={2n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						securityPoolAddress: selectedPoolAddress,
-						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
-						securityVault: createSecurityVaultProps({
-							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
-						}),
-						selectedPoolView: 'vaults',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: /^(My vault|Vault details)$/ })))
-
-		expectTransactionButtonDisabled(document.body, 'Deposit REP')
-		expect(within(document.body).getByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeTruthy()
+		expect(disabledReason?.textContent).toBe(admissionClosedReason)
+		expect(within(document.body).getByText(admissionClosedReason)).toBeTruthy()
 	})
 
 	test('disables an open deposit approval flow when origin vault admission closes', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderWorkflow = (chainTimestamp: bigint) => (
-			<ChainTimestampContext.Provider value={chainTimestamp}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						securityPoolAddress: selectedPoolAddress,
-						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
-						securityVault: createSecurityVaultProps({
-							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
-							securityVaultForm: {
-								depositAmount: '1',
-								repWithdrawAmount: '1',
-								targetHealthFactor: '2',
-								securityPoolAddress: selectedPoolAddress,
-								selectedVaultOwner: zeroAddress,
-							},
-							securityVaultRepApproval: {
-								error: undefined,
-								loading: false,
-								value: 0n,
-							},
-							walletRepBalanceAttoRep: 10n * 10n ** 18n,
-						}),
-						selectedPoolView: 'vaults',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>
-		)
-		const renderedComponent = await renderIntoDocument(renderWorkflow(1n))
-		setCleanup(renderedComponent.cleanup)
+		const openAdmissionProps = {
+			pool: { marketDetails: endedAtTwo() },
+			vault: {
+				securityVaultForm: createSecurityVaultForm({ depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2' }),
+				walletRepBalanceAttoRep: 10n * 10n ** 18n,
+			},
+		}
+		const { rerender } = await renderVaultsView({ ...openAdmissionProps, chainTimestamp: 1n })
 
 		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Deposit REP' })[0] as HTMLElement)
-		})
+		await openDialog('Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Approve 1 REP')
 
-		await act(() => {
-			render(renderWorkflow(2n), renderedComponent.container)
-		})
+		await rerender(createVaultsViewProps(openAdmissionProps), { chainTimestamp: 2n })
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositQueries = within(depositDialog)
@@ -119,40 +77,19 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			fireEvent.click(depositQueries.getByRole('button', { name: 'Cancel' }))
 		})
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
-		})
-		const withdrawDialog = documentQueries.getByRole('dialog', { name: 'Withdraw REP' })
+		const withdrawDialog = await openDialog('Withdraw REP')
 		expect((within(withdrawDialog).getByLabelText('REP withdraw amount') as HTMLInputElement).disabled).toBe(false)
 	})
 
 	test('vault dialogs keep a single primary transaction action and end with Cancel', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						securityPoolAddress: selectedPoolAddress,
-						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 2n }), securityPoolAddress: selectedPoolAddress })],
-						securityVault: createSecurityVaultProps({
-							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
-							securityVaultForm: {
-								depositAmount: '1',
-								repWithdrawAmount: '1',
-								targetHealthFactor: '2',
-								securityPoolAddress: selectedPoolAddress,
-								selectedVaultOwner: zeroAddress,
-							},
-							walletRepBalanceAttoRep: 10n * 10n ** 18n,
-						}),
-						selectedPoolView: 'vaults',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
-		const documentQueries = within(document.body)
+		await renderVaultsView({
+			chainTimestamp: 1n,
+			pool: { marketDetails: endedAtTwo() },
+			vault: {
+				securityVaultForm: createSecurityVaultForm({ depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2' }),
+				walletRepBalanceAttoRep: 10n * 10n ** 18n,
+			},
+		})
 		const expectDialogActions = (dialog: HTMLElement, expectedLabels: string[]) => {
 			const actionRow = within(dialog).getByRole('button', { name: 'Cancel' }).closest('.actions')
 			if (actionRow === null) throw new Error('Dialog action row is missing')
@@ -161,79 +98,34 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			expect(buttons.map(button => button.classList.contains('primary'))).toEqual(expectedLabels.map(label => label === expectedLabels[expectedLabels.length - 2]))
 		}
 
-		await act(() => {
-			fireEvent.click(documentQueries.getAllByRole('button', { name: 'Deposit REP' })[0] as HTMLElement)
-		})
-		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
+		const depositDialog = await openDialog('Deposit REP')
 		expectDialogActions(depositDialog, ['Approve 1\u00a0REP', 'Deposit REP', 'Cancel'])
 		await act(() => {
 			fireEvent.click(within(depositDialog).getByRole('button', { name: 'Cancel' }))
 		})
 
-		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REP' }))
-		})
-		expectDialogActions(documentQueries.getByRole('dialog', { name: 'Withdraw REP' }), ['Withdraw REP', 'Cancel'])
+		expectDialogActions(await openDialog('Withdraw REP'), ['Withdraw REP', 'Cancel'])
 	})
 
 	test('keeps continuation-child vault deposits available after the question ends', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={3n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						securityPoolAddress: selectedPoolAddress,
-						securityPools: [
-							createSelectedPool({
-								hasForkContinuationEscalationGame: true,
-								marketDetails: createMarketDetails({ endTime: 2n }),
-								securityPoolAddress: selectedPoolAddress,
-							}),
-						],
-						securityVault: createSecurityVaultProps({
-							securityVaultDetails: createSecurityVaultDetails({ securityPoolAddress: selectedPoolAddress }),
-						}),
-						selectedPoolView: 'vaults',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderVaultsView({ chainTimestamp: 3n, pool: { hasForkContinuationEscalationGame: true, marketDetails: endedAtTwo() } })
 
-		expect(within(document.body).queryByText('New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')).toBeNull()
+		expect(within(document.body).queryByText(admissionClosedReason)).toBeNull()
 	})
 
 	test('auto-loads the selected vault without presenting manual refresh guidance', async () => {
 		const loadSecurityVaultCalls: Array<string | undefined> = []
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					checkedSecurityPoolAddress: zeroAddress,
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
-					securityVault: createSecurityVaultProps({
-						onLoadSecurityVault: vaultAddress => {
-							loadSecurityVaultCalls.push(vaultAddress)
-						},
-						securityVaultForm: {
-							depositAmount: '10',
-							repWithdrawAmount: '1',
-							targetHealthFactor: '2',
-							securityPoolAddress: zeroAddress,
-							selectedVaultOwner: zeroAddress,
-						},
-					}),
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderLoadedPool({
+			securityVault: createSecurityVaultProps({
+				onLoadSecurityVault: vaultAddress => {
+					loadSecurityVaultCalls.push(vaultAddress)
+				},
+				securityVaultForm: createSecurityVaultForm({ depositAmount: '10', repWithdrawAmount: '1', targetHealthFactor: '2' }),
+			}),
+		})
 
 		const documentQueries = within(document.body)
-		const depositLauncherButton = documentQueries.getByRole('button', {
-			name: 'Deposit REP',
-		})
+		const depositLauncherButton = documentQueries.getByRole('button', { name: 'Deposit REP' })
 		if (!(depositLauncherButton instanceof HTMLElement)) throw new Error('Expected deposit launcher button')
 
 		expect(depositLauncherButton.hasAttribute('disabled')).toBe(true)
@@ -250,21 +142,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	})
 
 	test('announces automatic vault loading once without rendering manual refresh blockers', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					checkedSecurityPoolAddress: zeroAddress,
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
-					securityVault: createSecurityVaultProps({
-						loadingSecurityVault: true,
-						securityVaultDetails: undefined,
-					}),
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderLoadedPool({ securityVault: createSecurityVaultProps({ loadingSecurityVault: true, securityVaultDetails: undefined }) })
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('status').textContent).toContain('Loading vault details…')
@@ -276,24 +154,15 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 	test('offers an explicit retry after automatic vault loading fails', async () => {
 		const loadSecurityVaultCalls: Array<string | undefined> = []
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					checkedSecurityPoolAddress: zeroAddress,
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
-					securityVault: createSecurityVaultProps({
-						onLoadSecurityVault: vaultAddress => {
-							loadSecurityVaultCalls.push(vaultAddress)
-						},
-						securityVaultDetails: undefined,
-						securityVaultError: 'Failed to load security vault',
-					}),
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderLoadedPool({
+			securityVault: createSecurityVaultProps({
+				onLoadSecurityVault: vaultAddress => {
+					loadSecurityVaultCalls.push(vaultAddress)
+				},
+				securityVaultDetails: undefined,
+				securityVaultError: 'Failed to load security vault',
+			}),
+		})
 
 		const documentQueries = within(document.body)
 		const retryReason = documentQueries.getByText('Retry loading the vault to use these actions.')
@@ -313,81 +182,24 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 	test('does not auto-load a vault when no vault is selected and the wallet is disconnected', async () => {
 		const loadSecurityVaultCalls: Array<string | undefined> = []
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({ address: undefined }),
-					checkedSecurityPoolAddress: zeroAddress,
-					securityPoolAddress: zeroAddress,
-					securityPools: [createSelectedPool()],
-					securityVault: createSecurityVaultProps({
-						onLoadSecurityVault: vaultAddress => {
-							loadSecurityVaultCalls.push(vaultAddress)
-						},
-						securityVaultForm: {
-							depositAmount: '10',
-							repWithdrawAmount: '1',
-							targetHealthFactor: '2',
-							securityPoolAddress: zeroAddress,
-							selectedVaultOwner: '',
-						},
-					}),
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderLoadedPool({
+			accountState: createAccountState({ address: undefined }),
+			securityVault: createSecurityVaultProps({
+				onLoadSecurityVault: vaultAddress => {
+					loadSecurityVaultCalls.push(vaultAddress)
+				},
+				securityVaultForm: createSecurityVaultForm({ depositAmount: '10', repWithdrawAmount: '1', targetHealthFactor: '2', selectedVaultOwner: '' }),
+			}),
+		})
 
 		expect(loadSecurityVaultCalls.every(vaultAddress => vaultAddress === undefined)).toBe(true)
 		expect(within(document.body).queryByText('Enter a vault owner address or connect a wallet to inspect vault details.')).toBeNull()
 	})
 
 	test('keeps REP approval guidance inside the approval control in the deposit modal', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState(),
-					securityPoolAddress: selectedPoolAddress,
-					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
-					securityVault: createSecurityVaultProps({
-						securityVaultDetails: createSecurityVaultDetails({
-							securityPoolAddress: selectedPoolAddress,
-						}),
-						securityVaultForm: {
-							depositAmount: '10',
-							repWithdrawAmount: '',
-							targetHealthFactor: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedVaultOwner: zeroAddress,
-						},
-						walletRepBalanceAttoRep: 25n * 10n ** 18n,
-						securityVaultRepApproval: {
-							error: undefined,
-							loading: false,
-							value: 0n,
-						},
-					}),
-					selectedPoolView: 'vaults',
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderVaultsView({ vault: { securityVaultForm: createSecurityVaultForm({ depositAmount: '10' }), walletRepBalanceAttoRep: 25n * 10n ** 18n } })
 
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(
-				documentQueries.getAllByRole('button', {
-					name: 'Deposit REP',
-				})[0] as HTMLElement,
-			)
-		})
-
-		const depositDialog = documentQueries.getByRole('dialog', {
-			name: 'Deposit REP',
-		})
-		const modalQueries = within(depositDialog)
+		const modalQueries = within(await openDialog('Deposit REP'))
 		expect(modalQueries.queryByText('Review the selected vault, complete REP approval if needed, then deposit REP.')).toBeNull()
 		expect(modalQueries.queryByText('REP approval is sufficient for the deposit amount')).toBeNull()
 		expect(modalQueries.queryByText('Approve REP inside this modal before depositing.')).toBeNull()
@@ -397,50 +209,9 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	})
 
 	test('states an over-balance deposit once, in the approval control', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState(),
-					securityPoolAddress: selectedPoolAddress,
-					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
-					securityVault: createSecurityVaultProps({
-						securityVaultDetails: createSecurityVaultDetails({
-							securityPoolAddress: selectedPoolAddress,
-						}),
-						securityVaultForm: {
-							depositAmount: '30',
-							repWithdrawAmount: '',
-							targetHealthFactor: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedVaultOwner: zeroAddress,
-						},
-						walletRepBalanceAttoRep: 25n * 10n ** 18n,
-						securityVaultRepApproval: {
-							error: undefined,
-							loading: false,
-							value: 0n,
-						},
-					}),
-					selectedPoolView: 'vaults',
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderVaultsView({ vault: { securityVaultForm: createSecurityVaultForm({ depositAmount: '30' }), walletRepBalanceAttoRep: 25n * 10n ** 18n } })
 
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(
-				documentQueries.getAllByRole('button', {
-					name: 'Deposit REP',
-				})[0] as HTMLElement,
-			)
-		})
-
-		const depositDialog = documentQueries.getByRole('dialog', {
-			name: 'Deposit REP',
-		})
+		const depositDialog = await openDialog('Deposit REP')
 		const modalQueries = within(depositDialog)
 		const depositInput = modalQueries.getByLabelText('REP backing')
 		await act(() => {
@@ -453,60 +224,19 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	})
 
 	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState(),
-					poolOracleManagerDetails: createOracleManagerDetails({
-						isPriceValid: true,
-						lastPrice: 3n * 10n ** 18n,
-					}),
-					securityPoolAddress: selectedPoolAddress,
-					securityPools: [
-						createSelectedPool({
-							managerAddress: zeroAddress,
-							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldAttoRep: 20_000n * 10n ** 18n,
-							totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n,
-						}),
-					],
-					securityVault: createSecurityVaultProps({
-						repPerEthPrice: 3n * 10n ** 18n,
-						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
-						securityVaultDetails: createSecurityVaultDetails({
-							vaultAttoRepBacking: 20_000n * 10n ** 18n,
-							underwritingLimitAttoEth: 2_500n * 10n ** 18n,
-							securityPoolAddress: selectedPoolAddress,
-						}),
-						securityVaultForm: {
-							depositAmount: '',
-							repWithdrawAmount: '10000',
-							targetHealthFactor: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedVaultOwner: zeroAddress,
-						},
-					}),
-					selectedPoolView: 'vaults',
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(
-				documentQueries.getAllByRole('button', {
-					name: 'Withdraw REP',
-				})[0] as HTMLElement,
-			)
+		await renderVaultsView({
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 3n * 10n ** 18n }),
+			pool: { managerAddress: zeroAddress, totalPoolHeldAttoRep: 20_000n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n },
+			vault: {
+				repPerEthPrice: 3n * 10n ** 18n,
+				selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
+				securityVaultDetails: createSecurityVaultDetails({ vaultAttoRepBacking: 20_000n * 10n ** 18n, underwritingLimitAttoEth: 2_500n * 10n ** 18n }),
+				securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '10000' }),
+			},
 		})
 
-		const withdrawDialog = documentQueries.getByRole('dialog', {
-			name: 'Withdraw REP',
-		})
-		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Reduce the withdrawal to 5 000\u00a0REP or less.')
+		const withdrawDialog = await openDialog('Withdraw REP')
+		expectTransactionButtonDisabled(withdrawDialog, 'Withdraw REP', 'Reduce the withdrawal to 5 000\u00a0REP or less.')
 		const withdrawInput = within(withdrawDialog).getByLabelText('REP withdraw amount')
 		await act(() => {
 			withdrawInput.dispatchEvent(new Event('blur'))
@@ -518,64 +248,18 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 	})
 
 	test('blocks withdraw REP in the workflow modal when the wallet lacks the buffered oracle bounty ETH', async () => {
-		const selectedPoolAddress = zeroAddress
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState({
-						ethBalanceAttoEth: 5n * 10n ** 18n,
-					}),
-					poolOracleManagerDetails: createOracleManagerDetails({
-						isPriceValid: false,
-						lastPrice: 3n * 10n ** 18n,
-						requestPriceCostAttoEth: 10n * 10n ** 18n,
-					}),
-					securityPoolAddress: selectedPoolAddress,
-					securityPools: [
-						createSelectedPool({
-							managerAddress: zeroAddress,
-							securityPoolAddress: selectedPoolAddress,
-							totalPoolHeldAttoRep: 9n * 10n ** 18n,
-							totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
-						}),
-					],
-					securityVault: createSecurityVaultProps({
-						accountState: createAccountState({
-							ethBalanceAttoEth: 5n * 10n ** 18n,
-						}),
-						securityVaultDetails: createSecurityVaultDetails({
-							vaultAttoRepBacking: 12n * 10n ** 18n,
-							underwritingLimitAttoEth: 1n * 10n ** 18n,
-							securityPoolAddress: selectedPoolAddress,
-							totalUnderwritingLimitAttoEth: 2n * 10n ** 18n,
-						}),
-						securityVaultForm: {
-							depositAmount: '',
-							repWithdrawAmount: '1',
-							targetHealthFactor: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedVaultOwner: zeroAddress,
-						},
-					}),
-					selectedPoolView: 'vaults',
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
-
-		const documentQueries = within(document.body)
-		await act(() => {
-			fireEvent.click(
-				documentQueries.getAllByRole('button', {
-					name: 'Withdraw REP',
-				})[0] as HTMLElement,
-			)
+		const underfundedAccount = createAccountState({ ethBalanceAttoEth: 5n * 10n ** 18n })
+		await renderVaultsView({
+			accountState: underfundedAccount,
+			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 3n * 10n ** 18n, requestPriceCostAttoEth: 10n * 10n ** 18n }),
+			pool: { managerAddress: zeroAddress, totalPoolHeldAttoRep: 9n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2n * 10n ** 18n },
+			vault: {
+				accountState: underfundedAccount,
+				securityVaultDetails: createSecurityVaultDetails({ vaultAttoRepBacking: 12n * 10n ** 18n, underwritingLimitAttoEth: 1n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2n * 10n ** 18n }),
+				securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '1' }),
+			},
 		})
 
-		const withdrawDialog = documentQueries.getByRole('dialog', {
-			name: 'Withdraw REP',
-		})
-		expectTransactionButtonDisabled(withdrawDialog as HTMLElement, 'Withdraw REP', 'Need 7\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
+		expectTransactionButtonDisabled(await openDialog('Withdraw REP'), 'Withdraw REP', 'Need 7\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
 	})
 })

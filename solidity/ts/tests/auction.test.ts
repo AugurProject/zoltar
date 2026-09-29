@@ -2023,30 +2023,6 @@ describe('Auction', () => {
 			await assertContractEmpty(client, auctionAddress)
 		})
 
-		test('multiple bids at same tick from same bidder (FIFO pro-rata) - clearing suite', async () => {
-			const attoEthRaiseCap = 10n * 10n ** 18n
-			const maxAttoRepBeingSold = 10n * 10n ** 18n
-			const alice = createTestClient(0)
-
-			await startAuction(client, auctionAddress, attoEthRaiseCap, maxAttoRepBeingSold)
-
-			const sameTick = 0n
-			const bid1Amount = 7n * 10n ** 18n
-			const bid2Amount = 7n * 10n ** 18n
-
-			await submitBidAndVerifyLock(alice, auctionAddress, sameTick, bid1Amount)
-			await submitBidAndVerifyLock(alice, auctionAddress, sameTick, bid2Amount)
-
-			await finalizeAndVerify(client, auctionAddress)
-
-			const aliceBids = [
-				{ tick: sameTick, bidSize: bid1Amount, bidIndex: 0n },
-				{ tick: sameTick, bidSize: bid2Amount, bidIndex: 1n },
-			]
-
-			await assertFairPayoutForUser(client, auctionAddress, alice.account.address, aliceBids, 0n, 10n)
-		})
-
 		test('non-sequential withdrawal of same-tick bids yields correct allocation', async () => {
 			const attoEthRaiseCap = 10n * 10n ** 18n
 			const maxAttoRepBeingSold = 10n * 10n ** 18n

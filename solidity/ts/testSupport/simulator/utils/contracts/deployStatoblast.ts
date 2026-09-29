@@ -1,9 +1,9 @@
-import { concatHex, encodeAbiParameters, encodeDeployData, getCreate2Address, keccak256, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { concatHex, encodeDeployData, type Address, type Hex, toHex } from '@zoltar/core-shared/evm/ethereum'
 import { createSecurityPoolAddressHelper } from '../../../evm/securityPoolAddressDerivation'
-import { createApplyLinkedLibrariesHelper, createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
-import { createInfraContractAddressHelper } from '@zoltar/statoblast-shared/deployment/deploymentAddresses'
+import { createDeploymentStatusOracleAddressHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
+import { createStatoblastInitCodes, encodeOpenOraclePriceCoordinatorArguments } from '@zoltar/statoblast-shared/deployment/initCodes'
 import { createZoltarAddressHelpers } from '@zoltar/zoltar-shared/deployment/deploymentAddresses'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_FEE_PERCENTAGE, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_MULTIPLIER, ORACLE_PROTOCOL_FEE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { WriteClient, writeContractAndWait } from '../clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS } from '../constants'
@@ -33,24 +33,29 @@ import {
 import { objectEntries } from '../typescript'
 import { getRepTokenAddress } from './zoltar'
 
-export { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-
 const ZERO_SALT: Hex = toHex(0, { size: 32 })
 const MULTICALL3_BYTECODE = `0x${statoblast_Multicall3_Multicall3.evm.bytecode.object}` satisfies Hex
 const MAINNET_WETH_ADDRESS = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' satisfies Address
-const ORACLE_FEE_SINK_ADDRESS = '0x000000000000000000000000000000000000dEaD' satisfies Address
-const ORACLE_REPORT_GAS = 100000n
-const ORACLE_SETTLEMENT_GAS = 1000000
-const ORACLE_SETTLEMENT_TIME = 40 * 12
-const ORACLE_DISPUTE_DELAY = 0
-const ORACLE_TIME_TYPE = true
-const ORACLE_TRACK_DISPUTES = true
-const ORACLE_PROTOCOL_FEE_RECIPIENT = ORACLE_FEE_SINK_ADDRESS
-const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
-const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
-const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
 
-const getSecurityPoolUtilsAddress = () => getCreate2Address({ bytecode: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`, from: addressString(PROXY_DEPLOYER_ADDRESS), salt: ZERO_SALT })
+const statoblastInitCodes = createStatoblastInitCodes(
+	{
+		escalationGameClaimDelegate: statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
+		escalationGameFactory: statoblast_factories_EscalationGameFactory_EscalationGameFactory,
+		multicall3: statoblast_Multicall3_Multicall3,
+		openOracle: statoblast_openOracle_OpenOracle_OpenOracle,
+		priceOracleManagerAndOperatorQueuerFactory: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
+		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
+		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
+		securityPoolUtils: statoblast_SecurityPoolUtils_SecurityPoolUtils,
+		shareTokenFactory: statoblast_factories_ShareTokenFactory_ShareTokenFactory,
+		uniformPriceDualCapBatchAuctionFactory: statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
+	},
+	{ proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS), zeroSalt: ZERO_SALT },
+)
+
+export const { applyLibraries } = statoblastInitCodes
+const { getEscalationGameFactoryByteCode, getPriceOracleManagerAndOperatorQueuerFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getSecurityPoolOperationsDelegateByteCode, getShareTokenFactoryByteCode } = statoblastInitCodes
 
 export function getDeploymentStepAddresses() {
 	return getDeploymentStatusOracleSteps().map(step => step.address)
@@ -63,114 +68,6 @@ function getDeploymentStatusOracleByteCode() {
 		args: [getDeploymentStepAddresses()],
 	})
 }
-
-function getPriceOracleManagerAndOperatorQueuerFactoryByteCode(): Hex {
-	return concatHex([
-		applyLibraries(statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
-		encodeAbiParameters(
-			[
-				{ type: 'address' },
-				{ type: 'uint256' },
-				{ type: 'uint32' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-				{ type: 'uint48' },
-				{ type: 'uint24' },
-				{ type: 'uint24' },
-				{ type: 'uint24' },
-				{ type: 'uint16' },
-				{ type: 'bool' },
-				{ type: 'bool' },
-				{ type: 'address' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-				{ type: 'uint256' },
-			],
-			[
-				MAINNET_WETH_ADDRESS,
-				ORACLE_REPORT_GAS,
-				ORACLE_SETTLEMENT_GAS,
-				ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
-				ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-				OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
-				ORACLE_SETTLEMENT_TIME,
-				ORACLE_DISPUTE_DELAY,
-				ORACLE_PROTOCOL_FEE,
-				ORACLE_FEE_PERCENTAGE,
-				ORACLE_MULTIPLIER,
-				ORACLE_TIME_TYPE,
-				ORACLE_TRACK_DISPUTES,
-				ORACLE_PROTOCOL_FEE_RECIPIENT,
-				ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-				ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-				ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
-			],
-		),
-	])
-}
-
-const getSecurityPoolForkerByteCode = (zoltar: Address): Hex =>
-	encodeDeployData({
-		abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-		bytecode: applyLibraries(statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
-		args: [zoltar],
-	})
-
-const getSecurityPoolFactoryByteCode = ({
-	escalationGameFactory,
-	openOracle,
-	priceOracleManagerAndOperatorQueuerFactory,
-	securityPoolForker,
-	securityPoolOperationsDelegate,
-	shareTokenFactory,
-	uniformPriceDualCapBatchAuctionFactory,
-	zoltar,
-	zoltarQuestionData,
-}: {
-	escalationGameFactory: Address
-	openOracle: Address
-	priceOracleManagerAndOperatorQueuerFactory: Address
-	securityPoolForker: Address
-	securityPoolOperationsDelegate: Address
-	shareTokenFactory: Address
-	uniformPriceDualCapBatchAuctionFactory: Address
-	zoltar: Address
-	zoltarQuestionData: Address
-}): Hex =>
-	(() => {
-		return encodeDeployData({
-			abi: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi,
-			bytecode: applyLibraries(statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.evm.bytecode.object),
-			args: [
-				securityPoolForker,
-				zoltarQuestionData,
-				escalationGameFactory,
-				openOracle,
-				zoltar,
-				shareTokenFactory,
-				uniformPriceDualCapBatchAuctionFactory,
-				priceOracleManagerAndOperatorQueuerFactory,
-				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
-				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
-				securityPoolOperationsDelegate,
-			],
-		})
-	})()
-
-const getShareTokenFactoryByteCode = (zoltar: Address): Hex =>
-	encodeDeployData({
-		abi: statoblast_factories_ShareTokenFactory_ShareTokenFactory.abi,
-		bytecode: `0x${statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object}`,
-		args: [zoltar],
-	})
-
-const getEscalationGameFactoryByteCode = (claimDelegate: Address): Hex =>
-	encodeDeployData({
-		abi: statoblast_factories_EscalationGameFactory_EscalationGameFactory.abi,
-		bytecode: `0x${statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object}`,
-		args: [claimDelegate],
-	})
 
 const getZoltarInitCode = (zoltarQuestionDataAddress: Address): Hex =>
 	(() => {
@@ -187,8 +84,6 @@ const getZoltarQuestionDataByteCode = (): Hex =>
 		bytecode: `0x${ZoltarQuestionData_ZoltarQuestionData.evm.bytecode.object}`,
 	})
 
-export const { applyLibraries } = createApplyLinkedLibrariesHelper(() => [{ hash: keccak256(toHex('contracts/statoblast/SecurityPoolUtils.sol:SecurityPoolUtils')).slice(2, 36), address: getSecurityPoolUtilsAddress() }])
-
 const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHelpers({
 	getZoltarInitCode,
 	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
@@ -196,23 +91,7 @@ const { getZoltarAddress, getZoltarQuestionDataAddress } = createZoltarAddressHe
 	zoltarQuestionDataBytecode: getZoltarQuestionDataByteCode,
 })
 
-export const { getInfraContractAddresses } = createInfraContractAddressHelper({
-	escalationGameClaimDelegateBytecode: `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`,
-	getEscalationGameFactoryByteCode,
-	getSecurityPoolFactoryByteCode,
-	getSecurityPoolForkerByteCode,
-	getShareTokenFactoryByteCode,
-	getZoltarAddress,
-	getZoltarQuestionDataAddress,
-	multicall3Bytecode: MULTICALL3_BYTECODE,
-	openOracleBytecode: `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`,
-	priceOracleManagerAndOperatorQueuerFactoryBytecode: getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
-	proxyDeployerAddress: addressString(PROXY_DEPLOYER_ADDRESS),
-	securityPoolUtilsBytecode: `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`,
-	securityPoolOperationsDelegateBytecode: applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
-	uniformPriceDualCapBatchAuctionFactoryBytecode: `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`,
-	zeroSalt: ZERO_SALT,
-})
+export const getInfraContractAddresses = statoblastInitCodes.createInfraContractAddresses(MAINNET_WETH_ADDRESS, { getZoltarAddress, getZoltarQuestionDataAddress })
 
 export const { getDeploymentStatusOracleAddress } = createDeploymentStatusOracleAddressHelper({
 	deploymentStatusOracleBytecode: getDeploymentStatusOracleByteCode,
@@ -229,55 +108,7 @@ export const { getSecurityPoolAddresses } = createSecurityPoolAddressHelper({
 		}),
 	getInfraContracts: () => getInfraContractAddresses(),
 	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle, repToken, initialReportPriorityFeeAttoEthPerGas) =>
-		concatHex([
-			applyLibraries(statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object),
-			encodeAbiParameters(
-				[
-					{ type: 'address' },
-					{ type: 'address' },
-					{ type: 'address' },
-					{ type: 'uint256' },
-					{ type: 'uint32' },
-					{ type: 'uint256' },
-					{ type: 'uint256' },
-					{ type: 'uint256' },
-					{ type: 'uint256' },
-					{ type: 'uint48' },
-					{ type: 'uint24' },
-					{ type: 'uint24' },
-					{ type: 'uint24' },
-					{ type: 'uint16' },
-					{ type: 'bool' },
-					{ type: 'bool' },
-					{ type: 'address' },
-					{ type: 'uint256' },
-					{ type: 'uint256' },
-					{ type: 'uint256' },
-				],
-				[
-					openOracle,
-					repToken,
-					MAINNET_WETH_ADDRESS,
-					ORACLE_REPORT_GAS,
-					ORACLE_SETTLEMENT_GAS,
-					ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
-					initialReportPriorityFeeAttoEthPerGas,
-					ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
-					OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
-					ORACLE_SETTLEMENT_TIME,
-					ORACLE_DISPUTE_DELAY,
-					ORACLE_PROTOCOL_FEE,
-					ORACLE_FEE_PERCENTAGE,
-					ORACLE_MULTIPLIER,
-					ORACLE_TIME_TYPE,
-					ORACLE_TRACK_DISPUTES,
-					ORACLE_PROTOCOL_FEE_RECIPIENT,
-					ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
-					ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
-					ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
-				],
-			),
-		]),
+		concatHex([applyLibraries(statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.evm.bytecode.object), encodeOpenOraclePriceCoordinatorArguments({ initialReportPriorityFeeAttoEthPerGas, openOracle, repToken, weth: MAINNET_WETH_ADDRESS })]),
 	getRepTokenAddress,
 	getSecurityPoolInitCode: ({ escalationGameFactory, openOracle, parent, priceOracleManagerAndOperatorQueuer, questionId, statoblastSecurityMultiplierBps, securityPoolForker, shareToken, truthAuction, universeId, zoltar, zoltarQuestionData }) =>
 		(() => {
@@ -381,7 +212,7 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 	if (!existence['multicall3']) await deployBytecode('multicall3', MULTICALL3_BYTECODE)
 	if (!existence['uniformPriceDualCapBatchAuctionFactory']) await deployBytecode('uniformPriceDualCapBatchAuctionFactory', `0x${statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory.evm.bytecode.object}`)
 	if (!existence['securityPoolUtils']) await deployBytecode('securityPoolUtils', `0x${statoblast_SecurityPoolUtils_SecurityPoolUtils.evm.bytecode.object}`)
-	if (!existence['securityPoolOperationsDelegate']) await deployBytecode('securityPoolOperationsDelegate', applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object))
+	if (!existence['securityPoolOperationsDelegate']) await deployBytecode('securityPoolOperationsDelegate', getSecurityPoolOperationsDelegateByteCode())
 	if (!existence['openOracle']) await deployBytecode('openOracle', `0x${statoblast_openOracle_OpenOracle_OpenOracle.evm.bytecode.object}`)
 	if (!existence['zoltarQuestionData']) await deployBytecode('zoltarQuestionData', getZoltarQuestionDataByteCode())
 	if (!existence['zoltar']) {
@@ -393,25 +224,11 @@ export async function ensureInfraDeployed(client: WriteClient): Promise<void> {
 		await deployBytecode('zoltar', initCode)
 	}
 	if (!existence['shareTokenFactory']) await deployBytecode('shareTokenFactory', getShareTokenFactoryByteCode(getZoltarAddress()))
-	if (!existence['priceOracleManagerAndOperatorQueuerFactory']) await deployBytecode('priceOracleManagerAndOperatorQueuerFactory', getPriceOracleManagerAndOperatorQueuerFactoryByteCode())
+	if (!existence['priceOracleManagerAndOperatorQueuerFactory']) await deployBytecode('priceOracleManagerAndOperatorQueuerFactory', getPriceOracleManagerAndOperatorQueuerFactoryByteCode(MAINNET_WETH_ADDRESS))
 	if (!existence['securityPoolForker']) await deployBytecode('securityPoolForker', getSecurityPoolForkerByteCode(contractAddresses.zoltar))
 	if (!existence['escalationGameClaimDelegate']) await deployBytecode('escalationGameClaimDelegate', `0x${statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate.evm.bytecode.object}`)
 	if (!existence['escalationGameFactory']) await deployBytecode('escalationGameFactory', getEscalationGameFactoryByteCode(contractAddresses.escalationGameClaimDelegate))
-	if (!existence['securityPoolFactory'])
-		await deployBytecode(
-			'securityPoolFactory',
-			getSecurityPoolFactoryByteCode({
-				escalationGameFactory: contractAddresses.escalationGameFactory,
-				openOracle: contractAddresses.openOracle,
-				priceOracleManagerAndOperatorQueuerFactory: contractAddresses.priceOracleManagerAndOperatorQueuerFactory,
-				securityPoolForker: contractAddresses.securityPoolForker,
-				securityPoolOperationsDelegate: contractAddresses.securityPoolOperationsDelegate,
-				shareTokenFactory: contractAddresses.shareTokenFactory,
-				uniformPriceDualCapBatchAuctionFactory: contractAddresses.uniformPriceDualCapBatchAuctionFactory,
-				zoltar: contractAddresses.zoltar,
-				zoltarQuestionData: contractAddresses.zoltarQuestionData,
-			}),
-		)
+	if (!existence['securityPoolFactory']) await deployBytecode('securityPoolFactory', getSecurityPoolFactoryByteCode(contractAddresses))
 
 	for (const [name, contractAddress] of objectEntries(contractAddresses)) {
 		if (!(await contractExists(client, contractAddress))) throw new Error(`${name} does not exist even though we deployed it`)

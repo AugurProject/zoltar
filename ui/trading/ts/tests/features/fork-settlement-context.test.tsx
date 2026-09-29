@@ -4,13 +4,15 @@ import { act } from 'preact/test-utils'
 import { createPublicClient, createWalletClient, custom, getAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
-import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { shareBalanceScope } from '../../protocol/live.js'
 // Longer than the automatic quote debounce in useQuotedTransaction.
 const QUOTE_SETTLE_MILLISECONDS = 400
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { buttonByLabel } from '../support/dom.js'
+import { forkedMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = getAddress(`0x${'11'.repeat(20)}`)
 const pool = getAddress(`0x${'22'.repeat(20)}`)
@@ -20,45 +22,9 @@ const router = getAddress(`0x${'55'.repeat(20)}`)
 const transactionHash: Hash = `0x${'66'.repeat(32)}`
 const blockHash: Hash = `0x${'77'.repeat(32)}`
 
-const configuration: DeploymentConfiguration = {
-	chainId: 31_337,
-	chainName: 'Local',
-	rpcUrl: 'http://127.0.0.1:8545',
-	securityPoolFactory: getAddress(`0x${'88'.repeat(20)}`),
-	factory: getAddress(`0x${'99'.repeat(20)}`),
-	router,
-	feeBps: 30,
-}
+const configuration = deploymentConfigurationFixture({ securityPoolFactory: getAddress(`0x${'88'.repeat(20)}`), factory: getAddress(`0x${'99'.repeat(20)}`), router })
 
-const market: LiveMarket = {
-	pool,
-	pair: undefined,
-	shareToken,
-	universeId: 7n,
-	questionId: 8n,
-	title: 'Forked market',
-	description: 'Settlement context integration fixture',
-	endTime: 1n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 1,
-	awaitingForkContinuation: false,
-	universeForkTime: 1n,
-	vaultCount: 0n,
-	shareTokenSupplyAttoShares: 3n,
-	settlementCollateralAttoEth: 3n,
-	currentRetentionRate: 0n,
-	totalUnderwritingLimitAttoEth: 0n,
-	feeEligibleUnderwritingLimitAttoEth: 0n,
-	mintingCapacityCeilingAttoEth: 0n,
-	availableMintingCapacityAttoEth: 0n,
-	feeBps: 30n,
-	tradingStatus: 4,
-	questionOutcome: 3,
-	yesReserve: 0n,
-	noReserve: 0n,
-	lpTotalSupply: 0n,
-}
+const market = forkedMarketFixture({ pool, shareToken, description: 'Settlement context integration fixture', shareTokenSupplyAttoShares: 3n, settlementCollateralAttoEth: 3n })
 
 const forkContext: ForkMigrationContext = {
 	kind: 'categorical',
@@ -66,12 +32,6 @@ const forkContext: ForkMigrationContext = {
 	questionId: 99n,
 	title: 'Which branch wins?',
 	availableTargets: [{ outcomeIndex: 1n, universeId: 101n, label: 'Red', canonicalPool }],
-}
-
-function button(label: string) {
-	const found = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
-	if (!(found instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
-	return found
 }
 
 async function settleEffects() {
@@ -141,11 +101,11 @@ describe('live fork settlement context', () => {
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 		await act(async () => await Bun.sleep(QUOTE_SETTLE_MILLISECONDS))
-		await act(() => button('Redeem complete sets').click())
+		await act(() => buttonByLabel('Redeem complete sets').click())
 		await act(async () => await Bun.sleep(50))
 		expect(submissions).toBe(1)
 		expect(input.value).toBe('')
-		expect(button('Redeem complete sets').disabled).toBe(true)
+		expect(buttonByLabel('Redeem complete sets').disabled).toBe(true)
 	})
 
 	test('retries failed fork metadata and refreshes branches after confirmed migration', async () => {
@@ -223,7 +183,7 @@ describe('live fork settlement context', () => {
 		expect(contextLoads).toBe(1)
 		expect(document.body.textContent).toContain('fork metadata RPC unavailable')
 
-		await act(() => button('Retry fork details').click())
+		await act(() => buttonByLabel('Retry fork details').click())
 		await settleEffects()
 		expect(contextLoads).toBe(2)
 		expect(document.body.textContent).toContain('Which branch wins?')
@@ -238,7 +198,7 @@ describe('live fork settlement context', () => {
 		await settleEffects()
 		expect(document.body.textContent).toContain('Fork migration simulation ready at block 12')
 
-		await act(() => button('Migrate to 1 branch').click())
+		await act(() => buttonByLabel('Migrate to 1 branch').click())
 		await settleEffects()
 		expect(refreshes).toBe(1)
 		expect(contextLoads).toBe(3)

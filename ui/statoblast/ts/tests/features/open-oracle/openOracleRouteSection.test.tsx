@@ -22,6 +22,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
@@ -34,16 +35,6 @@ function expectPoliteFieldError(message: string) {
 	expect(error.getAttribute('role')).toBeNull()
 	expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')
 	return error
-}
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
 }
 
 function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps> = {}): OpenOracleSectionProps {

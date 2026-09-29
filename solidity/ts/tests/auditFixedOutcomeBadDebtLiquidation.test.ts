@@ -13,27 +13,16 @@ import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/si
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
-import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
+import { describe, test } from 'bun:test'
+import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	const { PRICE_PRECISION, repDeposit, statoblastSecurityMultiplierBps, genesisUniverse } = fixture
 
-	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
-	let client: StatoblastForkMigrationFixture['client']
-	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
-	let questionId: StatoblastForkMigrationFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	test('blocks REP recycling while commitments remain and preserves resolved-market liquidation closure', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)

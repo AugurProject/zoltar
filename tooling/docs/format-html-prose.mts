@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { listRepositoryFiles } from '../repo/git.mts'
 import { repositoryRoot } from '../repo/root.mts'
 
 const toolingRootPath = path.join(repositoryRoot, 'tooling')
@@ -121,12 +122,7 @@ export function formatParagraphsOnSingleLines(html: string): string {
 }
 
 export function repositoryHtmlFilePaths(): string[] {
-	const result = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', ':(glob)**/*.html'], { cwd: toolingRootPath })
-	if (result.exitCode !== 0) throw new Error(`Unable to list tracked HTML files: ${result.stderr.toString().trim()}`)
-	return result.stdout
-		.toString()
-		.split('\0')
-		.filter(Boolean)
+	return listRepositoryFiles({ cwd: toolingRootPath, untracked: true, pathspec: [':(glob)**/*.html'] })
 		.map(filePath => path.join(toolingRootPath, filePath))
 		.filter(filePath => existsSync(filePath))
 }

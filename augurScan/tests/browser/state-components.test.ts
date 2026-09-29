@@ -1,12 +1,11 @@
 import { expect, test } from 'bun:test'
 import { createStateComponents } from '../../browser/state-components.ts'
+import { overrideGlobals } from '../support/global-overrides.ts'
 
 test('checkpoints without numeric series render unavailable instead of empty plots or zeroes', () => {
-	const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
 	const renderedText: string[] = []
-	Object.defineProperty(globalThis, 'document', {
-		configurable: true,
-		value: {
+	const restoreGlobals = overrideGlobals({
+		document: {
 			createElement: () => ({ append() {} }),
 			createTextNode: (value: string) => value,
 		},
@@ -31,7 +30,6 @@ test('checkpoints without numeric series render unavailable instead of empty plo
 		expect(renderedText).toContain('Chart values are unavailable in these checkpoints.')
 		expect(renderedText.some(text => text.includes('exact latest values'))).toBe(false)
 	} finally {
-		if (originalDocument === undefined) Reflect.deleteProperty(globalThis, 'document')
-		else Object.defineProperty(globalThis, 'document', originalDocument)
+		restoreGlobals()
 	}
 })

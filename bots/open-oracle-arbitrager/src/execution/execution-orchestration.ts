@@ -3,6 +3,7 @@ import { endpointLabel } from '#monitoring/connectivity'
 import type { OpportunityDecision } from '#state/opportunity-snapshot'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { readReceiptOrMissing } from '@zoltar/bot-shared/execution/receipt-quorum'
 import { isSelfReport } from '#core/strategy'
 import type { StandardUniswapFee } from '#core/uniswap-v4'
 import type { Venue } from '#core/venue-strategy'
@@ -359,10 +360,6 @@ function normalizedReceipt(label: string, receipt: TransactionReceipt) {
 	}
 }
 
-function isMissingReceipt(error: unknown) {
-	return error instanceof Error && error.message.includes('Transaction receipt with hash') && error.message.includes('could not be found')
-}
-
 export async function receiptGasExpendituresWithQuorum(readers: readonly ReceiptBlockReader[], endpoints: readonly string[], label: string, receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'effectiveGasPrice' | 'gasUsed' | 'transactionHash'>[]) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	return settledQuorumValue(
@@ -410,12 +407,8 @@ export async function transactionReceiptsOrMissingWithQuorum(readers: readonly T
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await Promise.all(
 				transactionHashes.map(async hash => {
-					try {
-						return normalizedReceipt(label, await reader.getTransactionReceipt({ hash }))
-					} catch (error) {
-						if (isMissingReceipt(error)) return undefined
-						throw error
-					}
+					const receipt = await readReceiptOrMissing(reader, hash)
+					return receipt === undefined ? undefined : normalizedReceipt(label, receipt)
 				}),
 			),
 		})),

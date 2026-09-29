@@ -19,6 +19,7 @@ const PROTOCOL_CONFIG_ENV_KEYS = {
 	minimumSecurityBondDebtAttoEth: 'ZOLTAR_MINIMUM_SECURITY_BOND_DEBT',
 	minimumVaultRepDepositAttoRep: 'ZOLTAR_MINIMUM_VAULT_REP_DEPOSIT',
 } as const
+const PROTOCOL_CONFIG_FIELDS = ['forkBurnDivisor', 'forkThresholdDivisor', 'minimumSecurityBondDebtAttoEth', 'minimumVaultRepDepositAttoRep'] as const satisfies readonly (keyof ProtocolConfig)[]
 
 function parseConfigBigInt(value: bigint | number | string | undefined, field: keyof ProtocolConfig): bigint | undefined {
 	if (value === undefined) return undefined
@@ -43,17 +44,17 @@ function readProcessEnv(name: string): string | undefined {
 	return trimmedValue === '' ? undefined : trimmedValue
 }
 
-function getEnvironmentProtocolConfigOverrides(): ProtocolConfigInput {
-	const forkBurnDivisor = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.forkBurnDivisor)
-	const forkThresholdDivisor = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.forkThresholdDivisor)
-	const minimumSecurityBondDebtAttoEth = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.minimumSecurityBondDebtAttoEth)
-	const minimumVaultRepDepositAttoRep = readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS.minimumVaultRepDepositAttoRep)
-	return {
-		...(forkBurnDivisor === undefined ? {} : { forkBurnDivisor }),
-		...(forkThresholdDivisor === undefined ? {} : { forkThresholdDivisor }),
-		...(minimumSecurityBondDebtAttoEth === undefined ? {} : { minimumSecurityBondDebtAttoEth }),
-		...(minimumVaultRepDepositAttoRep === undefined ? {} : { minimumVaultRepDepositAttoRep }),
+function readDefinedOverrides(read: (field: keyof ProtocolConfig) => bigint | number | string | undefined): ProtocolConfigInput {
+	const overrides: ProtocolConfigInput = {}
+	for (const field of PROTOCOL_CONFIG_FIELDS) {
+		const value = read(field)
+		if (value !== undefined) overrides[field] = value
 	}
+	return overrides
+}
+
+function getEnvironmentProtocolConfigOverrides(): ProtocolConfigInput {
+	return readDefinedOverrides(field => readProcessEnv(PROTOCOL_CONFIG_ENV_KEYS[field]))
 }
 
 function readProtocolConfigOverrideValue(source: object, field: keyof ProtocolConfig) {
@@ -65,16 +66,7 @@ function readProtocolConfigOverrideValue(source: object, field: keyof ProtocolCo
 function getGlobalProtocolConfigOverrides(): ProtocolConfigInput {
 	const rawConfig = Reflect.get(globalThis, PROTOCOL_CONFIG_GLOBAL_KEY)
 	if (typeof rawConfig !== 'object' || rawConfig === null) return {}
-	const forkBurnDivisor = readProtocolConfigOverrideValue(rawConfig, 'forkBurnDivisor')
-	const forkThresholdDivisor = readProtocolConfigOverrideValue(rawConfig, 'forkThresholdDivisor')
-	const minimumSecurityBondDebtAttoEth = readProtocolConfigOverrideValue(rawConfig, 'minimumSecurityBondDebtAttoEth')
-	const minimumVaultRepDepositAttoRep = readProtocolConfigOverrideValue(rawConfig, 'minimumVaultRepDepositAttoRep')
-	return {
-		...(forkBurnDivisor === undefined ? {} : { forkBurnDivisor }),
-		...(forkThresholdDivisor === undefined ? {} : { forkThresholdDivisor }),
-		...(minimumSecurityBondDebtAttoEth === undefined ? {} : { minimumSecurityBondDebtAttoEth }),
-		...(minimumVaultRepDepositAttoRep === undefined ? {} : { minimumVaultRepDepositAttoRep }),
-	}
+	return readDefinedOverrides(field => readProtocolConfigOverrideValue(rawConfig, field))
 }
 
 function collectProtocolConfigOverrideSources(overrides: ProtocolConfigInput) {
@@ -89,7 +81,7 @@ function collectProtocolConfigOverrideSources(overrides: ProtocolConfigInput) {
 
 function assertMainnetProtocolConfigFrozen(overrides: ProtocolConfigInput = {}): ProtocolConfig {
 	for (const { config, source } of collectProtocolConfigOverrideSources(overrides)) {
-		for (const field of Object.keys(MAINNET_PROTOCOL_CONFIG) as Array<keyof ProtocolConfig>) {
+		for (const field of PROTOCOL_CONFIG_FIELDS) {
 			const overrideValue = parseConfigBigInt(config[field], field)
 			if (overrideValue === undefined) continue
 			if (overrideValue === MAINNET_PROTOCOL_CONFIG[field]) continue

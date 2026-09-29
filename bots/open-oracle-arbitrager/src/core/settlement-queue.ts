@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import { compareBigint } from '@zoltar/bot-shared/infrastructure/compare'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import type { Configuration } from '#config/configuration'
 import { gamePolicyMismatch, type CoordinatorGamePolicy } from '#core/game-policy'
 import { settlementDecision, settlementEconomics, settlementEligibilityMismatch, settlementTiming } from '#core/settlement-strategy'

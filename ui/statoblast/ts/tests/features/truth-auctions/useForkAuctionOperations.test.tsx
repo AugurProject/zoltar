@@ -10,9 +10,8 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
@@ -86,11 +85,6 @@ function createForkAuctionResult(action: ForkAuctionActionResult['action']): For
 		securityPoolAddress: SECURITY_POOL_ADDRESS,
 		universeId: 1n,
 	}
-}
-
-function requireHookState(state: UseForkAuctionOperationsState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
 }
 
 function getTransactionRowValueProp(state: ReturnType<typeof createInitialTransactionTrayState>, label: string, propName: 'address') {
@@ -180,22 +174,7 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 }
 
 describe('useForkAuctionOperations', () => {
-	let resetEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const)
 		for (const outcome of ['failure', 'cancel'] as const) {
@@ -270,7 +249,7 @@ describe('useForkAuctionOperations', () => {
 					)
 				}
 				const rendered = await renderIntoDocument(<Harness />)
-				cleanupRenderedComponent = rendered.cleanup
+				trackCleanup(rendered.cleanup)
 				const button = document.querySelector('button')
 				if (!(button instanceof HTMLButtonElement)) throw new Error('Missing submit button')
 				await act(() => button.click())
@@ -313,7 +292,7 @@ describe('useForkAuctionOperations', () => {
 			onTransactionFailed,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).refundLosingBids(undefined, selectedBids)
@@ -342,7 +321,7 @@ describe('useForkAuctionOperations', () => {
 			onTransactionFailed,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).withdrawAuctionRefund()
@@ -379,7 +358,7 @@ describe('useForkAuctionOperations', () => {
 			onTransactionFailed,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).claimAuctionProceeds(undefined, selectedClaimBids, selectedRefundBids)
@@ -413,7 +392,7 @@ describe('useForkAuctionOperations', () => {
 			onTransactionFailed,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).refundLosingBids(undefined, selectedBids)
@@ -445,7 +424,7 @@ describe('useForkAuctionOperations', () => {
 			onTransactionFailed,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).claimAuctionProceeds(undefined, selectedClaimBids, selectedRefundBids)
@@ -490,7 +469,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -590,7 +569,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -693,7 +672,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -800,7 +779,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -882,7 +861,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -956,7 +935,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -1036,7 +1015,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setForkAuctionForm(current => ({
@@ -1119,7 +1098,7 @@ describe('useForkAuctionOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).startTruthAuction(childPoolAddress, childUniverseId)

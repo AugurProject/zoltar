@@ -2,12 +2,10 @@ import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
-import { formatSlippagePercent, type TradeSettings } from '../lib/tradeSettings.js'
-import type { DeploymentConfiguration } from '../protocol/config.js'
-import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity, type LiveBalances, type LiveMarket } from '../protocol/live.js'
+import { formatSlippagePercent } from '../lib/tradeSettings.js'
+import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as liquidityCopy from '../copy/liquidity.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
@@ -16,12 +14,11 @@ import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
-import type { GuardedWalletWrite } from './liveTradingControllerHelpers.js'
-import type { BalanceState } from './live/liveTradingTypes.js'
+import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
 import { resolveLiquidityAvailability } from './live/actionAvailability.js'
-import { QuotedTransactionPanel, type WalletStep } from './QuotedTransactionPanel.js'
+import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 
 export type LiveLiquidityServices = Readonly<{
 	publicErrorMessage: typeof publicErrorMessage
@@ -35,53 +32,24 @@ export const liveLiquidityServices: LiveLiquidityServices = {
 	submitFreshLiquidity,
 }
 
-/** The first step of the panel when no usable wallet is connected: connect, or switch back to the deployment chain. */
-export type PanelWallet = Readonly<{ actionLabel: string; connect(): Promise<void> }>
-
 export function LiveLiquidityControls({
-	configuration,
-	market,
 	balances,
-	balanceState,
 	balanceError,
-	account,
-	walletClient,
 	networkMismatchReason,
 	walletEthAttoEth,
 	wallet,
-	settings,
-	externallyLocked,
 	nowSeconds,
-	refresh,
-	onKnownReceipt,
-	executeWithCurrentWalletContext,
-	createGuardedWalletWrite,
 	retryBalances,
-	onWorkflowLockChange,
 	services = liveLiquidityServices,
-}: {
-	configuration: DeploymentConfiguration
-	market: LiveMarket
-	balances: LiveBalances | undefined
-	balanceState: BalanceState
-	balanceError: string | undefined
-	account: Address | undefined
-	walletClient: WalletClient | undefined
-	networkMismatchReason: string | undefined
-	walletEthAttoEth: bigint | undefined
-	wallet: PanelWallet
-	settings: TradeSettings
-	externallyLocked: boolean
-	nowSeconds: bigint
-	refresh(): Promise<void>
-	onKnownReceipt(): void
-	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
-	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
-	retryBalances(): Promise<void>
-	onWorkflowLockChange(locked: boolean): void
-	services?: LiveLiquidityServices
-}) {
-	const controller = useLiquidityWorkflowController({ configuration, market, balanceState, account, walletClient, externallyLocked, nowSeconds, settings, refresh, onKnownReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite, onWorkflowLockChange, services })
+	...context
+}: LiveWorkflowPanelProps &
+	Readonly<{
+		walletEthAttoEth: bigint | undefined
+		nowSeconds: bigint
+		services?: LiveLiquidityServices
+	}>) {
+	const { market, balanceState, account, walletClient, settings } = context
+	const controller = useLiquidityWorkflowController({ ...context, nowSeconds, services })
 	const { operation, amount, probability, parsed, conditionalBps, transaction, selectOperation, updateAmount, updateProbability, submit } = controller
 	const { quote, state, workflowLocked } = transaction
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
@@ -100,7 +68,7 @@ export function LiveLiquidityControls({
 		quoteState: transaction.quoteState,
 		quoteError: transaction.quoteError,
 	})
-	const walletStep: WalletStep | undefined = walletConnected && networkMismatchReason === undefined ? undefined : { label: wallet.actionLabel, disabled: workflowLocked, onClick: () => void wallet.connect() }
+	const walletStep = panelWalletStep(wallet, walletConnected && networkMismatchReason === undefined, workflowLocked)
 	const fieldId = useId()
 	const amountId = `${fieldId}-amount`
 	const probabilityId = `${fieldId}-probability`

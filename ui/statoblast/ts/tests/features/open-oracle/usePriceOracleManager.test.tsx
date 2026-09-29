@@ -2,14 +2,13 @@
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 type TestWriteClient = { kind: 'price-oracle-write-client' }
 type UsePriceOracleManagerState = ReturnType<typeof usePriceOracleManager>
@@ -19,50 +18,8 @@ const POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a3')
 const TRANSACTION_HASH = '0x00000000000000000000000000000000000000000000000000000000000000a4' as const
 
-function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
-		lastPrice: 1n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
-		priceValidUntilTimestamp: 1000n,
-		queuedOperationCostAttoEth: 1n,
-		requestPriceCostAttoEth: 1n,
-		token1: zeroAddress,
-		token2: zeroAddress,
-		...overrides,
-	}
-}
-
-function requireHookState(state: UsePriceOracleManagerState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
-}
-
 describe('usePriceOracleManager', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let restoreActiveEnvironment: (() => void) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			restoreActiveEnvironment?.()
-			restoreActiveEnvironment = undefined
-			mock.restore()
-		},
-	})
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test.each([
 		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: false },
@@ -137,7 +94,7 @@ describe('usePriceOracleManager', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadPoolOracleManager(MANAGER_ADDRESS)
@@ -159,6 +116,10 @@ describe('usePriceOracleManager', () => {
 			expect(requestOraclePrice).not.toHaveBeenCalled()
 			return
 		}
+		expect(onTransactionFailed.mock.calls).toEqual([])
+		expect(onTransactionCanceled.mock.calls).toEqual([])
+		expect(requireHookState(hookState).poolOracleManagerError).toBeUndefined()
+		expect(requireHookState(hookState).poolOracleFeedback?.status).toMatchObject({ tone: 'success' })
 		expect(requestOraclePrice).toHaveBeenCalledTimes(1)
 		expect(requestOraclePrice).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, proposedPrice ?? 1n, 0n, 1n)
 		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)

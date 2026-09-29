@@ -1,16 +1,12 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import { mountSearch } from '../../browser/search-ui.ts'
+import { overrideGlobals } from '../support/global-overrides.ts'
 
 test('Escape discards search results from an in-flight request', async () => {
 	const browser = new Window({ url: 'https://scanner.test/' })
 	browser.document.body.innerHTML = '<form id="global-search"><input id="global-search-input" /></form><div id="global-search-results" hidden></div>'
-	const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
-	const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
-	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.document })
-	Object.defineProperty(globalThis, 'location', { configurable: true, value: browser.location })
-	Object.defineProperty(globalThis, 'window', { configurable: true, value: browser })
+	const restoreGlobals = overrideGlobals({ document: browser.document, location: browser.location, window: browser })
 	try {
 		let completeSearch: ((value: unknown) => void) | undefined
 		const pending = new Promise<unknown>(resolve => {
@@ -43,12 +39,7 @@ test('Escape discards search results from an in-flight request', async () => {
 		expect(input.value).toBe('')
 		expect(input.scrollLeft).toBe(0)
 	} finally {
-		if (originalDocument === undefined) Reflect.deleteProperty(globalThis, 'document')
-		else Object.defineProperty(globalThis, 'document', originalDocument)
-		if (originalLocation === undefined) Reflect.deleteProperty(globalThis, 'location')
-		else Object.defineProperty(globalThis, 'location', originalLocation)
-		if (originalWindow === undefined) Reflect.deleteProperty(globalThis, 'window')
-		else Object.defineProperty(globalThis, 'window', originalWindow)
+		restoreGlobals()
 		await browser.happyDOM.close()
 	}
 })

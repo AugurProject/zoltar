@@ -1,20 +1,11 @@
-import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { type GitRunner, runGit as runRepositoryGit } from '../repo/git.mts'
 import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
 import { augurScanMetadataOutputs } from '../repo/projects.ts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
-
-type GitResult = {
-	status: number | null
-	stdout: string
-	stderr: string
-	error?: Error
-}
-
-export type GitRunner = (args: readonly string[]) => GitResult
 
 export type GeneratedArtifactCheckOptions = {
 	repositoryRoot?: string
@@ -145,27 +136,8 @@ async function getUiImportMapGeneratedOutputs(repositoryRoot: string, appId: str
 	return outputs
 }
 
-function createGitRunner(repositoryRoot: string): GitRunner {
-	return args => {
-		const result = spawnSync('git', args, {
-			cwd: repositoryRoot,
-			encoding: 'utf8',
-		})
-		if (result.error !== undefined) throw result.error
-		return {
-			status: result.status,
-			stdout: result.stdout,
-			stderr: result.stderr,
-		}
-	}
-}
-
 function getTrackedGeneratedPaths(runGit: GitRunner) {
-	const result = runGit(['ls-files', '--', ...generatedReviewPaths])
-	if (result.status !== 0) {
-		throw new Error(`Unable to list tracked generated paths.\n${result.stdout}${result.stderr}`)
-	}
-	return result.stdout
+	return runGit(['ls-files', '--', ...generatedReviewPaths])
 		.split('\n')
 		.map(line => line.trim())
 		.filter(line => line !== '')
@@ -179,7 +151,7 @@ function assertNoTrackedGeneratedPaths(trackedGeneratedPaths: readonly string[])
 
 export async function assertGeneratedArtifactsClean(options: GeneratedArtifactCheckOptions = {}) {
 	const repositoryRoot = options.repositoryRoot ?? defaultRepositoryRoot
-	const runGit = options.runGit ?? createGitRunner(repositoryRoot)
+	const runGit = options.runGit ?? ((args: string[]) => runRepositoryGit(args, { cwd: repositoryRoot }))
 	const requiredGeneratedOutputs = new Set([
 		...explicitlyRequiredGeneratedOutputs,
 		...(await getSharedPackageGeneratedOutputs(repositoryRoot)),

@@ -23,16 +23,8 @@ import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features
 import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createOracleManagerDetails as createBaseOracleManagerDetails } from './workflow/builders.js'
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
@@ -100,26 +92,15 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 }
 
 function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVaultSectionProps['oracleManagerDetails']>> = {}): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
-	return {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
+	return createBaseOracleManagerDetails({
 		lastPrice: 3n * 10n ** 18n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
 		queuedOperationCostAttoEth: 0n,
 		requestPriceCostAttoEth: 0n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
-	}
+	})
 }
 
 function createEndedPoolState() {
@@ -1089,19 +1070,16 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Redeem REP')).toEqual({ disabled: true, reason: 'Connect a wallet before redeeming REP.' })
 	})
 
-	test('shows explicit modal-first vault blockers when the wallet is disconnected', async () => {
+	test.each([
+		['shows explicit modal-first vault blockers when the wallet is disconnected', { depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2' }],
+		['disables modal-first vault launchers when a guard blocker is present', {}],
+	] as const)('%s', async (_name, formAmounts) => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					accountState: createAccountState({ address: undefined }),
 					modalFirst: true,
-					securityVaultForm: {
-						depositAmount: '1',
-						repWithdrawAmount: '1',
-						targetHealthFactor: '2',
-						securityPoolAddress: zeroAddress,
-						selectedVaultOwner: zeroAddress,
-					},
+					securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, ...formAmounts },
 				})}
 			/>,
 		)
@@ -1526,24 +1504,6 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Redeem REP', 'Settle escalation deposits before redeeming REP.')
-	})
-
-	test('disables modal-first vault launchers when a guard blocker is present', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityVaultSection
-				{...createSecurityVaultSectionProps({
-					accountState: createAccountState({ address: undefined }),
-					modalFirst: true,
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
-		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
-		expect(depositLauncher.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Connect a wallet before depositing REP.')
 	})
 
 	test('keeps modal-first vault launchers disabled off Sepolia with recovery guidance', async () => {

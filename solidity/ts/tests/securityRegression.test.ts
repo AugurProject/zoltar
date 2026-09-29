@@ -23,7 +23,8 @@ import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSettl
 import { createChildUniverse, getMigratedAttoRep, getOwnForkRepBuckets, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
 import { ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { approveToken, contractExists, getChildUniverseId, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
@@ -407,7 +408,10 @@ describe('security regression coverage', () => {
 		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
 	})
 
-	test('first escalation deposits reject stale oracle prices while capacity ownership is active', async () => {
+	test.each([
+		{ name: 'first', depositAttoRep: initialEscalationGameDepositAttoRep },
+		{ name: 'large', depositAttoRep: largeEscalationGameDeposit },
+	])('$name escalation deposits reject stale oracle prices while capacity ownership is active', async ({ depositAttoRep }) => {
 		const mockWindow = getAnvilWindowEthereum()
 		const underwritingLimitAttoEth = 100n * 10n ** 18n
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
@@ -416,18 +420,6 @@ describe('security regression coverage', () => {
 		await mockWindow.setTime(questionEndDate + 1n)
 		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
 
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, initialEscalationGameDepositAttoRep), /Oracle price is stale|Stale price/)
-	})
-
-	test('large escalation deposits reject stale oracle prices while capacity ownership is active', async () => {
-		const mockWindow = getAnvilWindowEthereum()
-		const underwritingLimitAttoEth = 100n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
-		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
-
-		await mockWindow.setTime(questionEndDate + 1n)
-		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
-
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, largeEscalationGameDeposit), /Oracle price is stale|Stale price/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAttoRep), /Oracle price is stale|Stale price/)
 	})
 })

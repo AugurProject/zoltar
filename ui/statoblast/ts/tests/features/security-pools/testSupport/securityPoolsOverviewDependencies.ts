@@ -1,7 +1,12 @@
 import { mock } from 'bun:test'
-import { zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
-import type { UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
+import { zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 
 // Builds the page shape loadSecurityPoolPage returns from an in-memory pool list.
 export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[], pageIndex: number, pageSize: number): SecurityPoolPage {
@@ -15,8 +20,58 @@ export function createSecurityPoolPageFromLoadedPools(pools: ListedSecurityPool[
 }
 
 export type TestSecurityPoolsOverviewWriteClient = { kind: 'write-client' }
+type Dependencies = UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>
+export type CoordinatorFundingRequirement = Awaited<ReturnType<Dependencies['loadCoordinatorInitialReportFundingRequirement']>>
 
-export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>> = {}): UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient> {
+export function createCoordinatorFundingRequirement(overrides: Partial<CoordinatorFundingRequirement> = {}): CoordinatorFundingRequirement {
+	return {
+		currentRepBalanceAttoRep: 1n,
+		currentWethBalanceAttoEth: 1n,
+		requiredRepAttoRep: 1n,
+		initialReportAmount2: 1n,
+		maximumInitialAttoWeth: 1n,
+		minimumToken1ReportAttoEth: 1n,
+		proposedRepPerEthPrice: 1n,
+		reputationTokenAddress: zeroHash as never,
+		requestedInitialAttoWeth: 0n,
+		wethShortfallAttoEth: 0n,
+		...overrides,
+	}
+}
+
+type OverviewHarnessProps = { accountAddress?: Address; environmentRefreshKey?: number }
+
+// Mounts useSecurityPoolsOverview with inert transaction callbacks and exposes its latest state.
+export async function renderSecurityPoolsOverviewHook(dependencies: Dependencies, { accountAddress: defaultAccountAddress = zeroAddress, onTransactionPresented = () => undefined, ...initialProps }: OverviewHarnessProps & { onTransactionPresented?: (presentation: GlobalTransactionPresentation) => void } = {}) {
+	let hookState: ReturnType<typeof useSecurityPoolsOverview> | undefined
+	function SecurityPoolsOverviewHarness({ accountAddress = defaultAccountAddress, environmentRefreshKey = 0 }: OverviewHarnessProps) {
+		hookState = useSecurityPoolsOverview(
+			{
+				accountAddress,
+				environmentRefreshKey,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+			},
+			dependencies,
+		)
+		return h('div', {})
+	}
+	const rendered = await renderIntoDocument(h(SecurityPoolsOverviewHarness, initialProps))
+	return {
+		cleanup: rendered.cleanup,
+		rerender: async (props: OverviewHarnessProps) => {
+			await act(() => {
+				render(h(SecurityPoolsOverviewHarness, props), rendered.container)
+			})
+		},
+		state: () => requireHookState(hookState),
+	}
+}
+
+export function createSecurityPoolsOverviewDependencies(overrides: Partial<Dependencies> = {}): Dependencies {
 	const defaultManagerDetails: OracleManagerDetails = {
 		callbackStateHash: undefined,
 		exactToken1Report: 1n,
@@ -42,18 +97,7 @@ export function createSecurityPoolsOverviewDependencies(overrides: Partial<UseSe
 		})),
 		createWalletWriteClient: mock(() => ({ kind: 'write-client' as const })),
 		loadSecurityPoolLineage: mock(async () => []),
-		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-			currentRepBalanceAttoRep: 1n,
-			currentWethBalanceAttoEth: 1n,
-			requiredRepAttoRep: 1n,
-			initialReportAmount2: 1n,
-			maximumInitialAttoWeth: 1n,
-			minimumToken1ReportAttoEth: 1n,
-			proposedRepPerEthPrice: 1n,
-			reputationTokenAddress: zeroHash as never,
-			requestedInitialAttoWeth: 0n,
-			wethShortfallAttoEth: 0n,
-		})),
+		loadCoordinatorInitialReportFundingRequirement: mock(async () => createCoordinatorFundingRequirement()),
 		loadLiquidationApproval: mock(async () => ({
 			registryAddress: zeroAddress,
 			params: {

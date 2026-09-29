@@ -1,8 +1,9 @@
 import { canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { erc1155Abi, erc20Abi, genesisUniswapV3FactoryAbi, genesisUniswapV3PoolStateAbi, genesisUniswapV3SeederAbi, shareTokenAbi, twoWayConstantProductFactoryAbi, twoWayConstantProductPairAbi, twoWayConstantProductRouterAbi } from '@zoltar/bot-shared/contracts/abi'
-import { decodeFunctionData, encodeAbiParameters, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { decodeFunctionData, encodeDeployData, getAddress, getCreate2Address, isAddress, toHex, zeroAddress, type AbiValue, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { sameAddress as addressesMatch } from '@zoltar/core-shared/evm/address'
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
 import { GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -19,35 +20,28 @@ const BPS_DENOMINATOR = 10_000n
 const CANONICAL_PROXY_DEPLOYER = getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12')
 const ZERO_SALT = toHex(0, { size: 32 })
 const GENESIS_TRADING_FEE_BPS = 30
-const receiveRequestParameter = {
-	type: 'tuple',
-	components: [
-		{ name: 'version', type: 'uint8' },
-		{ name: 'operation', type: 'uint8' },
-		{ name: 'shareToken', type: 'address' },
-		{ name: 'securityPool', type: 'address' },
-		{ name: 'pair', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'questionId', type: 'uint256' },
-		{ name: 'invalidTokenId', type: 'uint256' },
-		{ name: 'yesTokenId', type: 'uint256' },
-		{ name: 'noTokenId', type: 'uint256' },
-		{ name: 'longOutcome', type: 'uint8' },
-		{ name: 'completeSetShares', type: 'uint256' },
-		{ name: 'maxLongSharesIn', type: 'uint256' },
-		{ name: 'minEthOut', type: 'uint256' },
-		{ name: 'payoutRecipient', type: 'address' },
-		{ name: 'refundRecipient', type: 'address' },
-		{ name: 'deadline', type: 'uint256' },
-	],
-} as const
 
 function receiveRequestData(snapshot: EcosystemSnapshot, pool: PoolSnapshot, pair: PairSnapshot, shares: ShareInventory, operation: 0 | 1, longOutcome: 1 | 2 | 3, completeAmount: bigint, maximumLong: bigint, minimumEthAttoEth: bigint, deadline: bigint) {
 	const invalidTokenId = shareTokenId(shares.universeId, 0)
-	return encodeAbiParameters(
-		[receiveRequestParameter],
-		[[1, operation, shares.shareToken, pool.address, pair.address, amount(pool.universeId), amount(pool.questionId), invalidTokenId, invalidTokenId | 1n, invalidTokenId | 2n, longOutcome, completeAmount, maximumLong, minimumEthAttoEth, snapshot.wallet.address, snapshot.wallet.address, deadline]],
-	)
+	return encodeReceiveRequest([
+		1,
+		operation,
+		shares.shareToken,
+		pool.address,
+		pair.address,
+		amount(pool.universeId),
+		amount(pool.questionId),
+		invalidTokenId,
+		invalidTokenId | 1n,
+		invalidTokenId | 2n,
+		longOutcome,
+		completeAmount,
+		maximumLong,
+		minimumEthAttoEth,
+		snapshot.wallet.address,
+		snapshot.wallet.address,
+		deadline,
+	])
 }
 
 function deploymentStep(id: string, label: string, to: Address, data: Hex, evidence: OperationEvidence[]) {

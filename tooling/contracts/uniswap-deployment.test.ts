@@ -30,6 +30,34 @@ async function stubbedPublishedContracts() {
 	return publishedContracts.map(contract => ({ ...contract, expectedRuntimeCodeHash: keccak256('0x01') }))
 }
 
+const FUNDED_SIGNER_BALANCE = 10_000_000_000_000_000n
+const RAW_TRANSACTION_HASH: Hash = `0x${'1'.repeat(64)}`
+const FUNDING_TRANSACTION_HASH: Hash = `0x${'2'.repeat(64)}`
+const rejectFunding = async (): Promise<Hash> => {
+	throw new Error('Funding should not be sent')
+}
+const rejectConfirmedDeploymentWait = async (): Promise<TransactionReceipt> => {
+	throw new Error('An already confirmed deployment should not be awaited')
+}
+
+async function getCreate2DeployerStep(sleep?: (delayMilliseconds: number) => Promise<void>) {
+	const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID, sleep)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
+	if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+	return step
+}
+
+async function getCreate2DeployerStepRecordingRetries() {
+	const retryDelays: number[] = []
+	const step = await getCreate2DeployerStep(async delayMilliseconds => {
+		retryDelays.push(delayMilliseconds)
+	})
+	return { retryDelays, step }
+}
+
+async function expectCreate2DeployerInstalled(step: Awaited<ReturnType<typeof getCreate2DeployerStep>>, client: WriteClient) {
+	expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+}
+
 describe('Uniswap testnet deployment', () => {
 	test('resolves confirmed CREATE2 code before fee and budget preflight', async () => {
 		let codeReadCount = 0
@@ -252,14 +280,13 @@ describe('Uniswap testnet deployment', () => {
 	})
 
 	test('waits for a concurrent canonical CREATE2 deployer transaction', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const step = await getCreate2DeployerStep()
 		let installed = false
 		let rawBroadcastCalled = false
 		let accountedRawTransactions = 0
 		const client = asWriteClient({
 			assertCanonicalRawTransactionCost: () => undefined,
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => (installed ? ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE : undefined),
 			getTransactionCount: async parameters => (parameters.blockTag === 'pending' ? 1n : 0n),
 			recordCanonicalRawTransaction: () => {
@@ -267,35 +294,27 @@ describe('Uniswap testnet deployment', () => {
 			},
 			sendRawTransaction: async () => {
 				rawBroadcastCalled = true
-				return `0x${'1'.repeat(64)}` as Hash
+				return RAW_TRANSACTION_HASH
 			},
-			sendTransaction: async () => {
-				throw new Error('Funding should not be sent')
-			},
+			sendTransaction: rejectFunding,
 			waitForTransactionReceipt: async () => {
 				installed = true
 				return successReceipt()
 			},
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 		expect(installed).toBe(true)
 		expect(rawBroadcastCalled).toBe(false)
 		expect(accountedRawTransactions).toBe(1)
 	})
 
 	test('retries CREATE2 deployer code verification when RPC state lags the confirmed receipt', async () => {
-		const retryDelays: number[] = []
-		const step = (
-			await getUniswapDeployment(SEPOLIA_CHAIN_ID, async delayMilliseconds => {
-				retryDelays.push(delayMilliseconds)
-			})
-		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const { retryDelays, step } = await getCreate2DeployerStepRecordingRetries()
 		let codeReadCount = 0
 		const client = asWriteClient({
 			assertCanonicalRawTransactionCost: () => undefined,
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => {
 				codeReadCount += 1
 				return codeReadCount < 3 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
@@ -305,19 +324,18 @@ describe('Uniswap testnet deployment', () => {
 			waitForTransactionReceipt: async () => successReceipt(),
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 		expect(retryDelays).toEqual([250])
 	})
 
 	test('accepts an already-known canonical CREATE2 deployer broadcast race', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const step = await getCreate2DeployerStep()
 		let installed = false
 		let pending = false
 		let accountedRawTransactions = 0
 		const client = asWriteClient({
 			assertCanonicalRawTransactionCost: () => undefined,
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => (installed ? ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE : undefined),
 			getTransactionCount: async parameters => (pending && parameters.blockTag === 'pending' ? 1n : 0n),
 			recordCanonicalRawTransaction: () => {
@@ -327,9 +345,7 @@ describe('Uniswap testnet deployment', () => {
 				pending = true
 				throw new Error('already known')
 			},
-			sendTransaction: async () => {
-				throw new Error('Funding should not be sent')
-			},
+			sendTransaction: rejectFunding,
 			waitForTransactionReceipt: async () => {
 				pending = false
 				installed = true
@@ -337,46 +353,35 @@ describe('Uniswap testnet deployment', () => {
 			},
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 		expect(installed).toBe(true)
 		expect(accountedRawTransactions).toBe(1)
 	})
 
 	test('accepts a canonical CREATE2 deployment that confirms before its broadcast returns', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const step = await getCreate2DeployerStep()
 		let installed = false
 		const client = asWriteClient({
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => (installed ? ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE : undefined),
 			getTransactionCount: async () => 0n,
 			sendRawTransaction: async () => {
 				installed = true
 				throw new Error('nonce too low')
 			},
-			sendTransaction: async () => {
-				throw new Error('Funding should not be sent')
-			},
-			waitForTransactionReceipt: async () => {
-				throw new Error('An already confirmed deployment should not be awaited')
-			},
+			sendTransaction: rejectFunding,
+			waitForTransactionReceipt: rejectConfirmedDeploymentWait,
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 	})
 
 	test('retries stale CREATE2 code after a broadcast reports an already-confirmed nonce', async () => {
-		const retryDelays: number[] = []
-		const step = (
-			await getUniswapDeployment(SEPOLIA_CHAIN_ID, async delayMilliseconds => {
-				retryDelays.push(delayMilliseconds)
-			})
-		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const { retryDelays, step } = await getCreate2DeployerStepRecordingRetries()
 		let confirmed = false
 		let codeReadCount = 0
 		const client = asWriteClient({
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => {
 				codeReadCount += 1
 				return codeReadCount < 6 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
@@ -387,30 +392,20 @@ describe('Uniswap testnet deployment', () => {
 				confirmed = true
 				throw new Error('nonce too low')
 			},
-			sendTransaction: async () => {
-				throw new Error('Funding should not be sent')
-			},
-			waitForTransactionReceipt: async () => {
-				throw new Error('An already confirmed deployment should not be awaited')
-			},
+			sendTransaction: rejectFunding,
+			waitForTransactionReceipt: rejectConfirmedDeploymentWait,
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 		expect(retryDelays).toEqual([250])
 	})
 
 	test('accepts delayed CREATE2 code after its signer nonce was already confirmed', async () => {
-		const retryDelays: number[] = []
-		const step = (
-			await getUniswapDeployment(SEPOLIA_CHAIN_ID, async delayMilliseconds => {
-				retryDelays.push(delayMilliseconds)
-			})
-		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const { retryDelays, step } = await getCreate2DeployerStepRecordingRetries()
 		let codeReadCount = 0
 		let transactionSubmitted = false
 		const client = asWriteClient({
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => {
 				codeReadCount += 1
 				return codeReadCount < 4 ? undefined : ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE
@@ -419,68 +414,78 @@ describe('Uniswap testnet deployment', () => {
 			recordCanonicalRawTransaction: () => undefined,
 			sendRawTransaction: async () => {
 				transactionSubmitted = true
-				return `0x${'1'.repeat(64)}` as Hash
+				return RAW_TRANSACTION_HASH
 			},
 			sendTransaction: async () => {
 				transactionSubmitted = true
-				return `0x${'2'.repeat(64)}` as Hash
+				return FUNDING_TRANSACTION_HASH
 			},
 			waitForTransactionReceipt: async () => successReceipt(),
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 		expect(retryDelays).toEqual([250])
 		expect(transactionSubmitted).toBe(false)
 	})
 
 	test('rejects unexpected code installed during a canonical CREATE2 deployer broadcast race', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const step = await getCreate2DeployerStep()
 		let code: Hex | undefined
 		const client = asWriteClient({
-			getBalance: async () => 10_000_000_000_000_000n,
+			getBalance: async () => FUNDED_SIGNER_BALANCE,
 			getCode: async () => code,
 			getTransactionCount: async () => 0n,
 			sendRawTransaction: async () => {
 				code = '0x1234'
 				throw new Error('nonce too low')
 			},
-			sendTransaction: async () => {
-				throw new Error('Funding should not be sent')
-			},
+			sendTransaction: rejectFunding,
 			waitForTransactionReceipt: async () => successReceipt(),
 		})
 
 		await expect(step.deploy(client)).rejects.toThrow('Unexpected code at canonical CREATE2 deployer')
 	})
 
-	test('rejects an incompatible canonical raw gas price without funding', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+	test.each([
+		{
+			name: 'rejects an incompatible canonical raw gas price without funding',
+			error: 'below the current base fee',
+			overrides: { getBalance: async () => 0n, getBlock: async () => ({ baseFeePerGas: 100_000_000_001n }) as never } satisfies Partial<WriteClient>,
+		},
+		{
+			name: 'enforces CREATE2 raw-transaction cost authorization before broadcast',
+			error: 'would exceed the authorized deployment total',
+			overrides: {
+				assertCanonicalRawTransactionCost: () => {
+					throw new Error('would exceed the authorized deployment total')
+				},
+				getBalance: async () => FUNDED_SIGNER_BALANCE,
+			} satisfies Partial<WriteClient>,
+		},
+	])('$name', async ({ error, overrides }) => {
+		const step = await getCreate2DeployerStep()
 		let writeCalled = false
 		const client = asWriteClient({
-			getBalance: async () => 0n,
-			getBlock: async () => ({ baseFeePerGas: 100_000_000_001n }) as never,
 			getCode: async () => undefined,
 			getTransactionCount: async () => 0n,
 			sendRawTransaction: async () => {
 				writeCalled = true
-				return `0x${'1'.repeat(64)}` as Hash
+				return RAW_TRANSACTION_HASH
 			},
 			sendTransaction: async () => {
 				writeCalled = true
-				return `0x${'2'.repeat(64)}` as Hash
+				return FUNDING_TRANSACTION_HASH
 			},
 			waitForTransactionReceipt: async () => successReceipt(),
+			...overrides,
 		})
 
-		await expect(step.deploy(client)).rejects.toThrow('below the current base fee')
+		await expect(step.deploy(client)).rejects.toThrow(error)
 		expect(writeCalled).toBe(false)
 	})
 
 	test('tests canonical raw-transaction policy before CREATE2 signer funding', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const step = await getCreate2DeployerStep()
 		let fundingCalled = false
 		const client = asWriteClient({
 			getBalance: async () => 0n,
@@ -491,7 +496,7 @@ describe('Uniswap testnet deployment', () => {
 			},
 			sendTransaction: async () => {
 				fundingCalled = true
-				return `0x${'2'.repeat(64)}` as Hash
+				return FUNDING_TRANSACTION_HASH
 			},
 			waitForTransactionReceipt: async () => successReceipt(),
 		})
@@ -505,15 +510,12 @@ describe('Uniswap testnet deployment', () => {
 		let funded = false
 		let rawBroadcastCount = 0
 		const retryDelays: number[] = []
-		const step = (
-			await getUniswapDeployment(SEPOLIA_CHAIN_ID, async delayMilliseconds => {
-				retryDelays.push(delayMilliseconds)
-				codeVisible = true
-			})
-		).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
+		const step = await getCreate2DeployerStep(async delayMilliseconds => {
+			retryDelays.push(delayMilliseconds)
+			codeVisible = true
+		})
 		const client = asWriteClient({
-			getBalance: async () => (funded ? 10_000_000_000_000_000n : 0n),
+			getBalance: async () => (funded ? FUNDED_SIGNER_BALANCE : 0n),
 			getCode: async () => (codeVisible ? ARACHNID_CREATE2_DEPLOYER_RUNTIME_CODE : undefined),
 			getTransactionCount: async () => (funded ? 1n : 0n),
 			recordCanonicalRawTransaction: () => undefined,
@@ -523,40 +525,14 @@ describe('Uniswap testnet deployment', () => {
 			},
 			sendTransaction: async () => {
 				funded = true
-				return `0x${'2'.repeat(64)}` as Hash
+				return FUNDING_TRANSACTION_HASH
 			},
 			waitForTransactionReceipt: async () => successReceipt(),
 		})
 
-		expect(await step.deploy(client)).not.toBe(`0x${'0'.repeat(64)}`)
+		await expectCreate2DeployerInstalled(step, client)
 		expect(retryDelays).toEqual([250])
 		expect(rawBroadcastCount).toBe(1)
-	})
-
-	test('enforces CREATE2 raw-transaction cost authorization before broadcast', async () => {
-		const step = (await getUniswapDeployment(SEPOLIA_CHAIN_ID)).steps.find(candidate => candidate.id === 'arachnidCreate2Deployer')
-		if (step === undefined) throw new Error('Expected canonical CREATE2 deployer step')
-		let writeCalled = false
-		const client = asWriteClient({
-			assertCanonicalRawTransactionCost: () => {
-				throw new Error('would exceed the authorized deployment total')
-			},
-			getBalance: async () => 10_000_000_000_000_000n,
-			getCode: async () => undefined,
-			getTransactionCount: async () => 0n,
-			sendRawTransaction: async () => {
-				writeCalled = true
-				return `0x${'1'.repeat(64)}` as Hash
-			},
-			sendTransaction: async () => {
-				writeCalled = true
-				return `0x${'2'.repeat(64)}` as Hash
-			},
-			waitForTransactionReceipt: async () => successReceipt(),
-		})
-
-		await expect(step.deploy(client)).rejects.toThrow('would exceed the authorized deployment total')
-		expect(writeCalled).toBe(false)
 	})
 })
 

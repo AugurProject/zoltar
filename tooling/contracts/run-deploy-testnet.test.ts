@@ -19,6 +19,19 @@ async function waitForFile(filePath: string) {
 	throw new Error(`Timed out waiting for ${filePath}`)
 }
 
+const runnerUrl = new URL('./run-deploy-testnet.mts', import.meta.url).href
+
+async function withTestRoot(prefix: string, run: (testRoot: string) => Promise<void>) {
+	const testRoot = await mkdtemp(path.join(tmpdir(), prefix))
+	try {
+		await run(testRoot)
+	} finally {
+		await rm(testRoot, { force: true, recursive: true })
+	}
+}
+
+const spawnDeploymentWrapper = (wrapperSource: string) => Bun.spawn([process.execPath, '-e', wrapperSource], { stderr: 'pipe' })
+
 async function expectNoTemporaryBundle(testRoot: string) {
 	expect((await readdir(testRoot)).filter(entry => entry.startsWith('zoltar-testnet-deployment-'))).toEqual([])
 }
@@ -46,57 +59,40 @@ function stubChild(exitCode: number) {
 	return { exited: Promise.resolve(exitCode), kill() {} }
 }
 
-test('headless deployment runs explorer verification after a successful deployment', async () => {
+async function runStubbedDeployment(args: readonly string[], deploymentExitCode: number, verificationExitCode = 0) {
 	const verificationCommands: string[][] = []
-	const exitCode = await runHeadlessTestnetDeployment(['--chain-id=17000', `--private-key=${privateKey}`], {
-		buildEntrypoint: async () => new Blob(['process.exitCode = 0']),
-		spawnChild: () => stubChild(0),
+	const exitCode = await runHeadlessTestnetDeployment([...args], {
+		buildEntrypoint: async () => new Blob([`process.exitCode = ${deploymentExitCode.toString()}`]),
+		spawnChild: () => stubChild(deploymentExitCode),
 		spawnVerification: command => {
 			verificationCommands.push(command)
-			return stubChild(0)
+			return stubChild(verificationExitCode)
 		},
 	})
+	return { exitCode, verificationCommands }
+}
+
+test('headless deployment runs explorer verification after a successful deployment', async () => {
+	const { exitCode, verificationCommands } = await runStubbedDeployment(['--chain-id=17000', `--private-key=${privateKey}`], 0)
 	expect(exitCode).toBe(0)
 	expect(verificationCommands).toHaveLength(1)
 	expect(verificationCommands[0]?.[1]).toEndWith(path.join('tooling', 'contracts', 'verify-contracts.mts'))
 	expect(verificationCommands[0]?.[2]).toBe('--chain-id=17000')
 })
 
-test('headless deployment skips verification when the deployment fails', async () => {
-	const verificationCommands: string[][] = []
-	const exitCode = await runHeadlessTestnetDeployment([], {
-		buildEntrypoint: async () => new Blob(['process.exitCode = 3']),
-		spawnChild: () => stubChild(3),
-		spawnVerification: command => {
-			verificationCommands.push(command)
-			return stubChild(0)
-		},
-	})
-	expect(exitCode).toBe(3)
-	expect(verificationCommands).toHaveLength(0)
-})
-
-test('headless deployment skips verification for help invocations', async () => {
-	const verificationCommands: string[][] = []
-	const exitCode = await runHeadlessTestnetDeployment(['--help'], {
-		buildEntrypoint: async () => new Blob(['process.exitCode = 0']),
-		spawnChild: () => stubChild(0),
-		spawnVerification: command => {
-			verificationCommands.push(command)
-			return stubChild(0)
-		},
-	})
-	expect(exitCode).toBe(0)
+test.each([
+	{ name: 'when the deployment fails', args: [], deploymentExitCode: 3 },
+	{ name: 'for help invocations', args: ['--help'], deploymentExitCode: 0 },
+])('headless deployment skips verification $name', async ({ args, deploymentExitCode }) => {
+	const { exitCode, verificationCommands } = await runStubbedDeployment(args, deploymentExitCode)
+	expect(exitCode).toBe(deploymentExitCode)
 	expect(verificationCommands).toHaveLength(0)
 })
 
 test('headless deployment reports a verification failure after a successful deployment', async () => {
-	const exitCode = await runHeadlessTestnetDeployment([], {
-		buildEntrypoint: async () => new Blob(['process.exitCode = 0']),
-		spawnChild: () => stubChild(0),
-		spawnVerification: () => stubChild(5),
-	})
+	const { exitCode, verificationCommands } = await runStubbedDeployment([], 0, 5)
 	expect(exitCode).toBe(5)
+	expect(verificationCommands).toHaveLength(1)
 })
 
 test('headless deployment carries its pinned artifact into actual execution', async () => {
@@ -110,104 +106,95 @@ test('headless deployment carries its pinned artifact into actual execution', as
 })
 
 test('headless deployment forwards termination and removes its temporary bundle', async () => {
-	const testRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-testnet-signal-test-'))
-	const childMarker = path.join(testRoot, 'child-pid')
-	const runnerUrl = new URL('./run-deploy-testnet.mts', import.meta.url).href
-	const wrapperSource = `
-		import { runHeadlessTestnetDeployment } from ${JSON.stringify(runnerUrl)}
-		const marker = ${JSON.stringify(childMarker)}
-		const temporaryRoot = ${JSON.stringify(testRoot)}
-		process.exitCode = await runHeadlessTestnetDeployment([], {
-			temporaryRoot,
-			spawnChild: () => Bun.spawn([process.execPath, '-e', \`await Bun.write(\${JSON.stringify(marker)}, String(process.pid)); await new Promise(() => {})\`]),
-			spawnVerification: () => ({ exited: Promise.resolve(0), kill() {} }),
-		})
-	`
-	let deploymentChildPid: number | undefined
-	try {
-		const wrapper = Bun.spawn([process.execPath, '-e', wrapperSource], { stderr: 'pipe' })
-		await waitForFile(childMarker)
-		const parsedDeploymentChildPid = Number.parseInt(await readFile(childMarker, 'utf8'), 10)
-		deploymentChildPid = parsedDeploymentChildPid
-		wrapper.kill('SIGTERM')
-		expect(await wrapper.exited).toBe(143)
-		expect(await readdir(testRoot)).toEqual(['child-pid'])
-		expect(() => process.kill(parsedDeploymentChildPid, 0)).toThrow()
-	} finally {
-		if (deploymentChildPid !== undefined) {
-			try {
-				process.kill(deploymentChildPid, 'SIGKILL')
-			} catch (error) {
-				if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error
+	await withTestRoot('zoltar-testnet-signal-test-', async testRoot => {
+		const childMarker = path.join(testRoot, 'child-pid')
+		const wrapperSource = `
+			import { runHeadlessTestnetDeployment } from ${JSON.stringify(runnerUrl)}
+			const marker = ${JSON.stringify(childMarker)}
+			const temporaryRoot = ${JSON.stringify(testRoot)}
+			process.exitCode = await runHeadlessTestnetDeployment([], {
+				temporaryRoot,
+				spawnChild: () => Bun.spawn([process.execPath, '-e', \`await Bun.write(\${JSON.stringify(marker)}, String(process.pid)); await new Promise(() => {})\`]),
+				spawnVerification: () => ({ exited: Promise.resolve(0), kill() {} }),
+			})
+		`
+		let deploymentChildPid: number | undefined
+		try {
+			const wrapper = spawnDeploymentWrapper(wrapperSource)
+			await waitForFile(childMarker)
+			const parsedDeploymentChildPid = Number.parseInt(await readFile(childMarker, 'utf8'), 10)
+			deploymentChildPid = parsedDeploymentChildPid
+			wrapper.kill('SIGTERM')
+			expect(await wrapper.exited).toBe(143)
+			expect(await readdir(testRoot)).toEqual(['child-pid'])
+			expect(() => process.kill(parsedDeploymentChildPid, 0)).toThrow()
+		} finally {
+			if (deploymentChildPid !== undefined) {
+				try {
+					process.kill(deploymentChildPid, 'SIGKILL')
+				} catch (error) {
+					if (!(error instanceof Error && 'code' in error && error.code === 'ESRCH')) throw error
+				}
 			}
 		}
-		await rm(testRoot, { force: true, recursive: true })
-	}
+	})
 })
 
 test('headless deployment handles termination before child spawn and removes its temporary bundle', async () => {
-	const testRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-testnet-pre-spawn-signal-test-'))
-	const buildMarker = path.join(testRoot, 'build-started')
-	const buildRelease = path.join(testRoot, 'release-build')
-	const childMarker = path.join(testRoot, 'child-started')
-	const runnerUrl = new URL('./run-deploy-testnet.mts', import.meta.url).href
-	const wrapperSource = `
-		import { runHeadlessTestnetDeployment } from ${JSON.stringify(runnerUrl)}
-		process.exitCode = await runHeadlessTestnetDeployment([], {
-			temporaryRoot: ${JSON.stringify(testRoot)},
-			buildEntrypoint: async () => {
-				await Bun.write(${JSON.stringify(buildMarker)}, 'ready')
-				while (!(await Bun.file(${JSON.stringify(buildRelease)}).exists())) await Bun.sleep(10)
-				return new Blob(['process.exitCode = 0'])
-			},
-			spawnChild: () => {
-				Bun.write(${JSON.stringify(childMarker)}, 'started')
-				return { exited: Promise.resolve(0), kill() {} }
-			},
-			spawnVerification: () => ({ exited: Promise.resolve(0), kill() {} }),
-		})
-	`
-	try {
-		const wrapper = Bun.spawn([process.execPath, '-e', wrapperSource], { stderr: 'pipe' })
+	await withTestRoot('zoltar-testnet-pre-spawn-signal-test-', async testRoot => {
+		const buildMarker = path.join(testRoot, 'build-started')
+		const buildRelease = path.join(testRoot, 'release-build')
+		const childMarker = path.join(testRoot, 'child-started')
+		const wrapperSource = `
+			import { runHeadlessTestnetDeployment } from ${JSON.stringify(runnerUrl)}
+			process.exitCode = await runHeadlessTestnetDeployment([], {
+				temporaryRoot: ${JSON.stringify(testRoot)},
+				buildEntrypoint: async () => {
+					await Bun.write(${JSON.stringify(buildMarker)}, 'ready')
+					while (!(await Bun.file(${JSON.stringify(buildRelease)}).exists())) await Bun.sleep(10)
+					return new Blob(['process.exitCode = 0'])
+				},
+				spawnChild: () => {
+					Bun.write(${JSON.stringify(childMarker)}, 'started')
+					return { exited: Promise.resolve(0), kill() {} }
+				},
+				spawnVerification: () => ({ exited: Promise.resolve(0), kill() {} }),
+			})
+		`
+		const wrapper = spawnDeploymentWrapper(wrapperSource)
 		await waitForFile(buildMarker)
 		wrapper.kill('SIGTERM')
 		await Bun.write(buildRelease, 'continue')
 		expect(await wrapper.exited).toBe(143)
 		expect(await Bun.file(childMarker).exists()).toBe(false)
 		await expectNoTemporaryBundle(testRoot)
-	} finally {
-		await rm(testRoot, { force: true, recursive: true })
-	}
+	})
 })
 
 test('headless deployment handles termination during temporary bundle cleanup', async () => {
-	const testRoot = await mkdtemp(path.join(tmpdir(), 'zoltar-testnet-cleanup-signal-test-'))
-	const cleanupMarker = path.join(testRoot, 'cleanup-started')
-	const cleanupRelease = path.join(testRoot, 'release-cleanup')
-	const runnerUrl = new URL('./run-deploy-testnet.mts', import.meta.url).href
-	const wrapperSource = `
-		import { rm } from 'node:fs/promises'
-		import { runHeadlessTestnetDeployment } from ${JSON.stringify(runnerUrl)}
-		process.exitCode = await runHeadlessTestnetDeployment([], {
-			temporaryRoot: ${JSON.stringify(testRoot)},
-			buildEntrypoint: async () => new Blob(['process.exitCode = 0']),
-			spawnChild: () => ({ exited: Promise.resolve(0), kill() {} }),
-			spawnVerification: () => ({ exited: Promise.resolve(0), kill() {} }),
-			removeTemporaryDirectory: async directory => {
-				await Bun.write(${JSON.stringify(cleanupMarker)}, 'ready')
-				while (!(await Bun.file(${JSON.stringify(cleanupRelease)}).exists())) await Bun.sleep(10)
-				await rm(directory, { force: true, recursive: true })
-			},
-		})
-	`
-	try {
-		const wrapper = Bun.spawn([process.execPath, '-e', wrapperSource], { stderr: 'pipe' })
+	await withTestRoot('zoltar-testnet-cleanup-signal-test-', async testRoot => {
+		const cleanupMarker = path.join(testRoot, 'cleanup-started')
+		const cleanupRelease = path.join(testRoot, 'release-cleanup')
+		const wrapperSource = `
+			import { rm } from 'node:fs/promises'
+			import { runHeadlessTestnetDeployment } from ${JSON.stringify(runnerUrl)}
+			process.exitCode = await runHeadlessTestnetDeployment([], {
+				temporaryRoot: ${JSON.stringify(testRoot)},
+				buildEntrypoint: async () => new Blob(['process.exitCode = 0']),
+				spawnChild: () => ({ exited: Promise.resolve(0), kill() {} }),
+				spawnVerification: () => ({ exited: Promise.resolve(0), kill() {} }),
+				removeTemporaryDirectory: async directory => {
+					await Bun.write(${JSON.stringify(cleanupMarker)}, 'ready')
+					while (!(await Bun.file(${JSON.stringify(cleanupRelease)}).exists())) await Bun.sleep(10)
+					await rm(directory, { force: true, recursive: true })
+				},
+			})
+		`
+		const wrapper = spawnDeploymentWrapper(wrapperSource)
 		await waitForFile(cleanupMarker)
 		wrapper.kill('SIGTERM')
 		await Bun.write(cleanupRelease, 'continue')
 		expect(await wrapper.exited).toBe(143)
 		await expectNoTemporaryBundle(testRoot)
-	} finally {
-		await rm(testRoot, { force: true, recursive: true })
-	}
+	})
 })

@@ -4,25 +4,17 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { deriveZoltarOverviewModel, getZoltarUniverseActions, resolveZoltarRouteGate, type ZoltarOverviewInput } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
 import { describe, expect, test } from 'bun:test'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 const walletAddress = '0x00000000000000000000000000000000000000a1'
 const childUniverseId = 5n
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
-		childUniverses: [],
-		forkQuestionDetails: undefined,
-		forkThresholdAttoRep: 1n,
-		forkTime: 0n,
-		forkingOutcomeIndex: 0n,
-		hasForked: false,
+	return createUniverseSummary({
 		lineage: [{ outcomeLabel: undefined, universeId: 0n }],
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
-		totalTheoreticalSupplyAttoRep: 1n,
 		universeId: 0n,
 		...overrides,
-	}
+	})
 }
 
 function createInput(overrides: Partial<ZoltarOverviewInput> = {}, account: Partial<ZoltarOverviewInput['account']> = {}): ZoltarOverviewInput {

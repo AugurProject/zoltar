@@ -101,25 +101,11 @@ browserTest(
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
-		const session = await startChromiumSession(chromium)
+		const session = await startChromiumSession(chromium, { evaluationDefaults: { attempts: 200, exceptions: 'ignore', intervalMilliseconds: 25 } })
 		await session.send('Runtime.enable')
 		await session.send('Page.enable')
-		const cdp = {
-			command: session.send,
-			close: session.close,
-			issues: session.issues,
-			evaluate: async (expression: string) => {
-				const response = await session.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-				return Reflect.get(Object(Reflect.get(Object(response), 'result')), 'value')
-			},
-		}
-		const waitFor = async (expression: string) => {
-			for (let attempt = 0; attempt < 200; attempt += 1) {
-				if ((await cdp.evaluate(expression)) === true) return
-				await Bun.sleep(25)
-			}
-			throw new Error(`Timed out: ${expression}`)
-		}
+		const cdp = { command: session.send, close: session.close, issues: session.issues, evaluate: session.evaluate }
+		const { waitFor } = session
 		const readiness = "Array.from(document.querySelectorAll('#execution-checklist li'), item => `${item.dataset.ready}${item.dataset.advisory === 'true' ? '~' : ''}:${item.querySelector('.readiness-label')?.textContent}`)"
 		const capture = async (name: string) => {
 			const result = await cdp.command('Page.captureScreenshot', { format: 'png' })

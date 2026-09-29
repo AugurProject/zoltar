@@ -1,17 +1,16 @@
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
-import { getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getMigratedAttoRep, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { getChildUniverseId, getERC20Balance } from '../../testSupport/simulator/utils/utilities'
+import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
-import { beforeEach, describe, test } from 'bun:test'
-import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './fixture'
+import { describe, test } from 'bun:test'
+import { useStatoblastTruthAuctionFixture } from './fixture'
 
 const transferAbi = [
 	{
@@ -29,21 +28,10 @@ const transferAbi = [
 describe('Truth-auction REP donation rounding regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
 
-	const { repDeposit, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool, genesisUniverse } = fixture
-
-	let client: StatoblastTruthAuctionFixture['client']
-	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
-	let questionId: StatoblastTruthAuctionFixture['questionId']
-	let securityPoolAddresses: StatoblastTruthAuctionFixture['securityPoolAddresses']
-
-	beforeEach(() => {
-		client = fixture.client
-		mockWindow = fixture.mockWindow
-		questionId = fixture.questionId
-		securityPoolAddresses = fixture.securityPoolAddresses
-	})
+	const { repDeposit, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
 
 	test('full vault migration reconciles donated REP and skips the truth auction', async () => {
+		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
 		const vaultClients = [client, createWriteClient(mockWindow, TEST_ADDRESSES[1]), createWriteClient(mockWindow, TEST_ADDRESSES[2]), createWriteClient(mockWindow, TEST_ADDRESSES[3]), createWriteClient(mockWindow, TEST_ADDRESSES[4]), createWriteClient(mockWindow, TEST_ADDRESSES[5])]
 		for (const vaultClient of vaultClients.slice(1)) {
 			await approveAndDepositRepToVault(vaultClient, repDeposit, questionId)
@@ -80,8 +68,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 			await migrateVault(vaultClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		}
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(migratedAttoRep, parentForkData.auctionableAttoRepAtFork, 'migrating the complete backingUnits denominator should reconcile every fork-time REP unit')
 

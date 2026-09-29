@@ -10,9 +10,9 @@ import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../testSup
 import { approveToken, getChildUniverseId, getETHBalance } from '../testSupport/simulator/utils/utilities'
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { addRepToMigrationBalance, deployChild, getUniverseData, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
+import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 import { getForkActivationTime } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 
 describe('Nested fork migration deadline', () => {
@@ -20,19 +20,8 @@ describe('Nested fork migration deadline', () => {
 
 	const { genesisUniverse, repDeposit, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
-	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
-	let client: StatoblastForkMigrationFixture['client']
-	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
-	let questionId: StatoblastForkMigrationFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	test('a delayed canonical pool retains a complete outgoing migration window after an early universe fork', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		const passiveVault = createWriteClient(mockWindow, TEST_ADDRESSES[6])

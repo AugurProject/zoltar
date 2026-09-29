@@ -125,6 +125,17 @@ function presence(value: OperationPlan, blocksNovelty = true) {
 	]
 }
 
+/** Tracks `value` as a pending lifecycle obligation at block 10 and returns it with its workflow and first step. */
+function trackedObligation(value: OperationPlan = plan('10')) {
+	const state = obligationState()
+	synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
+	const obligation = obligationForPlan(state, value)
+	const workflow = state.workflows[0]
+	const step = workflow?.steps[0]
+	if (obligation === undefined || workflow === undefined || step === undefined) throw new Error('Missing lifecycle fixture')
+	return { obligation, state, step, value, workflow }
+}
+
 describe('durable lifecycle obligations', () => {
 	test('reconciles a blocker observed during suffix backfill after that coverage catches up', () => {
 		const state = obligationState()
@@ -380,11 +391,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('tracks attempts and completes only with the durable workflow', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
+		const { obligation, state } = trackedObligation()
 		beginLifecycleObligation(obligation)
 		expect(obligation.attemptCount).toBe(1)
 		expect(obligation.automaticRetryCount).toBe(0)
@@ -398,14 +405,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('keeps finalized canonical-confirmation work pending until complete presence removes the identity', () => {
-		const value = { ...plan('10'), deadlineTimestamp: '1' }
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
-		const workflow = state.workflows[0]
-		const step = workflow?.steps[0]
-		if (workflow === undefined || step === undefined) throw new Error('Missing test workflow')
+		const { obligation, state, step, value, workflow } = trackedObligation({ ...plan('10'), deadlineTimestamp: '1' })
 		step.evidence = [
 			{
 				abi: 'event CanonicalProgress(address indexed target, uint256 value)',
@@ -493,13 +493,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('recovers a completed workflow with a fresh canonical tombstone after a crash', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
-		const workflow = state.workflows[0]
-		if (workflow === undefined) throw new Error('Missing test workflow')
+		const { obligation, state, workflow } = trackedObligation()
 		workflow.status = 'completed'
 		workflow.completedAt = new Date().toISOString()
 
@@ -520,13 +514,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('keeps a failed lifecycle instance terminal until an operator reconciles it', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
-		const workflow = state.workflows[0]
-		if (workflow === undefined) throw new Error('Missing test workflow')
+		const { obligation, state, workflow } = trackedObligation()
 		workflow.status = 'failed'
 		failLifecycleObligation(obligation, new Error('confirmed transaction failed'), false)
 
@@ -539,15 +527,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('retries only unsigned failures and preserves the prior attempt audit', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
-		const workflow = state.workflows[0]
-		if (workflow === undefined) throw new Error('Missing test workflow')
-		const step = workflow.steps[0]
-		if (step === undefined) throw new Error('Missing test workflow step')
+		const { obligation, state, step, workflow } = trackedObligation()
 		workflow.status = 'failed'
 		step.status = 'failed'
 		failLifecycleObligation(obligation, 'unsigned failure', false)
@@ -575,13 +555,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('terminally supersedes a missing lifecycle item without claiming competitor success', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		const workflow = state.workflows[0]
-		const step = workflow?.steps[0]
-		if (obligation === undefined || workflow === undefined || step === undefined) throw new Error('Missing lifecycle fixture')
+		const { obligation, state, step, workflow } = trackedObligation()
 		obligation.status = 'failed'
 		workflow.status = 'failed'
 		step.status = 'failed'
@@ -799,11 +773,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('records an abandonment tombstone that prevents rediscovery from recreating work', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
+		const { obligation, state } = trackedObligation()
 		failLifecycleObligation(obligation, 'operator review required', false)
 		abandonLifecycleObligation(state, obligation, 'Manually completed outside this bot')
 		expect(obligation.status).toBe('abandoned')
@@ -835,11 +805,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('starts terminal tombstone retention at the first complete canonical absence', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
+		const { obligation, state } = trackedObligation()
 		abandonLifecycleObligation(state, obligation, 'Protocol item was reconciled manually')
 		synchronizeLifecycleObligations(state, [evaluation(plan('20'))], presence(plan('20')), true, 20n)
 		expect(state.obligationTombstones[0]?.lastSeenBlock).toBe('20')
@@ -882,12 +848,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('blocks novelty when a completed identity returns after confirmed canonical absence', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		const workflow = state.workflows[0]
-		if (obligation === undefined || workflow === undefined) throw new Error('Missing completed lifecycle fixture')
+		const { state, value, workflow } = trackedObligation()
 		workflow.status = 'completed'
 		workflow.completedAt = new Date().toISOString()
 
@@ -906,11 +867,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('retains an active tombstone while execution policy makes its plan unavailable', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
+		const { obligation, state, value } = trackedObligation()
 		abandonLifecycleObligation(state, obligation, 'Operator deliberately resolved this protocol item elsewhere')
 
 		synchronizeLifecycleObligations(state, [], presence(value, false), true, 100n)
@@ -925,11 +882,7 @@ describe('durable lifecycle obligations', () => {
 	})
 
 	test('does not age tombstones while canonical presence discovery is incomplete', () => {
-		const value = plan('10')
-		const state = obligationState()
-		synchronizeLifecycleObligations(state, [evaluation(value)], presence(value), true, 10n)
-		const obligation = obligationForPlan(state, value)
-		if (obligation === undefined) throw new Error('Missing test obligation')
+		const { obligation, state } = trackedObligation()
 		abandonLifecycleObligation(state, obligation, 'Operator deliberately resolved this protocol item elsewhere')
 
 		synchronizeLifecycleObligations(state, [], [], false, 1_000n)

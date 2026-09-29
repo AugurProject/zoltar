@@ -1,23 +1,20 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as marketCopy from '../../../copy/market.js'
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
+import { useMemo } from 'preact/hooks'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
-import { DiscoveryControl, LocalCollectionSwitcher } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
-import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import { LocalBrowseBar, LocalBrowseSearchField, LocalCollectionEmptyState } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
 import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { Question, getQuestionTitle } from '@zoltar/ui-core-shared/components/Question.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
-import { usePagedDiscovery, type DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
-import { buildLocalBrowseEntries, normalizeLocalSearchText, type LocalBrowseCollection } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
+import { useLocalBrowseDirectory } from '@zoltar/ui-core-shared/hooks/useLocalBrowseDirectory.js'
+import type { DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
 import type { MarketDetails, MarketDetailsPage } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ZoltarView } from '../../types.js'
 import { QUESTION_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
@@ -39,67 +36,52 @@ type QuestionsViewProps = {
 
 /** Questions are browsed from this browser's favorites and downloaded summaries; the registry is scanned one page at a time on request. */
 export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onActiveViewChange, onLoadZoltarQuestionPage, onZoltarForkQuestionIdChange, requestContextKey, zoltarQuestionPage, zoltarQuestionsError, zoltarQuestionsFreshness }: QuestionsViewProps) {
-	const [collection, setCollection] = useState<LocalBrowseCollection>('favorites')
-	const [searchText, setSearchText] = useState('')
-	const favorites = useFavorites('zoltar', 'question')
-	const downloaded = useDownloadedEntities('zoltar', 'question', questionDownloadStore)
 	const receivedPage = useMemo((): DiscoveredPage<MarketDetails> | undefined => {
 		if (zoltarQuestionPage === undefined) return undefined
 		return { items: zoltarQuestionPage.questions, pageIndex: zoltarQuestionPage.pageIndex, pageSize: zoltarQuestionPage.pageSize, totalCount: zoltarQuestionPage.questionCount }
 	}, [zoltarQuestionPage])
-	const discovery = usePagedDiscovery({
+	const directory = useLocalBrowseDirectory({
+		app: 'zoltar',
 		contextKey: requestContextKey.toString(),
+		externalLoading: loadingZoltarQuestions,
+		kind: 'question',
 		loadPage: pageIndex => onLoadZoltarQuestionPage(pageIndex, QUESTION_PAGE_SIZE),
-		onItems: questions => downloaded.record(questions.map(question => ({ data: question, id: question.questionId }))),
 		pageSize: QUESTION_PAGE_SIZE,
 		receivedPage,
+		// After a scan, block refreshes of the last scanned page keep its cached questions current.
+		refreshedItems: zoltarQuestionPage?.questions,
+		store: questionDownloadStore,
+		toDownloadedItem: question => ({ data: question, id: question.questionId }),
 	})
-	const discoveryLoading = discovery.loading || loadingZoltarQuestions
-	// After a scan, block refreshes of the last scanned page keep its cached questions current; the recorder is read through a ref.
-	const recordQuestionsRef = useRef(downloaded.record)
-	recordQuestionsRef.current = downloaded.record
-	useEffect(() => {
-		if (zoltarQuestionPage === undefined || !discovery.hasScanned) return
-		recordQuestionsRef.current(zoltarQuestionPage.questions.map(question => ({ data: question, id: question.questionId })))
-	}, [zoltarQuestionPage, discovery.hasScanned])
-	const discover = () => {
-		setCollection('downloaded')
-		discovery.discoverNext()
-	}
-	const favoriteEntries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
-	const entries = collection === 'favorites' ? favoriteEntries : buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'downloaded')
-	const normalizedSearchText = normalizeLocalSearchText(searchText)
-	const questions = entries.map(entry => entry.data).filter(question => questionMatchesSearch(question, normalizedSearchText))
+	const { discovery, entries, favorites } = directory
+	const questions = entries.map(entry => entry.data).filter(question => questionMatchesSearch(question, directory.normalizedSearchText))
 	const loadError = zoltarQuestionsError ?? (discovery.loadFailed ? marketCopy.questionPageLoadError : undefined)
 	const content = (() => {
-		if (entries.length === 0) {
-			if (collection === 'favorites' && downloaded.entries.length > 0)
-				return (
-					<EmptyState
-						title={marketCopy.noFavoriteQuestions}
-						detail={marketCopy.noFavoriteQuestionsWithDownloadsDetail}
-						actions={
-							<button className='secondary' type='button' onClick={() => setCollection('downloaded')}>
-								{marketCopy.showDownloadedQuestions}
-							</button>
-						}
-					/>
-				)
-			if (discovery.hasScanned && discovery.totalCount === 0n)
-				return (
-					<EmptyState
-						title={marketCopy.noQuestions}
-						detail={marketCopy.noQuestionsDetail}
-						actions={
-							<button className='primary' type='button' onClick={() => onActiveViewChange('create')}>
-								{commonCopy.createQuestion}
-							</button>
-						}
-					/>
-				)
-			if (collection === 'favorites') return <EmptyState title={marketCopy.noFavoriteQuestions} detail={marketCopy.noFavoriteQuestionsDetail} />
-			return <EmptyState title={marketCopy.noDownloadedQuestions} detail={marketCopy.noDownloadedQuestionsDetail} />
-		}
+		if (entries.length === 0)
+			return (
+				<LocalCollectionEmptyState
+					copy={{
+						downloadedEmpty: marketCopy.noDownloadedQuestions,
+						downloadedEmptyDetail: marketCopy.noDownloadedQuestionsDetail,
+						favoritesEmpty: marketCopy.noFavoriteQuestions,
+						favoritesEmptyDetail: marketCopy.noFavoriteQuestionsDetail,
+						favoritesEmptyWithDownloadsDetail: marketCopy.noFavoriteQuestionsWithDownloadsDetail,
+						showDownloaded: marketCopy.showDownloadedQuestions,
+					}}
+					directory={directory}
+					registryEmpty={
+						<EmptyState
+							title={marketCopy.noQuestions}
+							detail={marketCopy.noQuestionsDetail}
+							actions={
+								<button className='primary' type='button' onClick={() => onActiveViewChange('create')}>
+									{commonCopy.createQuestion}
+								</button>
+							}
+						/>
+					}
+				/>
+			)
 		if (questions.length === 0) return <EmptyState title={commonCopy.noMatches} detail={marketCopy.questionSearchNoMatches} />
 		return (
 			<div className='entity-card-list'>
@@ -153,23 +135,9 @@ export function QuestionsView({ canFork, hasForked, loadingZoltarQuestions, onAc
 		<div className='route-view-flow'>
 			<RouteHeader description={canFork ? marketCopy.questionRegistryDescription : marketCopy.questionRegistryDescriptionWithoutUniverse} title={marketCopy.browseQuestions} />
 			<SectionBlock title={marketCopy.questions} variant='plain'>
-				<div className='local-browse-bar'>
-					<LocalCollectionSwitcher collection={collection} downloadedCount={downloaded.entries.length} favoritesCount={favoriteEntries.length} onChange={setCollection} />
-					{discovery.hasScanned ? <UpdatedAgo {...zoltarQuestionsFreshness} /> : undefined}
-					<DiscoveryControl discovery={{ ...discovery, discoverNext: discover, loading: discoveryLoading }} discoverLabel={marketCopy.discoverQuestions} emphasize={downloaded.entries.length === 0} nounPlural={marketCopy.questionsNoun} />
-				</div>
-				<label className='field'>
-					<span>{marketCopy.searchDownloadedQuestions}</span>
-					<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={marketCopy.questionSearchPlaceholder} />
-				</label>
-				<ErrorNotice message={loadError} />
-				{loadError === undefined ? undefined : (
-					<div className='actions'>
-						<button className='secondary' disabled={discoveryLoading} onClick={discovery.retry} type='button'>
-							{discoveryLoading ? commonCopy.retrying : marketCopy.retryQuestions}
-						</button>
-					</div>
-				)}
+				<LocalBrowseBar directory={directory} discoverLabel={marketCopy.discoverQuestions} freshness={zoltarQuestionsFreshness} nounPlural={marketCopy.questionsNoun} />
+				<LocalBrowseSearchField label={marketCopy.searchDownloadedQuestions} onChange={directory.setSearchText} placeholder={marketCopy.questionSearchPlaceholder} value={directory.searchText} />
+				<RetryableNotice disabled={discovery.loading} message={loadError} onRetry={discovery.retry} retryLabel={discovery.loading ? commonCopy.retrying : marketCopy.retryQuestions} />
 				{content}
 			</SectionBlock>
 		</div>

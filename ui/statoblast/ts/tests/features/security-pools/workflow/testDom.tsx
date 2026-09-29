@@ -1,12 +1,21 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach } from 'bun:test'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { createSecurityPoolWorkflowProps, createSelectedPool } from './builders.js'
+import { createLoadedPoolProps } from './builders.js'
+
+type RenderWorkflowOptions = { chainTimestamp?: bigint | undefined; showHeader?: boolean }
+
+function renderWorkflowNode(props: SecurityPoolWorkflowRouteContentProps, { chainTimestamp, showHeader = false }: RenderWorkflowOptions) {
+	const section = <SecurityPoolWorkflowSection {...props} showHeader={showHeader} />
+	return chainTimestamp === undefined ? section : <ChainTimestampContext.Provider value={chainTimestamp}>{section}</ChainTimestampContext.Provider>
+}
 
 export function useSecurityPoolWorkflowSectionTestDom() {
 	let restoreDomEnvironment: (() => void) | undefined
@@ -24,21 +33,20 @@ export function useSecurityPoolWorkflowSectionTestDom() {
 		restoreDomEnvironment = undefined
 	})
 
-	const renderWorkflow = async (props: SecurityPoolWorkflowRouteContentProps, options: { showHeader?: boolean } = {}) => {
-		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...props} showHeader={options.showHeader ?? false} />)
+	const renderWorkflow = async (props: SecurityPoolWorkflowRouteContentProps, options: RenderWorkflowOptions = {}) => {
+		const renderedComponent = await renderIntoDocument(renderWorkflowNode(props, options))
 		cleanupRenderedComponent = renderedComponent.cleanup
-		return renderedComponent
+		return {
+			...renderedComponent,
+			rerender: async (nextProps: SecurityPoolWorkflowRouteContentProps, nextOptions: RenderWorkflowOptions = options) => {
+				await act(() => {
+					render(renderWorkflowNode(nextProps, nextOptions), renderedComponent.container)
+				})
+			},
+		}
 	}
 
-	const renderLoadedPool = async (overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}) =>
-		await renderWorkflow(
-			createSecurityPoolWorkflowProps({
-				checkedSecurityPoolAddress: zeroAddress,
-				securityPoolAddress: zeroAddress,
-				securityPools: [createSelectedPool()],
-				...overrides,
-			}),
-		)
+	const renderLoadedPool = async (overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}, options: RenderWorkflowOptions = {}) => await renderWorkflow(createLoadedPoolProps(overrides), options)
 
 	return {
 		renderLoadedPool,

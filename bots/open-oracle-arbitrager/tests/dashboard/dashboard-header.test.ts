@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
+import { expectHeaderNotices } from '../../../shared/tests/support/dashboard-header.ts'
 import { operatorHeader } from '../../src/dashboard/header.ts'
 import { settingsPageMarkup } from '../../src/dashboard/settings-page.ts'
 
@@ -10,18 +11,7 @@ async function dashboardFixture() {
 }
 
 test('keeps global notices in the header on every tab', async () => {
-	const window = new Window({ url: 'http://localhost/settings' })
-	try {
-		window.document.write(await dashboardFixture())
-		for (const id of ['launch-notice', 'notice']) {
-			const notices = window.document.querySelectorAll(`#${id}`)
-			expect(notices.length).toBe(1)
-			expect(notices[0]?.closest('header .operator-notices')).not.toBeNull()
-			expect(notices[0]?.hasAttribute('data-page-content')).toBe(false)
-		}
-	} finally {
-		await window.happyDOM.close()
-	}
+	await expectHeaderNotices(new URL('../../src/dashboard/index.html', import.meta.url), operatorHeader, ['launch-notice', 'notice'])
 })
 
 test('rejects a dashboard control with the wrong element type', async () => {

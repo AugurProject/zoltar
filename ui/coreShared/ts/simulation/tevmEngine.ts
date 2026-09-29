@@ -4,9 +4,10 @@ import { createCommon } from '@tevm/common'
 import { createPublicClient, createWalletClient, custom, encodeFunctionData, getAddress, parseTransaction, publicActions, recoverTransactionAddress, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { InjectedEthereum } from '../wallet/injectedEthereum.js'
 import type { ChainBackend, CreateWriteClientCallbacks, ReadClient, WriteClient } from '../wallet/chainBackend.js'
+import { withTransactionCallbacks } from './writeClientCallbacks.js'
 import { createSimulationProfile } from '../wallet/networkProfile.js'
 import { bootstrapSimulationChain, mintSimulationGenesisRep, predictSimulationTokenAddresses, updateZoltarGenesisRepToken, type BootstrapScenarioApplyParameters } from './bootstrap.js'
-import { advanceSimulationTime, getNextSimulationTimestamp, getSimulationChainTimestamp, mineNextSimulationBlock, minePendingSimulationTransactionAtTimestamp } from './clock.js'
+import { advanceSimulationTime, mineNextSimulationBlock, minePendingSimulationTransaction } from './clock.js'
 import type { SimulationScenario } from './scenarios.js'
 import { serializeSavedSimulationStateEnvelope, type SavedSimulationStateEnvelopeV1, type SimulationInitialization, type SimulationSource } from './savedStates.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
@@ -90,27 +91,12 @@ function normalizeNonce(value: bigint | number | undefined) {
 	if (value === undefined) return undefined
 	return typeof value === 'bigint' ? value : BigInt(value)
 }
-function createTevmTransactionRequest({
-	data,
-	from,
-	gas,
-	gasPrice,
-	maxFeePerGas,
-	maxPriorityFeePerGas,
-	nonce,
-	to,
-	value,
-}: {
+type TevmTransactionParameters = Omit<SimulationSendTransactionRequest, 'account' | 'data' | 'nonce'> & {
 	data: Hex
 	from: Address
-	gas?: bigint | undefined
-	gasPrice?: bigint | undefined
-	maxFeePerGas?: bigint | undefined
-	maxPriorityFeePerGas?: bigint | undefined
 	nonce?: bigint | undefined
-	to?: Address | null | undefined
-	value?: bigint | undefined
-}): TevmTransactionRequest {
+}
+function createTevmTransactionRequest({ data, from, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: TevmTransactionParameters): TevmTransactionRequest {
 	return {
 		addToMempool: true,
 		data,
@@ -123,6 +109,17 @@ function createTevmTransactionRequest({
 		...(to === undefined || to === null ? {} : { to }),
 		...(value === undefined ? {} : { value }),
 	}
+}
+/** Adds an impersonated transaction to the Tevm mempool and mines it into the next simulation block. */
+async function submitTevmTransaction(memoryClient: MemoryClientLike, parameters: TevmTransactionParameters, label: string) {
+	const result = await memoryClient.tevmCall(createTevmTransactionRequest(parameters))
+	const hash = requireTransactionHash(result.txHash, label)
+	await minePendingSimulationTransaction(memoryClient, hash)
+	return hash
+}
+async function submitSimulationTransaction(memoryClient: MemoryClientLike, from: Address, { data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: SimulationSendTransactionRequest, label: string) {
+	const blockGasLimit = (await memoryClient.getBlock()).gasLimit
+	return await submitTevmTransaction(memoryClient, { data: data ?? '0x', from, gas: gas ?? blockGasLimit, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce: normalizeNonce(nonce), to, value }, label)
 }
 function clampDelayMilliseconds(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return 0
@@ -153,30 +150,6 @@ async function getSimulationChainState(memoryClient: MemoryClientLike) {
 	return {
 		blockNumber: getRequiredBlockNumber(block),
 		currentTimestamp: block.timestamp,
-	}
-}
-function withTransactionCallbacks(baseClient: WriteClient, callbacks: CreateWriteClientCallbacks): WriteClient {
-	const sendRawTransaction: typeof baseClient.sendRawTransaction = async parameters => {
-		const hash = await baseClient.sendRawTransaction(parameters)
-		callbacks.onTransactionSubmitted?.(hash)
-		return hash
-	}
-	const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
-		const hash = await baseClient.sendTransaction(parameters)
-		callbacks.onTransactionSubmitted?.(hash)
-		return hash
-	}
-	const writeContract: typeof baseClient.writeContract = async parameters => {
-		const hash = await baseClient.writeContract(parameters)
-		callbacks.onTransactionSubmitted?.(hash)
-		return hash
-	}
-	return {
-		...baseClient,
-		onTransactionPrepared: callbacks.onTransactionPrepared,
-		sendRawTransaction,
-		sendTransaction,
-		writeContract,
 	}
 }
 type SimulationEngine = {
@@ -326,10 +299,6 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 			await ensureImpersonated(account)
 		}
 	}
-	const mineSubmittedTransaction = async (hash: Hash) => {
-		const chainTimestamp = await getSimulationChainTimestamp(memoryClient)
-		await minePendingSimulationTransactionAtTimestamp(memoryClient, hash, getNextSimulationTimestamp(chainTimestamp))
-	}
 	const refreshSimulationState = async () => {
 		const chainState = await getSimulationChainState(memoryClient)
 		currentTimestamp = chainState.currentTimestamp
@@ -342,27 +311,10 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 				request: async parameters => await (memoryClientInstance.request as (parameters: RequestArguments) => Promise<unknown>)(parameters),
 			}),
 		})
-		const sendTransaction = async ({ account, data, gas, gasPrice, maxFeePerGas, maxPriorityFeePerGas, nonce, to, value }: SimulationSendTransactionRequest) => {
-			const senderAddress = normalizeRequestedAccount(account, accountAddress)
+		const sendTransaction = async (request: SimulationSendTransactionRequest) => {
+			const senderAddress = normalizeRequestedAccount(request.account, accountAddress)
 			await memoryClientInstance.impersonateAccount({ address: senderAddress })
-			const blockGasLimit = (await memoryClientInstance.getBlock()).gasLimit
-			const result = await memoryClientInstance.tevmCall(
-				createTevmTransactionRequest({
-					data: data ?? '0x',
-					from: senderAddress,
-					gas: gas ?? blockGasLimit,
-					gasPrice,
-					maxFeePerGas,
-					maxPriorityFeePerGas,
-					nonce: normalizeNonce(nonce),
-					to,
-					value,
-				}),
-			)
-			const hash = requireTransactionHash(result.txHash, 'temporary simulation transaction')
-			const chainTimestamp = await getSimulationChainTimestamp(memoryClientInstance)
-			await minePendingSimulationTransactionAtTimestamp(memoryClientInstance, hash, getNextSimulationTimestamp(chainTimestamp))
-			return hash
+			return await submitSimulationTransaction(memoryClientInstance, senderAddress, request, 'temporary simulation transaction')
 		}
 		const writeContract: WriteClient['writeContract'] = async parameters =>
 			await sendTransaction({
@@ -405,6 +357,25 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 			await applyDumpedAccountState(memoryClient, address, mutatedSnapshot)
 		}
 	}
+	const installSimulationProxyDeployer = async ({ address, runtimeCode }: { address: Address; runtimeCode: Hex }) => {
+		await memoryClient.setCode({
+			address,
+			bytecode: runtimeCode,
+		})
+	}
+	const patchSimulationGenesisRepToken = async ({ zoltarAddress }: { zoltarAddress: Address }) => {
+		await applyTemporarySimulationAccountChanges({
+			accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
+			mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
+				await updateZoltarGenesisRepToken({
+					createWriteClient,
+					memoryClient: temporaryMemoryClient,
+					repAddress: profile.genesisRepTokenAddress,
+					zoltarAddress,
+				})
+			},
+		})
+	}
 	const restoreSavedStateEnvelope = async (envelope: SavedSimulationStateEnvelopeV1, progressLabel: string) => {
 		bootstrapError = undefined
 		bootstrapLabel = progressLabel
@@ -429,14 +400,21 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 		bootstrapProgress = 1
 		bootstrapped = true
 	}
+	const recordSubmittedTransaction = async (hash: Hash) => {
+		transactionCountSinceReset += 1n
+		await refreshSimulationState()
+		emitState()
+		return hash
+	}
 	const sendRawTransactionInternal = async (serializedTransaction: SerializedTransaction) => {
 		const parsedTransaction = parseTransaction(serializedTransaction)
 		const recoveredAddress = await recoverTransactionAddress({
 			serializedTransaction,
 		})
 		await ensureImpersonated(recoveredAddress)
-		const result = await memoryClient.tevmCall(
-			createTevmTransactionRequest({
+		const hash = await submitTevmTransaction(
+			memoryClient,
+			{
 				data: parsedTransaction.data ?? '0x',
 				from: recoveredAddress,
 				gas: parsedTransaction.gas,
@@ -446,58 +424,15 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 				nonce: normalizeNonce(parsedTransaction.nonce),
 				to: parsedTransaction.to,
 				value: parsedTransaction.value,
-			}),
+			},
+			'raw transaction',
 		)
-		const hash = requireTransactionHash(result.txHash, 'raw transaction')
-		await mineSubmittedTransaction(hash)
-		transactionCountSinceReset += 1n
-		await refreshSimulationState()
-		emitState()
-		return hash
+		return await recordSubmittedTransaction(hash)
 	}
-	const sendTransactionInternal = async ({
-		account,
-		data,
-		gas,
-		gasPrice,
-		maxFeePerGas,
-		maxPriorityFeePerGas,
-		nonce,
-		to,
-		value,
-	}: {
-		account?: unknown
-		data?: Hex | undefined
-		gas?: bigint | undefined
-		gasPrice?: bigint | undefined
-		maxFeePerGas?: bigint | undefined
-		maxPriorityFeePerGas?: bigint | undefined
-		nonce?: bigint | number | undefined
-		to?: Address | null | undefined
-		value?: bigint | undefined
-	}) => {
-		const senderAddress = normalizeRequestedAccount(account, selectedAccount)
+	const sendTransactionInternal = async (request: SimulationSendTransactionRequest) => {
+		const senderAddress = normalizeRequestedAccount(request.account, selectedAccount)
 		await ensureImpersonated(senderAddress)
-		const blockGasLimit = (await memoryClient.getBlock()).gasLimit
-		const result = await memoryClient.tevmCall(
-			createTevmTransactionRequest({
-				data: data ?? '0x',
-				from: senderAddress,
-				gas: gas ?? blockGasLimit,
-				gasPrice,
-				maxFeePerGas,
-				maxPriorityFeePerGas,
-				nonce: normalizeNonce(nonce),
-				to,
-				value,
-			}),
-		)
-		const hash = requireTransactionHash(result.txHash, 'transaction')
-		await mineSubmittedTransaction(hash)
-		transactionCountSinceReset += 1n
-		await refreshSimulationState()
-		emitState()
-		return hash
+		return await recordSubmittedTransaction(await submitSimulationTransaction(memoryClient, senderAddress, request, 'transaction'))
 	}
 	const requestRpc = async (parameters: RequestArguments) => {
 		if (parameters.method === 'eth_sendRawTransaction') {
@@ -586,25 +521,8 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 		return withTransactionCallbacks(
 			{
 				...baseClient,
-				installSimulationProxyDeployer: async ({ address, runtimeCode }) => {
-					await memoryClient.setCode({
-						address,
-						bytecode: runtimeCode,
-					})
-				},
-				patchSimulationGenesisRepToken: async ({ zoltarAddress }) => {
-					await applyTemporarySimulationAccountChanges({
-						accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
-						mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
-							await updateZoltarGenesisRepToken({
-								createWriteClient,
-								memoryClient: temporaryMemoryClient,
-								repAddress: profile.genesisRepTokenAddress,
-								zoltarAddress,
-							})
-						},
-					})
-				},
+				installSimulationProxyDeployer,
+				patchSimulationGenesisRepToken,
 				sendRawTransaction,
 				sendTransaction,
 				waitForTransactionReceipt,
@@ -733,12 +651,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 		getChainId: async () => profile.chainIdHex,
 		getProfile: () => profile,
 		getState,
-		installSimulationProxyDeployer: async ({ address, runtimeCode }) => {
-			await memoryClient.setCode({
-				address,
-				bytecode: runtimeCode,
-			})
-		},
+		installSimulationProxyDeployer,
 		mintRep: async amount => {
 			if (!bootstrapped) {
 				throw new Error('Simulation scenario must be bootstrapped before minting REP')
@@ -783,19 +696,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 			await refreshSimulationState()
 			emitState()
 		},
-		patchSimulationGenesisRepToken: async ({ zoltarAddress }) => {
-			await applyTemporarySimulationAccountChanges({
-				accountsToCopy: [{ address: zoltarAddress, mode: 'storage' }],
-				mutate: async ({ createWriteClient, memoryClient: temporaryMemoryClient }) => {
-					await updateZoltarGenesisRepToken({
-						createWriteClient,
-						memoryClient: temporaryMemoryClient,
-						repAddress: profile.genesisRepTokenAddress,
-						zoltarAddress,
-					})
-				},
-			})
-		},
+		patchSimulationGenesisRepToken,
 		request: async parameters => await requestRpc(parameters),
 		reset: async () => {
 			bootstrapError = undefined

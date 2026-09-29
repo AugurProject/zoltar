@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { acquireBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { acquireBotProcessLocks, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat, readdir } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -54,7 +55,7 @@ async function fileExists(path: string) {
 		await lstat(path)
 		return true
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return false
+		if (isErrorCode(error, 'ENOENT')) return false
 		throw error
 	}
 }
@@ -243,9 +244,4 @@ async function main() {
 	console.log(result.message)
 }
 
-if (import.meta.main) {
-	main().catch(error => {
-		console.error(error instanceof Error ? error.message : String(error))
-		process.exitCode = 1
-	})
-}
+if (import.meta.main) runBotMain(main)

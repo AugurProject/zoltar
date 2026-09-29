@@ -1,6 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import ts from 'typescript'
+import { walkFiles } from './walk.mts'
 
 export const intentionalForwardingModules: Readonly<Record<string, string>> = {
 	'augurScan/src/api.ts': 'Stable application entry point for the capability-based API implementation.',
@@ -32,17 +33,6 @@ export function isForwardingModule(sourcePath: string, sourceText: string) {
 	return sourceFile.statements.length > 0 && sourceFile.statements.every(isForwardingStatement)
 }
 
-async function sourceFilesUnder(directory: string): Promise<readonly string[]> {
-	const files: string[] = []
-	for (const entry of await readdir(directory, { withFileTypes: true })) {
-		if (entry.isDirectory() && ignoredDirectoryNames.has(entry.name)) continue
-		const entryPath = path.join(directory, entry.name)
-		if (entry.isDirectory()) files.push(...(await sourceFilesUnder(entryPath)))
-		else if (entry.isFile() && sourceExtensionPattern.test(entry.name)) files.push(entryPath)
-	}
-	return files
-}
-
 // Parallel test files write short-lived probe sources into the tree; a file that vanishes between the directory
 // listing and the read is not a forwarding module.
 async function readSourceIfPresent(sourcePath: string) {
@@ -55,7 +45,7 @@ async function readSourceIfPresent(sourcePath: string) {
 }
 
 export async function forwardingModules(repositoryRoot: string) {
-	const sourcePaths = await sourceFilesUnder(repositoryRoot)
+	const sourcePaths = await walkFiles(repositoryRoot, { descend: (_directoryPath, entry) => !ignoredDirectoryNames.has(entry.name), include: (_filePath, entry) => sourceExtensionPattern.test(entry.name) })
 	const results: string[] = []
 	for (const sourcePath of sourcePaths) {
 		const relativePath = path.relative(repositoryRoot, sourcePath).split(path.sep).join('/')

@@ -8,27 +8,16 @@ import { addressString } from '../testSupport/simulator/utils/bigint'
 import { OperationType, getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
-import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
+import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 
 describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	const { PRICE_PRECISION, getVaultRepClaim, repDeposit } = fixture
 
-	let client: StatoblastForkMigrationFixture['client']
-	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
-	let questionId: StatoblastForkMigrationFixture['questionId']
-	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
-
-	beforeEach(() => {
-		client = fixture.client
-		mockWindow = fixture.mockWindow
-		questionId = fixture.questionId
-		securityPoolAddresses = fixture.securityPoolAddresses
-	})
-
 	test('retains failed commitments across redemption and blocks a fresh underbacked generation', async () => {
+		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
 		const liquidationReceiver = createWriteClient(mockWindow, TEST_ADDRESSES[1])

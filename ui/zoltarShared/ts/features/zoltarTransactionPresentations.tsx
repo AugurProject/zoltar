@@ -20,6 +20,7 @@ export function createDeploymentSuccessPresentation(stepLabel: string, hash: Has
 type MarketCreationTransactionContext = {
 	marketType: MarketCreationResult['marketType']
 	title?: string | undefined
+	universeId?: bigint | undefined
 }
 
 function getMarketCreationTransactionRows(context: MarketCreationTransactionContext) {
@@ -27,7 +28,14 @@ function getMarketCreationTransactionRows(context: MarketCreationTransactionCont
 }
 
 export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
-	return buildIntent({ action: 'createMarket', failedTitle: transactionCopy.questionCreation, rows: getMarketCreationTransactionRows(context), source: 'zoltar', submittedTitle: transactionCopy.creatingQuestion })
+	return buildIntent({
+		action: 'createMarket',
+		failedTitle: transactionCopy.questionCreation,
+		rows: getMarketCreationTransactionRows(context),
+		source: 'zoltar',
+		submittedTitle: transactionCopy.creatingQuestion,
+		universeId: context.universeId,
+	})
 }
 
 export function createMarketCreationSuccessPresentation(result: MarketCreationResult, context?: Omit<MarketCreationTransactionContext, 'marketType'>) {
@@ -36,6 +44,7 @@ export function createMarketCreationSuccessPresentation(result: MarketCreationRe
 		rows: [{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> }, ...getMarketCreationTransactionRows({ ...context, marketType: result.marketType })],
 		title: transactionCopy.questionCreated,
 		tone: 'success',
+		universeId: context?.universeId,
 	})
 }
 

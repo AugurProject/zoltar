@@ -1,14 +1,12 @@
+import { requiredElementFinder } from './domHelpers'
+
 const planner = document.querySelector('#mmr-proof-planner')
 if (!(planner instanceof HTMLDetailsElement)) {
 	throw new Error('MMR proof planner is missing')
 }
 const plannerElement: HTMLDetailsElement = planner
 
-function requiredElement<T extends Element>(root: ParentNode, selector: string, expected: new () => T): T {
-	const found = root.querySelector(selector)
-	if (!(found instanceof expected)) throw new Error(`Required MMR planner element ${selector} is missing or has the wrong type`)
-	return found
-}
+const requiredElement = requiredElementFinder('MMR planner')
 
 const leafCountInput = requiredElement(planner, '[data-tool-input="leafCount"]', HTMLInputElement)
 const peakHeightSelect = requiredElement(planner, '[data-tool-input="peakHeight"]', HTMLSelectElement)

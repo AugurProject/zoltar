@@ -2,14 +2,13 @@ import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethere
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
-import { deadlineAtBlock, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
+import { minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, simulateWithDeadline, stableSimulation, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { encodeReceiveBasedRedeemRequest, shareOperationRouter, shareTokenAbi } from './authorization.js'
 
 const securityPoolAbi = statoblast_SecurityPool_SecurityPool.abi
 
 export type SettlementOperation = 'redeem-complete-set' | 'redeem-winning-shares' | 'migrate-shares'
 export type ShareOutcome = 'INVALID' | 'YES' | 'NO'
-type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 
 function outcomeValue(outcome: ShareOutcome) {
 	if (outcome === 'INVALID') return 0n
@@ -66,9 +65,9 @@ async function simulateSettlementWithExpiryParameters(
 		const {
 			blockNumber,
 			blockHash,
-			result: { simulation, deadline },
-		} = await stableSimulation(client, async block => {
-			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+			deadline,
+			result: simulation,
+		} = await simulateWithDeadline(client, expiry, async (block, deadline) => {
 			const invalidTokenId = market.universeId << 8n
 			const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (amount * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
 			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
@@ -82,7 +81,7 @@ async function simulateSettlementWithExpiryParameters(
 				blockHash: block.blockHash,
 			})
 			void simulation
-			return { simulation: { result: estimatedEthOut }, deadline }
+			return { result: estimatedEthOut }
 		})
 		if (simulation.result <= 0n) throw new Error('Complete-set redemption would return zero ETH')
 		return { blockNumber, blockHash, operation, market, amount, deadline, slippageBps, expectedAttoEth: simulation.result, minimumAttoEth: minimumAfterSlippage(simulation.result, slippageBps) }

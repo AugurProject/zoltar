@@ -1,9 +1,9 @@
 /// <reference types='bun-types' />
 
 import { type Address, getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createMockLoaderClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -13,6 +13,7 @@ import { useZoltarFork, type UseZoltarForkDependencies } from '@zoltar/ui-zoltar
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 type UseZoltarForkState = ReturnType<typeof useZoltarFork>
 
@@ -21,19 +22,12 @@ const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000
 const REPUTATION_TOKEN_ADDRESS = getAddress('0x00000000000000000000000000000000000000c3')
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
-		childUniverses: [],
+	return createUniverseSummary({
 		forkThresholdAttoRep: 100n,
-		forkQuestionDetails: undefined,
 		forkTime: 1n,
-		forkingOutcomeIndex: 0n,
-		hasForked: false,
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
 		totalTheoreticalSupplyAttoRep: 1000n,
-		universeId: 1n,
 		...overrides,
-	}
+	})
 }
 
 function createForkQuestion(questionId: string): MarketDetails {
@@ -54,12 +48,6 @@ function createForkQuestion(questionId: string): MarketDetails {
 	}
 }
 
-function requireHookState(state: UseZoltarForkState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
-}
-
 function createZoltarForkDependencies(overrides: Partial<UseZoltarForkDependencies> = {}): UseZoltarForkDependencies {
 	return {
 		approveForkRep: async () => {
@@ -75,6 +63,27 @@ function createZoltarForkDependencies(overrides: Partial<UseZoltarForkDependenci
 	}
 }
 
+type UseZoltarForkParameters = Parameters<typeof useZoltarFork>[0]
+
+function createForkParameters(overrides: Partial<UseZoltarForkParameters> = {}): UseZoltarForkParameters {
+	const universe = overrides.zoltarUniverse ?? createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS })
+	return {
+		accountAddress: WALLET_ADDRESS,
+		activeUniverseId: 1n,
+		environmentRefreshKey: 0,
+		ensureZoltarUniverse: async () => universe,
+		onTransactionFinished: () => undefined,
+		onTransactionPresented: () => undefined,
+		onTransactionRequested: () => undefined,
+		onTransactionSubmitted: () => undefined,
+		refreshState: async () => undefined,
+		refreshZoltarUniverse: async () => undefined,
+		shouldAutoLoadForkAccess: false,
+		zoltarUniverse: universe,
+		...overrides,
+	}
+}
+
 function createForkAccessResults() {
 	return [
 		{ result: 100n, status: 'success' as const },
@@ -84,22 +93,21 @@ function createForkAccessResults() {
 }
 
 describe('useZoltarFork', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let resetEnvironment: (() => void) | undefined
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	async function renderForkHook(parameters: UseZoltarForkParameters, dependencies?: UseZoltarForkDependencies) {
+		let hookState: UseZoltarForkState | undefined
+		function Harness({ hookParameters }: { hookParameters: UseZoltarForkParameters }) {
+			hookState = useZoltarFork(hookParameters, dependencies)
+			return <div />
+		}
+		const rendered = await renderIntoDocument(h(Harness, { hookParameters: parameters }))
+		trackCleanup(rendered.cleanup)
+		return {
+			state: () => requireHookState(hookState),
+			rerender: (nextParameters: UseZoltarForkParameters) => render(h(Harness, { hookParameters: nextParameters }), rendered.container),
+		}
+	}
 
 	test.each(['success', 'failure', 'short array', 'invalid value'])('reads child migration history in one batch (%s)', async batchState => {
 		const childUniverses = [2n, 3n].map(universeId => ({ exists: true, forkTime: 1n, outcomeIndex: universeId, outcomeLabel: universeId.toString(), parentUniverseId: 1n, reputationToken: REPUTATION_TOKEN_ADDRESS, universeId }))
@@ -125,39 +133,19 @@ describe('useZoltarFork', () => {
 				})
 			},
 		})
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ accountAddress: WALLET_ADDRESS }), createReadClient: () => client })
-		let hookState: UseZoltarForkState | undefined
-		function Harness() {
-			hookState = useZoltarFork({
-				accountAddress: WALLET_ADDRESS,
-				activeUniverseId: 1n,
-				environmentRefreshKey: 0,
-				ensureZoltarUniverse: async () => universe,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: () => undefined,
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-				refreshZoltarUniverse: async () => undefined,
-				shouldAutoLoadForkAccess: false,
-				zoltarUniverse: universe,
-			})
-			return <div />
-		}
-		const rendered = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = rendered.cleanup
+		replaceEnvironment({ ...createFakeBackend({ accountAddress: WALLET_ADDRESS }), createReadClient: () => client })
+		const { state } = await renderForkHook(createForkParameters({ zoltarUniverse: universe }))
 		await act(async () => {
-			await requireHookState(hookState).loadZoltarForkAccess()
+			await state().loadZoltarForkAccess()
 		})
 		expect(requests).toHaveLength(1)
 		const historyRequests = requests[0]?.filter(contract => getContractFunctionName(contract).startsWith('getChildMigrationRepAmount'))
 		expect(historyRequests).toHaveLength(1)
 		expect(historyRequests?.[0]).toMatchObject({ functionName: 'getChildMigrationRepAmountsAttoRep', args: [WALLET_ADDRESS, 1n, [2n, 3n]] })
-		expect(requireHookState(hookState).zoltarMigrationChildSplitAmountsAttoRep['2']).toBe(batchState === 'success' ? 25n : undefined)
-		expect(requireHookState(hookState).zoltarMigrationChildSplitAmountsAttoRep['3']).toBe(batchState === 'success' || batchState === 'invalid value' ? 35n : undefined)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n, '3': 10n })
-		expect(requireHookState(hookState).zoltarForkRepBalanceAttoRep).toBe(10n)
+		expect(state().zoltarMigrationChildSplitAmountsAttoRep['2']).toBe(batchState === 'success' ? 25n : undefined)
+		expect(state().zoltarMigrationChildSplitAmountsAttoRep['3']).toBe(batchState === 'success' || batchState === 'invalid value' ? 35n : undefined)
+		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n, '3': 10n })
+		expect(state().zoltarForkRepBalanceAttoRep).toBe(10n)
 	})
 
 	test('does not request a fork transaction when the active wallet account changed', async () => {
@@ -170,34 +158,10 @@ describe('useZoltarFork', () => {
 		const onTransactionFailed = mock((message: string) => {
 			transactionState = markTransactionFailed(transactionState, { kind: 'error', message })
 		})
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse,
-					onTransactionFailed,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-				},
-				createZoltarForkDependencies(),
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const { state } = await renderForkHook(createForkParameters({ ensureZoltarUniverse, onTransactionFailed, onTransactionRequested }), createZoltarForkDependencies())
 
 		await act(async () => {
-			await requireHookState(hookState).forkZoltar()
+			await state().forkZoltar()
 		})
 
 		expect(onTransactionRequested).not.toHaveBeenCalled()
@@ -210,96 +174,50 @@ describe('useZoltarFork', () => {
 	})
 
 	test('does not execute or finish a fork transaction rejected by the global admission gate', async () => {
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 		const ensureZoltarUniverse = mock(async () => createUniverse())
 		const forkZoltarUniverse = mock(async () => {
 			throw new Error('forkZoltarUniverse should not be called when admission is rejected')
 		})
 		const onTransactionFinished = mock(() => undefined)
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse,
-					onTransactionFinished,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => false,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-				},
-				createZoltarForkDependencies({ forkZoltarUniverse }),
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const { state } = await renderForkHook(createForkParameters({ ensureZoltarUniverse, onTransactionFinished, onTransactionRequested: () => false }), createZoltarForkDependencies({ forkZoltarUniverse }))
 
 		await act(async () => {
-			await requireHookState(hookState).forkZoltar()
+			await state().forkZoltar()
 		})
 
 		expect(forkZoltarUniverse).not.toHaveBeenCalled()
 		expect(ensureZoltarUniverse).not.toHaveBeenCalled()
 		expect(onTransactionFinished).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).zoltarForkFeedback?.status.detail).toBeUndefined()
-		expect(requireHookState(hookState).zoltarForkPending).toBe(false)
+		expect(state().zoltarForkFeedback?.status.detail).toBeUndefined()
+		expect(state().zoltarForkPending).toBe(false)
 	})
 
 	test('preserves question selection across accounts but scopes it by environment and universe', async () => {
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness({ accountAddress, activeUniverseId, environmentRefreshKey }: { accountAddress: Address | undefined; activeUniverseId: bigint; environmentRefreshKey: number }) {
-			hookState = useZoltarFork(
-				{
-					accountAddress,
-					activeUniverseId,
-					environmentRefreshKey,
-					ensureZoltarUniverse: async () => createUniverse({ universeId: activeUniverseId }),
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ universeId: activeUniverseId }),
-				},
-				createZoltarForkDependencies(),
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 1n, environmentRefreshKey: 0 }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const scopedParameters = (accountAddress: Address, activeUniverseId: bigint, environmentRefreshKey: number) => createForkParameters({ accountAddress, activeUniverseId, environmentRefreshKey, zoltarUniverse: createUniverse({ universeId: activeUniverseId }) })
+		const { rerender, state } = await renderForkHook(scopedParameters(WALLET_ADDRESS, 1n, 0), createZoltarForkDependencies())
 
 		await act(async () => {
-			requireHookState(hookState).setZoltarForkQuestionId('0x01')
+			state().setZoltarForkQuestionId('0x01')
 		})
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('0x01')
+		expect(state().zoltarForkQuestionId).toBe('0x01')
 
 		await act(async () => {
-			render(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 0 }), renderedComponent.container)
+			rerender(scopedParameters(WALLET_ADDRESS, 2n, 0))
 		})
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+		expect(state().zoltarForkQuestionId).toBe('')
 
 		await act(async () => {
-			requireHookState(hookState).setZoltarForkQuestionId('0x02')
-			render(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 1 }), renderedComponent.container)
+			state().setZoltarForkQuestionId('0x02')
+			rerender(scopedParameters(WALLET_ADDRESS, 2n, 1))
 		})
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+		expect(state().zoltarForkQuestionId).toBe('')
 
 		await act(async () => {
-			requireHookState(hookState).setZoltarForkQuestionId('0x03')
-			render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS, activeUniverseId: 2n, environmentRefreshKey: 1 }), renderedComponent.container)
+			state().setZoltarForkQuestionId('0x03')
+			rerender(scopedParameters(NEXT_WALLET_ADDRESS, 2n, 1))
 		})
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('0x03')
+		expect(state().zoltarForkQuestionId).toBe('0x03')
 	})
 
 	test('forkZoltar snapshots the submitted question id before universe preflight resolves', async () => {
@@ -317,46 +235,21 @@ describe('useZoltarFork', () => {
 		const loadZoltarForkAccess = mock(async () => createForkAccessResults())
 		const dependencies = createZoltarForkDependencies({ forkZoltarUniverse, loadZoltarForkAccess })
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse: async () => await universeLoad.promise,
-					onTransactionFailed: () => undefined,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-				},
-				dependencies,
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const { state } = await renderForkHook(createForkParameters({ ensureZoltarUniverse: async () => await universeLoad.promise, onTransactionFailed: () => undefined }), dependencies)
 
 		await act(async () => {
-			requireHookState(hookState).setZoltarForkQuestionId('0x0b')
+			state().setZoltarForkQuestionId('0x0b')
 		})
 
 		let forkPromise = Promise.resolve()
 		await act(() => {
-			forkPromise = requireHookState(hookState).forkZoltar()
+			forkPromise = state().forkZoltar()
 		})
 
 		await act(async () => {
-			requireHookState(hookState).setZoltarForkQuestionId('0x0c')
+			state().setZoltarForkQuestionId('0x0c')
 		})
 
 		await act(async () => {
@@ -366,8 +259,8 @@ describe('useZoltarFork', () => {
 
 		expect(forkZoltarUniverse).toHaveBeenCalledTimes(1)
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
-		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xb')
+		expect(state().zoltarForkFeedback?.status.tone).toBe('success')
+		expect(state().zoltarForkResult?.questionId).toBe('0xb')
 	})
 
 	test('an earlier environment fork rejection cannot clear replacement environment feedback', async () => {
@@ -382,55 +275,31 @@ describe('useZoltarFork', () => {
 			forkZoltarUniverse,
 			loadZoltarForkAccess: async () => createForkAccessResults(),
 		})
-		let hookState: UseZoltarForkState | undefined
-		function Harness({ environmentRefreshKey }: { environmentRefreshKey: number }) {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey,
-					ensureZoltarUniverse: async () => createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-				},
-				dependencies,
-			)
-			return <div />
-		}
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		await act(async () => requireHookState(hookState).setZoltarForkQuestionId('0x01'))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		const { rerender, state } = await renderForkHook(createForkParameters(), dependencies)
+		await act(async () => state().setZoltarForkQuestionId('0x01'))
 		let oldPromise = Promise.resolve()
 		await act(() => {
-			oldPromise = requireHookState(hookState).forkZoltar()
+			oldPromise = state().forkZoltar()
 		})
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		await act(async () => render(h(Harness, { environmentRefreshKey: 1 }), renderedComponent.container))
-		await act(async () => requireHookState(hookState).setZoltarForkQuestionId('0x02'))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		await act(async () => rerender(createForkParameters({ environmentRefreshKey: 1 })))
+		await act(async () => state().setZoltarForkQuestionId('0x02'))
 		let newPromise = Promise.resolve()
 		await act(() => {
-			newPromise = requireHookState(hookState).forkZoltar()
+			newPromise = state().forkZoltar()
 		})
-		expect(requireHookState(hookState).zoltarForkPending).toBe(true)
-		const replacementFeedback = requireHookState(hookState).zoltarForkFeedback
+		expect(state().zoltarForkPending).toBe(true)
+		const replacementFeedback = state().zoltarForkFeedback
 
 		await act(async () => {
 			oldFork.reject(new Error('old environment fork failed'))
 			await oldPromise
 		})
-		expect(requireHookState(hookState).zoltarForkPending).toBe(true)
-		expect(requireHookState(hookState).zoltarForkActiveAction).toBe('fork')
-		expect(requireHookState(hookState).zoltarForkFeedback).toBe(replacementFeedback)
+		expect(state().zoltarForkPending).toBe(true)
+		expect(state().zoltarForkActiveAction).toBe('fork')
+		expect(state().zoltarForkFeedback).toBe(replacementFeedback)
 
 		await act(async () => {
 			newFork.resolve({
@@ -441,57 +310,30 @@ describe('useZoltarFork', () => {
 			})
 			await newPromise
 		})
-		expect(requireHookState(hookState).zoltarForkPending).toBe(false)
+		expect(state().zoltarForkPending).toBe(false)
 	})
 
-	test('approveZoltarForkRep uses the submitted question before the universe has forked', async () => {
-		const approveForkRep = mock(async (_accountAddress: string, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _reputationToken: string, _amount: bigint, questionId: bigint, universeId: bigint) => ({
+	function mockApproveForkRep(hash: Hash) {
+		return mock(async (_accountAddress: string, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _reputationToken: string, _amount: bigint, questionId: bigint, universeId: bigint) => ({
 			action: 'approveForkRep' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000ac' as Hash,
+			hash,
 			questionId: `0x${questionId.toString(16)}`,
 			universeId,
 		}))
+	}
+
+	test('approveZoltarForkRep uses the submitted question before the universe has forked', async () => {
+		const approveForkRep = mockApproveForkRep('0x00000000000000000000000000000000000000000000000000000000000000ac')
 		const loadZoltarForkAccess = mock(async () => createForkAccessResults())
-		const dependencies = createZoltarForkDependencies({
-			approveForkRep,
-			loadZoltarForkAccess,
-		})
-
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse: async () => createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-					onTransactionFailed: () => undefined,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: createUniverse({ reputationToken: REPUTATION_TOKEN_ADDRESS }),
-				},
-				dependencies,
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		const { state } = await renderForkHook(createForkParameters({ onTransactionFailed: () => undefined }), createZoltarForkDependencies({ approveForkRep, loadZoltarForkAccess }))
 
 		await act(async () => {
-			requireHookState(hookState).setZoltarForkQuestionId('0x0e')
+			state().setZoltarForkQuestionId('0x0e')
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).approveZoltarForkRep()
+			await state().approveZoltarForkRep()
 		})
 
 		expect(approveForkRep).toHaveBeenCalledTimes(1)
@@ -504,61 +346,25 @@ describe('useZoltarFork', () => {
 		expect(approveCall[4]).toBe(14n)
 		expect(approveCall[5]).toBe(1n)
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
-		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xe')
+		expect(state().zoltarForkFeedback?.status.tone).toBe('success')
+		expect(state().zoltarForkResult?.questionId).toBe('0xe')
 	})
 
 	test('approveZoltarForkRep uses loaded fork details after a post-fork reload', async () => {
-		const approveForkRep = mock(async (_accountAddress: string, _callbacks: { onTransactionSubmitted: (hash: Hash) => void }, _reputationToken: string, _amount: bigint, questionId: bigint, universeId: bigint) => ({
-			action: 'approveForkRep' as const,
-			hash: '0x00000000000000000000000000000000000000000000000000000000000000ad' as Hash,
-			questionId: `0x${questionId.toString(16)}`,
-			universeId,
-		}))
+		const approveForkRep = mockApproveForkRep('0x00000000000000000000000000000000000000000000000000000000000000ad')
 		const loadZoltarForkAccess = mock(async () => createForkAccessResults())
-		const dependencies = createZoltarForkDependencies({
-			approveForkRep,
-			loadZoltarForkAccess,
-		})
 		const forkedUniverse = createUniverse({
 			forkQuestionDetails: createForkQuestion('0x0f'),
 			hasForked: true,
 			reputationToken: REPUTATION_TOKEN_ADDRESS,
 		})
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		const { state } = await renderForkHook(createForkParameters({ onTransactionFailed: () => undefined, zoltarUniverse: forkedUniverse }), createZoltarForkDependencies({ approveForkRep, loadZoltarForkAccess }))
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness() {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse: async () => forkedUniverse,
-					onTransactionFailed: () => undefined,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: forkedUniverse,
-				},
-				dependencies,
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(requireHookState(hookState).zoltarForkQuestionId).toBe('')
+		expect(state().zoltarForkQuestionId).toBe('')
 
 		await act(async () => {
-			await requireHookState(hookState).approveZoltarForkRep()
+			await state().approveZoltarForkRep()
 		})
 
 		expect(approveForkRep).toHaveBeenCalledTimes(1)
@@ -567,71 +373,44 @@ describe('useZoltarFork', () => {
 		expect(approveCall[4]).toBe(15n)
 		expect(approveCall[5]).toBe(1n)
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).zoltarForkFeedback?.status.tone).toBe('success')
-		expect(requireHookState(hookState).zoltarForkResult?.questionId).toBe('0xf')
+		expect(state().zoltarForkFeedback?.status.tone).toBe('success')
+		expect(state().zoltarForkResult?.questionId).toBe('0xf')
 	})
 
-	test('reloads child REP access when a split deploys an existing child universe id', async () => {
-		const childUniverse = {
-			exists: false,
+	function createChildUniverse(overrides: Partial<ZoltarUniverseSummary['childUniverses'][number]> = {}): ZoltarUniverseSummary['childUniverses'][number] {
+		return {
+			exists: true,
 			forkTime: 1n,
 			outcomeIndex: 1n,
 			outcomeLabel: 'Yes',
 			parentUniverseId: 1n,
-			reputationToken: zeroAddress,
-			universeId: 2n,
-		}
-		const deployedChildUniverse = {
-			...childUniverse,
-			exists: true,
 			reputationToken: getAddress('0x00000000000000000000000000000000000000d4'),
+			universeId: 2n,
+			...overrides,
 		}
+	}
+
+	const createForkedUniverse = (childUniverses: ZoltarUniverseSummary['childUniverses'] = []) => createUniverse({ childUniverses, hasForked: true, reputationToken: REPUTATION_TOKEN_ADDRESS })
+
+	test('reloads child REP access when a split deploys an existing child universe id', async () => {
+		const childUniverse = createChildUniverse({ exists: false, reputationToken: zeroAddress })
+		const deployedChildUniverse = createChildUniverse()
 		const loadZoltarForkAccess = mock(async (_accountAddress: string, _reputationToken: string, _universeId: bigint, childUniverses: ZoltarUniverseSummary['childUniverses']) => [
 			...createForkAccessResults(),
 			...childUniverses.map(() => ({ result: 10n, status: 'success' as const })),
 			...childUniverses.map(() => ({ result: 25n, status: 'success' as const })),
 		])
 		const dependencies = createZoltarForkDependencies({ loadZoltarForkAccess })
-		const createForkedUniverse = (child: ZoltarUniverseSummary['childUniverses'][number]) =>
-			createUniverse({
-				childUniverses: [child],
-				hasForked: true,
-				reputationToken: REPUTATION_TOKEN_ADDRESS,
-			})
-
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness({ universe }: { universe: ZoltarUniverseSummary }) {
-			hookState = useZoltarFork(
-				{
-					accountAddress: WALLET_ADDRESS,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse: async () => universe,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: true,
-					zoltarUniverse: universe,
-				},
-				dependencies,
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, { universe: createForkedUniverse(childUniverse) }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const { rerender, state } = await renderForkHook(createForkParameters({ shouldAutoLoadForkAccess: true, zoltarUniverse: createForkedUniverse([childUniverse]) }), dependencies)
 
 		await act(async () => {
 			await Promise.resolve()
 		})
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(1)
-		const refreshFromDeployment = requireHookState(hookState).loadZoltarForkAccess
+		const refreshFromDeployment = state().loadZoltarForkAccess
 
 		await act(async () => {
-			render(h(Harness, { universe: createForkedUniverse(deployedChildUniverse) }), renderedComponent.container)
+			rerender(createForkParameters({ shouldAutoLoadForkAccess: true, zoltarUniverse: createForkedUniverse([deployedChildUniverse]) }))
 		})
 		await act(async () => {
 			await Promise.resolve()
@@ -644,114 +423,50 @@ describe('useZoltarFork', () => {
 		expect(loadZoltarForkAccess).toHaveBeenCalledTimes(3)
 		expect(loadZoltarForkAccess.mock.calls[2]?.[3]).toEqual([deployedChildUniverse])
 		expect(loadZoltarForkAccess.mock.calls[1]?.[3]).toEqual([deployedChildUniverse])
-		expect(requireHookState(hookState).zoltarMigrationChildSplitAmountsAttoRep).toEqual({ '2': 25n })
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
+		expect(state().zoltarMigrationChildSplitAmountsAttoRep).toEqual({ '2': 25n })
+		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
 	})
 
 	test('drops another accounts child REP balance when the replacement read fails', async () => {
-		const childUniverse = {
-			exists: true,
-			forkTime: 1n,
-			outcomeIndex: 1n,
-			outcomeLabel: 'Yes',
-			parentUniverseId: 1n,
-			reputationToken: getAddress('0x00000000000000000000000000000000000000d4'),
-			universeId: 2n,
-		}
-		const universe = createUniverse({
-			childUniverses: [childUniverse],
-			hasForked: true,
-			reputationToken: REPUTATION_TOKEN_ADDRESS,
-		})
+		const universe = createForkedUniverse([createChildUniverse()])
 		const loadZoltarForkAccess = mock(async (accountAddress: string) => {
 			if (accountAddress === WALLET_ADDRESS) return [...createForkAccessResults(), { result: 10n, status: 'success' as const }]
 			return [...createForkAccessResults(), { error: new Error('Child balance unavailable'), status: 'failure' as const }]
 		})
-		const dependencies = createZoltarForkDependencies({ loadZoltarForkAccess })
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness({ accountAddress }: { accountAddress: Address }) {
-			hookState = useZoltarFork(
-				{
-					accountAddress,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse: async () => universe,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: universe,
-				},
-				dependencies,
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const { rerender, state } = await renderForkHook(createForkParameters({ zoltarUniverse: universe }), createZoltarForkDependencies({ loadZoltarForkAccess }))
 
 		await act(async () => {
-			await requireHookState(hookState).loadZoltarForkAccess()
+			await state().loadZoltarForkAccess()
 		})
-		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(true)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
+		expect(state().hasLoadedZoltarForkAccess).toBe(true)
+		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({ '2': 10n })
 
-		render(h(Harness, { accountAddress: NEXT_WALLET_ADDRESS }), renderedComponent.container)
-		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(false)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
+		rerender(createForkParameters({ accountAddress: NEXT_WALLET_ADDRESS, zoltarUniverse: universe }))
+		expect(state().hasLoadedZoltarForkAccess).toBe(false)
+		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 		await act(async () => {
-			await requireHookState(hookState).loadZoltarForkAccess()
+			await state().loadZoltarForkAccess()
 		})
 
-		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(true)
+		expect(state().hasLoadedZoltarForkAccess).toBe(true)
 		expect(loadZoltarForkAccess.mock.calls[1]?.[0]).toBe(NEXT_WALLET_ADDRESS)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
+		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 	})
 
 	test('keeps fork access cleared when an earlier account load resolves after disconnect', async () => {
 		const deferred = createDeferred<ReturnType<typeof createForkAccessResults>>()
 		const loadZoltarForkAccess = mock(async () => await deferred.promise)
-		const dependencies = createZoltarForkDependencies({ loadZoltarForkAccess })
-		const universe = createUniverse({
-			hasForked: true,
-			reputationToken: REPUTATION_TOKEN_ADDRESS,
-		})
-		let hookState: UseZoltarForkState | undefined
-		const Harness = function ZoltarForkHarness({ accountAddress }: { accountAddress: Address | undefined }) {
-			hookState = useZoltarFork(
-				{
-					accountAddress,
-					activeUniverseId: 1n,
-					environmentRefreshKey: 0,
-					ensureZoltarUniverse: async () => universe,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-					refreshZoltarUniverse: async () => undefined,
-					shouldAutoLoadForkAccess: false,
-					zoltarUniverse: universe,
-				},
-				dependencies,
-			)
-
-			return <div />
-		}
-		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
-		cleanupRenderedComponent = renderedComponent.cleanup
-		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(false)
-		const pendingLoad = requireHookState(hookState).loadZoltarForkAccess()
+		const universe = createForkedUniverse()
+		const { rerender, state } = await renderForkHook(createForkParameters({ zoltarUniverse: universe }), createZoltarForkDependencies({ loadZoltarForkAccess }))
+		expect(state().hasLoadedZoltarForkAccess).toBe(false)
+		const pendingLoad = state().loadZoltarForkAccess()
 		await act(async () => {
 			await Promise.resolve()
 		})
 
-		expect(requireHookState(hookState).hasLoadedZoltarForkAccess).toBe(false)
-		render(h(Harness, { accountAddress: undefined }), renderedComponent.container)
-		expect(requireHookState(hookState).zoltarMigrationChildRepBalancesAttoRep).toEqual({})
+		expect(state().hasLoadedZoltarForkAccess).toBe(false)
+		rerender(createForkParameters({ accountAddress: undefined, zoltarUniverse: universe }))
+		expect(state().zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 
 		await act(async () => {
 			deferred.resolve(createForkAccessResults())
@@ -759,14 +474,14 @@ describe('useZoltarFork', () => {
 		})
 
 		await act(async () => {
-			await requireHookState(hookState).loadZoltarForkAccess()
+			await state().loadZoltarForkAccess()
 		})
 
-		const state = requireHookState(hookState)
-		expect(state.hasLoadedZoltarForkAccess).toBe(false)
-		expect(state.zoltarForkApproval.value).toBeUndefined()
-		expect(state.zoltarForkRepBalanceAttoRep).toBeUndefined()
-		expect(state.zoltarMigrationPreparedRepBalanceAttoRep).toBeUndefined()
-		expect(state.zoltarMigrationChildRepBalancesAttoRep).toEqual({})
+		const hookState = state()
+		expect(hookState.hasLoadedZoltarForkAccess).toBe(false)
+		expect(hookState.zoltarForkApproval.value).toBeUndefined()
+		expect(hookState.zoltarForkRepBalanceAttoRep).toBeUndefined()
+		expect(hookState.zoltarMigrationPreparedRepBalanceAttoRep).toBeUndefined()
+		expect(hookState.zoltarMigrationChildRepBalancesAttoRep).toEqual({})
 	})
 })

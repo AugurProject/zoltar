@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
 import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForOpenInterest, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
+import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
 const poolAddress = getAddress('0x0000000000000000000000000000000000000010')
 const managerAddress = getAddress('0x0000000000000000000000000000000000000020')
@@ -9,28 +10,7 @@ const callerAddress = getAddress('0x0000000000000000000000000000000000000030')
 const targetAddress = getAddress('0x0000000000000000000000000000000000000040')
 
 function strategy() {
-	return parseStrategy({
-		allowAutomaticDeposits: true,
-		allowAutomaticVaultMigrations: true,
-		allowAutomaticWithdrawals: true,
-		candidatePriority: 'largest-bonus',
-		fallbackRepPerEthPrice: '0',
-		maximumGasCostEth: '0.02',
-		maximumLiquidationDebtEth: '25',
-		maximumOracleRequestCostEth: '0.02',
-		maximumPerPoolRep: '10000',
-		maximumTotalDeployedRep: '25000',
-		minimumLiquidationDebtEth: '1',
-		minimumRepWithdrawalRep: '10',
-		minimumRewardValueEth: '0.02',
-		redeemFeesAboveEth: '0.01',
-		stalePriceFundingBufferBps: 15000,
-		stagedOperationValidForSeconds: 240,
-		vaultTargetHealthBps: 12500,
-		vaultTopUpHealthBps: 11000,
-		vaultWithdrawHealthBps: 15000,
-		walletReserveRep: '100',
-	})
+	return parseStrategy(storedStrategyFixture())
 }
 
 function vault(address: typeof callerAddress, vaultAttoRepBacking: bigint, openInterestAttoEth: bigint): VaultPosition {

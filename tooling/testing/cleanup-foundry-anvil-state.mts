@@ -1,6 +1,7 @@
 import { readdir, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { isMissingPathError } from '../repo/fs.mts'
 
 const ANVIL_STATE_DIRECTORY_PREFIX = 'anvil-state-'
 export const DEFAULT_ANVIL_STATE_MAX_AGE_MS = 3 * 60 * 60 * 1000
@@ -12,8 +13,6 @@ export type CleanupFoundryAnvilStateResult = {
 }
 
 const getDefaultAnvilStateDirectory = (): string => process.env['ZOLTAR_ANVIL_STATE_DIRECTORY']?.trim() || join(homedir(), '.foundry', 'anvil', 'tmp')
-
-const isMissingPathError = (error: unknown): boolean => typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
 
 export const cleanupFoundryAnvilState = async ({ maxAgeMs = DEFAULT_ANVIL_STATE_MAX_AGE_MS, now = new Date(), stateDirectory = getDefaultAnvilStateDirectory() }: { readonly maxAgeMs?: number; readonly now?: Date; readonly stateDirectory?: string } = {}): Promise<CleanupFoundryAnvilStateResult> => {
 	const cutoffTime = now.getTime() - maxAgeMs

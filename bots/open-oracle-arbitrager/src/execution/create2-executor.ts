@@ -4,6 +4,7 @@ import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendi
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
+import { readReceiptOrMissing } from '@zoltar/bot-shared/execution/receipt-quorum'
 import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { EXECUTOR_DEPLOYMENT_MESSAGES } from '#state/executor-deployment-recovery'
 import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -11,10 +12,6 @@ import { assertExecutorDeploymentActive, assertExecutorDeploymentEnvironment, as
 
 export async function assertStoredExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, expectedChainId: number) {
 	await assertExecutorDeploymentIntent(intent, intent.account, expectedChainId, executorDeploymentPlan(intent.salt))
-}
-
-function receiptNotFound(error: unknown) {
-	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || (error.message.toLowerCase().includes('transaction receipt') && (error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('could not be found'))))
 }
 
 /**
@@ -30,13 +27,8 @@ async function includedExecutorDeployment(parameters: { address: Address; client
 	const settled = await Promise.allSettled(
 		parameters.clients.map(async ({ client, rpcUrl }) => {
 			const endpoint = endpointLabel(rpcUrl)
-			let receipt
-			try {
-				receipt = await client.getTransactionReceipt({ hash: parameters.transactionHash })
-			} catch (error) {
-				if (receiptNotFound(error)) return { endpoint, value: undefined }
-				throw error
-			}
+			const receipt = await readReceiptOrMissing(client, parameters.transactionHash)
+			if (receipt === undefined) return { endpoint, value: undefined }
 			const code = executorCodeStatus(await client.getCode({ address: parameters.address }), parameters.expectedRuntimeCodeHash)
 			if (receipt.status === 'success' && code === 'missing') return { endpoint, value: undefined }
 			return {

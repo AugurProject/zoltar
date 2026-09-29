@@ -6,32 +6,21 @@ import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { useLiveTradingController } from '../../features/liveTradingController.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from '../../protocol/live.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { connectedWalletServices, discoveryPage, offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
-const pair = `0x${'33'.repeat(20)}` as Address
 const shareToken = `0x${'44'.repeat(20)}` as Address
 const secondPool = `0x${'23'.repeat(20)}` as Address
 const secondShareToken = `0x${'45'.repeat(20)}` as Address
-const factory = `0x${'55'.repeat(20)}` as Address
-const router = `0x${'66'.repeat(20)}` as Address
-const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 
 type Controller = ReturnType<typeof useLiveTradingController>
-
-function deferred<T>() {
-	let resolvePromise: (value: T) => void = () => undefined
-	let rejectPromise: (reason: Error) => void = () => undefined
-	const promise = new Promise<T>((resolve, reject) => {
-		resolvePromise = resolve
-		rejectPromise = reject
-	})
-	return { promise, resolve: resolvePromise, reject: rejectPromise }
-}
 
 async function flush() {
 	await act(async () => {
@@ -43,37 +32,16 @@ async function flush() {
 	})
 }
 
-const market: LiveMarket = {
+const market = etherScaleMarketFixture({
 	pool,
-	pair,
 	shareToken,
-	universeId: 1n,
-	questionId: 2n,
 	title: 'First market',
 	description: 'Balance selection fixture',
-	endTime: 2n ** 255n,
-	statoblastSecurityMultiplierBps: 20_000n,
 	initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
 	shareTokenSupplyAttoShares: 100n * 10n ** 18n,
-	settlementCollateralAttoEth: 10n * 10n ** 18n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 2n,
-	availableMintingCapacityAttoEth: 1n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
-	yesReserve: 50n * 10n ** 18n,
-	noReserve: 50n * 10n ** 18n,
-	lpTotalSupply: 50n * 10n ** 18n,
-}
+})
 const secondMarket: LiveMarket = { ...market, pool: secondPool, shareToken: secondShareToken, questionId: 3n, title: 'Second market' }
-const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory, factory, router, feeBps: 30 }
+const configuration = deploymentConfigurationFixture()
 
 function balancesFor(selectedMarket: LiveMarket, multiplier: bigint): LiveBalances {
 	return { scope: shareBalanceScope(selectedMarket), invalid: multiplier * 10n ** 18n, yes: multiplier * 10n ** 18n, no: multiplier * 10n ** 18n, lp: multiplier * 10n ** 18n }
@@ -91,7 +59,7 @@ describe('live balance selection', () => {
 	})
 
 	test('retains per-pool errors and other balances while portfolio reads revalidate', async () => {
-		const gate = deferred<void>()
+		const gate = createDeferred<void>()
 		let revalidating = false
 		const services = {
 			...liveTradingControllerServices,
@@ -136,9 +104,7 @@ describe('live balance selection', () => {
 			removeListener: (eventName: string) => walletListeners.delete(eventName),
 		})
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverUniverses: async () => {
 				throw new Error('Addressed routes must not run universe-only discovery')
 			},
@@ -149,14 +115,12 @@ describe('live balance selection', () => {
 				const found = [market, secondMarket].find(candidate => candidate.pool.toLowerCase() === address.toLowerCase())
 				if (found === undefined) throw new Error(`Unknown pool ${address}`)
 				// Live discovery always builds fresh market objects; the balance read must key on the pool, not object identity.
-				return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...found }], universeIds: [1n], selectedUniverseId: 1n }
+				return discoveryPage([{ ...found }])
 			},
-			walletChainId: async () => configuration.chainId,
-			connectWallet: async () => account,
+			...connectedWalletServices(account, configuration.chainId),
 			createTradingWalletClient: () => ({}),
-			loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
 			loadLiveBalances: async (_client: unknown, selectedMarket: LiveMarket) => {
-				const load = deferred<LiveBalances>()
+				const load = createDeferred<LiveBalances>()
 				pendingBalanceLoads.push({ pool: selectedMarket.pool, resolve: load.resolve })
 				return await load.promise
 			},

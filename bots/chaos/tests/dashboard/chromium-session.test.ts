@@ -4,13 +4,15 @@ import { startChromiumSession } from './chromium-session.ts'
 test('restarts only a timed-out Chromium initialization before any UI assertions run', async () => {
 	const logged = spyOn(console, 'warn').mockImplementation(() => {})
 	let attempts = 0
-	const session = { close: async () => {}, getLastNetworkActivity: () => 0, hasWorkerStarted: () => false, issues: [], send: async () => undefined, pageUrl: 'about:blank' }
+	const session = { close: async () => {}, evaluate: async () => undefined, getLastNetworkActivity: () => 0, hasWorkerStarted: () => false, issues: [], send: async () => undefined, pageUrl: 'about:blank', waitFor: async () => {} }
 	try {
 		expect(
-			await startChromiumSession('chromium', async () => {
-				attempts += 1
-				if (attempts === 1) throw new Error('Chromium initialization timed out while requesting the DevTools target list')
-				return session
+			await startChromiumSession('chromium', {
+				launch: async () => {
+					attempts += 1
+					if (attempts === 1) throw new Error('Chromium initialization timed out while requesting the DevTools target list')
+					return session
+				},
 			}),
 		).toBe(session)
 		expect(attempts).toBe(2)
@@ -27,9 +29,11 @@ test('fails after the second startup timeout and never retries other errors', as
 			let attempts = 0
 			const failure = new Error(message)
 			await expect(
-				startChromiumSession('chromium', async () => {
-					attempts += 1
-					throw failure
+				startChromiumSession('chromium', {
+					launch: async () => {
+						attempts += 1
+						throw failure
+					},
 				}),
 			).rejects.toBe(failure)
 			expect(attempts).toBe(message.startsWith('Chromium initialization') ? 2 : 1)
@@ -42,15 +46,17 @@ test('fails after the second startup timeout and never retries other errors', as
 test('allows a slow healthy browser to initialize without restarting it at ten seconds', async () => {
 	const logged = spyOn(console, 'warn').mockImplementation(() => {})
 	let attempts = 0
-	const session = { close: async () => {}, getLastNetworkActivity: () => 0, hasWorkerStarted: () => false, issues: [], send: async () => undefined, pageUrl: 'about:blank' }
+	const session = { close: async () => {}, evaluate: async () => undefined, getLastNetworkActivity: () => 0, hasWorkerStarted: () => false, issues: [], send: async () => undefined, pageUrl: 'about:blank', waitFor: async () => {} }
 	try {
-		const result = await startChromiumSession('chromium', async (_path, _url, _viewport, options) => {
-			attempts += 1
-			// Model a CI browser that becomes ready after 15 seconds. The shared launcher
-			// defaults to 60 seconds; a shorter override kills this healthy startup.
-			const startupBudget = options?.initializationTimeoutMilliseconds ?? 60_000
-			if (startupBudget < 15_000) throw new Error('Chromium initialization timed out while waiting for the DevTools port')
-			return session
+		const result = await startChromiumSession('chromium', {
+			launch: async (_path, _url, _viewport, options) => {
+				attempts += 1
+				// Model a CI browser that becomes ready after 15 seconds. The shared launcher
+				// defaults to 60 seconds; a shorter override kills this healthy startup.
+				const startupBudget = options?.initializationTimeoutMilliseconds ?? 60_000
+				if (startupBudget < 15_000) throw new Error('Chromium initialization timed out while waiting for the DevTools port')
+				return session
+			},
 		})
 		expect(result).toBe(session)
 		expect(attempts).toBe(1)

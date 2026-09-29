@@ -4,65 +4,29 @@ import { act } from 'preact/test-utils'
 import { render, type ComponentChildren } from 'preact'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { LiveLiquidityControls, type LiveLiquidityServices } from '../../features/LiveLiquidityControls.js'
 import { useLiquidityWorkflowController } from '../../features/live/useLiquidityWorkflowController.js'
 // Longer than the automatic quote debounce in useQuotedTransaction.
 const QUOTE_SETTLE_MILLISECONDS = 400
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const blockHash = `0x${'99'.repeat(32)}` as Hash
-const configuration: DeploymentConfiguration = {
-	chainId: 31_337,
-	chainName: 'Local',
-	rpcUrl: 'http://127.0.0.1:8545',
-	securityPoolFactory: `0x${'22'.repeat(20)}` as Address,
-	factory: `0x${'33'.repeat(20)}` as Address,
-	router: `0x${'44'.repeat(20)}` as Address,
-	feeBps: 30,
-}
-const market: LiveMarket = {
-	pool: `0x${'55'.repeat(20)}` as Address,
-	pair: `0x${'66'.repeat(20)}` as Address,
-	shareToken: `0x${'77'.repeat(20)}` as Address,
-	universeId: 1n,
-	questionId: 2n,
+const configuration = deploymentConfigurationFixture({ securityPoolFactory: `0x${'22'.repeat(20)}`, factory: `0x${'33'.repeat(20)}`, router: `0x${'44'.repeat(20)}` })
+const market = smallReserveMarketFixture({
+	pool: `0x${'55'.repeat(20)}`,
+	pair: `0x${'66'.repeat(20)}`,
+	shareToken: `0x${'77'.repeat(20)}`,
 	title: 'Workflow market',
 	description: 'Controller state fixture',
-	endTime: 2n ** 255n,
-	statoblastSecurityMultiplierBps: 20_000n,
 	initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 100n,
-	settlementCollateralAttoEth: 100n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 100n,
-	availableMintingCapacityAttoEth: 100n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
-	yesReserve: 50n,
-	noReserve: 50n,
 	lpTotalSupply: 100n,
-}
-
-function deferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (error: Error) => void = () => undefined
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise
-		reject = rejectPromise
-	})
-	return { promise, resolve, reject }
-}
+})
 
 function liquidityQuote(amount: bigint) {
 	return {
@@ -192,7 +156,7 @@ describe('liquidity workflow controller state', () => {
 	})
 
 	test('quotes automatically after typing settles and never lets an older quote replace a newer one', async () => {
-		const firstQuote = deferred<ReturnType<typeof liquidityQuote>>()
+		const firstQuote = createDeferred<ReturnType<typeof liquidityQuote>>()
 		const requested: bigint[] = []
 		const services: LiveLiquidityServices = {
 			publicErrorMessage: caught => (caught instanceof Error ? caught.message : 'unknown error'),
@@ -300,8 +264,8 @@ describe('liquidity workflow controller state', () => {
 	})
 
 	test('retains the market lock when its tab unmounts during wallet approval', async () => {
-		const signature = deferred<Hash>()
-		const signatureRequested = deferred<void>()
+		const signature = createDeferred<Hash>()
+		const signatureRequested = createDeferred<void>()
 		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
 		const walletClient = { ...baseWalletClient, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
 		const services: LiveLiquidityServices = {
@@ -337,7 +301,7 @@ describe('liquidity workflow controller state', () => {
 	})
 
 	test('simulates again before signing and represents a broadcast with an unknown receipt as one locked uncertain state', async () => {
-		const receiptFailure = deferred<{ status: 'success' | 'reverted' }>()
+		const receiptFailure = createDeferred<{ status: 'success' | 'reverted' }>()
 		const baseWalletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
 		const walletClient = { ...baseWalletClient, waitForTransactionReceipt: async () => await receiptFailure.promise }
 		let simulations = 0
