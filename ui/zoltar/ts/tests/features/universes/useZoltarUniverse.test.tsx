@@ -2,6 +2,7 @@
 
 import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -83,7 +84,7 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 }
 
 describe('useZoltarUniverse', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS })
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test('does not request a child-universe transaction when the active wallet account changed', async () => {
 		const onTransactionRequested = mock(() => undefined)

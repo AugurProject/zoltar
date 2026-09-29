@@ -1,6 +1,7 @@
 /// <reference types='bun-types' />
 
 import { createWalletClient, custom, getAddress, keccak256, publicActions, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -45,7 +46,7 @@ function codeReadingWriteClient(readCode: () => Hex) {
 }
 
 describe('useDeploymentFlow', () => {
-	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS })
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	function useWriteClient(readCode: () => Hex) {
 		const writeClient = codeReadingWriteClient(readCode)

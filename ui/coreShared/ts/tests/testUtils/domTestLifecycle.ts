@@ -4,7 +4,6 @@ import { installDomEnvironment } from './domEnvironment.js'
 import { createFakeBackend } from './fakeBackend.js'
 import { resetTransactionActivityForTesting } from '../../transactions/transactionActivityStore.js'
 import { appQueryCache } from '../../lib/dataRefresh.js'
-import { installActiveEnvironmentForTesting } from '../../lib/activeEnvironment.js'
 import type { ChainBackend } from '../../wallet/chainBackend.js'
 
 type DomTestLifecycleOptions = {
@@ -48,13 +47,19 @@ export function installDomTestLifecycle(options: DomTestLifecycleOptions = {}) {
 
 type FakeEnvironmentLifecycleOptions = {
 	accountAddress: Address
+	/**
+	 * The caller's `installActiveEnvironmentForTesting`. Import it through the same package path as the code under test,
+	 * so the test installs its backend into the active-environment module that code reads (CI resolves a relative import
+	 * from this helper to a separate module instance).
+	 */
+	installActiveEnvironment: (backend: ChainBackend) => () => void
 }
 
 /**
  * Hook-test lifecycle: each test starts in a DOM with a fake chain backend for the account, and afterwards unmounts the
  * tracked component, resets the active environment, and restores Bun module and function mocks.
  */
-export function installFakeEnvironmentLifecycle({ accountAddress }: FakeEnvironmentLifecycleOptions) {
+export function installFakeEnvironmentLifecycle({ accountAddress, installActiveEnvironment }: FakeEnvironmentLifecycleOptions) {
 	let resetEnvironment: (() => void) | undefined
 	let cleanupTracked: (() => Promise<void>) | undefined
 
@@ -66,7 +71,7 @@ export function installFakeEnvironmentLifecycle({ accountAddress }: FakeEnvironm
 
 	installDomTestLifecycle({
 		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress }))
+			resetEnvironment = installActiveEnvironment(createFakeBackend({ accountAddress }))
 		},
 		afterTest: async () => {
 			await cleanupRendered()
@@ -82,7 +87,7 @@ export function installFakeEnvironmentLifecycle({ accountAddress }: FakeEnvironm
 		/** Replaces the active chain backend for the rest of the test. */
 		replaceEnvironment(backend: ChainBackend) {
 			resetEnvironment?.()
-			resetEnvironment = installActiveEnvironmentForTesting(backend)
+			resetEnvironment = installActiveEnvironment(backend)
 		},
 		/** Tracks the component to unmount after the test, replacing any earlier one; `undefined` stops tracking. */
 		trackCleanup(cleanup: (() => Promise<void>) | undefined) {

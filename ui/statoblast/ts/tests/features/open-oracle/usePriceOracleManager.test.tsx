@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
@@ -18,7 +19,7 @@ const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a3')
 const TRANSACTION_HASH = '0x00000000000000000000000000000000000000000000000000000000000000a4' as const
 
 describe('usePriceOracleManager', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test.each([
 		{ proposedPrice: undefined, balance: 1n, cancelDuringFunding: false },

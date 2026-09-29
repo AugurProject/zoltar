@@ -2,6 +2,7 @@
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -119,7 +120,7 @@ function createReportingOperationsDependencies(overrides: Partial<UseReportingOp
 }
 
 describe('useReportingOperations', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: zeroAddress })
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: zeroAddress, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test.each([false, true])('refreshes balances after an account change and ignores old-account loads (pending: %s)', async pending => {
 		const pool = getAddress('0x00000000000000000000000000000000000000c1')

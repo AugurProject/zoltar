@@ -2,6 +2,7 @@
 
 import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
@@ -37,7 +38,7 @@ const DEPLOYED_QUESTION_DATA: DeploymentStatus = {
 describe('useQuestionCreation', () => {
 	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
-	const { cleanupRendered, replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { cleanupRendered, replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	async function renderHook(
 		options: {

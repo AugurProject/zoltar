@@ -3,6 +3,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types='bun-types' />
 
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -133,7 +134,7 @@ function createHarness(dependencies: UseSecurityVaultOperationsDependencies<Test
 }
 
 describe('useSecurityVaultOperations', () => {
-	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test.each(['setVaultUnderwritingLimit', 'withdrawRep'] as const)('passes a manual initial price through funding and queuing without automatic pricing: %s', async operation => {
 		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))

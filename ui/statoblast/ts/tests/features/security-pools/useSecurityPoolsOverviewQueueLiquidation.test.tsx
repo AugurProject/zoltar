@@ -4,6 +4,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { LiquidationApprovalDetails, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -57,7 +58,7 @@ const unexpectedPageLoad = () =>
 	})
 
 describe('useSecurityPoolsOverview queueLiquidation', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	const renderHook = async (dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, options: Parameters<typeof renderSecurityPoolsOverviewHook>[1] = {}) => {
 		const hook = await renderSecurityPoolsOverviewHook(dependencies, { accountAddress: WALLET_ADDRESS, ...options })

@@ -2,6 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -190,7 +191,7 @@ async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, act
 }
 
 describe('useOpenOracleOperations', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {
 		const dependencies = createOpenOracleOperationsDependencies()

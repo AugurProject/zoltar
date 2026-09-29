@@ -2,6 +2,7 @@
 
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
@@ -48,7 +49,7 @@ function withSessionStorage(storage: () => Storage, run: () => Promise<void>) {
 describe('useMarketCreation', () => {
 	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
-	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	async function renderMarketCreationHook(options: { createMarket?: CreateMarket; initialProps?: HarnessProps; onRender?: (state: UseMarketCreationState) => void; parameters?: Partial<UseQuestionCreationParameters> } = {}) {
 		const loadCreatedZoltarQuestion = mock(async (_questionId: string) => undefined)

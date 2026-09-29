@@ -10,6 +10,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -173,7 +174,7 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 }
 
 describe('useForkAuctionOperations', () => {
-	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const)
 		for (const outcome of ['failure', 'cancel'] as const) {

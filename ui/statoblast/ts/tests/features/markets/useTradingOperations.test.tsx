@@ -2,6 +2,7 @@
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -122,7 +123,7 @@ function createTwoPoolReads(pools: { address: Address; details: TradingDetails; 
 }
 
 describe('useTradingOperations', () => {
-	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	async function renderTradingHook(dependencies: UseTradingOperationsDependencies, parameters: Partial<UseTradingOperationsParameters> = {}, initialProps: HarnessProps = {}) {
 		const onTransactionFailed = mock((_message: string, _details?: unknown) => undefined)

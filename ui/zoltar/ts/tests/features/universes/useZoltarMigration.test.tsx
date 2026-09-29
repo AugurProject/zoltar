@@ -2,6 +2,7 @@
 
 import { getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
@@ -38,7 +39,7 @@ function createChildUniverse(overrides: Partial<ZoltarUniverseSummary['childUniv
 describe('useZoltarMigration', () => {
 	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
-	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	async function mockMigrationWrites(migrateInternalRepInZoltar: (...parameters: Parameters<MigrateInternalRepInZoltar>) => ReturnType<MigrateInternalRepInZoltar>) {
 		await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({ createWalletWriteClient: mock(() => ({ kind: 'write-client' })) }))
