@@ -1,6 +1,8 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
+import { formatTimestamp, formatTimestampDateTime } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { openInterestFeePerYearBigint } from '../../security-pools/lib/retentionRate.js'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { ActionLauncherCard } from '@zoltar/ui-core-shared/components/ActionLauncherCard.js'
@@ -27,6 +29,7 @@ import { getReportingOutcomeLabel, REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '..
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
 import {
 	estimateMintCheckpoint,
+	estimateMintHoldingFees,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getRemainingMintCapacity,
 	getMaximumMintAmount,
@@ -123,7 +126,19 @@ export function TradingSection({
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
 	const mintedAmountAttoShares = mintAmount === undefined ? undefined : convertMintSettlementCollateralAttoEthToAttoShares(mintAmount, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
-	const resultingEthBalance = mintAmount === undefined || accountState.ethBalanceAttoEth === undefined || mintAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - mintAmount
+	const marketEndTimestamp = selectedPool?.marketDetails.endTime
+	const hasMarketEnd = marketEndTimestamp !== undefined && marketEndTimestamp > 0n && formatTimestampDateTime(marketEndTimestamp) !== undefined
+	const marketEndPassed = hasMarketEnd && currentTimestamp !== undefined && marketEndTimestamp <= currentTimestamp
+	const holdingFees = estimateMintHoldingFees({
+		mintAmountAttoEth: mintAmount,
+		settlementCollateralAfterFeesAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth,
+		mintingCapacityAttoEth: oraclePriceUsable === true ? mintingCapacityAttoEth : undefined,
+		feeEligibleUnderwritingLimitAttoEth: selectedPool?.feeEligibleUnderwritingLimitAttoEth,
+		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
+		currentTimestamp,
+		marketEndTimestamp: hasMarketEnd ? marketEndTimestamp : undefined,
+		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
+	})
 	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
 	const redeemAmountAttoShares = redeemAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(redeemAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const resultingRedeemEthBalance = redeemAmount === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + redeemAmount
@@ -418,35 +433,21 @@ export function TradingSection({
 							value: mintAmount === undefined ? transactionReviewCopy.amountUnavailable : <CurrencyValue exactWhenRoundedToZero value={mintAmount} suffix={commonCopy.eth} />,
 						},
 						{
-							label: tradingCopy.estimatedSharesReceived,
-							value:
-								mintedAmountAttoShares === undefined ? (
-									transactionReviewCopy.amountUnavailable
-								) : (
-									<span className='trading-minted-outcomes' role='list' aria-label={tradingCopy.estimatedSharesReceived}>
-										<span className='trading-minted-outcome' role='listitem'>
-											<span>{commonCopy.yes}</span>
-											<CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />
-										</span>
-										<span className='trading-minted-outcome' role='listitem'>
-											<span>{commonCopy.no}</span>
-											<CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />
-										</span>
-										<span className='trading-minted-outcome' role='listitem'>
-											<span>{commonCopy.invalid}</span>
-											<CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />
-										</span>
-									</span>
-								),
+							label: tradingCopy.estimatedCompleteSetsReceived,
+							value: <CurrencyValue exactWhenRoundedToZero value={mintedAmountAttoShares} />,
 						},
 					]}
 					details={[
-						{ label: tradingCopy.estimatedRetentionFee, value: <CurrencyValue exactWhenRoundedToZero value={mintCheckpoint?.estimatedRetentionFeeAttoEth} suffix={commonCopy.eth} /> },
-						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue exactWhenRoundedToZero value={resultingEthBalance} suffix={commonCopy.eth} /> },
+						{ label: tradingCopy.currentAnnualHoldingFee, value: <CurrencyValue value={openInterestFeePerYearBigint(selectedPool?.currentRetentionRate)} suffix={commonCopy.percent} /> },
+						{ label: tradingCopy.estimatedAnnualFeeAfterMint, value: <CurrencyValue value={openInterestFeePerYearBigint(holdingFees?.retentionRateAfterMint)} suffix={commonCopy.percent} /> },
+						{ label: tradingCopy.marketEnd, value: hasMarketEnd ? formatTimestamp(marketEndTimestamp) : transactionReviewCopy.amountUnavailable },
+						{ label: tradingCopy.estimatedHoldingFeeUntilMarketEnd, value: <CurrencyValue exactWhenRoundedToZero value={holdingFees?.holdingFeeAttoEth} suffix={commonCopy.eth} /> },
 					]}
 					risks={[tradingCopy.mintBalanceRisk]}
 				/>
-				<p className='detail'>{tradingCopy.retentionFeeEstimateDetail}</p>
+				<p className='detail'>{tradingCopy.completeSetContents}</p>
+				<p className='detail'>{tradingCopy.holdingFeeEstimateDetail}</p>
+				{(!hasMarketEnd || marketEndPassed) && <p className='detail'>{marketEndPassed ? tradingCopy.holdingFeeEndPassed : tradingCopy.holdingFeeEndUnavailable}</p>}
 				<div className='actions'>
 					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage, oraclePriceGuardMessage)} />
 				</div>
