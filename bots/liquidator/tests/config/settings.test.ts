@@ -8,6 +8,10 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { parseDesiredPools, parseSettings, parseStrategy, serializedSettings } from '../../src/config/settings.ts'
 import { loadSettings, saveSettings, switchSettingsNetworkProfile } from '../../src/config/settings-store.ts'
+import { storedStrategyFixture } from '../support/strategy-settings.ts'
+
+// Pool creation follows deposits so the serialized key order matches what the round-trip test compares byte for byte.
+const { allowAutomaticDeposits, ...storedStrategy } = storedStrategyFixture()
 
 const settings = {
 	approvedUniverses: ['0'],
@@ -57,29 +61,7 @@ const settings = {
 		uiPort: 4183,
 	},
 	selectedPools: [],
-	strategy: {
-		allowAutomaticDeposits: true,
-		allowAutomaticPoolCreation: false,
-		allowAutomaticVaultMigrations: true,
-		allowAutomaticWithdrawals: true,
-		candidatePriority: 'largest-bonus',
-		fallbackRepPerEthPrice: '0',
-		maximumGasCostEth: '0.02',
-		maximumLiquidationDebtEth: '25',
-		maximumOracleRequestCostEth: '0.02',
-		maximumPerPoolRep: '10000',
-		maximumTotalDeployedRep: '25000',
-		minimumLiquidationDebtEth: '1',
-		minimumRepWithdrawalRep: '10',
-		minimumRewardValueEth: '0.02',
-		redeemFeesAboveEth: '0.01',
-		stalePriceFundingBufferBps: 15000,
-		stagedOperationValidForSeconds: 240,
-		vaultTargetHealthBps: 12500,
-		vaultTopUpHealthBps: 11000,
-		vaultWithdrawHealthBps: 15000,
-		walletReserveRep: '100',
-	},
+	strategy: { allowAutomaticDeposits, allowAutomaticPoolCreation: false, ...storedStrategy },
 	submission: {
 		minimumBundleRelaySuccesses: 1,
 		mode: 'public',
