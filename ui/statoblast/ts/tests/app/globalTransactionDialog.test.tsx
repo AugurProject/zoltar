@@ -485,21 +485,13 @@ describe('GlobalTransactionDialog', () => {
 		expect(document.body.querySelector('.global-transaction-notice-detail')).toBeNull()
 	})
 
-	test('keeps a wallet-awaiting request out of the way of app review', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<GlobalTransactionDialog
-				transaction={{
-					detail: 'Confirm the transaction in your wallet.',
-					dismissKey: 'transaction-request-wallet-close',
-					title: 'Creating question',
-					tone: 'awaiting-wallet',
-				}}
-			/>,
-		)
-		trackRendered(renderedComponent)
+	test.each([
+		{ detail: 'Confirm the transaction in your wallet.', dismissKey: 'transaction-request-wallet-close', name: 'a wallet-awaiting request out of the way of app review', tone: 'awaiting-wallet' },
+		{ detail: 'Submitting in browser simulation. No wallet confirmation is required.', dismissKey: 'transaction-request-1', name: 'simulation preparation out of the way of the form', tone: 'preparing' },
+	] as const)('keeps $name', async ({ detail, dismissKey, tone }) => {
+		trackRendered(await renderIntoDocument(<GlobalTransactionDialog transaction={{ detail, dismissKey, title: 'Creating question', tone }} />))
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		expect(within(document.body).queryByRole('dialog')).toBeNull()
 	})
 
 	test('shows a terminal failure after a wallet-awaiting transaction resolves', async () => {
@@ -515,23 +507,6 @@ describe('GlobalTransactionDialog', () => {
 
 		expect(within(document.body).getByText('Failed')).not.toBeNull()
 		expect(within(document.body).getByText('Action canceled in wallet.')).not.toBeNull()
-	})
-
-	test('keeps simulation preparation out of the way of the form', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<GlobalTransactionDialog
-				transaction={{
-					detail: 'Submitting in browser simulation. No wallet confirmation is required.',
-					dismissKey: 'transaction-request-1',
-					title: 'Creating question',
-					tone: 'preparing',
-				}}
-			/>,
-		)
-		trackRendered(renderedComponent)
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.queryByRole('dialog')).toBeNull()
 	})
 
 	test('renders a failed pre-submit transaction with the failure reason and dismiss control', async () => {
