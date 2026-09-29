@@ -2,9 +2,8 @@ import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transacti
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -15,6 +14,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { createOracleManagerDetails as createBaseOracleManagerDetails } from './workflow/builders.js'
 
 let nextBlockNumber = 5_000n
 // Stands in for the chain producing a block: queued operations are re-read on each new block until they resolve.
@@ -55,26 +55,15 @@ function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {
 }
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
+	return createBaseOracleManagerDetails({
 		lastPrice: 10n ** 18n,
-		lastSettlementTimestamp: 1n,
 		managerAddress: MANAGER_ADDRESS,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
 		priceValidUntilTimestamp: undefined,
-		queuedOperationCostAttoEth: 1n,
 		requestPriceCostAttoEth: 10n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
-	}
+	})
 }
 
 function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient>> = {}): UseSecurityVaultOperationsDependencies<TestSecurityVaultWriteClient> {
@@ -143,27 +132,8 @@ function createHarness(dependencies: UseSecurityVaultOperationsDependencies<Test
 	}
 }
 
-function requireHookState(state: UseSecurityVaultOperationsState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
-}
-
 describe('useSecurityVaultOperations', () => {
-	let restoreActiveEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			restoreActiveEnvironment?.()
-			restoreActiveEnvironment = undefined
-			mock.restore()
-		},
-	})
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
 
 	test.each(['setVaultUnderwritingLimit', 'withdrawRep'] as const)('passes a manual initial price through funding and queuing without automatic pricing: %s', async operation => {
 		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))
@@ -184,7 +154,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => {
 			if (operation === 'setVaultUnderwritingLimit') await requireHookState(state).adjustBackingFactor('2', price)
 			else {
@@ -209,7 +179,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, state => {
 			hookState = state
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		const first = act(async () => await requireHookState(hookState).adjustBackingFactor('2'))
 		await waitFor(() => expect(queueOracleManagerOperation).toHaveBeenCalledTimes(1))
 		await requireHookState(hookState).adjustBackingFactor('3')
@@ -240,7 +210,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor(limit))
 		if (error === undefined) {
 			expect(requireHookState(state).securityVaultError).toBeUndefined()
@@ -261,7 +231,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => requireHookState(state).setSecurityVaultForm(current => ({ ...current, stagedOperationTimeoutMinutes: 'invalid' })))
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
@@ -281,7 +251,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await act(async () => await requireHookState(state).loadSecurityVault())
 		expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued')
@@ -303,7 +273,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('queued'))
 		completed = true
@@ -329,7 +299,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(requireHookState(state).securityVaultResult?.queuedOperationState?.status).toBe('manual-queued'))
 		await act(async () => await requireHookState(state).redeemFees())
@@ -357,7 +327,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await act(async () => requireHookState(state).setSecurityVaultForm(current => ({ ...current, repWithdrawAmount: '1' })))
 		await act(async () => await requireHookState(state).withdrawRep())
@@ -386,7 +356,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(reads).toBe(1))
 		expect(requireHookState(state).securityVaultResult?.queuedOperation).toEqual(queuedOperation)
@@ -413,7 +383,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		await waitFor(() => expect(loadQueuedVaultOperationState).toHaveBeenCalled())
 		await act(async () => requireHookState(state).setSecurityVaultForm(current => ({ ...current, selectedVaultOwner: MANAGER_ADDRESS })))
@@ -433,7 +403,7 @@ describe('useSecurityVaultOperations', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => await requireHookState(state).adjustBackingFactor('2'))
 		expect(requireHookState(state).securityVaultError).toBe('Vault backing insufficient')
 		expect(requireHookState(state).securityVaultFeedback?.status.tone).not.toBe('success')
@@ -476,7 +446,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -519,7 +489,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -576,7 +546,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -652,7 +622,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -699,7 +669,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -758,7 +728,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -789,7 +759,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const rendered = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS, targetHealthFactor }))
 		})
@@ -817,7 +787,7 @@ describe('useSecurityVaultOperations', () => {
 			},
 			{ onTransactionRequested: intent => void intents.push(intent) },
 		)
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '3', repWithdrawAmount: '2', selectedVaultOwner: WALLET_ADDRESS, stagedOperationTimeoutMinutes: '5' }))
 		})
@@ -855,7 +825,7 @@ describe('useSecurityVaultOperations', () => {
 			},
 			{ onTransactionCanceled: canceled, onTransactionFailed: failed },
 		)
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS }))
 		})
@@ -903,7 +873,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -933,7 +903,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const rendered = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({ ...current, depositAmount: '1', selectedVaultOwner: WALLET_ADDRESS }))
 		})
@@ -995,7 +965,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({
@@ -1062,8 +1032,7 @@ describe('useSecurityVaultOperations', () => {
 			createWalletWriteClient: mock(() => ({ kind: 'injected-write-client' as const })),
 		})
 
-		restoreActiveEnvironment?.()
-		restoreActiveEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			getAccounts: async () => await activeAccounts.promise,
 		})
@@ -1072,7 +1041,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let redeemPromise = Promise.resolve()
 		await act(() => {
@@ -1132,7 +1101,7 @@ describe('useSecurityVaultOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).setSecurityVaultForm(current => ({

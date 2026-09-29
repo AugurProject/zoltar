@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
+import { parseSavedSimulationStateEnvelope } from '../testUtils/savedSimulationStates.js'
 
 function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: string }) {
 	return serializeSavedSimulationStateEnvelope({
@@ -24,29 +25,6 @@ function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: 
 		},
 		version: 1,
 	})
-}
-
-// Parses a serialized envelope through the public persist/read path using an in-memory Storage.
-function parseSavedSimulationStateEnvelope(serialized: string) {
-	const records = new Map<string, string>()
-	const storage: Storage = {
-		clear: () => records.clear(),
-		getItem: key => records.get(key) ?? null,
-		key: index => [...records.keys()][index] ?? null,
-		get length() {
-			return records.size
-		},
-		removeItem: key => {
-			records.delete(key)
-		},
-		setItem: (key, value) => {
-			records.set(key, value)
-		},
-	}
-	const record = persistSavedSimulationState(serialized, storage)
-	const envelope = getSavedSimulationStateEnvelope(record.id, storage)
-	if (envelope === undefined) throw new Error('Persisted simulation state could not be read back')
-	return envelope
 }
 
 describe('saved simulation states', () => {

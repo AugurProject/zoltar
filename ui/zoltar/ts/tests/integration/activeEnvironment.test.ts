@@ -5,13 +5,14 @@ import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { loadDeploymentStatusOracleSnapshot, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { getChainDisplayLabel, getWalletScopedAccountAddress, getWrongNetworkReason, isActiveAppChain, isSupportedAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveBackend, initializeActiveEnvironment, installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { getSavedSimulationStateEnvelope, persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
+import { persistSavedSimulationState, serializeSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/simulation/savedStates.js'
 import { createSimulationBackend } from '@zoltar/ui-core-shared/simulation/tevmBackend.js'
 import { createFakeBackend, createFakeSimulationProfile } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { parseSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/tests/testUtils/savedSimulationStates.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 // The simulation clock starts at 2025-01-01T00:00:00Z and advances one second per block.
@@ -36,28 +37,6 @@ async function selectsSimulationBackend(location: Parameters<typeof initializeAc
 	return selected
 }
 const SIMULATION_REP_MINT_AMOUNT = 1_000_000n * 10n ** 18n
-
-// Parses an exported state through the public persist/read path using an in-memory Storage.
-function parseExportedSimulationState(serialized: string) {
-	const records = new Map<string, string>()
-	const storage: Storage = {
-		clear: () => records.clear(),
-		getItem: key => records.get(key) ?? null,
-		key: index => [...records.keys()][index] ?? null,
-		get length() {
-			return records.size
-		},
-		removeItem: key => {
-			records.delete(key)
-		},
-		setItem: (key, value) => {
-			records.set(key, value)
-		},
-	}
-	const envelope = getSavedSimulationStateEnvelope(persistSavedSimulationState(serialized, storage).id, storage)
-	if (envelope === undefined) throw new Error('Exported simulation state was not persisted')
-	return envelope
-}
 
 afterEach(() => {
 	resetActiveEnvironmentForTesting()
@@ -739,7 +718,7 @@ void describe('simulation backend', () => {
 			await sourceBackend.mintRep(SIMULATION_REP_MINT_AMOUNT)
 
 			const restoredBackend = await createSimulationBackend({
-				savedState: parseExportedSimulationState(await sourceBackend.exportState('Saved baseline')),
+				savedState: parseSavedSimulationStateEnvelope(await sourceBackend.exportState('Saved baseline')),
 				savedStateId: 'saved-baseline-20260602123456',
 			})
 			await restoredBackend.bootstrap()

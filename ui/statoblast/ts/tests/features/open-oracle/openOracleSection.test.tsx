@@ -20,6 +20,7 @@ import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 type VNodeLike = {
 	props: Record<string, unknown>
@@ -102,13 +103,7 @@ function getSectionTitles(node: unknown) {
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 10n * 10n ** 18n,
-		wethBalanceAttoEth: 5n * 10n ** 18n,
-		...overrides,
-	}
+	return createEmptyAccountState({ ethBalanceAttoEth: 10n * 10n ** 18n, wethBalanceAttoEth: 5n * 10n ** 18n, ...overrides })
 }
 
 function createOpenOracleForm(overrides: Partial<OpenOracleFormState> = {}): OpenOracleFormState {

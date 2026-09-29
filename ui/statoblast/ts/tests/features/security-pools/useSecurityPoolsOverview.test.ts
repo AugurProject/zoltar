@@ -15,6 +15,7 @@ import { h, render, type ComponentChildren } from 'preact'
 import { act } from 'preact/test-utils'
 import { appQueryCache } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { createSecurityPoolPageFromLoadedPools, createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
+import { requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 
 type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
 
@@ -80,11 +81,6 @@ function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSe
 
 		return h('div', {})
 	}
-}
-
-function requireHookState(state: UseSecurityPoolsOverviewState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
 }
 
 void describe('useSecurityPoolsOverview helpers', () => {

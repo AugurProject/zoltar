@@ -11,6 +11,7 @@ import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimest
 import { ForkZoltarSection } from '@zoltar/ui-zoltar-shared/features/universes/components/ForkZoltarSection.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 const ATTO_REP = 10n ** 18n
 const ZOLTAR_ADDRESS = '0x00000000000000000000000000000000000000a1' as const
@@ -34,19 +35,11 @@ function createQuestion(): MarketDetails {
 }
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
-		childUniverses: [],
+	return createUniverseSummary({
 		forkThresholdAttoRep: 100n,
-		forkQuestionDetails: undefined,
-		forkTime: 0n,
-		forkingOutcomeIndex: 0n,
-		hasForked: false,
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
 		totalTheoreticalSupplyAttoRep: 1000n,
-		universeId: 1n,
 		...overrides,
-	}
+	})
 }
 
 describe('ForkZoltarSection', () => {

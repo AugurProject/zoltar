@@ -2,8 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types='bun-types' />
 
 import { getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -32,30 +31,10 @@ function createStatus(id: DeploymentStatus['id'], deployed: boolean, dependencie
 	}
 }
 
-function requireHookState(state: UseMarketCreationState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
-}
-
 describe('useMarketCreation', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
-	let resetEnvironment: (() => void) | undefined
 
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
 
 	test('blocks repeated market creation submissions while the first request is still preparing', async () => {
 		const pendingCreate = createDeferred<MarketCreationResult & { hash: Hash }>()
@@ -96,7 +75,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({
@@ -176,7 +155,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({
@@ -186,8 +165,7 @@ describe('useMarketCreation', () => {
 			}))
 		})
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		replaceEnvironment(createFakeBackend())
 
 		await act(async () => {
 			await requireHookState(hookState).createMarket()
@@ -199,8 +177,7 @@ describe('useMarketCreation', () => {
 		expect(requireHookState(hookState).marketFeedback?.status.detail).toContain('Wallet account is no longer connected')
 		expect(requireHookState(hookState).marketError).toContain('Wallet account is no longer connected')
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 
 		await act(async () => {
 			await requireHookState(hookState).createMarket()
@@ -234,8 +211,7 @@ describe('useMarketCreation', () => {
 			})),
 		}))
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			getAccounts: async () => await activeAccounts.promise,
 		})
@@ -261,7 +237,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({
@@ -321,7 +297,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => await requireHookState(hookState).createMarket())
 
@@ -362,7 +338,7 @@ describe('useMarketCreation', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(<Harness accountAddress={undefined} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
 			render(<Harness accountAddress={WALLET_ADDRESS} />, renderedComponent.container)
@@ -372,10 +348,10 @@ describe('useMarketCreation', () => {
 		})
 
 		await renderedComponent.cleanup()
-		cleanupRenderedComponent = undefined
+		trackCleanup(undefined)
 		hookState = undefined
 		const remountedComponent = await renderIntoDocument(<Harness accountAddress={WALLET_ADDRESS} />)
-		cleanupRenderedComponent = remountedComponent.cleanup
+		trackCleanup(remountedComponent.cleanup)
 		expect(requireHookState(hookState).marketForm.title).toBe('Anonymous draft')
 	})
 
@@ -406,7 +382,7 @@ describe('useMarketCreation', () => {
 		const anonymousKey = 'zoltar.questionDraft:anonymous:7'
 		const ownerKey = `zoltar.questionDraft:${WALLET_ADDRESS.toLowerCase()}:7`
 		const renderedComponent = await renderIntoDocument(<Harness accountAddress={undefined} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
 		})
@@ -469,7 +445,7 @@ describe('useMarketCreation', () => {
 				get: () => storageWithFailedOwnerWrites,
 			})
 			const renderedComponent = await renderIntoDocument(<Harness accountAddress={undefined} />)
-			cleanupRenderedComponent = renderedComponent.cleanup
+			trackCleanup(renderedComponent.cleanup)
 			await act(async () => {
 				requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Anonymous draft' }))
 				render(<Harness accountAddress={WALLET_ADDRESS} />, renderedComponent.container)
@@ -546,7 +522,7 @@ describe('useMarketCreation', () => {
 			title: 'Which team wins?',
 		}
 		const renderedComponent = await renderIntoDocument(<Harness accountAddress={WALLET_ADDRESS} activeUniverseId={7n} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(() => scalarDraft)
 		})
@@ -572,8 +548,7 @@ describe('useMarketCreation', () => {
 			render(<Harness accountAddress={SECOND_WALLET_ADDRESS} activeUniverseId={9n} />, renderedComponent.container)
 		})
 		expect(observedFormTitles.every(title => title === categoricalDraft.title)).toBe(true)
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: SECOND_WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: SECOND_WALLET_ADDRESS }))
 		await act(async () => {
 			await requireHookState(hookState).createMarket()
 		})
@@ -581,8 +556,7 @@ describe('useMarketCreation', () => {
 		expect(createMarketTransaction.mock.calls[0]?.[2].marketType).toBe('binary')
 		expect(createMarketTransaction.mock.calls[0]?.[2].outcomeLabels).toEqual(['Yes', 'No'])
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
 		await act(async () => {
 			render(<Harness accountAddress={WALLET_ADDRESS} activeUniverseId={7n} />, renderedComponent.container)
 		})
@@ -593,11 +567,11 @@ describe('useMarketCreation', () => {
 			await requireHookState(hookState).createMarket()
 		})
 		await renderedComponent.cleanup()
-		cleanupRenderedComponent = undefined
+		trackCleanup(undefined)
 
 		hookState = undefined
 		const remountedComponent = await renderIntoDocument(<Harness accountAddress={WALLET_ADDRESS} activeUniverseId={7n} />)
-		cleanupRenderedComponent = remountedComponent.cleanup
+		trackCleanup(remountedComponent.cleanup)
 		expect(requireHookState(hookState).marketForm.title).toBe('')
 
 		await act(async () => {
@@ -638,7 +612,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness activeUniverseId={7n} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({
 				...current,
@@ -716,7 +690,7 @@ describe('useMarketCreation', () => {
 		}
 		const originalSessionStorageDescriptor = Object.getOwnPropertyDescriptor(window, 'sessionStorage')
 		const renderedComponent = await renderIntoDocument(<Harness activeUniverseId={7n} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		expect(requireHookState(hookState).marketForm.title).toBe('')
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, title: 'Draft to reset' }))
@@ -724,10 +698,10 @@ describe('useMarketCreation', () => {
 		})
 		expect(window.sessionStorage.getItem(`zoltar.questionDraft:${WALLET_ADDRESS.toLowerCase()}:7`)).toBeNull()
 		await renderedComponent.cleanup()
-		cleanupRenderedComponent = undefined
+		trackCleanup(undefined)
 		hookState = undefined
 		const remountedComponent = await renderIntoDocument(<Harness activeUniverseId={7n} />)
-		cleanupRenderedComponent = remountedComponent.cleanup
+		trackCleanup(remountedComponent.cleanup)
 		expect(requireHookState(hookState).marketForm.title).toBe('')
 
 		try {
@@ -795,7 +769,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Environment zero question' }))
 			await requireHookState(hookState).createMarket()
@@ -836,7 +810,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Environment zero question' }))
@@ -890,7 +864,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Concurrent question' }))
 		})
@@ -965,7 +939,7 @@ describe('useMarketCreation', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness environmentRefreshKey={0} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setMarketForm(current => ({ ...current, endTime: '2026-07-02T00:00:00.000Z', title: 'Deferred question' }))
 		})

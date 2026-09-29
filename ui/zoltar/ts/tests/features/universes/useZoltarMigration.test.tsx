@@ -1,9 +1,8 @@
 /// <reference types='bun-types' />
 
 import { getAddress, type Hash, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -12,6 +11,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 type UseZoltarMigration = typeof import('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarMigration.js')['useZoltarMigration']
 type UseZoltarMigrationState = ReturnType<UseZoltarMigration>
@@ -19,45 +19,20 @@ type UseZoltarMigrationState = ReturnType<UseZoltarMigration>
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
+	return createUniverseSummary({
 		childUniverses: [1n, 2n, 3n, 4n].map(outcomeIndex => ({ exists: false, forkTime: 0n, outcomeIndex, outcomeLabel: `Outcome ${outcomeIndex.toString()}`, parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 10n + outcomeIndex })),
 		forkThresholdAttoRep: 100n,
-		forkQuestionDetails: undefined,
 		forkTime: 1n,
-		forkingOutcomeIndex: 0n,
 		hasForked: true,
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
 		totalTheoreticalSupplyAttoRep: 1000n,
-		universeId: 1n,
 		...overrides,
-	}
-}
-
-function requireHookState(state: UseZoltarMigrationState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
+	})
 }
 
 describe('useZoltarMigration', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
-	let resetEnvironment: (() => void) | undefined
 
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
 
 	test.each([false, true])('handles the combined split and refresh lifecycle (write failure: %s)', async writeFails => {
 		const migrateInternalRepInZoltar = mock(async () => {
@@ -110,7 +85,7 @@ describe('useZoltarMigration', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({
@@ -178,7 +153,7 @@ describe('useZoltarMigration', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({ ...current, amount: '10', outcomeIndexes: [2n, 1n] }))
 		})
@@ -223,7 +198,7 @@ describe('useZoltarMigration', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setZoltarMigrationForm(() => ({ amount: '10', outcomeIndexes: [1n, 5n] }))
 		})
@@ -240,8 +215,7 @@ describe('useZoltarMigration', () => {
 	})
 
 	test('does not request a migration transaction when the active wallet network changed', async () => {
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			getChainId: async () => '0x5',
 		})
@@ -272,7 +246,7 @@ describe('useZoltarMigration', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({
@@ -352,7 +326,7 @@ describe('useZoltarMigration', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setZoltarMigrationForm(current => ({

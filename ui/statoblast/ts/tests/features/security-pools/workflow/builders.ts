@@ -1,20 +1,10 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import type { ForkAuctionDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
-
-export function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
 
 export function createTradingProps(overrides: Partial<TradingRouteContentProps> = {}): TradingRouteContentProps {
 	return {
@@ -83,6 +73,7 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 		onRedeemFees: () => undefined,
 		onRedeemRepFromVault: () => undefined,
 		onSecurityVaultFormChange: () => undefined,
+		onSetVaultUnderwritingLimit: () => undefined,
 		onWithdrawRep: () => undefined,
 		repPerEthPrice: undefined,
 		repPerEthSource: undefined,
@@ -330,4 +321,5 @@ export function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolW
 	}
 }
 
+export { createAccountState }
 export { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'

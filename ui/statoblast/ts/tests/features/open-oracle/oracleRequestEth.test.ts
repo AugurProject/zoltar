@@ -1,31 +1,21 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { createOracleManagerDetails as createBaseOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	return {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
+	return createBaseOracleManagerDetails({
 		isPriceValid: false,
 		lastPrice: 2n * 10n ** 18n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
 		priceValidUntilTimestamp: undefined,
 		queuedOperationCostAttoEth: 2n,
 		requestPriceCostAttoEth: 10n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
-	}
+	})
 }
 
 describe('oracle request ETH funding', () => {

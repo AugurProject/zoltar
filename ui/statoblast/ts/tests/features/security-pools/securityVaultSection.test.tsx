@@ -23,16 +23,8 @@ import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features
 import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createOracleManagerDetails as createBaseOracleManagerDetails } from './workflow/builders.js'
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
@@ -100,26 +92,15 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 }
 
 function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVaultSectionProps['oracleManagerDetails']>> = {}): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
-	return {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
+	return createBaseOracleManagerDetails({
 		lastPrice: 3n * 10n ** 18n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
 		queuedOperationCostAttoEth: 0n,
 		requestPriceCostAttoEth: 0n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
-	}
+	})
 }
 
 function createEndedPoolState() {

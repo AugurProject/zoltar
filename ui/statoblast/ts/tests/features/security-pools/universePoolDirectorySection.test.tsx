@@ -5,29 +5,11 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import type { ListedSecurityPool, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { UniversePoolDirectorySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/UniversePoolDirectorySection.js'
 import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
-
-function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
-		childUniverses: [
-			{ exists: true, forkTime: 1n, outcomeIndex: 0n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
-			{ exists: false, forkTime: 1n, outcomeIndex: 1n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n },
-		],
-		forkQuestionDetails: undefined,
-		forkThresholdAttoRep: 1n,
-		forkTime: 1n,
-		forkingOutcomeIndex: 0n,
-		hasForked: true,
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
-		totalTheoreticalSupplyAttoRep: 1n,
-		universeId: 1n,
-		...overrides,
-	}
-}
+import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	return {
@@ -91,7 +73,7 @@ describe('UniversePoolDirectorySection', () => {
 	})
 
 	test('shows selection actions only for deployed non-active child universes', async () => {
-		const renderedComponent = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, securityPools: [], zoltarUniverse: createUniverse() }))
+		const renderedComponent = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, securityPools: [], zoltarUniverse: createForkedUniverseSummary() }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -105,7 +87,7 @@ describe('UniversePoolDirectorySection', () => {
 			h(UniversePoolDirectorySection, {
 				activeUniverseId: 2n,
 				securityPools: [],
-				zoltarUniverse: createUniverse({
+				zoltarUniverse: createForkedUniverseSummary({
 					childUniverses: [],
 					parentUniverseId: 1n,
 					universeId: 2n,
@@ -131,7 +113,7 @@ describe('UniversePoolDirectorySection', () => {
 						vaultCount: 4n,
 					}),
 				],
-				zoltarUniverse: createUniverse(),
+				zoltarUniverse: createForkedUniverseSummary(),
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -145,7 +127,7 @@ describe('UniversePoolDirectorySection', () => {
 	})
 
 	test('shows loading and retry states while universe stats are loading or fail', async () => {
-		const loadingRender = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, loadingSecurityPools: true, securityPools: undefined, zoltarUniverse: createUniverse() }))
+		const loadingRender = await renderIntoDocument(h(UniversePoolDirectorySection, { activeUniverseId: 1n, loadingSecurityPools: true, securityPools: undefined, zoltarUniverse: createForkedUniverseSummary() }))
 		cleanupRenderedComponent = loadingRender.cleanup
 		expect(document.body.textContent).toContain('Loading')
 		await cleanupRenderedComponent?.()
@@ -160,7 +142,7 @@ describe('UniversePoolDirectorySection', () => {
 				},
 				securityPoolError: 'Failed to load universe stats',
 				securityPools: undefined,
-				zoltarUniverse: createUniverse(),
+				zoltarUniverse: createForkedUniverseSummary(),
 			}),
 		)
 		cleanupRenderedComponent = errorRender.cleanup

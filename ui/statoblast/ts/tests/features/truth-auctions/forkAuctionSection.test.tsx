@@ -2,7 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { type Address, getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -13,41 +13,11 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState, ForkAuctionFormState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
-
-const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
-
-function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): ForkAuctionFormState {
-	return {
-		claimBidIndex: '',
-		claimBidTick: '',
-		depositIndexes: '',
-		directForkQuestionId: '',
-		directForkUniverseId: '',
-		refundBidIndex: '',
-		refundTick: '',
-		repMigrationOutcomes: '',
-		securityPoolAddress: PARENT_POOL_ADDRESS,
-		selectedOutcome: 'yes',
-		settlementAddress: '',
-		submitBidAmount: '',
-		submitBidPrice: '',
-		vaultAddress: '',
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createForkAuctionForm, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
 	return {
