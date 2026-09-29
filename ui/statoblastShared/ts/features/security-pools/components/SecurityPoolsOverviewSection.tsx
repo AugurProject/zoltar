@@ -101,7 +101,7 @@ export function SecurityPoolsOverviewSection({
 		)
 
 	const content = (() => {
-		if (rows.length === 0 && discoveryLoading) return <SkeletonList label={securityPoolCopy.loadingSecurityPools} />
+		if (rows.length === 0 && discovery.loading) return <SkeletonList label={securityPoolCopy.loadingSecurityPools} />
 		if (rows.length === 0)
 			return (
 				<LocalCollectionEmptyState
