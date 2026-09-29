@@ -1,464 +1,205 @@
 import { describe, expect, test } from 'bun:test'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { createRefreshAutoloadFixture, useSecurityPoolWorkflowSectionTestDom } from './fixture'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
+import { createActiveReportingDetails, createEscalationSides, createForkAuctionProps, createLoadedPoolProps, createMarketDetails, createReportingForm, createReportingProps, createSecurityVaultDetails, createSecurityVaultForm, createSecurityVaultProps, createSelectedPool } from './builders.js'
+import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 
 installTestRouting()
 describe('SecurityPoolWorkflowSection: refresh and autoload', () => {
-	const testDom = useSecurityPoolWorkflowSectionTestDom()
-	const { setCleanup } = testDom
-	const fixture = createRefreshAutoloadFixture()
-	const { render, act, getAddress, zeroAddress, SecurityPoolWorkflowSection, ChainTimestampContext, renderIntoDocument, createAccountState, createReportingProps, createSecurityVaultProps, createSecurityVaultDetails, createForkAuctionProps, createMarketDetails, createSelectedPool, createSecurityPoolWorkflowProps } =
-		fixture
+	const { renderLoadedPool, renderWorkflow } = useSecurityPoolWorkflowSectionTestDom()
+	const atChainTimeOne = { chainTimestamp: 1n }
+	const endedPoolAt = (securityPoolAddress: Address) => createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress })
+	const yesReportingForm = (securityPoolAddress: Address | '') => createReportingForm({ securityPoolAddress, selectedOutcome: 'yes' })
+	const forkAuctionFailure = (onLoadForkAuction: () => void) => createForkAuctionProps({ forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable', onLoadForkAuction })
 
 	test('autoloads reporting once after the reporting form pool matches the selected pool', async () => {
 		let reportingLoadCalls = 0
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000a1')
 		const stalePoolAddress = getAddress('0x00000000000000000000000000000000000000a2')
-		const baseProps = createSecurityPoolWorkflowProps({
-			checkedSecurityPoolAddress: selectedPoolAddress,
-			reporting: createReportingProps({
+		const reportingWithFormPool = (formPoolAddress: Address | '') =>
+			createReportingProps({
 				onLoadReporting: () => {
 					reportingLoadCalls += 1
 				},
-				reportingForm: {
-					reportAmount: '',
-					securityPoolAddress: '',
-					selectedOutcome: 'yes',
-					selectedWithdrawDepositIndexesByOutcome: {
-						invalid: [],
-						yes: [],
-						no: [],
-					},
-				},
-			}),
+				reportingForm: yesReportingForm(formPoolAddress),
+			})
+		const baseProps = createLoadedPoolProps({
+			checkedSecurityPoolAddress: selectedPoolAddress,
+			reporting: reportingWithFormPool(''),
 			securityPoolAddress: selectedPoolAddress,
-			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
+			securityPools: [endedPoolAt(selectedPoolAddress)],
 			selectedPoolView: 'reporting',
 		})
 
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n}>
-				<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		const { rerender } = await renderWorkflow(baseProps, atChainTimeOne)
 		expect(reportingLoadCalls).toBe(0)
 
-		await act(async () => {
-			render(
-				<ChainTimestampContext.Provider value={1n}>
-					<SecurityPoolWorkflowSection
-						{...baseProps}
-						reporting={createReportingProps({
-							onLoadReporting: () => {
-								reportingLoadCalls += 1
-							},
-							reportingForm: {
-								reportAmount: '',
-								securityPoolAddress: stalePoolAddress,
-								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexesByOutcome: {
-									invalid: [],
-									yes: [],
-									no: [],
-								},
-							},
-						})}
-						showHeader={false}
-					/>
-				</ChainTimestampContext.Provider>,
-				renderedComponent.container,
-			)
-		})
-
+		await rerender({ ...baseProps, reporting: reportingWithFormPool(stalePoolAddress) })
 		expect(reportingLoadCalls).toBe(0)
 
-		await act(async () => {
-			render(
-				<ChainTimestampContext.Provider value={1n}>
-					<SecurityPoolWorkflowSection
-						{...baseProps}
-						reporting={createReportingProps({
-							onLoadReporting: () => {
-								reportingLoadCalls += 1
-							},
-							reportingForm: {
-								reportAmount: '',
-								securityPoolAddress: selectedPoolAddress,
-								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexesByOutcome: {
-									invalid: [],
-									yes: [],
-									no: [],
-								},
-							},
-						})}
-						showHeader={false}
-					/>
-				</ChainTimestampContext.Provider>,
-				renderedComponent.container,
-			)
-		})
-
+		await rerender({ ...baseProps, reporting: reportingWithFormPool(selectedPoolAddress) })
 		expect(reportingLoadCalls).toBe(1)
 
-		await act(async () => {
-			render(
-				<ChainTimestampContext.Provider value={1n}>
-					<SecurityPoolWorkflowSection
-						{...baseProps}
-						reporting={createReportingProps({
-							onLoadReporting: () => {
-								reportingLoadCalls += 1
-							},
-							reportingForm: {
-								reportAmount: '',
-								securityPoolAddress: selectedPoolAddress,
-								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexesByOutcome: {
-									invalid: [],
-									yes: [],
-									no: [],
-								},
-							},
-						})}
-						showHeader={false}
-					/>
-				</ChainTimestampContext.Provider>,
-				renderedComponent.container,
-			)
-		})
-
+		await rerender({ ...baseProps, reporting: reportingWithFormPool(selectedPoolAddress) })
 		expect(reportingLoadCalls).toBe(1)
 	})
 
 	test('re-arms reporting autoload after leaving and re-entering the reporting tab', async () => {
 		let reportingLoadCalls = 0
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b1')
-		const reportingProps = createReportingProps({
-			onLoadReporting: () => {
-				reportingLoadCalls += 1
-			},
-			reportingForm: {
-				reportAmount: '',
-				securityPoolAddress: selectedPoolAddress,
-				selectedOutcome: 'yes',
-				selectedWithdrawDepositIndexesByOutcome: {
-					invalid: [],
-					yes: [],
-					no: [],
-				},
-			},
-		})
-		const baseProps = createSecurityPoolWorkflowProps({
+		const baseProps = createLoadedPoolProps({
 			checkedSecurityPoolAddress: selectedPoolAddress,
-			reporting: reportingProps,
+			reporting: createReportingProps({
+				onLoadReporting: () => {
+					reportingLoadCalls += 1
+				},
+				reportingForm: yesReportingForm(selectedPoolAddress),
+			}),
 			securityPoolAddress: selectedPoolAddress,
-			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
+			securityPools: [endedPoolAt(selectedPoolAddress)],
 		})
 
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n}>
-				<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		const { rerender } = await renderWorkflow({ ...baseProps, selectedPoolView: 'reporting' }, atChainTimeOne)
 		expect(reportingLoadCalls).toBe(1)
 
-		await act(async () => {
-			render(
-				<ChainTimestampContext.Provider value={1n}>
-					<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='vaults' showHeader={false} />
-				</ChainTimestampContext.Provider>,
-				renderedComponent.container,
-			)
-		})
-
+		await rerender({ ...baseProps, selectedPoolView: 'vaults' })
 		expect(reportingLoadCalls).toBe(1)
 
-		await act(async () => {
-			render(
-				<ChainTimestampContext.Provider value={1n}>
-					<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />
-				</ChainTimestampContext.Provider>,
-				renderedComponent.container,
-			)
-		})
-
+		await rerender({ ...baseProps, selectedPoolView: 'reporting' })
 		expect(reportingLoadCalls).toBe(2)
 	})
 
 	test('shows an explicit retry after automatic reporting loads fail in reporting and fork views', async () => {
 		let reportingLoadCalls = 0
-		const selectedPoolAddress = zeroAddress
-		const reporting = createReportingProps({
-			onLoadReporting: () => {
-				reportingLoadCalls += 1
-			},
-			reportingError: 'Failed to load reporting details. Reason: RPC unavailable',
-			reportingForm: {
-				reportAmount: '',
-				securityPoolAddress: selectedPoolAddress,
-				selectedOutcome: 'yes',
-				selectedWithdrawDepositIndexesByOutcome: {
-					invalid: [],
-					yes: [],
-					no: [],
+		const baseProps = createLoadedPoolProps({
+			reporting: createReportingProps({
+				onLoadReporting: () => {
+					reportingLoadCalls += 1
 				},
-			},
+				reportingError: 'Failed to load reporting details. Reason: RPC unavailable',
+				reportingForm: yesReportingForm(zeroAddress),
+			}),
+			securityPools: [endedPoolAt(zeroAddress)],
 		})
-		const baseProps = createSecurityPoolWorkflowProps({
-			checkedSecurityPoolAddress: selectedPoolAddress,
-			reporting,
-			securityPoolAddress: selectedPoolAddress,
-			securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }) })],
-		})
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n}>
-				<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='reporting' showHeader={false} />
-			</ChainTimestampContext.Provider>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		const { rerender } = await renderWorkflow({ ...baseProps, selectedPoolView: 'reporting' }, atChainTimeOne)
 		const documentQueries = within(document.body)
 
 		expect(reportingLoadCalls).toBe(1)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry reporting' }))
 		expect(reportingLoadCalls).toBe(2)
 
-		await act(async () => {
-			render(
-				<ChainTimestampContext.Provider value={1n}>
-					<SecurityPoolWorkflowSection {...baseProps} selectedPoolView='fork-migration' showHeader={false} />
-				</ChainTimestampContext.Provider>,
-				renderedComponent.container,
-			)
-		})
+		await rerender({ ...baseProps, selectedPoolView: 'fork-migration' })
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Retry reporting' }))
 		expect(reportingLoadCalls).toBe(3)
 	})
 
 	test('stabilizes a failed fork autoload until retry or the selected pool changes', async () => {
 		let forkLoadCalls = 0
-		const baseProps = createSecurityPoolWorkflowProps({
-			checkedSecurityPoolAddress: zeroAddress,
-			forkAuction: createForkAuctionProps({
-				onLoadForkAuction: () => {
-					forkLoadCalls += 1
-				},
-			}),
-			securityPoolAddress: zeroAddress,
-			securityPools: [createSelectedPool()],
-			selectedPoolView: 'fork-migration',
-		})
+		const onLoadForkAuction = () => {
+			forkLoadCalls += 1
+		}
+		const baseProps = createLoadedPoolProps({ forkAuction: createForkAuctionProps({ onLoadForkAuction }), selectedPoolView: 'fork-migration' })
 
-		const renderedComponent = await renderIntoDocument(<SecurityPoolWorkflowSection {...baseProps} showHeader={false} />)
-		setCleanup(renderedComponent.cleanup)
+		const { rerender } = await renderWorkflow(baseProps)
 		expect(forkLoadCalls).toBe(1)
 
-		await act(async () => {
-			render(
-				<SecurityPoolWorkflowSection
-					{...baseProps}
-					forkAuction={createForkAuctionProps({
-						forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable',
-						onLoadForkAuction: () => {
-							forkLoadCalls += 1
-						},
-					})}
-					showHeader={false}
-				/>,
-				renderedComponent.container,
-			)
-		})
+		await rerender({ ...baseProps, forkAuction: forkAuctionFailure(onLoadForkAuction) })
 
 		expect(forkLoadCalls).toBe(1)
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Retry fork workflow' }))
 		expect(forkLoadCalls).toBe(2)
 
 		const nextPoolAddress = getAddress('0x00000000000000000000000000000000000000a9')
-		await act(async () => {
-			render(
-				<SecurityPoolWorkflowSection
-					{...baseProps}
-					checkedSecurityPoolAddress={nextPoolAddress}
-					forkAuction={createForkAuctionProps({
-						forkAuctionError: 'Failed to load fork and auction details. Reason: RPC unavailable',
-						onLoadForkAuction: () => {
-							forkLoadCalls += 1
-						},
-					})}
-					securityPoolAddress={nextPoolAddress}
-					securityPools={[createSelectedPool({ securityPoolAddress: nextPoolAddress })]}
-					showHeader={false}
-				/>,
-				renderedComponent.container,
-			)
-		})
+		await rerender({ ...baseProps, checkedSecurityPoolAddress: nextPoolAddress, forkAuction: forkAuctionFailure(onLoadForkAuction), securityPoolAddress: nextPoolAddress, securityPools: [createSelectedPool({ securityPoolAddress: nextPoolAddress })] })
 		expect(forkLoadCalls).toBe(3)
 	})
 
 	test('refreshes the selected pool and current vault after finalized auction settlement', async () => {
-		const selectedPoolAddress = zeroAddress
 		let refreshedPoolAddress: string | undefined
 		let vaultLoadCalls = 0
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					accountState: createAccountState(),
-					checkedSecurityPoolAddress: selectedPoolAddress,
-					forkAuction: createForkAuctionProps({
-						forkAuctionResult: {
-							action: 'claimAuctionProceeds',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000ca',
-							securityPoolAddress: selectedPoolAddress,
-							universeId: 1n,
-						},
-					}),
-					onRefreshSelectedPoolData: securityPoolAddressInput => {
-						refreshedPoolAddress = securityPoolAddressInput
-					},
-					securityPoolAddress: selectedPoolAddress,
-					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
-					securityVault: createSecurityVaultProps({
-						onLoadSecurityVault: () => {
-							vaultLoadCalls += 1
-						},
-						securityVaultDetails: createSecurityVaultDetails({
-							securityPoolAddress: selectedPoolAddress,
-							vaultAddress: zeroAddress,
-						}),
-						securityVaultForm: {
-							depositAmount: '',
-							repWithdrawAmount: '',
-							targetHealthFactor: '',
-							securityPoolAddress: selectedPoolAddress,
-							selectedVaultOwner: zeroAddress,
-						},
-					}),
-					selectedPoolView: 'fork-migration',
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderLoadedPool({
+			forkAuction: createForkAuctionProps({
+				forkAuctionResult: { action: 'claimAuctionProceeds', hash: '0x00000000000000000000000000000000000000000000000000000000000000ca', securityPoolAddress: zeroAddress, universeId: 1n },
+			}),
+			onRefreshSelectedPoolData: securityPoolAddressInput => {
+				refreshedPoolAddress = securityPoolAddressInput
+			},
+			securityVault: createSecurityVaultProps({
+				onLoadSecurityVault: () => {
+					vaultLoadCalls += 1
+				},
+				securityVaultDetails: createSecurityVaultDetails(),
+				securityVaultForm: createSecurityVaultForm(),
+			}),
+			selectedPoolView: 'fork-migration',
+		})
 
-		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
+		expect(refreshedPoolAddress).toBe(zeroAddress)
 		expect(vaultLoadCalls).toBe(1)
 	})
 
 	test('refreshes the selected pool after starting truth auction', async () => {
-		const selectedPoolAddress = zeroAddress
 		let refreshedPoolAddress: string | undefined
 		const loadedForkAuctionAddresses: string[] = []
-		const renderedComponent = await renderIntoDocument(
-			<SecurityPoolWorkflowSection
-				{...createSecurityPoolWorkflowProps({
-					checkedSecurityPoolAddress: selectedPoolAddress,
-					forkAuction: createForkAuctionProps({
-						onLoadForkAuction: securityPoolAddressOverride => {
-							if (securityPoolAddressOverride !== undefined) loadedForkAuctionAddresses.push(securityPoolAddressOverride)
-						},
-						forkAuctionResult: {
-							action: 'startTruthAuction',
-							hash: '0x00000000000000000000000000000000000000000000000000000000000000cc',
-							securityPoolAddress: selectedPoolAddress,
-							universeId: 1n,
-						},
-					}),
-					onRefreshSelectedPoolData: securityPoolAddressInput => {
-						refreshedPoolAddress = securityPoolAddressInput
-					},
-					securityPoolAddress: selectedPoolAddress,
-					selectedPoolView: 'fork-migration',
-					securityPools: [createSelectedPool({ securityPoolAddress: selectedPoolAddress })],
-				})}
-				showHeader={false}
-			/>,
-		)
-		setCleanup(renderedComponent.cleanup)
+		await renderLoadedPool({
+			forkAuction: createForkAuctionProps({
+				onLoadForkAuction: securityPoolAddressOverride => {
+					if (securityPoolAddressOverride !== undefined) loadedForkAuctionAddresses.push(securityPoolAddressOverride)
+				},
+				forkAuctionResult: { action: 'startTruthAuction', hash: '0x00000000000000000000000000000000000000000000000000000000000000cc', securityPoolAddress: zeroAddress, universeId: 1n },
+			}),
+			onRefreshSelectedPoolData: securityPoolAddressInput => {
+				refreshedPoolAddress = securityPoolAddressInput
+			},
+			selectedPoolView: 'fork-migration',
+		})
 
-		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
-		expect(loadedForkAuctionAddresses).toContain(selectedPoolAddress)
+		expect(refreshedPoolAddress).toBe(zeroAddress)
+		expect(loadedForkAuctionAddresses).toContain(zeroAddress)
 	})
 
 	test('reloads reporting after claiming parent escalation deposits in the fork workflow', async () => {
-		const selectedPoolAddress = zeroAddress
 		let reportingLoadCalls = 0
 		let refreshedPoolAddress: string | undefined
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={1n}>
-				<SecurityPoolWorkflowSection
-					{...createSecurityPoolWorkflowProps({
-						checkedSecurityPoolAddress: selectedPoolAddress,
-						forkAuction: createForkAuctionProps({
-							forkAuctionResult: {
-								action: 'claimParentEscalationDeposits',
-								hash: '0x00000000000000000000000000000000000000000000000000000000000000cb',
-								securityPoolAddress: selectedPoolAddress,
-								universeId: 1n,
-							},
-						}),
-						onRefreshSelectedPoolData: securityPoolAddressInput => {
-							refreshedPoolAddress = securityPoolAddressInput
-						},
-						reporting: createReportingProps({
-							onLoadReporting: () => {
-								reportingLoadCalls += 1
-							},
-							reportingDetails: {
-								activationTime: 0n,
-								bindingCapital: 0n,
-								settlementCollateralAttoEth: 0n,
-								currentRequiredBond: 0n,
-								currentTime: 1n,
-								escalationEndTime: 2n,
-								escalationGameAddress: zeroAddress,
-								forkThresholdAttoRep: 0n,
-								hasReachedNonDecision: false,
-								marketDetails: createMarketDetails({ endTime: 0n }),
-								nonDecisionThresholdAttoRep: 0n,
-								questionOutcome: 'none',
-								securityPoolAddress: selectedPoolAddress,
-								sides: [
-									{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-									{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-									{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-								],
-								startBondAttoRep: 0n,
-								status: 'active',
-								systemState: 'operational',
-								totalCostAttoRep: 0n,
-								universeId: 1n,
-								viewerPoolHeldVaultRepBackingAttoRep: 0n,
-								viewerVaultExists: true,
-								viewerVaultDisputeStakedAttoRep: 0n,
-								viewerVaultRepBackingAttoRep: 0n,
-								settlementState: 'locked',
-								parentWithdrawalEnabled: false,
-							},
-							reportingForm: {
-								reportAmount: '',
-								securityPoolAddress: selectedPoolAddress,
-								selectedOutcome: 'yes',
-								selectedWithdrawDepositIndexesByOutcome: {
-									invalid: [],
-									yes: [],
-									no: [],
-								},
-							},
-						}),
-						securityPoolAddress: selectedPoolAddress,
-						securityPools: [createSelectedPool({ marketDetails: createMarketDetails({ endTime: 0n }), securityPoolAddress: selectedPoolAddress })],
-						selectedPoolView: 'reporting',
-					})}
-					showHeader={false}
-				/>
-			</ChainTimestampContext.Provider>,
+		await renderLoadedPool(
+			{
+				forkAuction: createForkAuctionProps({
+					forkAuctionResult: { action: 'claimParentEscalationDeposits', hash: '0x00000000000000000000000000000000000000000000000000000000000000cb', securityPoolAddress: zeroAddress, universeId: 1n },
+				}),
+				onRefreshSelectedPoolData: securityPoolAddressInput => {
+					refreshedPoolAddress = securityPoolAddressInput
+				},
+				reporting: createReportingProps({
+					onLoadReporting: () => {
+						reportingLoadCalls += 1
+					},
+					reportingDetails: createActiveReportingDetails({
+						activationTime: 0n,
+						bindingCapital: 0n,
+						settlementCollateralAttoEth: 0n,
+						currentRequiredBond: 0n,
+						currentTime: 1n,
+						escalationEndTime: 2n,
+						forkThresholdAttoRep: 0n,
+						marketDetails: createMarketDetails({ endTime: 0n }),
+						nonDecisionThresholdAttoRep: 0n,
+						sides: createEscalationSides([0n, 0n, 0n]),
+						startBondAttoRep: 0n,
+						totalCostAttoRep: 0n,
+						viewerPoolHeldVaultRepBackingAttoRep: 0n,
+						viewerVaultDisputeStakedAttoRep: 0n,
+						viewerVaultRepBackingAttoRep: 0n,
+					}),
+					reportingForm: yesReportingForm(zeroAddress),
+				}),
+				securityPools: [endedPoolAt(zeroAddress)],
+				selectedPoolView: 'reporting',
+			},
+			atChainTimeOne,
 		)
-		setCleanup(renderedComponent.cleanup)
 
-		expect(refreshedPoolAddress).toBe(selectedPoolAddress)
+		expect(refreshedPoolAddress).toBe(zeroAddress)
 		expect(reportingLoadCalls).toBe(1)
 	})
 })

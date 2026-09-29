@@ -29,20 +29,6 @@ export const constantProductPairAbi = [
 	},
 ] as const
 
-export const factoryAbi = [
-	{
-		type: 'function',
-		name: 'getPool',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'tokenA', type: 'address' },
-			{ name: 'tokenB', type: 'address' },
-			{ name: 'fee', type: 'uint24' },
-		],
-		outputs: [{ name: 'pool', type: 'address' }],
-	},
-] as const
-
 export const poolAbi = [
 	{ type: 'function', name: 'liquidity', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint128' }] },
 	{
@@ -68,91 +54,6 @@ export const poolAbi = [
 		outputs: [
 			{ name: 'tickCumulatives', type: 'int56[]' },
 			{ name: 'secondsPerLiquidityCumulativeX128s', type: 'uint160[]' },
-		],
-	},
-] as const
-
-const quoteParameters = [
-	{ name: 'tokenIn', type: 'address' },
-	{ name: 'tokenOut', type: 'address' },
-	{ name: 'amountIn', type: 'uint256' },
-	{ name: 'fee', type: 'uint24' },
-	{ name: 'sqrtPriceLimitX96', type: 'uint160' },
-] as const
-
-export const quoterAbi = [
-	{
-		type: 'function',
-		name: 'quoteExactInputSingle',
-		stateMutability: 'nonpayable',
-		inputs: [{ name: 'params', type: 'tuple', components: quoteParameters }],
-		outputs: [
-			{ name: 'amountOut', type: 'uint256' },
-			{ name: 'sqrtPriceX96After', type: 'uint160' },
-			{ name: 'initializedTicksCrossed', type: 'uint32' },
-			{ name: 'gasEstimate', type: 'uint256' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'quoteExactOutputSingle',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{
-				name: 'params',
-				type: 'tuple',
-				components: [
-					{ name: 'tokenIn', type: 'address' },
-					{ name: 'tokenOut', type: 'address' },
-					{ name: 'amount', type: 'uint256' },
-					{ name: 'fee', type: 'uint24' },
-					{ name: 'sqrtPriceLimitX96', type: 'uint160' },
-				],
-			},
-		],
-		outputs: [
-			{ name: 'amountIn', type: 'uint256' },
-			{ name: 'sqrtPriceX96After', type: 'uint160' },
-			{ name: 'initializedTicksCrossed', type: 'uint32' },
-			{ name: 'gasEstimate', type: 'uint256' },
-		],
-	},
-] as const
-
-const v4PoolKeyComponents = [
-	{ name: 'currency0', type: 'address' },
-	{ name: 'currency1', type: 'address' },
-	{ name: 'fee', type: 'uint24' },
-	{ name: 'tickSpacing', type: 'int24' },
-	{ name: 'hooks', type: 'address' },
-] as const
-
-const v4QuoteParameters = [
-	{ name: 'poolKey', type: 'tuple', components: v4PoolKeyComponents },
-	{ name: 'zeroForOne', type: 'bool' },
-	{ name: 'exactAmount', type: 'uint128' },
-	{ name: 'hookData', type: 'bytes' },
-] as const
-
-export const v4QuoterAbi = [
-	{
-		type: 'function',
-		name: 'quoteExactInputSingle',
-		stateMutability: 'nonpayable',
-		inputs: [{ name: 'params', type: 'tuple', components: v4QuoteParameters }],
-		outputs: [
-			{ name: 'amountOut', type: 'uint256' },
-			{ name: 'gasEstimate', type: 'uint256' },
-		],
-	},
-	{
-		type: 'function',
-		name: 'quoteExactOutputSingle',
-		stateMutability: 'nonpayable',
-		inputs: [{ name: 'params', type: 'tuple', components: v4QuoteParameters }],
-		outputs: [
-			{ name: 'amountIn', type: 'uint256' },
-			{ name: 'gasEstimate', type: 'uint256' },
 		],
 	},
 ] as const

@@ -5,18 +5,9 @@ import { assertOperationEthFunding } from '../../src/execution/safety.ts'
 import { assertAnchoredOracleRequestFunding, assertOracleRequestFundingEnvelope, oracleRequestFundingEnvelope } from '../../src/operations/oracle-request-funding.ts'
 import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
-import { snapshotFixture } from './fixture.ts'
+import { planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-const options = {
-	allowHighRisk: true,
-	allowIrreversibleOperations: true,
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maximumBlockIntervalSeconds: 15,
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: (10n ** 16n).toString(),
-	minimumRepReserveAttoRep: (10n ** 18n).toString(),
-	seed: 0x1234_5678,
-} as const
+const options = planningOptionsFixture()
 
 const simpleCoordinatorFunding = {
 	escalationHaltMultiplierBps: '10000',
@@ -29,6 +20,25 @@ const simpleCoordinatorFunding = {
 	settlementCallbackGasLimit: '2',
 	targetPriceErrorForDispute: '10000000',
 } as const
+
+/** A snapshot whose first pool needs a fresh oracle price funded through the simple coordinator. */
+function requestPriceSnapshot(projectedSettlementCollateralAttoEth?: bigint) {
+	const snapshot = snapshotFixture()
+	const pool = snapshot.pools[0]
+	if (pool === undefined) throw new Error('Pool fixture missing')
+	snapshot.anchor.baseFeePerGas = '1'
+	pool.oraclePriceValid = false
+	pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
+	pool.minimumToken1ReportAttoEth = '4'
+	pool.requestPriceCostAttoEth = '121'
+	if (projectedSettlementCollateralAttoEth !== undefined) pool.projectedSettlementCollateralAttoEth = projectedSettlementCollateralAttoEth.toString()
+	pool.settlementCollateralAttoEth = '100'
+	return { pool, snapshot }
+}
+
+function requestPricePlan(snapshot: ReturnType<typeof snapshotFixture>) {
+	return eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
+}
 
 describe('oracle request funding bounds', () => {
 	test('fails closed when an anchored coordinator getter disagrees with its immutable inputs', () => {
@@ -131,19 +141,10 @@ describe('oracle request funding bounds', () => {
 	})
 
 	test('reuses oversized allowances while preserving the full inclusion debit bound', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		snapshot.anchor.baseFeePerGas = '1'
-		pool.oraclePriceValid = false
-		pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
-		pool.minimumToken1ReportAttoEth = '4'
-		pool.requestPriceCostAttoEth = '121'
-		pool.projectedSettlementCollateralAttoEth = '100'
-		pool.settlementCollateralAttoEth = '100'
+		const { pool, snapshot } = requestPriceSnapshot(100n)
 		for (const token of snapshot.wallet.tokens) token.allowances[pool.coordinator] = (10n ** 30n).toString()
 
-		const plan = eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
+		const plan = requestPricePlan(snapshot)
 		if (plan === undefined) throw new Error('Request-price plan missing')
 		expect(plan.steps).toHaveLength(1)
 		expect(plan.maximumCleanupTransactionCount).toBeUndefined()
@@ -180,39 +181,22 @@ describe('oracle request funding bounds', () => {
 	})
 
 	test('makes an invalid funding candidate ineligible without aborting catalog evaluation', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		snapshot.anchor.baseFeePerGas = '1'
-		pool.oraclePriceValid = false
-		pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
-		pool.minimumToken1ReportAttoEth = '4'
-		pool.requestPriceCostAttoEth = '121'
-		pool.projectedSettlementCollateralAttoEth = '100'
-		pool.settlementCollateralAttoEth = '100'
+		const { pool, snapshot } = requestPriceSnapshot(100n)
 
 		pool.oracleRequestFunding.gasUnitsForOneDispute = '0'
-		const blocked = eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
+		const blocked = requestPricePlan(snapshot)
 		expect(blocked).toBeUndefined()
 	})
 
 	test('shrinks the funding envelope to available token inventory instead of rejecting a feasible request', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		snapshot.anchor.baseFeePerGas = '1'
-		pool.oraclePriceValid = false
-		pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
-		pool.minimumToken1ReportAttoEth = '4'
-		pool.requestPriceCostAttoEth = '121'
-		pool.settlementCollateralAttoEth = '100'
+		const { pool, snapshot } = requestPriceSnapshot()
 		const weth = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === snapshot.deployments.weth.toLowerCase())
 		const rep = snapshot.wallet.tokens.find(token => token.address.toLowerCase() === pool.repToken.toLowerCase())
 		if (weth === undefined || rep === undefined) throw new Error('Funding inventory missing')
 		weth.balance = (10n ** 12n).toString()
 		rep.balance = (10n ** 18n + 10n ** 12n).toString()
 
-		const plan = eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
+		const plan = requestPricePlan(snapshot)
 		expect(plan).toBeDefined()
 		expect(plan?.metadata['maximumInitialAttoWeth']).toBe((10n ** 12n).toString())
 		expect(plan?.metadata['maximumInitialAttoRep']).toBe((10n ** 12n).toString())
@@ -220,16 +204,8 @@ describe('oracle request funding bounds', () => {
 	})
 
 	test('reuses a persisted envelope after approval finality and cleans up when it becomes unsafe', () => {
-		const snapshot = snapshotFixture()
-		const pool = snapshot.pools[0]
-		if (pool === undefined) throw new Error('Pool fixture missing')
-		snapshot.anchor.baseFeePerGas = '1'
-		pool.oraclePriceValid = false
-		pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
-		pool.minimumToken1ReportAttoEth = '4'
-		pool.requestPriceCostAttoEth = '121'
-		pool.settlementCollateralAttoEth = '100'
-		const initial = eligibleOperationPlans(snapshot, options).find(candidate => candidate.definitionId === 'statoblast.oracle.request-price')
+		const { pool, snapshot } = requestPriceSnapshot()
+		const initial = requestPricePlan(snapshot)
 		if (initial === undefined) throw new Error('Request-price plan missing')
 		expect(initial.maximumCleanupTransactionCount).toBe(2)
 		const requestPrincipal = initial.steps.reduce((total, step) => total + BigInt(step.value ?? '0'), 0n)

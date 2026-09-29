@@ -8,15 +8,22 @@ import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { createAccountState, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
+import { createAccountState, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
 installStatoblastRouting()
-const { renderLoadedPool, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
+const { renderLoadedPool, renderWorkflow, setCleanup } = useSecurityPoolWorkflowSectionTestDom()
+// Renders the full pool page (header included) for one loaded pool, optionally at a chain time.
+const renderPoolPage = async (pool: ListedSecurityPool, overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}, chainTimestamp?: bigint) =>
+	await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], ...overrides }), { chainTimestamp, showHeader: true })
+const pendingReportManager = (pendingReportReadyAtTimestamp: bigint) => createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp })
+const unpricedPool = () => createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
+const pricedPool = () => createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
 
 test('opens a typed pool once its address is complete and never shows contents for a different address', async () => {
 	const pool = createSelectedPool()
@@ -65,7 +72,7 @@ test('shows the refresh busy label only while a shown pool reloads', async () =>
 	expect(page.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(true)
 	expect(page.queryByText('Refreshing pool…') === null).toBe(true)
 	await freshAddressRender.cleanup()
-	setCleanup((await renderIntoDocument(<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ loadingSecurityPools: true, securityPoolAddress: pool.securityPoolAddress, securityPools: [pool] })} />)).cleanup)
+	await renderPoolPage(pool, { loadingSecurityPools: true })
 	expect(within(document.body).getByRole('button', { name: 'Refreshing pool…' }).hasAttribute('disabled')).toBe(true)
 })
 
@@ -125,7 +132,7 @@ test('keeps the pool oracle request visible but disabled with its reason when no
 
 async function renderLoadedPoolWithWalletActions(overrides: Partial<SecurityPoolWorkflowRouteContentProps>) {
 	const walletFix = createWalletActions()
-	const props = createSecurityPoolWorkflowProps({ checkedSecurityPoolAddress: zeroAddress, securityPoolAddress: zeroAddress, securityPools: [createSelectedPool()], ...overrides })
+	const props = createLoadedPoolProps(overrides)
 	setCleanup(
 		(
 			await renderIntoDocument(
@@ -194,16 +201,7 @@ test('shows known standing commitments independently of a missing price', async 
 
 for (const timestamp of [undefined, 100000n]) {
 	test('keeps reference capacity consistent when chain time is ' + String(timestamp), async () => {
-		const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
-		setCleanup(
-			(
-				await renderIntoDocument(
-					<ChainTimestampContext.Provider value={timestamp}>
-						<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool] })} />
-					</ChainTimestampContext.Provider>,
-				)
-			).cleanup,
-		)
+		await renderPoolPage(pricedPool(), {}, timestamp)
 		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ 5.00 ETH')
 		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Settlement collateral / standing commitments')
 	})
@@ -217,33 +215,13 @@ test('keeps the pending report reachable while the pool universe differs', async
 })
 
 test('uses the refreshed manager price for the single capacity summary', async () => {
-	const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
-	setCleanup(
-		(
-			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={2n}>
-					<SecurityPoolWorkflowSection {...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n }) })} />
-				</ChainTimestampContext.Provider>,
-			)
-		).cleanup,
-	)
+	await renderPoolPage(pricedPool(), { poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 2n * 10n ** 18n, lastSettlementTimestamp: 1n }) }, 2n)
 	expect(document.querySelector('.pool-overview-header .pool-capacity-limit')?.textContent).toContain('5.00 ETH')
 	expect(document.querySelectorAll('.pool-capacity-summary')).toHaveLength(1)
 })
 
 test('shows the pending report countdown in selected pool price fields', async () => {
-	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
-	setCleanup(
-		(
-			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={100n}>
-					<SecurityPoolWorkflowSection
-						{...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], selectedPoolView: 'price-oracle', poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 154n }) })}
-					/>
-				</ChainTimestampContext.Provider>,
-			)
-		).cleanup,
-	)
+	await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(154n) }, 100n)
 	expect(document.body.textContent).toContain('Available in 54s')
 	expect(document.body.textContent).not.toContain('Unavailable ↻')
 	const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
@@ -255,41 +233,14 @@ test('shows the pending report countdown in selected pool price fields', async (
 })
 
 test('keeps the pending price countdown moving above one hour', async () => {
-	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
-	setCleanup(
-		(
-			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={100n}>
-					<SecurityPoolWorkflowSection
-						{...createSecurityPoolWorkflowProps({ securityPoolAddress: pool.securityPoolAddress, securityPools: [pool], selectedPoolView: 'price-oracle', poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 3702n }) })}
-					/>
-				</ChainTimestampContext.Provider>,
-			)
-		).cleanup,
-	)
+	await renderPoolPage(unpricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: pendingReportManager(3702n) }, 100n)
 	expect(document.body.textContent).toContain('Available in 1h 0m 2s')
 	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
 	expect(document.body.textContent).toContain('Available in 1h 0m 1s')
 })
 
 test('keeps the prior price expiry visible while a new report is pending', async () => {
-	const pool = createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
-	setCleanup(
-		(
-			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={2000n}>
-					<SecurityPoolWorkflowSection
-						{...createSecurityPoolWorkflowProps({
-							securityPoolAddress: pool.securityPoolAddress,
-							securityPools: [pool],
-							selectedPoolView: 'price-oracle',
-							poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 2054n, priceValidUntilTimestamp: 1000n }),
-						})}
-					/>
-				</ChainTimestampContext.Provider>,
-			)
-		).cleanup,
-	)
+	await renderPoolPage(pricedPool(), { selectedPoolView: 'price-oracle', poolOracleManagerDetails: createOracleManagerDetails({ lastPrice: 10n ** 18n, lastSettlementTimestamp: 1n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 2054n, priceValidUntilTimestamp: 1000n }) }, 2000n)
 	const price = document.querySelector('.oracle-price-value')?.textContent ?? ''
 	expect(price).toContain('expired')
 	expect(price).toContain('New price available in 54s')
@@ -297,10 +248,10 @@ test('keeps the prior price expiry visible while a new report is pending', async
 
 for (const outcome of ['disputed', 'settled'] as const) {
 	test(`refreshes the ${outcome} oracle state when the pending timer expires`, async () => {
-		const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
+		const pool = unpricedPool()
 		const refreshes: string[] = []
 		function Harness() {
-			const [manager, setManager] = useState(createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 100n }))
+			const [manager, setManager] = useState(pendingReportManager(100n))
 			return (
 				<ChainTimestampContext.Provider value={100n}>
 					<SecurityPoolWorkflowSection
@@ -311,7 +262,7 @@ for (const outcome of ['disputed', 'settled'] as const) {
 							poolOracleManagerDetails: manager,
 							onLoadPoolOracleManager: () => {
 								refreshes.push('manager')
-								setManager(createOracleManagerDetails(outcome === 'disputed' ? { lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 154n } : { lastPrice: 10n ** 18n, lastSettlementTimestamp: 100n, pendingReportId: 0n }))
+								setManager(outcome === 'disputed' ? pendingReportManager(154n) : createOracleManagerDetails({ lastPrice: 10n ** 18n, lastSettlementTimestamp: 100n, pendingReportId: 0n }))
 							},
 							onRefreshSelectedPoolData: () => refreshes.push('pool'),
 						})}
@@ -331,10 +282,10 @@ for (const outcome of ['disputed', 'settled'] as const) {
 }
 
 test('refreshes the selected pool when one pending price report is replaced by another', async () => {
-	const pool = createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
+	const pool = unpricedPool()
 	const refreshes: string[] = []
 	function Harness() {
-		const [manager, setManager] = useState(createOracleManagerDetails({ lastPrice: 0n, lastSettlementTimestamp: 0n, pendingReportId: 7n, pendingReportReadyAtTimestamp: 200n }))
+		const [manager, setManager] = useState(pendingReportManager(200n))
 		return (
 			<ChainTimestampContext.Provider value={100n}>
 				<button type='button' onClick={() => setManager(createOracleManagerDetails({ lastPrice: 10n ** 18n, lastSettlementTimestamp: 80n, pendingReportId: 8n, pendingReportReadyAtTimestamp: 154n }))}>

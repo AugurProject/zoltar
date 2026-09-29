@@ -1,9 +1,8 @@
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
-import { join } from 'node:path'
-import { dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import { dashboardAuthorities, dashboardRequestAuthorityIsAccepted, dashboardRequestIsSameOrigin, boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
+import { dashboardRequestIsSameOrigin, boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
+import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { CONFIGURATION_REVISION_CONFLICT } from '../config/settings.ts'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/configuration-commit.ts'
 import { requiredLiveInventory } from '../runtime/live-readiness.ts'
@@ -35,8 +34,6 @@ export type ChaosDashboardController = {
 	setSigner: (value: unknown) => unknown | Promise<unknown>
 	setWorkflow: (value: unknown) => unknown | Promise<unknown>
 }
-
-const dashboardPages = new Set(['overview', 'catalog', 'ecosystem', 'workflows', 'recovery', 'settings'])
 
 function publicStrings(value: unknown) {
 	return Array.isArray(value)
@@ -877,11 +874,7 @@ function indeterminateConfigurationFailure() {
 }
 
 export function startDashboardServer(port: number, controller: ChaosDashboardController) {
-	if (controller.hostname === '0.0.0.0' && controller.loopbackPublished !== true) {
-		throw new Error('Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port')
-	}
 	const directory = import.meta.dir
-	let authorities: ReadonlySet<string> = new Set()
 	let configurationCommitIndeterminate = false
 	let mutationBarrier = Promise.resolve()
 	const enqueueMutation = (operation: () => Promise<Response>) => {
@@ -899,13 +892,18 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 			}
 		})()
 	}
-	const server = Bun.serve({
+	return startBotDashboardServer({
+		directory,
+		exposure: { passwordlessExposureError: 'Non-loopback chaos dashboard exposure is disabled; bind to 127.0.0.1 or publish a 0.0.0.0 container listener through a host-loopback-only port' },
 		hostname: controller.hostname,
+		loopbackPublished: controller.loopbackPublished,
+		pages: ['overview', 'catalog', 'ecosystem', 'workflows', 'recovery', 'settings'],
+		pageSlots: [
+			['<!-- operator-header -->', operatorHeader],
+			['<!-- settings-page -->', settingsPageMarkup],
+		],
 		port,
-		async fetch(request) {
-			if (!dashboardRequestAuthorityIsAccepted(request, authorities)) return json({ error: 'Request authority is not accepted' }, 403)
-			const url = new URL(request.url)
-			if (request.method === 'GET' && url.pathname === '/healthz') return dashboardHealthResponse()
+		route: async (request, { acceptedAuthorities, url }) => {
 			if (request.method === 'GET') {
 				if (url.pathname === '/readyz' || url.pathname === '/metrics') {
 					try {
@@ -921,14 +919,6 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return json({ blockers: ['runtime_snapshot_unavailable'], ready: false }, 503)
 					}
 				}
-				const page = url.pathname === '/' ? 'overview' : url.pathname.slice(1)
-				if (dashboardPages.has(page)) {
-					const html = await Bun.file(join(directory, 'index.html')).text()
-					return new Response(html.replace('<!-- operator-header -->', operatorHeader).replace('<!-- settings-page -->', settingsPageMarkup).replace('<body>', `<body data-page="${page}">`), { headers: securityHeaders('text/html; charset=utf-8') })
-				}
-				if (url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
-				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
-				if (asset !== undefined) return asset
 				const script = await browserScript(url.pathname, directory)
 				if (script !== undefined) return new Response(script, { headers: securityHeaders('text/javascript; charset=utf-8') })
 				if (url.pathname === '/api/state') {
@@ -954,7 +944,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 				}
 			}
 			if (request.method === 'PUT') {
-				if (!dashboardRequestIsSameOrigin(request, authorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
+				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)
 				const handler = mutationRoutes(controller).get(url.pathname)
 				if (handler !== undefined) {
 					return await enqueueMutation(async () => {
@@ -970,10 +960,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 					})
 				}
 			}
-			return json({ error: 'Not found' }, 404)
+			return undefined
 		},
 	})
-	if (server.port === undefined) throw new Error('Dashboard server did not expose its listening port')
-	authorities = dashboardAuthorities(server.port)
-	return server
 }

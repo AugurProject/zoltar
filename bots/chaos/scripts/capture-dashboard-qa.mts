@@ -1,6 +1,5 @@
-import { createDevToolsCommandSender } from '../../../tooling/ui/devToolsCommands.mts'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { launchChromium } from '../../../tooling/ui/chromiumDevTools.mts'
+import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { unavailableOperationCatalog } from '../src/runtime/canonical-scan.ts'
 
@@ -125,86 +124,27 @@ function parseCaptureRequest(value: string): CaptureRequest {
 const requestedCapture = parseCaptureRequest(requestedCaptureSource)
 const chromium = process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium'
 const dashboardPassword = 'dashboard visual fixture password'
-const browserProfileDirectory = await mkdtemp(resolve(tmpdir(), 'chaos-dashboard-qa-'))
-const browser = Bun.spawn(
-	[
-		chromium,
-		'--headless=new',
-		'--no-sandbox',
-		'--disable-background-timer-throttling',
-		'--disable-dev-shm-usage',
-		'--disable-renderer-backgrounding',
-		'--force-device-scale-factor=1',
-		'--hide-scrollbars',
-		'--run-all-compositor-stages-before-draw',
-		'--remote-debugging-port=9393',
-		`--user-data-dir=${browserProfileDirectory}`,
-		`--window-size=${requestedCapture.width.toString()},${requestedCapture.height.toString()}`,
-		'about:blank',
-	],
-	{ stderr: 'pipe', stdout: 'pipe' },
-)
+const page = await launchChromium({
+	extraArgs: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--force-device-scale-factor=1', '--hide-scrollbars', '--run-all-compositor-stages-before-draw'],
+	path: chromium,
+	profilePrefix: 'chaos-dashboard-qa-',
+	viewport: { height: requestedCapture.height, width: requestedCapture.width },
+})
 
 try {
-	let tabs: unknown
-	for (let attempt = 0; attempt < 60; attempt += 1) {
-		try {
-			const response: unknown = await fetch('http://127.0.0.1:9393/json/list').then(value => value.json())
-			if (Array.isArray(response) && response.length > 0) {
-				tabs = response
-				break
-			}
-		} catch (error) {
-			void error
-		}
-		await Bun.sleep(100)
-	}
-	if (!Array.isArray(tabs) || tabs.length === 0) throw new Error('Chromium debugging tab did not become available')
-	const tab = tabs[0]
-	if (typeof tab !== 'object' || tab === null || Array.isArray(tab)) throw new Error('Chromium returned an invalid tab')
-	const debuggerUrl = Reflect.get(tab, 'webSocketDebuggerUrl')
-	if (typeof debuggerUrl !== 'string') throw new Error('Chromium tab is missing a debugger URL')
-	const socket = new WebSocket(debuggerUrl)
 	const diagnostics: string[] = []
-	socket.addEventListener('message', event => {
+	page.socket.addEventListener('message', event => {
 		const message: unknown = JSON.parse(String(event.data))
 		if (typeof message !== 'object' || message === null || !('method' in message)) return
 		if (message.method === 'Runtime.exceptionThrown' || message.method === 'Log.entryAdded') diagnostics.push(JSON.stringify(message))
 	})
-	await new Promise<void>((resolvePromise, reject) => {
-		socket.addEventListener('open', () => resolvePromise(), { once: true })
-		socket.addEventListener('error', () => reject(new Error('Chromium debugger connection failed')), { once: true })
-	})
-	const command = createDevToolsCommandSender(socket, {
-		isExited: () => browser.exitCode !== null,
-		onExit: listener => {
-			void browser.exited.then(code => listener(`code ${code}`))
-		},
-	})
+	const { evaluate, send: command } = page
 	await command('Runtime.enable')
 	await command('Log.enable')
 	await command('Page.enable')
 	await command('Page.bringToFront')
 	await command('Network.enable')
 	await command('Network.setExtraHTTPHeaders', { headers: { Authorization: `Basic ${Buffer.from(`operator:${dashboardPassword}`).toString('base64')}` } })
-
-	const evaluate = async (expression: string) => {
-		const response = await command('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-		if (typeof response !== 'object' || response === null || Array.isArray(response)) throw new Error('Runtime evaluation returned an invalid response')
-		const exceptionDetails = Reflect.get(response, 'exceptionDetails')
-		if (typeof exceptionDetails === 'object' && exceptionDetails !== null) {
-			const exception = Reflect.get(exceptionDetails, 'exception')
-			const description = typeof exception === 'object' && exception !== null ? Reflect.get(exception, 'description') : undefined
-			const textValue = Reflect.get(exceptionDetails, 'text')
-			let message = 'Runtime evaluation failed'
-			if (typeof description === 'string') message = description
-			else if (typeof textValue === 'string') message = textValue
-			throw new Error(message)
-		}
-		const result = Reflect.get(response, 'result')
-		if (typeof result !== 'object' || result === null || Array.isArray(result)) throw new Error('Runtime evaluation omitted its result')
-		return Reflect.get(result, 'value')
-	}
 
 	const capture = async ({ catalogDetail, catalogExpectedExplanation, catalogOperationId, fullDocument, height, name, recoveryRefreshFailure, resumeDialog, route, stateRefreshFailure, submissionReadiness, verticalScroll, width }: CaptureRequest) => {
 		await command('Emulation.setDeviceMetricsOverride', { deviceScaleFactor: 1, height, mobile: false, width })
@@ -939,9 +879,6 @@ try {
 
 	await capture(requestedCapture)
 	if (diagnostics.length > 0) throw new Error(`Dashboard produced browser diagnostics: ${diagnostics.join('\n')}`)
-	socket.close()
 } finally {
-	browser.kill()
-	await browser.exited
-	await rm(browserProfileDirectory, { force: true, recursive: true })
+	await page.close()
 }

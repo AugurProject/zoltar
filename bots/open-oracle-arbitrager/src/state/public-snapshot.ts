@@ -1,5 +1,5 @@
 import { publicOpportunity } from '#state/opportunity-snapshot'
-import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
+import { publicOperatorFailure, publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import type { OperationEntry, OperatorSnapshot, PublicOperationEntry, PublicOperatorSnapshot } from '#state/operator-state'
 
 function publicLastError(snapshot: Pick<OperatorSnapshot, 'lastError' | 'lastPollFailureAt' | 'marketAvailability'>) {

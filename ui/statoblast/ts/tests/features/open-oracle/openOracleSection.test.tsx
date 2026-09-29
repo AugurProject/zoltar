@@ -20,11 +20,15 @@ import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 type VNodeLike = {
 	props: Record<string, unknown>
 	type: unknown
 }
+
+const REPORTER = getAddress('0x3000000000000000000000000000000000000000')
+const TOKEN_UNITS = 10n ** 18n
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null
@@ -91,6 +95,12 @@ function findButton(node: unknown, label: string) {
 	return matchingButton
 }
 
+function requireButton(node: unknown, label: string) {
+	const button = findButton(node, label)
+	if (button === undefined) throw new Error(`Expected the ${label} button to render`)
+	return button
+}
+
 function getSectionTitles(node: unknown) {
 	const titles: string[] = []
 	visitTree(node, vnode => {
@@ -102,13 +112,7 @@ function getSectionTitles(node: unknown) {
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 10n * 10n ** 18n,
-		wethBalanceAttoEth: 5n * 10n ** 18n,
-		...overrides,
-	}
+	return createEmptyAccountState({ ethBalanceAttoEth: 10n * 10n ** 18n, wethBalanceAttoEth: 5n * 10n ** 18n, ...overrides })
 }
 
 function createOpenOracleForm(overrides: Partial<OpenOracleFormState> = {}): OpenOracleFormState {
@@ -233,7 +237,7 @@ function createReportSummary(reportId: bigint, overrides: Partial<OpenOracleRepo
 	return {
 		currentAmount1: 10n ** 18n,
 		currentAmount2: 2n * 10n ** 18n,
-		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+		currentReporter: REPORTER,
 		disputeOccurred: false,
 		exactToken1Report: 10n ** 18n,
 		isDistributed: false,
@@ -305,7 +309,7 @@ function createOpenOracleDisputeSubmission({
 	openOracleForm = createOpenOracleForm(),
 	openOracleTokenAccessState = createOpenOracleTokenAccessState(),
 	openOracleReportDetails = createOpenOracleReportDetails({
-		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+		currentReporter: REPORTER,
 		currentTime: 200n,
 		disputeDelay: 10n,
 		reportTimestamp: 100n,
@@ -333,30 +337,21 @@ function createOpenOracleDisputeSubmission({
 	})
 }
 
-function renderDisputeActionSection({
-	accountState = createAccountState(),
-	isOnActiveAppChain = true,
-	openOracleForm = createOpenOracleForm(),
-	openOracleTokenAccessState = createOpenOracleTokenAccessState(),
-	openOracleReportDetails = createOpenOracleReportDetails({
-		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
-		reportTimestamp: 100n,
-	}),
-}: {
+type ReportActionSectionOptions = {
 	accountState?: AccountState
 	isOnActiveAppChain?: boolean
 	openOracleForm?: OpenOracleFormState
-	openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState']
 	openOracleReportDetails?: OpenOracleReportDetails
-} = {}) {
-	const disputeSubmission = createOpenOracleDisputeSubmission({
-		openOracleForm,
-		openOracleTokenAccessState,
-		openOracleReportDetails,
-	})
+}
 
+function renderReportActionSection(
+	actionMode: 'dispute' | 'settle',
+	{ accountState = createAccountState(), isOnActiveAppChain = true, openOracleForm = createOpenOracleForm(), openOracleReportDetails }: Required<Pick<ReportActionSectionOptions, 'openOracleReportDetails'>> & ReportActionSectionOptions,
+	openOracleTokenAccessState: OpenOracleSectionProps['openOracleTokenAccessState'],
+	disputeSubmission: OpenOracleDisputeSubmissionDetails | undefined,
+) {
 	return renderSelectedReportActionSection({
-		actionMode: 'dispute',
+		actionMode,
 		disputeSubmission,
 		isConnected: accountState.address !== undefined,
 		isOnActiveAppChain,
@@ -374,40 +369,53 @@ function renderDisputeActionSection({
 	})
 }
 
-function renderSettleActionSection({
-	accountState = createAccountState(),
-	isOnActiveAppChain = true,
+function renderDisputeActionSection({
 	openOracleForm = createOpenOracleForm(),
+	openOracleTokenAccessState = createOpenOracleTokenAccessState(),
 	openOracleReportDetails = createOpenOracleReportDetails({
-		currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+		currentReporter: REPORTER,
+		reportTimestamp: 100n,
+	}),
+	...options
+}: ReportActionSectionOptions & { openOracleTokenAccessState?: OpenOracleSectionProps['openOracleTokenAccessState'] } = {}) {
+	const disputeSubmission = createOpenOracleDisputeSubmission({ openOracleForm, openOracleTokenAccessState, openOracleReportDetails })
+	return renderReportActionSection('dispute', { ...options, openOracleForm, openOracleReportDetails }, openOracleTokenAccessState, disputeSubmission)
+}
+
+function renderSettleActionSection({
+	openOracleReportDetails = createOpenOracleReportDetails({
+		currentReporter: REPORTER,
 		currentTime: 161n,
 		disputeDelay: 10n,
 		reportTimestamp: 100n,
 		settlementTime: 60n,
 	}),
-}: {
-	accountState?: AccountState
-	isOnActiveAppChain?: boolean
-	openOracleForm?: OpenOracleFormState
-	openOracleReportDetails?: OpenOracleReportDetails
-} = {}) {
-	return renderSelectedReportActionSection({
-		actionMode: 'settle',
-		disputeSubmission: undefined,
-		isConnected: accountState.address !== undefined,
-		isOnActiveAppChain,
-		onApproveToken1: () => undefined,
-		onApproveToken2: () => undefined,
-		onDisputeReport: () => undefined,
-		onOpenOracleFormChange: () => undefined,
-		onSettleReport: () => undefined,
-		openOracleActiveAction: undefined,
-		openOracleForm,
-		openOracleTokenAccessState: createOpenOracleTokenAccessState(),
-		openOracleReportDetails,
-		token1Symbol: openOracleReportDetails.token1Symbol,
-		token2Symbol: openOracleReportDetails.token2Symbol,
+	...options
+}: ReportActionSectionOptions = {}) {
+	return renderReportActionSection('settle', { ...options, openOracleReportDetails }, createOpenOracleTokenAccessState(), undefined)
+}
+
+/** A report in its dispute window with 10 REPv2 / 5 WETH reported and no fees. */
+function createDisputableReportDetails(overrides: Partial<OpenOracleReportDetails> = {}) {
+	return createOpenOracleReportDetails({
+		currentAmount1: 10n * TOKEN_UNITS,
+		currentAmount2: 5n * TOKEN_UNITS,
+		currentReporter: REPORTER,
+		currentTime: 200n,
+		disputeDelay: 10n,
+		escalationHalt: 20n * TOKEN_UNITS,
+		feePercentage: 0n,
+		multiplier: 20_000n,
+		protocolFee: 0n,
+		reportTimestamp: 100n,
+		settlementTime: 200n,
+		...overrides,
 	})
+}
+
+function createApprovedTokenAccessState(approvedAmount: bigint, overrides: Partial<OpenOracleSectionProps['openOracleTokenAccessState']> = {}) {
+	const approval = { error: undefined, loading: false, value: approvedAmount }
+	return createOpenOracleTokenAccessState({ token1Approval: approval, token2Approval: approval, ...overrides })
 }
 
 void describe('OpenOracleSection', () => {
@@ -428,7 +436,7 @@ void describe('OpenOracleSection', () => {
 					activeView: 'selected-report',
 					openOracleReportDetails: createOpenOracleReportDetails({
 						currentBlockNumber: 300n,
-						currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+						currentReporter: REPORTER,
 						reportTimestamp: 123n,
 						settlementTimestamp: 234n,
 						timeType: false,
@@ -661,7 +669,7 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('favorites an opened report once and keeps an un-star after the report refreshes', async () => {
-		const openedReport = createOpenOracleReportDetails({ currentReporter: getAddress('0x3000000000000000000000000000000000000000'), reportTimestamp: 100n })
+		const openedReport = createOpenOracleReportDetails({ currentReporter: REPORTER, reportTimestamp: 100n })
 		const selectedProps = { activeView: 'selected-report' as const, openOracleReportDetails: openedReport, openOracleReportLookupState: 'ready' as const }
 		const browse = await renderBrowseSection(selectedProps)
 		try {
@@ -696,7 +704,7 @@ void describe('OpenOracleSection', () => {
 	void test('renders settle-only controls after the dispute window closes', () => {
 		const section = renderSettleActionSection({
 			openOracleReportDetails: createOpenOracleReportDetails({
-				currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+				currentReporter: REPORTER,
 				currentTime: 161n,
 				disputeDelay: 10n,
 				reportTimestamp: 100n,
@@ -704,8 +712,7 @@ void describe('OpenOracleSection', () => {
 			}),
 		})
 
-		const settleButton = findButton(section, 'Settle report #7')
-		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		const settleButton = requireButton(section, 'Settle report #7')
 
 		expect(getButtonDisabled(settleButton)).toBe(false)
 		expect(findButton(section, 'Dispute & swap')).toBeUndefined()
@@ -718,7 +725,7 @@ void describe('OpenOracleSection', () => {
 	void test('disables dispute before dispute delay and disables settle before settlement time', () => {
 		const section = renderDisputeActionSection({
 			openOracleReportDetails: createOpenOracleReportDetails({
-				currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
+				currentReporter: REPORTER,
 				currentTime: 109n,
 				disputeDelay: 10n,
 				reportTimestamp: 100n,
@@ -726,8 +733,7 @@ void describe('OpenOracleSection', () => {
 			}),
 		})
 
-		const disputeButton = findButton(section, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		const disputeButton = requireButton(section, 'Dispute & swap')
 
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(findButton(section, 'Settle report #7')).toBeUndefined()
@@ -738,182 +744,72 @@ void describe('OpenOracleSection', () => {
 	})
 
 	void test('renders dispute approval controls and blocks submit until required approvals are present', () => {
-		const tokenUnits = 10n ** 18n
-		const openOracleReportDetails = createOpenOracleReportDetails({
-			currentAmount1: 10n * tokenUnits,
-			currentAmount2: 5n * tokenUnits,
-			currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
-			currentTime: 200n,
-			disputeDelay: 10n,
-			escalationHalt: 20n * tokenUnits,
-			feePercentage: 0n,
-			multiplier: 20_000n,
-			protocolFee: 0n,
-			reportTimestamp: 100n,
-			settlementTime: 200n,
-		})
-		const openOracleForm = createOpenOracleForm({
-			disputeNewAmount1: '20',
-			disputeNewAmount2: '7',
-		})
-		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
-			token1Approval: {
-				error: undefined,
-				loading: false,
-				value: 0n,
-			},
-			token2Approval: {
-				error: undefined,
-				loading: false,
-				value: 0n,
-			},
-		})
 		const section = renderDisputeActionSection({
-			openOracleForm,
-			openOracleTokenAccessState,
-			openOracleReportDetails,
+			openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
+			openOracleTokenAccessState: createApprovedTokenAccessState(0n),
+			openOracleReportDetails: createDisputableReportDetails(),
 		})
 
 		expect(getSectionTitles(section)).toContain('REPv2 approval')
 		expect(getSectionTitles(section)).toContain('WETH approval')
 		expect(getTextContent(section)).toContain('REPv2 approval required')
-		const disputeButton = findButton(section, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
-		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabled(requireButton(section, 'Dispute & swap'))).toBe(true)
 	})
 
 	void test('shows a price-direction blocker before rendering dispute approval controls', () => {
-		const tokenUnits = 10n ** 18n
-		const openOracleReportDetails = createOpenOracleReportDetails({
-			currentAmount1: 10n * tokenUnits,
-			currentAmount2: 5n * tokenUnits,
-			currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
-			currentTime: 200n,
-			disputeDelay: 10n,
-			escalationHalt: 20n * tokenUnits,
-			multiplier: 20_000n,
-			reportTimestamp: 100n,
-			settlementTime: 200n,
-		})
 		const section = renderDisputeActionSection({
 			openOracleForm: createOpenOracleForm({
 				disputeNewAmount1: '20',
 				disputeNewAmount2: '7',
 				disputeTokenToSwap: 'token2',
 			}),
-			openOracleReportDetails,
+			// Keeps the default report fee, unlike the fee-free disputable report.
+			openOracleReportDetails: createDisputableReportDetails({ feePercentage: createOpenOracleReportDetails().feePercentage }),
 		})
 
 		const directionMessage = 'These amounts would swap out REPv2, not WETH. Select REPv2 or change the proposed price.'
 		expect(getTextContent(section).split(directionMessage)).toHaveLength(2)
 		expect(getSectionTitles(section)).not.toContain('REPv2 approval')
 		expect(getSectionTitles(section)).not.toContain('WETH approval')
-		const disputeButton = findButton(section, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		const disputeButton = requireButton(section, 'Dispute & swap')
 		expect(getButtonDisabledReason(disputeButton)).toBe(directionMessage)
 		expect(disputeButton.props['disabledReasonElementId']).toBe('open-oracle-dispute-token-to-swap-error-7')
 		expect(disputeButton.props['showDisabledReason']).toBe(false)
 	})
 
 	void test('accepts human-readable token decimals for dispute amounts', () => {
-		const tokenUnits = 10n ** 18n
-		const openOracleReportDetails = createOpenOracleReportDetails({
-			currentAmount1: tokenUnits,
-			currentAmount2: 5n * tokenUnits,
-			currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
-			currentTime: 200n,
-			disputeDelay: 10n,
-			escalationHalt: 2n * tokenUnits,
-			feePercentage: 0n,
-			multiplier: 20_000n,
-			protocolFee: 0n,
-			reportTimestamp: 100n,
-			settlementTime: 200n,
-		})
-		const openOracleForm = createOpenOracleForm({
-			disputeNewAmount1: '2',
-			disputeNewAmount2: '7.5',
-		})
-		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
-			token1Approval: {
-				error: undefined,
-				loading: false,
-				value: 100n * tokenUnits,
-			},
-			token2Approval: {
-				error: undefined,
-				loading: false,
-				value: 100n * tokenUnits,
-			},
-		})
-
 		const disputeSubmission = createOpenOracleDisputeSubmission({
-			openOracleForm,
-			openOracleReportDetails,
-			openOracleTokenAccessState,
+			openOracleForm: createOpenOracleForm({ disputeNewAmount1: '2', disputeNewAmount2: '7.5' }),
+			openOracleReportDetails: createDisputableReportDetails({ currentAmount1: TOKEN_UNITS, escalationHalt: 2n * TOKEN_UNITS }),
+			openOracleTokenAccessState: createApprovedTokenAccessState(100n * TOKEN_UNITS),
 		})
 
-		expect(disputeSubmission.expectedNewAmount1).toBe(2n * tokenUnits)
+		expect(disputeSubmission.expectedNewAmount1).toBe(2n * TOKEN_UNITS)
 		expect(disputeSubmission.canSubmit).toBe(true)
 		expect(disputeSubmission.blockMessage).toBeUndefined()
 	})
 
 	void test('renders dispute balance blockers when the wallet lacks the required swap contribution', () => {
-		const tokenUnits = 10n ** 18n
-		const openOracleReportDetails = createOpenOracleReportDetails({
-			currentAmount1: 10n * tokenUnits,
-			currentAmount2: 5n * tokenUnits,
-			currentReporter: getAddress('0x3000000000000000000000000000000000000000'),
-			currentTime: 200n,
-			disputeDelay: 10n,
-			escalationHalt: 20n * tokenUnits,
-			feePercentage: 0n,
-			multiplier: 20_000n,
-			protocolFee: 0n,
-			reportTimestamp: 100n,
-			settlementTime: 200n,
-		})
-		const openOracleForm = createOpenOracleForm({
-			disputeNewAmount1: '20',
-			disputeNewAmount2: '7',
-		})
-		const openOracleTokenAccessState = createOpenOracleTokenAccessState({
-			token1Approval: {
-				error: undefined,
-				loading: false,
-				value: 100n * tokenUnits,
-			},
-			token2Approval: {
-				error: undefined,
-				loading: false,
-				value: 100n * tokenUnits,
-			},
-			token2Balance: 1n * tokenUnits,
-		})
 		const section = renderDisputeActionSection({
-			openOracleForm,
-			openOracleTokenAccessState,
-			openOracleReportDetails,
+			openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),
+			openOracleTokenAccessState: createApprovedTokenAccessState(100n * TOKEN_UNITS, { token2Balance: TOKEN_UNITS }),
+			openOracleReportDetails: createDisputableReportDetails(),
 		})
 
 		expect(getTextContent(section)).toContain('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
-		const disputeButton = findButton(section, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
-		expect(getButtonDisabledReason(disputeButton)).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
+		expect(getButtonDisabledReason(requireButton(section, 'Dispute & swap'))).toBe('Insufficient WETH balance for this dispute. Need 2, wallet has 1.')
 	})
 
 	void test('keeps create and selected-report actions disabled off Sepolia with recovery guidance', () => {
 		const disputeSection = renderDisputeActionSection({ isOnActiveAppChain: false })
-		const disputeButton = findButton(disputeSection, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		const disputeButton = requireButton(disputeSection, 'Dispute & swap')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Sepolia.')
 		expect(disputeButton.props.showDisabledReason).toBe(false)
 		expect(disputeButton.props.disabledReasonElementId).toContain('open-oracle-dispute-approval-guard-')
 
 		const settleSection = renderSettleActionSection({ isOnActiveAppChain: false })
-		const settleButton = findButton(settleSection, 'Settle report #7')
-		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		const settleButton = requireButton(settleSection, 'Settle report #7')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Sepolia.')
 	})
@@ -923,8 +819,7 @@ void describe('OpenOracleSection', () => {
 			isOnActiveAppChain: false,
 			openOracleForm: createOpenOracleForm({ reportId: '' }),
 		})
-		const disputeButton = findButton(invalidDisputeSection, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		const disputeButton = requireButton(invalidDisputeSection, 'Dispute & swap')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Switch to Sepolia.')
 		expect(getTextContent(invalidDisputeSection)).not.toContain('Load a report first.')
@@ -938,8 +833,7 @@ void describe('OpenOracleSection', () => {
 				settlementTime: 60n,
 			}),
 		})
-		const settleButton = findButton(invalidSettleSection, 'Settle report #7')
-		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		const settleButton = requireButton(invalidSettleSection, 'Settle report #7')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Switch to Sepolia.')
 		expect(getTextContent(invalidSettleSection)).not.toContain('Load a report first.')
@@ -949,14 +843,12 @@ void describe('OpenOracleSection', () => {
 		const disconnectedAccount = createAccountState({ address: undefined })
 
 		const disputeSection = renderDisputeActionSection({ accountState: disconnectedAccount })
-		const disputeButton = findButton(disputeSection, 'Dispute & swap')
-		if (disputeButton === undefined) throw new Error('Expected dispute action button to render')
+		const disputeButton = requireButton(disputeSection, 'Dispute & swap')
 		expect(getButtonDisabled(disputeButton)).toBe(true)
 		expect(getButtonDisabledReason(disputeButton)).toBe('Connect a wallet before disputing the report.')
 
 		const settleSection = renderSettleActionSection({ accountState: disconnectedAccount })
-		const settleButton = findButton(settleSection, 'Settle report #7')
-		if (settleButton === undefined) throw new Error('Expected settle action button to render')
+		const settleButton = requireButton(settleSection, 'Settle report #7')
 		expect(getButtonDisabled(settleButton)).toBe(true)
 		expect(getButtonDisabledReason(settleButton)).toBe('Connect a wallet before settling the report.')
 	})

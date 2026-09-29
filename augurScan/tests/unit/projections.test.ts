@@ -21,25 +21,25 @@ const log = (name: string, argumentsValue: Record<string, unknown>, address = po
 	decoded: { name, arguments: argumentsValue, status: 'decoded', summary: name },
 })
 
+const questionCreatedLog = log('QuestionCreated', {
+	questionId: '42',
+	createdTimestamp: '1000',
+	questionData: {
+		title: 'Will it rain?',
+		description: 'Observed at the airport',
+		startTime: '1100',
+		endTime: '2100',
+		numTicks: '0',
+		displayValueMin: '0',
+		displayValueMax: '0',
+		answerUnit: '',
+	},
+	outcomeOptions: ['Yes', 'No'],
+})
+
 describe('state projections', () => {
 	test('captures immutable question metadata', () => {
-		const [projection] = projectionsFrom(
-			log('QuestionCreated', {
-				questionId: '42',
-				createdTimestamp: '1000',
-				questionData: {
-					title: 'Will it rain?',
-					description: 'Observed at the airport',
-					startTime: '1100',
-					endTime: '2100',
-					numTicks: '0',
-					displayValueMin: '0',
-					displayValueMax: '0',
-					answerUnit: '',
-				},
-				outcomeOptions: ['Yes', 'No'],
-			}),
-		)
+		const [projection] = projectionsFrom(questionCreatedLog)
 		expect(projection?.type).toBe('question')
 		if (projection?.type !== 'question') throw new Error('question projection missing')
 		expect(projection.questionId).toBe('42')
@@ -246,25 +246,7 @@ describe('state projections', () => {
 	})
 
 	test('adds stable timeline identities for registries, markets, and universes', () => {
-		expect(
-			projectionsFrom(
-				log('QuestionCreated', {
-					questionId: '42',
-					createdTimestamp: '1000',
-					questionData: {
-						title: 'Will it rain?',
-						description: 'Observed at the airport',
-						startTime: '1100',
-						endTime: '2100',
-						numTicks: '0',
-						displayValueMin: '0',
-						displayValueMax: '0',
-						answerUnit: '',
-					},
-					outcomeOptions: ['Yes', 'No'],
-				}),
-			).at(-1),
-		).toMatchObject({
+		expect(projectionsFrom(questionCreatedLog).at(-1)).toMatchObject({
 			domain: 'system',
 			entityType: 'question',
 			entityIdentity: '42',

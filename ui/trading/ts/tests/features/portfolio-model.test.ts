@@ -4,6 +4,7 @@ import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import { lpReserveClaims, portfolioOverview } from '../../features/portfolioModel.js'
 import type { PortfolioBalanceEntry } from '../../features/live/liveTradingTypes.js'
 import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
+import { liveMarketFixture } from '../support/liveMarketFixture.js'
 
 const SET = 10n ** 18n
 const ATTO_ETH_PER_ETH = 10n ** 18n
@@ -15,7 +16,7 @@ const shareToken: Address = `0x${'34'.repeat(20)}`
 const pair: Address = `0x${'9a'.repeat(20)}`
 
 // One complete set (10^18 attoShares) is backed by exactly 1 ETH in this fixture.
-const market: LiveMarket = {
+const market = liveMarketFixture({
 	pool,
 	pair,
 	shareToken,
@@ -24,26 +25,14 @@ const market: LiveMarket = {
 	title: 'Portfolio model market',
 	description: 'Model fixture',
 	endTime: NOW + 30n * 24n * 60n * 60n,
-	statoblastSecurityMultiplierBps: 20_000n,
 	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
 	shareTokenSupplyAttoShares: 100n * SET,
 	settlementCollateralAttoEth: 100n * ATTO_ETH_PER_ETH,
-	currentRetentionRate: 10n ** 18n,
-	totalCapacityOwnershipAttoRep: 1n,
-	feeEligibleCapacityOwnershipAttoRep: 1n,
-	mintingCapacityCeilingAttoEth: 1n,
-	availableMintingCapacityAttoEth: 1n,
-	feeBps: 30n,
 	tradingStatus: undefined,
-	questionOutcome: 3,
 	yesReserve: 10n * SET,
 	noReserve: 10n * SET,
 	lpTotalSupply: 10n * SET,
-}
+})
 
 type Amounts = Partial<Pick<LiveBalances, 'yes' | 'no' | 'invalid' | 'lp'>>
 

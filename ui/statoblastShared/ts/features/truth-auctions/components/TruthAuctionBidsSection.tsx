@@ -4,10 +4,10 @@ import type { ComponentChildren } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import type { TruthAuctionBidRowViewModel, ViewerTruthAuctionBidRowViewModel } from '../lib/truthAuctionBidViewModels.js'
 
@@ -40,33 +40,57 @@ type ViewerTruthAuctionBidsSectionProps = {
 	showSettlementActionColumn: boolean
 }
 
-function AuctionBidsHeader() {
-	return (
-		<div className='truth-auction-bid-row is-wide is-no-actions is-header' role='row'>
-			<span className='truth-auction-bid-row-label' role='columnheader'>
-				{forkAuctionCopy.priceEthPerRep}
-			</span>
-			<span role='columnheader'>{forkAuctionCopy.bidder}</span>
-			<span role='columnheader'>{forkAuctionCopy.bidAmountEth}</span>
-			<span role='columnheader'>{forkAuctionCopy.loadedDepthEth}</span>
-			<span className='truth-auction-bid-row-status' role='columnheader'>
-				{commonCopy.status}
-			</span>
-		</div>
-	)
+type BidTableColumn<TRow> = {
+	/** Applied to both the header and the body cells. */
+	className?: string
+	/** Applied to body cells only; such cells hold block content and render as a `div`. */
+	blockCellClassName?: string
+	label: string
+	render: (row: TRow) => ComponentChildren
 }
 
-function ViewerBidsHeader({ showActions }: { showActions: boolean }) {
+type BidTableRow = { key: string; statusLabel: string; statusToneClassName: string }
+
+function priceColumn<TRow extends { price: bigint | undefined }>(renderPriceValue: (value: bigint | undefined) => ComponentChildren): BidTableColumn<TRow> {
+	return { className: 'truth-auction-bid-row-label', label: forkAuctionCopy.priceEthPerRep, render: row => renderPriceValue(row.price) }
+}
+
+function bidAmountColumn<TRow extends { bidAmountAttoEth: bigint }>(): BidTableColumn<TRow> {
+	return { label: forkAuctionCopy.bidAmountEth, render: row => <CurrencyValue value={row.bidAmountAttoEth} suffix={commonCopy.eth} /> }
+}
+
+function statusColumn<TRow extends BidTableRow>(): BidTableColumn<TRow> {
+	return { className: 'truth-auction-bid-row-status', label: commonCopy.status, render: row => <span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span> }
+}
+
+function BidTable<TRow extends BidTableRow>({ columns, regionClassName, regionLabel, rowClassName, rows, tableLabel }: { columns: readonly BidTableColumn<TRow>[]; regionClassName: string; regionLabel: string; rowClassName: string; rows: readonly TRow[]; tableLabel: string }) {
+	if (rows.length === 0) return undefined
 	return (
-		<div className={`truth-auction-bid-row is-wallet ${showActions ? '' : 'is-no-actions'} is-header`} role='row'>
-			{showActions ? <span role='columnheader'>{commonCopy.selected}</span> : undefined}
-			<span className='truth-auction-bid-row-label' role='columnheader'>
-				{forkAuctionCopy.priceEthPerRep}
-			</span>
-			<span role='columnheader'>{forkAuctionCopy.bidAmountEth}</span>
-			<span className='truth-auction-bid-row-status' role='columnheader'>
-				{commonCopy.status}
-			</span>
+		<div className={regionClassName} role='region' aria-label={regionLabel} tabIndex={0}>
+			<div className='truth-auction-bid-table' role='table' aria-label={tableLabel}>
+				<div className={`${rowClassName} is-header`} role='row'>
+					{columns.map(column => (
+						<span className={column.className} key={column.label} role='columnheader'>
+							{column.label}
+						</span>
+					))}
+				</div>
+				{rows.map(row => (
+					<div className={rowClassName} key={row.key} role='row'>
+						{columns.map(column =>
+							column.blockCellClassName === undefined ? (
+								<span className={column.className} data-label={column.label} key={column.label} role='cell'>
+									{column.render(row)}
+								</span>
+							) : (
+								<div className={column.blockCellClassName} data-label={column.label} key={column.label} role='cell'>
+									{column.render(row)}
+								</div>
+							),
+						)}
+					</div>
+				))}
+			</div>
 		</div>
 	)
 }
@@ -86,42 +110,23 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 					<LoadingText>{forkAuctionCopy.loadingAuctionBids}</LoadingText>
 				</p>
 			) : undefined}
-			<ErrorNotice message={error} />
-			{error === undefined || onRetry === undefined ? undefined : (
-				<div className='actions'>
-					<button aria-label={forkAuctionCopy.retryCurrentBids} className='secondary' disabled={retrying} onClick={onRetry} type='button'>
-						{retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids}
-					</button>
-				</div>
-			)}
+			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryCurrentBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
-			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table-scroll' role='region' aria-label={forkAuctionCopy.scrollableAuctionBidHistory} tabIndex={0}>
-					<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.auctionBidHistory}>
-						<AuctionBidsHeader />
-						{rows.map(row => (
-							<div className='truth-auction-bid-row is-wide is-no-actions' key={row.key} role='row'>
-								<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
-									{renderPriceValue(row.price)}
-								</span>
-								<div className='truth-auction-bid-row-address' data-label={forkAuctionCopy.bidder} role='cell'>
-									<AddressValue address={row.bidder} copyable={false} />
-								</div>
-								<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
-									<CurrencyValue value={row.bidAmountAttoEth} suffix={commonCopy.eth} />
-								</span>
-								<span data-label={forkAuctionCopy.loadedDepthEth} role='cell'>
-									<CurrencyValue value={row.cumulativeBidAttoEth} suffix={commonCopy.eth} />
-								</span>
-								<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
-									<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
-								</span>
-							</div>
-						))}
-					</div>
-				</div>
-			)}
+			<BidTable
+				columns={[
+					priceColumn(renderPriceValue),
+					{ blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> },
+					bidAmountColumn(),
+					{ label: forkAuctionCopy.loadedDepthEth, render: row => <CurrencyValue value={row.cumulativeBidAttoEth} suffix={commonCopy.eth} /> },
+					statusColumn(),
+				]}
+				regionClassName='truth-auction-bid-table-scroll'
+				regionLabel={forkAuctionCopy.scrollableAuctionBidHistory}
+				rowClassName='truth-auction-bid-row is-wide is-no-actions'
+				rows={rows}
+				tableLabel={forkAuctionCopy.auctionBidHistory}
+			/>
 			{error === undefined && hasMoreAggregatedAuctionBids ? <PaginationControls hasNextPage={hasMoreAggregatedAuctionBids} loading={loadingAggregatedAuctionBids} onLoadMore={onLoadNextAuctionBidPage} loadMoreLabel={forkAuctionCopy.loadMoreTruthAuctionBids} /> : undefined}
 		</SectionBlock>
 	)
@@ -136,44 +141,33 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 					<LoadingText>{forkAuctionCopy.loadingYourBids}</LoadingText>
 				</p>
 			) : undefined}
-			<ErrorNotice message={error} />
-			{error === undefined || onRetry === undefined ? undefined : (
-				<div className='actions'>
-					<button aria-label={forkAuctionCopy.retryMyBids} className='secondary' disabled={retrying} onClick={onRetry} type='button'>
-						{retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids}
-					</button>
-				</div>
-			)}
+			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryMyBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
 			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
-			{rows.length === 0 ? undefined : (
-				<div className='truth-auction-bid-table-scroll is-wallet' role='region' aria-label={forkAuctionCopy.scrollableMyBids} tabIndex={0}>
-					<div className='truth-auction-bid-table' role='table' aria-label={forkAuctionCopy.myBids}>
-						<ViewerBidsHeader showActions={showSettlementActionColumn} />
-						{rows.map(row => (
-							<div className={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`} key={row.key} role='row'>
-								{showSettlementActionColumn ? (
-									<div className='truth-auction-bid-row-actions' data-label={commonCopy.selected} role='cell'>
-										{(() => {
-											const settlementControl = row.settlementControl
-											if (settlementControl === undefined) return undefined
-											return <input disabled={settlementControl.disabled} type='checkbox' checked={settlementControl.checked} title={settlementControl.title} aria-label={settlementControl.ariaLabel} onChange={event => onSettlementBidSelectionChange(settlementControl.bidKey, event.currentTarget.checked)} />
-										})()}
-									</div>
-								) : undefined}
-								<span className='truth-auction-bid-row-label' data-label={forkAuctionCopy.priceEthPerRep} role='cell'>
-									{renderPriceValue(row.price)}
-								</span>
-								<span data-label={forkAuctionCopy.bidAmountEth} role='cell'>
-									<CurrencyValue value={row.bidAmountAttoEth} suffix={commonCopy.eth} />
-								</span>
-								<span className='truth-auction-bid-row-status' data-label={commonCopy.status} role='cell'>
-									<span className={`truth-auction-status-pill ${row.statusToneClassName}`}>{row.statusLabel}</span>
-								</span>
-							</div>
-						))}
-					</div>
-				</div>
-			)}
+			<BidTable
+				columns={[
+					...(showSettlementActionColumn
+						? [
+								{
+									blockCellClassName: 'truth-auction-bid-row-actions',
+									label: commonCopy.selected,
+									render: (row: ViewerTruthAuctionBidRowViewModel) => {
+										const settlementControl = row.settlementControl
+										if (settlementControl === undefined) return undefined
+										return <input disabled={settlementControl.disabled} type='checkbox' checked={settlementControl.checked} title={settlementControl.title} aria-label={settlementControl.ariaLabel} onChange={event => onSettlementBidSelectionChange(settlementControl.bidKey, event.currentTarget.checked)} />
+									},
+								},
+							]
+						: []),
+					priceColumn(renderPriceValue),
+					bidAmountColumn(),
+					statusColumn(),
+				]}
+				regionClassName='truth-auction-bid-table-scroll is-wallet'
+				regionLabel={forkAuctionCopy.scrollableMyBids}
+				rowClassName={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`}
+				rows={rows}
+				tableLabel={forkAuctionCopy.myBids}
+			/>
 			{accountAddress !== undefined && error === undefined && hasMoreViewerBids ? <PaginationControls hasNextPage={hasMoreViewerBids} loading={loadingTruthAuctionBook} onLoadMore={onLoadNextViewerBidPage} loadMoreLabel={forkAuctionCopy.loadMoreOfMyBids} /> : undefined}
 		</SectionBlock>
 	)

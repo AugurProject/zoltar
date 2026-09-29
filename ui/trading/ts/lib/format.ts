@@ -9,10 +9,7 @@ export function formatRoundedUnits(value: bigint, decimals = 18, maximumFraction
 	return formatTrimmedUnits(value < 0n ? -rounded : rounded, decimals, maximumFractionDigits)
 }
 
-export function formatUnderwritingLimits(totalAttoEth: bigint, feeEligibleAttoEth: bigint) {
-	return `${formatTrimmedUnits(totalAttoEth)} / ${formatTrimmedUnits(feeEligibleAttoEth)} ETH`
-}
-
-export function formatMintingCapacity(mintedAttoEth: bigint, maximumAttoEth: bigint) {
-	return `${formatTrimmedUnits(mintedAttoEth)} / ${formatTrimmedUnits(maximumAttoEth)} ETH`
+/** Formats two ETH amounts as `first / second ETH`, e.g. minted against maximum capacity or total against fee-eligible limits. */
+export function formatEthAmountPair(firstAttoEth: bigint, secondAttoEth: bigint) {
+	return `${formatTrimmedUnits(firstAttoEth)} / ${formatTrimmedUnits(secondAttoEth)} ETH`
 }

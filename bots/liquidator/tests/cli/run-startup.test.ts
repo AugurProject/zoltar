@@ -45,31 +45,53 @@ afterEach(async () => {
 	await Promise.all(directories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
 })
 
-test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-bootstrap-'))
+async function temporaryDirectory(prefix: string) {
+	const directory = await mkdtemp(join(tmpdir(), prefix))
 	directories.push(directory)
-	const rpc = Bun.serve({
+	return directory
+}
+
+/** A loopback JSON-RPC endpoint that answers every request with `result(method)`. */
+function jsonRpcServer(result: (method: string) => unknown) {
+	const server = Bun.serve({
 		async fetch(request) {
-			const body = (await request.json()) as { id: unknown }
-			return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
+			const body = (await request.json()) as { id: unknown; method: string }
+			return Response.json({ id: body.id, jsonrpc: '2.0', result: result(body.method) })
 		},
 		hostname: '127.0.0.1',
 		port: 0,
 	})
-	servers.push(rpc)
-	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
+	servers.push(server)
+	if (server.port === undefined) throw new Error('Test RPC did not expose a port')
+	return `http://127.0.0.1:${server.port.toString()}`
+}
+
+async function reserveUiPort() {
 	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
 	const uiPort = reservation.port
 	await reservation.stop(true)
 	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
+	return uiPort
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function objectField(value: Record<string, unknown>, key: string) {
+	const field = value[key]
+	if (!isRecord(field)) throw new Error(`Example configuration ${key} is missing`)
+	return field
+}
+
+async function exampleConfiguration() {
 	const configuration = (await Bun.file(join(import.meta.dir, '..', '..', 'config', 'operator.example.json')).json()) as Record<string, unknown>
-	const runtime = Reflect.get(configuration, 'runtime')
-	if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
-	Reflect.set(runtime, 'stateFile', join(directory, 'state.json'))
-	Reflect.set(runtime, 'pollMilliseconds', 1_000)
-	Reflect.set(runtime, 'uiPort', uiPort)
-	const configurationPath = join(directory, 'operator.json')
-	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
+	return { configuration, runtime: objectField(configuration, 'runtime') }
+}
+
+const sepoliaNetwork = { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' }
+
+function startLiquidator(configurationPath: string) {
 	const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')], {
 		cwd: join(import.meta.dir, '..', '..'),
 		env: { ...process.env, ZOLTAR_LIQUIDATOR_CONFIG: configurationPath },
@@ -77,6 +99,33 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 		stdout: 'pipe',
 	})
 	children.push(child)
+	return child
+}
+
+async function startLiquidatorWith(directory: string, configuration: Record<string, unknown>) {
+	const configurationPath = join(directory, 'operator.json')
+	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
+	return { child: startLiquidator(configurationPath), configurationPath }
+}
+
+/** Waits for a liquidator that must refuse to start and returns its exit code and combined output. */
+async function startupFailure(child: Bun.Subprocess<'ignore', 'pipe', 'pipe'>, description: string) {
+	const exitCode = await Promise.race([child.exited, Bun.sleep(3_000).then(() => undefined)])
+	if (exitCode === undefined) throw new Error(`Liquidator did not exit after ${description} failed`)
+	return { exitCode, output: `${await new Response(child.stdout).text()}${await new Response(child.stderr).text()}` }
+}
+
+function putJson(origin: string, endpoint: string, body: unknown) {
+	return fetch(`${origin}${endpoint}`, { body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin }, method: 'PUT' })
+}
+
+test('keeps the dashboard available until initial chain and RPC settings are saved', async () => {
+	const directory = await temporaryDirectory('zoltar-liquidator-bootstrap-')
+	const rpcUrl = `${jsonRpcServer(() => '0xaa36a7')}/`
+	const uiPort = await reserveUiPort()
+	const { configuration, runtime } = await exampleConfiguration()
+	Object.assign(runtime, { pollMilliseconds: 1_000, stateFile: join(directory, 'state.json'), uiPort })
+	const { child } = await startLiquidatorWith(directory, configuration)
 	const origin = `http://127.0.0.1:${uiPort.toString()}`
 	const initial = await waitForJson(origin, '/api/configuration')
 	expect(initial).toMatchObject({ network: { name: 'mainnet' }, networkConfigured: false })
@@ -87,15 +136,11 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 		['/api/market-configuration', {}],
 		['/api/paused', { paused: false }],
 	] as const) {
-		const blocked = await fetch(`${origin}${endpoint}`, { body: JSON.stringify(body), headers: { 'content-type': 'application/json', origin }, method: 'PUT' })
+		const blocked = await putJson(origin, endpoint, body)
 		expect(blocked.status, `${endpoint}: ${await blocked.clone().text()}`).toBe(400)
 	}
 	if (child.exitCode !== null) throw new Error(`Liquidator exited before profile switch: ${await new Response(child.stderr).text()}`)
-	const profileResult = await fetch(`${origin}/api/network-profile`, {
-		body: JSON.stringify({ network: 'sepolia' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const profileResult = await putJson(origin, '/api/network-profile', { network: 'sepolia' })
 	expect(profileResult.status, await profileResult.clone().text()).toBe(200)
 	for (let attempt = 0; attempt < 700; attempt++) {
 		if (child.exitCode !== null) throw new Error(`Liquidator exited during profile switch: ${await new Response(child.stderr).text()}`)
@@ -105,26 +150,13 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 	}
 	expect(await waitForJson(origin, '/api/configuration')).toMatchObject({ network: { name: 'sepolia' }, networkConfigured: false })
 	expect(child.exitCode).toBeNull()
-	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
-	const response = await fetch(`${origin}/api/network-connectivity`, {
-		body: JSON.stringify({ connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }, network: 'sepolia' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const response = await putJson(origin, '/api/network-connectivity', { connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }, network: 'sepolia' })
 	expect(response.status, await response.clone().text()).toBe(200)
 	expect(await response.json()).toMatchObject({ network: { chainId: 11_155_111, name: 'sepolia' } })
-	const signerAfterConnectivity = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ privateKey: '', rememberSigner: false }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const signerAfterConnectivity = await putJson(origin, '/api/signer', { privateKey: '', rememberSigner: false })
 	expect(signerAfterConnectivity.status, await signerAfterConnectivity.clone().text()).toBe(200)
 	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(true)
-	const backToMainnet = await fetch(`${origin}/api/network-profile`, {
-		body: JSON.stringify({ network: 'mainnet' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const backToMainnet = await putJson(origin, '/api/network-profile', { network: 'mainnet' })
 	expect(backToMainnet.status, await backToMainnet.clone().text()).toBe(200)
 	let restoredMainnet: Record<string, unknown> | undefined
 	for (let attempt = 0; attempt < 700; attempt++) {
@@ -138,50 +170,25 @@ test('keeps the dashboard available until initial chain and RPC settings are sav
 })
 
 test('keeps the active operator running and unpaused when a dormant profile is incompatible', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-rejected-profile-'))
-	directories.push(directory)
-	const rpc = Bun.serve({
-		async fetch(request) {
-			const body = (await request.json()) as { id: unknown; method: string }
-			const result =
-				new Map([
-					['eth_chainId', '0x1'],
-					['eth_getCode', '0x'],
-				]).get(body.method) ?? '0x0'
-			return Response.json({ id: body.id, jsonrpc: '2.0', result })
-		},
-		hostname: '127.0.0.1',
-		port: 0,
+	const directory = await temporaryDirectory('zoltar-liquidator-rejected-profile-')
+	const rpcUrl = `${jsonRpcServer(
+		method =>
+			new Map([
+				['eth_chainId', '0x1'],
+				['eth_getCode', '0x'],
+			]).get(method) ?? '0x0',
+	)}/`
+	const uiPort = await reserveUiPort()
+	const { configuration, runtime } = await exampleConfiguration()
+	Object.assign(configuration, {
+		connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl, rpcQuorum: 1 },
+		network: { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' },
+		networkConfigured: true,
+		paused: false,
 	})
-	servers.push(rpc)
-	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
-	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
-	const uiPort = reservation.port
-	await reservation.stop(true)
-	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
-	const configuration = (await Bun.file(join(import.meta.dir, '..', '..', 'config', 'operator.example.json')).json()) as Record<string, unknown>
-	const runtime = Reflect.get(configuration, 'runtime')
-	if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime)) throw new Error('Example runtime is missing')
-	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}/`
-	Reflect.set(configuration, 'connectivity', { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl, rpcQuorum: 1 })
-	Reflect.set(configuration, 'network', { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' })
-	Reflect.set(configuration, 'networkConfigured', true)
-	Reflect.set(configuration, 'paused', false)
-	const activeMarket = Reflect.get(configuration, 'centralizedMarkets')
-	if (typeof activeMarket !== 'object' || activeMarket === null || Array.isArray(activeMarket)) throw new Error('Example centralized market is missing')
-	Reflect.set(activeMarket, 'assetChainId', 1)
-	Reflect.set(runtime, 'pollMilliseconds', 1_000)
-	Reflect.set(runtime, 'stateFile', join(directory, 'mainnet-state.json'))
-	Reflect.set(runtime, 'uiPort', uiPort)
-	const configurationPath = join(directory, 'operator.json')
-	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
-	const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')], {
-		cwd: join(import.meta.dir, '..', '..'),
-		env: { ...process.env, ZOLTAR_LIQUIDATOR_CONFIG: configurationPath },
-		stderr: 'pipe',
-		stdout: 'pipe',
-	})
-	children.push(child)
+	Reflect.set(objectField(configuration, 'centralizedMarkets'), 'assetChainId', 1)
+	Object.assign(runtime, { pollMilliseconds: 1_000, stateFile: join(directory, 'mainnet-state.json'), uiPort })
+	const { child, configurationPath } = await startLiquidatorWith(directory, configuration)
 	const origin = `http://127.0.0.1:${uiPort.toString()}`
 	await Bun.sleep(200)
 	if (child.exitCode !== null) throw new Error(`Liquidator exited before rejected-profile test: ${await new Response(child.stderr).text()}`)
@@ -189,10 +196,9 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
 
 	const incompatibleProfile = JSON.parse(JSON.stringify(configuration)) as Record<string, unknown>
-	const incompatibleRuntime = Reflect.get(incompatibleProfile, 'runtime')
-	const incompatibleMarket = Reflect.get(incompatibleProfile, 'centralizedMarkets')
-	if (typeof incompatibleRuntime !== 'object' || incompatibleRuntime === null || Array.isArray(incompatibleRuntime) || typeof incompatibleMarket !== 'object' || incompatibleMarket === null || Array.isArray(incompatibleMarket)) throw new Error('Expected mutable profile fixture')
-	Reflect.set(incompatibleProfile, 'network', { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
+	const incompatibleRuntime = objectField(incompatibleProfile, 'runtime')
+	const incompatibleMarket = objectField(incompatibleProfile, 'centralizedMarkets')
+	Reflect.set(incompatibleProfile, 'network', sepoliaNetwork)
 	Reflect.set(incompatibleProfile, 'networkConfigured', false)
 	Reflect.deleteProperty(incompatibleProfile, 'connectivity')
 	Reflect.set(incompatibleProfile, 'paused', true)
@@ -201,52 +207,36 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	Reflect.set(incompatibleRuntime, 'uiPort', uiPort + 1)
 	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
 
-	const rejected = await fetch(`${origin}/api/network-profile`, {
-		body: JSON.stringify({ network: 'sepolia' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const rejected = await putJson(origin, '/api/network-profile', { network: 'sepolia' })
 	expect(rejected.status, await rejected.clone().text()).toBe(400)
 	await Bun.sleep(50)
 	expect(child.exitCode).toBeNull()
 	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
-	const signer = await fetch(`${origin}/api/signer`, {
-		body: JSON.stringify({ privateKey: '', rememberSigner: false }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
+	const signer = await putJson(origin, '/api/signer', { privateKey: '', rememberSigner: false })
 	expect(signer.status, await signer.clone().text()).toBe(200)
 
 	Reflect.set(incompatibleRuntime, 'uiPort', uiPort)
 	Reflect.set(incompatibleProfile, 'connectivity', { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl, rpcQuorum: 1 })
 	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
 	const activeBeforeLockedSwitch = await Bun.file(configurationPath).text()
-	const targetStateLock = await acquireFileProcessLock(join(directory, 'sepolia-state.json'), 'Liquidator state')
-	try {
-		const locked = await fetch(`${origin}/api/network-profile`, {
-			body: JSON.stringify({ network: 'sepolia' }),
-			headers: { 'content-type': 'application/json', origin },
-			method: 'PUT',
-		})
-		expect(locked.status, await locked.clone().text()).toBe(400)
+	/** Requests the incompatible dormant profile and proves the active operator and its configuration are untouched. */
+	const expectRejectedSwitch = async () => {
+		const switched = await putJson(origin, '/api/network-profile', { network: 'sepolia' })
+		expect(switched.status, await switched.clone().text()).toBe(400)
 		expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
 		expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
 		expect(child.exitCode).toBeNull()
+	}
+	const targetStateLock = await acquireFileProcessLock(join(directory, 'sepolia-state.json'), 'Liquidator state')
+	try {
+		await expectRejectedSwitch()
 	} finally {
 		await targetStateLock.release()
 	}
 
 	Reflect.set(incompatibleProfile, 'networkConfigured', true)
 	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
-	const wrongChain = await fetch(`${origin}/api/network-profile`, {
-		body: JSON.stringify({ network: 'sepolia' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
-	expect(wrongChain.status, await wrongChain.clone().text()).toBe(400)
-	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
-	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
-	expect(child.exitCode).toBeNull()
+	await expectRejectedSwitch()
 
 	const targetPrivateKey = `0x${'22'.repeat(32)}` as const
 	const targetAccount = privateKeyToAccount(targetPrivateKey)
@@ -254,15 +244,7 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	await saveDurableState(join(directory, 'sepolia-state.json'), wrongBoundState)
 	Reflect.set(incompatibleProfile, 'networkConfigured', false)
 	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
-	const wrongBoundProfile = await fetch(`${origin}/api/network-profile`, {
-		body: JSON.stringify({ network: 'sepolia' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
-	expect(wrongBoundProfile.status, await wrongBoundProfile.clone().text()).toBe(400)
-	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
-	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
-	expect(child.exitCode).toBeNull()
+	await expectRejectedSwitch()
 
 	const wrongChainTransaction = await targetAccount.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0n, to: '0x0000000000000000000000000000000000000020', value: 0n })
 	const targetState = initialRuntimeState(true, targetAccount.address, 11_155_111)
@@ -285,154 +267,51 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	Reflect.set(incompatibleRuntime, 'execute', true)
 	const wrongIntentProfile = JSON.stringify(incompatibleProfile)
 	await writeFile(`${configurationPath}.sepolia.profile`, wrongIntentProfile, 'utf8')
-	const wrongIntent = await fetch(`${origin}/api/network-profile`, {
-		body: JSON.stringify({ network: 'sepolia' }),
-		headers: { 'content-type': 'application/json', origin },
-		method: 'PUT',
-	})
-	expect(wrongIntent.status, await wrongIntent.clone().text()).toBe(400)
-	expect(await Bun.file(configurationPath).text()).toBe(activeBeforeLockedSwitch)
+	await expectRejectedSwitch()
 	expect(await Bun.file(`${configurationPath}.sepolia.profile`).text()).toBe(wrongIntentProfile)
-	expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
-	expect(child.exitCode).toBeNull()
 })
 
 test('stops the dashboard and exits when startup network validation fails', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-startup-'))
-	directories.push(directory)
-	const rpc = Bun.serve({
-		fetch: async request => {
-			const body = (await request.json()) as { id: unknown }
-			return Response.json({ id: body.id, jsonrpc: '2.0', result: '0x1' })
-		},
-		hostname: '127.0.0.1',
-		port: 0,
-	})
-	servers.push(rpc)
-	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
-	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
-	const uiPort = reservation.port
-	await reservation.stop(true)
-	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
-	const examplePath = join(import.meta.dir, '..', '..', 'config', 'operator.example.json')
-	const configuration = JSON.parse(await Bun.file(examplePath).text()) as {
-		connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
-		runtime: { stateFile: string; ui: boolean; uiPort: number }
-	}
-	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}`
-	configuration.connectivity = { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }
-	Reflect.set(configuration, 'network', { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
-	configuration.runtime.stateFile = join(directory, 'state.json')
-	configuration.runtime.ui = true
-	configuration.runtime.uiPort = uiPort
-	const configurationPath = join(directory, 'operator.json')
-	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
-	const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
-	const child = Bun.spawn([process.execPath, runSource], {
-		cwd: join(import.meta.dir, '..', '..'),
-		env: { ...process.env, ZOLTAR_LIQUIDATOR_CONFIG: configurationPath },
-		stderr: 'pipe',
-		stdout: 'pipe',
-	})
-	children.push(child)
-	const exitCode = await Promise.race([child.exited, Bun.sleep(3_000).then(() => undefined)])
-	if (exitCode === undefined) throw new Error('Liquidator did not exit after startup validation failed')
-	const output = `${await new Response(child.stdout).text()}${await new Response(child.stderr).text()}`
+	const directory = await temporaryDirectory('zoltar-liquidator-startup-')
+	const rpcUrl = jsonRpcServer(() => '0x1')
+	const { configuration, runtime } = await exampleConfiguration()
+	Object.assign(configuration, { connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }, network: sepoliaNetwork })
+	Object.assign(runtime, { stateFile: join(directory, 'state.json'), ui: true, uiPort: await reserveUiPort() })
+	const { child } = await startLiquidatorWith(directory, configuration)
+	const { exitCode, output } = await startupFailure(child, 'startup validation')
 	expect(exitCode).toBe(1)
 	expect(output).toContain('does not match configured chain')
 })
 
 test('rejects a wrong-chain private relay during startup validation', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-relay-startup-'))
-	directories.push(directory)
-	const rpc = Bun.serve({
-		async fetch(request) {
-			const body = (await request.json()) as { id: unknown }
-			return Response.json({ id: body.id, jsonrpc: '2.0', result: '0xaa36a7' })
-		},
-		hostname: '127.0.0.1',
-		port: 0,
+	const directory = await temporaryDirectory('zoltar-liquidator-relay-startup-')
+	const rpcUrl = jsonRpcServer(() => '0xaa36a7')
+	const relayUrl = jsonRpcServer(() => '0x1')
+	const { configuration, runtime } = await exampleConfiguration()
+	Object.assign(configuration, {
+		connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl },
+		network: sepoliaNetwork,
+		submission: { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [relayUrl] },
 	})
-	const relay = Bun.serve({
-		async fetch(request) {
-			const body = (await request.json()) as { id: unknown }
-			return Response.json({ id: body.id, jsonrpc: '2.0', result: '0x1' })
-		},
-		hostname: '127.0.0.1',
-		port: 0,
-	})
-	servers.push(rpc, relay)
-	if (rpc.port === undefined || relay.port === undefined) throw new Error('Test RPC did not expose a port')
-	const reservation = Bun.serve({ fetch: () => new Response('reserved'), hostname: '127.0.0.1', port: 0 })
-	const uiPort = reservation.port
-	await reservation.stop(true)
-	if (uiPort === undefined) throw new Error('Test dashboard reservation did not expose a port')
-	const examplePath = join(import.meta.dir, '..', '..', 'config', 'operator.example.json')
-	const configuration = JSON.parse(await Bun.file(examplePath).text()) as {
-		connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
-		runtime: { stateFile: string; ui: boolean; uiPort: number }
-		submission: { minimumBundleRelaySuccesses: number; mode: string; relayUrls: string[] }
-	}
-	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}`
-	configuration.connectivity = { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }
-	Reflect.set(configuration, 'network', { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
-	configuration.submission = { minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: [`http://127.0.0.1:${relay.port.toString()}`] }
-	configuration.runtime.stateFile = join(directory, 'state.json')
-	configuration.runtime.ui = true
-	configuration.runtime.uiPort = uiPort
-	const configurationPath = join(directory, 'operator.json')
-	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
-	const runSource = join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')
-	const child = Bun.spawn([process.execPath, runSource], {
-		cwd: join(import.meta.dir, '..', '..'),
-		env: { ...process.env, ZOLTAR_LIQUIDATOR_CONFIG: configurationPath },
-		stderr: 'pipe',
-		stdout: 'pipe',
-	})
-	children.push(child)
-	const exitCode = await Promise.race([child.exited, Bun.sleep(3_000).then(() => undefined)])
-	if (exitCode === undefined) throw new Error('Liquidator did not exit after relay validation failed')
-	const output = `${await new Response(child.stdout).text()}${await new Response(child.stderr).text()}`
+	Object.assign(runtime, { stateFile: join(directory, 'state.json'), ui: true, uiPort: await reserveUiPort() })
+	const { child } = await startLiquidatorWith(directory, configuration)
+	const { exitCode, output } = await startupFailure(child, 'relay validation')
 	expect(exitCode).toBe(1)
 	expect(output).toContain('Expected chain 11155111, received 1')
 })
 
 test('pins deployment bytecode to the observed block without scanning an undeployed system', async () => {
-	const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-undeployed-'))
-	directories.push(directory)
+	const directory = await temporaryDirectory('zoltar-liquidator-undeployed-')
 	const methods: string[] = []
-	const rpc = Bun.serve({
-		async fetch(request) {
-			const body = (await request.json()) as { id: unknown; method: string }
-			methods.push(body.method)
-			if (body.method === 'eth_getBlockByNumber') return Response.json({ id: body.id, jsonrpc: '2.0', result: { hash: `0x${'11'.repeat(32)}`, number: '0x64', timestamp: '0x7b', transactions: [] } })
-			return Response.json({ id: body.id, jsonrpc: '2.0', result: body.method === 'eth_chainId' ? '0xaa36a7' : '0x' })
-		},
-		hostname: '127.0.0.1',
-		port: 0,
+	const rpcUrl = jsonRpcServer(method => {
+		methods.push(method)
+		if (method === 'eth_getBlockByNumber') return { hash: `0x${'11'.repeat(32)}`, number: '0x64', timestamp: '0x7b', transactions: [] }
+		return method === 'eth_chainId' ? '0xaa36a7' : '0x'
 	})
-	servers.push(rpc)
-	if (rpc.port === undefined) throw new Error('Test RPC did not expose a port')
-	const examplePath = join(import.meta.dir, '..', '..', 'config', 'operator.example.json')
-	const configuration = JSON.parse(await Bun.file(examplePath).text()) as {
-		connectivity: { publicRpcUrls: string[]; quorumRpcUrls: string[]; readRpcUrl: string }
-		runtime: { pollMilliseconds: number; stateFile: string; ui: boolean }
-	}
-	const rpcUrl = `http://127.0.0.1:${rpc.port.toString()}`
-	configuration.connectivity = { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }
-	Reflect.set(configuration, 'network', { chainId: 11_155_111, explorerUrl: 'https://sepolia.etherscan.io', name: 'sepolia' })
-	configuration.runtime.pollMilliseconds = 1_000
-	configuration.runtime.stateFile = join(directory, 'state.json')
-	configuration.runtime.ui = false
-	const configurationPath = join(directory, 'operator.json')
-	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
-	const child = Bun.spawn([process.execPath, join(import.meta.dir, '..', '..', 'src', 'cli', 'run.ts')], {
-		cwd: join(import.meta.dir, '..', '..'),
-		env: { ...process.env, ZOLTAR_LIQUIDATOR_CONFIG: configurationPath },
-		stderr: 'pipe',
-		stdout: 'pipe',
-	})
-	children.push(child)
+	const { configuration, runtime } = await exampleConfiguration()
+	Object.assign(configuration, { connectivity: { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl }, network: sepoliaNetwork })
+	Object.assign(runtime, { pollMilliseconds: 1_000, stateFile: join(directory, 'state.json'), ui: false })
+	const { child } = await startLiquidatorWith(directory, configuration)
 
 	await waitForRpcMethod(methods, 'eth_getCode')
 	expect(methods).toContain('eth_getBlockByNumber')

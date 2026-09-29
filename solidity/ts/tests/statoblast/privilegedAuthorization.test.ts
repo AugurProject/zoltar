@@ -14,6 +14,12 @@ import { getERC20Balance, getETHBalance } from '../../testSupport/simulator/util
 import { ReputationToken_ReputationToken, statoblast_EscalationGame_EscalationGame, statoblast_EscalationGameDepositDelegate_EscalationGameDepositDelegate, statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './fixture'
 
+const assertRejectsWithoutStateChange = async <Snapshot>(readSnapshot: () => Promise<Snapshot>, execute: () => Promise<unknown>, expected: RegExp) => {
+	const before = await readSnapshot()
+	await assert.rejects(execute(), expected)
+	assert.deepStrictEqual(await readSnapshot(), before)
+}
+
 describe('Statoblast: privileged authorization matrix', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 
@@ -63,11 +69,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 				args: [],
 			}),
 		})
-		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>) => {
-			const before = await readSnapshot()
-			await assert.rejects(execute(), /ReputationToken caller must be the Zoltar contract/)
-			assert.deepStrictEqual(await readSnapshot(), before)
-		}
+		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>) => await assertRejectsWithoutStateChange(readSnapshot, execute, /ReputationToken caller must be the Zoltar contract/)
 
 		await assertUnauthorizedUnchanged(() =>
 			writeContractAndWait(attacker, () =>
@@ -134,11 +136,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 			retentionRate: await getCurrentRetentionRate(client, securityPool),
 			totalUnderwritingLimitAttoEth: await getTotalUnderwritingLimitAttoEth(client, securityPool),
 		})
-		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => {
-			const before = await readSnapshot()
-			await assert.rejects(execute(), expected)
-			assert.deepStrictEqual(await readSnapshot(), before)
-		}
+		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => await assertRejectsWithoutStateChange(readSnapshot, execute, expected)
 
 		await assertUnauthorizedUnchanged(
 			() =>
@@ -288,11 +286,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 				args: [],
 			}),
 		})
-		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => {
-			const before = await readSnapshot()
-			await assert.rejects(execute(), expected)
-			assert.deepStrictEqual(await readSnapshot(), before)
-		}
+		const assertUnauthorizedUnchanged = async (execute: () => Promise<unknown>, expected: RegExp) => await assertRejectsWithoutStateChange(readSnapshot, execute, expected)
 
 		await assertUnauthorizedUnchanged(
 			() =>

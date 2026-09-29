@@ -8,7 +8,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import type { LiquidationApprovalDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { LiquidationModal } from '@zoltar/ui-statoblast-shared/features/security-pools/components/LiquidationModal.js'
 import { isVaultHealthyAtFactor, simulateLiquidation } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
@@ -18,32 +18,9 @@ import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { createOracleManagerDetails } from './workflow/builders.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
-
-function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {
-	const details = {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
-		lastPrice: 1n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
-		priceValidUntilTimestamp: 1000n,
-		queuedOperationCostAttoEth: 1n,
-		requestPriceCostAttoEth: 1n,
-		token1: zeroAddress,
-		token2: zeroAddress,
-		...overrides,
-	}
-	return details
-}
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	const underwritingLimitAttoEth = overrides.underwritingLimitAttoEth ?? 2n * 10n ** 18n
@@ -201,34 +178,18 @@ describe('LiquidationModal', () => {
 		}
 	})
 
-	test('disables execute liquidation when the selected pool has ended', async () => {
+	test.each([
+		['execute', true, 'Execute vault liquidation'],
+		['queued', false, 'Queue liquidation'],
+	] as const)('disables %s liquidation when the selected pool has ended', async (_mode, isPriceValid, actionLabel) => {
 		const renderedComponent = await renderLiquidationModal({
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: true,
-			}),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid }),
 			poolState: createEndedPoolState(),
-			selectedPool: createSelectedPool({
-				questionOutcome: 'yes',
-			}),
+			selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation')
-	})
-
-	test('disables queued liquidation when the selected pool has ended', async () => {
-		const renderedComponent = await renderLiquidationModal({
-			currentPoolOracleManagerDetails: createOracleManagerDetails({
-				isPriceValid: false,
-			}),
-			poolState: createEndedPoolState(),
-			selectedPool: createSelectedPool({
-				questionOutcome: 'yes',
-			}),
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
+		expectTransactionButtonDisabled(document.body, actionLabel)
 	})
 
 	test('defaults queued liquidation timeout copy to 5 minutes', async () => {
@@ -2087,37 +2048,26 @@ describe('LiquidationModal', () => {
 		expect(within(document.body).queryByRole('button', { name: 'Load approval limits' })).toBeNull()
 	})
 
-	test('shows an accessible receiver loading status and disables queued submission', async () => {
+	test.each([
+		['shows an accessible receiver loading status and disables queued submission', false, 'Queue liquidation', `0x${'24'.repeat(32)}`],
+		['shows receiver loading once and associates it with disabled execute submission', true, 'Execute vault liquidation', `0x${'25'.repeat(32)}`],
+	] as const)('%s', async (_name, isPriceValid, actionLabel, liquidationApprovalId) => {
 		const receiverVault = getAddress('0x0000000000000000000000000000000000000002')
 		const renderedComponent = await renderLiquidationModal({
-			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid }),
 			liquidationReceiverVault: receiverVault,
-			liquidationApprovalId: `0x${'24'.repeat(32)}`,
+			liquidationApprovalId,
 			loadingLiquidationReceiverVaultSummary: true,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
-
-		const status = within(document.body).getByRole('status')
-		expect(status.textContent).toBe('Loading receiver vault…')
-		expect(within(document.body).getByRole('button', { name: 'Queue liquidation' }).getAttribute('aria-describedby')).toBe(status.id)
-		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
-	})
-
-	test('shows receiver loading once and associates it with disabled execute submission', async () => {
-		const receiverVault = getAddress('0x0000000000000000000000000000000000000002')
-		const renderedComponent = await renderLiquidationModal({
-			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }),
-			liquidationReceiverVault: receiverVault,
-			liquidationApprovalId: `0x${'25'.repeat(32)}`,
-			loadingLiquidationReceiverVaultSummary: true,
-		})
-		cleanupRenderedComponent = renderedComponent.cleanup
+		if (!isPriceValid) fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		const documentQueries = within(document.body)
 		const status = documentQueries.getByRole('status')
+		expect(status.textContent).toBe('Loading receiver vault…')
 		expect(documentQueries.getAllByText('Loading receiver vault…')).toHaveLength(1)
-		expect(documentQueries.getByRole('button', { name: 'Execute vault liquidation' }).getAttribute('aria-describedby')).toBe(status.id)
+		expect(documentQueries.getByRole('button', { name: actionLabel }).getAttribute('aria-describedby')).toBe(status.id)
+		expectTransactionButtonDisabled(document.body, actionLabel)
 	})
 
 	test('uses configured pool minimums in liquidation validation', async () => {

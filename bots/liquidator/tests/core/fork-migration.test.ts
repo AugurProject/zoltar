@@ -6,6 +6,7 @@ import { validatePoolUniverseRep } from '../../src/monitoring/pool-identity.ts'
 const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
 import { initialRuntimeState, operatorSnapshot, type PoolObservation, type UniverseObservation } from '../../src/state/operator-state.ts'
 import { getAddress, zeroAddress } from '@zoltar/bot-shared/ethereum'
+import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
 const wallet = getAddress('0x0000000000000000000000000000000000000009')
 const forker = getAddress('0x0000000000000000000000000000000000000008')
@@ -56,28 +57,7 @@ function settings(approvedUniverses = ['101']) {
 			uiPort: 4183,
 		},
 		selectedPools: [],
-		strategy: {
-			allowAutomaticDeposits: true,
-			allowAutomaticVaultMigrations: true,
-			allowAutomaticWithdrawals: true,
-			candidatePriority: 'largest-bonus',
-			fallbackRepPerEthPrice: '0',
-			maximumGasCostEth: '0.02',
-			maximumLiquidationDebtEth: '25',
-			maximumOracleRequestCostEth: '0.02',
-			maximumPerPoolRep: '10000',
-			maximumTotalDeployedRep: '25000',
-			minimumLiquidationDebtEth: '1',
-			minimumRepWithdrawalRep: '10',
-			minimumRewardValueEth: '0.02',
-			redeemFeesAboveEth: '0.01',
-			stalePriceFundingBufferBps: 15_000,
-			stagedOperationValidForSeconds: 240,
-			vaultTargetHealthBps: 12_500,
-			vaultTopUpHealthBps: 11_000,
-			vaultWithdrawHealthBps: 15_000,
-			walletReserveRep: '100',
-		},
+		strategy: storedStrategyFixture(),
 		submission: {
 			minimumBundleRelaySuccesses: 1,
 			mode: 'public',

@@ -13,7 +13,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
@@ -236,51 +236,27 @@ export function ReportingSection({
 	})()
 	const presetReasons = [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && !isRedundantPresetReason(reason) && reason !== presetBlocker && reasons.indexOf(reason) === index)
 	const vaultFundingLoadingReason = usesWalletFunding && activeReportingDetails?.forkContinuation && actualReportDepositAmount !== undefined && walletDepositAmount === undefined ? reportingCopy.loadingVaultFunding : undefined
-	const reportGuardMessage =
-		vaultFundingLoadingReason ??
-		fullReportingLoadingReason ??
-		reportActionGuardMessage ??
-		reportControlsLockedReason ??
-		getReportingReportGuardMessage({
-			actualDepositAmount: actualReportDepositAmount,
-			accountAddress: accountState.address,
-			contributionFunding,
-			walletFundingAvailable: true,
-			walletDepositAmount,
-			contributionPreviewReason: reportContributionPreview?.reason,
-			isOnActiveAppChain,
-			remainingSelectedOutcomeCapacity,
-			reportAmount: reportingForm.reportAmount,
-			reportingStatus,
-			selectedOutcome,
-			selectedAmount,
-			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
-			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
-			viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
-			viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
-		})
+	const reportGuardParameters = {
+		actualDepositAmount: actualReportDepositAmount,
+		accountAddress: accountState.address,
+		contributionFunding,
+		walletFundingAvailable: true,
+		walletDepositAmount,
+		contributionPreviewReason: reportContributionPreview?.reason,
+		isOnActiveAppChain,
+		remainingSelectedOutcomeCapacity,
+		reportAmount: reportingForm.reportAmount,
+		reportingStatus,
+		selectedOutcome,
+		selectedAmount,
+		viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
+		viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
+		viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
+		viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
+	}
+	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingReportGuardMessage(reportGuardParameters)
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
-	const reportingApprovalGuardMessage =
-		vaultFundingLoadingReason ??
-		getReportingReportGuardMessage({
-			actualDepositAmount: actualReportDepositAmount,
-			accountAddress: accountState.address,
-			contributionFunding,
-			walletFundingAvailable: true,
-			walletDepositAmount,
-			contributionPreviewReason: reportContributionPreview?.reason,
-			isOnActiveAppChain,
-			remainingSelectedOutcomeCapacity,
-			reportAmount: reportingForm.reportAmount,
-			reportingStatus,
-			selectedOutcome,
-			selectedAmount,
-			requireAllowance: false,
-			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
-			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
-			viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
-			viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
-		})
+	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
 
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
@@ -581,14 +557,7 @@ export function ReportingSection({
 
 			{forkTriggeredActions}
 
-			<ErrorNotice message={reportingError} />
-			{reportingError === undefined || showSecurityPoolAddressInput ? undefined : (
-				<div className='actions'>
-					<button className='secondary' disabled={loadingReportingDetails} onClick={onLoadReporting} type='button'>
-						{loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting}
-					</button>
-				</div>
-			)}
+			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={showSecurityPoolAddressInput ? undefined : onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting} />
 		</>
 	)
 	if (embedInCard) return sections

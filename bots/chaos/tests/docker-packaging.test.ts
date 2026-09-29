@@ -3,11 +3,9 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseSettings, serializedSettings } from '../src/config/settings.ts'
-import { batchCommands, dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../../../tooling/testing/packaging-parsers.ts'
+import { assertBotDockerPackaging, batchCommands } from '../../../tooling/testing/packaging-parsers.ts'
 
 const botDirectory = join(import.meta.dir, '..')
-const dockerfile = join(botDirectory, 'Dockerfile')
-const dockerignore = join(botDirectory, 'Dockerfile.dockerignore')
 const composeFile = join(botDirectory, 'compose.yaml')
 const entrypoint = join(botDirectory, 'scripts', 'docker-entrypoint.sh')
 const example = join(botDirectory, 'config', 'operator.example.json')
@@ -94,53 +92,31 @@ describe('chaos Docker packaging', () => {
 		expect(await new Response(child.stderr).text()).toContain('runtime.stateFile must be a file or directory below')
 	})
 
-	test('builds shared packages and runs as the non-root Bun user', async () => {
-		const stages = parseDockerfile(await readFile(dockerfile, 'utf8'))
-		const builder = requireDockerStage(stages, 'shared-builder')
-		const runtime = stages.at(-1)
-		if (runtime === undefined) throw new Error('Missing runtime Docker stage')
-		const copies = stages.flatMap(stage => dockerInstructions(stage, 'COPY'))
-		const runtimeRuns = dockerInstructions(runtime, 'RUN').flatMap(shellCommandSegments)
-		expect(runtimeRuns).toContain('bun install --frozen-lockfile --production --filter @zoltar/chaos')
-		const ignoreSource = await readFile(dockerignore, 'utf8')
-		expect(builder.base).toContain('-alpine')
-		expect(dockerInstructions(builder, 'RUN').flatMap(shellCommandSegments)).toContain('bun ./tooling/repo/build-shared.mts')
-		expect(copies).toEqual(expect.arrayContaining(['--from=shared-builder /source/shared/ ./shared/', 'bots/chaos/src/ ./bots/chaos/src/', 'bots/chaos/scripts/check-runtime.mts ./bots/chaos/scripts/check-runtime.mts', 'bots/chaos/scripts/validate-container-paths.mts ./bots/chaos/scripts/validate-container-paths.mts']))
-		for (const asset of ['ui/coreShared/ts/ ./ui/coreShared/ts/', 'ui/coreShared/css/tokens.css ./ui/coreShared/css/tokens.css']) expect(dockerInstructions(runtime, 'COPY')).toContain(asset)
-		for (const path of ['!ui/coreShared/ts/**', '!ui/coreShared/css/tokens.css']) expect(ignoreSource).toContain(path)
+	test('packages the shared bot image contract with its own entrypoint, launch preflight, and retained state', async () => {
+		const { copies, ignoreSource, service } = await assertBotDockerPackaging({
+			botDirectory,
+			composeService: 'chaos',
+			copiedScripts: ['check-runtime.mts', 'validate-container-paths.mts'],
+			entrypointSource: 'bots/chaos/scripts/docker-entrypoint.sh',
+			packageName: '@zoltar/chaos',
+			port: 4193,
+			runtimeChecks: ['check-runtime.mts'],
+		})
+		expect(ignoreSource).toContain('!ui/coreShared/ts/**')
 		expect(copies.some(copy => copy.includes('solidity/tsconfig.json') && copy.includes('solidity/tsconfig-compile.json'))).toBe(true)
-		expect(copies.some(copy => copy.includes('ui/coreShared/favicon'))).toBe(false)
-		expect(ignoreSource).toContain('!bots/chaos/scripts/check-runtime.mts')
-		expect(ignoreSource).toContain('!bots/chaos/scripts/validate-container-paths.mts')
 		expect(ignoreSource).toContain('!solidity/tsconfig.json')
-		expect(copies).toContain('docs/mainnet-deployment-addresses.json docs/sepolia-deployment-addresses.json ./docs/')
-		for (const network of ['mainnet', 'sepolia']) expect(ignoreSource).toContain(`!docs/${network}-deployment-addresses.json`)
-		expect(ignoreSource).not.toContain('ui/coreShared/favicon')
-		expect(dockerInstructions(runtime, 'USER')).toEqual(['bun'])
-		expect(runtimeRuns).toContain('bun ./scripts/check-runtime.mts')
 		const runtimeCheck = await readFile(join(botDirectory, 'scripts', 'check-runtime.mts'), 'utf8')
 		expect(runtimeCheck).toContain("import { main } from '../src/cli/run.ts'")
 		expect(runtimeCheck).toContain("await buildDashboardScript(join(import.meta.dir, '../src/dashboard/dashboard.ts'))")
-		expect(dockerInstructions(runtime, 'EXPOSE')).toContain('4193')
-		expect(dockerInstructions(runtime, 'VOLUME')).toContain('["/app/bots/chaos/.state"]')
 		const entrypointSource = await readFile(entrypoint, 'utf8')
 		expect(entrypointSource).toContain('[ "$1" = \'bun\' ] && [ "$2" = \'run\' ] && [ "$3" = \'run\' ]')
 		expect(entrypointSource).toContain('bun "$script_directory/../src/cli/doctor.ts" --if-live-capable')
 		expect(entrypointSource.indexOf('--if-live-capable')).toBeLessThan(entrypointSource.indexOf('exec "$@"'))
-	})
-
-	test('publishes only the host-loopback dashboard port and retains state', async () => {
-		const compose = Bun.YAML.parse(await readFile(composeFile, 'utf8')) as { services?: { chaos?: { environment?: Record<string, unknown>; healthcheck?: { test?: unknown[] }; ports?: unknown[]; volumes?: unknown[] } }; volumes?: Record<string, { name?: string }> }
-		const chaos = compose.services?.chaos
-		expect(chaos?.environment?.['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED']).toBe('true')
-		expect(chaos?.environment?.['ZOLTAR_BOT_SIGNER_LOCK_ROOT']).toBe('.state/process-locks')
-		expect(chaos?.environment).not.toHaveProperty('ZOLTAR_BOT_DASHBOARD_PASSWORD')
-		expect(chaos?.ports).toContain('127.0.0.1:4193:4193')
-		expect(chaos?.volumes).toEqual(expect.arrayContaining(['chaos-state:/app/bots/chaos/.state', 'chaos-signer-locks:/app/bots/chaos/.state/process-locks']))
-		expect(compose.volumes?.['chaos-signer-locks']?.name).toBe('zoltar-chaos-signer-locks')
-		const healthCommand = chaos?.healthcheck?.test?.map(String).join(' ') ?? ''
-		expect(healthCommand).toContain("fetch('http://127.0.0.1:4193/healthz')")
-		expect(healthCommand).not.toContain('/readyz')
+		expect(service.environment?.['ZOLTAR_BOT_SIGNER_LOCK_ROOT']).toBe('.state/process-locks')
+		expect(service.volumes).toEqual(expect.arrayContaining(['chaos-state:/app/bots/chaos/.state', 'chaos-signer-locks:/app/bots/chaos/.state/process-locks']))
+		expect(service.healthcheck?.test?.map(String).join(' ') ?? '').not.toContain('/readyz')
+		const compose: unknown = Bun.YAML.parse(await readFile(composeFile, 'utf8'))
+		expect(compose).toMatchObject({ volumes: { 'chaos-signer-locks': { name: 'zoltar-chaos-signer-locks' } } })
 	})
 
 	test('creates a private paused dry-run operator configuration on first start', async () => {

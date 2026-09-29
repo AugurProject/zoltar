@@ -238,14 +238,13 @@ export function useZoltarUniverse(
 		})
 	}
 
-	const loadQuestions = async (): Promise<void> => {
-		if (!isMounted.current) return
-		if (!zoltarDeployed) return
+	const runQuestionLoad = async <T>({ load, onLoaded, errorFallback }: { load: (readClient: ReturnType<typeof createConnectedReadClient>) => Promise<T>; onLoaded: (loaded: T) => void; errorFallback: string }): Promise<void> => {
 		const isCountCurrent = nextQuestionCountLoad()
 		const isQuestionsCurrent = nextQuestionsLoad()
 		const questionLoadGeneration = questionLoadGenerationRef.current
 		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
 		const readClient = dependencies.createConnectedReadClient()
+		const isCurrentLoad = () => isMounted.current && isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)
 		let loadError: unknown
 		zoltarQuestionsError.value = undefined
 
@@ -253,8 +252,7 @@ export function useZoltarUniverse(
 			isCurrent: isCountCurrent,
 			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
 			onSuccess: questionCount => {
-				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+				if (!isCurrentLoad()) return
 				zoltarQuestionCount.value = questionCount
 			},
 			onError: error => {
@@ -264,10 +262,30 @@ export function useZoltarUniverse(
 
 		const questionsTask = questionsLoad.run({
 			isCurrent: isQuestionsCurrent,
-			load: async () => await dependencies.loadAllZoltarQuestions(readClient),
-			onSuccess: questions => {
-				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+			load: async () => await load(readClient),
+			onSuccess: loaded => {
+				if (!isCurrentLoad()) return
+				onLoaded(loaded)
+			},
+			onError: error => {
+				loadError = loadError ?? error
+			},
+		})
+
+		await Promise.allSettled([countTask, questionsTask])
+		if (!isCountCurrent() || !isQuestionsCurrent() || !isCurrentLoad()) return
+		if (loadError !== undefined) {
+			zoltarQuestionsError.value = getErrorMessage(loadError, errorFallback)
+			throw loadError
+		}
+	}
+
+	const loadQuestions = async (): Promise<void> => {
+		if (!isMounted.current) return
+		if (!zoltarDeployed) return
+		await runQuestionLoad({
+			load: async readClient => await dependencies.loadAllZoltarQuestions(readClient),
+			onLoaded: questions => {
 				zoltarQuestions.value = questions
 				clearResolvedQuestionLookupError(questions)
 				hasLoadedZoltarQuestions.value = true
@@ -276,68 +294,26 @@ export function useZoltarUniverse(
 					zoltarQuestionPage.value = buildQuestionPageFromQuestions(questions, currentQuestionPage)
 				}
 			},
-			onError: error => {
-				loadError = loadError ?? error
-			},
+			errorFallback: 'Failed to load Zoltar questions',
 		})
-
-		await Promise.allSettled([countTask, questionsTask])
-		if (!isMounted.current || !isCountCurrent() || !isQuestionsCurrent() || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
-		if (loadError !== undefined) {
-			zoltarQuestionsError.value = getErrorMessage(loadError, 'Failed to load Zoltar questions')
-			throw loadError
-		}
 	}
 
 	const loadQuestionsPage = async (pageIndex: number, pageSize: number): Promise<void> => {
 		if (!isMounted.current) return
 		requestedQuestionPage.current = { pageIndex, pageSize }
 		if (!zoltarDeployed) return
-		const isCountCurrent = nextQuestionCountLoad()
-		const isQuestionsCurrent = nextQuestionsLoad()
-		const questionLoadGeneration = questionLoadGenerationRef.current
-		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
-		const readClient = dependencies.createConnectedReadClient()
-		let loadError: unknown
-		zoltarQuestionsError.value = undefined
-
-		const countTask = questionCountLoad.run({
-			isCurrent: isCountCurrent,
-			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
-			onSuccess: questionCount => {
-				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
-				zoltarQuestionCount.value = questionCount
-			},
-			onError: error => {
-				loadError = loadError ?? error
-			},
-		})
-
-		const questionsTask = questionsLoad.run({
-			isCurrent: isQuestionsCurrent,
-			load: async () => await dependencies.loadZoltarQuestionPage(readClient, pageIndex, pageSize),
-			onSuccess: page => {
-				if (!isMounted.current) return
-				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
+		await runQuestionLoad({
+			load: async readClient => await dependencies.loadZoltarQuestionPage(readClient, pageIndex, pageSize),
+			onLoaded: page => {
 				zoltarQuestionPage.value = page
 				questionPageCommitVersionRef.current += 1
-				zoltarQuestionPageQueries.set(`${questionLoadContext.environmentRefreshKey}:${pageIndex}:${pageSize}`, page)
+				zoltarQuestionPageQueries.set(`${environmentRefreshKey}:${pageIndex}:${pageSize}`, page)
 				const mergedQuestions = mergeQuestionLists(zoltarQuestions.value, page.questions)
 				zoltarQuestions.value = mergedQuestions
 				clearResolvedQuestionLookupError(mergedQuestions)
 			},
-			onError: error => {
-				loadError = loadError ?? error
-			},
+			errorFallback: 'Failed to load Zoltar question page',
 		})
-
-		await Promise.allSettled([countTask, questionsTask])
-		if (!isMounted.current || !isCountCurrent() || !isQuestionsCurrent() || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
-		if (loadError !== undefined) {
-			zoltarQuestionsError.value = getErrorMessage(loadError, 'Failed to load Zoltar question page')
-			throw loadError
-		}
 	}
 
 	const loadQuestionById = async (questionId: string): Promise<void> => {

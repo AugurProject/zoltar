@@ -4,6 +4,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LivePortfolio } from '../../features/LivePortfolio.js'
 import type { LiveMarket } from '../../protocol/live.js'
+import { liveMarketFixture } from '../support/liveMarketFixture.js'
 
 const SET = 10n ** 18n
 const NOW = 1_000_000n
@@ -11,7 +12,7 @@ const openPool: Address = `0x${'12'.repeat(20)}`
 const resolvedPool: Address = `0x${'56'.repeat(20)}`
 const shareToken: Address = `0x${'34'.repeat(20)}`
 
-const openMarket: LiveMarket = {
+const openMarket = liveMarketFixture({
 	pool: openPool,
 	pair: `0x${'9a'.repeat(20)}`,
 	shareToken,
@@ -20,26 +21,14 @@ const openMarket: LiveMarket = {
 	title: 'Open market',
 	description: 'Overview fixture',
 	endTime: NOW + 2n * 24n * 60n * 60n,
-	statoblastSecurityMultiplierBps: 20_000n,
 	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
 	shareTokenSupplyAttoShares: 100n * SET,
 	settlementCollateralAttoEth: 100n * 10n ** 18n,
-	currentRetentionRate: 10n ** 18n,
-	totalCapacityOwnershipAttoRep: 1n,
-	feeEligibleCapacityOwnershipAttoRep: 1n,
-	mintingCapacityCeilingAttoEth: 1n,
-	availableMintingCapacityAttoEth: 1n,
-	feeBps: 30n,
 	tradingStatus: undefined,
-	questionOutcome: 3,
 	yesReserve: 10n * SET,
 	noReserve: 10n * SET,
 	lpTotalSupply: 10n * SET,
-}
+})
 const resolvedMarket: LiveMarket = { ...openMarket, pool: resolvedPool, title: 'Resolved market', questionOutcome: 1 }
 
 function scope(pool: Address) {

@@ -18,6 +18,9 @@ import type {
 	validateLiveDeployment,
 } from '../../protocol/live.js'
 import type { TransactionPhase } from './transactionWorkflow.js'
+import type { TradeSettings } from '../../lib/tradeSettings.js'
+import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
+import type { GuardedWalletWrite } from '../../protocol/tradeQuote.js'
 
 type EntryQuote = Awaited<ReturnType<typeof simulateEntry>>
 type ExitQuote = Awaited<ReturnType<typeof simulateExit>>
@@ -45,4 +48,45 @@ export type LiveTradingControllerServices = Readonly<{
 	switchWalletChain: typeof switchInjectedChain
 	validateLiveDeployment: typeof validateLiveDeployment
 	walletChainId: typeof readInjectedChainIdNumber
+}>
+
+/** The first step of a workflow panel when no usable wallet is connected: connect, or switch back to the deployment chain. */
+export type PanelWallet = Readonly<{ actionLabel: string; connect(): Promise<void> }>
+
+/** Market, wallet, and refresh wiring shared by the liquidity and settlement workflow controllers. */
+export type LiveWorkflowContext = Readonly<{
+	configuration: DeploymentConfiguration
+	market: LiveMarket
+	balanceState: BalanceState
+	account: Address | undefined
+	walletClient: WalletClient | undefined
+	externallyLocked: boolean
+	settings: TradeSettings
+	refresh(): Promise<void>
+	onKnownReceipt(): void
+	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
+	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
+	onWorkflowLockChange(locked: boolean): void
+}>
+
+/** Props the liquidity and settlement panels take on top of their controller context. */
+export type LiveWorkflowPanelProps = LiveWorkflowContext &
+	Readonly<{
+		balances: LiveBalances | undefined
+		balanceError: string | undefined
+		networkMismatchReason: string | undefined
+		wallet: PanelWallet
+		retryBalances(): Promise<void>
+	}>
+
+/** Route, deployment, and universe inputs shared by the trading controller and its market discovery controller. */
+export type LiveTradingRouteContext = Readonly<{
+	route: string
+	configuration: DeploymentConfiguration | undefined
+	configurationError: string | undefined
+	selectedUniverseId: string | undefined
+	/** The `universe` parameter the application is currently honouring; recorded in each answer's scope. */
+	urlUniverseId: bigint | undefined
+	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
+	walletSummaryRetryNonce: number
 }>

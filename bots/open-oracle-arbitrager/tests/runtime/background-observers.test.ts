@@ -1,35 +1,14 @@
-import { emptySettlementSnapshot } from '#state/settlement-store'
 import { expect, spyOn, test } from 'bun:test'
 import { parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { networkConfiguration } from '#config/network'
 import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from '../../src/runtime/background-observers.ts'
 import type { OperatorState } from '#state/operator-state'
+import { operatorStateFixture } from '../support/operator-state.ts'
 
 const network = networkConfiguration('sepolia')
 
 function operatorState(): OperatorState {
-	return {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		endpointChecks: [],
-		executionHistory: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		operationLog: [],
-		opportunities: [],
-		paused: false,
-		positions: [],
-		priceHistory: [],
-		reportPaths: [],
-		status: 'syncing',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
-	}
+	return operatorStateFixture()
 }
 
 function centralizedMarkets(assetAddress: `0x${string}`, sources: readonly { exchangeId: string; repMarket: string }[] = []) {

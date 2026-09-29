@@ -37,7 +37,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool, getYesChildPool, forkOwnGameAfterQuestionEnd } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -71,19 +71,12 @@ describe('Statoblast: fork migration', () => {
 		test('redeemRepFromVault removes redeemed backingUnits from the child pool denominator once the child pool is operational', async () => {
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			const attackerVaultBeforeRedeem = await getSecurityVault(client, yesSecurityPool.securityPool, attackerClient.account.address)
@@ -121,8 +114,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -177,8 +169,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateVault(newMinter, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'child pool should wait in migration state before accounting is settled')
 			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, 1n), /Pool not operational|Pool inactive/)
@@ -252,8 +243,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -309,8 +299,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -352,8 +341,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateShares(openInterestHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.No, [QuestionOutcome.Yes])
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
@@ -392,13 +380,7 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('can claim parent escalation deposits before migrateVault', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			const parentVaultBeforeEscalationClaim = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)

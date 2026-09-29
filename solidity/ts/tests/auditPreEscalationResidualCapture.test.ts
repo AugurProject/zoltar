@@ -1,35 +1,24 @@
-import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { getQuestionOutcome } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
-import { depositRepToVault, depositToEscalationGame, getSecurityPoolsEscalationGame, getSecurityVault, getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
+import { depositRepToVault, getSecurityVault, getTotalPoolHeldAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { DAY, TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
+import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
-import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './statoblast/fixture'
+import { describe, test } from 'bun:test'
+import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
+import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals, redeemOwnVaultPayout, sweepResidualRep, withdrawFirstDepositOfEachOutcome } from './residualCaptureHelpers'
 
 describe('Audit: pre-escalation residual capture', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 	const { repDeposit } = fixture
 
-	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
-	let client: StatoblastVaultAccountingFixture['client']
-	let securityPoolAddresses: StatoblastVaultAccountingFixture['securityPoolAddresses']
-	let questionId: StatoblastVaultAccountingFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	test('rejects vault admission as soon as the question ends', async () => {
+		const { mockWindow, client, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
@@ -38,6 +27,7 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('keeps vault admission open before the question end timestamp and closes it exactly at the boundary', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const depositor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(depositor, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -50,14 +40,11 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('prevents an exact-end deposit before the first dispute from capturing an honest vault residual', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-		const attoRep = 10n ** 18n
-		const lowLosingPrincipal = 100n * attoRep
-		const bindingLosingPrincipal = 200n * attoRep
-		const winningPrincipal = 300n * attoRep
-		const totalEscalationPrincipal = lowLosingPrincipal + bindingLosingPrincipal + winningPrincipal
-		await approveAndDepositRepToVault(escalationDepositor, totalEscalationPrincipal, questionId)
+		const { lowLosingPrincipal, totalPrincipal } = ordinaryEscalationPrincipals
+		await approveAndDepositRepToVault(escalationDepositor, totalPrincipal, questionId)
 
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -75,39 +62,20 @@ describe('Audit: pre-escalation residual capture', () => {
 		const attackerVaultBeforeDispute = await getSecurityVault(client, securityPoolAddresses.securityPool, attacker.account.address)
 		strictEqualTypeSafe(attackerVaultBeforeDispute.repBackingUnits, 0n, 'the rejected attacker should receive no residual-eligible backing units')
 		strictEqualTypeSafe(attackerVaultBeforeDispute.underwritingLimitAttoEth, 0n, 'the rejected attacker should assume no open-interest allocation')
-		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, lowLosingPrincipal)
-		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.No, bindingLosingPrincipal)
-		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningPrincipal)
+		await depositOrdinaryEscalationPrincipals(escalationDepositor, securityPoolAddresses.securityPool)
 
-		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
-		const escalationActivation = await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: escalationGame,
-			functionName: 'activationTime',
-			args: [],
-		})
-		await mockWindow.setTime(escalationActivation + 49n * DAY + 1n)
+		const escalationGame = await advancePastOrdinaryEscalationDeadline(client, mockWindow, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'the dispute should resolve YES normally')
 
-		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
-		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.No, [0n])
-		await withdrawFromEscalationGame(attacker, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, [0n])
+		await withdrawFirstDepositOfEachOutcome(attacker, securityPoolAddresses.securityPool)
 		strictEqualTypeSafe(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), escalationGame), lowLosingPrincipal, 'the low losing side should remain as terminal residual')
 
 		const poolRepBeforeSweep = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
-		const sweepHash = await attacker.writeContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: escalationGame,
-			functionName: 'sweepResidualRepToSecurityPool',
-			args: [],
-		})
-		await attacker.waitForTransactionReceipt({ hash: sweepHash })
+		await sweepResidualRep(attacker, escalationGame)
 		strictEqualTypeSafe((await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)) - poolRepBeforeSweep, lowLosingPrincipal, 'the entire residual should enter the passive backing pool')
 
-		const honestWalletBeforeRedeem = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-		await redeemRepFromVault(client, securityPoolAddresses.securityPool, client.account.address)
+		const honestPayout = await redeemOwnVaultPayout(client, securityPoolAddresses.securityPool, addressString(GENESIS_REPUTATION_TOKEN))
 		const attackerNetProfit = (await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), attacker.account.address)) - attackerWalletBefore
-		const honestPayout = (await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)) - honestWalletBeforeRedeem
 		const honestResidual = honestPayout - repDeposit
 		const honestResidualShortfall = lowLosingPrincipal - honestResidual
 

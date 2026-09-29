@@ -54,6 +54,52 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 
 	const zeroPeaks = () => Array.from({ length: 64 }, () => zeroHash)
 
+	type StartFromForkArgs = readonly [startBondAttoRep: bigint, nonDecisionThresholdAttoRep: bigint, elapsedAtFork: bigint, fixedQuestionOutcome: QuestionOutcome, winnerHaircutPaidByFork: boolean, forkCarryInitialBackingAttoRep: bigint]
+
+	const deployStartedForkContinuation = async (zoltar: Address, proofVerifier: Address, startFromForkArgs: StartFromForkArgs) => {
+		const securityPool = await deployContract(
+			client,
+			encodeDeployData({
+				abi: proofTestPoolArtifact.abi,
+				bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
+				args: [zoltar, 0n, zeroAddress],
+			}),
+		)
+		const escalationGame = await deployContract(
+			client,
+			encodeDeployData({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
+				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
+			}),
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: proofTestPoolArtifact.abi,
+				address: securityPool,
+				functionName: 'setEscalationGame',
+				args: [escalationGame],
+			}),
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: ReputationToken_ReputationToken.abi,
+				address: repTokenAddress,
+				functionName: 'approve',
+				args: [securityPool, MAX_UINT256],
+			}),
+		)
+		await writeContractAndWait(client, () =>
+			client.writeContract({
+				abi: statoblast_EscalationGame_EscalationGame.abi,
+				address: escalationGame,
+				functionName: 'startFromFork',
+				args: startFromForkArgs,
+			}),
+		)
+		return { escalationGame, securityPool }
+	}
+
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
@@ -80,46 +126,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		const exactMinimumBacking = sourcePrincipalAtFork - sourcePrincipalAtFork / 5n
 
 		const deployContinuation = async (initialBacking: bigint) => {
-			const securityPool = await deployContract(
-				client,
-				encodeDeployData({
-					abi: proofTestPoolArtifact.abi,
-					bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
-					args: [getZoltarAddress(), 0n, zeroAddress],
-				}),
-			)
-			const escalationGame = await deployContract(
-				client,
-				encodeDeployData({
-					abi: statoblast_EscalationGame_EscalationGame.abi,
-					bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-					args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
-				}),
-			)
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					abi: proofTestPoolArtifact.abi,
-					address: securityPool,
-					functionName: 'setEscalationGame',
-					args: [escalationGame],
-				}),
-			)
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					abi: ReputationToken_ReputationToken.abi,
-					address: repTokenAddress,
-					functionName: 'approve',
-					args: [securityPool, MAX_UINT256],
-				}),
-			)
-			await writeContractAndWait(client, () =>
-				client.writeContract({
-					abi: statoblast_EscalationGame_EscalationGame.abi,
-					address: escalationGame,
-					functionName: 'startFromFork',
-					args: [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking],
-				}),
-			)
+			const { escalationGame, securityPool } = await deployStartedForkContinuation(getZoltarAddress(), proofVerifier, [1n, 10n, 0n, QuestionOutcome.Yes, true, initialBacking])
 
 			const invalidPeaks = zeroPeaks()
 			const yesPeaks = zeroPeaks()
@@ -199,11 +206,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 			const zoltar = await deployContract(client, encodeDeployData({ abi: Zoltar_Zoltar.abi, bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`, args: [canonicalQuestionData, repTokenAddress, 20n, forkBurnDivisor] }))
 			await mockWindow.addStateOverrides({ [zoltar]: { stateDiff: { [universeSupplySlot]: FORK_THRESHOLD * 20n } } })
 			const proofVerifier = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.abi, bytecode: `0x${statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier.evm.bytecode.object}` }))
-			const securityPool = await deployContract(client, encodeDeployData({ abi: proofTestPoolArtifact.abi, bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`, args: [zoltar, 0n, zeroAddress] }))
-			const escalationGame = await deployContract(client, encodeDeployData({ abi: statoblast_EscalationGame_EscalationGame.abi, bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`, args: [securityPool, repTokenAddress, proofVerifier, claimDelegate] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: proofTestPoolArtifact.abi, address: securityPool, functionName: 'setEscalationGame', args: [escalationGame] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: ReputationToken_ReputationToken.abi, address: repTokenAddress, functionName: 'approve', args: [securityPool, MAX_UINT256] }))
-			await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGame, functionName: 'startFromFork', args: [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD] }))
+			const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.None, false, FORK_THRESHOLD])
 			await writeContractAndWait(client, () =>
 				client.writeContract({
 					abi: initializeForkCarrySnapshotWithResolutionBalancesAbi,
@@ -297,46 +300,7 @@ describe('Audit regression: escalation fork burn divisor solvency', () => {
 		)
 
 		const childBacking = FORK_THRESHOLD - FORK_THRESHOLD / forkBurnDivisor
-		const securityPool = await deployContract(
-			client,
-			encodeDeployData({
-				abi: proofTestPoolArtifact.abi,
-				bytecode: `0x${proofTestPoolArtifact.evm.bytecode.object}`,
-				args: [zoltar, 0n, zeroAddress],
-			}),
-		)
-		const escalationGame = await deployContract(
-			client,
-			encodeDeployData({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				bytecode: `0x${statoblast_EscalationGame_EscalationGame.evm.bytecode.object}`,
-				args: [securityPool, repTokenAddress, proofVerifier, claimDelegate],
-			}),
-		)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: proofTestPoolArtifact.abi,
-				address: securityPool,
-				functionName: 'setEscalationGame',
-				args: [escalationGame],
-			}),
-		)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: ReputationToken_ReputationToken.abi,
-				address: repTokenAddress,
-				functionName: 'approve',
-				args: [securityPool, MAX_UINT256],
-			}),
-		)
-		await writeContractAndWait(client, () =>
-			client.writeContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				address: escalationGame,
-				functionName: 'startFromFork',
-				args: [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, true, childBacking],
-			}),
-		)
+		const { escalationGame, securityPool } = await deployStartedForkContinuation(zoltar, proofVerifier, [START_BOND, NON_DECISION_THRESHOLD, ESCALATION_TIME_LENGTH, QuestionOutcome.Yes, true, childBacking])
 
 		const yesParentDepositIndex = 1_001n + forkBurnDivisor
 		const noParentDepositIndex = 2_001n + forkBurnDivisor

@@ -3,8 +3,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -169,12 +168,6 @@ function createHarness(dependencies: UseOpenOracleOperationsDependencies<TestOpe
 	}
 }
 
-function requireHookState(state: UseOpenOracleOperationsState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
-}
-
 function createTokenAccessReadResults({ token1Allowance = 100n, token2Allowance = 25n, unavailableToken }: { token1Allowance?: bigint; token2Allowance?: bigint; unavailableToken?: 'token1' | 'token2' | undefined } = {}): TestTokenAccessReadResult[] {
 	const createAllowanceResult = (token: 'token1' | 'token2', allowance: bigint): TestTokenAccessReadResult => (token === unavailableToken ? { error: new Error(`${token} allowance RPC unavailable`), status: 'failure' } : { result: allowance, status: 'success' })
 	return [createAllowanceResult('token1', token1Allowance), createAllowanceResult('token2', token2Allowance), { result: 1_000n, status: 'success' }, { result: 1_000n, status: 'success' }]
@@ -198,21 +191,7 @@ async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, act
 }
 
 describe('useOpenOracleOperations', () => {
-	let restoreActiveEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			restoreActiveEnvironment?.()
-			restoreActiveEnvironment = undefined
-			mock.restore()
-		},
-	})
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {
 		const dependencies = createOpenOracleOperationsDependencies()
@@ -225,7 +204,7 @@ describe('useOpenOracleOperations', () => {
 			false,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).approveToken1(1n)
@@ -247,7 +226,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		expect(requireHookState(hookState).openOracleReportLookupState).toBe('unknown')
 		await act(async () => {
@@ -295,7 +274,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let firstLoadPromise = Promise.resolve()
 		await act(() => {
@@ -339,7 +318,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -370,7 +349,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -430,7 +409,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -489,7 +468,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -528,7 +507,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -576,7 +555,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -625,7 +604,7 @@ describe('useOpenOracleOperations', () => {
 				hookState = state
 			})
 			const renderedComponent = await renderIntoDocument(h(Harness, {}))
-			cleanupRenderedComponent = renderedComponent.cleanup
+			trackCleanup(renderedComponent.cleanup)
 
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -671,7 +650,7 @@ describe('useOpenOracleOperations', () => {
 				hookState = state
 			})
 			const renderedComponent = await renderIntoDocument(h(Harness, {}))
-			cleanupRenderedComponent = renderedComponent.cleanup
+			trackCleanup(renderedComponent.cleanup)
 
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -715,7 +694,7 @@ describe('useOpenOracleOperations', () => {
 				hookState = state
 			})
 			const renderedComponent = await renderIntoDocument(h(Harness, {}))
-			cleanupRenderedComponent = renderedComponent.cleanup
+			trackCleanup(renderedComponent.cleanup)
 
 			await act(async () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -764,7 +743,7 @@ describe('useOpenOracleOperations', () => {
 					hookState = state
 				})
 				const renderedComponent = await renderIntoDocument(h(Harness, {}))
-				cleanupRenderedComponent = renderedComponent.cleanup
+				trackCleanup(renderedComponent.cleanup)
 
 				await act(async () => {
 					await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -813,7 +792,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -850,7 +829,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -910,7 +889,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -992,7 +971,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1057,7 +1036,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1114,7 +1093,7 @@ describe('useOpenOracleOperations', () => {
 			{ onTransactionFailed, onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1197,7 +1176,7 @@ describe('useOpenOracleOperations', () => {
 			{ onReportSettled, onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1281,7 +1260,7 @@ describe('useOpenOracleOperations', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<ContextHarness enabled />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1342,7 +1321,7 @@ describe('useOpenOracleOperations', () => {
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1420,7 +1399,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1502,7 +1481,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1570,7 +1549,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1636,7 +1615,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1699,7 +1678,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
@@ -1749,7 +1728,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
@@ -1810,7 +1789,7 @@ describe('useOpenOracleOperations', () => {
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
@@ -1860,7 +1839,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
@@ -1905,7 +1884,7 @@ describe('useOpenOracleOperations', () => {
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
@@ -1943,7 +1922,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setOpenOracleCreateForm(current => ({
@@ -2012,7 +1991,7 @@ describe('useOpenOracleOperations', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())

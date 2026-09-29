@@ -1,5 +1,4 @@
-import { mkdir, open, readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { appendFileDurably, durableFilesystem, readFileIfPresent, type DurableAppendFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { attemptHasFinality } from '#execution/execution-orchestration'
@@ -285,31 +284,15 @@ function parseTransactionIntent(value: unknown): DurableTransactionIntent | unde
 	return { data: intent['data'] as Hex, to: intent['to'] as Address, value: intent['value'] }
 }
 
-type SettlementJournalFileHandle = {
-	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
-	sync: () => Promise<unknown>
-}
-
-export type SettlementJournalFilesystem = {
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'a' | 'r', mode?: number) => Promise<SettlementJournalFileHandle>
+export type SettlementJournalFilesystem = DurableAppendFilesystem & {
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
 }
 
-const settlementJournalFilesystem: SettlementJournalFilesystem = { mkdir, open, readFile }
-
 /** Append-only JSONL journal; the latest line per transaction hash is the current record, newest first. */
-export async function loadSettlementJournal(path: string, expectedChainId: number, filesystem: SettlementJournalFilesystem = settlementJournalFilesystem): Promise<SettlementRecord[]> {
+export async function loadSettlementJournal(path: string, expectedChainId: number, filesystem: SettlementJournalFilesystem = durableFilesystem): Promise<SettlementRecord[]> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected settlement journal chain ID must be a positive integer')
-	let contents: string
-	try {
-		contents = await filesystem.readFile(path, 'utf8')
-	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return []
-		throw error
-	}
+	const contents = await readFileIfPresent(path, filesystem)
+	if (contents === undefined) return []
 	const unique = new Map<string, SettlementRecord>()
 	for (const [index, line] of contents.split('\n').entries()) {
 		if (line.trim() === '') continue
@@ -329,23 +312,9 @@ export async function loadSettlementJournal(path: string, expectedChainId: numbe
 	return [...unique.values()].reverse()
 }
 
-export async function appendSettlementRecord(path: string, record: SettlementRecord, chainId: number, filesystem: SettlementJournalFilesystem = settlementJournalFilesystem) {
+export async function appendSettlementRecord(path: string, record: SettlementRecord, chainId: number, filesystem: SettlementJournalFilesystem = durableFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Settlement journal chain ID must be a positive integer')
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const handle = await filesystem.open(path, 'a', 0o600)
-	try {
-		await handle.chmod(0o600)
-		await handle.appendFile(`${JSON.stringify({ chainId, record })}\n`, { encoding: 'utf8' })
-		await handle.sync()
-	} finally {
-		await handle.close()
-	}
-	const directoryHandle = await filesystem.open(dirname(path), 'r')
-	try {
-		await directoryHandle.sync()
-	} finally {
-		await directoryHandle.close()
-	}
+	await appendFileDurably(path, `${JSON.stringify({ chainId, record })}\n`, filesystem)
 }
 
 /** Replaces the record with the same transaction hash, keeping newest-first order for the dashboard. */

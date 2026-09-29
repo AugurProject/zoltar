@@ -1,15 +1,39 @@
 import { describe, expect, test } from 'bun:test'
 import { APPLICATION_TYPESCRIPT_HEAP_MB, getApplicationTypeScriptCommand, getApplicationTypeScriptEnvironment, getApplicationTypeScriptHeapOption, getApplicationTypeScriptNodeOptions } from './run-app-typescript.mts'
 
+const DEFAULT_HEAP_OPTION = `--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`
+const PRINT_HEAP_AND_TITLE = 'console.log(JSON.stringify({ heapOption: process.execArgv[0], title: process.title }))'
+
+const requireNode = () => {
+	const nodeExecutablePath = Bun.which('node')
+	if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript NODE_OPTIONS regression tests')
+	return nodeExecutablePath
+}
+
+const spawnNode = (leadingArgs: readonly string[], script: string, env: Record<string, string | undefined>) =>
+	Bun.spawnSync([requireNode(), ...leadingArgs, '--input-type=module', '--eval', script], {
+		env,
+		stderr: 'pipe',
+		stdout: 'pipe',
+	})
+
+const runNode = (leadingArgs: readonly string[], script: string, env: Record<string, string | undefined>) => {
+	const result = spawnNode(leadingArgs, script, env)
+	if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
+	return new TextDecoder().decode(result.stdout).trim()
+}
+
+const inheritedEnvironment = (nodeOptions: string) => getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions })
+
 describe('application TypeScript process arguments', () => {
 	test('uses the repository default when NODE_OPTIONS does not set a heap limit', () => {
-		expect(getApplicationTypeScriptHeapOption(undefined)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
-		expect(getApplicationTypeScriptHeapOption(' --trace-warnings ')).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
+		expect(getApplicationTypeScriptHeapOption(undefined)).toBe(DEFAULT_HEAP_OPTION)
+		expect(getApplicationTypeScriptHeapOption(' --trace-warnings ')).toBe(DEFAULT_HEAP_OPTION)
 	})
 
 	test('passes an explicit V8 heap limit directly to Node', () => {
 		expect(getApplicationTypeScriptHeapOption('--max-old-space-size=8192')).toBe('--max-old-space-size=8192')
-		expect(getApplicationTypeScriptHeapOption('--trace-warnings --max_old_space_size 7168')).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
+		expect(getApplicationTypeScriptHeapOption('--trace-warnings --max_old_space_size 7168')).toBe(DEFAULT_HEAP_OPTION)
 		expect(getApplicationTypeScriptHeapOption('--max_old_space_size=+7168')).toBe('--max-old-space-size=7168')
 		expect(getApplicationTypeScriptHeapOption('--max-old-space-size="7168" "--max_old_space_size=8192"')).toBe('--max-old-space-size=8192')
 		expect(getApplicationTypeScriptCommand('C:\\Program Files\\nodejs\\node.exe', 'C:\\projects\\zoltar\\node_modules\\typescript\\bin\\tsc', '--trace-warnings')).toEqual([
@@ -23,16 +47,8 @@ describe('application TypeScript process arguments', () => {
 	})
 
 	test('preserves the effective heap limit from quoted and repeated NODE_OPTIONS', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript heap regression test')
 		const nodeOptions = '--max-old-space-size="256" "--max_old_space_size=384"'
-		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', 'console.log(process.execArgv[0])'], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
-		expect(new TextDecoder().decode(result.stdout).trim()).toBe('--max-old-space-size=384')
+		expect(runNode([getApplicationTypeScriptHeapOption(nodeOptions)], 'console.log(process.execArgv[0])', inheritedEnvironment(nodeOptions))).toBe('--max-old-space-size=384')
 	})
 
 	test('removes heap flags from inherited NODE_OPTIONS while preserving other options', () => {
@@ -44,101 +60,33 @@ describe('application TypeScript process arguments', () => {
 		expect(getApplicationTypeScriptEnvironment({ Node_Options: '--trace-warnings --max-old-space-size=8192', PATH: 'kept' }, 'win32')).toEqual({ NODE_OPTIONS: '--trace-warnings', PATH: 'kept' })
 	})
 
-	test('preserves escaped quotes in non-heap NODE_OPTIONS', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript option-preservation test')
-		const nodeOptions = '--title="hello \\"world\\"" --max-old-space-size=384'
-		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
-		expect(childNodeOptions).toBe('--title="hello \\"world\\""')
-		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', 'console.log(JSON.stringify({ heapOption: process.execArgv[0], title: process.title }))'], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
-		const output = JSON.parse(new TextDecoder().decode(result.stdout)) as { heapOption: string; title: string }
-		expect(output.title).toBe('hello "world"')
-		expect(output.heapOption).toBe('--max-old-space-size=384')
-	})
-
-	test('treats apostrophes as literals while finding a later heap option', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript apostrophe regression test')
-		const nodeOptions = "--title=Codex's --max-old-space-size=384"
-		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
-		expect(childNodeOptions).toBe("--title=Codex's")
-		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', 'console.log(JSON.stringify({ heapOption: process.execArgv[0], title: process.title }))'], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
-		const output = JSON.parse(new TextDecoder().decode(result.stdout)) as { heapOption: string; title: string }
-		expect(output.title).toBe("Codex's")
-		expect(output.heapOption).toBe('--max-old-space-size=384')
-	})
-
-	test('decodes escaped heap digits while preserving raw non-heap options', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript escape regression test')
-		const nodeOptions = '--title="kept \\q" --max-old-space-size="3\\84"'
-		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
-		expect(childNodeOptions).toBe('--title="kept \\q"')
-		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', 'console.log(JSON.stringify({ heapOption: process.execArgv[0], title: process.title }))'], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
-		const output = JSON.parse(new TextDecoder().decode(result.stdout)) as { heapOption: string; title: string }
-		expect(output.title).toBe('kept q')
-		expect(output.heapOption).toBe('--max-old-space-size=384')
+	test.each([
+		{ name: 'preserves escaped quotes in non-heap NODE_OPTIONS', nodeOptions: '--title="hello \\"world\\"" --max-old-space-size=384', childNodeOptions: '--title="hello \\"world\\""', title: 'hello "world"' },
+		{ name: 'treats apostrophes as literals while finding a later heap option', nodeOptions: "--title=Codex's --max-old-space-size=384", childNodeOptions: "--title=Codex's", title: "Codex's" },
+		{ name: 'decodes escaped heap digits while preserving raw non-heap options', nodeOptions: '--title="kept \\q" --max-old-space-size="3\\84"', childNodeOptions: '--title="kept \\q"', title: 'kept q' },
+	])('$name', ({ nodeOptions, childNodeOptions, title }) => {
+		expect(getApplicationTypeScriptNodeOptions(nodeOptions)).toBe(childNodeOptions)
+		const output: unknown = JSON.parse(runNode([getApplicationTypeScriptHeapOption(nodeOptions)], PRINT_HEAP_AND_TITLE, inheritedEnvironment(nodeOptions)))
+		expect(output).toEqual({ heapOption: '--max-old-space-size=384', title })
 	})
 
 	test('treats tabs as literal option content instead of heap delimiters', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript delimiter regression test')
 		const nodeOptions = '--title=a\t--max-old-space-size=7168'
-		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
-		expect(childNodeOptions).toBe(nodeOptions)
-		expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
-		const result = Bun.spawnSync([nodeExecutablePath, '--input-type=module', '--eval', 'console.log(process.title)'], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
-		expect(new TextDecoder().decode(result.stdout).trim()).toBe('a\t--max-old-space-size=7168')
+		expect(getApplicationTypeScriptNodeOptions(nodeOptions)).toBe(nodeOptions)
+		expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(DEFAULT_HEAP_OPTION)
+		expect(runNode([], 'console.log(process.title)', inheritedEnvironment(nodeOptions))).toBe('a\t--max-old-space-size=7168')
 	})
 
-	test('preserves malformed heap options so Node reports them', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript malformed-option regression test')
-		for (const nodeOptions of ['--max-old-space-size="7168', '--max-old-space-size', '--max-old-space-size 7168']) {
-			const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
-			expect(childNodeOptions).toBe(nodeOptions)
-			expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(`--max-old-space-size=${APPLICATION_TYPESCRIPT_HEAP_MB.toString()}`)
-			const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', ''], {
-				env: getApplicationTypeScriptEnvironment({ ...process.env, NODE_OPTIONS: nodeOptions }),
-				stderr: 'pipe',
-				stdout: 'pipe',
-			})
-			expect(result.exitCode).not.toBe(0)
-		}
+	test.each(['--max-old-space-size="7168', '--max-old-space-size', '--max-old-space-size 7168'])('preserves malformed heap option %p so Node reports it', nodeOptions => {
+		expect(getApplicationTypeScriptNodeOptions(nodeOptions)).toBe(nodeOptions)
+		expect(getApplicationTypeScriptHeapOption(nodeOptions)).toBe(DEFAULT_HEAP_OPTION)
+		expect(spawnNode([getApplicationTypeScriptHeapOption(nodeOptions)], '', inheritedEnvironment(nodeOptions)).exitCode).not.toBe(0)
 	})
 
 	test('honors a leading plus in an inline heap value', () => {
-		const nodeExecutablePath = Bun.which('node')
-		if (nodeExecutablePath === null) throw new Error('Node.js is required for the application TypeScript signed-value regression test')
 		const nodeOptions = '--max-old-space-size=+384'
-		const childNodeOptions = getApplicationTypeScriptNodeOptions(nodeOptions)
-		expect(childNodeOptions).toBeUndefined()
-		const result = Bun.spawnSync([nodeExecutablePath, getApplicationTypeScriptHeapOption(nodeOptions), '--input-type=module', '--eval', 'console.log(process.execArgv[0])'], {
-			env: getApplicationTypeScriptEnvironment({ ...process.env, Node_Options: '--max-old-space-size=512', NODE_OPTIONS: nodeOptions }, 'win32'),
-			stderr: 'pipe',
-			stdout: 'pipe',
-		})
-		if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr))
-		expect(new TextDecoder().decode(result.stdout).trim()).toBe('--max-old-space-size=384')
+		expect(getApplicationTypeScriptNodeOptions(nodeOptions)).toBeUndefined()
+		const env = getApplicationTypeScriptEnvironment({ ...process.env, Node_Options: '--max-old-space-size=512', NODE_OPTIONS: nodeOptions }, 'win32')
+		expect(runNode([getApplicationTypeScriptHeapOption(nodeOptions)], 'console.log(process.execArgv[0])', env)).toBe('--max-old-space-size=384')
 	})
 })

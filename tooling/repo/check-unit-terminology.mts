@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
+import { listRepositoryFiles } from './git.mts'
 
-const sourceFilesResult = Bun.spawnSync(['git', 'ls-files', '--cached', '--others', '--exclude-standard'], { stdout: 'pipe' })
-if (sourceFilesResult.exitCode !== 0) throw new Error('Unable to enumerate repository files for unit terminology validation')
+const sourceFiles = listRepositoryFiles({ untracked: true })
 
 const protectedVendorPath = 'solidity/contracts/statoblast/openOracle/OpenOracle.sol'
 const terminologyCheckPath = 'tooling/repo/check-unit-terminology.mts'
@@ -83,8 +83,8 @@ if (!legacyTerminology.test('1 wei') || !legacyTerminology.test('1 gwei')) throw
 if (legacyTerminology.test('1 ETH 1 nanoETH 1 nano ETH 1 REP 1 nanoREP 1 nano REP')) throw new Error('Unit terminology checker rejected SI token units')
 
 const failures: string[] = []
-for (const path of new TextDecoder().decode(sourceFilesResult.stdout).trim().split('\n')) {
-	if (path === '' || !textFilePattern.test(path)) continue
+for (const path of sourceFiles) {
+	if (!textFilePattern.test(path)) continue
 	if (!(await Bun.file(path).exists())) continue
 	const source = await readFile(path, 'utf8')
 	const isTestSource = path.includes('/tests/') || path.includes('/testSupport/') || /\.(?:test|fuzz)\.[^.]+$/.test(path)

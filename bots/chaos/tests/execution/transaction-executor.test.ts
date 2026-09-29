@@ -1,3 +1,4 @@
+import { synchronizeLifecycleObligations } from '../../src/runtime/obligations.ts'
 import { preflightOperationPreview } from '../../src/execution/operation-preview.ts'
 import { processRetirementCycle, retirementPositionsForScan } from '../../src/runtime/retirement-runner.ts'
 import { retirementUniswapV3PositionAbi } from '../../src/contracts/retirement-abi.ts'
@@ -1568,6 +1569,76 @@ describe('included transaction rollback', () => {
 		expect(restarted.rollbackQueue).toHaveLength(0)
 		expect(restarted.workflows[0]?.status).toBe('completed')
 		expect(fixture.receiptState.transactionHashes).toHaveLength(2)
+	})
+
+	test('retains lifecycle history until its included transaction finalizes, including across restart', async () => {
+		const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+		const plan: OperationPlan = { ...executablePlan(), classification: 'lifecycle-obligation', obligation: true }
+		synchronizeLifecycleObligations(
+			fixture.state,
+			[
+				{
+					definition: { classification: 'lifecycle-obligation', contract: 'SecurityPool', description: 'Test lifecycle', discoveryInputs: [], ecosystem: plan.ecosystem, id: plan.definitionId, label: plan.label, method: 'checkpointCollateral', risk: 'low' },
+					eligibility: { blockers: [], eligible: true },
+					plan,
+				},
+			],
+			[{ definitionId: plan.definitionId, ecosystem: plan.ecosystem, metadata: plan.metadata, blocksNovelty: true }],
+			true,
+			100n,
+			0n,
+		)
+		await executeOperationPlan(fixture.environment, plan)
+		synchronizeLifecycleObligations(fixture.state, [], [], true, 101n, 0n)
+		await saveDurableState(fixture.stateFile, fixture.state)
+		const before = await loadDurableState(fixture.stateFile, 1)
+		synchronizeLifecycleObligations(fixture.state, [], [], true, 166n, 0n)
+		await saveDurableState(fixture.stateFile, fixture.state)
+		expect(fixture.state.workflows).toHaveLength(1)
+		expect(fixture.state.obligations).toHaveLength(1)
+		expect(fixture.state.obligationTombstones).toHaveLength(1)
+		const included = fixture.state.includedTransactions[0]
+		if (included === undefined) throw new Error('Expected retained lifecycle inclusion')
+		// Each journal independently pins history, even after the absence retention window.
+		for (const journal of ['pending', 'rollback'] as const) {
+			const recovering = structuredClone(fixture.state)
+			recovering.includedTransactions = []
+			if (journal === 'pending') {
+				recovering.pendingTransactions.push(included.intent)
+				recovering.workflows = [structuredClone(included.workflow)]
+			} else recovering.rollbackQueue.push({ intent: included.intent, workflow: included.workflow })
+			const recoveryPath = `${fixture.stateFile}.${journal}`
+			await saveDurableState(recoveryPath, recovering)
+			synchronizeLifecycleObligations(recovering, [], [], true, 166n, 0n)
+			expect(recovering.workflows).toHaveLength(1)
+			expect(recovering.obligations).toHaveLength(1)
+			expect(recovering.obligationTombstones).toHaveLength(1)
+			await saveDurableState(recoveryPath, recovering)
+		}
+		const restarted = initialRuntimeState(false, fixture.state.wallet, 1, await loadDurableState(fixture.stateFile, 1))
+		expect(restarted.includedTransactions).toEqual(before.includedTransactions)
+		fixture.receiptState.finalizedBlock = 112n
+		await reconcileIncludedTransactions({ ...fixture.environment, state: restarted })
+		synchronizeLifecycleObligations(restarted, [], [], true, 167n, 0n)
+		expect(restarted.includedTransactions).toHaveLength(0)
+		expect(restarted.workflows).toHaveLength(0)
+		expect(restarted.obligations).toHaveLength(0)
+		expect(restarted.obligationTombstones).toHaveLength(0)
+		await saveDurableState(fixture.stateFile, restarted)
+	})
+
+	test('identifies a missing inclusion workflow and preserves the last valid state for restart', async () => {
+		const fixture = await finalizedExecutionFixture([], '0x1', 99n)
+		await executeOperationPlan(fixture.environment, executablePlan())
+		const before = await Bun.file(fixture.stateFile).text()
+		const record = fixture.state.includedTransactions[0]
+		if (record === undefined) throw new Error('Expected retained inclusion')
+		fixture.state.workflows = []
+		await expect(saveDurableState(fixture.stateFile, fixture.state)).rejects.toThrow(`Included transaction journal references missing workflow ${record.workflow.id} (transaction ${record.intent.hash}, nonce ${record.intent.nonce.toString()})`)
+		expect(await Bun.file(fixture.stateFile).text()).toBe(before)
+		const restored = await loadDurableState(fixture.stateFile, 1)
+		expect(restored.workflows[0]?.id).toBe(record.workflow.id)
+		expect(restored.includedTransactions).toEqual(fixture.state.includedTransactions)
 	})
 
 	test('rejects a forged rollback workflow without overwriting the durable journal', async () => {

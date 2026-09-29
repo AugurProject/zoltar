@@ -199,8 +199,12 @@ describe('openOracle protocol client', () => {
 		await expect(loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)).rejects.toThrow(`Token metadata for ${token1Address} returned invalid decimals`)
 	})
 
-	test('loadOpenOracleReportSummaries rejects empty token symbols', async () => {
+	test.each([
+		{ error: `Token metadata for ${token1Address} returned an empty symbol`, name: 'empty token symbols', symbols: [' ', 'TOK'], token2IsWeth: false },
+		{ error: `WETH metadata is invalid for ${wethAddress}`, name: 'mismatched configured WETH metadata', symbols: ['REP', 'ETH'], token2IsWeth: true },
+	])('loadOpenOracleReportSummaries rejects $name', async ({ error, symbols, token2IsWeth }) => {
 		const preimage = createOpenOraclePreimage()
+		if (token2IsWeth) preimage.game.token2 = wethAddress
 		const client = createMockLoaderClient({
 			getBlock: async () => createBlockWithTimestamp(0n),
 			getLogs: async () => {
@@ -209,7 +213,7 @@ describe('openOracle protocol client', () => {
 			multicall: async request => {
 				const firstFunctionName = getContractFunctionName(request.contracts[0])
 				if (firstFunctionName === 'decimals') return [18n, 18n]
-				if (firstFunctionName === 'symbol') return [' ', 'TOK']
+				if (firstFunctionName === 'symbol') return symbols
 				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
 			},
 			readContract: async request => {
@@ -218,30 +222,7 @@ describe('openOracle protocol client', () => {
 			},
 		})
 
-		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(`Token metadata for ${token1Address} returned an empty symbol`)
-	})
-
-	test('loadOpenOracleReportSummaries rejects mismatched configured WETH metadata', async () => {
-		const preimage = createOpenOraclePreimage()
-		preimage.game.token2 = wethAddress
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(0n),
-			getLogs: async () => {
-				throw new Error('Log access unavailable')
-			},
-			multicall: async request => {
-				const firstFunctionName = getContractFunctionName(request.contracts[0])
-				if (firstFunctionName === 'decimals') return [18n, 18n]
-				if (firstFunctionName === 'symbol') return ['REP', 'ETH']
-				throw new Error(`Unexpected multicall contract: ${firstFunctionName}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'nextReportId') return 2n
-				return readStoredOracleFixture(request.functionName, preimage)
-			},
-		})
-
-		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(`WETH metadata is invalid for ${wethAddress}`)
+		await expect(loadOpenOracleReportSummaries(client, 0, 10)).rejects.toThrow(error)
 	})
 
 	test('loadOracleManagerDetails caps active staged operation previews and preserves the pending slot outside the preview window', async () => {

@@ -4,7 +4,7 @@ import { loadConfiguration } from '#config/configuration'
 import { createExecutionLockManager } from '#execution/execution-locks'
 import { acquireExecutionSignerLock, acquirePositionJournalLock } from '#state/position-store'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
-import { createBotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { createBotShutdownController, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { operationalFailureDisposition, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 import { runOperator } from '../runtime/operator'
@@ -53,9 +53,4 @@ async function main() {
 	}
 }
 
-if (import.meta.main) {
-	main().catch(error => {
-		console.error(errorMessage(error))
-		process.exitCode = 1
-	})
-}
+if (import.meta.main) runBotMain(main)

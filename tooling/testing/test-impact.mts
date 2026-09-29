@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { getChangedFileEntries, type ChangedFileEntry } from '../repo/changed-files.mts'
+import { mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
 import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
@@ -197,27 +197,29 @@ async function readCurrentPackageImports(repositoryRoot: string, sourceFiles: It
 }
 
 function resolveMergeBase(repositoryRoot: string) {
-	const mergeBase = execFileSync('git', ['merge-base', 'origin/main', 'HEAD'], { cwd: repositoryRoot, encoding: 'utf8' }).trim()
-	if (mergeBase === '') throw new Error('Git could not resolve the merge base of origin/main and HEAD')
-	return mergeBase
+	return mergeBaseWithMain(args => runGit(args, { cwd: repositoryRoot }))
+}
+
+function readGitBlob(reference: string, filePath: string, repositoryRoot: string) {
+	return runGit(['show', `${reference}:${filePath}`], { cwd: repositoryRoot, trim: false })
+}
+
+function listTreeFiles(reference: string, repositoryRoot: string) {
+	return runGit(['ls-tree', '-r', '--name-only', '-z', reference], { cwd: repositoryRoot, trim: false }).split('\0')
 }
 
 function readBaselineSources(reference: string, repositoryRoot: string) {
 	const sources = new Map<string, string>()
-	const filePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { cwd: repositoryRoot, encoding: 'utf8' })
-		.split('\0')
-		.filter(filePath => IMPORT_GRAPH_SOURCE_PATTERN.test(filePath))
-	for (const filePath of filePaths) sources.set(filePath, execFileSync('git', ['show', `${reference}:${filePath}`], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }))
+	const filePaths = listTreeFiles(reference, repositoryRoot).filter(filePath => IMPORT_GRAPH_SOURCE_PATTERN.test(filePath))
+	for (const filePath of filePaths) sources.set(filePath, readGitBlob(reference, filePath, repositoryRoot))
 	return sources
 }
 
 function readBaselinePackageImports(reference: string, repositoryRoot: string) {
 	const packageImports = new Map<string, ReadonlyMap<string, string>>()
-	const packagePaths = execFileSync('git', ['ls-tree', '-r', '--name-only', '-z', reference], { cwd: repositoryRoot, encoding: 'utf8' })
-		.split('\0')
-		.filter(filePath => path.posix.basename(filePath) === 'package.json')
+	const packagePaths = listTreeFiles(reference, repositoryRoot).filter(filePath => path.posix.basename(filePath) === 'package.json')
 	for (const packagePath of packagePaths) {
-		const imports = parsePackageImports(execFileSync('git', ['show', `${reference}:${packagePath}`], { cwd: repositoryRoot, encoding: 'utf8' }))
+		const imports = parsePackageImports(readGitBlob(reference, packagePath, repositoryRoot))
 		if (imports.size > 0) packageImports.set(path.posix.dirname(packagePath), imports)
 	}
 	return packageImports

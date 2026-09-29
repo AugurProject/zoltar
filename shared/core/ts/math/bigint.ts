@@ -3,3 +3,9 @@ export function ceilDiv(numerator: bigint, denominator: bigint) {
 	if (numerator < 0n || denominator <= 0n) throw new Error('ceilDiv requires a nonnegative numerator and positive denominator')
 	return numerator === 0n ? 0n : (numerator - 1n) / denominator + 1n
 }
+
+/** Three-way bigint comparison for sort callbacks. */
+export function compareBigint(left: bigint, right: bigint): -1 | 0 | 1 {
+	if (left < right) return -1
+	return left > right ? 1 : 0
+}

@@ -45,6 +45,29 @@ const question: MarketDetails = {
 	title: 'Binary question',
 }
 
+type QuestionCreateSectionProps = Parameters<typeof QuestionCreateSection>[0]
+
+function createSectionProps(overrides: Partial<QuestionCreateSectionProps> = {}): QuestionCreateSectionProps {
+	return {
+		accountAddress: zeroAddress,
+		canUseForFork: false,
+		hasForked: false,
+		isOnActiveAppChain: true,
+		loadingZoltarQuestions: false,
+		onCreateQuestion: () => undefined,
+		onOpenForkTab: () => undefined,
+		onQuestionFormChange: () => undefined,
+		onResetQuestion: () => undefined,
+		onUseQuestionForFork: () => undefined,
+		questionCreating: false,
+		questionError: undefined,
+		questionForm: createQuestionForm(),
+		questionResult: undefined,
+		zoltarQuestions: [],
+		...overrides,
+	}
+}
+
 describe('QuestionCreateSection', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -55,28 +78,15 @@ describe('QuestionCreateSection', () => {
 		},
 	})
 
+	async function renderSection(overrides: Partial<QuestionCreateSectionProps> = {}) {
+		const rendered = await renderIntoDocument(<QuestionCreateSection {...createSectionProps(overrides)} />)
+		cleanupRenderedComponent = rendered.cleanup
+		return rendered
+	}
+
 	test('blocks review without a wallet and reports field updates', async () => {
 		const updates: Array<Partial<MarketFormState>> = []
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={undefined}
-				canUseForFork={false}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => undefined}
-				onQuestionFormChange={update => updates.push(update)}
-				onResetQuestion={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				questionCreating={false}
-				questionError='Previous creation failed'
-				questionForm={createQuestionForm()}
-				questionResult={undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ accountAddress: undefined, onQuestionFormChange: update => updates.push(update), questionError: 'Previous creation failed' })
 
 		const documentQueries = within(document.body)
 		await act(() => {
@@ -92,23 +102,7 @@ describe('QuestionCreateSection', () => {
 		const transaction = { detail: 'Action canceled in wallet.', dismissKey: 'transaction-request-question-write', title: 'Question creation', tone: 'error' as const }
 		const renderedComponent = await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={transaction}>
-				<QuestionCreateSection
-					accountAddress={zeroAddress}
-					canUseForFork={false}
-					hasForked={false}
-					isOnActiveAppChain={true}
-					loadingZoltarQuestions={false}
-					onCreateQuestion={() => undefined}
-					onOpenForkTab={() => undefined}
-					onQuestionFormChange={() => undefined}
-					onResetQuestion={() => undefined}
-					onUseQuestionForFork={() => undefined}
-					questionCreating={false}
-					questionError='Action canceled in wallet.'
-					questionForm={createQuestionForm()}
-					questionResult={undefined}
-					zoltarQuestions={[]}
-				/>
+				<QuestionCreateSection {...createSectionProps({ questionError: 'Action canceled in wallet.' })} />
 				<GlobalTransactionDialog transaction={transaction} />
 			</GlobalTransactionPresentationProvider>,
 		)
@@ -123,27 +117,7 @@ describe('QuestionCreateSection', () => {
 	})
 
 	test('renders the inline transaction review in place of the overridden submit button', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={false}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => undefined}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={undefined}
-				submitActionOverride={{ availability: { disabled: false, reason: undefined }, idleLabel: 'Create question and pool', onSubmit: () => undefined, pending: true, pendingLabel: 'Creating…', reviewContent: <div data-testid='inline-review'>Confirm the pool transaction</div> }}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ submitActionOverride: { availability: { disabled: false, reason: undefined }, idleLabel: 'Create question and pool', onSubmit: () => undefined, pending: true, pendingLabel: 'Creating…', reviewContent: <div data-testid='inline-review'>Confirm the pool transaction</div> } })
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Confirm the pool transaction')).not.toBeNull()
@@ -156,30 +130,20 @@ describe('QuestionCreateSection', () => {
 		const selectedQuestionIds: string[] = []
 		const openedViews: string[] = []
 		const result: MarketCreationResult = { createQuestionHash: `0x${'1'.repeat(64)}`, marketType: 'binary', questionId: question.questionId }
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={true}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => {
-					createCount += 1
-				}}
-				onOpenForkTab={() => openedViews.push('fork')}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => {
-					resetCount += 1
-				}}
-				onUseQuestionForFork={questionId => selectedQuestionIds.push(questionId)}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const handoffProps = {
+			canUseForFork: true,
+			onOpenForkTab: () => openedViews.push('fork'),
+			onResetQuestion: () => {
+				resetCount += 1
+			},
+			onUseQuestionForFork: (questionId: string) => selectedQuestionIds.push(questionId),
+		}
+		const renderedComponent = await renderSection({
+			...handoffProps,
+			onCreateQuestion: () => {
+				createCount += 1
+			},
+		})
 		const documentQueries = within(document.body)
 
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Create question' })))
@@ -187,28 +151,7 @@ describe('QuestionCreateSection', () => {
 
 		await renderedComponent.cleanup()
 		cleanupRenderedComponent = undefined
-		const successComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={true}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => openedViews.push('fork')}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => {
-					resetCount += 1
-				}}
-				onUseQuestionForFork={questionId => selectedQuestionIds.push(questionId)}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={result}
-				zoltarQuestions={[question]}
-			/>,
-		)
-		cleanupRenderedComponent = successComponent.cleanup
+		await renderSection({ ...handoffProps, questionResult: result, zoltarQuestions: [question] })
 		expect(document.body.querySelector('.transaction-hash-link')).toBeNull()
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))
@@ -222,26 +165,7 @@ describe('QuestionCreateSection', () => {
 
 	test('omits the post-create fork handoff when no universe is available', async () => {
 		const result: MarketCreationResult = { createQuestionHash: `0x${'1'.repeat(64)}`, marketType: 'binary', questionId: question.questionId }
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={false}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => undefined}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={result}
-				zoltarQuestions={[question]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ questionResult: result, zoltarQuestions: [question] })
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` })).toBeNull()
@@ -250,26 +174,7 @@ describe('QuestionCreateSection', () => {
 
 	test('offers question types as a native radio group with descriptions and examples', async () => {
 		const updates: Array<Partial<MarketFormState>> = []
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={false}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => undefined}
-				onQuestionFormChange={update => updates.push(update)}
-				onResetQuestion={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ onQuestionFormChange: update => updates.push(update) })
 
 		const documentQueries = within(document.body)
 		const group = document.querySelector('fieldset.question-type-options')
@@ -290,26 +195,7 @@ describe('QuestionCreateSection', () => {
 
 	test('labels time inputs with the browser time zone and previews each time locally and in UTC', async () => {
 		const timeZone = new Intl.DateTimeFormat().resolvedOptions().timeZone
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				canUseForFork={false}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => undefined}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm({ endTime: '1798752600', startTime: '' })}
-				questionResult={undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ questionForm: createQuestionForm({ endTime: '1798752600', startTime: '' }) })
 
 		const documentQueries = within(document.body)
 		const endTimeInput = documentQueries.getByLabelText('End time')
@@ -326,28 +212,7 @@ describe('QuestionCreateSection', () => {
 	})
 
 	test('keeps extra submit fields with the inputs, before the preview, and states a single allowed type without an example', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<QuestionCreateSection
-				accountAddress={zeroAddress}
-				allowedMarketTypes={['binary']}
-				canUseForFork={false}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				loadingZoltarQuestions={false}
-				onCreateQuestion={() => undefined}
-				onOpenForkTab={() => undefined}
-				onQuestionFormChange={() => undefined}
-				onResetQuestion={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				questionCreating={false}
-				questionError={undefined}
-				questionForm={createQuestionForm()}
-				questionResult={undefined}
-				submitFields={<input aria-label='Pool multiplier' />}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ allowedMarketTypes: ['binary'], submitFields: <input aria-label='Pool multiplier' /> })
 
 		const extraField = within(document.body).getByLabelText('Pool multiplier')
 		const preview = document.querySelector('aside[aria-label="Question preview"]')

@@ -3,16 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { createQueryCache } from '../lib/queryCache.js'
 import { isSameQueryData } from '../lib/dataRefresh.js'
-
-function deferred<T>() {
-	let resolve: (value: T) => void = () => undefined
-	let reject: (error: unknown) => void = () => undefined
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise
-		reject = rejectPromise
-	})
-	return { promise, reject, resolve }
-}
+import { createDeferred } from './testUtils/deferred.js'
 
 async function flush() {
 	for (let index = 0; index < 5; index++) await Promise.resolve()
@@ -27,7 +18,7 @@ describe('query cache', () => {
 		expect(store.get('pools')).toEqual({ data: 'first', error: undefined, updatedAt: 1_000, fetching: false, stale: false })
 
 		now = 5_000
-		const next = deferred<string>()
+		const next = createDeferred<string>()
 		void store.fetch('pools', async () => await next.promise)
 		expect(store.get('pools')).toMatchObject({ data: 'first', fetching: true, updatedAt: 1_000 })
 		next.resolve('second')
@@ -37,7 +28,7 @@ describe('query cache', () => {
 
 	test('shares one in-flight read between concurrent requests for a key', async () => {
 		const store = createQueryCache().createStore<number>()
-		const read = deferred<number>()
+		const read = createDeferred<number>()
 		let loads = 0
 		const loader = async () => {
 			loads += 1
@@ -81,8 +72,8 @@ describe('query cache', () => {
 
 	test('a read requested after an invalidation starts again instead of sharing the older in-flight read', async () => {
 		const store = createQueryCache().createStore<string>()
-		const before = deferred<string>()
-		const after = deferred<string>()
+		const before = createDeferred<string>()
+		const after = createDeferred<string>()
 		let loads = 0
 		const loader = async () => (++loads === 1 ? await before.promise : await after.promise)
 		void store.fetch('page', loader)
@@ -99,7 +90,7 @@ describe('query cache', () => {
 
 	test('an older in-flight read cannot overwrite a result stored with set', async () => {
 		const store = createQueryCache().createStore<string>()
-		const older = deferred<string>()
+		const older = createDeferred<string>()
 		void store.fetch('summary', async () => await older.promise)
 		store.set('summary', 'foreground')
 		expect(store.get('summary').fetching).toBe(false)
@@ -111,7 +102,7 @@ describe('query cache', () => {
 	test('clear retires in-flight reads so an answer from a replaced environment is dropped', async () => {
 		const cache = createQueryCache()
 		const store = cache.createStore<string>()
-		const read = deferred<string>()
+		const read = createDeferred<string>()
 		void store.fetch('universe', async () => await read.promise)
 		cache.clear()
 		read.resolve('old environment')

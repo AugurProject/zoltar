@@ -1,5 +1,6 @@
 import type { Configuration } from '#config/configuration'
-import { constantProductPairAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
+import { constantProductPairAbi } from '#contracts/abi'
+import { uniswapV3QuoterAbi, uniswapV4QuoterAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import { batchRead, batchValue, type BatchCall, type BatchReader } from '#core/batch-read'
 import type { Pool } from '#core/operator-types'
 import { requiredBigint, requiredTuple } from '#core/rpc-validation'
@@ -55,18 +56,18 @@ export async function quoteVenue(client: BatchReader, config: QuoteConfiguration
 			if (pool.venue === 'uniswap-v3') {
 				if (config.router === undefined) throw new Error('Uniswap V3 is disabled')
 				calls = [
-					{ address: config.network.quoter, abi: quoterAbi, functionName: 'quoteExactInputSingle', args: [{ tokenIn: pool.token, tokenOut: config.network.weth, amountIn: amounts.sellAmount, fee: pool.fee, sqrtPriceLimitX96: 0n }] },
-					{ address: config.network.quoter, abi: quoterAbi, functionName: 'quoteExactOutputSingle', args: [{ tokenIn: config.network.weth, tokenOut: pool.token, amount: amounts.buyAmount, fee: pool.fee, sqrtPriceLimitX96: 0n }] },
-					{ address: config.network.quoter, abi: quoterAbi, functionName: 'quoteExactInputSingle', args: [{ tokenIn: config.network.weth, tokenOut: pool.token, amountIn: amounts.replacementAttoWeth, fee: pool.fee, sqrtPriceLimitX96: 0n }] },
+					{ address: config.network.quoter, abi: uniswapV3QuoterAbi, functionName: 'quoteExactInputSingle', args: [{ tokenIn: pool.token, tokenOut: config.network.weth, amountIn: amounts.sellAmount, fee: pool.fee, sqrtPriceLimitX96: 0n }] },
+					{ address: config.network.quoter, abi: uniswapV3QuoterAbi, functionName: 'quoteExactOutputSingle', args: [{ tokenIn: config.network.weth, tokenOut: pool.token, amount: amounts.buyAmount, fee: pool.fee, sqrtPriceLimitX96: 0n }] },
+					{ address: config.network.quoter, abi: uniswapV3QuoterAbi, functionName: 'quoteExactInputSingle', args: [{ tokenIn: config.network.weth, tokenOut: pool.token, amountIn: amounts.replacementAttoWeth, fee: pool.fee, sqrtPriceLimitX96: 0n }] },
 				]
 			} else {
 				if (config.v4PoolManager === undefined || config.v4Quoter === undefined || pool.address.toLowerCase() !== config.v4PoolManager.toLowerCase()) throw new Error('Uniswap V4 is disabled or has an unexpected PoolManager')
 				const plan = v4QuotePlan(pool.token, pool.fee, amounts.sellAmount, amounts.buyAmount)
 				const replacementPlan = v4QuotePlan(pool.token, pool.fee, amounts.sellAmount, amounts.replacementAttoWeth)
 				calls = [
-					{ address: config.v4Quoter, abi: v4QuoterAbi, functionName: 'quoteExactInputSingle', args: [plan.sell] },
-					{ address: config.v4Quoter, abi: v4QuoterAbi, functionName: 'quoteExactOutputSingle', args: [plan.buy] },
-					{ address: config.v4Quoter, abi: v4QuoterAbi, functionName: 'quoteExactInputSingle', args: [replacementPlan.buy] },
+					{ address: config.v4Quoter, abi: uniswapV4QuoterAbi, functionName: 'quoteExactInputSingle', args: [plan.sell] },
+					{ address: config.v4Quoter, abi: uniswapV4QuoterAbi, functionName: 'quoteExactOutputSingle', args: [plan.buy] },
+					{ address: config.v4Quoter, abi: uniswapV4QuoterAbi, functionName: 'quoteExactInputSingle', args: [replacementPlan.buy] },
 				]
 			}
 			const results = await batchRead(client, config.network.multicall3, calls, blockNumber)

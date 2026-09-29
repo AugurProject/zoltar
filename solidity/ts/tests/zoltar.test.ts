@@ -8,7 +8,7 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulat
 import { approveToken, setupTestAccounts, getERC20Balance, getChildUniverseId, contractExists, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeAbiParameters, encodeDeployData, getAddress, hexToBytes, isHex, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
 import {
 	addRepToMigrationBalance,
 	deployChild,
@@ -26,10 +26,12 @@ import {
 	isZoltarDeployed,
 	splitMigrationRep,
 } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getAnswerOptionName, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, getAnswerOptionName } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { ReputationToken_ReputationToken, test_RepV2GenesisMock_RepV2GenesisMock, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'
+import { PERMIT_TYPES, signTypedDataV4, tokenDomain } from '../testSupport/simulator/utils/typedDataSignatures'
 
 // Forker deposit fraction: the deposit is 5% of total supply (1/20).
 const FORKER_DEPOSIT_FRACTION = 20n
@@ -45,34 +47,11 @@ function formatStorageSlot(slot: bigint) {
 	return `0x${slot.toString(16).padStart(64, '0')}`
 }
 
-function splitSignature(signature: string) {
-	if (signature.length !== 132) throw new Error('Expected a 65-byte signature')
-	return {
-		r: `0x${signature.slice(2, 66)}` as Hex,
-		s: `0x${signature.slice(66, 130)}` as Hex,
-		v: Number.parseInt(signature.slice(130, 132), 16),
-	}
-}
-
-async function signTypedData(ethereum: AnvilWindowEthereum, signer: Address, typedData: object) {
-	const signature = await ethereum.request({ method: 'eth_signTypedData_v4', params: [signer, JSON.stringify(typedData)] })
-	if (typeof signature !== 'string' || !isHex(signature)) throw new Error('Typed-data signature missing')
-	return splitSignature(signature)
-}
-
 async function signPermit(ethereum: AnvilWindowEthereum, owner: Address, token: Address, tokenName: string, spender: Address, value: bigint, nonce: bigint, deadline: bigint, chainId = 1) {
-	return await signTypedData(ethereum, owner, {
-		domain: { chainId, name: tokenName, version: '1', verifyingContract: token },
+	return await signTypedDataV4(ethereum, owner, {
+		domain: tokenDomain(token, tokenName, chainId),
 		primaryType: 'Permit',
-		types: {
-			Permit: [
-				{ name: 'owner', type: 'address' },
-				{ name: 'spender', type: 'address' },
-				{ name: 'value', type: 'uint256' },
-				{ name: 'nonce', type: 'uint256' },
-				{ name: 'deadline', type: 'uint256' },
-			],
-		},
+		types: PERMIT_TYPES,
 		message: { owner, spender, value: value.toString(), nonce: nonce.toString(), deadline: deadline.toString() },
 	})
 }
@@ -265,82 +244,23 @@ describe('Contract Test Suite', () => {
 		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /SafeERC20Ops token returned false from ERC20 call/)
 	})
 
-	test('constructor rejects missing genesis REP token code', async () => {
-		const zoltarQuestionDataAddress = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'zoltarQuestionData',
-			address: getZoltarAddress(),
-			args: [],
-		})
+	test.each([
+		{ name: 'missing genesis REP token code', override: { code: hexToBytes('0x') }, expected: /Genesis REP token address must contain code/ },
+		{ name: 'zero genesis REP theoretical supply', override: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 0n } }, expected: /Genesis REP missing supply: theoretical supply must be non-zero/ },
+		{ name: 'genesis REP theoretical supply above the protocol maximum', override: { stateDiff: { [formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 11_000_000n * 10n ** 18n + 1n } }, expected: /Genesis REP exceeds maximum supply/ },
+	])('constructor rejects $name', async ({ override, expected }) => {
+		const zoltarQuestionDataAddress = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'zoltarQuestionData', address: getZoltarAddress(), args: [] })
 		const deployment = encodeDeployData({
 			abi: Zoltar_Zoltar.abi,
 			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
 			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
 		})
 
-		await mockWindow.addStateOverrides({
-			[addressString(GENESIS_REPUTATION_TOKEN)]: {
-				code: hexToBytes('0x'),
-			},
-		})
+		await mockWindow.addStateOverrides({ [addressString(GENESIS_REPUTATION_TOKEN)]: override })
 
 		await assert.rejects(
 			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
-			/Genesis REP token address must contain code/,
-		)
-	})
-
-	test('constructor rejects zero genesis REP theoretical supply', async () => {
-		const zoltarQuestionDataAddress = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'zoltarQuestionData',
-			address: getZoltarAddress(),
-			args: [],
-		})
-		const deployment = encodeDeployData({
-			abi: Zoltar_Zoltar.abi,
-			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
-		})
-
-		await mockWindow.addStateOverrides({
-			[addressString(GENESIS_REPUTATION_TOKEN)]: {
-				stateDiff: {
-					[formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 0n,
-				},
-			},
-		})
-
-		await assert.rejects(
-			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
-			/Genesis REP missing supply: theoretical supply must be non-zero/,
-		)
-	})
-
-	test('constructor rejects genesis REP theoretical supply above the protocol maximum', async () => {
-		const zoltarQuestionDataAddress = await client.readContract({
-			abi: Zoltar_Zoltar.abi,
-			functionName: 'zoltarQuestionData',
-			address: getZoltarAddress(),
-			args: [],
-		})
-		const deployment = encodeDeployData({
-			abi: Zoltar_Zoltar.abi,
-			bytecode: `0x${Zoltar_Zoltar.evm.bytecode.object}`,
-			args: [zoltarQuestionDataAddress, addressString(GENESIS_REPUTATION_TOKEN), DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor, DEFAULT_PROTOCOL_CONFIG.forkBurnDivisor],
-		})
-
-		await mockWindow.addStateOverrides({
-			[addressString(GENESIS_REPUTATION_TOKEN)]: {
-				stateDiff: {
-					[formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)]: 11_000_000n * 10n ** 18n + 1n,
-				},
-			},
-		})
-
-		await assert.rejects(
-			writeContractAndWait(client, () => client.sendTransaction({ data: deployment })),
-			/Genesis REP exceeds maximum supply/,
+			expected,
 		)
 	})
 

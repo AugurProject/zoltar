@@ -38,6 +38,63 @@ export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMark
 	}
 }
 
+/** An open market with whole-ETH quantities: ten complete sets backed by ten ETH and 50 YES, 50 NO, and 50 LP in the pool. */
+export function etherScaleMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMarket {
+	return liveMarketFixture({
+		initialReportPriorityFeeAttoEthPerGas: 1n,
+		shareTokenSupplyAttoShares: 10n * 10n ** 18n,
+		settlementCollateralAttoEth: 10n * 10n ** 18n,
+		mintingCapacityCeilingAttoEth: 2n,
+		availableMintingCapacityAttoEth: 1n,
+		yesReserve: 50n * 10n ** 18n,
+		noReserve: 50n * 10n ** 18n,
+		lpTotalSupply: 50n * 10n ** 18n,
+		...overrides,
+	})
+}
+
+/** An open market with raw attounit quantities: 100 attoShares backed by 100 attoETH and 50 YES, 50 NO, and 50 LP in the pool. */
+export function smallReserveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMarket {
+	return liveMarketFixture({
+		initialReportPriorityFeeAttoEthPerGas: 1n,
+		shareTokenSupplyAttoShares: 100n,
+		settlementCollateralAttoEth: 100n,
+		mintingCapacityCeilingAttoEth: 100n,
+		availableMintingCapacityAttoEth: 100n,
+		yesReserve: 50n,
+		noReserve: 50n,
+		lpTotalSupply: 50n,
+		...overrides,
+	})
+}
+
+/** A market whose universe forked: trading stopped, no pair, no vaults, and an empty pool. */
+export function forkedMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMarket {
+	return liveMarketFixture({
+		pair: undefined,
+		universeId: 7n,
+		questionId: 8n,
+		title: 'Forked market',
+		endTime: 1n,
+		initialReportPriorityFeeAttoEthPerGas: 1n,
+		systemState: 1,
+		universeForkTime: 1n,
+		vaultCount: 0n,
+		shareTokenSupplyAttoShares: 0n,
+		settlementCollateralAttoEth: 0n,
+		currentRetentionRate: 0n,
+		totalUnderwritingLimitAttoEth: 0n,
+		feeEligibleUnderwritingLimitAttoEth: 0n,
+		mintingCapacityCeilingAttoEth: 0n,
+		availableMintingCapacityAttoEth: 0n,
+		tradingStatus: 4,
+		yesReserve: 0n,
+		noReserve: 0n,
+		lpTotalSupply: 0n,
+		...overrides,
+	})
+}
+
 /** The ticket model for a connected wallet with ample ETH, so tests read estimates through the public model. */
 export function ticketModelFor(market: LiveMarket, mode: TradeMode, amount: string, balances?: LiveBalances, overrides: Partial<TradeTicketInputs> = {}) {
 	return tradeTicketModel({

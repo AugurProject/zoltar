@@ -1,7 +1,7 @@
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -10,260 +10,21 @@ import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntiti
 import { resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { VaultMetricGrid } from '@zoltar/ui-statoblast-shared/features/security-pools/components/VaultMetricGrid.js'
 import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
-import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
-import type { ForkAuctionRouteContentProps, SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { SecurityPoolRouteContentProps, SecurityPoolsOverviewRouteContentProps, SecurityPoolsSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { createAccountState, createSecurityPoolWorkflowProps, createSelectedPool as createBuilderSelectedPool } from './workflow/builders.js'
+
 installTestRouting()
 
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
-
-function createTradingProps(overrides: Partial<TradingRouteContentProps> = {}): TradingRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		loadingTradingForkUniverse: false,
-		loadingTradingDetails: false,
-		onCreateCompleteSet: () => undefined,
-		onMigrateShares: () => undefined,
-		onRedeemCompleteSet: () => undefined,
-		onRedeemShares: () => undefined,
-		onTradingFormChange: () => undefined,
-		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		selectedPool: undefined,
-		tradingActiveAction: undefined,
-		tradingDetails: undefined,
-		tradingError: undefined,
-		tradingForkUniverse: undefined,
-		tradingForm: {
-			completeSetAmount: '',
-			redeemAmount: '',
-			securityPoolAddress: '',
-			selectedShareOutcome: 'yes',
-			targetOutcomeIndexes: '',
-		},
-		tradingResult: undefined,
-		...overrides,
-	}
-}
-
-function createReportingProps(overrides: Partial<ReportingRouteContentProps> = {}): ReportingRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		loadingReportingDetails: false,
-		onApproveReportingRep: () => undefined,
-		onLoadReporting: () => undefined,
-		onReportOutcome: () => undefined,
-		onReportingFormChange: () => undefined,
-		onWithdrawEscalation: (_outcome, _depositIndexes) => undefined,
-		reportingActiveAction: undefined,
-		reportingDetails: undefined,
-		reportingError: undefined,
-		reportingForm: {
-			reportAmount: '',
-			securityPoolAddress: '',
-			selectedOutcome: undefined,
-			selectedWithdrawDepositIndexesByOutcome: {
-				invalid: [],
-				yes: [],
-				no: [],
-			},
-		},
-		reportingResult: undefined,
-		...overrides,
-	}
-}
-
-function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteContentProps> = {}): SecurityVaultRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		loadingSecurityVault: false,
-		onApproveRep: () => undefined,
-		onSetVaultUnderwritingLimit: () => undefined,
-		onDepositRepToVault: () => undefined,
-		onLoadSecurityVault: () => undefined,
-		onRedeemFees: () => undefined,
-		onRedeemRepFromVault: () => undefined,
-		onSecurityVaultFormChange: () => undefined,
-		onWithdrawRep: () => undefined,
-		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		securityPoolVaults: undefined,
-		securityVaultActiveAction: undefined,
-		securityVaultDetails: undefined,
-		securityVaultError: undefined,
-		securityVaultForm: {
-			depositAmount: '',
-			repWithdrawAmount: '',
-			targetHealthFactor: '',
-			securityPoolAddress: '',
-			selectedVaultOwner: '',
-		},
-		securityVaultMissing: false,
-		securityVaultRepApproval: {
-			error: undefined,
-			loading: false,
-			value: 0n,
-		},
-		walletRepBalanceAttoRep: undefined,
-		securityVaultResult: undefined,
-		selectedPoolStatoblastSecurityMultiplierBps: undefined,
-		...overrides,
-		walletRepBalanceError: overrides.walletRepBalanceError,
-		walletRepBalanceLoading: overrides.walletRepBalanceLoading ?? false,
-	}
-}
-
-function createForkAuctionProps(overrides: Partial<ForkAuctionRouteContentProps> = {}): ForkAuctionRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		forkAuctionActiveAction: undefined,
-		forkAuctionDetails: undefined,
-		forkAuctionError: undefined,
-		forkAuctionForm: {
-			claimBidIndex: '',
-			claimBidTick: '',
-			depositIndexes: '',
-			directForkQuestionId: '',
-			directForkUniverseId: '',
-			refundBidIndex: '',
-			refundTick: '',
-			repMigrationOutcomes: '',
-			securityPoolAddress: '',
-			selectedOutcome: 'yes',
-			settlementAddress: '',
-			submitBidAmount: '',
-			submitBidPrice: '',
-			vaultAddress: '',
-		},
-		forkAuctionResult: undefined,
-		loadingForkAuctionDetails: false,
-		onClaimAuctionProceeds: () => undefined,
-		onCreateChildUniverse: () => undefined,
-		onFinalizeTruthAuction: () => undefined,
-		onForkAuctionFormChange: () => undefined,
-		onForkUniverse: () => undefined,
-		onForkWithOwnEscalation: () => undefined,
-		onInitiateFork: () => undefined,
-		onLoadForkAuction: () => undefined,
-		onClaimParentEscalationDeposits: (_outcome, _depositIndexes) => undefined,
-		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
-		onMigrateRepToZoltar: _outcomes => undefined,
-		onMigrateVault: () => undefined,
-		onRefundLosingBids: () => undefined,
-		onStartTruthAuction: () => undefined,
-		onSubmitBid: (_securityPoolAddressOverride?: Address) => undefined,
-		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
-		...overrides,
-	}
-}
-
+// Section fixtures describe a pool that already has vaults.
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	const selectedPool: ListedSecurityPool = {
-		settlementCollateralAttoEth: 0n,
-		currentRetentionRate: 10n,
-		feeEligibleUnderwritingLimitAttoEth: 5n * 10n ** 18n,
-		hasForkActivity: false,
-		forkOutcome: 'none',
-		forkOwnSecurityPool: false,
-		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: undefined,
-		lastOracleSettlementTimestamp: 0n,
-		managerAddress: zeroAddress,
-		marketDetails: createMarketDetails(),
-		migratedAttoRep: 0n,
-		hasForkContinuationEscalationGame: false,
-		ordinaryEscalationGameStarted: false,
-		parent: zeroAddress,
-		questionOutcome: 'none',
-		questionId: '0x01',
-		statoblastSecurityMultiplierBps: 20_000n,
-		securityPoolAddress: zeroAddress,
-		shareTokenSupplyAttoShares: 0n,
-		systemState: 'operational',
-		totalPoolHeldAttoRep: 0n,
-		totalUnderwritingLimitAttoEth: 5n * 10n ** 18n,
-		truthAuctionAddress: zeroAddress,
-		truthAuctionStartedAt: 0n,
-		universeHasForked: false,
-		universeId: 1n,
-		vaultCount: 3n,
-		vaults: [],
-		...overrides,
-	}
-	return {
-		...selectedPool,
-		hasForkActivity: overrides.hasForkActivity ?? deriveHasForkActivity(selectedPool),
-	}
-}
-
-function createWorkflowProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
-	return {
-		accountState: createAccountState(),
-		activeUniverseId: 1n,
-		checkedSecurityPoolAddress: undefined,
-		closeLiquidationModal: () => undefined,
-		forkAuction: createForkAuctionProps(),
-		liquidationDebtEthAmount: '',
-		maximumLiquidationDebtAttoEth: undefined,
-		liquidationManagerAddress: undefined,
-		liquidationModalOpen: false,
-		liquidationSecurityPoolAddress: undefined,
-		liquidationTargetVault: '',
-		liquidationTimeoutMinutes: '5',
-		loadingPoolOracleManager: false,
-		loadingSecurityPools: false,
-		onBrowsePools: () => undefined,
-		onCreatePool: () => undefined,
-		onLiquidationAmountChange: () => undefined,
-		onLiquidationTimeoutMinutesChange: () => undefined,
-		onLoadPoolOracleManager: () => undefined,
-		onOpenLiquidationModal: () => undefined,
-		onQueueLiquidation: () => undefined,
-		onExecutePendingPoolOperation: () => undefined,
-		onRefreshSelectedPoolData: () => undefined,
-		onRequestPoolPrice: () => undefined,
-		onSelectedPoolViewChange: () => undefined,
-		onSecurityPoolAddressChange: () => undefined,
-		selectedPoolRefreshNonce: 0,
-		onViewPendingReport: () => undefined,
-		poolOracleActiveAction: undefined,
-		poolOracleManagerDetails: undefined,
-		poolOracleManagerError: undefined,
-		poolOracleManagerErrorAddress: undefined,
-		poolPriceOracleResult: undefined,
-		repPerEthPrice: undefined,
-		repPerEthSource: undefined,
-		repPerEthSourceUrl: undefined,
-		reporting: createReportingProps(),
-		selectedPoolView: '',
-		securityPoolAddress: '',
-		securityPoolOverviewActiveAction: undefined,
-		securityPoolOverviewError: undefined,
-		securityPoolLiquidationError: undefined,
-		securityPoolOverviewResult: undefined,
-		securityPools: [],
-		securityVault: createSecurityVaultProps(),
-		trading: createTradingProps(),
-		...overrides,
-	}
+	return createBuilderSelectedPool({ vaultCount: 3n, ...overrides })
 }
 
 type SecurityPoolsOverviewRouteTestOverrides = Omit<Partial<SecurityPoolsOverviewRouteContentProps>, 'securityPoolPage'> & {
@@ -354,7 +115,7 @@ function createSecurityPoolsSectionProps(overrides: Partial<SecurityPoolsSection
 		createPool: createCreatePoolProps(),
 		onActiveViewChange: () => undefined,
 		overview: createOverviewProps(),
-		workflow: createWorkflowProps(),
+		workflow: createSecurityPoolWorkflowProps(),
 		...overrides,
 	}
 }
@@ -379,7 +140,7 @@ void describe('SecurityPoolsSection', () => {
 			activeView: 'open',
 			onLoadUniverseDirectoryPools: () => calls.push('universes'),
 			overview: createOverviewProps({ onLoadSecurityPoolPage: () => calls.push('browse') }),
-			workflow: createWorkflowProps({ onSecurityPoolAddressChange: address => calls.push(address), onRefreshSelectedPoolData: () => calls.push('refresh') }),
+			workflow: createSecurityPoolWorkflowProps({ onSecurityPoolAddressChange: address => calls.push(address), onRefreshSelectedPoolData: () => calls.push('refresh') }),
 		})
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, props))
 		cleanupRenderedComponent = renderedComponent.cleanup
@@ -464,7 +225,7 @@ void describe('SecurityPoolsSection', () => {
 							universeId: 1n,
 						},
 					}),
-					workflow: createWorkflowProps({
+					workflow: createSecurityPoolWorkflowProps({
 						onRefreshSelectedPoolData: address => {
 							if (address !== undefined) {
 								refreshCalls.push(address)
@@ -578,7 +339,7 @@ void describe('SecurityPoolsSection', () => {
 					overview: createOverviewProps({
 						securityPools: [selectedPool],
 					}),
-					workflow: createWorkflowProps({
+					workflow: createSecurityPoolWorkflowProps({
 						checkedSecurityPoolAddress: zeroAddress,
 						securityPoolAddress: zeroAddress,
 						securityPools: [selectedPool],
@@ -623,7 +384,7 @@ void describe('SecurityPoolsSection', () => {
 				SecurityPoolsSection,
 				createSecurityPoolsSectionProps({
 					activeView: 'operate',
-					workflow: createWorkflowProps({
+					workflow: createSecurityPoolWorkflowProps({
 						securityPoolAddress: '0x0000000000000000000000000000000000000001',
 					}),
 				}),

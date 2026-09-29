@@ -1,17 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
-import { address, snapshotFixture } from './fixture.ts'
+import { address, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-const options = {
-	allowHighRisk: true,
-	allowIrreversibleOperations: true,
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maximumBlockIntervalSeconds: 15,
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: (10n ** 16n).toString(),
-	minimumRepReserveAttoRep: (10n ** 18n).toString(),
-	seed: 0x1234_5678,
-} as const
+const options = planningOptionsFixture()
 
 describe('Statoblast timestamp safety', () => {
 	test('does not plan a deadline-bound auction call inside one custom-chain block interval', () => {

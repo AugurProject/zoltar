@@ -2,11 +2,10 @@ import { getSeededVaultDepositTargetFactorBps } from './seededVaultTarget.js'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { getStatoblastScenarioProtocol as getScenarioProtocol } from './statoblastScenarioProtocol.js'
-import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type BootstrapProgressHandler, type ProgressRange, type BootstrapScenarioApplyParameters, type TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
+import { createRangeProgressReporter, deploySimulationAppContracts, reportBootstrapProgress, requireQaAccount, type ProgressRange, type BootstrapScenarioApplyParameters, type TevmLikeClient } from '@zoltar/ui-core-shared/simulation/bootstrap.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import type { ListedSecurityPool, QuestionData } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export { getStatoblastScenarioLabel, getStatoblastScenarioDescription, type StatoblastScenario } from './statoblastScenarioDescriptions.js'
@@ -29,6 +28,8 @@ const SECURITY_POOL_X2_AUCTION_EXTRA_REP_DEPOSIT = 2_000_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_UNMIGRATED_REP_DEPOSIT = 1_000n * 10n ** 18n
 const SECURITY_POOL_X2_AUCTION_BID_PRICES = [getTruthAuctionPriceAtTick(12n), getTruthAuctionPriceAtTick(10n), getTruthAuctionPriceAtTick(8n)] as const
 const SECURITY_POOL_X2_AUCTION_BID_AMOUNTS = [3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 6n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n, 3n * 10n ** 18n, 4n * 10n ** 18n, 5n * 10n ** 18n] as const
+type ScenarioSeedParameters = Omit<BootstrapScenarioApplyParameters, 'scenario'>
+
 type SeededVaultSpec = {
 	accountAddress: Address
 	vaultRepBackingDepositAttoRep: bigint
@@ -204,13 +205,8 @@ async function seedSecurityPool({
 	poolSpec,
 	profile,
 	seedTimestamp,
-}: {
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
+}: Omit<ScenarioSeedParameters, 'accounts'> & {
 	poolSpec: SeededSecurityPoolSpec
-	profile: NetworkProfile
 	seedTimestamp: bigint
 }) {
 	const readClient = createReadClient()
@@ -280,21 +276,7 @@ async function seedSecurityPool({
 	await reportStep(poolSpec.readyLabel)
 }
 
-async function seedSecurityPoolScenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-}: {
-	accounts: readonly Address[]
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
-	profile: NetworkProfile
-}) {
+async function seedSecurityPoolScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
 	const primaryAccount = requireQaAccount(accounts[0], 'Expected seeded simulation QA account A1')
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
 
@@ -321,21 +303,7 @@ async function seedSecurityPoolScenario({
 	})
 }
 
-async function seedSecurityPoolX2Scenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-}: {
-	accounts: readonly Address[]
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
-	profile: NetworkProfile
-}) {
+async function seedSecurityPoolX2Scenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
 	const primaryAccount = requireQaAccount(accounts[0], 'Expected simulation QA account A1 for securitypoolx2')
 	const secondaryAccount = requireQaAccount(accounts[1], 'Expected simulation QA account B2 for securitypoolx2')
 	const currentTimestamp = await getSimulationChainTimestamp(memoryClient)
@@ -461,21 +429,7 @@ async function loadRequiredChildSecurityPool(readClient: ReadClient, parentSecur
 	return childPool
 }
 
-async function seedSecurityPoolX2AuctionScenario({
-	accounts,
-	createReadClient,
-	createWriteClient,
-	memoryClient,
-	onProgress,
-	profile,
-}: {
-	accounts: readonly Address[]
-	createReadClient: () => ReadClient
-	createWriteClient: (accountAddress: Address) => WriteClient
-	memoryClient: TevmLikeClient
-	onProgress: BootstrapProgressHandler | undefined
-	profile: NetworkProfile
-}) {
+async function seedSecurityPoolX2AuctionScenario({ accounts, createReadClient, createWriteClient, memoryClient, onProgress, profile }: ScenarioSeedParameters) {
 	await seedSecurityPoolX2Scenario({
 		accounts,
 		createReadClient,

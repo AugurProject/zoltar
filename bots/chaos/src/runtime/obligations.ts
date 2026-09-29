@@ -220,7 +220,7 @@ function hasSemanticFailure(workflow: DurableWorkflow) {
 }
 
 export function synchronizeLifecycleObligations(
-	state: Pick<RuntimeState, 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'workflows'>,
+	state: Pick<RuntimeState, 'includedTransactions' | 'lifecyclePresenceBlocker' | 'obligationTombstones' | 'obligations' | 'pendingTransactions' | 'rollbackQueue' | 'workflows'>,
 	evaluations: readonly EvaluatedOperation[],
 	canonicalPresence: readonly CanonicalLifecyclePresence[],
 	presenceComplete: boolean,
@@ -371,8 +371,12 @@ export function synchronizeLifecycleObligations(
 			}
 		}
 	}
+	// Absence retention can expire before finality; every transaction journal still needs its workflow.
+	const retainedWorkflowIds = new Set([...state.pendingTransactions, ...state.includedTransactions.map(record => record.intent), ...state.rollbackQueue.map(record => record.intent)].map(intent => intent.workflowId))
 	const retiredIds = new Set(
 		state.obligationTombstones.flatMap(tombstone => {
+			const obligation = obligationsById.get(tombstone.id)
+			if (obligation !== undefined && retainedWorkflowIds.has(obligation.workflowId)) return []
 			if (!identityPresenceComplete(tombstone.id) || present.has(tombstone.id)) return []
 			if (tombstone.observedAbsentAtBlock === undefined) return []
 			const retainedThrough = BigInt(tombstone.observedAbsentAtBlock)

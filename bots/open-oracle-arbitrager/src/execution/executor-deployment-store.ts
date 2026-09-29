@@ -1,9 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { durableFilesystem, syncDirectory, writeFileAtomically, type DurableWriteFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { acquireExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type ExecutorDeploymentIntent = {
@@ -57,31 +58,24 @@ async function parseExecutorDeploymentIntent(value: unknown): Promise<ExecutorDe
 }
 
 type DeploymentIntentReadFilesystem = {
-	open(path: string, flags: 'r'): Promise<{ close(): Promise<void>; sync(): Promise<void> }>
+	open(path: string, flags: 'r'): Promise<{ close(): Promise<unknown>; sync(): Promise<unknown> }>
 	readFile(path: string, encoding: 'utf8'): Promise<string>
 }
 
 async function syncExistingParentDirectory(path: string, filesystem: DeploymentIntentReadFilesystem) {
-	let directory
 	try {
-		directory = await filesystem.open(dirname(path), 'r')
+		await syncDirectory(dirname(path), filesystem)
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return
-		throw error
-	}
-	try {
-		await directory.sync()
-	} finally {
-		await directory.close()
+		if (!isErrorCode(error, 'ENOENT')) throw error
 	}
 }
 
-export async function loadExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentReadFilesystem = { open, readFile }) {
+export async function loadExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentReadFilesystem = durableFilesystem) {
 	let contents: string
 	try {
 		contents = await filesystem.readFile(path, 'utf8')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+		if (isErrorCode(error, 'ENOENT')) {
 			await syncExistingParentDirectory(path, filesystem)
 			return undefined
 		}
@@ -90,92 +84,25 @@ export async function loadExecutorDeploymentIntent(path: string, filesystem: Dep
 	return parseExecutorDeploymentIntent(JSON.parse(contents))
 }
 
-export async function loadExecutorDeploymentIntentForChain(path: string, expectedChainId: number, filesystem: DeploymentIntentReadFilesystem = { open, readFile }) {
+export async function loadExecutorDeploymentIntentForChain(path: string, expectedChainId: number, filesystem: DeploymentIntentReadFilesystem = durableFilesystem) {
 	const intent = await loadExecutorDeploymentIntent(path, filesystem)
 	if (intent !== undefined && intent.chainId !== expectedChainId) throw new Error(`Executor deployment intent targets chain ${intent.chainId.toString()}; expected chain ${expectedChainId.toString()}`)
 	return intent
 }
 
-type DeploymentIntentWriteFilesystem = {
-	mkdir(path: string, options: { mode: number; recursive: true }): Promise<unknown>
-	openDirectory(path: string): Promise<{ close(): Promise<void>; sync(): Promise<void> }>
-	openFile(path: string): Promise<{ chmod(mode: number): Promise<void>; close(): Promise<void>; sync(): Promise<void>; writeFile(data: string, encoding: 'utf8'): Promise<void> }>
-	rename(from: string, to: string): Promise<void>
-	rm(path: string, options: { force: true }): Promise<void>
-}
-
-const deploymentIntentWriteFilesystem: DeploymentIntentWriteFilesystem = {
-	mkdir,
-	openDirectory: path => open(path, 'r'),
-	openFile: path => open(path, 'wx', 0o600),
-	rename,
-	rm,
-}
-
-async function ensureDurableDirectory(path: string, filesystem: DeploymentIntentWriteFilesystem) {
-	const missingDirectories: string[] = []
-	let existingDirectory = path
-	for (;;) {
-		let handle
-		try {
-			handle = await filesystem.openDirectory(existingDirectory)
-		} catch (error) {
-			if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error
-			const parent = dirname(existingDirectory)
-			if (parent === existingDirectory) throw error
-			missingDirectories.push(existingDirectory)
-			existingDirectory = parent
-			continue
-		}
-		await handle.close()
-		break
-	}
-	if (missingDirectories.length === 0) return
-	await filesystem.mkdir(path, { mode: 0o700, recursive: true })
-	for (const directory of missingDirectories) {
-		const parent = await filesystem.openDirectory(dirname(directory))
-		try {
-			await parent.sync()
-		} finally {
-			await parent.close()
-		}
-	}
-}
-
-export async function saveExecutorDeploymentIntent(path: string, intent: ExecutorDeploymentIntent, filesystem: DeploymentIntentWriteFilesystem = deploymentIntentWriteFilesystem) {
-	await ensureDurableDirectory(dirname(path), filesystem)
-	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
-	try {
-		const handle = await filesystem.openFile(temporaryPath)
-		try {
-			await handle.writeFile(`${JSON.stringify(intent, undefined, 2)}\n`, 'utf8')
-			await handle.chmod(0o600)
-			await handle.sync()
-		} finally {
-			await handle.close()
-		}
-		await filesystem.rename(temporaryPath, path)
-		const directory = await filesystem.openDirectory(dirname(path))
-		try {
-			await directory.sync()
-		} finally {
-			await directory.close()
-		}
-	} catch (error) {
-		await filesystem.rm(temporaryPath, { force: true })
-		throw error
-	}
+export async function saveExecutorDeploymentIntent(path: string, intent: ExecutorDeploymentIntent, filesystem?: DurableWriteFilesystem) {
+	await writeFileAtomically(path, `${JSON.stringify(intent, undefined, 2)}\n`, { filesystem, syncCreatedDirectories: true })
 }
 
 type DeploymentIntentFilesystem = DeploymentIntentReadFilesystem & {
 	rm(path: string, options: { force: true }): Promise<void>
 }
 
-export async function clearExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentFilesystem = { open, readFile, rm }) {
+export async function clearExecutorDeploymentIntent(path: string, filesystem: DeploymentIntentFilesystem = durableFilesystem) {
 	try {
 		await filesystem.readFile(path, 'utf8')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
+		if (isErrorCode(error, 'ENOENT')) {
 			await syncExistingParentDirectory(path, filesystem)
 			return
 		}

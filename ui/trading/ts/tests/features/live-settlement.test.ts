@@ -1,15 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
+import { simulateSettlement, submitFreshSettlement } from '../../protocol/live.js'
 import { receiveBasedExitArguments } from '../../protocol/authorization.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
+import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { forkedMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const shareToken = `0x${'22'.repeat(20)}` as Address
 const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
-const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
+const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
 const migrateAbi = [
 	{
 		type: 'function',
@@ -37,28 +39,6 @@ const shareTransferAbi = [
 		outputs: [],
 	},
 ] as const
-const receiveRequestParameter = {
-	type: 'tuple',
-	components: [
-		{ name: 'version', type: 'uint8' },
-		{ name: 'operation', type: 'uint8' },
-		{ name: 'shareToken', type: 'address' },
-		{ name: 'securityPool', type: 'address' },
-		{ name: 'pair', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'questionId', type: 'uint256' },
-		{ name: 'invalidTokenId', type: 'uint256' },
-		{ name: 'yesTokenId', type: 'uint256' },
-		{ name: 'noTokenId', type: 'uint256' },
-		{ name: 'longOutcome', type: 'uint8' },
-		{ name: 'completeSetShares', type: 'uint256' },
-		{ name: 'maxLongSharesIn', type: 'uint256' },
-		{ name: 'minEthOut', type: 'uint256' },
-		{ name: 'payoutRecipient', type: 'address' },
-		{ name: 'refundRecipient', type: 'address' },
-		{ name: 'deadline', type: 'uint256' },
-	],
-} as const
 
 function decodeReceiveRequest(data: Hex) {
 	// The router request is a static tuple, so its fields decode as flat ABI outputs.
@@ -69,35 +49,7 @@ function decodeReceiveRequest(data: Hex) {
 	})
 }
 
-const market: LiveMarket = {
-	pool,
-	pair: undefined,
-	shareToken,
-	universeId: 7n,
-	questionId: 8n,
-	title: 'Forked market',
-	description: 'Encoding fixture',
-	endTime: 1n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 1,
-	awaitingForkContinuation: false,
-	universeForkTime: 1n,
-	vaultCount: 0n,
-	shareTokenSupplyAttoShares: 0n,
-	settlementCollateralAttoEth: 0n,
-	currentRetentionRate: 0n,
-	totalUnderwritingLimitAttoEth: 0n,
-	feeEligibleUnderwritingLimitAttoEth: 0n,
-	mintingCapacityCeilingAttoEth: 0n,
-	availableMintingCapacityAttoEth: 0n,
-	feeBps: 30n,
-	tradingStatus: 4,
-	questionOutcome: 3,
-	yesReserve: 0n,
-	noReserve: 0n,
-	lpTotalSupply: 0n,
-}
+const market = forkedMarketFixture({ pool, shareToken, description: 'Encoding fixture' })
 
 function requireTransactionData(params: unknown) {
 	if (!Array.isArray(params)) throw new Error('RPC parameters must be an array')
@@ -106,6 +58,33 @@ function requireTransactionData(params: unknown) {
 	const data = transaction.data
 	if (!isHexValue(data)) throw new Error('RPC transaction data must be hex')
 	return data
+}
+
+/** A wallet client at block 2 that records every simulated and broadcast transaction's data in order. */
+function recordingSettlementClient() {
+	const transactionData: Hex[] = []
+	const counts = { sends: 0, simulations: 0 }
+	const client = createWalletClient({
+		account,
+		transport: custom({
+			async request({ method, params }) {
+				if (method === 'eth_blockNumber') return '0x2'
+				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+				if (method === 'eth_call') {
+					counts.simulations++
+					transactionData.push(requireTransactionData(params))
+					return '0x'
+				}
+				if (method === 'eth_sendTransaction') {
+					counts.sends++
+					transactionData.push(requireTransactionData(params))
+					return transactionHash
+				}
+				throw new Error(`Unexpected RPC method ${method}`)
+			},
+		}),
+	})
+	return { client, counts, transactionData }
 }
 
 function isHexValue(value: unknown): value is Hex {
@@ -128,27 +107,7 @@ describe('live settlement contract encoding', () => {
 	}
 
 	test('encodes and submits ShareToken migration with the ShareToken ABI', async () => {
-		const transactionData: Hex[] = []
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method, params }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') {
-						return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					}
-					if (method === 'eth_call') {
-						transactionData.push(requireTransactionData(params))
-						return '0x'
-					}
-					if (method === 'eth_sendTransaction') {
-						transactionData.push(requireTransactionData(params))
-						return transactionHash
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
-		})
+		const { client, transactionData } = recordingSettlementClient()
 
 		const selectedScalarTargets = [99n, 42n, 12n]
 		const normalizedScalarTargets = [12n, 42n, 99n]
@@ -165,21 +124,7 @@ describe('live settlement contract encoding', () => {
 	test('simulates and submits the exact final receive-based redemption payload', async () => {
 		const pair = `0x${'66'.repeat(20)}` as Address
 		const canonicalMarket = { ...market, pair, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
-		const transactionData: Hex[] = []
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method, params }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if (method === 'eth_call' || method === 'eth_sendTransaction') {
-						transactionData.push(requireTransactionData(params))
-						return method === 'eth_sendTransaction' ? transactionHash : '0x'
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
-		})
+		const { client, transactionData } = recordingSettlementClient()
 		const quote = await simulateSettlement(client, configuration, canonicalMarket, account, 'redeem-complete-set', { amount: 10n, validityMinutes: 7n, slippageBps: 500n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		expect(quote.expectedAttoEth).toBe(10n)
@@ -198,51 +143,17 @@ describe('live settlement contract encoding', () => {
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {
-		let sends = 0
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if (method === 'eth_call') return '0x'
-					if (method === 'eth_sendTransaction') {
-						sends++
-						return transactionHash
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
-		})
+		const { client, counts } = recordingSettlementClient()
 		const canonicalMarket = { ...market, pair: `0x${'66'.repeat(20)}` as Address, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
 		const quote = await simulateSettlement(client, configuration, canonicalMarket, account, 'redeem-complete-set', { amount: 10n ** 18n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		await expect(submitFreshSettlement(client, configuration, account, { ...quote, minimumAttoEth: quote.expectedAttoEth + 1n }, async write => await write())).rejects.toThrow('approved minimum ETH output')
-		expect(sends).toBe(0)
+		expect(counts.sends).toBe(0)
 	})
 
 	test('runs the wallet-context guard after revalidation and before broadcasting', async () => {
-		let simulations = 0
-		let sends = 0
+		const { client, counts } = recordingSettlementClient()
 		let guards = 0
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if (method === 'eth_call') {
-						simulations++
-						return '0x'
-					}
-					if (method === 'eth_sendTransaction') {
-						sends++
-						return transactionHash
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
-		})
 		const quote = await simulateSettlement(client, configuration, market, account, 'migrate-shares', { sourceOutcome: 'YES', targetOutcomeIndexes: [12n] })
 		await expect(
 			submitFreshSettlement(client, configuration, account, quote, async () => {
@@ -250,8 +161,8 @@ describe('live settlement contract encoding', () => {
 				throw new Error('Wallet context changed during revalidation')
 			}),
 		).rejects.toThrow('Wallet context changed during revalidation')
-		expect(simulations).toBe(2)
+		expect(counts.simulations).toBe(2)
 		expect(guards).toBe(1)
-		expect(sends).toBe(0)
+		expect(counts.sends).toBe(0)
 	})
 })

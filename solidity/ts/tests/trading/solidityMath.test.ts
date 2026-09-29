@@ -58,21 +58,13 @@ describe('Solidity and TypeScript AMM math parity', () => {
 		}
 	})
 
-	test('matches exact-input math when the reserve and net-input sum exceeds uint256', async () => {
+	test.each([
+		{ name: 'when the reserve and net-input sum exceeds uint256', reserveOutBelowMaximum: 123n },
+		{ name: 'with a maximum output reserve and overflowing denominator', reserveOutBelowMaximum: 0n },
+	])('matches exact-input math $name', async ({ reserveOutBelowMaximum }) => {
 		const maximum = (1n << 256n) - 1n
 		const reserveIn = maximum - 10n
-		const reserveOut = maximum - 123n
-		const amountIn = maximum
-		const expected = quoteExactInput(reserveIn, reserveOut, amountIn, 30n)
-		const actual = await client.readContract({ abi: artifact.abi, address: harness, functionName: 'quoteExactInput', args: [reserveIn, reserveOut, amountIn, 30n] })
-		expect(actual[0]).toBe(expected.amountOut)
-		expect(actual[1]).toBe(expected.feeAmount)
-	})
-
-	test('matches exact-input math with a maximum output reserve and overflowing denominator', async () => {
-		const maximum = (1n << 256n) - 1n
-		const reserveIn = maximum - 10n
-		const reserveOut = maximum
+		const reserveOut = maximum - reserveOutBelowMaximum
 		const amountIn = maximum
 		const expected = quoteExactInput(reserveIn, reserveOut, amountIn, 30n)
 		const actual = await client.readContract({ abi: artifact.abi, address: harness, functionName: 'quoteExactInput', args: [reserveIn, reserveOut, amountIn, 30n] })

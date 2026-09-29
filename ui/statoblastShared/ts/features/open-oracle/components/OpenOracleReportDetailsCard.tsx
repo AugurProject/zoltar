@@ -212,6 +212,22 @@ export function OpenOracleReportDetailsCard({
 	} else {
 		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>
 	}
+	const selectedReportActionProps = {
+		disputeSubmission: openOracleDisputeSubmission,
+		isConnected,
+		isOnActiveAppChain,
+		onApproveToken1,
+		onApproveToken2,
+		onDisputeReport,
+		onOpenOracleFormChange,
+		onSettleReport,
+		openOracleActiveAction,
+		openOracleForm,
+		openOracleTokenAccessState,
+		openOracleReportDetails: liveReportDetails,
+		token1Symbol: openOracleReportDetails.token1Symbol,
+		token2Symbol: openOracleReportDetails.token2Symbol,
+	}
 	const reportTransactionContext = [
 		{ label: openOracleCopy.reportId, value: openOracleReportDetails.reportId.toString() },
 		{ label: openOracleCopy.tokenPair, value: openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol) },
@@ -405,25 +421,7 @@ export function OpenOracleReportDetailsCard({
 			</div>
 
 			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'dispute' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
-				{renderSelectedReportActionSection({
-					actionMode: 'dispute',
-					onDisputeFieldRevealChange,
-					revealedDisputeFields,
-					disputeSubmission: openOracleDisputeSubmission,
-					isConnected,
-					isOnActiveAppChain,
-					onApproveToken1,
-					onApproveToken2,
-					onDisputeReport,
-					onOpenOracleFormChange,
-					onSettleReport,
-					openOracleActiveAction,
-					openOracleForm,
-					openOracleTokenAccessState,
-					openOracleReportDetails: liveReportDetails,
-					token1Symbol: openOracleReportDetails.token1Symbol,
-					token2Symbol: openOracleReportDetails.token2Symbol,
-				})}
+				{renderSelectedReportActionSection({ ...selectedReportActionProps, actionMode: 'dispute', onDisputeFieldRevealChange, revealedDisputeFields })}
 			</OperationModal>
 		</>
 	)

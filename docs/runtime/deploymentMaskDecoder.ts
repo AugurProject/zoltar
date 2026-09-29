@@ -1,13 +1,11 @@
+import { requiredElementFinder } from './domHelpers'
+
 type DeploymentStep = {
 	id: string
 	label: string
 }
 
-function requiredElement<T extends Element>(root: ParentNode, selector: string, expected: new () => T): T {
-	const found = root.querySelector(selector)
-	if (!(found instanceof expected)) throw new Error(`Required deployment decoder element ${selector} is missing or has the wrong type`)
-	return found
-}
+const requiredElement = requiredElementFinder('deployment decoder')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -66,23 +64,28 @@ function renderMessageRow(body: HTMLTableSectionElement, message: string, linkUr
 	body.replaceChildren(row)
 }
 
+function createStepRow(step: DeploymentStep, bit: number): HTMLTableRowElement {
+	const row = document.createElement('tr')
+	for (const [value, useCode] of [
+		[String(bit), true],
+		[step.id, true],
+		[step.label, false],
+	] as const) {
+		const cell = document.createElement('td')
+		if (useCode) {
+			const code = document.createElement('code')
+			code.textContent = value
+			cell.append(code)
+		} else cell.textContent = value
+		row.append(cell)
+	}
+	return row
+}
+
 function renderMappingRows(): void {
 	const rows = trackedSteps.map((step, bit) => {
-		const row = document.createElement('tr')
+		const row = createStepRow(step, bit)
 		row.dataset['deploymentBit'] = String(bit)
-		for (const [value, useCode] of [
-			[String(bit), true],
-			[step.id, true],
-			[step.label, false],
-		] as const) {
-			const cell = document.createElement('td')
-			if (useCode) {
-				const code = document.createElement('code')
-				code.textContent = value
-				cell.append(code)
-			} else cell.textContent = value
-			row.append(cell)
-		}
 		const statusCell = document.createElement('td')
 		statusCell.dataset['deploymentBitStatus'] = String(bit)
 		statusCell.textContent = 'Clear'
@@ -120,23 +123,7 @@ async function loadSepoliaMapping(): Promise<void> {
 		const response = await fetch(sepoliaManifestUrl)
 		if (!response.ok) throw new TypeError(`Could not load deployment manifest: ${response.status}`)
 		const steps = validateManifest(await response.json())
-		const rows = steps.map((step, bit) => {
-			const row = document.createElement('tr')
-			for (const [value, useCode] of [
-				[String(bit), true],
-				[step.id, true],
-				[step.label, false],
-			] as const) {
-				const cell = document.createElement('td')
-				if (useCode) {
-					const code = document.createElement('code')
-					code.textContent = value
-					cell.append(code)
-				} else cell.textContent = value
-				row.append(cell)
-			}
-			return row
-		})
+		const rows = steps.map((step, bit) => createStepRow(step, bit))
 		sepoliaMappingBody.replaceChildren(...rows)
 	} catch (error) {
 		if (!(error instanceof TypeError) && !(error instanceof SyntaxError)) throw error

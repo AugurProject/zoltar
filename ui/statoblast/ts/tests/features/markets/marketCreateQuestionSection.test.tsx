@@ -12,7 +12,10 @@ import { MarketCreateQuestionSection } from '@zoltar/ui-statoblast-shared/featur
 import { createMarketParameters } from '@zoltar/ui-statoblast-shared/features/markets/lib/marketCreation.js'
 import type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
+import type { ComponentProps } from 'preact'
 import { act } from 'preact/test-utils'
+
+type MarketCreateQuestionSectionProps = ComponentProps<typeof MarketCreateQuestionSection>
 
 function createMarketForm(overrides: Partial<MarketFormState> = {}): MarketFormState {
 	return {
@@ -42,6 +45,46 @@ function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDeta
 	})
 }
 
+function createSectionProps(overrides: Partial<MarketCreateQuestionSectionProps>): MarketCreateQuestionSectionProps {
+	return {
+		accountAddress: zeroAddress,
+		hasForked: false,
+		isOnActiveAppChain: true,
+		marketCreating: false,
+		marketError: undefined,
+		marketForm: createMarketForm(),
+		marketResult: undefined,
+		loadingZoltarQuestions: false,
+		onCreateMarket: () => {
+			throw new Error('create should remain unavailable')
+		},
+		onMarketFormChange: () => undefined,
+		onOpenForkTab: () => undefined,
+		onResetMarket: () => undefined,
+		onUseQuestionForFork: () => undefined,
+		zoltarQuestions: [],
+		...overrides,
+	}
+}
+
+function getDraftPreview() {
+	const draftPreview = within(document.body).getByRole('heading', { name: 'Draft preview' }).closest('section')
+	if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
+	return draftPreview
+}
+
+function getDraftPreviewOutcomeChips() {
+	return Array.from(getDraftPreview().querySelectorAll('.outcome-chip'))
+}
+
+function getDraftPreviewOutcomeLabels() {
+	return getDraftPreviewOutcomeChips().map(element => element.textContent?.trim() ?? '')
+}
+
+function getDescribedText(element: Element) {
+	return document.getElementById(element.getAttribute('aria-describedby') ?? '')?.textContent
+}
+
 describe('MarketCreateQuestionSection', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	let marketForm = createMarketForm()
@@ -56,32 +99,24 @@ describe('MarketCreateQuestionSection', () => {
 		},
 	})
 
+	async function renderSection(overrides: Partial<MarketCreateQuestionSectionProps> = {}, chainTimestamp?: bigint) {
+		const section = <MarketCreateQuestionSection {...createSectionProps(overrides)} />
+		const renderedComponent = await renderIntoDocument(chainTimestamp === undefined ? section : <ChainTimestampContext.Provider value={chainTimestamp}>{section}</ChainTimestampContext.Provider>)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		return renderedComponent
+	}
+
 	test('collects form updates and blocks create without wallet', async () => {
 		const updates: Array<Partial<MarketFormState>> = []
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={undefined}
-				hasForked={false}
-				isOnActiveAppChain={false}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={marketForm}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => {
-					throw new Error('create should remain unavailable')
-				}}
-				onMarketFormChange={update => {
-					marketForm = { ...marketForm, ...update }
-					updates.push(update)
-				}}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			accountAddress: undefined,
+			isOnActiveAppChain: false,
+			marketForm,
+			onMarketFormChange: update => {
+				marketForm = { ...marketForm, ...update }
+				updates.push(update)
+			},
+		})
 
 		const documentQueries = within(document.body)
 		expect(document.querySelectorAll('input[name="market-create-type"]')).toHaveLength(0)
@@ -98,25 +133,7 @@ describe('MarketCreateQuestionSection', () => {
 	})
 
 	test('shows neutral guidance until an invalid field is touched', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({ description: '', title: '' })}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm: createMarketForm({ description: '', title: '' }) })
 
 		const documentQueries = within(document.body)
 		const titleInput = documentQueries.getByLabelText('Title') as HTMLInputElement
@@ -129,9 +146,7 @@ describe('MarketCreateQuestionSection', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Question type Guidance' })).toBeNull()
 		expect(document.querySelectorAll('input[name="market-create-type"]')).toHaveLength(0)
 		expect(document.querySelector('.question-type-fixed')?.textContent).toContain('Binary')
-		expect(documentQueries.getByRole('heading', { name: 'Draft preview' })).not.toBeNull()
-		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft preview' }).closest('section')
-		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
+		const draftPreview = getDraftPreview()
 		expect(within(draftPreview).getByText('Untitled question')).not.toBeNull()
 		expect(within(draftPreview).getByText('Binary')).not.toBeNull()
 		expect(within(draftPreview).queryByText('binary')).toBeNull()
@@ -149,29 +164,11 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		expect(documentQueries.getByText('Title is required')).not.toBeNull()
-		expect(document.getElementById(titleInput.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Title is required')
+		expect(getDescribedText(titleInput)).toBe('Title is required')
 	})
 
 	test('associates chronology errors with both time fields and explains the disabled action', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({ title: '', startTime: '2000', endTime: '1000' })}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm: createMarketForm({ title: '', startTime: '2000', endTime: '1000' }) })
 
 		const documentQueries = within(document.body)
 		const startTimeInput = documentQueries.getByLabelText('Start time')
@@ -181,10 +178,10 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		expect(documentQueries.getAllByText('End time must be after start time')).toHaveLength(1)
-		expect(startTimeInput.getAttribute('aria-invalid')).toBe('true')
-		expect(endTimeInput.getAttribute('aria-invalid')).toBe('true')
-		expect(startTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error market-create-time-zone')
-		expect(endTimeInput.getAttribute('aria-describedby')).toBe('market-create-timing-error market-create-time-zone')
+		for (const input of [startTimeInput, endTimeInput]) {
+			expect(input.getAttribute('aria-invalid')).toBe('true')
+			expect(input.getAttribute('aria-describedby')).toBe('market-create-timing-error market-create-time-zone')
+		}
 		expect(documentQueries.queryByText('Missing required fields: Title')).toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Create question', 'Missing required fields: Title. Fix invalid fields: End time must be after start time')
 	})
@@ -200,29 +197,15 @@ describe('MarketCreateQuestionSection', () => {
 			scalarMin: '0',
 			startTime: '',
 		})
-		const renderedComponent = await renderIntoDocument(
-			<ChainTimestampContext.Provider value={2_000_000_000n}>
-				<MarketCreateQuestionSection
-					accountAddress={zeroAddress}
-					hasForked={false}
-					isOnActiveAppChain={true}
-					marketCreating={false}
-					marketError={undefined}
-					marketForm={scalarForm}
-					marketResult={undefined}
-					loadingZoltarQuestions={false}
-					onCreateMarket={() => {
-						createCount += 1
-					}}
-					onMarketFormChange={() => undefined}
-					onOpenForkTab={() => undefined}
-					onResetMarket={() => undefined}
-					onUseQuestionForFork={() => undefined}
-					zoltarQuestions={[]}
-				/>
-			</ChainTimestampContext.Provider>,
+		await renderSection(
+			{
+				marketForm: scalarForm,
+				onCreateMarket: () => {
+					createCount += 1
+				},
+			},
+			2_000_000_000n,
 		)
-		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('This question will be created already ended. Reporting and resolution may be available immediately.')).not.toBeNull()
@@ -240,31 +223,10 @@ describe('MarketCreateQuestionSection', () => {
 	})
 
 	test('uses normalized market type and Augur Statoblast terminology for categorical questions', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({ marketType: 'categorical' })}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm: createMarketForm({ marketType: 'categorical' }) })
 
-		const documentQueries = within(document.body)
-		const draftPreview = documentQueries.getByRole('heading', { name: 'Draft preview' }).closest('section')
-		if (!(draftPreview instanceof HTMLElement)) throw new Error('Expected draft preview section')
-		expect(within(draftPreview).getByText('Categorical')).not.toBeNull()
-		expect(documentQueries.queryByText(/Augur Statoblast origin security pools/)).toBeNull()
+		expect(within(getDraftPreview()).getByText('Categorical')).not.toBeNull()
+		expect(within(document.body).queryByText(/Augur Statoblast origin security pools/)).toBeNull()
 	})
 
 	test('renders selected market details and triggers selection callbacks', async () => {
@@ -279,34 +241,23 @@ describe('MarketCreateQuestionSection', () => {
 			marketType: 'binary',
 		}
 
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={marketForm}
-				marketResult={marketResult}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => {
-					openForkTabCount += 1
-				}}
-				onResetMarket={() => {
-					resetCount += 1
-				}}
-				onUseQuestionForFork={() => {
-					useForForkCount += 1
-				}}
-				onUseQuestionForPool={questionId => {
-					useForPoolQuestionId = questionId
-				}}
-				zoltarQuestions={[question]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			marketForm,
+			marketResult,
+			onOpenForkTab: () => {
+				openForkTabCount += 1
+			},
+			onResetMarket: () => {
+				resetCount += 1
+			},
+			onUseQuestionForFork: () => {
+				useForForkCount += 1
+			},
+			onUseQuestionForPool: questionId => {
+				useForPoolQuestionId = questionId
+			},
+			zoltarQuestions: [question],
+		})
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: question.title })).not.toBeNull()
@@ -326,32 +277,15 @@ describe('MarketCreateQuestionSection', () => {
 
 	test('calls categorical mutators', async () => {
 		const updates: Array<Partial<MarketFormState>> = []
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({
-					marketType: 'categorical',
-					categoricalOutcomes: ['Yes', 'No'],
-				})}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => {
-					throw new Error('create should remain unavailable')
-				}}
-				onMarketFormChange={update => {
-					updates.push(update)
-				}}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			marketForm: createMarketForm({
+				marketType: 'categorical',
+				categoricalOutcomes: ['Yes', 'No'],
+			}),
+			onMarketFormChange: update => {
+				updates.push(update)
+			},
+		})
 
 		const documentQueries = within(document.body)
 		await act(() => {
@@ -369,25 +303,7 @@ describe('MarketCreateQuestionSection', () => {
 	})
 
 	test('marks the required categorical outcome slots and associates their shared error', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({ categoricalOutcomes: ['', 'Yes', 'No'], marketType: 'categorical' })}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm: createMarketForm({ categoricalOutcomes: ['', 'Yes', 'No'], marketType: 'categorical' }) })
 
 		const documentQueries = within(document.body)
 		const outcomesGroup = document.body.querySelector('[role="group"][aria-labelledby="market-create-outcomes-label"]')
@@ -406,8 +322,8 @@ describe('MarketCreateQuestionSection', () => {
 		})
 
 		expect(documentQueries.getByText('Outcome 1 is required')).not.toBeNull()
-		expect(document.getElementById(outcome1.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Outcome 1 is required')
-		expect(document.getElementById(outcome2.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Outcome 1 is required')
+		expect(getDescribedText(outcome1)).toBe('Outcome 1 is required')
+		expect(getDescribedText(outcome2)).toBe('Outcome 1 is required')
 	})
 
 	test('uses canonical categorical outcome ordering in the draft preview', async () => {
@@ -415,32 +331,9 @@ describe('MarketCreateQuestionSection', () => {
 			categoricalOutcomes: ['Cherry', 'Apple', 'Banana'],
 			marketType: 'categorical',
 		})
-		const expectedOutcomeLabels = [...createMarketParameters(marketForm).outcomeLabels, 'Invalid']
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={marketForm}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm })
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
-		const draftPreviewSection = draftPreviewHeading.closest('section')
-		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
-		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
-		expect(renderedOutcomeLabels).toEqual(expectedOutcomeLabels)
+		expect(getDraftPreviewOutcomeLabels()).toEqual([...createMarketParameters(marketForm).outcomeLabels, 'Invalid'])
 	})
 
 	test('does not duplicate invalid in the categorical draft preview when the user already entered it', async () => {
@@ -448,203 +341,78 @@ describe('MarketCreateQuestionSection', () => {
 			categoricalOutcomes: ['Yes', 'Invalid', 'No'],
 			marketType: 'categorical',
 		})
-		const expectedOutcomeLabels = createMarketParameters(marketForm).outcomeLabels
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={marketForm}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm })
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
-		const draftPreviewSection = draftPreviewHeading.closest('section')
-		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
-		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
-		expect(renderedOutcomeLabels).toEqual(expectedOutcomeLabels)
+		const renderedOutcomeLabels = getDraftPreviewOutcomeLabels()
+		expect(renderedOutcomeLabels).toEqual(createMarketParameters(marketForm).outcomeLabels)
 		expect(renderedOutcomeLabels.filter(label => label.toLowerCase() === 'invalid')).toHaveLength(1)
 	})
 
 	test('renders a user-entered lowercase invalid outcome as the single warning chip in the draft preview', async () => {
-		const marketForm = createMarketForm({
-			categoricalOutcomes: ['Yes', 'invalid', 'No'],
-			marketType: 'categorical',
+		await renderSection({
+			marketForm: createMarketForm({
+				categoricalOutcomes: ['Yes', 'invalid', 'No'],
+				marketType: 'categorical',
+			}),
 		})
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={marketForm}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
-		const draftPreviewSection = draftPreviewHeading.closest('section')
-		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
-		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
-		expect(renderedOutcomeLabels.filter(label => label.toLowerCase() === 'invalid')).toHaveLength(1)
-
-		const invalidChip = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).find(element => element.textContent?.trim().toLowerCase() === 'invalid')
+		const invalidChips = getDraftPreviewOutcomeChips().filter(element => element.textContent?.trim().toLowerCase() === 'invalid')
+		expect(invalidChips).toHaveLength(1)
+		const [invalidChip] = invalidChips
 		if (!(invalidChip instanceof HTMLElement)) throw new Error('Expected invalid outcome chip')
 		expect(invalidChip.className).toContain('warning')
 	})
 
 	test('uses the same scalar label in the draft preview as the final question display', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({
-					marketType: 'scalar',
-				})}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm: createMarketForm({ marketType: 'scalar' }) })
 
-		const draftPreviewHeading = within(document.body).getByRole('heading', { name: 'Draft preview' })
-		const draftPreviewSection = draftPreviewHeading.closest('section')
-		if (!(draftPreviewSection instanceof HTMLElement)) throw new Error('Expected draft preview section')
-		const renderedOutcomeLabels = Array.from(draftPreviewSection.querySelectorAll('.outcome-chip')).map(element => element.textContent?.trim() ?? '')
+		const renderedOutcomeLabels = getDraftPreviewOutcomeLabels()
 		expect(renderedOutcomeLabels).toContain('Scalar')
 		expect(renderedOutcomeLabels).not.toContain('Scalar value')
 	})
 
 	test('shows scalar preview guidance for malformed scalar inputs', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={false}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({
-					marketType: 'scalar',
-					scalarIncrement: 'not-a-number',
-					scalarMin: '0',
-					scalarMax: '10',
-				})}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => {
-					throw new Error('create should remain unavailable')
-				}}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			isOnActiveAppChain: false,
+			marketForm: createMarketForm({
+				marketType: 'scalar',
+				scalarIncrement: 'not-a-number',
+				scalarMin: '0',
+				scalarMax: '10',
+			}),
+		})
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
+		expect(within(document.body).getByText('Enter scalar min, max, and increment to preview the tick slider.')).not.toBeNull()
 		expectTransactionButtonDisabled(document.body, 'Create question')
 	})
 
 	test('marks scalar range fields required and associates their contextual errors', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({ marketType: 'scalar', scalarIncrement: '', scalarMax: '', scalarMin: '' })}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ marketForm: createMarketForm({ marketType: 'scalar', scalarIncrement: '', scalarMax: '', scalarMin: '' }) })
 
 		const documentQueries = within(document.body)
-		const scalarMin = documentQueries.getByLabelText('Scalar min') as HTMLInputElement
-		const scalarIncrement = documentQueries.getByLabelText('Scalar increment') as HTMLInputElement
-		const scalarMax = documentQueries.getByLabelText('Scalar max') as HTMLInputElement
-		for (const input of [scalarMin, scalarIncrement, scalarMax]) {
+		const scalarFields = ['Scalar min', 'Scalar increment', 'Scalar max'].map(label => ({ input: documentQueries.getByLabelText(label) as HTMLInputElement, label }))
+		for (const { input } of scalarFields) {
 			expect(input.required).toBe(true)
 			expect(document.querySelector(`label[for="${input.id}"] .required-field-indicator`)).not.toBeNull()
 		}
 
 		await act(() => {
-			scalarMin.dispatchEvent(new Event('blur'))
-			scalarIncrement.dispatchEvent(new Event('blur'))
-			scalarMax.dispatchEvent(new Event('blur'))
+			for (const { input } of scalarFields) input.dispatchEvent(new Event('blur'))
 		})
 
-		expect(documentQueries.getByText('Scalar min is required')).not.toBeNull()
-		expect(documentQueries.getByText('Scalar increment is required')).not.toBeNull()
-		expect(documentQueries.getByText('Scalar max is required')).not.toBeNull()
-		expect(document.getElementById(scalarMin.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar min is required')
-		expect(document.getElementById(scalarIncrement.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar increment is required')
-		expect(document.getElementById(scalarMax.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Scalar max is required')
+		for (const { input, label } of scalarFields) {
+			expect(documentQueries.getByText(`${label} is required`)).not.toBeNull()
+			expect(getDescribedText(input)).toBe(`${label} is required`)
+		}
 	})
 
 	test('calls create market handler when validation passes', async () => {
 		let createCallCount = 0
-
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm()}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => {
-					createCallCount += 1
-				}}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			onCreateMarket: () => {
+				createCallCount += 1
+			},
+		})
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Create question' }))
@@ -655,38 +423,21 @@ describe('MarketCreateQuestionSection', () => {
 
 	test('updates scalar form values', async () => {
 		const updates: Array<Partial<MarketFormState>> = []
-
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({
-					marketType: 'scalar',
-					scalarMin: '0',
-					scalarMax: '100',
-					scalarIncrement: '0.1',
-					answerUnit: 'USD',
-				})}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={update => {
-					marketForm = { ...marketForm, ...update }
-					updates.push(update)
-				}}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			marketForm: createMarketForm({
+				marketType: 'scalar',
+				scalarMin: '0',
+				scalarMax: '100',
+				scalarIncrement: '0.1',
+				answerUnit: 'USD',
+			}),
+			onMarketFormChange: update => {
+				marketForm = { ...marketForm, ...update }
+				updates.push(update)
+			},
+		})
 
 		const documentQueries = within(document.body)
-
 		await act(() => {
 			fireEvent.input(documentQueries.getByLabelText('Description') as HTMLTextAreaElement, { target: { value: 'A scoped scalar description' } })
 			fireEvent.input(documentQueries.getByLabelText('Scalar min') as HTMLInputElement, { target: { value: '1' } })
@@ -703,34 +454,17 @@ describe('MarketCreateQuestionSection', () => {
 	})
 
 	test('renders and updates a valid scalar preview', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={false}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({
-					marketType: 'scalar',
-					scalarIncrement: '0.1',
-					scalarMin: '1',
-					scalarMax: '10',
-					answerUnit: 'USD',
-				})}
-				marketResult={undefined}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({
+			marketForm: createMarketForm({
+				marketType: 'scalar',
+				scalarIncrement: '0.1',
+				scalarMin: '1',
+				scalarMax: '10',
+				answerUnit: 'USD',
+			}),
+		})
 
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Try a scalar answer')).not.toBeNull()
+		expect(within(document.body).getByText('Try a scalar answer')).not.toBeNull()
 
 		const slider = document.querySelector('input[type="range"]')
 		if (slider === null) throw new Error('Expected scalar slider')
@@ -746,50 +480,18 @@ describe('MarketCreateQuestionSection', () => {
 			createQuestionHash: '0xhash-2',
 			marketType: 'scalar',
 		}
+		const scalarResultProps = {
+			hasForked: true,
+			marketForm: createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' }),
+			marketResult: result,
+		}
 
-		const loadingRender = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={true}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError={undefined}
-				marketForm={createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' })}
-				marketResult={result}
-				loadingZoltarQuestions={true}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = loadingRender.cleanup
-		const loadingQueries = within(document.body)
-		expect(loadingQueries.getByRole('status', { name: 'Loading question details' })).not.toBeNull()
+		const loadingRender = await renderSection({ ...scalarResultProps, loadingZoltarQuestions: true })
+		expect(within(document.body).getByRole('status', { name: 'Loading question details' })).not.toBeNull()
 		await loadingRender.cleanup()
 		cleanupRenderedComponent = undefined
 
-		const missingRender = await renderIntoDocument(
-			<MarketCreateQuestionSection
-				accountAddress={zeroAddress}
-				hasForked={true}
-				isOnActiveAppChain={true}
-				marketCreating={false}
-				marketError='Unable to load details'
-				marketForm={createMarketForm({ marketType: 'scalar', scalarMin: '0', scalarMax: '10', scalarIncrement: '1' })}
-				marketResult={result}
-				loadingZoltarQuestions={false}
-				onCreateMarket={() => undefined}
-				onMarketFormChange={() => undefined}
-				onOpenForkTab={() => undefined}
-				onResetMarket={() => undefined}
-				onUseQuestionForFork={() => undefined}
-				zoltarQuestions={[]}
-			/>,
-		)
-		cleanupRenderedComponent = missingRender.cleanup
+		await renderSection({ ...scalarResultProps, marketError: 'Unable to load details' })
 		const missingQueries = within(document.body)
 		expect(missingQueries.getByText('Question details are not available.')).not.toBeNull()
 		expect(missingQueries.getByRole('button', { name: `Already forked: Question (${result.questionId})` })).not.toBeNull()

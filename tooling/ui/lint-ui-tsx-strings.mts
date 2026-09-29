@@ -1,8 +1,9 @@
-import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { getChangedFiles } from '../repo/changed-files.mts'
+import { type GitRunner, mergeBaseWithMain, runGit } from '../repo/git.mts'
+import { walkFiles } from '../repo/walk.mts'
 
 const UI_TSX_ROOTS = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'].map(packageId => path.join('ui', packageId, 'ts'))
 const UI_TSX_CHANGED_FILE_PATTERN = /^ui\/(?:coreShared|zoltarShared|statoblastShared|zoltar|statoblast|trading)\/ts\/.+\.tsx$/
@@ -65,11 +66,7 @@ const ASSIGNMENT_OPERATOR_KINDS = new Set([
 	ts.SyntaxKind.GreaterThanGreaterThanGreaterThanEqualsToken,
 ])
 
-function runGit(args: string[]) {
-	return execFileSync('git', args, { encoding: 'utf8' }).trim()
-}
-
-export function getChangedUiTsxFiles(runGitFn: (args: string[]) => string = runGit) {
+export function getChangedUiTsxFiles(runGitFn: GitRunner = runGit) {
 	return getChangedFiles(runGitFn).filter(filePath => UI_TSX_CHANGED_FILE_PATTERN.test(filePath) && !UI_TSX_ROOTS.some(root => filePath.startsWith(`${root}/tests/`)))
 }
 
@@ -87,7 +84,7 @@ function parseChangedLineNumbers(diffText: string) {
 	return changedLines
 }
 
-export function getChangedLineNumbers(filePath: string, runGitFn: (args: string[]) => string = runGit) {
+export function getChangedLineNumbers(filePath: string, runGitFn: GitRunner = runGit) {
 	const untrackedPath = runGitFn(['ls-files', '--others', '--exclude-standard', '--', filePath])
 	if (untrackedPath === filePath) return undefined
 	const relocatedTradingPrefix = 'ui/trading/ts/'
@@ -99,7 +96,7 @@ export function getChangedLineNumbers(filePath: string, runGitFn: (args: string[
 			return parseChangedLineNumbers(relocationDiff)
 		}
 	}
-	const mergeBase = runGitFn(['merge-base', 'origin/main', 'HEAD'])
+	const mergeBase = mergeBaseWithMain(runGitFn)
 	const diffTexts = [runGitFn(['diff', '--no-color', '--unified=0', mergeBase, '--', filePath])]
 	const changedLines = new Set<number>()
 	for (const diffText of diffTexts) {
@@ -424,12 +421,8 @@ function lintFile(filePath: string) {
 
 if (import.meta.main) {
 	const changedUiTsxFiles = getChangedUiTsxFiles().filter(existsSync)
-	const copyModuleFiles = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).flatMap(copyRoot => {
-		if (!existsSync(copyRoot)) return []
-		return readdirSync(copyRoot, { withFileTypes: true })
-			.filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
-			.map(entry => path.join(copyRoot, entry.name))
-	})
+	const copyRoots = UI_TSX_ROOTS.map(root => path.join(root, 'copy')).filter(existsSync)
+	const copyModuleFiles = (await Promise.all(copyRoots.map(copyRoot => walkFiles(copyRoot, { descend: () => false, include: filePath => filePath.endsWith('.ts') })))).flat()
 	const failures = [...changedUiTsxFiles.flatMap(lintFile), ...copyModuleFiles.flatMap(filePath => lintCopySourceText(filePath, readFileSync(filePath, 'utf8')))]
 
 	if (failures.length === 0) {
