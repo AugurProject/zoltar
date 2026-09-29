@@ -311,6 +311,14 @@
 			"bun": "./ts/tests/walletAssetControl.test.tsx",
 			"default": "./js/tests/walletAssetControl.test.js"
 		},
+		"./lib/readOperation.js": {
+			"bun": "./ts/lib/readOperation.ts",
+			"default": "./js/lib/readOperation.js"
+		},
+		"./lib/incrementalRegistry.js": {
+			"bun": "./ts/lib/incrementalRegistry.ts",
+			"default": "./js/lib/incrementalRegistry.js"
+		},
 		"./*": {
 			"bun": "./ts/*.ts",
 			"default": "./js/*.js"

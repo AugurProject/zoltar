@@ -1,3 +1,6 @@
+import type { discoverTradingMarketPage } from '../../protocol/marketDiscovery.js'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { useLiveTradingController } from '../../features/liveTradingController.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { render } from 'preact'
@@ -100,6 +103,93 @@ describe('live market refresh', () => {
 			cleanupRendered = undefined
 		},
 		url: `http://localhost/?demo=0#/market/${pool}`,
+	})
+
+	test('shows completed markets while the rest of discovery is still pending', async () => {
+		let finish: () => void = () => undefined
+		const pending = new Promise<void>(resolve => {
+			finish = resolve
+		})
+		const first = { ...market, title: 'Fast market' }
+		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Slow market' }
+		const page = (markets: LiveMarket[]) => ({ start: 0n, count: 2n, total: 2n, previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
+		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
+			onProgress?.(page([first]))
+			await pending
+			return page([first, second])
+		}
+		const services = { ...liveTradingControllerServices, createTradingPublicClient: () => ({}), validateLiveDeployment: async () => undefined, discoverTradingMarketPage: discover }
+		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		cleanupRendered = rendered.cleanup
+		try {
+			await waitForDom(() => document.body.textContent?.includes('Fast market') === true, 'first completed market')
+			expect(document.body.textContent).not.toContain('Slow market')
+			expect(document.querySelector('.market-browser')?.getAttribute('aria-busy')).toBe('true')
+			finish()
+			await waitForDom(() => document.body.textContent?.includes('Slow market') === true, 'remaining market')
+		} finally {
+			finish()
+		}
+	})
+
+	test('preserves every loaded market when a partial foreground refresh later times out', async () => {
+		const timeout = createDeferred<void>()
+		const first = { ...market, title: 'Fast market' }
+		const second = { ...market, pool: '0x8888888888888888888888888888888888888888' as const, title: 'Slow market' }
+		const page = (markets: LiveMarket[]) => ({ start: 0n, count: 2n, total: 2n, previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
+		let reads = 0
+		const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
+			if (++reads === 1) return page([first, second])
+			onProgress?.(page([first]))
+			await timeout.promise
+			throw new Error('RPC read timed out.')
+		}
+		const services = { ...liveTradingControllerServices, createTradingPublicClient: () => ({}), validateLiveDeployment: async () => undefined, discoverTradingMarketPage: discover }
+		let controller: ReturnType<typeof useLiveTradingController> | undefined
+		function Harness() {
+			controller = useLiveTradingController({
+				route: 'market',
+				configuration,
+				configurationError: undefined,
+				selectedUniverseId: '1',
+				onUniversesChange: () => undefined,
+				onWorkflowLockChange: () => undefined,
+				onWalletSummaryChange: () => undefined,
+				walletSummaryRetryNonce: 0,
+				defaultSlippage: '0.5',
+				defaultValidityMinutes: '20',
+				services,
+			})
+			return (
+				<div>
+					{controller.discovery.visibleMarkets.map(market => (
+						<div key={market.pool}>{market.title}</div>
+					))}
+				</div>
+			)
+		}
+		const rendered = await renderIntoDocument(<Harness />)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => document.body.textContent?.includes('Slow market') === true, 'initial markets')
+		if (controller === undefined) throw new Error('Controller has not rendered')
+		let refresh: Promise<void> | undefined
+		await act(() => {
+			refresh = controller?.discovery.refresh()
+		})
+		try {
+			expect(reads).toBe(2)
+			expect(document.body.textContent).toContain('Slow market')
+			await act(async () => {
+				timeout.resolve()
+				await refresh
+			})
+			expect(controller.discovery.discoveryState).toBe('error')
+			expect(document.body.textContent).toContain('Fast market')
+			expect(document.body.textContent).toContain('Slow market')
+		} finally {
+			timeout.resolve()
+			await refresh
+		}
 	})
 
 	test('refreshes market data in the background without hiding loaded balances, re-prices the live estimate, and stops a submission the chain prices differently', async () => {

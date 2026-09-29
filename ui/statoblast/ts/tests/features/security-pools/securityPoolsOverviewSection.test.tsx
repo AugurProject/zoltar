@@ -146,6 +146,16 @@ describe('SecurityPoolsOverviewSection', () => {
 		},
 	})
 
+	test('shows a loading placeholder during first discovery and preserves rows during refresh', async () => {
+		const rendered = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [], loadingSecurityPoolPage: true })} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(document.querySelector('.skeleton-list')?.textContent).toContain('Loading security pools')
+		expect(document.body.textContent).not.toContain('No favorite pools yet')
+		await act(() => render(<SecurityPoolsOverviewSection {...createProps({ securityPools: [createSecurityPool()], loadingSecurityPoolPage: true })} />, rendered.container))
+		expect(document.querySelector('.pool-directory-row')).not.toBeNull()
+		expect(document.querySelector('.skeleton-list')).toBeNull()
+	})
+
 	test('distinguishes same-title pools and opens the selected address', async () => {
 		const first = createSecurityPool()
 		const second = createSecurityPool({ securityPoolAddress: getAddress('0x0000000000000000000000000000000000000002'), statoblastSecurityMultiplierBps: 30000n })

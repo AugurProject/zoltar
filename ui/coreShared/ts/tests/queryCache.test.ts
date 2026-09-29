@@ -79,22 +79,26 @@ describe('query cache', () => {
 		expect(notifications).toEqual(['a', 'b'])
 	})
 
-	test('a read requested after an invalidation starts again instead of sharing the older in-flight read', async () => {
-		const store = createQueryCache().createStore<string>()
-		const before = deferred<string>()
-		const after = deferred<string>()
+	test('lets an in-flight read finish across repeated block invalidations, then refreshes again', async () => {
+		const cache = createQueryCache()
+		const store = cache.createStore<string>()
+		const pending = deferred<string>()
 		let loads = 0
-		const loader = async () => (++loads === 1 ? await before.promise : await after.promise)
-		void store.fetch('page', loader)
-		store.invalidate('page')
-		expect(store.get('page').stale).toBe(true)
-		const second = store.fetch('page', loader)
-		expect(loads).toBe(2)
-		after.resolve('after the new block')
-		expect(await second).toBe('after the new block')
-		before.resolve('before the new block')
-		await flush()
-		expect(store.get('page')).toMatchObject({ data: 'after the new block', stale: false, fetching: false })
+		const loader = async () => {
+			loads += 1
+			return await pending.promise
+		}
+		const first = store.fetch('page', loader)
+		for (let block = 0; block < 5; block++) {
+			cache.invalidateAll()
+			expect(store.fetch('page', loader)).toBe(first)
+		}
+		expect(loads).toBe(1)
+		pending.resolve('slow result')
+		await first
+		expect(store.get('page')).toMatchObject({ data: 'slow result', stale: true, fetching: false })
+		await store.fetch('page', async () => 'latest result')
+		expect(store.get('page')).toMatchObject({ data: 'latest result', stale: false, fetching: false })
 	})
 
 	test('an older in-flight read cannot overwrite a result stored with set', async () => {

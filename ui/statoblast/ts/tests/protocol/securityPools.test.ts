@@ -44,6 +44,26 @@ describe('securityPools protocol client', () => {
 		expect(await loadSecurityPoolLineage(client, securityPoolAddress)).toEqual([])
 	})
 
+	test('reuses canonical deployment pages when opening another pool with the same registry index', async () => {
+		const ranges: unknown[] = []
+		const index = { snapshot: undefined, pending: undefined }
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ hash: `0x${'11'.repeat(32)}`, number: 100n, timestamp: 0n }),
+			multicall: async () => [],
+			readContract: async request => {
+				if (request.functionName === 'securityPoolDeploymentCount') return 1n
+				if (request.functionName === 'securityPoolDeploymentsRange') {
+					ranges.push(request.args)
+					return [{ securityPool: alternateSecurityPoolAddress, parent: zeroAddress, priceOracleManagerAndOperatorQueuer: zeroAddress, truthAuction: zeroAddress, shareToken: shareTokenAddress, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 10000n, initialReportPriorityFeeAttoEthPerGas: 0n }]
+				}
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			},
+		})
+		await loadSecurityPoolLineage(client, securityPoolAddress, undefined, index)
+		await loadSecurityPoolLineage(client, securityPoolAddress, undefined, index)
+		expect(ranges).toHaveLength(1)
+	})
+
 	test('revalidates ordinary vault admission against latest chain time while keeping genuine continuations open', async () => {
 		let currentTimestamp = 100n
 		let escalationGame = zeroAddress
@@ -113,7 +133,7 @@ describe('securityPools protocol client', () => {
 			},
 		})
 
-		await expect(loadSecurityPoolChildren(client, securityPoolAddress)).rejects.toThrow('deployments changed during discovery')
+		await expect(loadSecurityPoolChildren(client, securityPoolAddress)).rejects.toThrow('changed during discovery')
 	})
 
 	test('loadSecurityPoolPage preserves exact offsets above the safe multiplication range', async () => {

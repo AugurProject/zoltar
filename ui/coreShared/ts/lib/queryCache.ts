@@ -41,12 +41,13 @@ function createStoreFor<T>(now: () => number) {
 			return { data, error, updatedAt, fetching, stale }
 		},
 		/**
-		 * Reads through the cache: a request already in flight for the key is shared instead of repeated, unless an
-		 * invalidation arrived after it began. Then a new read starts and only the newest read may settle.
+		 * Reads through the cache: a request already in flight for the key is shared even when a new block
+		 * invalidates it. Let it make progress; retain the stale flag so a later refresh reads the newer block.
+		 * Explicit foreground set() and environment clear() still retire older answers.
 		 */
 		fetch(key: string, loader: () => Promise<T>): Promise<T> {
 			const current = read(key)
-			if (current.promise !== undefined && current.generation === generation && !current.stale) return current.promise
+			if (current.promise !== undefined && current.generation === generation) return current.promise
 			const requestGeneration = generation
 			const promise = loader()
 			update(key, { ...current, fetching: true, stale: false, generation: requestGeneration, promise })

@@ -1,3 +1,4 @@
+import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { useSignal } from '@preact/signals'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
@@ -176,7 +177,7 @@ export function useZoltarUniverse(
 		else zoltarUniverseError.value = undefined
 		return await universeLoad.run({
 			isCurrent,
-			load: async () => {
+			load: async operation => {
 				if (!hasDeployedStep(deploymentStatuses, 'zoltar')) {
 					zoltarUniverseMissing.value = false
 					zoltarUniverse.value = undefined
@@ -186,7 +187,7 @@ export function useZoltarUniverse(
 					zoltarChildUniversePendingOutcomeIndex.value = undefined
 					return undefined
 				}
-				return await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), requestedUniverseId)
+				return await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), requestedUniverseId)
 			},
 			onSuccess: universe => {
 				if (!isCurrentZoltarContext(universeLoadContext)) return
@@ -224,7 +225,7 @@ export function useZoltarUniverse(
 		zoltarQuestionsError.value = undefined
 		await questionCountLoad.run({
 			isCurrent,
-			load: async () => await dependencies.loadZoltarQuestionCount(dependencies.createConnectedReadClient()),
+			load: async operation => await dependencies.loadZoltarQuestionCount(readOperationClient(dependencies.createConnectedReadClient(), operation)),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
@@ -251,7 +252,7 @@ export function useZoltarUniverse(
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
-			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
+			load: async operation => await dependencies.loadZoltarQuestionCount(readOperationClient(readClient, operation)),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
@@ -264,7 +265,7 @@ export function useZoltarUniverse(
 
 		const questionsTask = questionsLoad.run({
 			isCurrent: isQuestionsCurrent,
-			load: async () => await dependencies.loadAllZoltarQuestions(readClient),
+			load: async operation => await dependencies.loadAllZoltarQuestions(readOperationClient(readClient, operation)),
 			onSuccess: questions => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
@@ -303,7 +304,7 @@ export function useZoltarUniverse(
 
 		const countTask = questionCountLoad.run({
 			isCurrent: isCountCurrent,
-			load: async () => await dependencies.loadZoltarQuestionCount(readClient),
+			load: async operation => await dependencies.loadZoltarQuestionCount(readOperationClient(readClient, operation)),
 			onSuccess: questionCount => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
@@ -316,7 +317,7 @@ export function useZoltarUniverse(
 
 		const questionsTask = questionsLoad.run({
 			isCurrent: isQuestionsCurrent,
-			load: async () => await dependencies.loadZoltarQuestionPage(readClient, pageIndex, pageSize),
+			load: async operation => await dependencies.loadZoltarQuestionPage(readOperationClient(readClient, operation), pageIndex, pageSize),
 			onSuccess: page => {
 				if (!isMounted.current) return
 				if (!isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext)) return
@@ -359,7 +360,7 @@ export function useZoltarUniverse(
 		const questionLoadContext = { environmentRefreshKey, zoltarDeployed }
 		await questionByIdLoad.run({
 			isCurrent,
-			load: async () => await dependencies.loadMarketDetails(dependencies.createConnectedReadClient(), BigInt(normalizedQuestionId)),
+			load: async operation => await dependencies.loadMarketDetails(readOperationClient(dependencies.createConnectedReadClient(), operation), BigInt(normalizedQuestionId)),
 			onSuccess: question => {
 				if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionLoadContext) || zoltarQuestionLookupId.value !== normalizedQuestionId) return
 				if (!question.exists) {
@@ -433,7 +434,7 @@ export function useZoltarUniverse(
 			const commitVersion = ++universeCommitVersionRef.current
 			tasks.push(
 				zoltarUniverseQueries
-					.fetch(universeQueryKey, async () => await dependencies.loadZoltarUniverseSummary(dependencies.createConnectedReadClient(), activeUniverseId))
+					.fetch(universeQueryKey, async () => await runReadOperation(async operation => await dependencies.loadZoltarUniverseSummary(readOperationClient(dependencies.createConnectedReadClient(), operation), activeUniverseId), { isCurrent: () => isMounted.current && isCurrentZoltarContext(universeContext) }))
 					.then(universe => {
 						if (universe === undefined || !isMounted.current || !isCurrentZoltarContext(universeContext) || universeLoad.isLoading.peek() || universeCommitVersionRef.current !== commitVersion) return
 						if (!isSameQueryData(universe, zoltarUniverse.value)) zoltarUniverse.value = universe
@@ -443,9 +444,10 @@ export function useZoltarUniverse(
 		const page = zoltarQuestionPage.value
 		if (questionPageQueryKey !== undefined && page !== undefined && !questionsLoad.isLoading.peek()) {
 			const commitVersion = ++questionPageCommitVersionRef.current
+			const isCurrent = () => isMounted.current && isCurrentQuestionLoad(questionLoadGeneration, questionContext)
 			tasks.push(
 				zoltarQuestionPageQueries
-					.fetch(questionPageQueryKey, async () => await dependencies.loadZoltarQuestionPage(dependencies.createConnectedReadClient(), page.pageIndex, page.pageSize))
+					.fetch(questionPageQueryKey, async () => await runReadOperation(async operation => await dependencies.loadZoltarQuestionPage(readOperationClient(dependencies.createConnectedReadClient(), operation), page.pageIndex, page.pageSize), { isCurrent }))
 					.then(nextPage => {
 						if (!isMounted.current || !isCurrentQuestionLoad(questionLoadGeneration, questionContext) || questionsLoad.isLoading.peek() || questionPageCommitVersionRef.current !== commitVersion) return
 						if (isSameQueryData(nextPage, zoltarQuestionPage.value)) return

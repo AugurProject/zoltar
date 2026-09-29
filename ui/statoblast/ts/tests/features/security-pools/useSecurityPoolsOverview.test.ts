@@ -128,7 +128,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			await requireHookState(hookState).loadSecurityPools(selectedAddress)
 		})
 
-		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress)
+		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress, expect.objectContaining({ read: expect.any(Function) }))
 		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
 	})
 
@@ -173,19 +173,55 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			if (newerRead === 'explicit load') await requireHookState(hookState).loadSecurityPools(selectedAddress)
 			else {
 				appQueryCache.invalidateAll()
-				await requireHookState(hookState).refreshSecurityPools()
+				void requireHookState(hookState).refreshSecurityPools()
+				expect(lineageReads).toBe(3)
 			}
 		})
-		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		if (newerRead === 'explicit load') expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
 		await act(async () => {
 			staleRefresh.resolve([createListedSecurityPool('0x03', selectedAddress)])
 			await pendingRefresh
 		})
-		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		expect(requireHookState(hookState).securityPools.map(pool => pool.questionId)).toEqual([newerRead === 'explicit load' ? '0x04' : '0x03'])
 		appQueryCache.clear()
 	})
 
-	void test('an older background browse response cannot replace a newer page', async () => {
+	void test('stops background lineage follow-up RPC reads after unmount', async () => {
+		const firstRead = createDeferred<void>()
+		let loads = 0
+		let followupReads = 0
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			loadSecurityPoolLineage: mock(async (_address, _account, operation) => {
+				if (++loads === 1) return []
+				if (operation === undefined) throw new Error('Missing read operation')
+				await operation.read(() => firstRead.promise)
+				await operation.read(async () => ++followupReads)
+				return []
+			}),
+		})
+		const domEnvironment = installDomEnvironment()
+		restoreDomEnvironment = domEnvironment.cleanup
+		let hookState: UseSecurityPoolsOverviewState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const rendered = await renderIntoDocument(h(Harness, {}))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(async () => await requireHookState(hookState).loadSecurityPools('0x0000000000000000000000000000000000000001'))
+		let pending: Promise<void> | undefined
+		await act(() => {
+			pending = requireHookState(hookState).refreshSecurityPools()
+		})
+		expect(loads).toBe(2)
+		await rendered.cleanup()
+		cleanupRenderedComponent = undefined
+		firstRead.resolve()
+		await pending
+		expect(followupReads).toBe(0)
+		appQueryCache.clear()
+	})
+
+	void test('a slow background browse response survives repeated block invalidations', async () => {
 		const firstPage = { pageIndex: 0, pageSize: 10, poolCount: 0n, pools: [] }
 		const newerPage = { ...firstPage, poolCount: 2n }
 		const olderRead = createDeferred<typeof firstPage>()
@@ -215,16 +251,60 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		})
 		await act(async () => {
 			appQueryCache.invalidateAll()
-			await state().refreshBrowseSecurityPoolPage()
+			void state().refreshBrowseSecurityPoolPage()
 		})
-		expect(state().securityPoolPage?.poolCount).toBe(2n)
+		expect(reads).toBe(2)
 		await act(async () => {
-			olderRead.resolve(firstPage)
+			olderRead.resolve(newerPage)
 			await pending
 		})
 		expect(state().securityPoolPage?.poolCount).toBe(2n)
 		appQueryCache.clear()
 	})
+
+	for (const cancellation of ['page replacement', 'environment change', 'unmount'] as const)
+		void test(`stops background browse follow-up RPC reads after ${cancellation}`, async () => {
+			const page = { pageIndex: 0, pageSize: 10, poolCount: 0n, pools: [] }
+			const firstRead = createDeferred<void>()
+			let loads = 0
+			let followupReads = 0
+			const dependencies = createSecurityPoolsOverviewDependencies({
+				loadSecurityPoolPage: mock(async (_pageIndex, _pageSize, _account, operation) => {
+					if (++loads !== 2) return page
+					if (operation === undefined) throw new Error('Missing read operation')
+					await operation.read(() => firstRead.promise)
+					await operation.read(async () => ++followupReads)
+					return page
+				}),
+			})
+			const domEnvironment = installDomEnvironment()
+			restoreDomEnvironment = domEnvironment.cleanup
+			let hookState: UseSecurityPoolsOverviewState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const rendered = await renderIntoDocument(h(Harness, {}))
+			cleanupRenderedComponent = rendered.cleanup
+			const state = () => requireHookState(hookState)
+			await act(async () => await state().loadBrowseSecurityPoolPage(0, 10, 'page'))
+			let pending: Promise<void> | undefined
+			await act(() => {
+				pending = state().refreshBrowseSecurityPoolPage()
+			})
+			expect(loads).toBe(2)
+			if (cancellation === 'page replacement') await act(async () => await state().loadBrowseSecurityPoolPage(1, 10, 'next-page'))
+			else if (cancellation === 'environment change') await act(() => render(h(Harness, { environmentRefreshKey: 1 }), rendered.container))
+			else {
+				await rendered.cleanup()
+				cleanupRenderedComponent = undefined
+			}
+			await act(async () => {
+				firstRead.resolve()
+				await pending
+			})
+			expect(followupReads).toBe(0)
+			appQueryCache.clear()
+		})
 
 	void test('waits for active backend readiness before loading the registry page', async () => {
 		let backendReady = false

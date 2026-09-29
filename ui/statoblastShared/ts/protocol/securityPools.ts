@@ -1,3 +1,4 @@
+import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 export { createSecurityPool, getOriginSecurityPoolAddress, originSecurityPoolExists } from './securityPoolCreation.js'
 import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../contractArtifact.js'
@@ -536,27 +537,26 @@ function uniqueDeployments(deployments: readonly SecurityPoolDeploymentTuple[]) 
 	return [...new Map(deployments.map(deployment => [deployment.securityPool.toLowerCase(), deployment])).values()]
 }
 
-async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor) {
-	const deploymentCount = await client.readContract({
-		address: getInfraContractAddresses().securityPoolFactory,
-		abi: securityPoolFactoryAbi,
-		functionName: 'securityPoolDeploymentCount',
-		args: [],
-		blockNumber: anchor.blockNumber,
+async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor, index: RegistryIndex<SecurityPoolDeploymentTuple> = createRegistryIndex()) {
+	const factory = getInfraContractAddresses().securityPoolFactory
+	return await readIncrementalRegistry({
+		index,
+		key: factory.toLowerCase(),
+		anchor,
+		loadCount: async () => await client.readContract({ address: factory, abi: securityPoolFactoryAbi, functionName: 'securityPoolDeploymentCount', args: [], blockNumber: anchor.blockNumber }),
+		loadRange: async (start, count) => await loadSecurityPoolDeployments(client, start, count, anchor.blockNumber),
+		isCanonical: async candidate => {
+			const block = await client.getBlock({ blockNumber: candidate.blockNumber })
+			return block.hash?.toLowerCase() === candidate.blockHash.toLowerCase()
+		},
 	})
-	const deployments: SecurityPoolDeploymentTuple[] = []
-	for (let startIndex = 0n; startIndex < deploymentCount; startIndex += 100n) {
-		const count = deploymentCount - startIndex < 100n ? deploymentCount - startIndex : 100n
-		deployments.push(...(await loadSecurityPoolDeployments(client, startIndex, count, anchor.blockNumber)))
-	}
-	return deployments
 }
 
-export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address) {
+export async function loadSecurityPoolLineage(client: ReadClient, securityPoolAddress: Address, accountAddress?: Address, registryIndex?: RegistryIndex<SecurityPoolDeploymentTuple>) {
 	const { anchor, deployments } = await readWithRpcStateRetries(
 		async () => {
 			const anchor = await loadDeploymentRegistryAnchor(client)
-			const deployments = await loadDeploymentRegistry(client, anchor)
+			const deployments = await loadDeploymentRegistry(client, anchor, registryIndex)
 			await requireDeploymentRegistryAnchor(client, anchor)
 			return { anchor, deployments }
 		},

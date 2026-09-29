@@ -1,4 +1,5 @@
-import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
+import { readOperationClient, runReadOperation, type ReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
+import type { MarketDiscoveryProgress } from '../../protocol/live.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import type { createLatestRequestGuard, RequestIdentity } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -68,17 +69,17 @@ export function useMarketDiscoveryController({
 	// A background discovery slower than the block interval is left to finish instead of being restarted on each block.
 	const backgroundDiscovery = useRef<RequestIdentity>()
 
-	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean) {
-		const client = services.createTradingPublicClient(nextConfiguration)
+	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean, operation: ReadOperation, onProgress: MarketDiscoveryProgress) {
+		const client = readOperationClient(services.createTradingPublicClient(nextConfiguration), operation)
 		await services.validateLiveDeployment(client, nextConfiguration)
 		if (!isCurrent()) return undefined
 		const requestedUniverseId = parsedUniverseId(selectedUniverseId)
 		if (routePool !== undefined) return await services.discoverAddressedMarket(client, nextConfiguration, routePool)
-		if (route === 'portfolio') return await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, market.deploymentIndex)
+		if (route === 'portfolio') return await services.discoverAllLiveMarketsInUniverse(client, nextConfiguration, requestedUniverseId, 25n, market.deploymentIndex, onProgress)
 		// Lookup routes are list-first, so they page through the candidates of their workflow.
 		const listRoute = tradingListKindFor(route)
-		if (listRoute === 'security-pools') return await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.deploymentIndex)
-		if (listRoute === 'markets') return await services.discoverTradingMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.pairIndex, isCurrent)
+		if (listRoute === 'security-pools') return await services.discoverLiveUniverseMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.deploymentIndex, onProgress)
+		if (listRoute === 'markets') return await services.discoverTradingMarketPage(client, nextConfiguration, requestedUniverseId, requestedStart, 25n, market.pairIndex, isCurrent, onProgress)
 		return await services.discoverUniverses(client, nextConfiguration, requestedUniverseId, isCurrent)
 	}
 
@@ -126,7 +127,18 @@ export function useMarketDiscoveryController({
 			market.setDiscoveryError(undefined)
 		}
 		try {
-			const discovered = await withReadTimeout(discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request)))
+			let acceptingProgress = true
+			// Partial first loads can fill an empty view; refreshes keep every prior row until the full result arrives.
+			const publishProgress = market.markets.length === 0
+			const onProgress: MarketDiscoveryProgress = discovered => {
+				if (!publishProgress || !acceptingProgress || background || !discoveryRequests.isCurrent(request) || !commitAllowed()) return
+				market.setMarkets(discovered.markets)
+				onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
+				market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
+			}
+			const discovered = await runReadOperation(async operation => await discover(nextConfiguration, requestedStart, () => discoveryRequests.isCurrent(request), operation, onProgress), { isCurrent: () => discoveryRequests.isCurrent(request) }).finally(() => {
+				acceptingProgress = false
+			})
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
 			if (!commitAllowed()) {
 				market.setDiscoveryState('ready')

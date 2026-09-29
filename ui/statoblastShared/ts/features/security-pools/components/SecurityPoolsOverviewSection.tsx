@@ -1,3 +1,4 @@
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
 import { formatSecurityPoolPageSummary } from '../lib/securityPoolLabels.js'
 import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -117,6 +118,7 @@ export function SecurityPoolsOverviewSection({
 
 	const content = (() => {
 		if (rows.length === 0) {
+			if (discoveryLoading) return <SkeletonList label={securityPoolCopy.loadingSecurityPools} />
 			if (collection === 'favorites' && downloaded.entries.length > 0)
 				return (
 					<EmptyState

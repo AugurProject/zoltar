@@ -1,3 +1,4 @@
+import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
@@ -80,7 +81,7 @@ async function loadOriginUniverseId(client: PublicClient, parent: Address, curre
 	return originUniverseId
 }
 
-export async function mapWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>) {
+export async function mapWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>, onProgress?: (results: Output[]) => void) {
 	if (!Number.isInteger(maximumConcurrency) || maximumConcurrency <= 0) throw new Error('Async concurrency limit must be a positive integer')
 	const queue = items.map((item, index) => ({ item, index }))
 	const completed: Array<Readonly<{ index: number; value: Output }>> = []
@@ -91,6 +92,7 @@ export async function mapWithConcurrency<Input, Output>(items: readonly Input[],
 			if (job === undefined) return
 			nextQueueIndex += 1
 			completed.push({ index: job.index, value: await mapper(job.item, job.index) })
+			onProgress?.([...completed].sort((left, right) => left.index - right.index).map(result => result.value))
 		}
 	}
 	const workerCount = Math.min(maximumConcurrency, queue.length)
@@ -99,14 +101,20 @@ export async function mapWithConcurrency<Input, Output>(items: readonly Input[],
 	return completed.map(result => result.value)
 }
 
-async function settleWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>) {
-	return await mapWithConcurrency(items, maximumConcurrency, async (item, index): Promise<PromiseSettledResult<Output>> => {
-		try {
-			return { status: 'fulfilled', value: await mapper(item, index) }
-		} catch (reason) {
-			return { status: 'rejected', reason }
-		}
-	})
+type MarketDiscoveryResult = ReturnType<typeof marketDiscoveryPage> & {
+	total: bigint
+	markets: LiveMarket[]
+	universeIds: bigint[]
+	selectedUniverseId: bigint | undefined
+}
+export type MarketDiscoveryProgress = (result: MarketDiscoveryResult) => void
+
+async function loadDiscoveredMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment) {
+	try {
+		return await loadLiveMarket(client, configuration, deployment)
+	} catch (error) {
+		return unavailableMarket(deployment, error, configuration.feeBps)
+	}
 }
 
 export function marketDiscoveryPage(total: bigint, requestedStart = 0n, pageSize = 25n) {
@@ -163,15 +171,6 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 		noReserve: 0n,
 		lpTotalSupply: 0n,
 	}
-}
-
-function collateMarketDiscoveryResults(deployments: readonly SecurityPoolDeployment[], results: readonly PromiseSettledResult<LiveMarket>[], feeBps: number) {
-	if (deployments.length !== results.length) throw new Error('Market discovery result length mismatch')
-	return results.map((result, index) => {
-		const deployment = deployments[index]
-		if (deployment === undefined) throw new Error('Market discovery result length mismatch')
-		return result.status === 'fulfilled' ? result.value : unavailableMarket(deployment, result.reason, feeBps)
-	})
 }
 
 export async function loadLiveMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment): Promise<LiveMarket> {
@@ -250,10 +249,11 @@ export type SecurityPoolDeploymentIndex<Deployment, Anchor> = {
 	deployments: Deployment[]
 	anchor: Anchor | undefined
 	pending: Promise<void> | undefined
+	registry: RegistryIndex<SecurityPoolDeployment>
 }
 
 export function createSecurityPoolDeploymentIndex<Deployment, Anchor>(): SecurityPoolDeploymentIndex<Deployment, Anchor> {
-	return { key: undefined, deployments: [], anchor: undefined, pending: undefined }
+	return { key: undefined, deployments: [], anchor: undefined, pending: undefined, registry: createRegistryIndex() }
 }
 
 function clearSecurityPoolDeploymentIndex<Deployment, Anchor>(index: SecurityPoolDeploymentIndex<Deployment, Anchor>, key: string) {
@@ -327,7 +327,25 @@ export async function loadUniverseIds(client: PublicClient, configuration: Deplo
 	return universeIds
 }
 
-export async function loadSecurityPoolRegistry(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, blockNumber: bigint, isCurrent = () => true) {
+export async function loadSecurityPoolRegistry(client: PublicClient, configuration: DeploymentConfiguration, universeId: bigint, blockNumber: bigint, isCurrent = () => true, registry?: { index: RegistryIndex<SecurityPoolDeployment>; anchor: RegistryBlockAnchor }) {
+	if (registry !== undefined) {
+		const deployments = await readIncrementalRegistry({
+			index: registry.index,
+			key: `${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}`,
+			anchor: registry.anchor,
+			loadCount: async () => await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', blockNumber }),
+			loadRange: async (start, count) => {
+				if (!isCurrent()) throw new Error('Market discovery cancelled')
+				const page = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentsRange', args: [start, count], blockNumber })
+				return page.map(deployment => ({ ...deployment, securityPool: getAddress(deployment.securityPool), shareToken: getAddress(deployment.shareToken) }))
+			},
+			isCanonical: async candidate => {
+				const block = await client.getBlock({ blockNumber: candidate.blockNumber })
+				return block.hash?.toLowerCase() === candidate.blockHash.toLowerCase()
+			},
+		})
+		return deployments.filter(deployment => deployment.universeId === universeId)
+	}
 	const count = await client.readContract({ abi: securityPoolFactoryAbi, address: configuration.securityPoolFactory, functionName: 'securityPoolDeploymentCount', blockNumber })
 	const deployments: SecurityPoolDeployment[] = []
 	for (let start = 0n; start < count; start += 100n) {
@@ -346,11 +364,19 @@ async function loadSecurityPoolDeploymentsInUniverse(client: PublicClient, confi
 		`${configuration.chainId}:${configuration.securityPoolFactory}:${configuration.rpcUrl}:${universeId}`,
 		async () => await latestBlockIdentity(client),
 		async anchor => await registryBlockAnchorIsCanonical(anchor, async () => await latestBlockIdentity(client), getActiveBackend().id === 'simulation' ? undefined : async blockNumber => await latestBlockIdentity({ getBlock: async () => await client.getBlock({ blockNumber }) })),
-		async ({ blockNumber }) => await loadSecurityPoolRegistry(client, configuration, universeId, blockNumber, isCurrent),
+		async anchor => await loadSecurityPoolRegistry(client, configuration, universeId, anchor.blockNumber, isCurrent, { index: index.registry, anchor }),
 	)
 }
 
-export async function discoverLiveUniverseMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
+export async function discoverLiveUniverseMarketPage(
+	client: PublicClient,
+	configuration: DeploymentConfiguration,
+	requestedUniverseId: bigint | undefined,
+	requestedStart = 0n,
+	pageSize = 25n,
+	index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>(),
+	onProgress?: MarketDiscoveryProgress,
+) {
 	const universeIds = await loadUniverseIds(client, configuration)
 	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
 	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
@@ -360,17 +386,29 @@ export async function discoverLiveUniverseMarketPage(client: PublicClient, confi
 		const position = BigInt(index)
 		return position >= page.start && position < pageEnd
 	})
-	const results = await Promise.allSettled(pageDeployments.map(async deployment => await loadLiveMarket(client, configuration, deployment)))
-	return { ...page, total: BigInt(selectedDeployments.length), markets: collateMarketDiscoveryResults(pageDeployments, results, configuration.feeBps), universeIds, selectedUniverseId }
+	const result = { ...page, total: BigInt(selectedDeployments.length), universeIds, selectedUniverseId }
+	const markets = await mapWithConcurrency(
+		pageDeployments,
+		6,
+		async deployment => await loadDiscoveredMarket(client, configuration, deployment),
+		markets => onProgress?.({ ...result, markets }),
+	)
+	return { ...result, markets }
 }
 
-export async function discoverAllLiveMarketsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, _pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>()) {
+export async function discoverAllLiveMarketsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, _pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>(), onProgress?: MarketDiscoveryProgress) {
 	const universeIds = await loadUniverseIds(client, configuration)
 	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
 	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
-	const results = await settleWithConcurrency(selectedDeployments, 6, async deployment => await loadLiveMarket(client, configuration, deployment))
 	const total = BigInt(selectedDeployments.length)
-	return { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, markets: collateMarketDiscoveryResults(selectedDeployments, results, configuration.feeBps), universeIds, selectedUniverseId }
+	const result = { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, universeIds, selectedUniverseId }
+	const markets = await mapWithConcurrency(
+		selectedDeployments,
+		6,
+		async deployment => await loadDiscoveredMarket(client, configuration, deployment),
+		markets => onProgress?.({ ...result, markets }),
+	)
+	return { ...result, markets }
 }
 
 export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address): Promise<LiveBalances> {

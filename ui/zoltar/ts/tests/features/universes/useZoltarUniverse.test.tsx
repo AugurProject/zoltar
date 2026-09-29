@@ -760,7 +760,7 @@ describe('useZoltarUniverse', () => {
 		expect(pageReads).toBe(2)
 	})
 
-	test('does not let older background responses overwrite a newer universe and question page', async () => {
+	test('lets slow background universe and question reads finish across new blocks', async () => {
 		const universe = { childUniverses: [], forkQuestionDetails: undefined, forkThresholdAttoRep: 100n, forkTime: 0n, forkingOutcomeIndex: 0n, hasForked: false, parentUniverseId: 0n, reputationToken: zeroAddress, totalTheoreticalSupplyAttoRep: 1000n, universeId: 1n }
 		const forkedUniverse = { ...universe, forkTime: 50n, hasForked: true }
 		const firstPage = { pageIndex: 0, pageSize: 10, questionCount: 1n, questions: [createQuestion('0x01')] }
@@ -817,14 +817,14 @@ describe('useZoltarUniverse', () => {
 		})
 		await waitFor(() => expect(pageReads).toBe(2))
 		await act(() => announceNewBlock())
-		await waitFor(() => expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage))
-		expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true)
+		expect(pageReads).toBe(2)
+		expect(universeReads).toBe(2)
 		await act(async () => {
-			refreshedPageRead.resolve(firstPage)
-			staleUniverseRead.resolve(universe)
+			refreshedPageRead.resolve(refreshedPage)
+			staleUniverseRead.resolve(forkedUniverse)
 			await Promise.all([refreshedPageRead.promise, staleUniverseRead.promise])
 		})
-		expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true)
+		await waitFor(() => expect(requireHookState(hookState).zoltarUniverse?.hasForked).toBe(true))
 		expect(requireHookState(hookState).zoltarQuestionPage).toEqual(refreshedPage)
 	})
 

@@ -255,13 +255,14 @@ export async function loadZoltarUniverseSummary(client: ReadClient, universeId: 
 		},
 	])
 	if (repToken === zeroAddress) return undefined
-	const reputationTokenMetadata = await loadReputationTokenMetadata(client, repToken, universeId === 0n)
-
-	const totalTheoreticalSupplyAttoRep = await client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', address: zoltarAddress, args: [universeId] })
 	const universeData: UniverseTuple = universe
 	const [storedForkTime, forkQuestionId, forkingOutcomeIndex, , parentUniverseId] = universeData
 	const hasForked = forkTime > 0n || storedForkTime > 0n
-	const lineage = await loadUniverseLineage(client, universeId, universeData, zoltarAddress)
+	const [reputationTokenMetadata, totalTheoreticalSupplyAttoRep, lineage] = await Promise.all([
+		loadReputationTokenMetadata(client, repToken, universeId === 0n),
+		client.readContract({ abi: Zoltar_Zoltar.abi, functionName: 'getUniverseTheoreticalSupplyAttoRep', address: zoltarAddress, args: [universeId] }),
+		loadUniverseLineage(client, universeId, universeData, zoltarAddress),
+	])
 
 	let childUniverses: ZoltarUniverseSummary['childUniverses'] = []
 	let forkQuestionDetails: MarketDetails | undefined = undefined

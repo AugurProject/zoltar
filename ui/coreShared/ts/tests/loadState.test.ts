@@ -83,6 +83,44 @@ void describe('load state helpers', () => {
 		}
 	})
 
+	void test('allows a progressing multi-read load to outlive one read deadline', async () => {
+		const controller = createLoadController({ timeoutMilliseconds: 100 })
+		const result = await controller.run({
+			load: async operation => {
+				let value = 0
+				for (let step = 0; step < 3; step++)
+					value += await operation.read(async () => {
+						await new Promise(resolve => setTimeout(resolve, 60))
+						return 1
+					})
+				return value
+			},
+		})
+		expect(result).toBe(3)
+	})
+
+	void test('a timed-out read cannot start another request when its late result arrives', async () => {
+		const controller = createLoadController({ timeoutMilliseconds: 5 })
+		const stalled = createDeferred<number>()
+		let followupReads = 0
+		let readSettled = false
+		await controller.run({
+			load: async operation => {
+				await operation
+					.read(() => stalled.promise)
+					.finally(() => {
+						readSettled = true
+					})
+				return await operation.read(async () => ++followupReads)
+			},
+		})
+		await Promise.resolve()
+		expect(readSettled).toBe(true)
+		stalled.resolve(1)
+		await new Promise(resolve => setTimeout(resolve, 10))
+		expect(followupReads).toBe(0)
+	})
+
 	void test('starts idle and exposes loading state during successful runs', async () => {
 		const controller = createLoadController()
 		let started = false
