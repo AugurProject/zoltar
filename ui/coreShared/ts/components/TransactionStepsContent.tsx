@@ -147,6 +147,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 												pending={isTransactionStepInFlight(step)}
 												pendingLabel={commonCopy.formatApprovingToken(step.approval.tokenSymbol)}
 												requiredAmount={step.approval.requiredAmount}
+												recommendedAmount={step.approval.recommendedAmount}
 												resetKey={`${contextKey}:${index}`}
 												tokenSymbol={step.approval.tokenSymbol}
 												tokenUnits={step.approval.tokenUnits}
