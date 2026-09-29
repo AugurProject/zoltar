@@ -12,12 +12,12 @@ import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletA
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
-import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
+import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
-import { createForkAuctionForm, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
+import { createForkAuctionForm, createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 function createReportingForm(overrides: Partial<ReportingFormState> = {}): ReportingFormState {
 	return {
@@ -104,38 +104,7 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 }
 
 function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
-		settlementCollateralAttoEth: 0n,
-		currentRetentionRate: 10n,
-		feeEligibleUnderwritingLimitAttoEth: 0n,
-		hasForkActivity: true,
-		forkOutcome: 'yes',
-		forkOwnSecurityPool: false,
-		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: undefined,
-		lastOracleSettlementTimestamp: 0n,
-		managerAddress: zeroAddress,
-		marketDetails: createMarketDetails(),
-		migratedAttoRep: 1n,
-		hasForkContinuationEscalationGame: false,
-		ordinaryEscalationGameStarted: false,
-		parent: PARENT_POOL_ADDRESS,
-		questionOutcome: 'yes',
-		questionId: '0x01',
-		statoblastSecurityMultiplierBps: 20_000n,
-		securityPoolAddress: '0x00000000000000000000000000000000000000f1',
-		shareTokenSupplyAttoShares: 0n,
-		systemState: 'operational',
-		totalPoolHeldAttoRep: 0n,
-		totalUnderwritingLimitAttoEth: 0n,
-		truthAuctionAddress: zeroAddress,
-		truthAuctionStartedAt: 1n,
-		universeHasForked: true,
-		universeId: 11n,
-		vaultCount: 0n,
-		vaults: [],
-		...overrides,
-	}
+	return createForkChildPool({ securityPoolAddress: '0x00000000000000000000000000000000000000f1', ...overrides })
 }
 
 function createFinalizedTruthAuctionDetails(currentChildPool: ListedSecurityPool): ForkAuctionDetails {
@@ -190,41 +159,18 @@ function createForkMigrationReadClient(): Pick<ReadClient, 'readContract'> {
 }
 
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
-	return {
-		accountState: createAccountState(),
+	return createForkAuctionSectionProps(createForkAuctionDetails(), {
 		currentStageView: 'auction',
 		embedInCard: true,
-		forkAuctionActiveAction: undefined,
-		forkAuctionDetails: createForkAuctionDetails(),
-		forkAuctionError: undefined,
-		forkAuctionForm: createForkAuctionForm(),
 		forkMigrationReadClient: createForkMigrationReadClient(),
-		forkAuctionResult: undefined,
-		loadingForkAuctionDetails: false,
-		onClaimAuctionProceeds: () => undefined,
-		onCreateChildUniverse: () => undefined,
-		onFinalizeTruthAuction: () => undefined,
-		onForkAuctionFormChange: () => undefined,
-		onForkUniverse: () => undefined,
-		onForkWithOwnEscalation: () => undefined,
-		onInitiateFork: () => undefined,
-		onLoadForkAuction: () => undefined,
-		onClaimParentEscalationDeposits: () => undefined,
-		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
-		onMigrateRepToZoltar: () => undefined,
-		onMigrateVault: () => undefined,
-		onRefundLosingBids: () => undefined,
 		onSelectedStageViewChange: () => undefined,
-		onStartTruthAuction: () => undefined,
-		onSubmitBid: () => undefined,
 		onWithdrawAuctionRefund: () => undefined,
-		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
 		securityPools: [createChildPool()],
 		selectedStageView: 'migration',
 		showHeader: false,
 		showSecurityPoolAddressInput: false,
 		...overrides,
-	}
+	})
 }
 
 installTestRouting()

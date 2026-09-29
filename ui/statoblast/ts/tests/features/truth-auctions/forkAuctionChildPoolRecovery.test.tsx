@@ -3,19 +3,19 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
+import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
-import { createForkAuctionForm, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
+import { createForkAuctionForm, createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
@@ -57,66 +57,7 @@ await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => (
 
 const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
 
-function createParentDetails(): ForkAuctionDetails {
-	return {
-		auctionedUnderwritingLimitAttoEth: 0n,
-		claimingAvailable: false,
-		settlementCollateralAttoEth: 1n,
-		currentTime: 250n,
-		forkOutcome: 'none',
-		forkOwnSecurityPool: false,
-		hasForkActivity: true,
-		marketDetails: createMarketDetails(),
-		migratedAttoRep: 1n,
-		migrationEndsAt: 200n,
-		parentSecurityPoolAddress: zeroAddress,
-		questionOutcome: 'yes',
-		auctionableAttoRepAtFork: 20n,
-		securityPoolAddress: PARENT_POOL_ADDRESS,
-		systemState: 'forkMigration',
-		truthAuction: undefined,
-		truthAuctionAddress: zeroAddress,
-		truthAuctionStartedAt: 0n,
-		universeId: 1n,
-	}
-}
-
-function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
-		settlementCollateralAttoEth: 1n,
-		currentRetentionRate: 10n,
-		feeEligibleUnderwritingLimitAttoEth: 0n,
-		forkOutcome: 'none',
-		forkOwnSecurityPool: false,
-		hasForkActivity: false,
-		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: undefined,
-		lastOracleSettlementTimestamp: 0n,
-		managerAddress: zeroAddress,
-		marketDetails: createMarketDetails(),
-		migratedAttoRep: 0n,
-		hasForkContinuationEscalationGame: false,
-		ordinaryEscalationGameStarted: false,
-		parent: PARENT_POOL_ADDRESS,
-		questionOutcome: 'yes',
-		questionId: '0x01',
-		statoblastSecurityMultiplierBps: 20_000n,
-		securityPoolAddress: YES_CHILD_POOL_ADDRESS,
-		shareTokenSupplyAttoShares: 0n,
-		systemState: 'forkMigration',
-		totalPoolHeldAttoRep: 0n,
-		totalUnderwritingLimitAttoEth: 0n,
-		truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
-		truthAuctionStartedAt: 0n,
-		universeHasForked: true,
-		universeId: 11n,
-		vaultCount: 0n,
-		vaults: [],
-		...overrides,
-	}
-}
-
-function createChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDetails {
+function createChildAuctionDetails(securityPoolAddress: Address, overrides: Partial<ForkAuctionDetails> = {}): ForkAuctionDetails {
 	return {
 		auctionedUnderwritingLimitAttoEth: 0n,
 		claimingAvailable: false,
@@ -137,20 +78,32 @@ function createChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDet
 		truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
 		truthAuctionStartedAt: 0n,
 		universeId: 11n,
+		...overrides,
 	}
 }
 
-function createStaleChildAuctionDetails(securityPoolAddress: Address): ForkAuctionDetails {
-	return {
-		...createChildAuctionDetails(securityPoolAddress),
-		systemState: 'forkTruthAuction',
-		truthAuctionAddress: STALE_TRUTH_AUCTION_ADDRESS,
-	}
+/** The YES child pool as the registry lists it right after migration, before its truth auction starts. */
+function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
+	return createForkChildPool({
+		forkOutcome: 'none',
+		hasForkActivity: false,
+		migratedAttoRep: 0n,
+		securityPoolAddress: YES_CHILD_POOL_ADDRESS,
+		settlementCollateralAttoEth: 1n,
+		systemState: 'forkMigration',
+		truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
+		truthAuctionStartedAt: 0n,
+		...overrides,
+	})
+}
+
+/** A child pool whose truth auction has started, so the section loads its auction details. */
+function createAuctionChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
+	return createChildPool({ hasForkActivity: true, systemState: 'forkTruthAuction', truthAuctionStartedAt: 10n, ...overrides })
 }
 
 function createStartedChildAuctionDetails(securityPoolAddress: Address, truthAuctionAddress: Address): ForkAuctionDetails {
-	return {
-		...createChildAuctionDetails(securityPoolAddress),
+	return createChildAuctionDetails(securityPoolAddress, {
 		systemState: 'forkTruthAuction',
 		truthAuction: {
 			accumulatedBidAttoEth: 0n,
@@ -173,110 +126,105 @@ function createStartedChildAuctionDetails(securityPoolAddress: Address, truthAuc
 		},
 		truthAuctionAddress,
 		truthAuctionStartedAt: 10n,
-	}
+	})
 }
 
+const AUCTION_STAGE_PROPS = { currentStageView: 'auction', selectedStageView: 'auction' } as const
+
 function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
-	return {
-		accountState: createAccountState(),
+	return createForkAuctionSectionProps(createChildAuctionDetails(PARENT_POOL_ADDRESS, { parentSecurityPoolAddress: zeroAddress, truthAuctionAddress: zeroAddress, universeId: 1n }), {
 		auctionDetailsOverride: undefined,
-		forkAuctionActiveAction: undefined,
-		forkAuctionDetails: createParentDetails(),
-		forkAuctionError: undefined,
-		forkAuctionForm: createForkAuctionForm(),
 		forkAuctionResult: {
 			action: 'migrateRepToZoltar',
 			hash: '0x00000000000000000000000000000000000000000000000000000000000000f1',
 			securityPoolAddress: PARENT_POOL_ADDRESS,
 			universeId: 1n,
 		},
-		loadingForkAuctionDetails: false,
-		onClaimAuctionProceeds: () => undefined,
-		onCreateChildUniverse: () => undefined,
-		onFinalizeTruthAuction: () => undefined,
-		onForkAuctionFormChange: () => undefined,
-		onForkUniverse: () => undefined,
-		onForkWithOwnEscalation: () => undefined,
-		onInitiateFork: () => undefined,
-		onLoadForkAuction: () => undefined,
-		onClaimParentEscalationDeposits: () => undefined,
-		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
-		onMigrateRepToZoltar: () => undefined,
-		onMigrateVault: () => undefined,
-		onRefundLosingBids: () => undefined,
-		onStartTruthAuction: () => undefined,
-		onSubmitBid: () => undefined,
-		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
-		previewPool: {
-			...createChildPool(),
+		previewPool: createChildPool({
 			parent: zeroAddress,
 			questionOutcome: 'none',
 			securityPoolAddress: PARENT_POOL_ADDRESS,
 			truthAuctionAddress: zeroAddress,
 			universeId: 1n,
 			universeHasForked: false,
-		},
-		securityPools: [],
+		}),
 		showHeader: true,
 		showSecurityPoolAddressInput: true,
 		stageView: 'auction',
 		...overrides,
-	}
+	})
 }
 
 installTestRouting()
 describe('ForkAuctionSection child pool recovery', () => {
-	let cleanupDom: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
+	let rendered: Awaited<ReturnType<typeof renderIntoDocument>> | undefined
+	let renderedProps: ForkAuctionSectionProps | undefined
 
-	beforeEach(() => {
-		recoveredPools = []
-		loadAllSecurityPoolsCallOptions = []
-		loadAllSecurityPoolsMock.mockClear()
-		loadForkAuctionDetailsCalls = 0
-		childAuctionDetailsFactory = securityPoolAddress => createChildAuctionDetails(securityPoolAddress)
-		recoveredPoolsFactory = () => recoveredPools
-		cleanupDom = installDomEnvironment().cleanup
+	installDomTestLifecycle({
+		beforeTest: () => {
+			recoveredPools = []
+			loadAllSecurityPoolsCallOptions = []
+			loadAllSecurityPoolsMock.mockClear()
+			loadForkAuctionDetailsCalls = 0
+			childAuctionDetailsFactory = securityPoolAddress => createChildAuctionDetails(securityPoolAddress)
+			recoveredPoolsFactory = () => recoveredPools
+		},
+		afterTest: async () => {
+			await rendered?.cleanup()
+			rendered = undefined
+			renderedProps = undefined
+		},
 	})
 
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
-	})
+	async function renderSection(overrides: Partial<ForkAuctionSectionProps> = {}) {
+		renderedProps = createProps(overrides)
+		rendered = await renderIntoDocument(h(ForkAuctionSection, renderedProps))
+	}
+
+	/** Rerenders with only the given props changed, keeping every other prop's identity. */
+	async function rerenderSection(overrides: Partial<ForkAuctionSectionProps>) {
+		const container = rendered?.container
+		if (container === undefined || renderedProps === undefined) throw new Error('Expected the fork auction section to be rendered')
+		const nextProps = { ...renderedProps, ...overrides }
+		renderedProps = nextProps
+		await act(() => {
+			render(h(ForkAuctionSection, nextProps), container)
+		})
+	}
+
+	/** Flushes pending effects inside `waitFor`, whose polling alone does not run queued Preact updates. */
+	async function waitForFlushed(assertion: () => void) {
+		await waitFor(async () => {
+			await act(async () => {
+				await Promise.resolve()
+			})
+			assertion()
+		})
+	}
+
+	const expectCopyAddressButton = (address: Address, present: boolean) => {
+		const button = within(document.body).queryByRole('button', { name: `Copy address ${address}` })
+		if (present) expect(button).not.toBeNull()
+		else expect(button).toBeNull()
+	}
+
+	const recoveryCall = (accountAddress: Address): (typeof loadAllSecurityPoolsCallOptions)[number] => ({ accountAddress, selectedSecurityPoolAddress: PARENT_POOL_ADDRESS, vaultDetailMode: 'selected' })
 
 	test('recovers a migrated child pool from the registry when the local security-pools list is stale', async () => {
 		recoveredPools = [createChildPool()]
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps()))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection()
 
 		await waitFor(() => {
 			expect(within(document.body).queryByText('Yes universe does not exist.')).toBeNull()
 			expectTransactionButtonEnabled(document.body, 'Start truth auction')
 		})
-		expect(loadAllSecurityPoolsCallOptions).toEqual([
-			{
-				accountAddress: zeroAddress,
-				selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
-				vaultDetailMode: 'selected',
-			},
-		])
+		expect(loadAllSecurityPoolsCallOptions).toEqual([recoveryCall(zeroAddress)])
 	})
 
 	test('shows child-pool discovery as loading until an empty result is confirmed', async () => {
 		const recovery = createDeferred<ListedSecurityPool[]>()
 		recoveredPoolsFactory = () => recovery.promise
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'auction',
-					selectedStageView: 'auction',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection(AUCTION_STAGE_PROPS)
 
 		await waitFor(() => {
 			const loadingStatus = within(document.body).getByText('Loading the Yes child pool…')
@@ -302,8 +250,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 			if (recoveryAttempts === 1) throw new Error('Registry RPC unavailable')
 			return [createChildPool()]
 		}
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createProps()))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection()
 		const documentQueries = within(document.body)
 
 		await waitFor(() => {
@@ -322,67 +269,26 @@ describe('ForkAuctionSection child pool recovery', () => {
 	})
 
 	test('reloads stale recovered child auction details once the child pool is already operational', async () => {
-		recoveredPools = [
-			createChildPool({
-				hasForkActivity: true,
-				systemState: 'operational',
-				truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
-				truthAuctionStartedAt: 10n,
-			}),
-		]
+		recoveredPools = [createAuctionChildPool({ systemState: 'operational' })]
 		childAuctionDetailsFactory = (securityPoolAddress: Address): ForkAuctionDetails => {
-			if (loadForkAuctionDetailsCalls === 1) return createStaleChildAuctionDetails(securityPoolAddress)
-
-			return {
-				...createChildAuctionDetails(securityPoolAddress),
-				systemState: 'operational',
-				truthAuctionAddress: REFRESHED_TRUTH_AUCTION_ADDRESS,
-				truthAuctionStartedAt: 10n,
-			}
+			if (loadForkAuctionDetailsCalls === 1) return createChildAuctionDetails(securityPoolAddress, { systemState: 'forkTruthAuction', truthAuctionAddress: STALE_TRUTH_AUCTION_ADDRESS })
+			return createChildAuctionDetails(securityPoolAddress, { systemState: 'operational', truthAuctionAddress: REFRESHED_TRUTH_AUCTION_ADDRESS, truthAuctionStartedAt: 10n })
 		}
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'auction',
-					selectedStageView: 'auction',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection(AUCTION_STAGE_PROPS)
 
-		await waitFor(async () => {
-			await act(async () => {
-				await Promise.resolve()
-			})
+		await waitForFlushed(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(2)
-			expect(within(document.body).queryByRole('button', { name: `Copy address ${REFRESHED_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+			expectCopyAddressButton(REFRESHED_TRUTH_AUCTION_ADDRESS, true)
 		})
 
-		expect(within(document.body).queryByRole('button', { name: `Copy address ${STALE_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
-		expect(within(document.body).queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
+		expectCopyAddressButton(STALE_TRUTH_AUCTION_ADDRESS, false)
+		expectCopyAddressButton(YES_TRUTH_AUCTION_ADDRESS, false)
 	})
 
 	test('shows automatic truth auction loading and keeps bid submission disabled while details load', async () => {
-		recoveredPools = [
-			createChildPool({
-				hasForkActivity: true,
-				systemState: 'forkTruthAuction',
-				truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
-				truthAuctionStartedAt: 10n,
-			}),
-		]
+		recoveredPools = [createAuctionChildPool()]
 		childAuctionDetailsFactory = () => new Promise(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'auction',
-					selectedStageView: 'auction',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection(AUCTION_STAGE_PROPS)
 
 		await waitFor(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(1)
@@ -403,28 +309,12 @@ describe('ForkAuctionSection child pool recovery', () => {
 	})
 
 	test('shows selected-auction detail errors with retry and recovers after a repeated read', async () => {
-		recoveredPools = [
-			createChildPool({
-				hasForkActivity: true,
-				systemState: 'forkTruthAuction',
-				truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
-				truthAuctionStartedAt: 10n,
-			}),
-		]
+		recoveredPools = [createAuctionChildPool()]
 		childAuctionDetailsFactory = securityPoolAddress => {
 			if (loadForkAuctionDetailsCalls === 1) throw new Error('Child auction RPC unavailable')
 			return createChildAuctionDetails(securityPoolAddress)
 		}
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'auction',
-					selectedStageView: 'auction',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection(AUCTION_STAGE_PROPS)
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
@@ -435,10 +325,7 @@ describe('ForkAuctionSection child pool recovery', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Retry' }))
 			await Promise.resolve()
 		})
-		await waitFor(async () => {
-			await act(async () => {
-				await Promise.resolve()
-			})
+		await waitForFlushed(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(2)
 			expect(documentQueries.queryByText('Unable to load auction details for the Yes child universe. Reason: Child auction RPC unavailable')).toBeNull()
 			expect(documentQueries.queryByRole('button', { name: 'Retrying auction details…' })).toBeNull()
@@ -446,48 +333,21 @@ describe('ForkAuctionSection child pool recovery', () => {
 	})
 
 	test('drops stale auction details immediately when switching outcomes', async () => {
-		const yesPool = createChildPool({
-			hasForkActivity: true,
-			systemState: 'forkTruthAuction',
-			truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
-			truthAuctionStartedAt: 10n,
-		})
-		const noPool = createChildPool({
-			hasForkActivity: true,
-			questionOutcome: 'no',
-			securityPoolAddress: NO_CHILD_POOL_ADDRESS,
-			systemState: 'forkTruthAuction',
-			truthAuctionAddress: NO_TRUTH_AUCTION_ADDRESS,
-			truthAuctionStartedAt: 10n,
-		})
+		const yesPool = createAuctionChildPool()
+		const noPool = createAuctionChildPool({ questionOutcome: 'no', securityPoolAddress: NO_CHILD_POOL_ADDRESS, truthAuctionAddress: NO_TRUTH_AUCTION_ADDRESS })
 		const noDetails = createDeferred<ForkAuctionDetails>()
 		childAuctionDetailsFactory = securityPoolAddress => {
 			if (securityPoolAddress === YES_CHILD_POOL_ADDRESS) return createStartedChildAuctionDetails(YES_CHILD_POOL_ADDRESS, YES_TRUTH_AUCTION_ADDRESS)
 			return noDetails.promise
 		}
-		const initialProps = createProps({
-			currentStageView: 'auction',
-			forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'yes' }),
-			securityPools: [yesPool, noPool],
-			selectedStageView: 'auction',
-		})
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, initialProps))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ ...AUCTION_STAGE_PROPS, forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'yes' }), securityPools: [yesPool, noPool] })
 
 		const documentQueries = within(document.body)
 		await waitFor(() => {
 			expect(documentQueries.getByRole('button', { name: 'Submit bid' })).not.toBeNull()
 		})
 
-		await act(() => {
-			render(
-				h(ForkAuctionSection, {
-					...initialProps,
-					forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }),
-				}),
-				renderedComponent.container,
-			)
-		})
+		await rerenderSection({ forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }) })
 		await waitFor(() => {
 			const submitBidButton = documentQueries.getByRole('button', { name: 'Loading truth auction…' })
 			expect(submitBidButton.hasAttribute('disabled')).toBe(true)
@@ -504,44 +364,20 @@ describe('ForkAuctionSection child pool recovery', () => {
 	})
 
 	test('drops a recovered child pool immediately while the next outcome is being recovered', async () => {
-		const yesPool = createChildPool({
-			hasForkActivity: true,
-			systemState: 'forkTruthAuction',
-			truthAuctionAddress: YES_TRUTH_AUCTION_ADDRESS,
-			truthAuctionStartedAt: 10n,
-		})
-		recoveredPools = [yesPool]
+		recoveredPools = [createAuctionChildPool()]
 		childAuctionDetailsFactory = securityPoolAddress => createStartedChildAuctionDetails(securityPoolAddress, YES_TRUTH_AUCTION_ADDRESS)
-		const initialProps = createProps({
-			currentStageView: 'auction',
-			forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'yes' }),
-			securityPools: [],
-			selectedStageView: 'auction',
-		})
-		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, initialProps))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ ...AUCTION_STAGE_PROPS, forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'yes' }) })
 		const documentQueries = within(document.body)
 
-		await waitFor(async () => {
-			await act(async () => {
-				await Promise.resolve()
-			})
-			expect(documentQueries.getByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+		await waitForFlushed(() => {
+			expectCopyAddressButton(YES_TRUTH_AUCTION_ADDRESS, true)
 		})
 
 		const noPoolRecovery = createDeferred<ListedSecurityPool[]>()
 		recoveredPoolsFactory = () => noPoolRecovery.promise
-		await act(() => {
-			render(
-				h(ForkAuctionSection, {
-					...initialProps,
-					forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }),
-				}),
-				renderedComponent.container,
-			)
-		})
+		await rerenderSection({ forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }) })
 
-		expect(documentQueries.queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).toBeNull()
+		expectCopyAddressButton(YES_TRUTH_AUCTION_ADDRESS, false)
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		expect(submitBidButton.hasAttribute('disabled')).toBe(true)
 
@@ -554,47 +390,19 @@ describe('ForkAuctionSection child pool recovery', () => {
 	test('reloads selected child auction details after a selected-pool refresh', async () => {
 		recoveredPools = [createChildPool()]
 		const secondTruthAuctionAddress: Address = '0x0000000000000000000000000000000000000ab2'
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					currentStageView: 'auction',
-					selectedPoolRefreshNonce: 0,
-					selectedStageView: 'auction',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ ...AUCTION_STAGE_PROPS, selectedPoolRefreshNonce: 0 })
 
 		await waitFor(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(1)
-			expect(within(document.body).queryByRole('button', { name: `Copy address ${YES_TRUTH_AUCTION_ADDRESS}` })).not.toBeNull()
+			expectCopyAddressButton(YES_TRUTH_AUCTION_ADDRESS, true)
 		})
 
-		childAuctionDetailsFactory = securityPoolAddress => ({
-			...createChildAuctionDetails(securityPoolAddress),
-			truthAuctionAddress: securityPoolAddress === YES_CHILD_POOL_ADDRESS ? secondTruthAuctionAddress : YES_TRUTH_AUCTION_ADDRESS,
-		})
-		await act(() => {
-			render(
-				h(
-					ForkAuctionSection,
-					createProps({
-						currentStageView: 'auction',
-						selectedPoolRefreshNonce: 1,
-						selectedStageView: 'auction',
-					}),
-				),
-				renderedComponent.container,
-			)
-		})
+		childAuctionDetailsFactory = securityPoolAddress => createChildAuctionDetails(securityPoolAddress, { truthAuctionAddress: securityPoolAddress === YES_CHILD_POOL_ADDRESS ? secondTruthAuctionAddress : YES_TRUTH_AUCTION_ADDRESS })
+		await rerenderSection({ selectedPoolRefreshNonce: 1 })
 
-		await waitFor(async () => {
-			await act(async () => {
-				await Promise.resolve()
-			})
+		await waitForFlushed(() => {
 			expect(loadForkAuctionDetailsCalls).toBe(2)
-			expect(within(document.body).queryByRole('button', { name: `Copy address ${secondTruthAuctionAddress}` })).not.toBeNull()
+			expectCopyAddressButton(secondTruthAuctionAddress, true)
 		})
 	})
 
@@ -602,55 +410,16 @@ describe('ForkAuctionSection child pool recovery', () => {
 		const firstWallet = getAddress('0x0000000000000000000000000000000000000ba1')
 		const secondWallet = getAddress('0x0000000000000000000000000000000000000ba2')
 		recoveredPools = [createChildPool()]
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({ address: firstWallet }),
-					currentStageView: 'auction',
-					selectedStageView: 'auction',
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderSection({ ...AUCTION_STAGE_PROPS, accountState: createAccountState({ address: firstWallet }) })
 
 		await waitFor(() => {
-			expect(loadAllSecurityPoolsCallOptions).toEqual([
-				{
-					accountAddress: firstWallet,
-					selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
-					vaultDetailMode: 'selected',
-				},
-			])
+			expect(loadAllSecurityPoolsCallOptions).toEqual([recoveryCall(firstWallet)])
 		})
 
-		await act(() => {
-			render(
-				h(
-					ForkAuctionSection,
-					createProps({
-						accountState: createAccountState({ address: secondWallet }),
-						currentStageView: 'auction',
-						selectedStageView: 'auction',
-					}),
-				),
-				renderedComponent.container,
-			)
-		})
+		await rerenderSection({ accountState: createAccountState({ address: secondWallet }) })
 
 		await waitFor(() => {
-			expect(loadAllSecurityPoolsCallOptions).toEqual([
-				{
-					accountAddress: firstWallet,
-					selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
-					vaultDetailMode: 'selected',
-				},
-				{
-					accountAddress: secondWallet,
-					selectedSecurityPoolAddress: PARENT_POOL_ADDRESS,
-					vaultDetailMode: 'selected',
-				},
-			])
+			expect(loadAllSecurityPoolsCallOptions).toEqual([recoveryCall(firstWallet), recoveryCall(secondWallet)])
 		})
 	})
 })
