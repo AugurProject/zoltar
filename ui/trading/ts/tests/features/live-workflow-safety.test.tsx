@@ -3,7 +3,6 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
 import { liveLiquidityServices } from '../../features/LiveLiquidityControls.js'
 import { liveSettlementServices } from '../../features/LiveSettlementControls.js'
@@ -16,32 +15,22 @@ import { transactionActivity } from '@zoltar/ui-core-shared/transactions/transac
 import { isMarketTransactionPending } from '../../features/live/marketTransactionActivity.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { buttonByLabel, waitForDom } from '../support/dom.js'
+import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
-const pair = `0x${'33'.repeat(20)}` as Address
 const shareToken = `0x${'44'.repeat(20)}` as Address
 const secondPool = `0x${'23'.repeat(20)}` as Address
 const secondShareToken = `0x${'45'.repeat(20)}` as Address
 const childPool = `0x${'24'.repeat(20)}` as Address
 const childShareToken = `0x${'46'.repeat(20)}` as Address
-const factory = `0x${'55'.repeat(20)}` as Address
-const router = `0x${'66'.repeat(20)}` as Address
-const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const replacementTransactionHash = `0x${'89'.repeat(32)}` as Hash
 const secondMarketTransactionHash = `0x${'8a'.repeat(32)}` as Hash
 const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready']
-
-function deferred<T>() {
-	let resolvePromise: (value: T) => void = () => undefined
-	let rejectPromise: (reason: Error) => void = () => undefined
-	const promise = new Promise<T>((resolve, reject) => {
-		resolvePromise = resolve
-		rejectPromise = reject
-	})
-	return { promise, resolve: resolvePromise, reject: rejectPromise }
-}
 
 async function flush() {
 	await act(async () => {
@@ -55,20 +44,6 @@ async function settleAsyncWorkflow() {
 		await Bun.sleep(10)
 	})
 	await flush()
-}
-
-async function waitForDom(predicate: () => boolean, description: string) {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		await settleAsyncWorkflow()
-		if (predicate()) return
-	}
-	throw new Error(`Timed out waiting for ${description}. Rendered text: ${document.body.textContent}`)
-}
-
-function button(label: string) {
-	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
-	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
-	return match
 }
 
 function hasButton(label: string) {
@@ -89,21 +64,21 @@ describe('live workflow safety boundary', () => {
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
 		let connectedAccount = account
-		let positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		const secondMarketReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		let positionReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
+		const secondMarketReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
 		let waitForPositionReceipt = false
 		let repricePositionReceipt = false
-		let positionBroadcast = deferred<undefined>()
-		let positionWalletWrite = deferred<undefined>()
+		let positionBroadcast = createDeferred<undefined>()
+		let positionWalletWrite = createDeferred<undefined>()
 		let deferPositionBroadcast = false
-		let deferredWalletChainRead: ReturnType<typeof deferred<number>> | undefined
-		let walletChainReadStarted: ReturnType<typeof deferred<undefined>> | undefined
+		let deferredWalletChainRead: ReturnType<typeof createDeferred<number>> | undefined
+		let walletChainReadStarted: ReturnType<typeof createDeferred<undefined>> | undefined
 		const rejectBalanceRefresh = false
 		let deferSecondPortfolioBalance = false
-		const secondPortfolioBalance = deferred<undefined>()
+		const secondPortfolioBalance = createDeferred<undefined>()
 		let deferChildDiscovery = false
-		const childDiscovery = deferred<undefined>()
-		let childBalanceStarted = deferred<undefined>()
+		const childDiscovery = createDeferred<undefined>()
+		let childBalanceStarted = createDeferred<undefined>()
 		const discoveredUniverseIds: Array<bigint | undefined> = []
 		const submittedEntries: Array<{ market: LiveMarket; minimumLongShares: bigint; result: { totalLongShares: bigint } }> = []
 		const balancedPools: Address[] = []
@@ -138,38 +113,19 @@ describe('live workflow safety boundary', () => {
 		let discoveredEndTime = 2n ** 255n
 		let discoveredLoadError: string | undefined
 		let rejectDiscovery = false
-		const market: LiveMarket = {
+		const market = etherScaleMarketFixture({
 			pool,
-			pair,
 			shareToken,
-			universeId: 1n,
-			questionId: 2n,
 			title: 'Rendered workflow market',
 			description: 'Receipt uncertainty fixture',
 			endTime: discoveredEndTime,
-			statoblastSecurityMultiplierBps: 20_000n,
 			initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n,
-			systemState: 0,
-			awaitingForkContinuation: false,
-			universeForkTime: 0n,
-			vaultCount: 1n,
 			shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 			settlementCollateralAttoEth: 100n * 10n ** 18n,
-			currentRetentionRate: 10n ** 18n,
-			totalUnderwritingLimitAttoEth: 1n,
-			feeEligibleUnderwritingLimitAttoEth: 1n,
-			mintingCapacityCeilingAttoEth: 2n,
-			availableMintingCapacityAttoEth: 1n,
-			feeBps: 30n,
-			tradingStatus: 0,
-			questionOutcome: 3,
-			yesReserve: 50n * 10n ** 18n,
-			noReserve: 50n * 10n ** 18n,
-			lpTotalSupply: 50n * 10n ** 18n,
-		}
+		})
 		const secondMarket: LiveMarket = { ...market, pool: secondPool, shareToken: secondShareToken, questionId: 3n, title: 'Second rendered workflow market' }
 		const childMarket: LiveMarket = { ...market, pool: childPool, shareToken: childShareToken, universeId: 2n, questionId: 4n, title: 'Child-universe workflow market' }
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory, factory, router, feeBps: 30 }
+		const configuration = deploymentConfigurationFixture()
 		const discoverMarkets = async () => {
 			if (rejectDiscovery) throw new Error('registry RPC unavailable')
 			return {
@@ -277,10 +233,10 @@ describe('live workflow safety boundary', () => {
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'recovered market details')
 		discoveredEndTime = now + 2n
 
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
+		deferredWalletChainRead = createDeferred<number>()
+		walletChainReadStarted = createDeferred<undefined>()
 		await act(async () => {
-			button('Connect wallet').click()
+			buttonByLabel('Connect wallet').click()
 			await walletChainReadStarted?.promise
 		})
 		const summariesBeforeUnmountedConnectionResolution = walletSummaries.length
@@ -293,8 +249,8 @@ describe('live workflow safety boundary', () => {
 		deferredWalletChainRead = undefined
 		walletChainReadStarted = undefined
 		const poolRoute = `security-pool/${pool}`
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
+		deferredWalletChainRead = createDeferred<number>()
+		walletChainReadStarted = createDeferred<undefined>()
 		rendered = await renderIntoDocument(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={0} />)
 		cleanupRendered = rendered.cleanup
 		await flush()
@@ -320,11 +276,11 @@ describe('live workflow safety boundary', () => {
 		// The lookup route is list-first: the address form sits above the same rows the browse alias shows.
 		expect(document.querySelector('.open-pool-form')).not.toBeNull()
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
+		deferredWalletChainRead = createDeferred<number>()
+		walletChainReadStarted = createDeferred<undefined>()
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
 		await act(async () => {
-			button('Connect wallet').click()
+			buttonByLabel('Connect wallet').click()
 			await walletChainReadStarted?.promise
 		})
 		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
@@ -348,7 +304,7 @@ describe('live workflow safety boundary', () => {
 		await Bun.sleep(10)
 		await flush()
 		expect(secondPortfolioCard?.textContent).toContain('4 YES')
-		childBalanceStarted = deferred<undefined>()
+		childBalanceStarted = createDeferred<undefined>()
 		deferChildDiscovery = true
 		render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container)
 		expect(document.body.textContent).not.toContain(pool)
@@ -376,8 +332,8 @@ describe('live workflow safety boundary', () => {
 		deferChildDiscovery = false
 		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
 		await flush()
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
+		deferredWalletChainRead = createDeferred<number>()
+		walletChainReadStarted = createDeferred<undefined>()
 		connectedAccount = `0x${'9c'.repeat(20)}` as Address
 		const discoveriesBeforeMidEventUniverseChange = discoveredUniverseIds.length
 		await act(async () => {
@@ -433,15 +389,15 @@ describe('live workflow safety boundary', () => {
 		}
 		await typeAmount('0.01')
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
-		expect(button('Buy YES').classList.contains('tx-action-button')).toBeTrue()
+		expect(buttonByLabel('Buy YES').classList.contains('tx-action-button')).toBeTrue()
 		expect(hasButton('Preview trade')).toBeFalse()
 		deferPositionBroadcast = true
 		waitForPositionReceipt = true
 		repricePositionReceipt = true
-		positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		positionBroadcast = deferred<undefined>()
-		positionWalletWrite = deferred<undefined>()
-		await act(async () => button('Buy YES').click())
+		positionReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
+		positionBroadcast = createDeferred<undefined>()
+		positionWalletWrite = createDeferred<undefined>()
+		await act(async () => buttonByLabel('Buy YES').click())
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy YES: checking the latest price before your wallet opens')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
@@ -488,8 +444,8 @@ describe('live workflow safety boundary', () => {
 			secondAmountInput.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'second market entry estimate')
-		expect(button('Buy YES').disabled).toBeFalse()
-		await act(async () => button('Buy YES').click())
+		expect(buttonByLabel('Buy YES').disabled).toBeFalse()
+		await act(async () => buttonByLabel('Buy YES').click())
 		await waitForDom(() => document.body.textContent?.includes('Buy YES sent. Waiting for confirmation') === true, 'second market pending trade')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(secondMarketTransactionHash)
 		expect(document.querySelector('.transaction-hash')?.textContent).not.toContain(transactionHash)
@@ -565,7 +521,7 @@ describe('live workflow safety boundary', () => {
 		await typeAmount('0.02')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
-		await act(async () => button('Sell').click())
+		await act(async () => buttonByLabel('Sell').click())
 		expect(document.querySelector('[role="tabpanel"] .tx-action-button')).not.toBeNull()
 		expect(document.querySelector('[role="tabpanel"] .pool-mechanics')).toBeNull()
 		expect(document.body.textContent).not.toContain('Factory discovery')
@@ -580,7 +536,7 @@ describe('live workflow safety boundary', () => {
 		await act(() => render(<LiveTrading route={liquidityRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
 		await flush()
 		await waitForDom(() => hasButton('Remove'), 'liquidity controls')
-		await act(async () => button('Remove').click())
+		await act(async () => buttonByLabel('Remove').click())
 		expect(hasButton('Approve exact LP amount')).toBeFalse()
 		expect(hasButton('Remove liquidity')).toBeTrue()
 		expect(hasButton('Simulate liquidity transaction')).toBeFalse()

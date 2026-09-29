@@ -3,66 +3,24 @@ import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { Help } from '../../features/Help.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { buttonByLabel, waitForDom } from '../support/dom.js'
+import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
-const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'55'.repeat(20)}`, router: `0x${'66'.repeat(20)}`, feeBps: 30 }
-const market: LiveMarket = {
-	pool,
-	pair: `0x${'33'.repeat(20)}`,
-	shareToken: `0x${'44'.repeat(20)}`,
-	universeId: 1n,
-	questionId: 2n,
-	title: 'Nesting fixture market',
-	description: 'Surface nesting fixture',
-	endTime: 2n ** 255n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-	settlementCollateralAttoEth: 10n * 10n ** 18n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 2n,
-	availableMintingCapacityAttoEth: 1n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
-	yesReserve: 50n * 10n ** 18n,
-	noReserve: 50n * 10n ** 18n,
-	lpTotalSupply: 50n * 10n ** 18n,
-}
+const configuration = deploymentConfigurationFixture()
+const market = etherScaleMarketFixture({ pool, title: 'Nesting fixture market', description: 'Surface nesting fixture' })
 
 /** Card-like surfaces: entity cards and section blocks that draw their own border or background. */
 const CARD_SURFACE_SELECTOR = '.entity-card, .section-block:not(.plain):not(.embedded)'
 
 function nestedCardSurfaces(container: ParentNode) {
 	return Array.from(container.querySelectorAll(CARD_SURFACE_SELECTOR)).filter(surface => surface.parentElement?.closest(CARD_SURFACE_SELECTOR) !== null)
-}
-
-async function waitForDom(predicate: () => boolean, description: string) {
-	for (let attempt = 0; attempt < 200; attempt++) {
-		await act(async () => {
-			await Bun.sleep(10)
-		})
-		if (predicate()) return
-	}
-	throw new Error(`Timed out waiting for ${description}. Rendered text: ${document.body.textContent}`)
-}
-
-function button(label: string) {
-	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
-	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}`)
-	return match
 }
 
 describe('trading surface nesting', () => {
@@ -99,7 +57,7 @@ describe('trading surface nesting', () => {
 		expect(document.querySelectorAll('.sticky-object-context')).toHaveLength(1)
 		expect(document.querySelector('[role="tablist"]')).not.toBeNull()
 		expect(nestedCardSurfaces(document.body)).toEqual([])
-		await act(async () => button('Connect wallet').click())
+		await act(async () => buttonByLabel('Connect wallet').click())
 		await waitForDom(() => document.body.textContent?.includes('1 YES') === true, 'wallet balances')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await rendered.cleanup()
@@ -115,7 +73,7 @@ describe('trading surface nesting', () => {
 
 		const portfolio = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = portfolio.cleanup
-		await act(async () => button('Connect wallet').click())
+		await act(async () => buttonByLabel('Connect wallet').click())
 		await waitForDom(() => document.querySelector('.entity-card[data-portfolio-pool]') !== null && document.body.textContent?.includes('1 YES') === true, 'portfolio positions')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await portfolio.cleanup()
