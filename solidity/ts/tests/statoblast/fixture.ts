@@ -135,19 +135,20 @@ function useStatoblastTestFixture() {
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultAddress)
 		return await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, vault.repBackingUnits)
 	}
-	const { finalizeQuestionAsYesWithoutFork, setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, setupStartedTruthAuction, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, triggerExternalForkForSecurityPool } = createStatoblastTruthAuctionScenarioHelpers({
-		genesisUniverse,
-		getClient: () => client,
-		getMockWindow: () => mockWindow,
-		getOutcomes: () => outcomes,
-		getQuestionData: () => questionData,
-		getQuestionId: () => questionId,
-		getSecurityPoolAddresses: () => securityPoolAddresses,
-		repDeposit,
-		reportBond,
-		statoblastSecurityMultiplierBps,
-		transferRepToAddress,
-	})
+	const { finalizeQuestionAsYesWithoutFork, forkOwnGameAfterQuestionEnd, getYesChildPool, setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, setupStartedTruthAuction, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, triggerExternalForkForSecurityPool } =
+		createStatoblastTruthAuctionScenarioHelpers({
+			genesisUniverse,
+			getClient: () => client,
+			getMockWindow: () => mockWindow,
+			getOutcomes: () => outcomes,
+			getQuestionData: () => questionData,
+			getQuestionId: () => questionId,
+			getSecurityPoolAddresses: () => securityPoolAddresses,
+			repDeposit,
+			reportBond,
+			statoblastSecurityMultiplierBps,
+			transferRepToAddress,
+		})
 
 	const initializeStatoblastBaseline = async () => {
 		mockWindow = getAnvilWindowEthereum()
@@ -239,6 +240,8 @@ function useStatoblastTestFixture() {
 		deployOwnForkEscalationClaimHarness,
 		getVaultRepClaim,
 		finalizeQuestionAsYesWithoutFork,
+		forkOwnGameAfterQuestionEnd,
+		getYesChildPool,
 		triggerExternalForkForSecurityPool,
 		setupStartedTruthAuction,
 		setupOwnForkWithEscrow,
@@ -260,6 +263,7 @@ export function useStatoblastDeploymentAndOwnForkEscalationFixture() {
 		'MAX_RETENTION_RATE',
 		'outcomes',
 		'deployOwnForkEscalationClaimHarness',
+		'getYesChildPool',
 		'mockWindow',
 		'client',
 		'securityPoolAddresses',
@@ -273,7 +277,7 @@ export type StatoblastDeploymentAndOwnForkEscalationFixture = ReturnType<typeof 
 
 export function useStatoblastEscalationMigrationFixture() {
 	const fixture = useStatoblastTestFixture()
-	return pickFixtureProperties(fixture, ['getMigrationProxyAddressAbi', 'formatStorageSlot', 'getMappingStorageSlot', 'reportBond', 'repDeposit', 'genesisUniverse', 'statoblastSecurityMultiplierBps', 'outcomes', 'mockWindow', 'client', 'securityPoolAddresses', 'questionData', 'questionId'] as const)
+	return pickFixtureProperties(fixture, ['getMigrationProxyAddressAbi', 'formatStorageSlot', 'getMappingStorageSlot', 'reportBond', 'repDeposit', 'genesisUniverse', 'statoblastSecurityMultiplierBps', 'outcomes', 'getYesChildPool', 'mockWindow', 'client', 'securityPoolAddresses', 'questionData', 'questionId'] as const)
 }
 
 export type StatoblastEscalationMigrationFixture = ReturnType<typeof useStatoblastEscalationMigrationFixture>
@@ -297,6 +301,8 @@ export function useStatoblastForkMigrationFixture() {
 		'setupFinalizedTruthAuctionWithMixedBids',
 		'triggerExternalForkForSecurityPool',
 		'setupOwnForkWithEscrow',
+		'forkOwnGameAfterQuestionEnd',
+		'getYesChildPool',
 		'mockWindow',
 		'client',
 		'securityPoolAddresses',
@@ -332,6 +338,7 @@ export function useStatoblastTruthAuctionFixture() {
 		'setupTruthAuctionWithMixedBids',
 		'setupTruthAuctionWithTwoWinningBids',
 		'setupFinalizedTruthAuctionWithMixedBids',
+		'getYesChildPool',
 		'mockWindow',
 		'client',
 		'securityPoolAddresses',

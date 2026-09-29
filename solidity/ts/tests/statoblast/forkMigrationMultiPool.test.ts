@@ -38,7 +38,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps } = fixture
+	const { PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -84,8 +84,7 @@ describe('Statoblast: fork migration', () => {
 			const ownForkParentCollateralAtFork = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 
 			// we migrate to yes
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -449,8 +448,7 @@ describe('Statoblast: fork migration', () => {
 
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.PoolForked, 'Parent is forked')
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration needs to start')
 			const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)

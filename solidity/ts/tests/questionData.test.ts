@@ -88,17 +88,13 @@ describe('Question Data', () => {
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
+	const futureQuestion = async <Fields extends { title: string }>(fields: Fields) => {
+		const now = await mockWindow.getTime()
+		return { description: '', startTime: now + 100000n, endTime: now + 200000n, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '', ...fields }
+	}
+
 	const createScalarParityQuestion = async (question: ScalarParityQuestion) => {
-		const questionData = {
-			title: `scalar parity ${question.name}`,
-			description: 'scalar parity fixture',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: question.numTicks,
-			displayValueMin: question.displayValueMin,
-			displayValueMax: question.displayValueMax,
-			answerUnit: question.answerUnit,
-		}
+		const questionData = await futureQuestion({ title: `scalar parity ${question.name}`, description: 'scalar parity fixture', numTicks: question.numTicks, displayValueMin: question.displayValueMin, displayValueMax: question.displayValueMax, answerUnit: question.answerUnit })
 		await createQuestion(client, questionData, [])
 		return getQuestionId(questionData, [])
 	}
@@ -126,16 +122,7 @@ describe('Question Data', () => {
 
 	test('can make categorical question', async () => {
 		const outcomeLabels = ['Yes', 'No']
-		const testCategoricalQuestion = {
-			title: 'test categorical question',
-			description: 'test categorical description',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const testCategoricalQuestion = await futureQuestion({ title: 'test categorical question', description: 'test categorical description' })
 
 		const createHash = await createQuestion(client, testCategoricalQuestion, outcomeLabels)
 		const questionId = getQuestionId(testCategoricalQuestion, outcomeLabels)
@@ -193,17 +180,7 @@ describe('Question Data', () => {
 	})
 
 	test('can make scalar question', async () => {
-		const testScalarQuestion = {
-			title: 'test scalar question',
-			description: 'test scalar description',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 1000n,
-			outcomeLabels: [],
-			displayValueMin: -500n * 10n ** 18n,
-			displayValueMax: 500n * 10n ** 18n,
-			answerUnit: 'km',
-		}
+		const testScalarQuestion = await futureQuestion({ title: 'test scalar question', description: 'test scalar description', numTicks: 1000n, outcomeLabels: [], displayValueMin: -500n * 10n ** 18n, displayValueMax: 500n * 10n ** 18n, answerUnit: 'km' })
 
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
@@ -266,16 +243,7 @@ describe('Question Data', () => {
 
 	test('isMalformedAnswerOption: scalar answers with high bit set follow the scalar validity rules', async () => {
 		// Create a scalar question
-		const testScalarQuestion = {
-			title: 'scalar',
-			description: 'scalar',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 1000n,
-			displayValueMin: 0n,
-			displayValueMax: 1000n,
-			answerUnit: 'unit',
-		}
+		const testScalarQuestion = await futureQuestion({ title: 'scalar', description: 'scalar', numTicks: 1000n, displayValueMax: 1000n, answerUnit: 'unit' })
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
 
@@ -309,16 +277,7 @@ describe('Question Data', () => {
 	})
 
 	test('scalar answers with non-zero reserved bits are malformed even when the payload is otherwise canonical', async () => {
-		const testScalarQuestion = {
-			title: 'scalar reserved bits',
-			description: 'scalar reserved bits',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 1000n,
-			displayValueMin: 0n,
-			displayValueMax: 1000n,
-			answerUnit: 'unit',
-		}
+		const testScalarQuestion = await futureQuestion({ title: 'scalar reserved bits', description: 'scalar reserved bits', numTicks: 1000n, displayValueMax: 1000n, answerUnit: 'unit' })
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
 
@@ -339,17 +298,7 @@ describe('Question Data', () => {
 
 	test('accepts scalar questions at the uint120 encoding boundary', async () => {
 		const maxScalarNumTicks = (1n << 120n) - 1n
-		const testScalarQuestion = {
-			title: 'Boundary Scalar',
-			description: 'boundary scalar encoding',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: maxScalarNumTicks,
-			outcomeLabels: [],
-			displayValueMin: 0n,
-			displayValueMax: 1n,
-			answerUnit: '',
-		}
+		const testScalarQuestion = await futureQuestion({ title: 'Boundary Scalar', description: 'boundary scalar encoding', numTicks: maxScalarNumTicks, outcomeLabels: [], displayValueMax: 1n })
 		await createQuestion(client, testScalarQuestion, [])
 		const questionId = getQuestionId(testScalarQuestion, [])
 
@@ -359,35 +308,17 @@ describe('Question Data', () => {
 
 	test('rejects scalar questions whose numTicks exceeds the uint120 answer encoding range', async () => {
 		const tooLargeNumTicks = 1n << 120n
-		const testScalarQuestion = {
-			title: 'Too Large Scalar',
-			description: 'too many ticks for uint120 encoding',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: tooLargeNumTicks,
-			outcomeLabels: [],
-			displayValueMin: 0n,
-			displayValueMax: 1n,
-			answerUnit: '',
-		}
+		const testScalarQuestion = await futureQuestion({ title: 'Too Large Scalar', description: 'too many ticks for uint120 encoding', numTicks: tooLargeNumTicks, outcomeLabels: [], displayValueMax: 1n })
 
 		await assert.rejects(createQuestion(client, testScalarQuestion, []), /numTicks.*out of unsigned bounds/)
 	})
 
-	// Test for integer overflow in getTradeInterval: maxValue - minValue exceeds int256max
-	test('getTradeInterval handles extreme range without overflow', async () => {
+	// Regression for integer overflow in getTradeInterval (maxValue - minValue exceeds int256max) and in
+	// getScalarOutcomeName (scalarValue calculation): both are triggered by the same extreme range.
+	test('getTradeInterval and getScalarOutcomeName handle an extreme range without overflow', async () => {
 		const int256Max = (1n << 255n) - 1n
 		const int256Min = -(1n << 255n)
-		const question = {
-			title: 'extreme range overflow',
-			description: '',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 1000n,
-			displayValueMin: int256Min,
-			displayValueMax: int256Max,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'extreme range overflow', numTicks: 1000n, displayValueMin: int256Min, displayValueMax: int256Max })
 		await createQuestion(client, question, [])
 		const questionId = getQuestionId(question, [])
 		// Use a valid tick with secondPart = 1 to avoid int256min issue
@@ -397,41 +328,9 @@ describe('Question Data', () => {
 		assert.ok(name !== 'Malformed' && name !== 'Invalid', 'should return valid outcome name')
 	})
 
-	// Test for integer overflow in getScalarOutcomeName: scalarValue calculation may overflow
-	// This is triggered by the same extreme range, but ensures the full computation succeeds.
-	test('getScalarOutcomeName handles large scalarValue without overflow', async () => {
-		const int256Max = (1n << 255n) - 1n
-		const int256Min = -(1n << 255n)
-		const question = {
-			title: 'scalarValue overflow',
-			description: '',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 1000n,
-			displayValueMin: int256Min,
-			displayValueMax: int256Max,
-			answerUnit: '',
-		}
-		await createQuestion(client, question, [])
-		const questionId = getQuestionId(question, [])
-		// Use a valid tick with secondPart = 1
-		const answer = combineUint256FromTwoWithInvalid(false, question.numTicks - 1n, 1n)
-		const name = await getAnswerOptionName(client, questionId, answer)
-		assert.ok(name !== 'Malformed' && name !== 'Invalid', 'should return valid outcome name')
-	})
-
 	test('getScalarOutcomeName handles int256 min without reverting', async () => {
 		const int256Min = -(1n << 255n)
-		const question = {
-			title: 'int256 min',
-			description: '',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 1000n,
-			displayValueMin: int256Min,
-			displayValueMax: int256Min + 1000n,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'int256 min', numTicks: 1000n, displayValueMin: int256Min, displayValueMax: int256Min + 1000n })
 		await createQuestion(client, question, [])
 		const questionId = getQuestionId(question, [])
 		const answer = combineUint256FromTwoWithInvalid(false, question.numTicks, 0n)
@@ -440,16 +339,7 @@ describe('Question Data', () => {
 	})
 
 	test('createQuestion rejects duplicate outcome options', async () => {
-		const question = {
-			title: 'Test Duplicates',
-			description: 'Testing uniqueness',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'Test Duplicates', description: 'Testing uniqueness' })
 		// Duplicate entries: ['Yes', 'Yes']
 		await assert.rejects(createQuestion(client, question, ['Yes', 'Yes']), { message: /outcome option hashes must be provided in descending sorted order/i })
 		// Duplicate entries with more options
@@ -507,16 +397,7 @@ describe('Question Data', () => {
 	})
 
 	test('createQuestion enforces binary outcome order', async () => {
-		const question = {
-			title: 'Test Binary Order',
-			description: 'Testing binary order requirement',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'Test Binary Order', description: 'Testing binary order requirement' })
 		// Correct order ['Yes','No'] is accepted
 		assert.ok(areEqualArrays(sortStringArrayByKeccak(['Yes', 'No']), ['Yes', 'No']), 'sorting mismatch')
 		await createQuestion(client, question, ['Yes', 'No'])
@@ -529,51 +410,15 @@ describe('Question Data', () => {
 	})
 
 	test('createQuestion rejects unsorted non-binary outcome options', async () => {
-		const question = {
-			title: 'Test Invalid Order',
-			description: 'Testing unsorted options',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'Test Invalid Order', description: 'Testing unsorted options' })
 
 		const unsortedOutcomes = ['Apple', 'Banana', 'Cherry']
 		assert.ok(!areEqualArrays(sortStringArrayByKeccak(unsortedOutcomes), unsortedOutcomes), 'test inputs must be intentionally unsorted')
 		await assert.rejects(createQuestion(client, question, unsortedOutcomes), { message: /outcome option hashes must be provided in descending sorted order/i })
 	})
 
-	test('createQuestion accepts non-binary outcome options after sorting them by the contract hash order', async () => {
-		const question = {
-			title: 'Test Valid',
-			description: 'Testing valid options',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
-		// For non-binary questions, any order of unique options is accepted
-		await createQuestion(client, question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
-		const questionId = getQuestionId(question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
-		const labels = await getOutcomeLabels(client, questionId)
-		assert.deepStrictEqual(labels, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']), 'outcome labels should match')
-	})
-
 	test('createQuestion accepts unique outcome options once sorted into the contract order', async () => {
-		const question = {
-			title: 'Test Valid',
-			description: 'Testing valid options',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'Test Valid', description: 'Testing valid options' })
 		// Unique options in arbitrary order are accepted (order not enforced)
 		await createQuestion(client, question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
 		const questionId = getQuestionId(question, sortStringArrayByKeccak(['Apple', 'Banana', 'Cherry']))
@@ -588,16 +433,7 @@ describe('Question Data', () => {
 	})
 
 	test('question pagination returns exact-length pages without zero padding', async () => {
-		const question = {
-			title: 'Paged Question',
-			description: '',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const question = await futureQuestion({ title: 'Paged Question' })
 		const firstOutcomes = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma'])
 		const secondOutcomes = ['Yes', 'No']
 		const secondQuestion = { ...question, title: 'Paged Question 2' }
@@ -648,16 +484,7 @@ describe('Question Data', () => {
 			address: questionDataAddress,
 			args: [],
 		})
-		const baseQuestion = {
-			title: 'Question registry coherence 1',
-			description: 'persistent registry fixture',
-			startTime: (await mockWindow.getTime()) + 100000n,
-			endTime: (await mockWindow.getTime()) + 200000n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const baseQuestion = await futureQuestion({ title: 'Question registry coherence 1', description: 'persistent registry fixture' })
 		const categoricalOutcomes = ['Yes', 'No']
 		const secondQuestion = { ...baseQuestion, title: 'Question registry coherence 2' }
 		const scalarQuestion = {

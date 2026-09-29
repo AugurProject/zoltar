@@ -3,7 +3,7 @@ import { beforeEach, describe, test } from 'bun:test'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import assert from '../../testSupport/simulator/utils/assert'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
-import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { createWriteClient, writeContractAndWait, type WriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getCurrentRetentionRate, getSecurityVault, getSettlementCollateralAttoEth, getTotalPoolHeldAttoRep, getTotalRepBackingUnits, getTotalUnderwritingLimitAttoEth, updateVaultFees } from '../../testSupport/simulator/utils/contracts/securityPool'
@@ -147,15 +147,9 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(receiverVaultAfter.underwritingLimitAttoEth > receiverVaultBefore.underwritingLimitAttoEth, 'the receiver should accept the sub-floor liquidation slice')
 		})
 
-		test('real coordinator delegated liquidation consumes exactly the receiver debt increase within its reservation', async () => {
-			const { receiverClient, forcedPrice } = await prepareMinimumDebtLiquidation(5n * 10n ** 17n)
-			const operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-			const requestedDebtAttoEth = 75n * 10n ** 16n
-			const registryAddress = await client.readContract({
-				address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				functionName: 'liquidationApprovalRegistry',
-			})
+		// The receiver lets the operator liquidate the client vault up to 1 ETH per operation and 2 ETH in total.
+		const installTargetLiquidationApproval = async (receiverClient: WriteClient, operatorClient: WriteClient, nonce: bigint) => {
+			const registryAddress = await client.readContract({ address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'liquidationApprovalRegistry' })
 			const approval = {
 				securityPool: securityPoolAddresses.securityPool,
 				receiverVault: receiverClient.account.address,
@@ -166,17 +160,17 @@ describe('Statoblast: fork migration', () => {
 				minPostLiquidationHealthFactorBps: 10_000n,
 				validAfter: 0n,
 				validUntil: 9_999_999_999n,
-				nonce: 1n,
+				nonce,
 			}
-			const approvalId = getLiquidationApprovalId(approval)
-			await writeContractAndWait(receiverClient, () =>
-				receiverClient.writeContract({
-					address: registryAddress,
-					abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
-					functionName: 'setLiquidationApproval',
-					args: [approval],
-				}),
-			)
+			await writeContractAndWait(receiverClient, () => receiverClient.writeContract({ address: registryAddress, abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi, functionName: 'setLiquidationApproval', args: [approval] }))
+			return { registryAddress, approval, approvalId: getLiquidationApprovalId(approval) }
+		}
+
+		test('real coordinator delegated liquidation consumes exactly the receiver debt increase within its reservation', async () => {
+			const { receiverClient, forcedPrice } = await prepareMinimumDebtLiquidation(5n * 10n ** 17n)
+			const operatorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
+			const requestedDebtAttoEth = 75n * 10n ** 16n
+			const { registryAddress, approval, approvalId } = await installTargetLiquidationApproval(receiverClient, operatorClient, 1n)
 
 			const receiverVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)
 			const operatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, operatorClient.account.address)
@@ -231,32 +225,7 @@ describe('Statoblast: fork migration', () => {
 			const requestedDebtAttoEth = 5n * 10n ** 17n
 			const validForSeconds = 60n
 			const coordinatorAddress = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
-			const registryAddress = await client.readContract({
-				address: coordinatorAddress,
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				functionName: 'liquidationApprovalRegistry',
-			})
-			const approval = {
-				securityPool: securityPoolAddresses.securityPool,
-				receiverVault: receiverClient.account.address,
-				operator: operatorClient.account.address,
-				targetVault: client.account.address,
-				maxCumulativeDebtAttoEth: 2n * 10n ** 18n,
-				maxDebtPerLiquidationAttoEth: 1n * 10n ** 18n,
-				minPostLiquidationHealthFactorBps: 10_000n,
-				validAfter: 0n,
-				validUntil: 9_999_999_999n,
-				nonce: 2n,
-			}
-			const approvalId = getLiquidationApprovalId(approval)
-			await writeContractAndWait(receiverClient, () =>
-				receiverClient.writeContract({
-					address: registryAddress,
-					abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
-					functionName: 'setLiquidationApproval',
-					args: [approval],
-				}),
-			)
+			const { registryAddress, approval, approvalId } = await installTargetLiquidationApproval(receiverClient, operatorClient, 2n)
 			await queueDelegatedLiquidationAtForcedPrice(operatorClient, coordinatorAddress, client.account.address, receiverClient.account.address, requestedDebtAttoEth, approvalId, forcedPrice, validForSeconds)
 			const operationId = await getStagedOperationCounter(client, coordinatorAddress)
 			const settlementTime = await client.readContract({

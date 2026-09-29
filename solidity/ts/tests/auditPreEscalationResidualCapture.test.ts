@@ -9,27 +9,16 @@ import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../testSupport/simulat
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
-import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './statoblast/fixture'
+import { describe, test } from 'bun:test'
+import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals, redeemOwnVaultPayout, sweepResidualRep, withdrawFirstDepositOfEachOutcome } from './residualCaptureHelpers'
 
 describe('Audit: pre-escalation residual capture', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 	const { repDeposit } = fixture
 
-	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
-	let client: StatoblastVaultAccountingFixture['client']
-	let securityPoolAddresses: StatoblastVaultAccountingFixture['securityPoolAddresses']
-	let questionId: StatoblastVaultAccountingFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	test('rejects vault admission as soon as the question ends', async () => {
+		const { mockWindow, client, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
@@ -38,6 +27,7 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('keeps vault admission open before the question end timestamp and closes it exactly at the boundary', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const depositor = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(depositor, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -50,6 +40,7 @@ describe('Audit: pre-escalation residual capture', () => {
 	})
 
 	test('prevents an exact-end deposit before the first dispute from capturing an honest vault residual', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		const { lowLosingPrincipal, totalPrincipal } = ordinaryEscalationPrincipals

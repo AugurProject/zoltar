@@ -15,32 +15,19 @@ import { OperationType, getQuestionEndDate, participateAuction } from '../testSu
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
 import { getTotalPoolHeldAttoRep, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { addRepToMigrationBalance, getZoltarForkThreshold, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './statoblast/fixture'
+import { useStatoblastTruthAuctionFixture } from './statoblast/fixture'
 
 describe('Recursive truth-auction ownership regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
 
 	const { PRICE_PRECISION, formatStorageSlot, genesisUniverse, getMappingStorageSlot, outcomes, reportBond, repDeposit, statoblastSecurityMultiplierBps } = fixture
 
-	let client: StatoblastTruthAuctionFixture['client']
-	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
-	let questionData: StatoblastTruthAuctionFixture['questionData']
-	let questionId: StatoblastTruthAuctionFixture['questionId']
-	let securityPoolAddresses: StatoblastTruthAuctionFixture['securityPoolAddresses']
-
-	beforeEach(() => {
-		client = fixture.client
-		mockWindow = fixture.mockWindow
-		questionData = fixture.questionData
-		questionId = fixture.questionId
-		securityPoolAddresses = fixture.securityPoolAddresses
-	})
-
 	test('three recursive full-cap auctions preserve only backed claims', async () => {
+		const { client, mockWindow, questionData, questionId, securityPoolAddresses } = fixture
 		const poolRep = 1_100n * PRICE_PRECISION
 		const attackerRep = 990n * PRICE_PRECISION
 		const passiveRep = poolRep - attackerRep

@@ -71,7 +71,7 @@ const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 30_000_000n
 describe('Statoblast: escalation migration', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes } = fixture
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
 	let client: StatoblastEscalationMigrationFixture['client']
@@ -314,8 +314,7 @@ describe('Statoblast: escalation migration', () => {
 
 		const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesUniverse, yesSecurityPool } = getYesChildPool()
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childRepToken = getRepTokenAddress(yesUniverse)
@@ -396,8 +395,7 @@ describe('Statoblast: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		strictEqualTypeSafe(parentVaultAfterMigration.disputeStakedAttoRep, 0n, 'aggregate migration should clear all parent unresolved escrow')
 		strictEqualTypeSafe(await getForkedEscrowPrincipalByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'the child should rely on its aggregate carry snapshot rather than per-vault escrow')
 	})
@@ -421,8 +419,7 @@ describe('Statoblast: escalation migration', () => {
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const relayerClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await assert.rejects(migrateVaultWithUnresolvedEscalation(relayerClient, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes))
@@ -489,8 +486,7 @@ describe('Statoblast: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		const forkTime = await mockWindow.getTime()
 		await mockWindow.setTime(forkTime + 8n * 7n * DAY + 1n)
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -556,8 +552,7 @@ describe('Statoblast: escalation migration', () => {
 			},
 		})
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -595,8 +590,7 @@ describe('Statoblast: escalation migration', () => {
 
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
@@ -1022,8 +1016,7 @@ describe('Statoblast: escalation migration', () => {
 		const parentYesOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const parentNoOutcomeState = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
 		const parentVaultAfterMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -1083,8 +1076,7 @@ describe('Statoblast: escalation migration', () => {
 		const parentOutcomeStateBeforeMigration = await getEscalationGameOutcomeState(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		const yesEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childOutcomeState = await getEscalationGameOutcomeState(client, yesEscalationGame, QuestionOutcome.Yes)
 		assert.ok(childOutcomeState.currentCarryRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000', 'the child continuation should materialize a non-empty carry root')
@@ -1128,8 +1120,7 @@ describe('Statoblast: escalation migration', () => {
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childCostDuringMigration = await getEscalationGameTotalCost(client, childEscalationGame)
 		approximatelyEqual(childCostDuringMigration, parentCostAtFork, reportBond / 10_000n, 'the child continuation game should inherit the fork-time cost snapshot')
@@ -1501,8 +1492,7 @@ describe('Statoblast: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesUniverse, yesSecurityPool } = getYesChildPool()
 		const childEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		const childVaultAfterFirstMigration = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		strictEqualTypeSafe((await getEscalationGameOutcomeState(client, childEscalationGame, QuestionOutcome.Yes)).currentCarryTotalAttoRep, recursiveDeposit, 'the child continuation snapshot should carry the unresolved yes-side total before the second fork')
@@ -1586,8 +1576,7 @@ describe('Statoblast: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 		if ((await getSystemState(client, yesSecurityPool.securityPool)) === SystemState.ForkTruthAuction) {
@@ -1654,8 +1643,7 @@ describe('Statoblast: escalation migration', () => {
 		await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
 		await migrateVaultWithUnresolvedEscalation(attackerClient, securityPoolAddresses.securityPool, attackerClient.account.address, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesUniverse, yesSecurityPool } = getYesChildPool()
 
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)

@@ -6,7 +6,7 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
+import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getSystemState, withdrawFromEscalationGame } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { claimForkedEscalationDeposits, createChildUniverse, forkZoltarWithOwnEscalationGame, getMigratedAttoRep, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
@@ -22,7 +22,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes } = fixture
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -118,8 +118,7 @@ describe('Statoblast: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const migratedBeforeEscalation = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
 			const parentVaultBeforeMigration = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -233,7 +232,8 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(walletRepAfterClaim > walletRepBeforeClaim, 'own-fork wallet payout should follow the claim outcome even when the parent bucket is poisoned')
 		})
 
-		test('claimForkedEscalationDeposits rejects after the own-fork migration window closes', async () => {
+		// Both sides stake in the ordinary game before the own-question fork; the client migrates its REP to YES.
+		const forkContestedGameAndMigrateYesRep = async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			const winningDeposit = repDeposit / 8n
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -248,6 +248,11 @@ describe('Statoblast: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			const { forkTime } = await getUniverseData(client, genesisUniverse)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			return forkTime
+		}
+
+		test('claimForkedEscalationDeposits rejects after the own-fork migration window closes', async () => {
+			const forkTime = await forkContestedGameAndMigrateYesRep()
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
 			const claimDeadline = forkTime + 8n * 7n * DAY
@@ -257,20 +262,7 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('claimForkedEscalationDeposits allows the exact own-fork migration deadline', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const winningDeposit = repDeposit / 8n
-			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
-			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
-			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-			const { forkTime } = await getUniverseData(client, genesisUniverse)
-			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+			const forkTime = await forkContestedGameAndMigrateYesRep()
 			const claimDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(claimDeadline - 1n)
 			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -299,8 +291,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateVault(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.Operational, 'the child pool should be operational before late claim settlement')

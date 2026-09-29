@@ -48,7 +48,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, transferRepToAddress, triggerExternalForkForSecurityPool, setupOwnForkWithEscrow } = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, transferRepToAddress, triggerExternalForkForSecurityPool, setupOwnForkWithEscrow, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -119,18 +119,17 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(await getMigrationRepBalanceAttoRep(client, genesisUniverse, migrationProxyAddress), prefunded.forkData.auctionableAttoRepAtFork, 'unsolicited REP must not enter the own-fork migration ledger')
 		})
 
-		test('allows delayed fork initialization for an escalation game unresolved at the universe fork', async () => {
+		const startYesEscalationAfterQuestionEnd = async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+			return await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', address: securityPoolAddresses.escalationGame, args: [] })
+		}
 
-			const escalationGameEndDate = await client.readContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				functionName: 'getEscalationGameEndDate',
-				address: securityPoolAddresses.escalationGame,
-				args: [],
-			})
+		test('allows delayed fork initialization for an escalation game unresolved at the universe fork', async () => {
+			const escalationGameEndDate = await startYesEscalationAfterQuestionEnd()
+
 			const forkTimeAtResolution = escalationGameEndDate
 			const forkSourceQuestionData = {
 				...questionData,
@@ -153,8 +152,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'delayed initialization should leave the child migration recoverable')
 			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).disputeStakedAttoRep, 0n, 'unresolved migration should clear the parent escrow lock')
 			strictEqualTypeSafe(await getForkedEscrowChildRepByOutcomeAndVault(client, yesSecurityPool.securityPool, QuestionOutcome.Yes, client.account.address), 0n, 'optional vault cleanup should not create per-vault child escrow')
@@ -168,16 +166,7 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('rejects delayed fork initialization for an escalation game resolved before the universe fork', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
-			const escalationGameEndDate = await client.readContract({
-				abi: statoblast_EscalationGame_EscalationGame.abi,
-				functionName: 'getEscalationGameEndDate',
-				address: securityPoolAddresses.escalationGame,
-				args: [],
-			})
+			const escalationGameEndDate = await startYesEscalationAfterQuestionEnd()
 			await mockWindow.setTime(escalationGameEndDate + 1n)
 			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve before the universe fork')
 

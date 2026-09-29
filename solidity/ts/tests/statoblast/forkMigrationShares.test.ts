@@ -47,7 +47,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, getVaultRepClaim, finalizeQuestionAsYesWithoutFork, triggerExternalForkForSecurityPool } = fixture
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, getVaultRepClaim, finalizeQuestionAsYesWithoutFork, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -166,8 +166,7 @@ describe('Statoblast: fork migration', () => {
 			await triggerExternalForkForSecurityPool(undefined, 'forced ETH migration source')
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const forcedParentSurplus = 7n * 10n ** 18n
 			const forcedChildSurplus = 11n * 10n ** 18n
 			const parentRawBalanceBeforeForce = await getETHBalance(client, securityPoolAddresses.securityPool)
@@ -330,20 +329,24 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(afterPublicUpdate.settlementCollateralAttoEth, expectedCollateralAfterCheckpoint(afterPriceChange, afterPublicUpdate.lastUpdatedFeeAccumulator), 'public retention updates must checkpoint elapsed fees before retaining or changing the rate')
 		})
 
-		test('frequent public collateral updates do not strand extra fee residue', async () => {
-			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n + 1n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-
-			const openInterestAmount = 100n * 10n ** 18n
+		// Mints 100 ETH of complete sets shortly before question end, then updates settlement collateral once per second 128 times.
+		const mintCompleteSetAndRunSplitCollateralUpdates = async (extraSecondsBeforeEnd: bigint) => {
 			const splitUpdateCount = 128n
 			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - splitUpdateCount - 10n)
-			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
-
+			await mockWindow.setTime(endTime - splitUpdateCount - extraSecondsBeforeEnd)
+			await createCompleteSet(client, securityPoolAddresses.securityPool, 100n * 10n ** 18n)
 			for (let index = 1n; index <= splitUpdateCount; index++) {
 				await mockWindow.advanceTime(1n)
 				await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
 			}
+			return endTime
+		}
+
+		test('frequent public collateral updates do not strand extra fee residue', async () => {
+			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n + 1n
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+
+			const endTime = await mintCompleteSetAndRunSplitCollateralUpdates(10n)
 			await mockWindow.setTime(endTime + 10000n)
 			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
 
@@ -367,16 +370,7 @@ describe('Statoblast: fork migration', () => {
 			const secondVaultUnderwritingLimitAttoEth = repDeposit / 8n + 3n
 			await setVaultCapacityFixture(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVaultClient.account.address, secondVaultUnderwritingLimitAttoEth)
 
-			const openInterestAmount = 100n * 10n ** 18n
-			const splitUpdateCount = 128n
-			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - splitUpdateCount - 10n)
-			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
-
-			for (let index = 1n; index <= splitUpdateCount; index++) {
-				await mockWindow.advanceTime(1n)
-				await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
-			}
+			const endTime = await mintCompleteSetAndRunSplitCollateralUpdates(10n)
 			await mockWindow.setTime(endTime + 10000n)
 
 			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
@@ -467,7 +461,8 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(totalFeesOwed, totalCreditedVaultFees, 'capacity ownerships')
 		})
 
-		test('a newly eligible vault cannot claim settlement collateral accrued before it joined', async () => {
+		// Starts a backed second vault without capacity while 128 one-second collateral updates accrue fees to the first vault.
+		const setupIdleSecondVaultAfterCollateralUpdates = async (secondsBeforeSplitUpdates: bigint) => {
 			const firstVaultUnderwritingLimitAttoEth = repDeposit / 4n + 1n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, firstVaultUnderwritingLimitAttoEth)
 			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -475,17 +470,11 @@ describe('Statoblast: fork migration', () => {
 			// This accounting scenario starts with a backed vault whose capacity has been removed.
 			await setVaultCapacityFixture(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVaultClient.account.address, 0n)
 
-			const openInterestAmount = 100n * 10n ** 18n
-			const splitUpdateCount = 128n
-			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - splitUpdateCount - 20n)
-			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
+			await mintCompleteSetAndRunSplitCollateralUpdates(secondsBeforeSplitUpdates)
+			return secondVaultClient
+		}
 
-			for (let index = 1n; index <= splitUpdateCount; index++) {
-				await mockWindow.advanceTime(1n)
-				await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
-			}
-
+		const assertNewOwnerEarnsOnlyNextAccrual = async (secondVaultClient: StatoblastForkMigrationFixture['client']) => {
 			const secondVaultUnderwritingLimitAttoEth = repDeposit / 4n + 3n
 			await setVaultCapacityFixture(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVaultClient.account.address, secondVaultUnderwritingLimitAttoEth)
 
@@ -498,26 +487,16 @@ describe('Statoblast: fork migration', () => {
 
 			const secondVault = await getSecurityVault(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
 			assert.ok(secondVault.claimableFeesAttoEth <= expectedNextSecondDelta, 'capacity ownership')
+		}
+
+		test('a newly eligible vault cannot claim settlement collateral accrued before it joined', async () => {
+			const secondVaultClient = await setupIdleSecondVaultAfterCollateralUpdates(20n)
+
+			await assertNewOwnerEarnsOnlyNextAccrual(secondVaultClient)
 		})
 
 		test('settlement collateral pauses without eligible capacity and resumes for a new owner', async () => {
-			const firstVaultUnderwritingLimitAttoEth = repDeposit / 4n + 1n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, firstVaultUnderwritingLimitAttoEth)
-			const secondVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await approveAndDepositRepToVault(secondVaultClient, repDeposit, questionId)
-			// This accounting scenario starts with a backed vault whose capacity has been removed.
-			await setVaultCapacityFixture(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVaultClient.account.address, 0n)
-
-			const openInterestAmount = 100n * 10n ** 18n
-			const splitUpdateCount = 128n
-			const endTime = await getQuestionEndDate(client, questionId)
-			await mockWindow.setTime(endTime - splitUpdateCount - 40n)
-			await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
-
-			for (let index = 1n; index <= splitUpdateCount; index++) {
-				await mockWindow.advanceTime(1n)
-				await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
-			}
+			const secondVaultClient = await setupIdleSecondVaultAfterCollateralUpdates(40n)
 
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
 			const collateralAtZeroUnderwritingLimitAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
@@ -526,18 +505,7 @@ describe('Statoblast: fork migration', () => {
 			await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
 			strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), collateralAtZeroUnderwritingLimitAttoEth, 'collateral should not decay while no vault backs the pool')
 
-			const secondVaultUnderwritingLimitAttoEth = repDeposit / 4n + 3n
-			await setVaultCapacityFixture(secondVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVaultClient.account.address, secondVaultUnderwritingLimitAttoEth)
-
-			const collateralBeforeSecondAccrual = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
-			const retentionRate = await getCurrentRetentionRate(client, securityPoolAddresses.securityPool)
-			const expectedNextSecondDelta = collateralBeforeSecondAccrual - (collateralBeforeSecondAccrual * rpow(retentionRate, 1n, PRICE_PRECISION)) / PRICE_PRECISION
-
-			await mockWindow.advanceTime(1n)
-			await updateVaultFees(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
-
-			const secondVault = await getSecurityVault(secondVaultClient, securityPoolAddresses.securityPool, secondVaultClient.account.address)
-			assert.ok(secondVault.claimableFeesAttoEth <= expectedNextSecondDelta, 'capacity ownership')
+			await assertNewOwnerEarnsOnlyNextAccrual(secondVaultClient)
 		})
 
 		test('redeemCompleteSet exits at the fee-adjusted share exchange rate', async () => {
@@ -633,8 +601,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(0n, await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool), "Parent's original rep is gone")
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 
 			strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Fork Migration need to start')
 			const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
@@ -726,8 +693,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			await migrateShares(firstHolder, securityPoolAddresses.shareToken, genesisUniverse, QuestionOutcome.Yes, [QuestionOutcome.Yes])
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)

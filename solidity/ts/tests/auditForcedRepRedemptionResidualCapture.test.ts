@@ -10,27 +10,16 @@ import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulat
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
-import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixture } from './statoblast/fixture'
+import { describe, test } from 'bun:test'
+import { useStatoblastVaultAccountingFixture } from './statoblast/fixture'
 import { advancePastOrdinaryEscalationDeadline, depositOrdinaryEscalationPrincipals, ordinaryEscalationPrincipals, sweepResidualRep, withdrawFirstDepositOfEachOutcome } from './residualCaptureHelpers'
 
 describe('Audit: forced REP redemption before escalation residual sweep', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 	const { repDeposit } = fixture
 
-	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
-	let client: StatoblastVaultAccountingFixture['client']
-	let securityPoolAddresses: StatoblastVaultAccountingFixture['securityPoolAddresses']
-	let questionId: StatoblastVaultAccountingFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	test('rejects forced redemption and preserves the honest vault share of later ordinary-game residual REP', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)

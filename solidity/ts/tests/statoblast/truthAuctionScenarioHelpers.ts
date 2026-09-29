@@ -61,6 +61,11 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 	statoblastSecurityMultiplierBps,
 	transferRepToAddress,
 }: StatoblastTruthAuctionScenarioContext) {
+	const getYesChildPool = () => {
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		return { yesUniverse, yesSecurityPool: getSecurityPoolAddresses(getFixtureSecurityPoolAddresses().securityPool, yesUniverse, getQuestionId(), statoblastSecurityMultiplierBps) }
+	}
+
 	const finalizeQuestionAsYesWithoutFork = async () => {
 		const client = getClient()
 		const mockWindow = getMockWindow()
@@ -94,6 +99,19 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		await approveToken(effectiveForkingClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(effectiveForkingClient, genesisUniverse, forkSourceQuestionId)
 		return await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+	}
+
+	// Deposits twice the fork threshold, ends the question, refreshes the price, and forks the universe on the pool's own game.
+	const forkOwnGameAfterQuestionEnd = async () => {
+		const client = getClient()
+		const mockWindow = getMockWindow()
+		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
+		const endTime = await getQuestionEndDate(client, getQuestionId())
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 	}
 
 	const setupStartedTruthAuction = async (titlePrefix: string) => {
@@ -230,6 +248,8 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 
 	return {
 		finalizeQuestionAsYesWithoutFork,
+		forkOwnGameAfterQuestionEnd,
+		getYesChildPool,
 		setupFinalizedTruthAuctionWithMixedBids,
 		setupOwnForkWithEscrow,
 		setupStartedTruthAuction,

@@ -11,30 +11,19 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY } from '../testSupport/simulator/utils/constants'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import { getVaultCount, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
 import { backingUnitsToAttoRep as forkerBackingUnitsToAttoRep, getOwnForkRepBuckets } from '../testSupport/simulator/utils/contracts/securityPoolForker'
-import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
+import { useStatoblastEscalationMigrationFixture } from './statoblast/fixture'
 
 describe('Own-fork continuation residual settlement regression', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
 
 	const { genesisUniverse, statoblastSecurityMultiplierBps } = fixture
 
-	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
-	let client: StatoblastEscalationMigrationFixture['client']
-	let securityPoolAddresses: StatoblastEscalationMigrationFixture['securityPoolAddresses']
-	let questionId: StatoblastEscalationMigrationFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	test('burns significant continuation residual when the resolved child has no live owner', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const parentRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const forkThreshold = (((await getTotalTheoreticalSupply(client, parentRepToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		const universeForkThreshold = await getZoltarForkThreshold(client, genesisUniverse)

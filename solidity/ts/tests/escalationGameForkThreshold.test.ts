@@ -50,6 +50,11 @@ describe('Escalation Game Fork Threshold Test', () => {
 	}
 	let questionId: bigint
 
+	const overrideGenesisTheoreticalSupply = async (totalSupply: bigint) => {
+		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
+		await mockWindow.addStateOverrides({ [getZoltarAddress()]: { stateDiff: { [universeSupplySlot]: totalSupply } } })
+	}
+
 	beforeEach(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
@@ -101,14 +106,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		// Lower the tracked universe theoretical supply to make actual fork threshold less than escalationThreshold
 		const newTotalSupply = initialTotalSupply / 10n // reduce to 10% to get significant ratio
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
-		await mockWindow.addStateOverrides({
-			[getZoltarAddress()]: {
-				stateDiff: {
-					[universeSupplySlot]: newTotalSupply,
-				},
-			},
-		})
+		await overrideGenesisTheoreticalSupply(newTotalSupply)
 
 		const actualForkThreshold = newTotalSupply / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		assert.ok(actualForkThreshold < escalationThreshold, 'actual fork threshold should be lower after override')
@@ -289,15 +287,8 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const oddForkThreshold = approximateForkThreshold % 2n === 0n ? approximateForkThreshold + 1n : approximateForkThreshold
 		const overriddenTotalSupply = oddForkThreshold * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const expectedThreshold = (oddForkThreshold + 1n) / 2n
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 
-		await mockWindow.addStateOverrides({
-			[getZoltarAddress()]: {
-				stateDiff: {
-					[universeSupplySlot]: overriddenTotalSupply,
-				},
-			},
-		})
+		await overrideGenesisTheoreticalSupply(overriddenTotalSupply)
 
 		await mockWindow.setTime(questionEndDate + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
@@ -354,14 +345,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		{ name: 'odd', forkThresholdAttoRep: 101n },
 	])('uses ceiling-half non-decision funding boundaries for an $name fork threshold', async ({ forkThresholdAttoRep }) => {
 		const overriddenTotalSupply = forkThresholdAttoRep * DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
-		await mockWindow.addStateOverrides({
-			[getZoltarAddress()]: {
-				stateDiff: {
-					[universeSupplySlot]: overriddenTotalSupply,
-				},
-			},
-		})
+		await overrideGenesisTheoreticalSupply(overriddenTotalSupply)
 
 		const nonDecisionThresholdAttoRep = await client.readContract({
 			abi: Zoltar_Zoltar.abi,

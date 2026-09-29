@@ -61,7 +61,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, transferRepToAddress, triggerExternalForkForSecurityPool } = fixture
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, transferRepToAddress, triggerExternalForkForSecurityPool, getYesChildPool, forkOwnGameAfterQuestionEnd } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -111,35 +111,28 @@ describe('Statoblast: fork migration', () => {
 	}
 
 	describe('vault and REP migration', () => {
-		test('own-fork vault migration preserves checkpointed parent fees', async () => {
+		test.each([
+			{
+				fork: 'own-fork',
+				forkPool: async () => {
+					const endTime = await getQuestionEndDate(client, questionId)
+					const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+					await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+					if ((await mockWindow.getTime()) <= endTime) await mockWindow.setTime(endTime + 1n)
+					await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+					await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+					await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
+				},
+			},
+			{ fork: 'external-fork', forkPool: async () => await triggerExternalForkForSecurityPool(undefined, 'external parent fee checkpoint source') },
+		])('$fork vault migration preserves checkpointed parent fees', async ({ forkPool }) => {
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			const migratingVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveAndDepositRepToVault(migratingVaultClient, repDeposit, questionId)
 			await setVaultCapacityFixture(migratingVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, migratingVaultClient.account.address, securityPoolUnderwritingLimitAttoEth)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
 			await mockWindow.advanceTime(30n * DAY)
-
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			if ((await mockWindow.getTime()) <= endTime) await mockWindow.setTime(endTime + 1n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
-			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-
-			await assertVaultMigrationPreservesParentFees(migratingVaultClient, async () => {
-				await migrateVault(migratingVaultClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			})
-		})
-
-		test('external-fork vault migration preserves checkpointed parent fees', async () => {
-			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
-			const migratingVaultClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-			await approveAndDepositRepToVault(migratingVaultClient, repDeposit, questionId)
-			await setVaultCapacityFixture(migratingVaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, migratingVaultClient.account.address, securityPoolUnderwritingLimitAttoEth)
-			await createCompleteSet(client, securityPoolAddresses.securityPool, 10n * 10n ** 18n)
-			await mockWindow.advanceTime(30n * DAY)
-			await triggerExternalForkForSecurityPool(undefined, 'external parent fee checkpoint source')
+			await forkPool()
 
 			await assertVaultMigrationPreservesParentFees(migratingVaultClient, async () => {
 				await migrateVault(migratingVaultClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -152,8 +145,7 @@ describe('Statoblast: fork migration', () => {
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested child branch at the inclusive external-fork deadline')
 
 			await mockWindow.setTime(migrationDeadline + 1n)
@@ -161,20 +153,13 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('createChildUniverse allows the exact own-fork migration deadline and rejects one second later', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			const { forkTime } = await getUniverseData(client, genesisUniverse)
 			const migrationDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			strictEqualTypeSafe(await getRepToken(client, yesSecurityPool.securityPool), getRepTokenAddress(yesUniverse), 'createChildUniverse should still deploy the requested own-fork child branch at the inclusive migration deadline')
 
 			// Child creation mines at the inclusive deadline; the next transaction is one second later.
@@ -204,17 +189,10 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('migrateRepToZoltar should fund an already-created child pool with pool-held vault REP backing in own-fork mode', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			const ownForkRepBuckets = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 			const poolHeldVaultRepBackingAtForkAttoRep = ownForkRepBuckets.vaultRepAtForkAttoRep
 
@@ -230,13 +208,7 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('migrateRepToZoltar rejects after the migration window closes', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			const migrationDeadline = (await mockWindow.getTime()) + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline + 1n)
 
@@ -256,37 +228,23 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('migrateRepToZoltar allows the exact own-fork migration deadline', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 			const { forkTime } = await getUniverseData(client, genesisUniverse)
 			const migrationDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			const childRepToken = getRepTokenAddress(yesUniverse)
 			const poolBalance = await getERC20Balance(client, childRepToken, yesSecurityPool.securityPool)
 			assert.ok(poolBalance > 0n, 'migrateRepToZoltar should still split child REP at the inclusive migration deadline')
 		})
 
 		test('migrateRepToZoltar rejects once the child branch is already priced', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			await mockWindow.setTime((await mockWindow.getTime()) + 60n * DAY)
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 
@@ -308,8 +266,7 @@ describe('Statoblast: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 
 			await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n, 1n])
 			const vaultAfterEscalationClaim = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
@@ -324,21 +281,14 @@ describe('Statoblast: fork migration', () => {
 		})
 
 		test('migrateVault allows the exact own-fork migration deadline', async () => {
-			const endTime = await getQuestionEndDate(client, questionId)
-			const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
-			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
-			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
+			await forkOwnGameAfterQuestionEnd()
 			const { forkTime } = await getUniverseData(client, genesisUniverse)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			const migrationDeadline = forkTime + 8n * 7n * DAY
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 
 			assert.ok(childVault.repBackingUnits > 0n, 'migrateVault should still migrate backingUnits at the inclusive deadline')
@@ -353,8 +303,7 @@ describe('Statoblast: fork migration', () => {
 			await mockWindow.setTime(migrationDeadline - 1n)
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			assert.ok(childVault.repBackingUnits > 0n, 'migrateVault should still move non-escrowed vault REP backing units at the inclusive external-fork deadline')
 
@@ -389,8 +338,7 @@ describe('Statoblast: fork migration', () => {
 			assert.strictEqual(forkData.ownFork, false, 'this should be a non-own fork')
 
 			const parentSettlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const migrationSnapshot = await mockWindow.anvilSnapshot()
 			const runMigrationOrder = async (firstVaultClient: typeof client, secondVaultClient: typeof client) => {
 				const parentEthBefore = await getETHBalance(client, securityPoolAddresses.securityPool)
@@ -456,8 +404,7 @@ describe('Statoblast: fork migration', () => {
 
 			const parentSettlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const migratedCollateral = await getETHBalance(client, yesSecurityPool.securityPool)
 			const forkData = await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool)
 			const expectedAuctionCollateral = parentSettlementCollateralAtForkAttoEth - migratedCollateral
@@ -573,8 +520,7 @@ describe('Statoblast: fork migration', () => {
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 
 			strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'matching-question child should resolve to its branch outcome')
 		})
@@ -787,8 +733,7 @@ describe('Statoblast: fork migration', () => {
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVaultWithUnresolvedEscalation(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesUniverse, yesSecurityPool } = getYesChildPool()
 			const yesEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 
 			await mockWindow.advanceTime(8n * 7n * DAY + DAY)
@@ -874,8 +819,7 @@ describe('Statoblast: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const parentEthBeforeMigration = await getETHBalance(client, securityPoolAddresses.securityPool)
 			const childEthBeforeMigration = await getETHBalance(client, yesSecurityPool.securityPool)
 			const parentAccruedFeesBeforeMigration = await getTotalAccruedFees(client, securityPoolAddresses.securityPool)
@@ -913,8 +857,7 @@ describe('Statoblast: fork migration', () => {
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 			await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const childVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 			const childRepClaim = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, childVault.repBackingUnits)
 			strictEqualTypeSafe(childRepClaim, expectedChildRepClaim, 'child vault backingUnits should redeem the full migrated vault REP bucket')
@@ -940,8 +883,7 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(ownForkRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep > 0n, 'test setup should include separate dispute-staked REP at fork')
 
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
-			const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-			const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+			const { yesSecurityPool } = getYesChildPool()
 			const parentSettlementCollateralAttoEthBeforeMigration = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			const childEthBeforeMigration = await getETHBalance(client, yesSecurityPool.securityPool)
 
