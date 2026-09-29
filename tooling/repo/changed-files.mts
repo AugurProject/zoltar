@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { type GitRunner, mergeBaseWithMain, runGit } from './git.mts'
 
 const CHANGED_FILE_DIFF_FILTER = 'ACMRTUXB'
 const TEST_PLAN_DIFF_FILTER = `${CHANGED_FILE_DIFF_FILTER}D`
@@ -9,11 +9,7 @@ export type ChangedFileEntry = {
 	status: 'added' | 'deleted' | 'modified' | 'renamed'
 }
 
-function runGit(args: string[]) {
-	return execFileSync('git', args, { encoding: 'utf8' }).trim()
-}
-
-export function getChangedFiles(runGitFn: (args: string[]) => string = runGit) {
+export function getChangedFiles(runGitFn: GitRunner = runGit) {
 	const changedFiles = new Set<string>()
 	const fileLists = [
 		runGitFn(['diff', '--name-only', `--diff-filter=${CHANGED_FILE_DIFF_FILTER}`, 'origin/main...HEAD']),
@@ -59,10 +55,15 @@ const parseNameStatus = (output: string): ChangedFileEntry[] => {
 	return changes
 }
 
-export function getChangedFileEntries(runGitFn: (args: string[]) => string = runGit) {
+/** Paths touched by commits on HEAD since it diverged from `baseRef`, including both sides of renames and copies. */
+export function getCommittedChangedPaths(baseRef: string, runGitFn: GitRunner = runGit) {
+	const changes = parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, `${baseRef}...HEAD`]))
+	return [...new Set(changes.flatMap(change => (change.previousPath === undefined ? [change.path] : [change.previousPath, change.path])))].sort()
+}
+
+export function getChangedFileEntries(runGitFn: GitRunner = runGit) {
 	const changesByPath = new Map<string, ChangedFileEntry>()
-	const mergeBase = runGitFn(['merge-base', 'origin/main', 'HEAD'])
-	if (mergeBase === '') throw new Error('Git could not resolve the merge base of origin/main and HEAD')
+	const mergeBase = mergeBaseWithMain(runGitFn)
 	for (const change of parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, mergeBase]))) changesByPath.set(change.path, change)
 	for (const filePath of runGitFn(['ls-files', '-z', '--others', '--exclude-standard']).split('\0')) {
 		if (filePath !== '') changesByPath.set(filePath, { path: filePath, status: 'added' })

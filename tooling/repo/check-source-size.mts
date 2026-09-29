@@ -1,6 +1,6 @@
-import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { listRepositoryFiles } from './git.mts'
 import { repositoryRoot } from './root.mts'
 import { productionSourceLineLimit, sourceSizeAllowances, type SourceSizeAllowance } from './source-size-policy.ts'
 
@@ -58,7 +58,7 @@ export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowance
 }
 
 function trackedSources(repositoryRoot: string): Map<string, string> {
-	const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: repositoryRoot, encoding: 'utf8' }).split('\0').filter(isProductionSource)
+	const tracked = listRepositoryFiles({ cwd: repositoryRoot }).filter(isProductionSource)
 	return new Map(tracked.map(file => [file, readFileSync(path.join(repositoryRoot, file), 'utf8')]))
 }
 

@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
 import * as url from 'node:url'
+import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
 
 type ManifestProtocolConfig = {
@@ -45,16 +46,6 @@ const deploymentRuntimeOutputPaths = [
 ] as const
 const manifestIds = ['mainnet', 'sepolia'] as const
 type ManifestId = (typeof manifestIds)[number]
-
-async function pathExists(filePath: string) {
-	try {
-		await fs.access(filePath)
-		return true
-	} catch (error) {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
-		throw error
-	}
-}
 
 async function runRepositoryCommand(args: readonly string[], label: string) {
 	const child = Bun.spawn({
