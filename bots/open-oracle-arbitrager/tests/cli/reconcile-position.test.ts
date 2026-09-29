@@ -2,49 +2,17 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getAddress, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
-import { loadPositionJournalState, savePositionJournalState, type PositionRecord } from '#state/position-store'
+import { privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
+import { emptyPositionJournalArchive, loadPositionJournalState, savePositionJournalState, type PositionRecord } from '#state/position-store'
+import { terminalPositionFixture } from '../support/position-record.ts'
 
 const requiredArguments = ['--position-file=/tmp/unused-position-journal.json', '--chain-id=1', '--report-id=7', '--confirm-report-id=7', '--evidence=archived receipts', '--note=manual unwind complete', '--external-cost-eth=0.003', '--final-wallet-weth=4', '--final-wallet-token=5'] as const
 const privateKey = `0x${'00'.repeat(31)}01` as Hex
 const signer = privateKeyToAccount(privateKey).address
 const directories: string[] = []
 
-function terminalPosition(index: number, overrides: Partial<PositionRecord> = {}): PositionRecord {
-	return {
-		account: signer,
-		actualEntryGasCostEth: '0.001',
-		capitalAtRiskWeth: '0',
-		closedAt: '2026-01-01T01:00:00.000Z',
-		direction: 'sell-rep',
-		entryTransactionHash: `0x${'11'.repeat(32)}`,
-		entryTransactionHashes: [`0x${'11'.repeat(32)}`],
-		gasExpenditures: [{ costEth: '0.001', minedAt: '2026-01-01T00:00:00.000Z', transactionHash: `0x${'11'.repeat(32)}` }],
-		historyOutbox: undefined,
-		hedgeAmountToken: '1',
-		hedgeWeth: '1',
-		hedgedProfitBeforeGasEth: '0.1',
-		lifecycleGasCostEth: '0',
-		lifecycleReceiptRecovered: false,
-		lifecycleTargetBlockNumber: undefined,
-		lifecycleTokenDecimals: undefined,
-		lifecycleTransactionHashes: [],
-		lifecycleUpdatedAt: undefined,
-		lifecycleWalletTokenBefore: undefined,
-		lifecycleWalletWethBefore: undefined,
-		lockedToken: '0',
-		lockedWeth: '0',
-		manualReconciliation: undefined,
-		openedAt: '2026-01-01T00:00:00.000Z',
-		realizedNetProfitEth: '0.1',
-		reportId: (index + 1).toString(),
-		status: 'closed',
-		token: getAddress('0x0000000000000000000000000000000000000001'),
-		tokenSymbol: 'REP',
-		withdrawnToken: '1',
-		withdrawnWeth: '1',
-		...overrides,
-	}
+function terminalPosition(index: number, overrides: Partial<PositionRecord> = {}) {
+	return terminalPositionFixture(index, { account: signer, ...overrides })
 }
 
 async function run(arguments_: readonly string[], privateKeyValue?: Hex) {
@@ -83,14 +51,7 @@ test('retains a newly reconciled recovery record when the terminal journal is fu
 		withdrawnToken: '0',
 		withdrawnWeth: '0',
 	})
-	await savePositionJournalState(
-		positionFile,
-		{
-			archived: { gasSpentByUtcDay: {}, hedgedProfitBeforeGasEth: '0', positionCount: 0, realizedNetProfitEth: '0' },
-			positions: [...Array.from({ length: 500 }, (_value, index) => terminalPosition(index)), recovery],
-		},
-		1,
-	)
+	await savePositionJournalState(positionFile, { archived: emptyPositionJournalArchive(), positions: [...Array.from({ length: 500 }, (_value, index) => terminalPosition(index)), recovery] }, 1)
 
 	const result = await run([`--position-file=${positionFile}`, '--chain-id=1', '--report-id=501', '--confirm-report-id=501', '--evidence=archived receipts', '--note=manual unwind complete', '--external-cost-eth=0.003', '--final-wallet-weth=4', '--final-wallet-token=5', '--pnl-unavailable=true'], privateKey)
 	expect(result).toMatchObject({ exitCode: 0, stderr: '' })
