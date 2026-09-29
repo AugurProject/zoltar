@@ -20,7 +20,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/state/operator-state.ts', 1114],
 		['bots/chaos/src/runtime/operator.ts', 870],
 		['bots/chaos/src/monitoring/topology-cache.ts', 953],
-		['bots/chaos/src/dashboard/dashboard-server.ts', 979],
+		['bots/chaos/src/dashboard/dashboard-server.ts', 966],
 		['bots/chaos/src/state/protocol-index-store.ts', 908],
 		['bots/chaos/src/operations/open-oracle.ts', 1024],
 		['bots/chaos/src/execution/recovery.ts', 643],
@@ -30,7 +30,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1173],
 		['bots/open-oracle-arbitrager/src/runtime/operator.ts', 979],
 		['bots/liquidator/src/dashboard/dashboard.ts', 891],
-		['bots/liquidator/src/cli/run.ts', 714],
+		['bots/liquidator/src/cli/run.ts', 696],
 		['bots/liquidator/src/state/operator-state.ts', 645],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [

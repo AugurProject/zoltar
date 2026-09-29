@@ -2,7 +2,7 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
 import { formatMultiplier, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatUnderwritingLimits, formatMintingCapacity } from '../lib/format.js'
+import { formatEthAmountPair } from '../lib/format.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -113,7 +113,7 @@ export function LiveSecurityPoolDetails({
 										)}
 									</MetricField>
 									{market.questionOutcome === 3 ? undefined : <MetricField label={liveCopy.outcome}>{questionOutcomeLabel(market.questionOutcome)}</MetricField>}
-									<MetricField label={liveCopy.mintingCapacity}>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
+									<MetricField label={liveCopy.mintingCapacity}>{formatEthAmountPair(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
 								</DataGrid>
 							</div>
 							{market.pair === undefined ? (
@@ -136,7 +136,7 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
-									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatUnderwritingLimits(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
+									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
 							<BackingDetails market={market} />

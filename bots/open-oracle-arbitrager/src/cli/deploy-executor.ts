@@ -3,7 +3,8 @@ import { canonicalExecutorSalt } from '#execution/executor-identity'
 
 import { privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 import { defaultConfigurationFile } from '#config/configuration'
-import { loadOperatorSettings, operatorProfilePath } from '#config/settings-store'
+import { networkProfilePath } from '@zoltar/bot-shared/config/profiles'
+import { loadOperatorSettings } from '#config/settings-store'
 import { defaultRpcUrl, networkConfiguration, parseNetworkName } from '#config/network'
 import { deployExecutorCreate2 } from '#execution/create2-executor'
 import { executorDeploymentPlan } from '#execution/executor-deployment-primitives'
@@ -48,7 +49,7 @@ const rpcUrl = option('rpc-url') ?? process.env['ETH_RPC_URL'] ?? defaultRpcUrl(
 const quorumRpcUrls = options('quorum-rpc-url')
 const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)
 const activeSettings = await loadOperatorSettings(settingsFile)
-const selectedSettings = activeSettings?.network === networkName ? activeSettings : await loadOperatorSettings(operatorProfilePath(settingsFile, networkName))
+const selectedSettings = activeSettings?.network === networkName ? activeSettings : await loadOperatorSettings(networkProfilePath(settingsFile, networkName))
 if (selectedSettings !== undefined && selectedSettings.network !== networkName) throw new Error(`The ${networkName} profile contains ${selectedSettings.network} settings`)
 const rpcQuorum = selectedSettings?.rpcQuorum ?? 1
 process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()

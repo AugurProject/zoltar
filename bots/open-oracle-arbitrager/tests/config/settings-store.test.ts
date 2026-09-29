@@ -9,7 +9,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
-import { CONFIGURATION_REVISION_CONFLICT, durableJournalPaths, loadOperatorSettings, loadOperatorSettingsWithRevision, operatorProfilePath, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile } from '#config/settings-store'
+import { CONFIGURATION_REVISION_CONFLICT, durableJournalPaths, loadOperatorSettings, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile } from '#config/settings-store'
+import { networkProfilePath } from '@zoltar/bot-shared/config/profiles'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { parseSettlementSettings, settlementJournalPath } from '#state/settlement-store'
 
@@ -141,12 +142,12 @@ describe('operator settings persistence', () => {
 			runtime: { ...mainnet.runtime, historyFile: reservedPath, positionFile: join(directory, 'sepolia-positions.json'), priceHistoryFile: join(directory, 'sepolia-prices.jsonl') },
 		}
 		await saveOperatorSettings(path, mainnet)
-		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
+		await saveOperatorSettings(networkProfilePath(path, 'sepolia'), sepolia)
 		const activeBefore = await readFile(path, 'utf8')
-		const targetBefore = await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')
+		const targetBefore = await readFile(networkProfilePath(path, 'sepolia'), 'utf8')
 		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Durable journal paths must not reuse configuration, profile, or executor deployment intent files')
 		expect(await readFile(path, 'utf8')).toBe(activeBefore)
-		expect(await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
+		expect(await readFile(networkProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
 	})
 
 	test('defaults existing configuration files to the primary-reader RPC policy', () => {
@@ -303,7 +304,7 @@ describe('operator settings persistence', () => {
 			runtime: { ...mainnet.runtime, historyFile: join(durableAlias, 'sepolia-history.jsonl'), positionFile: join(durableAlias, 'sepolia-positions.json'), priceHistoryFile: join(durableAlias, 'mainnet-positions.json.settlements') },
 		}
 		await saveOperatorSettings(path, mainnet)
-		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
+		await saveOperatorSettings(networkProfilePath(path, 'sepolia'), sepolia)
 		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable journal paths')
 		expect((await loadOperatorSettings(path))?.network).toBe('mainnet')
 	})

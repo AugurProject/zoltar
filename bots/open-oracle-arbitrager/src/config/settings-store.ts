@@ -336,7 +336,6 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 }
 
 /** Preset chain profiles live beside the active configuration file. */
-export const operatorProfilePath = networkProfilePath
 
 const operatorNetwork = (settings: PersistedOperatorSettings) => settings.network
 
@@ -352,12 +351,12 @@ async function assertOperatorProfileCandidates(path: string, candidates: readonl
 			duplicatePathsWithinProfile: candidate => `The ${candidate.expected} profile must use distinct durable journal paths`,
 			reservedPathReuse: 'Durable journal paths must not reuse configuration, profile, or executor deployment intent files',
 		},
-		reservedPaths: [path, operatorProfilePath(path, 'mainnet'), operatorProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path, 'mainnet'), executorDeploymentIntentPath(path, 'sepolia')],
+		reservedPaths: [path, networkProfilePath(path, 'mainnet'), networkProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path, 'mainnet'), executorDeploymentIntentPath(path, 'sepolia')],
 	})
 }
 
 export async function assertOperatorProfileIsolation(path: string, active: PersistedOperatorSettings) {
-	const { candidates } = await storedNetworkProfileCandidates(active, operatorNetwork, network => loadOperatorSettings(operatorProfilePath(path, network)))
+	const { candidates } = await storedNetworkProfileCandidates(active, operatorNetwork, network => loadOperatorSettings(networkProfilePath(path, network)))
 	await assertOperatorProfileCandidates(path, candidates)
 }
 
@@ -391,12 +390,12 @@ export async function switchOperatorNetworkProfile(path: string, network: Networ
 			}
 		},
 		current,
-		loadProfile: network => loadOperatorSettings(operatorProfilePath(path, network)),
+		loadProfile: network => loadOperatorSettings(networkProfilePath(path, network)),
 		network,
 		networkOf: operatorNetwork,
 		preflight,
 		saveActive: (settings, expectedRevision) => saveOperatorSettings(path, settings, undefined, expectedRevision),
-		saveProfile: (network, settings) => saveOperatorSettings(operatorProfilePath(path, network), settings),
+		saveProfile: (network, settings) => saveOperatorSettings(networkProfilePath(path, network), settings),
 	})
 }
 
