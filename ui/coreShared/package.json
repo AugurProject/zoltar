@@ -1042,6 +1042,10 @@
 		"./tests/components/universeBrowser.test.js": {
 			"bun": "./ts/tests/components/universeBrowser.test.tsx",
 			"default": "./js/tests/components/universeBrowser.test.js"
+		},
+		"./tests/components/universeLink.test.js": {
+			"bun": "./ts/tests/components/universeLink.test.tsx",
+			"default": "./js/tests/components/universeLink.test.js"
 		}
 	},
 	"version": "1.0.0"

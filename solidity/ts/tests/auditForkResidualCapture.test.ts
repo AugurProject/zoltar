@@ -1,98 +1,32 @@
-import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
-import { depositRepToVault, depositToEscalationGame, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../testSupport/simulator/utils/contracts/securityPool'
-import { forkUniverse, getRepTokenAddress, getZoltarAddress, getZoltarForkThreshold, getTotalTheoreticalSupply } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createChildUniverse, initiateSecurityPoolFork, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
-import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import { depositRepToVault, getSecurityPoolsEscalationGame, getSecurityVault, backingUnitsToAttoRep, getTotalRepBackingUnits, getTotalPoolHeldAttoRep, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getTotalTheoreticalSupply, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
-import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
-import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
-import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { addressString } from '../testSupport/simulator/utils/bigint'
-import { approveToken, getChildUniverseId, getERC20Balance } from '../testSupport/simulator/utils/utilities'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { approveToken, getERC20Balance } from '../testSupport/simulator/utils/utilities'
+import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import { createCarryProof, SparseNullifierTree } from './carryProofHelpers'
-import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
-import { getTotalRepBackingUnits, getTotalPoolHeldAttoRep, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
-import { splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
-import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import { useStatoblastEscalationMigrationFixture } from './statoblast/fixture'
+import { activateContinuationWithoutAuction, createYesContinuationChild, escrowParentVaultBelowNonDecisionThreshold, forkGenesisUniverseExternally, sweepResidualRep } from './residualCaptureHelpers'
 
 describe('Fork-continuation residual settlement regression', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
-	const { genesisUniverse, statoblastSecurityMultiplierBps, outcomes } = fixture
-
-	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
-	let client: StatoblastEscalationMigrationFixture['client']
-	let securityPoolAddresses: StatoblastEscalationMigrationFixture['securityPoolAddresses']
-	let questionData: StatoblastEscalationMigrationFixture['questionData']
-	let questionId: StatoblastEscalationMigrationFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionData = fixture.questionData
-		questionId = fixture.questionId
-	})
 
 	test('burns external-fork continuation residual instead of assigning it to a late depositor', async () => {
-		const forkThreshold = await getZoltarForkThreshold(client, genesisUniverse)
-		const nonDecisionThreshold = forkThreshold / 2n + (forkThreshold % 2n)
-		const invalidPrincipal = nonDecisionThreshold - 3n
-		const noPrincipal = nonDecisionThreshold - 2n
-		const yesPrincipal = nonDecisionThreshold - 1n
-		const totalPrincipal = invalidPrincipal + noPrincipal + yesPrincipal
-
-		const parentVaultBeforeTopUp = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const parentRepBeforeTopUp = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, parentVaultBeforeTopUp.repBackingUnits)
-		assert.ok(parentRepBeforeTopUp < totalPrincipal, 'fixture vault must fit below the audit target')
-		await approveAndDepositRepToVault(client, totalPrincipal - parentRepBeforeTopUp, questionId)
-		const questionEnd = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(questionEnd + 10_000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, invalidPrincipal)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, noPrincipal)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, yesPrincipal)
-		strictEqualTypeSafe(await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool), 0n, 'all parent REP backing units must be escrowed')
-		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'all parent pool-held REP must be held by the escalation game')
+		const { mockWindow, client, securityPoolAddresses, genesisUniverse } = fixture
+		const { nonDecisionThreshold, noPrincipal, yesPrincipal, totalPrincipal } = await escrowParentVaultBelowNonDecisionThreshold(fixture)
 
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		const externalForkQuestion = {
-			...questionData,
-			title: 'audit external fork for zero-owner residual capture',
-			endTime: (await mockWindow.getTime()) + DAY,
-		}
-		const externalForkQuestionId = getQuestionId(externalForkQuestion, outcomes)
-		await createQuestion(forkInitiator, externalForkQuestion, outcomes)
-		await mockWindow.setTime(externalForkQuestion.endTime + 1n)
-		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(forkInitiator, genesisUniverse, externalForkQuestionId)
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-
-		const childUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
-		const childRepToken = getRepTokenAddress(childUniverse)
-		const childGame = await getSecurityPoolsEscalationGame(client, childPool.securityPool)
-		const seedRep = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: childPool.securityPool,
-			functionName: 'minimumVaultRepDepositAttoRep',
-			args: [],
-		})
+		await forkGenesisUniverseExternally(fixture, forkInitiator, 'audit external fork for zero-owner residual capture')
+		const { childPool, childRepToken, childGame, seedRep } = await createYesContinuationChild(fixture)
 		await splitMigrationRep(forkInitiator, genesisUniverse, seedRep, [QuestionOutcome.Yes])
 		await approveToken(forkInitiator, childRepToken, childPool.securityPool)
 
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, childPool.securityPool)
-		strictEqualTypeSafe(await getSystemState(client, childPool.securityPool), SystemState.Operational, 'zero pool-held REP must skip the auction and activate the continuation')
+		await activateContinuationWithoutAuction(fixture, childPool.securityPool)
 		strictEqualTypeSafe(await getTotalRepBackingUnits(client, childPool.securityPool), 0n, 'the activated child must begin without an owner')
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, childPool.securityPool), 0n, 'continuation backing must remain in the game, outside pool backing claims')
 
@@ -132,13 +66,7 @@ describe('Fork-continuation residual settlement regression', () => {
 		const expectedResidual = totalPrincipal - yesPrincipal - rewardBonus - winnerHaircut
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), expectedResidual, 'the lower losing side must remain as sweepable continuation residual')
 		const theoreticalSupplyBeforeSweep = await getTotalTheoreticalSupply(client, childRepToken)
-		const sweepHash = await client.writeContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: childGame,
-			functionName: 'sweepResidualRepToSecurityPool',
-			args: [],
-		})
-		const sweepReceipt = await client.waitForTransactionReceipt({ hash: sweepHash })
+		const sweepReceipt = await sweepResidualRep(client, childGame)
 		const sweepEventNames = sweepReceipt.logs
 			.filter(log => log.address.toLowerCase() === childGame.toLowerCase())
 			.map(

@@ -15,6 +15,7 @@ import type { SettlementSelectedBid } from '@zoltar/ui-zoltar-shared/features/ty
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 
 const walletAddress: Address = '0x0000000000000000000000000000000000000001'
 const otherWalletAddress: Address = '0x0000000000000000000000000000000000000002'
@@ -46,11 +47,6 @@ const refundDisposition: TruthAuctionBidDisposition = {
 	settlementKind: 'ethRefund',
 	summaryKind: 'refundable',
 	tone: 'danger',
-}
-
-function requireHookState<T>(state: T | undefined) {
-	if (state === undefined) throw new Error('Hook state is unavailable')
-	return state
 }
 
 function requireHarnessSetter<T>(setter: HarnessSetter<T> | undefined) {

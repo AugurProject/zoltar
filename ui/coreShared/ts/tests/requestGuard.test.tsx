@@ -4,14 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { installDomEnvironment } from './testUtils/domEnvironment.js'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { createExclusiveWorkflowGuard, createLatestRequestGuard, useRequestGuard } from '../lib/requestGuard.js'
-
-function deferred<T>() {
-	let resolvePromise: (value: T) => void = () => undefined
-	const promise = new Promise<T>(resolve => {
-		resolvePromise = resolve
-	})
-	return { promise, resolve: resolvePromise }
-}
+import { createDeferred } from './testUtils/deferred.js'
 
 describe('request guard', () => {
 	let cleanupDom: (() => void) | undefined
@@ -52,9 +45,9 @@ describe('request guard', () => {
 
 	test('discards invalidated and out-of-order asynchronous completions', async () => {
 		const guard = createLatestRequestGuard()
-		const firstResponse = deferred<string>()
+		const firstResponse = createDeferred<string>()
 		const firstRequest = guard.begin()
-		const secondResponse = deferred<string>()
+		const secondResponse = createDeferred<string>()
 		const secondRequest = guard.begin()
 		let visibleValue: string | undefined
 		const firstCompletion = firstResponse.promise.then(value => {
@@ -86,7 +79,7 @@ describe('request guard', () => {
 
 	test('prevents duplicate asynchronous work while the first preflight is pending', async () => {
 		const guard = createExclusiveWorkflowGuard()
-		const preflight = deferred<void>()
+		const preflight = createDeferred<void>()
 		let writes = 0
 		const submit = async () => {
 			if (!guard.begin()) return

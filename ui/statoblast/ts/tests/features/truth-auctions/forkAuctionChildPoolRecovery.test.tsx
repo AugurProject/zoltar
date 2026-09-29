@@ -11,14 +11,14 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
 import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createForkAuctionForm, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
-const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const YES_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f1'
 const YES_TRUTH_AUCTION_ADDRESS: Address = '0x0000000000000000000000000000000000000aa1'
 const NO_CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f2'
@@ -56,36 +56,6 @@ await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => (
 }))
 
 const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
-
-function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): ForkAuctionFormState {
-	return {
-		claimBidIndex: '',
-		claimBidTick: '',
-		depositIndexes: '',
-		directForkQuestionId: '',
-		directForkUniverseId: '',
-		refundBidIndex: '',
-		refundTick: '',
-		repMigrationOutcomes: '',
-		securityPoolAddress: PARENT_POOL_ADDRESS,
-		selectedOutcome: 'yes',
-		settlementAddress: '',
-		submitBidAmount: '',
-		submitBidPrice: '',
-		vaultAddress: '',
-		...overrides,
-	}
-}
 
 function createParentDetails(): ForkAuctionDetails {
 	return {

@@ -2,10 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { createPublicClient, createWalletClient, custom, decodeFunctionData, encodeAbiParameters, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
+import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -40,36 +41,8 @@ const shareTransferAbi = [
 		outputs: [],
 	},
 ] as const
-const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
-const market: LiveMarket = {
-	pool,
-	pair,
-	shareToken,
-	universeId: 1n,
-	questionId: 2n,
-	title: 'Guarded writes',
-	description: 'Wallet context fixture',
-	endTime: 2n ** 255n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 100n,
-	settlementCollateralAttoEth: 100n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 100n,
-	availableMintingCapacityAttoEth: 100n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
-	yesReserve: 50n,
-	noReserve: 50n,
-	lpTotalSupply: 50n,
-}
+const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
+const market = smallReserveMarketFixture({ pool, pair, shareToken, title: 'Guarded writes', description: 'Wallet context fixture' })
 
 const uint256 = { type: 'uint256' } as const
 const address = { type: 'address' } as const

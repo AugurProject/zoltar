@@ -10,19 +10,18 @@ import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '../testUtils/queries.js'
 import { renderIntoDocument } from '../testUtils/renderIntoDocument.js'
 import { installTestRouting } from '../testUtils/testRouting.js'
+import { createUniverseSummary } from '../testUtils/universeFixtures.js'
 
 const yesUniverseId = 11n
 const alphaUniverseId = 21n
 const betaUniverseId = 22n
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
+	return createUniverseSummary({
 		childUniverses: [
 			{ exists: true, forkTime: 0n, outcomeIndex: 1n, outcomeLabel: 'Alpha', parentUniverseId: yesUniverseId, reputationToken: zeroAddress, reputationTokenSymbol: 'REPa', universeId: alphaUniverseId },
 			{ exists: false, forkTime: 0n, outcomeIndex: 2n, outcomeLabel: 'Beta', parentUniverseId: yesUniverseId, reputationToken: zeroAddress, universeId: betaUniverseId },
 		],
-		forkQuestionDetails: undefined,
-		forkThresholdAttoRep: 1n,
 		forkTime: 1n,
 		forkingOutcomeIndex: 1n,
 		hasForked: true,
@@ -30,14 +29,12 @@ function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarU
 			{ outcomeLabel: undefined, universeId: 0n },
 			{ outcomeLabel: 'Yes', universeId: yesUniverseId },
 		],
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
 		reputationTokenName: 'Fork YES Reputation',
 		reputationTokenSymbol: 'YESREP',
 		totalTheoreticalSupplyAttoRep: 10n ** 18n,
 		universeId: yesUniverseId,
 		...overrides,
-	}
+	})
 }
 
 installTestRouting()

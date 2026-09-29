@@ -2,8 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -61,12 +60,6 @@ function createUniverseSummary(overrides: Partial<ZoltarUniverseSummary> = {}): 
 		universeId: 1n,
 		...overrides,
 	}
-}
-
-function requireHookState(state: UseTradingOperationsState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
 }
 
 function createHarness(
@@ -137,22 +130,7 @@ function createTradingOperationsDependencies(overrides: Partial<UseTradingOperat
 }
 
 describe('useTradingOperations', () => {
-	let resetEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
 
 	test('disabling pool reads clears stale errors and discards an outstanding decode failure', async () => {
 		let hookState: UseTradingOperationsState | undefined
@@ -167,7 +145,7 @@ describe('useTradingOperations', () => {
 			createTradingOperationsDependencies({ loadTradingDetails }),
 		)
 		const rendered = await renderIntoDocument(<Harness enabled={false} />)
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		expect(loadTradingDetails).not.toHaveBeenCalled()
 		await act(() => render(<Harness enabled />, rendered.container))
 		await waitFor(() => expect(loadTradingDetails).toHaveBeenCalledTimes(1))
@@ -211,7 +189,7 @@ describe('useTradingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setTradingForm(current => ({
@@ -259,7 +237,7 @@ describe('useTradingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setTradingForm(current => ({
@@ -317,7 +295,7 @@ describe('useTradingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setTradingForm(current => ({ ...current, completeSetAmount: '1.999999999999999999' }))
@@ -379,7 +357,7 @@ describe('useTradingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setTradingForm(current => ({
@@ -478,7 +456,7 @@ describe('useTradingOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(TradingOperationsHarness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await waitFor(() => expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeA.universeId))
 		await waitFor(() => expect(requireHookState(hookState).tradingForkUniverse?.universeId).toBe(universeA.universeId))
@@ -595,7 +573,7 @@ describe('useTradingOperations', () => {
 		}
 
 		const renderedComponent = await renderIntoDocument(h(TradingOperationsHarness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await waitFor(() => expect(requireHookState(hookState).tradingDetails?.universeId).toBe(universeA.universeId))
 
@@ -644,8 +622,7 @@ describe('useTradingOperations', () => {
 	})
 
 	test('does not request a mint transaction when the active wallet account changed', async () => {
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 
 		const createCompleteSetInSecurityPool = mock(async () => {
 			throw new Error('createCompleteSetInSecurityPool should not be called when the active wallet account changed')
@@ -684,7 +661,7 @@ describe('useTradingOperations', () => {
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		getWalletEthBalance.mockClear()
 		loadTradingDetails.mockClear()
 		loadZoltarUniverseSummary.mockClear()
@@ -712,8 +689,7 @@ describe('useTradingOperations', () => {
 	})
 
 	test('does not request a share-migration transaction when the active wallet account changed', async () => {
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 
 		const migrateSharesFromUniverse = mock(async () => {
 			throw new Error('migrateSharesFromUniverse should not be called when the active wallet account changed')
@@ -765,7 +741,7 @@ describe('useTradingOperations', () => {
 			{ onTransactionRequested },
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		getWalletEthBalance.mockClear()
 		loadTradingDetails.mockClear()
 		loadZoltarUniverseSummary.mockClear()

@@ -7,38 +7,20 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { LiveMarketBrowser } from '../../features/LiveMarketBrowser.js'
 import { getRememberableMarket, marketDownloadStore, partitionFavoriteMarkets, selectBrowseMarkets, selectMarketCacheUpdates } from '../../lib/favoriteMarkets.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
+import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
 function createMarket(index: number, overrides: Partial<LiveMarket> = {}): LiveMarket {
-	return {
-		availableMintingCapacityAttoEth: 100n,
-		awaitingForkContinuation: false,
-		currentRetentionRate: 10n ** 18n,
+	return smallReserveMarketFixture({
 		description: 'Favorite market fixture',
 		endTime: 2n ** 70n,
-		feeBps: 30n,
-		feeEligibleUnderwritingLimitAttoEth: 1n,
-		initialReportPriorityFeeAttoEthPerGas: 1n,
-		lpTotalSupply: 50n,
-		mintingCapacityCeilingAttoEth: 100n,
-		noReserve: 50n,
 		pair: getAddress(`0x${(index + 0x100).toString(16).padStart(40, '0')}`),
 		pool: getAddress(`0x${index.toString(16).padStart(40, '0')}`),
 		questionId: BigInt(index),
-		questionOutcome: 3,
-		settlementCollateralAttoEth: 100n,
 		shareToken: getAddress(`0x${(index + 0x200).toString(16).padStart(40, '0')}`),
-		shareTokenSupplyAttoShares: 100n,
-		statoblastSecurityMultiplierBps: 20_000n,
-		systemState: 0,
 		title: `Market ${index.toString()}`,
-		totalUnderwritingLimitAttoEth: 1n,
 		tradingStatus: 6,
-		universeForkTime: 0n,
-		universeId: 1n,
-		vaultCount: 1n,
-		yesReserve: 50n,
 		...overrides,
-	}
+	})
 }
 
 describe('favorite markets', () => {

@@ -12,10 +12,11 @@ import type { ForkAuctionDetails, ListedSecurityPool, TruthAuctionBidView, Truth
 import { getTruthAuctionBidDisposition } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createForkAuctionForm, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
@@ -24,7 +25,6 @@ type TruthAuctionSettlementHookState = ReturnType<typeof import('@zoltar/ui-stat
 
 const ONE_UNIT = 10n ** 18n
 const HALF_UNIT = 5n * 10n ** 17n
-const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f7'
 const TRUTH_AUCTION_ADDRESS: Address = '0x00000000000000000000000000000000000000f8'
 const CONNECTED_WALLET: Address = '0x00000000000000000000000000000000000000aa'
@@ -59,36 +59,6 @@ await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/features/truth-auctio
 }))
 
 const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
-
-function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): ForkAuctionFormState {
-	return {
-		claimBidIndex: '',
-		claimBidTick: '',
-		depositIndexes: '',
-		directForkQuestionId: '',
-		directForkUniverseId: '',
-		refundBidIndex: '',
-		refundTick: '',
-		repMigrationOutcomes: '',
-		securityPoolAddress: PARENT_POOL_ADDRESS,
-		selectedOutcome: 'yes',
-		settlementAddress: '',
-		submitBidAmount: '',
-		submitBidPrice: '',
-		vaultAddress: '',
-		...overrides,
-	}
-}
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {

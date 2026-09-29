@@ -2,9 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { LiquidationApprovalDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -44,27 +42,8 @@ function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSe
 	}
 }
 
-function requireHookState(state: UseSecurityPoolsOverviewState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
-}
-
 describe('useSecurityPoolsOverview queueLiquidation', () => {
-	let restoreActiveEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			restoreActiveEnvironment?.()
-			restoreActiveEnvironment = undefined
-			mock.restore()
-		},
-	})
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
 
 	test('uses the supplied initial price for liquidation funding and submission', async () => {
 		const price = 3n * 10n ** 18n
@@ -80,7 +59,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(async () => {
 			requireHookState(state).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n)
 			requireHookState(state).setLiquidationAmount('1')
@@ -103,7 +82,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const Harness = createHarness(dependencies, next => {
 			state = next
 		})
-		cleanupRenderedComponent = (await renderIntoDocument(h(Harness, {}))).cleanup
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
 		await act(() => {
 			requireHookState(state).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
 		})
@@ -143,7 +122,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -186,7 +165,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -235,7 +214,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -272,7 +251,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -314,7 +293,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -371,7 +350,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -437,7 +416,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
@@ -520,7 +499,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		})
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -591,7 +570,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		})
 
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -641,7 +620,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			},
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -694,7 +673,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
@@ -732,7 +711,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			hookState = state
 		})
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)

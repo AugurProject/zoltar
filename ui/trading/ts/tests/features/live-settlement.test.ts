@@ -1,16 +1,17 @@
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, decodeFunctionData, decodeFunctionResult, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
-import { simulateSettlement, submitFreshSettlement, type LiveMarket } from '../../protocol/live.js'
+import { simulateSettlement, submitFreshSettlement } from '../../protocol/live.js'
 import { receiveBasedExitArguments } from '../../protocol/authorization.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { forkedMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const shareToken = `0x${'22'.repeat(20)}` as Address
 const pool = `0x${'33'.repeat(20)}` as Address
 const transactionHash = `0x${'44'.repeat(32)}` as Hex
 const blockHash = `0x${'55'.repeat(32)}` as Hex
-const configuration: DeploymentConfiguration = { chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}`, feeBps: 30 }
+const configuration = deploymentConfigurationFixture({ chainId: 1, chainName: 'Test', rpcUrl: 'http://localhost', factory: `0x${'88'.repeat(20)}`, router: `0x${'99'.repeat(20)}` })
 const migrateAbi = [
 	{
 		type: 'function',
@@ -48,35 +49,7 @@ function decodeReceiveRequest(data: Hex) {
 	})
 }
 
-const market: LiveMarket = {
-	pool,
-	pair: undefined,
-	shareToken,
-	universeId: 7n,
-	questionId: 8n,
-	title: 'Forked market',
-	description: 'Encoding fixture',
-	endTime: 1n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 1,
-	awaitingForkContinuation: false,
-	universeForkTime: 1n,
-	vaultCount: 0n,
-	shareTokenSupplyAttoShares: 0n,
-	settlementCollateralAttoEth: 0n,
-	currentRetentionRate: 0n,
-	totalUnderwritingLimitAttoEth: 0n,
-	feeEligibleUnderwritingLimitAttoEth: 0n,
-	mintingCapacityCeilingAttoEth: 0n,
-	availableMintingCapacityAttoEth: 0n,
-	feeBps: 30n,
-	tradingStatus: 4,
-	questionOutcome: 3,
-	yesReserve: 0n,
-	noReserve: 0n,
-	lpTotalSupply: 0n,
-}
+const market = forkedMarketFixture({ pool, shareToken, description: 'Encoding fixture' })
 
 function requireTransactionData(params: unknown) {
 	if (!Array.isArray(params)) throw new Error('RPC parameters must be an array')

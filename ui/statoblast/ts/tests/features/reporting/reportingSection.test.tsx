@@ -21,6 +21,7 @@ import { signal } from '@preact/signals'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 const ATTO_REP = 10n ** 18n
 
@@ -49,16 +50,6 @@ function getEscalationMetricsSection() {
 
 function getReportOutcomeSection() {
 	return getClosestSection(within(document.body).getByRole('heading', { name: 'Report outcome' }))
-}
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
 }
 
 function createMarketDetails(overrides: Partial<MarketDetails> = {}): MarketDetails {

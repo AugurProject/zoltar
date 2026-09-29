@@ -4,50 +4,24 @@ import { render } from 'preact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import { largestExitForLongShares } from '@zoltar/trading-shared/trading/positions'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { buttonByLabel, waitForDom } from '../support/dom.js'
+import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
 const pair = `0x${'33'.repeat(20)}` as Address
 const shareToken = `0x${'44'.repeat(20)}` as Address
-const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory: `0x${'77'.repeat(20)}`, factory: `0x${'55'.repeat(20)}`, router: `0x${'66'.repeat(20)}`, feeBps: 30 }
+const configuration = deploymentConfigurationFixture()
 
 // One attoETH of collateral is worth 10^18 attoShares, mirroring the SecurityPool genesis rate that makes raw share counts unreadable.
-const market: LiveMarket = {
-	pool,
-	pair,
-	shareToken,
-	universeId: 1n,
-	questionId: 2n,
-	title: 'Background fixture market',
-	description: 'Background refresh fixture',
-	endTime: 2n ** 255n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-	settlementCollateralAttoEth: 10n * 10n ** 18n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 2n,
-	availableMintingCapacityAttoEth: 1n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
-	yesReserve: 50n * 10n ** 18n,
-	noReserve: 50n * 10n ** 18n,
-	lpTotalSupply: 50n * 10n ** 18n,
-}
+const market = etherScaleMarketFixture({ pool, pair, shareToken, title: 'Background fixture market', description: 'Background refresh fixture' })
 
 // Stands in for the chain: reports a new block every interval so the block-driven background refresh runs.
 function produceBlocks(milliseconds: number) {
@@ -64,20 +38,6 @@ async function settle(milliseconds = 10) {
 	await act(async () => {
 		await Bun.sleep(milliseconds)
 	})
-}
-
-async function waitForDom(predicate: () => boolean, description: string) {
-	for (let attempt = 0; attempt < 200; attempt++) {
-		await settle()
-		if (predicate()) return
-	}
-	throw new Error(`Timed out waiting for ${description}. Rendered text: ${document.body.textContent}`)
-}
-
-function button(label: string) {
-	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
-	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
-	return match
 }
 
 function actionFeedback() {
@@ -168,7 +128,7 @@ describe('live market refresh', () => {
 		stopBlocks = produceBlocks(40)
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onWalletSummaryChange={observeWallet} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => button('Connect wallet').click())
+		await act(async () => buttonByLabel('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
 		// The lookup instruction belongs to the landing list, not to an opened market.
 		expect(document.body.textContent).not.toContain('Open a market by security pool address')
@@ -208,39 +168,39 @@ describe('live market refresh', () => {
 		}
 		await typeAmount('0.01')
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
-		expect(button('Buy YES').disabled).toBeFalse()
+		expect(buttonByLabel('Buy YES').disabled).toBeFalse()
 		const estimateBeforeMove = document.querySelector('.transaction-review-primary')?.textContent
 		discoveredMarket = { ...discoveredMarket, yesReserve: 30n * 10n ** 18n }
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent !== estimateBeforeMove, 'estimate re-priced after reserve change')
 
 		// Sells are entered in shares, with shortcuts, and priced locally before the chain is asked.
-		await act(async () => button('Sell').click())
+		await act(async () => buttonByLabel('Sell').click())
 		expect(amountInput.value).toBe('')
 		expect(document.body.textContent).toContain('You hold 3 YES')
-		expect(['25%', '50%', 'Max'].every(label => button(label) instanceof HTMLButtonElement)).toBeTrue()
+		expect(['25%', '50%', 'Max'].every(label => buttonByLabel(label) instanceof HTMLButtonElement)).toBeTrue()
 		await typeAmount('0.5')
 		await waitForDom(() => document.querySelector('.transaction-review-primary')?.textContent?.includes('You sell') === true, 'exit estimate')
 		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 17n })
 		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
 		const discoveriesBeforeSubmit = discoveries
-		await act(async () => button('Sell YES').click())
+		await act(async () => buttonByLabel('Sell YES').click())
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error') !== null, 'price-moved notice')
 		expect(exitRequests).toEqual([expectedCompleteSets])
 		expect(document.querySelector('[role="tabpanel"] .notice.error')?.textContent).toContain('The price moved since your estimate')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
 		await typeAmount('0.0000000000000000001')
 		expect(actionFeedback()).toContain('Enter a share amount with at most 18 decimal places.')
-		expect(button('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
-		expect(button('Sell YES').disabled).toBeTrue()
+		expect(buttonByLabel('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
+		expect(buttonByLabel('Sell YES').disabled).toBeTrue()
 		await typeAmount('9')
 		expect(actionFeedback()).toContain('Insufficient YES balance.')
 		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-notice')).toHaveLength(1)
-		expect(button('Sell YES').disabled).toBeTrue()
+		expect(buttonByLabel('Sell YES').disabled).toBeTrue()
 
 		// Simulation failures stay beside the action instead of only at the top of the route.
 		failExitSimulation = true
 		await typeAmount('0.25')
-		await act(async () => button('Sell YES').click())
+		await act(async () => buttonByLabel('Sell YES').click())
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.error')?.textContent?.includes('receiver rejected tokens') === true, 'simulation failure beside the action')
 		// The failure is announced once beside the action; no route-level or status duplicate repeats it.
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('receiver rejected tokens') === true)).toHaveLength(1)
@@ -274,7 +234,7 @@ describe('live market refresh', () => {
 		stopBlocks = produceBlocks(30)
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
-		await act(async () => button('Connect wallet').click())
+		await act(async () => buttonByLabel('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === 'Loading balances…' && balanceLoads > 0, 'first balance read in flight')
 		await settle(150)
 		expect(balanceLoads).toBe(1)
@@ -396,10 +356,10 @@ describe('live market refresh', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 1 && document.querySelector('.discovery-control')?.textContent?.includes('1 of 2 markets scanned') === true, 'first discovered page')
-		await act(() => button('Discover more').click())
+		await act(() => buttonByLabel('Discover more').click())
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'second page joins the downloaded list')
 		expect(requestedStarts).toEqual([0n, 1n])
-		expect(button('Scan again').disabled).toBe(false)
+		expect(buttonByLabel('Scan again').disabled).toBe(false)
 		expect(document.querySelector('.market-list-count')?.textContent).toBe('2 markets')
 		const search = document.querySelector<HTMLInputElement>('input[type="search"]')
 		if (search === null) throw new Error('Market search did not render')

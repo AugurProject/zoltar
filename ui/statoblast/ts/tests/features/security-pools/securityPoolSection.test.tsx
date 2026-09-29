@@ -1,7 +1,7 @@
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { getAddress, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -10,23 +10,13 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTra
 import { SecurityPoolSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSection.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { createTransactionStepController } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): SecurityPoolSectionProps {
 	return {

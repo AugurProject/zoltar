@@ -1,8 +1,7 @@
 /// <reference types='bun-types' />
 
 import { createWalletClient, custom, getAddress, keccak256, publicActions, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -17,29 +16,8 @@ type UseDeploymentFlowState = ReturnType<typeof useDeploymentFlow>
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
 
-function requireHookState(state: UseDeploymentFlowState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
-}
-
 describe('useDeploymentFlow', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let resetEnvironment: (() => void) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS })
 
 	test('does not request a deployment transaction when the active wallet account changed', async () => {
 		const deploy = mock(async () => `0x${'1'.repeat(64)}` as Hash)
@@ -73,7 +51,7 @@ describe('useDeploymentFlow', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).deployStep('zoltar')
@@ -86,8 +64,7 @@ describe('useDeploymentFlow', () => {
 	})
 
 	test('does not request a deployment transaction when the wallet disconnects after selection', async () => {
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend())
+		replaceEnvironment(createFakeBackend())
 		const deploy = mock(async () => `0x${'1'.repeat(64)}` as Hash)
 		const onTransactionRequested = mock(() => undefined)
 		const onTransactionFailed = mock(() => undefined)
@@ -119,7 +96,7 @@ describe('useDeploymentFlow', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).deployStep('zoltar')
@@ -132,8 +109,7 @@ describe('useDeploymentFlow', () => {
 	})
 
 	test('does not request a deployment transaction when the wallet network changed', async () => {
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			getChainId: async () => '0x5',
 		})
@@ -167,7 +143,7 @@ describe('useDeploymentFlow', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).deployStep('zoltar')
@@ -190,8 +166,7 @@ describe('useDeploymentFlow', () => {
 				},
 			}),
 		}).extend(publicActions)
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			createWriteClient: () => writeClient,
 		})
@@ -230,7 +205,7 @@ describe('useDeploymentFlow', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).deployStep('zoltar')
@@ -259,8 +234,7 @@ describe('useDeploymentFlow', () => {
 				},
 			}),
 		}).extend(publicActions)
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			createWriteClient: () => writeClient,
 		})
@@ -300,7 +274,7 @@ describe('useDeploymentFlow', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).deployStep('zoltar')
@@ -327,8 +301,7 @@ describe('useDeploymentFlow', () => {
 				},
 			}),
 		}).extend(publicActions)
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting({
+		replaceEnvironment({
 			...createFakeBackend({ accountAddress: WALLET_ADDRESS }),
 			createWriteClient: () => writeClient,
 		})
@@ -362,7 +335,7 @@ describe('useDeploymentFlow', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).deployStep('zoltar')
