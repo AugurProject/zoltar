@@ -177,17 +177,18 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 		startWithoutReview(index: number) {
 			claimWorkflow()
 			const step = steps[index]
-			if (step?.phase !== 'upcoming' || step.approval !== undefined || (step.tokenFunding?.length ?? 0) > 0) throw new Error('Only transactions without approval choices can skip app review.')
-			if (steps.slice(0, index).some(previous => previous.phase !== 'confirmed')) throw new Error('Wait for preceding transactions to confirm.')
+			if (step?.phase !== 'upcoming') throw new Error('This transaction has already started.')
+			if (steps.slice(0, index).some(previous => previous.phase !== 'confirmed' && previous.phase !== 'skipped')) throw new Error('Wait for preceding transactions to confirm.')
 			activeIndex = index
 			step.phase = 'wallet'
+			step.approvalAmount = step.approval?.requiredAmount
 			publish()
-			return undefined
+			return step.approvalAmount
 		},
 		async review(index = activeIndex + 1) {
 			return (await reviewChoices([index])).amount
 		},
-		async chooseFunding(indices: readonly number[]) {
+		async chooseFunding(indices: readonly number[], automatically = false) {
 			assertActive()
 			for (let index = 0; index < steps.length - 1; index += 1) {
 				const step = steps[index]
@@ -196,6 +197,11 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 			if (indices.length === 0) {
 				publish()
 				return undefined
+			}
+			if (automatically) {
+				const index = indices[0]
+				if (index === undefined) throw new Error('Missing funding transaction.')
+				return { index, amount: this.startWithoutReview(index) }
 			}
 			return await reviewChoices(indices)
 		},

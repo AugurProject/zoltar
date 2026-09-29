@@ -18,7 +18,7 @@ import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_C
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
@@ -505,41 +505,13 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(outcomes, '0.9 ETH')).toHaveLength(1)
 	})
 
-	void test('shows complete sets and forecasts the entered deposit through the explicit market end', async () => {
-		const props = createTradingSectionProps({
-			selectedPool: createSelectedPool({
-				currentRetentionRate: 999_999_996_848_000_000n,
-				marketDetails: createMarketDetails({ endTime: 31_536_100n }),
-				feeAccrualState: { feeEndTimestamp: 2n ** 256n - 1n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 100n, totalFeesOwedRemainder: 0n },
-				totalUnderwritingLimitAttoEth: 10n * 10n ** 18n,
-			}),
-			tradingForm: createTradingForm({ completeSetAmount: '1' }),
-		})
-		const view = (amount: string) => (
-			<ChainTimestampContext.Provider value={100n}>
-				<TradingSection {...props} tradingForm={createTradingForm({ completeSetAmount: amount })} />
-			</ChainTimestampContext.Provider>
-		)
-		const rendered = await renderIntoDocument(view('1'))
-		cleanupRenderedComponent = rendered.cleanup
+	void test('keeps minting inputs and the submit action without a review panel', async () => {
+		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
 		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
-		const setsRow = dialog.getByText('Estimated complete sets received').parentElement
-		if (setsRow === null) throw new Error('Expected complete sets row')
-		expect(getExactValueTitles(setsRow, '1')).toHaveLength(1)
-		expect(dialog.getByText('Each complete set contains one Yes, No, and Invalid share.')).not.toBeNull()
-		expect(dialog.queryByText('Estimated retention fee')).toBeNull()
-		expect(dialog.getByText('1971-01-01 00:01:40 UTC')).not.toBeNull()
-		expect(dialog.getByText('Current annual holding fee')).not.toBeNull()
-		expect(dialog.getByText('Estimated annual fee after mint')).not.toBeNull()
-		const feeRow = dialog.getByText('Estimated holding fee until market end').parentElement
-		if (feeRow === null) throw new Error('Expected holding fee row')
-		const initialFee = feeRow.textContent
-		expect(initialFee).toContain('0.16')
-		await act(() => render(view('2'), rendered.container))
-		expect(feeRow.textContent).not.toBe(initialFee)
-		await act(() => render(view(''), rendered.container))
-		expect(feeRow.textContent).toContain('—')
+		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
+		expect(dialog.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
 	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
@@ -701,7 +673,7 @@ void describe('TradingSection', () => {
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
-	void test('uses the child fee horizon beyond question end for the mint share preview', async () => {
+	void test('keeps minting available beyond question end using the child fee horizon', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={2n}>
 				<TradingSection
@@ -729,14 +701,10 @@ void describe('TradingSection', () => {
 		const dialog = within(dialogElement)
 		expect(dialog.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		expect(document.body.querySelector('.transaction-review')).toBeNull()
-		expect(dialog.getByText('You pay')).not.toBeNull()
-		expect(dialog.getByText('Estimated complete sets received')).not.toBeNull()
-		expect(dialog.queryByText('Estimated retention fee')).toBeNull()
-		expect(dialog.getByText('Current annual holding fee')).not.toBeNull()
-		expect(dialog.getByText('Holding-cost estimate unavailable: market end has passed.')).not.toBeNull()
-		expect(dialog.queryByText('Resulting ETH balance') === null).toBe(true)
-		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(1)
-		expect(dialog.queryByText('Technical Details')).toBeNull()
+		expect(dialog.queryByText('You pay')).toBeNull()
+		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
+		expect(dialog.queryByText('Estimated holding fee until market end')).toBeNull()
+		expect(dialog.getByRole('button', { name: 'Mint complete sets' }).hasAttribute('disabled')).toBe(false)
 	})
 
 	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
@@ -840,11 +808,13 @@ void describe('TradingSection', () => {
 		expect(getTransactionButtonState(document.body, 'Redeem resolved shares').reason).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 
-	void test('uses a title-case resolved-share dialog title and a sentence-case action label', async () => {
+	void test('redeems resolved shares directly without a confirmation dialog', async () => {
+		const redeem = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
 			<TradingSection
 				{...createTradingSectionProps({
 					selectedPool: createSelectedPool({ questionOutcome: 'yes' }),
+					onRedeemShares: redeem,
 				})}
 			/>,
 		)
@@ -854,8 +824,8 @@ void describe('TradingSection', () => {
 		const launcher = documentQueries.getByRole('button', { name: 'Redeem resolved shares' })
 		fireEvent.click(launcher)
 
-		const dialog = documentQueries.getByRole('dialog', { name: 'Redeem resolved shares' })
-		expect(within(dialog).getByRole('button', { name: 'Redeem shares' })).not.toBeNull()
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		expect(redeem).toHaveBeenCalledTimes(1)
 	})
 
 	void test('blocks minting once the selected market has finalized', async () => {

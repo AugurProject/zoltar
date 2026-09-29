@@ -23,14 +23,12 @@ import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } fro
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleReportDetails, OpenOracleWithdrawableBalances } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 export const BROWSE_PAGE_SIZE = 10
 export const OPEN_ORACLE_PRICE_UNITS = 30
-type WithdrawalBalanceKey = keyof OpenOracleWithdrawableBalances
-export type SelectedReportModal = 'dispute' | 'settle' | `withdraw-${WithdrawalBalanceKey}` | undefined
+export type SelectedReportModal = 'dispute' | undefined
 export const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
-export const SETTLE_REPORT_MODAL: SelectedReportModal = 'settle'
 const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> = {
 	disputeDelay: 'open-oracle-dispute-delay-error',
 	escalationHalt: 'open-oracle-escalation-halt-error',
@@ -72,15 +70,6 @@ function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, re
 		default:
 			return assertNever(field)
 	}
-}
-export function getWithdrawalReportModal(balance: WithdrawalBalanceKey): SelectedReportModal {
-	return `withdraw-${balance}`
-}
-export function getSelectedWithdrawalBalance(modal: SelectedReportModal): WithdrawalBalanceKey | undefined {
-	if (modal === 'withdraw-ethAttoEth') return 'ethAttoEth'
-	if (modal === 'withdraw-token1') return 'token1'
-	if (modal === 'withdraw-token2') return 'token2'
-	return undefined
 }
 export function getEffectiveOpenOracleReportDetails(report: OpenOracleReportDetails | undefined, currentTimestamp: bigint | undefined, currentBlockNumber: bigint | undefined) {
 	if (report === undefined) return undefined

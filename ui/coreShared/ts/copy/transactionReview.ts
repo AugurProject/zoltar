@@ -1,5 +1,2 @@
 export const transactionReview = 'Transaction review'
 export const risksAndConsequences = 'Risks and consequences'
-export const youPay = 'You pay'
-export const resultingEthBalance = 'Resulting ETH balance'
-export const amountUnavailable = 'Enter a valid amount to preview'

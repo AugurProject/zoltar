@@ -1,3 +1,4 @@
+import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -13,7 +14,6 @@ import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
@@ -30,20 +30,7 @@ import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { getOpenOracleReportEntityId } from '../lib/reportBrowse.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
-import {
-	DISPUTE_REPORT_MODAL,
-	getOpenOracleClockLabel,
-	getSelectedWithdrawalBalance,
-	getWithdrawalReportModal,
-	OPEN_ORACLE_PRICE_UNITS,
-	OpenOracleClockValue,
-	renderReportField,
-	renderReportFields,
-	renderReportSection,
-	renderSelectedReportActionSection,
-	SETTLE_REPORT_MODAL,
-	type SelectedReportModal,
-} from './OpenOracleReportContent.js'
+import { DISPUTE_REPORT_MODAL, getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportField, renderReportFields, renderReportSection, renderSelectedReportActionSection, type SelectedReportModal } from './OpenOracleReportContent.js'
 
 type OpenOracleReportDetailsCardProps = {
 	accountAddress: string | undefined
@@ -201,7 +188,10 @@ export function OpenOracleReportDetailsCard({
 		}
 		if (action.blocker !== undefined) return action
 		if (action.key === 'dispute-report') return { ...action, onAction: () => onSelectedReportModalChange(DISPUTE_REPORT_MODAL) }
-		if (action.key === 'settle-report') return { ...action, actionLabel: commonCopy.launchAction(action.actionLabel), onAction: () => onSelectedReportModalChange(SETTLE_REPORT_MODAL) }
+		if (action.key === 'settle-report') {
+			const wallet = getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected })
+			return { ...action, onAction: onSettleReport, ...(wallet.reason !== undefined ? { blocker: wallet.reason, walletBlocker: wallet.walletBlocker } : {}) }
+		}
 
 		return action
 	})
@@ -210,15 +200,6 @@ export function OpenOracleReportDetailsCard({
 		{ amount: openOracleWithdrawableBalances?.token1, key: 'token1' as const, symbol: openOracleReportDetails.token1Symbol, units: openOracleReportDetails.token1Decimals },
 		{ amount: openOracleWithdrawableBalances?.token2, key: 'token2' as const, symbol: openOracleReportDetails.token2Symbol, units: openOracleReportDetails.token2Decimals },
 	]
-	const selectedWithdrawalBalance = getSelectedWithdrawalBalance(selectedReportModal)
-	const selectedWithdrawalItem = withdrawableBalanceItems.find(item => item.key === selectedWithdrawalBalance)
-	const selectedWithdrawalAmount = selectedWithdrawalItem?.amount
-	const selectedWithdrawalReviewMessage = openOracleWithdrawalReviewMessage !== undefined && openOracleWithdrawalReviewMessage.balance === selectedWithdrawalBalance ? openOracleWithdrawalReviewMessage.message : undefined
-	const withdrawalDisabledReason = (() => {
-		if (!isOnActiveAppChain) return getWrongNetworkReason()
-		if (selectedWithdrawalAmount !== undefined && selectedWithdrawalAmount <= 0n) return openOracleCopy.noWithdrawableBalanceForAsset
-		return undefined
-	})()
 	const hasWithdrawableBalance = withdrawableBalanceItems.some(item => (item.amount ?? 0n) > 0n)
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
 	let withdrawableBalancesContent: ComponentChildren
@@ -278,7 +259,7 @@ export function OpenOracleReportDetailsCard({
 				<SectionBlock title={openOracleCopy.reportActions}>
 					<div className='action-readiness-grid open-oracle-report-actions'>
 						{readinessActions.map(action => (
-							<ActionLauncherCard key={action.key} action={action}>
+							<ActionLauncherCard key={action.key} action={action} pending={action.key === 'settle-report' && openOracleActiveAction === 'settle'} pendingLabel={openOracleCopy.settlingReport}>
 								{action.key === 'settle-report' && settleCountdown !== undefined ? (
 									<p id='open-oracle-settle-countdown' className='detail'>
 										{settleCountdown}
@@ -292,6 +273,7 @@ export function OpenOracleReportDetailsCard({
 			{!showWithdrawableBalances ? undefined : (
 				<SectionBlock title={openOracleCopy.oracleBalances} description={openOracleCopy.oracleBalancesDetail}>
 					<ErrorNotice message={openOracleWithdrawableBalancesError} />
+					<ErrorNotice message={openOracleWithdrawalReviewMessage?.message} />
 					{withdrawableBalancesContent}
 					{!hasWithdrawableBalance && !openOracleWithdrawableBalancesLoading && openOracleWithdrawableBalancesError === undefined ? <p className='detail'>{openOracleCopy.noOracleBalances}</p> : undefined}
 					{!hasWithdrawableBalance ? undefined : (
@@ -303,10 +285,12 @@ export function OpenOracleReportDetailsCard({
 										key={item.key}
 										idleLabel={openOracleCopy.withdrawBalance(item.symbol)}
 										pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(item.symbol) : openOracleCopy.withdrawingBalance(item.symbol)}
-										onClick={() => onSelectedReportModalChange(getWithdrawalReportModal(item.key))}
+										onClick={() => {
+											if (item.amount !== undefined) onWithdrawOpenOracleBalance(item.key, item.amount)
+										}}
 										pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === item.key}
 										tone='secondary'
-										availability={{ disabled: !isOnActiveAppChain || openOracleActiveAction === 'withdrawBalance', reason: isOnActiveAppChain ? undefined : getWrongNetworkReason() }}
+										availability={{ disabled: !isOnActiveAppChain || openOracleWithdrawalBalanceChecking || openOracleActiveAction !== undefined, reason: isOnActiveAppChain ? undefined : getWrongNetworkReason() }}
 									/>
 								))}
 						</div>
@@ -439,44 +423,6 @@ export function OpenOracleReportDetailsCard({
 			<OperationModal closeOnSuccessKey={openOracleResult?.action === 'dispute' ? openOracleResult.hash : undefined} context={reportTransactionContext} isOpen={selectedReportModal === 'dispute'} onClose={() => onSelectedReportModalChange(undefined)} title={openOracleCopy.disputeAndSwap}>
 				{renderSelectedReportActionSection({ ...selectedReportActionProps, actionMode: 'dispute', onDisputeFieldRevealChange, revealedDisputeFields })}
 			</OperationModal>
-
-			<OperationModal
-				confirmSingleStepFromForm
-				closeOnSuccessKey={openOracleResult?.action === 'settle' ? openOracleResult.hash : undefined}
-				context={reportTransactionContext}
-				isOpen={selectedReportModal === 'settle'}
-				onClose={() => onSelectedReportModalChange(undefined)}
-				title={openOracleCopy.settleReportTitle(liveReportDetails.reportId)}
-			>
-				{renderSelectedReportActionSection({ ...selectedReportActionProps, actionMode: 'settle' })}
-			</OperationModal>
-
-			{selectedWithdrawalItem === undefined || selectedWithdrawalAmount === undefined ? undefined : (
-				<OperationModal
-					closeOnSuccessKey={openOracleResult?.action === 'withdrawBalance' ? openOracleResult.hash : undefined}
-					context={reportTransactionContext}
-					isOpen={selectedWithdrawalBalance !== undefined}
-					onClose={() => onSelectedReportModalChange(undefined)}
-					title={openOracleCopy.withdrawBalance(selectedWithdrawalItem.symbol)}
-				>
-					<ErrorNotice message={selectedWithdrawalReviewMessage} />
-					<div className='actions'>
-						<TransactionActionButton
-							idleLabel={openOracleCopy.confirmWithdrawal}
-							pendingLabel={openOracleWithdrawalBalanceChecking ? openOracleCopy.checkingWithdrawalBalance(selectedWithdrawalItem.symbol) : openOracleCopy.withdrawingBalance(selectedWithdrawalItem.symbol)}
-							onClick={() => onWithdrawOpenOracleBalance(selectedWithdrawalItem.key, selectedWithdrawalAmount)}
-							pending={(openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance') && openOracleActiveWithdrawalBalance === selectedWithdrawalItem.key}
-							availability={withWalletGuardFirst(
-								{
-									disabled: !isOnActiveAppChain || selectedWithdrawalAmount <= 0n || openOracleWithdrawalBalanceChecking || openOracleActiveAction === 'withdrawBalance',
-									reason: withdrawalDisabledReason,
-								},
-								getWalletConnectionActiveAppChainGuardState({ isOnActiveAppChain, walletConnected: isConnected }),
-							)}
-						/>
-					</div>
-				</OperationModal>
-			)}
 		</>
 	)
 }

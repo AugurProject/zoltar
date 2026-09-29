@@ -614,15 +614,14 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 	await driver.clickButton('+10 min')
 	await driver.waitForBodyText('Pending request')
-	const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
-	expect(pendingReportOpened).toBe(true)
-	await driver.waitForButtonEnabled('Settle report…')
-	await driver.clickButton('Settle report…')
-	const settleLabel = await driver.evaluate("document.querySelector('.operation-modal-panel h3')?.textContent?.trim()")
-	if (typeof settleLabel !== 'string' || !/^Settle report #[0-9]+$/.test(settleLabel)) throw new Error('Missing explicit report settlement title')
-	await driver.waitForButtonEnabled(settleLabel)
-	await driver.clickButton(settleLabel)
-	const settledTitle = settleLabel.replace('Settle', 'Settled')
+	const pendingReportId = await driver.evaluate(
+		`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return undefined; const reportId = button.textContent?.trim().slice('Report #'.length).trim(); button.click(); return reportId })()`,
+	)
+	if (typeof pendingReportId !== 'string' || !/^[0-9]+$/.test(pendingReportId)) throw new Error('Missing pending report ID')
+	await driver.waitForButtonEnabled('Settle report')
+	await driver.clickButton('Settle report')
+	expect(await driver.evaluate("document.querySelector('.operation-modal-panel') === null")).toBe(true)
+	const settledTitle = `Settled report #${pendingReportId}`
 	await completeTransactionReview(settledTitle)
 	await driver.waitForTransactionStatus('Confirmed', settledTitle)
 	await driver.clickButton('Dismiss')

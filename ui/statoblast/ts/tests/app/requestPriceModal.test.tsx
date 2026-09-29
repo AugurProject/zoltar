@@ -634,6 +634,8 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 		const queries = within(document.body)
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
+		expect(transactionSteps.value?.steps[0]?.hash).toBeUndefined()
 		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
 		await settle()
 		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')

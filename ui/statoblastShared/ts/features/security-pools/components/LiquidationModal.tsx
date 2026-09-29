@@ -14,7 +14,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, isVaultHealthyAtFactor, getMaxLiquidationAmount, simulateLiquidation } from '../lib/liquidation.js'
+import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
@@ -40,7 +40,7 @@ import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
-import { LiquidationApprovalSummary, LiquidationContextSummary, LiquidationTransactionReview, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
+import { LiquidationApprovalSummary, LiquidationContextSummary, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'
 type LiquidationModalProps = {
 	accountAddress: Address | undefined
 	closeLiquidationModal: () => void
@@ -214,33 +214,6 @@ export function LiquidationModal({
 		liquidationApprovalId,
 		loadingLiquidationApproval,
 	})
-	const liquidationSimulation =
-		targetVaultSummary === undefined || uiCalculationPrice === undefined || selectedPool?.statoblastSecurityMultiplierBps === undefined || liquidationAmountValue === undefined
-			? undefined
-			: simulateLiquidation({
-					callerVaultSummary: receiverVaultSummary,
-					requestedDebtAttoEth: liquidationAmountValue,
-					totalUnderwritingLimitAttoEth: selectedPool.totalUnderwritingLimitAttoEth,
-					minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
-					repPerEthPrice: uiCalculationPrice,
-					settlementCollateralAttoEth: selectedPool.settlementCollateralAttoEth,
-					statoblastSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
-					targetVaultSummary,
-				})
-	const receiverOpenInterest = receiverVaultSummary?.openInterestAttoEth ?? (receiverVaultSummary === undefined && liquidationReceiverVaultSummaryResolved ? 0n : undefined)
-	const minimumReceiverHealth = delegatedReceiver ? liquidationApprovalDetails?.params.minPostLiquidationHealthFactorBps : 10000n
-	const receiverHealthy =
-		minimumReceiverHealth === undefined || !hasUsableOraclePrice || liquidationSimulation === undefined || receiverOpenInterest === undefined || uiCalculationPrice === undefined || selectedPool === undefined
-			? undefined
-			: isVaultHealthyAtFactor({
-					disputeStakedAttoRep: liquidationSimulation.callerAfter.disputeStakedAttoRep,
-					healthFactorBps: minimumReceiverHealth,
-					openInterestAttoEth: receiverOpenInterest + liquidationSimulation.debtMovedAttoEth,
-					poolHeldVaultRepBackingAttoRep: liquidationSimulation.callerAfter.vaultAttoRepBacking,
-					poolSecurityMultiplierBps: selectedPool.statoblastSecurityMultiplierBps,
-					repPerEthPrice: uiCalculationPrice,
-				})
-
 	const computedLiquidationMaxAmount = getMaxLiquidationAmount({
 		repPerEthPrice: uiCalculationPrice,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
@@ -425,14 +398,6 @@ export function LiquidationModal({
 						</button>
 					</div>
 				)}
-				<LiquidationTransactionReview
-					receiverHealthy={receiverHealthy}
-					liquidationExecutionMode={liquidationExecutionMode}
-					liquidationFundingPreview={initialPriceError === undefined ? liquidationFundingPreview : undefined}
-					liquidationSimulation={liquidationSimulation}
-					selectedPool={selectedPool}
-					walletBalanceAttoEth={walletBalanceAttoEth}
-				/>
 			</div>
 			<div className='actions liquidation-modal-actions'>
 				<TransactionActionButton

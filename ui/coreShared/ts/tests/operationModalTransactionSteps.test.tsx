@@ -413,3 +413,36 @@ test('keeps a single-action review by default for other app dialogs', async () =
 		await rendered.cleanup()
 	}
 })
+
+test('direct wallet actions retain the initiating form without a second confirmation', async () => {
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	function Harness() {
+		return (
+			<OperationModal isOpen title='Set commitment limit' onClose={() => undefined}>
+				<input aria-label='Commitment limit' defaultValue='2' />
+				<button
+					onClick={() => {
+						controller = createTransactionStepController(undefined, false)
+						controller.setPlan([step])
+						controller.startWithoutReview(0)
+					}}
+				>
+					Set commitment limit
+				</button>
+			</OperationModal>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const page = within(document.body)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' })))
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
+		expect(document.querySelector('.operation-modal-steps')).toBeNull()
+		expect(page.queryByRole('button', { name: 'Send withdrawal' })).toBeNull()
+		expect(page.getByRole('textbox', { name: 'Commitment limit' }).getAttribute('value')).toBe('2')
+		expect(page.getByRole('button', { name: 'Close' }).hasAttribute('disabled')).toBe(true)
+	} finally {
+		transactionSteps.value?.cancel()
+		await rendered.cleanup()
+	}
+})

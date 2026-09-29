@@ -1,3 +1,4 @@
+import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -172,8 +173,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (!valid || review === undefined || key === undefined || running || attempted === key || preparationPaused || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
+			const releasePreparation = registerTransactionPreparationScope(cancellation.signal)
 			embeddedTransactionSteps.value = cancellation.signal
 			const cancel = () => {
+				releasePreparation()
 				const firstDetach = run.current?.signal === cancellation.signal && run.current.submissionOutstanding !== true
 				const { steps: currentSteps } = cancelTransactionReview(cancellation.signal)
 				const steps = currentSteps ?? (run.current?.signal === cancellation.signal ? run.current.steps : undefined)
@@ -205,6 +208,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			setAttempted(key)
 			setRunning(true)
 			void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice }, cancellation.signal)).finally(() => {
+				releasePreparation()
 				if (mounted.current && run.current?.signal === cancellation.signal) setRunning(false)
 				if (embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
 			})

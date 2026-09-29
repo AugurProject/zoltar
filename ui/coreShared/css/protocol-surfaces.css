@@ -2002,11 +2002,11 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .transaction-approval-editor {
-	--approval-rows: 2;
+	--approval-rows: 3;
 }
 
 .transaction-approval-editor:has(.field-error, .notice.error) {
-	--approval-rows: 3;
+	--approval-rows: 4;
 }
 
 .transaction-plan-action:has(.approval-amount-field),
@@ -2022,7 +2022,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .transaction-approval-editor .form-grid {
 	gap: 0.5rem;
-	grid-template-columns: minmax(0, 1fr) max-content;
+	grid-template-columns: minmax(0, 1fr);
 }
 
 .transaction-approval-editor .form-grid > .workflow-metric-grid,
@@ -2044,15 +2044,15 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .transaction-approval-editor .form-grid > .actions {
-	grid-column: 2;
-	grid-row: 2;
-	align-self: end;
+	container-type: inline-size;
+	grid-column: 1;
+	grid-row: -2 / -1;
+	align-self: start;
 }
 
-@media (max-width: 40rem) {
-	.transaction-approval-editor .form-grid {
-		grid-template-columns: minmax(0, 1fr);
-	}
+.transaction-approval-editor .form-grid > .field-error,
+.transaction-approval-editor .form-grid > .notice.error {
+	grid-row: 3;
 }
 
 .transaction-approval-editor .workflow-metric-grid {
@@ -2228,26 +2228,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	.transaction-approval-editor .workflow-metric-grid .metric-field-value {
 		width: auto;
 		flex: none;
-	}
-
-	.transaction-approval-editor {
-		--approval-rows: 3;
-	}
-
-	.transaction-approval-editor:has(.field-error, .notice.error) {
-		--approval-rows: 4;
-	}
-
-	.transaction-approval-editor .form-grid > .actions {
-		container-type: inline-size;
-		grid-column: 1;
-		grid-row: -2 / -1;
-		align-self: start;
-	}
-
-	.transaction-approval-editor .form-grid > .field-error,
-	.transaction-approval-editor .form-grid > .notice.error {
-		grid-row: 3;
 	}
 
 	.transaction-plan-action:has(.approval-amount-field) .tx-action-button {

@@ -71,11 +71,10 @@ async function setupContractMocks({ loadMarketDetails, createSecurityPool, getOr
 
 	await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
 		createConnectedReadClient: mock(() => ({ kind: 'read-client', getBlock: async () => ({ timestamp: 1n }) })),
-		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void; reviewSignal?: AbortSignal; skipAppReview?: boolean }) => ({
+		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void; reviewSignal?: AbortSignal }) => ({
 			walletAddress,
 			onTransactionSubmitted: options.onTransactionSubmitted,
 			reviewSignal: options.reviewSignal,
-			skipAppReview: options.skipAppReview,
 		})),
 	}))
 }
@@ -623,8 +622,7 @@ describe('useSecurityPoolCreation', () => {
 
 	test('createPool succeeds and refreshes state when all preconditions pass', async () => {
 		const submittedParameters: Array<{ initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }> = []
-		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void; skipAppReview?: boolean }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }) => {
-			expect(client.skipAppReview).toBe(true)
+		const createSecurityPool = mock(async (client: { onTransactionSubmitted?: (hash: Hash) => void }, parameters: { initialReportPriorityFeeAttoEthPerGas: bigint; statoblastSecurityMultiplierBps: bigint }) => {
 			submittedParameters.push(parameters)
 			client.onTransactionSubmitted?.('0xabc')
 			return {
@@ -730,8 +728,7 @@ describe('useSecurityPoolCreation', () => {
 	test('createPool shows write failures in the form and releases the transaction review', async () => {
 		const { embeddedTransactionSteps } = await import('@zoltar/ui-core-shared/components/TransactionStepsModal.js')
 		const { createTransactionStepController, transactionSteps } = await import('@zoltar/ui-core-shared/transactions/transactionSteps.js')
-		const createSecurityPool = mock(async (client: { reviewSignal?: AbortSignal; skipAppReview?: boolean }) => {
-			expect(client.skipAppReview).toBe(true)
+		const createSecurityPool = mock(async (client: { reviewSignal?: AbortSignal }) => {
 			// Simulate a wallet request that rejects after the pending state is published.
 			const controller = createTransactionStepController(client.reviewSignal)
 			controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
