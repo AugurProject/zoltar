@@ -365,19 +365,6 @@ strong.metric-value-danger {
 	overflow-wrap: anywhere;
 }
 
-.trading-minted-outcomes {
-	display: grid;
-	gap: 0.6rem;
-}
-
-.trading-minted-outcome {
-	display: grid;
-	grid-template-columns: 5rem minmax(0, 1fr);
-	align-items: baseline;
-	min-width: 0;
-	gap: 0.5rem;
-}
-
 .transaction-review-details {
 	display: grid;
 	gap: 0.45rem;
