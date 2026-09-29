@@ -35,6 +35,12 @@ afterEach(async () => {
 	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
 })
 
+async function temporaryDirectory(prefix: string) {
+	const directory = await mkdtemp(join(tmpdir(), prefix))
+	temporaryDirectories.push(directory)
+	return directory
+}
+
 async function settingsFixture(name: 'operator.configured-placeholder.json' | 'operator.example.json') {
 	const value: unknown = JSON.parse(await readFile(join(import.meta.dir, '..', '..', 'config', name), 'utf8'))
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Expected settings fixture object')
@@ -79,6 +85,7 @@ describe('chaos launch doctor', () => {
 		const firstHash = `0x${'11'.repeat(32)}`
 		const secondHash = `0x${'22'.repeat(32)}`
 		const thirdHash = `0x${'33'.repeat(32)}`
+		const checkpoints = (...entries: (readonly [string, bigint])[]) => entries.map(([hash, number]) => ({ hash, number }))
 		expect(
 			commonFreshFinalizedBlockNumber(1_000n, [
 				{ hash: firstHash, number: 930n },
@@ -101,76 +108,13 @@ describe('chaos launch doctor', () => {
 		).toThrow('disagree on common finalized block')
 		expect(() => assertFinalizedTagsMatchCommonBlock(930n, thirdHash, [{ hash: firstHash, number: 930n }])).toThrow('finalized-tag hash does not match common finalized block 930')
 		expect(() =>
-			assertStableFinalizedCheckpointResults(
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 940n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 940n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: thirdHash, number: 941n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 940n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: thirdHash, number: 941n },
-				],
-			),
+			assertStableFinalizedCheckpointResults(checkpoints([firstHash, 930n], [secondHash, 940n]), checkpoints([firstHash, 930n], [secondHash, 940n]), checkpoints([firstHash, 930n], [thirdHash, 941n]), checkpoints([firstHash, 930n], [secondHash, 940n]), checkpoints([firstHash, 930n], [thirdHash, 941n])),
 		).not.toThrow()
 		expect(() =>
-			assertStableFinalizedCheckpointResults(
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 940n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 940n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: thirdHash, number: 941n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: thirdHash, number: 940n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: thirdHash, number: 941n },
-				],
-			),
+			assertStableFinalizedCheckpointResults(checkpoints([firstHash, 930n], [secondHash, 940n]), checkpoints([firstHash, 930n], [secondHash, 940n]), checkpoints([firstHash, 930n], [thirdHash, 941n]), checkpoints([firstHash, 930n], [thirdHash, 940n]), checkpoints([firstHash, 930n], [thirdHash, 941n])),
 		).toThrow('changed after the finalized-tag recheck')
 		expect(() =>
-			assertStableFinalizedCheckpointResults(
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 930n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 930n },
-				],
-				[
-					{ hash: thirdHash, number: 931n },
-					{ hash: thirdHash, number: 931n },
-				],
-				[
-					{ hash: firstHash, number: 930n },
-					{ hash: secondHash, number: 930n },
-				],
-				[
-					{ hash: thirdHash, number: 931n },
-					{ hash: thirdHash, number: 931n },
-				],
-			),
+			assertStableFinalizedCheckpointResults(checkpoints([firstHash, 930n], [secondHash, 930n]), checkpoints([firstHash, 930n], [secondHash, 930n]), checkpoints([thirdHash, 931n], [thirdHash, 931n]), checkpoints([firstHash, 930n], [secondHash, 930n]), checkpoints([thirdHash, 931n], [thirdHash, 931n])),
 		).toThrow('disagree on initial finalized-tag block 930')
 		expect(() => assertStableFinalizedCheckpointResults([{ hash: firstHash, number: 930n }], [{ hash: firstHash, number: 930n }], [{ hash: firstHash, number: 929n }], [{ hash: firstHash, number: 930n }], [{ hash: firstHash, number: 929n }])).toThrow('regressed')
 	})
@@ -390,8 +334,7 @@ describe('chaos launch doctor', () => {
 	})
 
 	test('loads real configuration without reading malformed durable state before lock acquisition', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-lock-'))
-		temporaryDirectories.push(directory)
+		const directory = await temporaryDirectory('zoltar-chaos-doctor-lock-')
 		const path = join(directory, 'operator.json')
 		const stateFile = join(directory, 'state.json')
 		const settings = await settingsFixture('operator.configured-placeholder.json')
@@ -467,8 +410,7 @@ describe('chaos launch doctor', () => {
 	})
 
 	test('preflights an unpinned operated Sepolia state while leaving an incompatible topology for rebuild', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-legacy-'))
-		temporaryDirectories.push(directory)
+		const directory = await temporaryDirectory('zoltar-chaos-doctor-legacy-')
 		const path = join(directory, 'operator.json')
 		const stateFile = join(directory, 'chaos.sepolia.json')
 		const settings = await settingsFixture('operator.configured-placeholder.json')
@@ -538,8 +480,7 @@ describe('chaos launch doctor', () => {
 
 	test('loads the complete durable journal and fails when its committed index generation is missing', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-state-'))
-		temporaryDirectories.push(directory)
+		const directory = await temporaryDirectory('zoltar-chaos-doctor-state-')
 		await chmod(directory, 0o700)
 		const stateFile = join(directory, 'state.json')
 		const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
@@ -571,8 +512,7 @@ describe('chaos launch doctor', () => {
 
 	test('loads and rejects malformed durable journal JSON before probing the network', async () => {
 		const baseline = await settingsFixture('operator.configured-placeholder.json')
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-chaos-doctor-malformed-'))
-		temporaryDirectories.push(directory)
+		const directory = await temporaryDirectory('zoltar-chaos-doctor-malformed-')
 		await chmod(directory, 0o700)
 		const stateFile = join(directory, 'state.json')
 		const settings = { ...baseline, runtime: { ...baseline.runtime, stateFile } }
