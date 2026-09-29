@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { AddressValue, ReadOnlyAddressValue } from './AddressValue.js'
+import { AddressValue, ReadOnlyAddressValue, type AddressWidthConstraint } from './AddressValue.js'
 
 type WalletChipTone = 'ok' | 'danger'
 
@@ -18,11 +18,11 @@ export function WalletChip({ address, tone = 'ok' }: { address: string; tone?: W
 }
 
 /** Non-interactive chip body for use inside a `<summary>`, where nested buttons are not allowed. */
-export function WalletChipLabel({ address, tone = 'ok' }: { address: string; tone?: WalletChipTone }) {
+export function WalletChipLabel({ address, tone = 'ok', widthConstraint }: { address: string; tone?: WalletChipTone; widthConstraint?: AddressWidthConstraint | undefined }) {
 	return (
 		<span className={chipClassName(tone, 'is-static')}>
 			<span className='wallet-chip-dot' aria-hidden='true' />
-			<ReadOnlyAddressValue address={address} responsiveAbbreviation />
+			<ReadOnlyAddressValue address={address} responsiveAbbreviation widthConstraint={widthConstraint} />
 		</span>
 	)
 }

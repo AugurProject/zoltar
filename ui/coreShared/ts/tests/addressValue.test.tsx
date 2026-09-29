@@ -3,7 +3,8 @@
 import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
-import { AddressValue } from '../components/AddressValue.js'
+import { createRef } from 'preact'
+import { AddressValue, ReadOnlyAddressValue } from '../components/AddressValue.js'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 
@@ -80,6 +81,40 @@ describe('AddressValue', () => {
 			await rendered.cleanup()
 			cleanupRenderedComponent = undefined
 			expect(disconnect).toHaveBeenCalled()
+		} finally {
+			Reflect.set(globalThis, 'ResizeObserver', previousObserver)
+		}
+	})
+
+	test('restores a compact control from its available slot rather than its shortened text width', async () => {
+		let resize = () => {}
+		const previousObserver = globalThis.ResizeObserver
+		Reflect.set(globalThis, 'ResizeObserver', function (callback: () => void) {
+			resize = callback
+			return { observe: () => {}, disconnect: () => {} }
+		})
+		try {
+			const slot = createRef<HTMLDivElement>()
+			const control = createRef<HTMLButtonElement>()
+			const rendered = await renderIntoDocument(
+				<div ref={slot}>
+					<button ref={control}>
+						<ReadOnlyAddressValue address='0x1234567890abcdef1234567890abcdef12345678' widthConstraint={{ slot, control }} />
+					</button>
+				</div>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			const text = rendered.container.querySelector('.address-value-text')
+			const full = rendered.container.querySelector('.address-value-full')
+			if (!(text instanceof HTMLElement) || !(full instanceof HTMLElement) || slot.current === null || control.current === null) throw new Error('Address layout is missing')
+			Reflect.defineProperty(full, 'scrollWidth', { value: 420 })
+			Reflect.defineProperty(text, 'clientWidth', { value: 150 })
+			Reflect.defineProperty(control.current, 'offsetWidth', { value: 190 })
+			for (const width of [250, 460, 500, 250]) {
+				Reflect.defineProperty(slot.current, 'clientWidth', { configurable: true, value: width })
+				await act(() => resize())
+				expect(text.getAttribute('data-abbreviated')).toBe(String(width < 460))
+			}
 		} finally {
 			Reflect.set(globalThis, 'ResizeObserver', previousObserver)
 		}

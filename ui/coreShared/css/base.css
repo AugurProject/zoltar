@@ -582,6 +582,9 @@ button.quiet:disabled {
 
 .account-menu {
 	position: relative;
+	flex: 1;
+	display: flex;
+	justify-content: flex-end;
 	min-width: 0;
 	max-width: 100%;
 }
@@ -1355,6 +1358,20 @@ button.wallet-asset-action-pending:disabled {
 
 .address-value-text[data-abbreviated="true"] .address-value-abbreviated {
 	visibility: visible;
+}
+
+/* A stable external slot lets a control fit its visible label without losing
+ * the width needed to restore the full address when more space is available. */
+.address-value-fit-content {
+	position: relative;
+}
+
+.address-value-fit-content[data-abbreviated="true"] .address-value-full {
+	position: absolute;
+}
+
+.address-value-fit-content[data-abbreviated="false"] .address-value-abbreviated {
+	position: absolute;
 }
 
 .identifier-value.copyable {

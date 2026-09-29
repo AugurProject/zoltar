@@ -803,7 +803,7 @@ button.tx-action-wallet-fix {
 }
 
 .header-toolbar-navigation {
-	flex: 1 0 auto;
+	flex: 0 0 auto;
 	min-width: 0;
 }
 
@@ -924,7 +924,7 @@ button.tx-action-wallet-fix {
 
 .header-toolbar-controls {
 	display: flex;
-	flex: 0 1 auto;
+	flex: 1 1 auto;
 	align-items: center;
 	justify-content: flex-end;
 	gap: var(--space-3);
@@ -1237,18 +1237,60 @@ button.tx-action-wallet-fix {
 	}
 }
 
-/* Phones: a denser top bar (universe, account, and settings share one row down to 360px), section views in a two-column grid, and a full-width account popover. */
+/* Phones: brand and tools above universe and account, with navigation at the bottom. */
 @media (max-width: 40rem) {
 	.header-toolbar {
-		gap: 0.3rem;
-		padding: 0.25rem 0.3rem;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--space-2);
+		padding: var(--space-2);
 		border-radius: var(--radius-control);
 	}
 
-	/* A network-switch action is the only control that can push the bar to a second row. */
+	.header-toolbar-brand {
+		grid-area: 1 / 1;
+	}
+
+	.header-toolbar .application-brand {
+		font-size: var(--font-body);
+	}
+
+	.header-toolbar .application-brand-name {
+		position: static;
+		width: auto;
+		height: auto;
+		margin: 0;
+		clip: auto;
+	}
+
+	.header-toolbar-settings {
+		grid-area: 1 / 2;
+	}
+
 	.header-toolbar-controls {
+		grid-area: 2 / 1 / 3 / -1;
+		width: 100%;
+		justify-content: space-between;
+		flex-wrap: nowrap;
+		gap: var(--space-2);
+	}
+
+	/* Network recovery may need its own line, without squeezing the account. */
+	.header-toolbar-controls:has(.wallet-button + .account-menu) {
 		flex-wrap: wrap;
-		gap: 0.3rem;
+	}
+
+	.header-toolbar-controls:has(.wallet-button + .account-menu) > .wallet-button {
+		order: 1;
+		flex-basis: 100%;
+	}
+
+	.header-toolbar-controls .account-menu {
+		margin-left: auto;
+	}
+
+	.header-toolbar-controls .address-value-text {
+		justify-items: end;
 	}
 
 	.header-toolbar-controls .toolbar-field-value,
@@ -1279,15 +1321,24 @@ button.tx-action-wallet-fix {
 	}
 
 	.account-menu-trigger {
-		padding-right: 0;
+		padding-right: var(--space-2);
 	}
 
-	.account-menu-caret {
-		display: none;
+	.header-toolbar .account-menu {
+		position: static;
+	}
+
+	.header-toolbar .account-menu-popover {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		left: 0;
+		width: auto;
+		max-width: 100%;
+		margin-top: var(--space-2);
 	}
 
 	/* The popover spans the viewport under its trigger instead of overflowing the left edge. */
-	.account-menu-popover,
 	.header-toolbar .universe-switcher-popover {
 		position: fixed;
 		top: auto;

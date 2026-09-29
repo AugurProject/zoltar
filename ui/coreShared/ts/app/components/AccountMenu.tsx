@@ -1,3 +1,4 @@
+import { useMemo } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import * as appCopy from '../../copy/app.js'
 import { AddressValue } from '../../components/AddressValue.js'
@@ -22,10 +23,11 @@ type AccountMenuProps = {
  */
 export function AccountMenu({ actions, address, metrics, network, tone = 'ok' }: AccountMenuProps) {
 	const popover = useDisclosurePopover()
+	const widthConstraint = useMemo(() => ({ slot: popover.containerRef, control: popover.triggerProps.ref }), [popover.containerRef, popover.triggerProps.ref])
 	return (
 		<div className='account-menu' ref={popover.containerRef}>
 			<button {...popover.triggerProps} className='account-menu-trigger' aria-label={appCopy.formatAccountMenuLabel(abbreviateAddress(address))} onClick={popover.toggle}>
-				<WalletChipLabel address={address} tone={tone} />
+				<WalletChipLabel address={address} tone={tone} widthConstraint={widthConstraint} />
 				<span className='account-menu-caret' aria-hidden='true' />
 			</button>
 			{popover.open ? (
