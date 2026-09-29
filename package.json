@@ -54,7 +54,7 @@
 		"tmp": "0.2.7",
 		"vitest": "4.1.11",
 		"ws": "8.21.0",
-		"undici": "7.29.0"
+		"undici": "7.29.1"
 	},
 	"scripts": {
 		"check:unit-terminology": "bun ./tooling/repo/check-unit-terminology.mts",
