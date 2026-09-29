@@ -1247,3 +1247,50 @@ test('keeps preparation paused when a retry quote fails', async () => {
 		dom.cleanup()
 	}
 })
+
+test.each(['edit', 'fetch', 'pending approval'] as const)('prepares again after a confirmed approval when the price changes by %s', async action => {
+	const dom = installDomEnvironment()
+	const prices: Array<bigint | undefined> = []
+	const receipt = createDeferred<void>()
+	const approvalHash = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+	const onConfirm = async (request: RequestPriceReview, signal?: AbortSignal) => {
+		prices.push(request.proposedRepPerEthPrice)
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([
+			{ ...step, title: 'Approve REP spending', approval: { requiredAmount: 3n, approvedAmount: 0n, tokenSymbol: 'REP', tokenUnits: 0 } },
+			{ ...step, title: 'Request new price' },
+		])
+		try {
+			await controller.review(0)
+			controller.submitted(approvalHash)
+			if (action === 'pending approval') await receipt.promise
+			controller.receipt(approvalHash, 'success')
+			await controller.review(1)
+		} catch (error) {
+			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
+		}
+	}
+	const rendered = await renderIntoDocument(<RequestPriceModal {...props} fetchPrice={async () => 4n * 10n ** 18n} onConfirm={onConfirm} />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '2' } }))
+		await settle()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /Approve.*REP/ })))
+		await settle()
+		expect(transactionSteps.value?.steps.map(step => step.phase)).toEqual(action === 'pending approval' ? ['pending', 'upcoming'] : ['confirmed', 'review'])
+		if (action !== 'fetch') await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '4' } }))
+		else await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		if (action === 'pending approval') {
+			expect(prices).toEqual([2n * 10n ** 18n])
+			await act(() => receipt.resolve())
+			await settle()
+		}
+		expect(prices).toEqual([2n * 10n ** 18n, 4n * 10n ** 18n])
+		expect(queries.queryByText('Edit the price or fetch a quote to retry.')).toBeNull()
+	} finally {
+		receipt.resolve()
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
