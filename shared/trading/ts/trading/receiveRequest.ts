@@ -39,7 +39,7 @@ export type ReceiveRequest = readonly [
 	longOutcome: number,
 	completeSetShares: bigint,
 	maxLongSharesIn: bigint,
-	minEthOut: bigint,
+	minEthOutAttoEth: bigint,
 	payoutRecipient: Address,
 	refundRecipient: Address,
 	deadline: bigint,
