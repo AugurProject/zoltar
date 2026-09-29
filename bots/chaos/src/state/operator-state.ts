@@ -1,6 +1,6 @@
 import { compactDurableState, MAXIMUM_ACTIVITY_COUNT, MAXIMUM_OBLIGATION_TOMBSTONE_COUNT } from './durable-compaction.ts'
 export { MAXIMUM_OBLIGATION_TOMBSTONE_COUNT } from './durable-compaction.ts'
-import { parseRollbackQueue, serializedRollbackQueue, type RollbackQueuedTransaction, parseIncludedTransactions, serializedIncludedTransactions, serializedTransactionIntent, type IncludedTransaction } from './included-transactions.ts'
+import { assertIncludedTransactionWorkflows, parseRollbackQueue, serializedRollbackQueue, type RollbackQueuedTransaction, parseIncludedTransactions, serializedIncludedTransactions, serializedTransactionIntent, type IncludedTransaction } from './included-transactions.ts'
 import { storedInputSources, storedInputValues } from '../operations/input-values.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
@@ -968,7 +968,7 @@ async function loadDurableStateFile(path: string, expectedChainId: number, files
 	if (rollbackQueue.some(record => pendingTransactions.some(intent => record.intent.nonce < intent.nonce))) throw new Error('Rollback queue precedes the active pending nonce')
 	const retainedNonces = [...includedTransactions, ...rollbackQueue].map(record => record.intent.nonce.toString())
 	if (new Set([...retainedNonces, ...pendingTransactions.map(intent => intent.nonce.toString())]).size !== retainedNonces.length + pendingTransactions.length || rollbackQueue.some(record => !workflowById.has(record.workflow.id))) throw new Error('Rollback queue conflicts with retained nonces or workflows')
-	if (includedTransactions.some(record => !workflowById.has(record.workflow.id) || pendingTransactions.some(intent => intent.nonce === record.intent.nonce))) throw new Error('Included transaction journal conflicts with current workflows or pending nonces')
+	assertIncludedTransactionWorkflows(includedTransactions, workflowById)
 	if (new Set(pendingTransactions.map(intent => intent.id)).size !== pendingTransactions.length) throw new Error('Chaos-bot state contains duplicate transaction intent IDs')
 	if (new Set(pendingTransactions.map(intent => intent.nonce.toString())).size !== pendingTransactions.length) throw new Error('Chaos-bot state contains duplicate pending transaction nonces')
 	for (const intent of pendingTransactions) {

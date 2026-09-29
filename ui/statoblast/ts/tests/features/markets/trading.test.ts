@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	estimateMintCheckpoint,
+	estimateMintHoldingFees,
 	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
 	convertAttoSharesToSettlementCollateralAttoEth,
@@ -150,6 +151,35 @@ void describe('trading helpers', () => {
 				totalFeesOwedRemainder: 0n,
 			}),
 		).toEqual({ estimatedRetentionFeeAttoEth: TOKEN_PRECISION, settlementCollateralAfterFeesAttoEth: 9n * TOKEN_PRECISION })
+	})
+
+	void test('estimates the mint holding cost using post-mint utilization and the entered deposit', () => {
+		const input = {
+			mintAmountAttoEth: TOKEN_PRECISION,
+			settlementCollateralAfterFeesAttoEth: 0n,
+			mintingCapacityAttoEth: 10n * TOKEN_PRECISION,
+			feeEligibleUnderwritingLimitAttoEth: 10n * TOKEN_PRECISION,
+			totalUnderwritingLimitAttoEth: 10n * TOKEN_PRECISION,
+			currentTimestamp: 100n,
+			marketEndTimestamp: 31_536_100n,
+			feeEndTimestamp: 2n ** 256n - 1n,
+		}
+		const estimate = estimateMintHoldingFees(input)
+		expect(estimate?.retentionRateAfterMint).toBe(999_999_994_477_000_000n)
+		expect(estimate?.holdingFeeAttoEth).toBeGreaterThan(159_000_000_000_000_000n)
+		expect(estimate?.holdingFeeAttoEth).toBeLessThan(161_000_000_000_000_000n)
+		expect(estimateMintHoldingFees({ ...input, mintAmountAttoEth: 8n * TOKEN_PRECISION })?.retentionRateAfterMint).toBe(999_999_977_880_000_000n)
+		expect(estimateMintHoldingFees({ ...input, mintAmountAttoEth: 9n * TOKEN_PRECISION })?.retentionRateAfterMint).toBe(999_999_977_880_000_000n)
+		expect(estimateMintHoldingFees({ ...input, feeEligibleUnderwritingLimitAttoEth: 0n })?.holdingFeeAttoEth).toBe(0n)
+		const partialFee = estimateMintHoldingFees({ ...input, feeEligibleUnderwritingLimitAttoEth: 5n * TOKEN_PRECISION })?.holdingFeeAttoEth
+		expect(partialFee).toBeGreaterThan(0n)
+		expect(partialFee).toBeLessThan(estimate?.holdingFeeAttoEth ?? 0n)
+		expect(estimateMintHoldingFees({ ...input, feeEndTimestamp: 101n })?.holdingFeeAttoEth).toBe(5_523_000_000n)
+		for (const marketEndTimestamp of [0n, 99n, 100n]) expect(estimateMintHoldingFees({ ...input, marketEndTimestamp })?.holdingFeeAttoEth).toBeUndefined()
+		for (const mintAmountAttoEth of [undefined, 0n, -1n, 11n * TOKEN_PRECISION]) expect(estimateMintHoldingFees({ ...input, mintAmountAttoEth })).toBeUndefined()
+		expect(estimateMintHoldingFees({ ...input, settlementCollateralAfterFeesAttoEth: undefined })).toBeUndefined()
+		expect(estimateMintHoldingFees({ ...input, feeEndTimestamp: undefined })).toBeUndefined()
+		expect(estimateMintHoldingFees({ ...input, currentTimestamp: undefined })?.holdingFeeAttoEth).toBeUndefined()
 	})
 
 	void test('treats the trading system as deployed only when every deterministic deployment step is deployed', () => {

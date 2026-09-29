@@ -505,19 +505,41 @@ void describe('TradingSection', () => {
 		expect(getExactValueTitles(outcomes, '0.9 ETH')).toHaveLength(1)
 	})
 
-	void test('labels each first-mint outcome separately and preserves its full share amount', async () => {
-		const renderedComponent = await renderIntoDocument(<TradingSection {...createTradingSectionProps({ selectedPool: createSelectedPool({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 0n }), tradingForm: createTradingForm({ completeSetAmount: '1' }) })} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+	void test('shows complete sets and forecasts the entered deposit through the explicit market end', async () => {
+		const props = createTradingSectionProps({
+			selectedPool: createSelectedPool({
+				currentRetentionRate: 999_999_996_848_000_000n,
+				marketDetails: createMarketDetails({ endTime: 31_536_100n }),
+				feeAccrualState: { feeEndTimestamp: 2n ** 256n - 1n, feeIndexRemainder: 0n, lastUpdatedFeeAccumulator: 100n, totalFeesOwedRemainder: 0n },
+				totalUnderwritingLimitAttoEth: 10n * 10n ** 18n,
+			}),
+			tradingForm: createTradingForm({ completeSetAmount: '1' }),
+		})
+		const view = (amount: string) => (
+			<ChainTimestampContext.Provider value={100n}>
+				<TradingSection {...props} tradingForm={createTradingForm({ completeSetAmount: amount })} />
+			</ChainTimestampContext.Provider>
+		)
+		const rendered = await renderIntoDocument(view('1'))
+		cleanupRenderedComponent = rendered.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
 		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
-		const outcomes = within(dialog.getByRole('list', { name: 'Estimated shares received' })).getAllByRole('listitem')
-		expect(outcomes).toHaveLength(3)
-		for (const [index, label] of ['Yes', 'No', 'Invalid'].entries()) {
-			const outcome = outcomes[index]
-			if (outcome === undefined) throw new Error(`Missing ${label} share estimate`)
-			expect(within(outcome).getByText(label, { exact: true })).not.toBeNull()
-			expect(getExactValueTitles(outcome, '1')).toHaveLength(1)
-		}
+		const setsRow = dialog.getByText('Estimated complete sets received').parentElement
+		if (setsRow === null) throw new Error('Expected complete sets row')
+		expect(getExactValueTitles(setsRow, '1')).toHaveLength(1)
+		expect(dialog.getByText('Each complete set contains one Yes, No, and Invalid share.')).not.toBeNull()
+		expect(dialog.queryByText('Estimated retention fee')).toBeNull()
+		expect(dialog.getByText('1971-01-01 00:01:40 UTC')).not.toBeNull()
+		expect(dialog.getByText('Current annual holding fee')).not.toBeNull()
+		expect(dialog.getByText('Estimated annual fee after mint')).not.toBeNull()
+		const feeRow = dialog.getByText('Estimated holding fee until market end').parentElement
+		if (feeRow === null) throw new Error('Expected holding fee row')
+		const initialFee = feeRow.textContent
+		expect(initialFee).toContain('0.16')
+		await act(() => render(view('2'), rendered.container))
+		expect(feeRow.textContent).not.toBe(initialFee)
+		await act(() => render(view(''), rendered.container))
+		expect(feeRow.textContent).toContain('—')
 	})
 
 	void test('shows the minting disabled reason when total underwriting commitments remain unclaimed and none is fee eligible', async () => {
@@ -708,17 +730,13 @@ void describe('TradingSection', () => {
 		expect(dialog.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		expect(document.body.querySelector('.transaction-review')).toBeNull()
 		expect(dialog.getByText('You pay')).not.toBeNull()
-		expect(dialog.getByText('Estimated shares received')).not.toBeNull()
-		expect(dialog.getByText('Estimated retention fee')).not.toBeNull()
-		expect(dialog.getByText('Estimate may change when accrued fees are checkpointed.')).not.toBeNull()
-		expect(dialog.getByText('Resulting ETH balance')).not.toBeNull()
-		const estimatedFeeRow = dialog.getByText('Estimated retention fee').parentElement
-		if (estimatedFeeRow === null) throw new Error('Expected estimated retention fee row')
-		expect(getExactValueTitles(estimatedFeeRow, '1')).toHaveLength(1)
-		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(3)
+		expect(dialog.getByText('Estimated complete sets received')).not.toBeNull()
+		expect(dialog.queryByText('Estimated retention fee')).toBeNull()
+		expect(dialog.getByText('Current annual holding fee')).not.toBeNull()
+		expect(dialog.getByText('Holding-cost estimate unavailable: market end has passed.')).not.toBeNull()
+		expect(dialog.queryByText('Resulting ETH balance') === null).toBe(true)
+		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(1)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
-		const receivedShares = dialog.getByRole('list', { name: 'Estimated shares received' })
-		for (const label of ['Yes', 'No', 'Invalid']) expect(within(receivedShares).getByText(label, { exact: true })).not.toBeNull()
 	})
 
 	void test('shows the minting disabled reason on the launcher when migrated shares have no collateral exchange rate', async () => {
