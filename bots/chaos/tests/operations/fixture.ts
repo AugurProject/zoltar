@@ -1,8 +1,24 @@
 import { getAddress, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import type { PlanningOptions } from '../../src/operations/catalog.ts'
 import type { EcosystemSnapshot } from '../../src/operations/types.ts'
 
 export const address = (value: number): Address => getAddress(`0x${value.toString(16).padStart(40, '0')}`)
 export const hash = (value: number): Hash => `0x${value.toString(16).padStart(64, '0')}`
+
+/** Planning limits that admit every catalog operation above the standard wallet reserves; tests override what they exercise. */
+export function planningOptionsFixture(overrides: Partial<PlanningOptions> = {}): PlanningOptions {
+	return {
+		allowHighRisk: true,
+		allowIrreversibleOperations: true,
+		maxEthSpendAttoEth: (10n ** 15n).toString(),
+		maximumBlockIntervalSeconds: 15,
+		maxRepSpendAttoRep: (10n ** 15n).toString(),
+		minimumEthReserveAttoEth: (10n ** 16n).toString(),
+		minimumRepReserveAttoRep: (10n ** 18n).toString(),
+		seed: 0x1234_5678,
+		...overrides,
+	}
+}
 
 export function snapshotFixture(): EcosystemSnapshot {
 	const wallet = address(1)
