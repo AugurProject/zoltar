@@ -95,6 +95,35 @@ function withInitializedV4Pool<T extends Pick<ReturnType<typeof createConnectedR
 	return client
 }
 
+function withMinimumReportFixture<T extends Pick<ReturnType<typeof createConnectedReadClient>, 'readContract' | 'getBlock'>>(client: T, minimum: bigint) {
+	return {
+		...client,
+		getBlock: async () => ({ ...(await client.getBlock()), baseFeePerGas: 0n }),
+		readContract: createReadContractStub(async request => {
+			switch (request.functionName) {
+				case 'gasUnitsForOneDispute':
+					return 1n
+				case 'initialReportPriorityFeeAttoEthPerGas':
+					return 1n
+				case 'targetPriceErrorForDispute':
+					return 10_000_000n
+				case 'openOracleSecurityMultiplierBps':
+					return 10_000n
+				case 'protocolFee':
+					return 0
+				case 'feePercentage':
+					return 0
+				case 'securityPool':
+					return getAddress(WETH_ADDRESS)
+				case 'settlementCollateralAttoEth':
+					return (minimum - 2n) * 100n
+				default:
+					return await client.readContract(request)
+			}
+		}),
+	}
+}
+
 function createQuoteClient(amountOut: bigint): Parameters<typeof loadOpenOracleInitialReportPrice>[0] {
 	const client = withInitializedV4Pool(createConnectedReadClient())
 	const simulateContract: Parameters<typeof loadOpenOracleInitialReportPrice>[0]['simulateContract'] = async () => ({ result: [amountOut, 100000n], request: {} as never }) as never
@@ -961,6 +990,17 @@ describe('Open Oracle helpers', () => {
 			blockNumber: block.number,
 			gasPrice: block.baseFeePerGas,
 		})
+		const expectedMinimum = await client.readContract({
+			address: managerAddress,
+			abi: [{ type: 'function', name: 'minimumToken1ReportAttoEth', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+			functionName: 'minimumToken1ReportAttoEth',
+			account: client.account.address,
+			blockNumber: block.number,
+			gasPrice: block.baseFeePerGas,
+		})
+		const funding = await loadCoordinatorInitialReportFundingRequirement(uiReadClient, managerAddress, client.account.address, 10n ** 18n)
+		expect(funding.minimumToken1ReportAttoEth).toBe(expectedMinimum)
+		expect(funding.maximumInitialAttoWeth).toBe(2n * funding.minimumToken1ReportAttoEth)
 		const details = await loadOracleManagerDetails(uiReadClient, managerAddress)
 		expect(details.requestPriceCostAttoEth).toBe(expectedCost)
 		expect(details.requestPriceCostAttoEth).toBeGreaterThan(101n)
@@ -1150,7 +1190,6 @@ describe('Open Oracle helpers', () => {
 		mockClient.readContract = async parameters => {
 			const address = parameters.address as Address
 			const functionName = parameters.functionName as string
-			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 			if (functionName === 'lastPrice') throw new Error('A cached price must not be used for a new initial report')
 			if (functionName === 'reputationToken') return reputationTokenAddress as never
 			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return currentWethBalanceAttoEth as never
@@ -1159,7 +1198,7 @@ describe('Open Oracle helpers', () => {
 		}
 		mockClient.simulateContract = async () => ({ result: [quotedAmount2, 100000n], request: {} as never }) as never
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(withMinimumReportFixture(mockClient, minimumToken1ReportAttoEth)), managerAddress, uiWriteClient.account.address)
 
 		expect(funding.initialReportAmount2).toBe(quotedAmount2 * 2n)
 		expect(funding.requiredRepAttoRep).toBe(quotedAmount2)
@@ -1178,7 +1217,6 @@ describe('Open Oracle helpers', () => {
 		mockClient.readContract = async parameters => {
 			const address = parameters.address as Address
 			const functionName = parameters.functionName as string
-			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 			if (functionName === 'reputationToken') return reputationTokenAddress as never
 			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return 0n as never
 			if (functionName === 'balanceOf' && address === reputationTokenAddress) return 1_000n as never
@@ -1189,7 +1227,7 @@ describe('Open Oracle helpers', () => {
 			throw new Error('Manual initial price must bypass Uniswap')
 		}
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(withMinimumReportFixture(mockClient, minimumToken1ReportAttoEth)), managerAddress, uiWriteClient.account.address, proposedRepPerEthPrice, requestedInitialAttoWeth)
 
 		expect(funding.minimumToken1ReportAttoEth).toBe(minimumToken1ReportAttoEth)
 		expect(funding.requestedInitialAttoWeth).toBe(requestedInitialAttoWeth)
@@ -1207,7 +1245,6 @@ describe('Open Oracle helpers', () => {
 		mockClient.readContract = async parameters => {
 			const address = parameters.address as Address
 			const functionName = parameters.functionName as string
-			if (functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 			if (functionName === 'reputationToken') return reputationTokenAddress as never
 			if (functionName === 'balanceOf' && address === WETH_ADDRESS) return 0n as never
 			if (functionName === 'balanceOf' && address === reputationTokenAddress) return 1_000n as never
@@ -1228,7 +1265,7 @@ describe('Open Oracle helpers', () => {
 			return { result: [100n, 0n, 0, 0n], request: {} as never } as never
 		}
 
-		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(mockClient), managerAddress, uiWriteClient.account.address, undefined, requestedInitialAttoWeth)
+		const funding = await loadCoordinatorInitialReportFundingRequirement(withInitializedV4Pool(withMinimumReportFixture(mockClient, minimumToken1ReportAttoEth)), managerAddress, uiWriteClient.account.address, undefined, requestedInitialAttoWeth)
 
 		expect(quotedExactAmounts).toEqual(Array.from({ length: 8 }, () => requestedInitialAttoWeth))
 		expect(funding.proposedRepPerEthPrice).toBe(400_000_000_000_000_000n)
@@ -1342,7 +1379,6 @@ describe('Open Oracle helpers', () => {
 				if (parameters.functionName === 'getSettlementCallbackGasLimit') return 10 as never
 				if (parameters.functionName === 'gasConsumedOpenOracleReportPrice') return 20n as never
 				if (parameters.functionName === 'isPriceValid') return false as never
-				if (parameters.functionName === 'minimumToken1ReportAttoEth') return minimumToken1ReportAttoEth as never
 				if (parameters.functionName === 'reputationToken') return reputationTokenAddress as never
 				if (parameters.functionName === 'balanceOf') return (parameters.address === reputationTokenAddress ? 100n : 1_000n) as never
 				if (parameters.functionName === 'allowance') return 0n as never
@@ -1376,9 +1412,10 @@ describe('Open Oracle helpers', () => {
 				waitForTransactionReceipt: async () => createSuccessfulReceipt(transactionHash, managerAddress),
 			}
 
-			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(mockClient), managerAddress, proposedPrice, requestedInitialAttoWeth, undefined)
-			else if (operation === 'liquidation-helper') await queueSecurityPoolLiquidation(withInitializedV4Pool(mockClient), managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth, undefined, undefined, proposedPrice)
-			else await queueOracleManagerOperation(withInitializedV4Pool(mockClient), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedPrice, requestedInitialAttoWeth)
+			if (operation === 'request') await requestOraclePrice(withInitializedV4Pool(withMinimumReportFixture(mockClient, minimumToken1ReportAttoEth)), managerAddress, proposedPrice, requestedInitialAttoWeth, undefined)
+			else if (operation === 'liquidation-helper')
+				await queueSecurityPoolLiquidation(withInitializedV4Pool(withMinimumReportFixture(mockClient, minimumToken1ReportAttoEth)), managerAddress, client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, requestedInitialAttoWeth, undefined, undefined, proposedPrice)
+			else await queueOracleManagerOperation(withInitializedV4Pool(withMinimumReportFixture(mockClient, minimumToken1ReportAttoEth)), managerAddress, 'liquidation', client.account.address, 1n, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, proposedPrice, requestedInitialAttoWeth)
 
 			expect(quotedExactAmounts).toEqual(manual ? [] : Array.from({ length: 8 }, () => requestedInitialAttoWeth))
 			// The committed bounty is the final argument and equals the ETH sent with the request.
