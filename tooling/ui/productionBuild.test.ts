@@ -449,7 +449,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
 			selected =
 				(await driver.evaluate(
-					`(() => { const tab = [...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"]')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (tab instanceof HTMLElement) { tab.click(); return true } const disclosure = document.querySelector('.pool-tools-disclosure'); if (!(disclosure instanceof HTMLDetailsElement)) return false; if (!disclosure.open) disclosure.querySelector('summary')?.click(); const button = [...disclosure.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
+					`(() => { const tab = [...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"]')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (tab instanceof HTMLElement) { tab.click(); return true } const trigger = document.querySelector('.pool-tools-trigger'); if (!(trigger instanceof HTMLButtonElement)) return false; if (trigger.getAttribute('aria-expanded') !== 'true') { trigger.click(); return false } const button = [...document.querySelectorAll('.pool-tools-options button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
 				)) === true
 			if (!selected) await Bun.sleep(50)
 		}

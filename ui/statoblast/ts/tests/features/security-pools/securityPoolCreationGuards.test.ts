@@ -66,7 +66,7 @@ describe('security pool creation guards', () => {
 				statoblastSecurityMultiplier: '2',
 				zoltarUniverseHasForked: false,
 			}),
-		).toBe('A pool for this question, Statoblast security multiplier, and priority fee already exists.')
+		).toBe('A pool for this question, security multiplier, and priority fee already exists.')
 
 		expect(
 			getSecurityPoolCreateDisabledReason({
@@ -111,12 +111,12 @@ describe('security pool creation guards', () => {
 		).toBeUndefined()
 	})
 
-	test('validates the Statoblast security multiplier before submission', () => {
-		expect(getStatoblastSecurityMultiplierValidationMessage('')).toBe('Enter a Statoblast security multiplier of at least 1.0002×.')
+	test('validates the security multiplier before submission', () => {
+		expect(getStatoblastSecurityMultiplierValidationMessage('')).toBe('Enter a security multiplier of at least 1.0002×.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('abc')).toBe('Enter a multiplier with at most 4 decimal places.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('2.00001')).toBe('Enter a multiplier with at most 4 decimal places.')
-		expect(getStatoblastSecurityMultiplierValidationMessage('1')).toBe('Statoblast security multiplier must be at least 1.0002×.')
-		expect(getStatoblastSecurityMultiplierValidationMessage('1.0001')).toBe('Statoblast security multiplier must be at least 1.0002×.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('1')).toBe('Security multiplier must be at least 1.0002×.')
+		expect(getStatoblastSecurityMultiplierValidationMessage('1.0001')).toBe('Security multiplier must be at least 1.0002×.')
 		expect(getStatoblastSecurityMultiplierValidationMessage('2.0001')).toBeUndefined()
 	})
 

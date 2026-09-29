@@ -316,7 +316,7 @@ export function useSecurityPoolCreation({
 							if (!isRecoverableContractReadError(error)) throw error
 							// The duplicate remains blocked when its address lookup fails.
 						}
-						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
+						throw new Error('A security pool for this question, security multiplier, and priority fee already exists.')
 					}
 
 					const reviewLabels = { title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }

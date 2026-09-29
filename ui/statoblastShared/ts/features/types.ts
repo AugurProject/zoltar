@@ -142,6 +142,8 @@ type LiquidationModalStateProps = {
 type SecurityPoolsOverviewRouteContentProps = {
 	accountState: AccountState
 	activeUniverseId: bigint
+	/** Scans the first registry page once when nothing is downloaded for the universe, so the landing list is not empty until a manual scan. */
+	autoDiscoverWhenEmpty?: boolean | undefined
 	currentTimestamp: bigint | undefined
 	environmentRefreshKey: number
 	loadingSecurityPoolPage: boolean
@@ -203,6 +205,8 @@ export type SecurityPoolsSectionProps = {
 	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
 	onLoadUniverseDirectoryPools?: (() => void) | undefined
+	/** Opens a Browse pools row in its universe with one history entry and one pool load. */
+	onOpenSecurityPool: (securityPoolAddress: string, universeId: bigint) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined

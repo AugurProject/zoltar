@@ -52,7 +52,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		const openAdmissionProps = {
 			pool: { marketDetails: endedAtTwo() },
 			vault: {
-				securityVaultForm: createSecurityVaultForm({ depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2' }),
+				securityVaultForm: createSecurityVaultForm({ depositAmount: '5', repWithdrawAmount: '1', targetHealthFactor: '2' }),
 				walletRepBalanceAttoRep: 10n * 10n ** 18n,
 			},
 		}
@@ -60,7 +60,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 		const documentQueries = within(document.body)
 		await openDialog('Deposit REP')
-		expectTransactionButtonEnabled(document.body, 'Approve 1 REP')
+		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
 
 		await rerender(createVaultsViewProps(openAdmissionProps), { chainTimestamp: 2n })
 
@@ -71,7 +71,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		expect(depositAmountInput?.disabled).toBe(true)
 		expect(approvalAmountInput?.disabled).toBe(true)
 		expect(depositQueries.getByText('REP approval amount').parentElement?.querySelector('button')).toBeNull()
-		expectTransactionButtonDisabled(depositDialog, 'Approve 1 REP')
+		expectTransactionButtonDisabled(depositDialog, 'Approve 5 REP')
 
 		await act(() => {
 			fireEvent.click(depositQueries.getByRole('button', { name: 'Cancel' }))
@@ -86,7 +86,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 			chainTimestamp: 1n,
 			pool: { marketDetails: endedAtTwo() },
 			vault: {
-				securityVaultForm: createSecurityVaultForm({ depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2' }),
+				securityVaultForm: createSecurityVaultForm({ depositAmount: '5', repWithdrawAmount: '1', targetHealthFactor: '2' }),
 				walletRepBalanceAttoRep: 10n * 10n ** 18n,
 			},
 		})
@@ -99,7 +99,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		}
 
 		const depositDialog = await openDialog('Deposit REP')
-		expectDialogActions(depositDialog, ['Approve 1\u00a0REP', 'Deposit REP', 'Cancel'])
+		expectDialogActions(depositDialog, ['Approve 5\u00a0REP', 'Deposit REP', 'Cancel'])
 		await act(() => {
 			fireEvent.click(within(depositDialog).getByRole('button', { name: 'Cancel' }))
 		})
@@ -252,10 +252,11 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 		await renderVaultsView({
 			accountState: underfundedAccount,
 			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, lastPrice: 3n * 10n ** 18n, requestPriceCostAttoEth: 10n * 10n ** 18n }),
-			pool: { managerAddress: zeroAddress, totalPoolHeldAttoRep: 9n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2n * 10n ** 18n },
+			pool: { managerAddress: zeroAddress, totalPoolHeldAttoRep: 9n * 10n ** 18n, totalUnderwritingLimitAttoEth: 0n },
 			vault: {
 				accountState: underfundedAccount,
-				securityVaultDetails: createSecurityVaultDetails({ vaultAttoRepBacking: 12n * 10n ** 18n, underwritingLimitAttoEth: 1n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2n * 10n ** 18n }),
+				// Without a usable price only an uncommitted pool has a known withdrawal maximum.
+				securityVaultDetails: createSecurityVaultDetails({ vaultAttoRepBacking: 12n * 10n ** 18n, underwritingLimitAttoEth: 0n, totalUnderwritingLimitAttoEth: 0n }),
 				securityVaultForm: createSecurityVaultForm({ repWithdrawAmount: '1' }),
 			},
 		})

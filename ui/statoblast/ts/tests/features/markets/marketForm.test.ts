@@ -9,7 +9,7 @@ describe('market form defaults', () => {
 		expect(getDefaultMarketFormState().categoricalOutcomes).toEqual(['Yes', 'No'])
 		expect(getDefaultSecurityPoolFormState().statoblastSecurityMultiplierBps).toBe('2')
 		expect(getDefaultSecurityPoolFormState().initialReportPriorityFeeEth).toBe('0.00000001')
-		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('0')
+		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('')
 		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('5')
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')
 		expect(getDefaultForkAuctionFormState().repMigrationOutcomes).toBe('yes')

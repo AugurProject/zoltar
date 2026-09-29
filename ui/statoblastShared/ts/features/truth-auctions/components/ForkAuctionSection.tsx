@@ -19,6 +19,7 @@ import { ForkAuctionWorkflowShell, ForkTriggeredStage } from './ForkAuctionWorkf
 import { ForkAuctionBidsStatusSection, ForkAuctionSettlementActionSection, ForkAuctionStartSection, ForkAuctionSubmitBidSection } from './ForkAuctionActionSections.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
+import { getTruthAuctionReservePrice } from '../lib/truthAuctionBook.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import { type DisplayMetric, ForkAuctionOutcomeStage, ForkAuctionMigrationSummaryCard, FORK_MIGRATION_DURATION, ForkWorkflowStageNavigator, renderAddress, renderMetricValue, renderTruthAuctionPriceValue, renderTruthAuctionSettlementSelectionSummary, sameBigIntRecord } from './ForkAuctionPresentation.js'
@@ -144,6 +145,12 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				minBidSizeAttoEth={model.truthAuctionStatus.minBidSizeAttoEth}
 				pendingRefundDisplay={pendingRefundDisplay}
 				repSoldProgress={model.repSoldProgress}
+				reservePriceDisplay={(() => {
+					// Live bids below the reserve cannot fill if the auction misses its cap, so show the reserve until the auction clears or finalizes.
+					if (model.truthAuctionStatus.finalized || model.truthAuctionStatus.hitCap) return undefined
+					const reservePrice = getTruthAuctionReservePrice(model.truthAuctionStatus)
+					return reservePrice === undefined ? undefined : renderTruthAuctionPriceValue(reservePrice)
+				})()}
 				startedDisplay={model.startedDisplay}
 				winningThresholdPriceDisplay={model.winningThresholdPrice === undefined ? undefined : renderTruthAuctionPriceValue(model.winningThresholdPrice)}
 			/>

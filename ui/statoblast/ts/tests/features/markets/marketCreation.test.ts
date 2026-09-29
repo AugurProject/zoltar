@@ -469,7 +469,7 @@ void describe('market creation helpers', () => {
 					marketId: '0x2a',
 					statoblastSecurityMultiplierBps,
 				} as SecurityPoolFormState),
-			).toThrow('Statoblast security multiplier must be at least 1.0002')
+			).toThrow('Security multiplier must be at least 1.0002')
 		}
 	})
 

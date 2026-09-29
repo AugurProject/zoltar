@@ -7,8 +7,8 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
-import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
+import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import type { MetricGridVariant } from '../../types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -33,7 +33,7 @@ export function SecurityPoolSummaryMetrics({ children, className = '', metricVar
 		<MetricGrid className={className} variant={metricVariant}>
 			<MetricField label={securityPoolCopy.vaultCount}>{pool.vaultCount.toString()}</MetricField>
 			<MetricField label={<GlossaryTerm id='security-multiplier'>{statoblastAppCopy.statoblastSecurityMultiplierBps}</GlossaryTerm>}>{formatStatoblastSecurityMultiplier(pool.statoblastSecurityMultiplierBps)}</MetricField>
-			<MetricField label={commonCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(pool.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
+			<MetricField label={commonCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(pool.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 			<MetricField label={<GlossaryTerm id='open-interest-fee'>{securityPoolCopy.openInterestFeeYear}</GlossaryTerm>}>
 				<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 			</MetricField>

@@ -249,7 +249,7 @@ export function OpenOracleReportDetailsCard({
 					{ label: openOracleCopy.reporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 					{
 						label: openOracleCopy.price,
-						value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
+						value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatReportPriceUnit(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
 					},
 				]}
 			/>
@@ -327,7 +327,7 @@ export function OpenOracleReportDetailsCard({
 						},
 						{
 							label: openOracleCopy.price,
-							value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
+							value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatReportPriceUnit(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
 						},
 						{
 							label: openOracleCopy.settlerReward,

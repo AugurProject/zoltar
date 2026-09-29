@@ -20,6 +20,7 @@ type TruthAuctionSummaryCardProps = {
 	minBidSizeAttoEth: bigint
 	pendingRefundDisplay: ComponentChildren
 	repSoldProgress: number
+	reservePriceDisplay?: ComponentChildren | undefined
 	startedDisplay: ComponentChildren
 	winningThresholdPriceDisplay?: ComponentChildren | undefined
 }
@@ -37,6 +38,7 @@ export function TruthAuctionSummaryCard({
 	minBidSizeAttoEth,
 	pendingRefundDisplay,
 	repSoldProgress,
+	reservePriceDisplay,
 	startedDisplay,
 	winningThresholdPriceDisplay,
 }: TruthAuctionSummaryCardProps) {
@@ -73,6 +75,7 @@ export function TruthAuctionSummaryCard({
 					<MetricField label={forkAuctionCopy.pendingRefund}>{pendingRefundDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.minBid}>{<CurrencyValue value={minBidSizeAttoEth} suffix={commonCopy.eth} />}</MetricField>
 					<MetricField label={commonCopy.ends}>{endsDisplay}</MetricField>
+					{reservePriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.reservePrice}>{reservePriceDisplay}</MetricField>}
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>

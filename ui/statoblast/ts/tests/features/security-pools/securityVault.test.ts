@@ -14,6 +14,7 @@ import {
 	hasValidSecurityVaultOraclePrice,
 	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
+	doesVaultWithdrawalExitEntireVault,
 	isSelectedVaultOwnedByAccount,
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
@@ -140,11 +141,11 @@ void describe('security vault helpers', () => {
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
 	})
 
-	void test('requires a minimum first deposit for brand-new vaults only', () => {
+	void test('requires every deposit to leave the vault at the minimum or above', () => {
 		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
 		expect(isSecurityVaultDepositBelowMinimum(undefined, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
 		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
-		expect(isSecurityVaultDepositBelowMinimum(1n, 1n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, 1n)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, 5n * 10n ** 17n)).toBe(false)
 		expect(isSecurityVaultDepositBelowMinimum(0n, 19n * 10n ** 18n, 20n * 10n ** 18n)).toBe(true)
 		expect(isSecurityVaultDepositBelowMinimum(0n, 20n * 10n ** 18n, 20n * 10n ** 18n)).toBe(false)
@@ -332,4 +333,31 @@ void test('commitment maximum is healthy and one attoETH more is liquidatable ac
 	}
 	expect(getMaximumHealthyCommitment(undefined, 1n, 20000n)).toBeUndefined()
 	expect(getMaximumHealthyCommitment({ vaultAttoRepBacking: 1n, disputeStakedAttoRep: 0n }, 0n, 20000n)).toBeUndefined()
+})
+
+void test('an exact minimum first deposit is below the minimum when the unit round trip floors it', () => {
+	// SecurityPoolOperationsDelegate._creditRepDeposit floors REP into backing units, then checks the vault's REP after
+	// converting those units back against the post-deposit pool, so an inexact REP-per-unit ratio loses one attoREP.
+	const pool = { totalPoolHeldAttoRep: 30n * 10n ** 18n + 1n, totalRepBackingUnits: 20n * 10n ** 18n }
+	expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, pool)).toBe(true)
+	expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP + 1n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, pool)).toBe(false)
+	// An exact ratio or an empty pool credits the full deposit.
+	expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, { totalPoolHeldAttoRep: 30n * 10n ** 18n, totalRepBackingUnits: 30n * 10n ** 36n })).toBe(false)
+	expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, { totalPoolHeldAttoRep: 0n, totalRepBackingUnits: 0n })).toBe(false)
+	// The contract checks the whole vault after every deposit, including an existing vault below the minimum.
+	expect(isSecurityVaultDepositBelowMinimum(4n * 10n ** 18n, 5n * 10n ** 18n)).toBe(true)
+	expect(isSecurityVaultDepositBelowMinimum(4n * 10n ** 18n, 6n * 10n ** 18n)).toBe(false)
+})
+
+void test('a partial withdrawal maximum keeps the vault minimum unless coverage allows a full exit', () => {
+	const minimum = 10n * 10n ** 18n
+	// A commitment locks 4 REP of 20: withdrawing more than 10 would leave less than the minimum and exit the whole vault, which coverage rejects.
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 20n * 10n ** 18n, repPerEthPrice: 2n * 10n ** 18n, underwritingLimitAttoEth: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, minimumVaultRepDepositAttoRep: minimum })).toBe(10n * 10n ** 18n)
+	// Without a commitment the whole vault can leave.
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 20n * 10n ** 18n, repPerEthPrice: undefined, underwritingLimitAttoEth: 0n, statoblastSecurityMultiplierBps: 20_000n, minimumVaultRepDepositAttoRep: minimum })).toBe(20n * 10n ** 18n)
+	// A committed vault at the minimum cannot withdraw anything partially.
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: minimum, repPerEthPrice: 10n ** 18n, underwritingLimitAttoEth: 1n, statoblastSecurityMultiplierBps: 20_000n, minimumVaultRepDepositAttoRep: minimum })).toBe(0n)
+	expect(doesVaultWithdrawalExitEntireVault(11n * 10n ** 18n, 20n * 10n ** 18n, minimum)).toBe(true)
+	expect(doesVaultWithdrawalExitEntireVault(10n * 10n ** 18n, 20n * 10n ** 18n, minimum)).toBe(false)
+	expect(doesVaultWithdrawalExitEntireVault(undefined, 20n * 10n ** 18n, minimum)).toBe(false)
 })

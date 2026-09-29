@@ -15,6 +15,7 @@ import type { SecurityVaultFormState } from '../types/app.js'
 import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityVaultActionResult, TradingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
+import { formatInitialReportPriorityFee, formatInitialReportPriorityFeeInput } from './security-pools/lib/priorityFee.js'
 
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeEth?: string | undefined
@@ -31,7 +32,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 		...(context.questionTitle === undefined || context.questionTitle.trim() === '' ? [] : [{ label: commonCopy.question, value: context.questionTitle.trim() }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps) }]),
-		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatValueWithUnit(context.initialReportPriorityFeeEth.trim(), commonCopy.eth) }]),
+		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatInitialReportPriorityFeeInput(context.initialReportPriorityFeeEth) }]),
 	]
 }
 
@@ -54,7 +55,7 @@ export function createSecurityPoolCreationSuccessPresentation(result: SecurityPo
 			{ label: transactionCopy.pool, value: <AddressValue address={result.securityPoolAddress} /> },
 			{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> },
 			{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(result.statoblastSecurityMultiplierBps) },
-			{ label: commonCopy.initialReportPriorityFee, value: formatCurrencyBalanceWithUnit(result.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18) },
+			{ label: commonCopy.initialReportPriorityFee, value: formatInitialReportPriorityFee(result.initialReportPriorityFeeAttoEthPerGas) },
 		],
 		title: transactionCopy.securityPoolCreated,
 		tone: 'success',
@@ -112,6 +113,17 @@ export function createSecurityVaultTransactionIntent(actionName: SecurityVaultAc
 }
 
 export function createSecurityVaultSuccessPresentation(result: SecurityVaultActionResult, context?: SecurityVaultTransactionContext) {
+	// A staged operation that ran and reverted is a failure, not a completed vault action.
+	if (result.stagedExecution?.success === false) {
+		return buildPresentation({
+			detail: result.stagedExecution.errorMessage ?? securityPoolCopy.stagedOperationFailedDetail,
+			hash: result.hash,
+			rows: [...(getSecurityVaultTransactionRows(context) ?? []), { label: commonCopy.stagedOperation, value: `#${result.stagedExecution.operationId.toString()}` }],
+			title: getSecurityVaultActionTitle(result.action, context?.repTokenSymbol),
+			tone: 'error',
+			universeId: context?.universeId,
+		})
+	}
 	let queuedOperationDetail: string | undefined
 	if (result.queuedOperation !== undefined && result.stagedExecution === undefined) {
 		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedOperationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedOperationManualExecutionDetail(result.queuedOperation.operationId.toString())
@@ -199,6 +211,8 @@ export function createLiquidationTransactionIntent(context?: LiquidationTransact
 }
 
 export function createLiquidationSuccessPresentation(result: SecurityPoolOverviewActionResult, context?: LiquidationTransactionContext) {
+	// A staged liquidation that ran and reverted is a failure, whichever caller builds the presentation.
+	if (result.stagedExecution?.success === false) return createLiquidationFailurePresentation(result, result.stagedExecution.errorMessage ?? securityPoolCopy.stagedOperationFailedDetail, context)
 	let queuedOperationDetail: string = transactionCopy.liquidationRequestSubmittedDetail
 	if (result.queuedOperation !== undefined && result.stagedExecution === undefined) {
 		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedLiquidationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedLiquidationManualExecutionDetail(result.queuedOperation.operationId.toString())

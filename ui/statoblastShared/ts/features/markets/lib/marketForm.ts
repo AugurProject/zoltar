@@ -16,7 +16,7 @@ export function getDefaultSecurityPoolFormState(): SecurityPoolFormState {
 }
 
 export function parseStatoblastSecurityMultiplierBpsInput(value: string) {
-	return parseDecimalInput(value, 'Statoblast security multiplier', STATOBLAST_SECURITY_MULTIPLIER_DECIMALS)
+	return parseDecimalInput(value, 'Security multiplier', STATOBLAST_SECURITY_MULTIPLIER_DECIMALS)
 }
 
 export function tryParseStatoblastSecurityMultiplierBpsInput(value: string) {
@@ -25,7 +25,7 @@ export function tryParseStatoblastSecurityMultiplierBpsInput(value: string) {
 
 export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
-		depositAmount: '0',
+		depositAmount: '',
 		targetHealthFactor: '2',
 		repWithdrawAmount: '0',
 		selectedVaultOwner: '',

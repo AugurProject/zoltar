@@ -84,12 +84,12 @@ describe('transaction presentations', () => {
 		expect(getSecurityVaultActionRepAmount('queueWithdrawRep', { depositAmount: '', repWithdrawAmount: 'abc' })).toBeUndefined()
 	})
 
-	test('normalizes the Statoblast security multiplier in security pool creation intents', () => {
+	test('normalizes the security multiplier in security pool creation intents', () => {
 		const intent = createSecurityPoolCreationTransactionIntent({
 			statoblastSecurityMultiplierBps: 25_000n,
 		})
 
-		expect(intent.rows).toEqual([{ label: 'Statoblast security multiplier', value: '2.5×' }])
+		expect(intent.rows).toEqual([{ label: 'Security multiplier', value: '2.5×' }])
 		expect(intent.failedTitle).toBe('Security pool creation')
 	})
 
@@ -109,8 +109,31 @@ describe('transaction presentations', () => {
 		})
 
 		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
-		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast security multiplier', 'Initial report priority fee'])
-		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast security multiplier', 'Initial report priority fee'])
+		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Security multiplier', 'Initial report priority fee'])
+		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Security multiplier', 'Initial report priority fee'])
+		// The fee is a per-gas price: review and success state it the same way, in ETH per gas.
+		expect(intent.rows?.at(-1)?.value).toBe('0.00000001\u00a0ETH per gas')
+		expect(success.rows?.at(-1)?.value).toBe('0.00000001\u00a0ETH per gas')
+	})
+
+	test('does not present a failed staged execution as a success', () => {
+		const vaultPresentation = createSecurityVaultSuccessPresentation({
+			action: 'queueWithdrawRep',
+			hash: transactionHash,
+			queuedOperation: { operation: 'withdrawRep', operationId: 3n, isPendingSlot: false },
+			stagedExecution: { operation: 'withdrawRep', operationId: 3n, success: false, errorMessage: 'Price is stale' },
+		})
+		expect(vaultPresentation.tone).toBe('error')
+		expect(vaultPresentation.detail).toBe('Price is stale')
+		const liquidationPresentation = createLiquidationSuccessPresentation({
+			action: 'queueLiquidation',
+			hash: transactionHash,
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			queuedOperation: { operation: 'liquidation', operationId: 4n, isPendingSlot: false },
+			stagedExecution: { operation: 'liquidation', operationId: 4n, success: false, errorMessage: undefined },
+		})
+		expect(liquidationPresentation.tone).toBe('error')
+		expect(liquidationPresentation.title).toBe('Liquidation failed')
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {

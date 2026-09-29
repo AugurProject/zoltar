@@ -11,10 +11,10 @@ const MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS = 10_002n
 
 export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier: string) {
 	const input = statoblastSecurityMultiplier.trim()
-	if (input === '') return `Enter a Statoblast security multiplier of at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
+	if (input === '') return `Enter a security multiplier of at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
 	const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(input)
 	if (statoblastSecurityMultiplierBps === undefined) return 'Enter a multiplier with at most 4 decimal places.'
-	if (statoblastSecurityMultiplierBps < MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS) return `Statoblast security multiplier must be at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
+	if (statoblastSecurityMultiplierBps < MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS) return `Security multiplier must be at least ${formatMultiplier(MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS, 4)}.`
 	return undefined
 }
 
@@ -55,9 +55,9 @@ export function getSecurityPoolCreateDisabledReason({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier)
 	if (statoblastSecurityMultiplierValidationMessage !== undefined) return statoblastSecurityMultiplierValidationMessage
-	if (checkingDuplicateOriginPool) return 'Checking whether a pool already exists for this question, Statoblast security multiplier, and priority fee.'
+	if (checkingDuplicateOriginPool) return 'Checking whether a pool already exists for this question, security multiplier, and priority fee.'
 	if (securityPoolCreating) return 'Security pool creation is already in progress.'
-	if (duplicateOriginPoolExists) return 'A pool for this question, Statoblast security multiplier, and priority fee already exists.'
+	if (duplicateOriginPoolExists) return 'A pool for this question, security multiplier, and priority fee already exists.'
 	if (marketDetails === undefined) return 'Enter an exact binary Yes / No question before creating a pool.'
 	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
 	if (currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp) return securityPoolCopy.questionEndedReason

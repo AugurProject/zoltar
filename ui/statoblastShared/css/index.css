@@ -1636,8 +1636,6 @@
 
 .security-pool-strip,
 .security-pool-strip-stats,
-.vault-preview-strip-head,
-.vault-preview-side-metrics,
 .vault-detail-hero,
 .vault-detail-hero-secondary,
 .vault-detail-health,
@@ -1649,10 +1647,8 @@
 
 .security-pool-strip-stats span,
 .security-pool-strip-price span,
-.vault-preview-capacity-ownership span,
-.vault-preview-side-metrics span,
 .vault-detail-hero span,
-.trading-holdings-hero span,
+.trading-holdings-hero > span,
 .trading-share-callouts span {
 	font-size: var(--font-label);
 	color: var(--muted);
@@ -1660,8 +1656,6 @@
 
 .security-pool-strip-stats strong,
 .security-pool-strip-price strong,
-.vault-preview-capacity-ownership strong,
-.vault-preview-side-metrics strong,
 .vault-detail-hero strong,
 .trading-holdings-hero strong,
 .trading-share-callouts strong {
@@ -1670,8 +1664,6 @@
 }
 
 .security-pool-strip-stats > div,
-.vault-preview-capacity-ownership,
-.vault-preview-side-metrics > div,
 .vault-detail-hero-secondary > div,
 .trading-share-callouts > div {
 	display: grid;
@@ -1723,8 +1715,34 @@
 .security-pool-strip-price,
 .trading-holdings-hero {
 	display: grid;
-	gap: var(--space-2);
+	gap: var(--space-1);
 	padding: 0 0 var(--space-1);
+}
+
+/* The set count and its ETH value share one baseline; the value in parentheses is secondary but uses the same metric face. */
+.trading-holdings-value {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-2);
+	font-family: var(--font-family-mono);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--value);
+}
+
+.trading-holdings-value .currency-value {
+	font-size: inherit;
+	color: inherit;
+}
+
+.trading-holdings-backing {
+	font-size: var(--font-value);
+	color: var(--text-secondary);
+}
+
+.trading-holdings-hero .detail {
+	margin: 0;
 }
 
 .security-pool-card-progress {
@@ -1846,28 +1864,7 @@
 }
 
 .vault-preview-strip {
-	display: grid;
-	gap: var(--space-4);
-}
-
-.vault-preview-strip-head {
-	grid-template-columns: minmax(11rem, 1fr);
 	align-items: start;
-}
-
-.vault-preview-meter {
-	min-width: 0;
-}
-
-.vault-preview-side-metrics {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.vault-preview-meta {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.8rem;
-	align-items: end;
 }
 
 .vault-position-list {
@@ -1970,7 +1967,6 @@
 	align-items: start;
 }
 
-.vault-preview-meta .metric-field,
 .vault-detail-meta .metric-field {
 	min-width: 0;
 }
@@ -2047,9 +2043,7 @@
 	}
 
 	.security-pool-strip-stats,
-	.vault-preview-strip-head,
-	.vault-detail-hero,
-	.vault-preview-side-metrics {
+	.vault-detail-hero {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
@@ -2493,6 +2487,11 @@
 	}
 }
 
+/* Creating a pool pairs a wider question form with its sticky draft preview instead of capping both at the single-column form width. */
+.security-pool-create-question .question-create-form {
+	max-width: 72rem;
+}
+
 .pool-question-source {
 	display: flex;
 	flex-wrap: wrap;
@@ -2529,10 +2528,7 @@
 
 @media (max-width: 40rem) {
 	.security-pool-card-progress,
-	.vault-preview-meta,
 	.security-pool-strip-stats,
-	.vault-preview-strip-head,
-	.vault-preview-side-metrics,
 	.vault-detail-hero,
 	.vault-detail-hero-secondary,
 	.vault-detail-health,
@@ -2809,18 +2805,119 @@ span.rep-price-status.stale,
 .pool-workspace-navigation {
 	display: flex;
 	min-width: 0;
-	align-items: start;
+	align-items: flex-end;
 	justify-content: flex-start;
 	gap: var(--space-3);
 	border-bottom: 1px solid var(--border-default);
-	padding-bottom: var(--space-2);
 }
 
-.pool-tools-disclosure {
+/* "More tools" is a tab-styled trigger for a popover, so the secondary views line up with the primary tabs and never push the workspace down. */
+.pool-tools-menu {
+	position: relative;
+	flex: none;
+}
+
+.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
+	flex: 0 1 auto;
+	padding-bottom: 0;
+}
+
+.pool-tools-trigger.view-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	padding: 0.75rem 0.5rem;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	letter-spacing: 0;
+	white-space: nowrap;
+}
+
+.pool-tools-trigger.view-tab:hover,
+.pool-tools-trigger.view-tab[aria-expanded="true"] {
+	background: transparent;
+	border-bottom-color: var(--border-active);
+	color: var(--text);
+}
+
+.pool-tools-label-short {
+	display: none;
+}
+
+@media (max-width: 40rem) {
+	.pool-tools-label-long {
+		display: none;
+	}
+
+	.pool-tools-label-short {
+		display: inline;
+	}
+}
+
+.pool-tools-caret {
 	flex-shrink: 0;
+	width: 0.4rem;
+	height: 0.4rem;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: translateY(-0.1rem) rotate(45deg);
 }
 
-.pool-tools-disclosure summary,
+.pool-tools-trigger[aria-expanded="true"] .pool-tools-caret {
+	transform: translateY(0.1rem) rotate(225deg);
+}
+
+.pool-tools-options {
+	position: absolute;
+	z-index: var(--z-dropdown);
+	top: calc(100% + 0.4rem);
+	left: 0;
+	display: grid;
+	min-width: 12rem;
+	margin: 0;
+	padding: var(--space-1);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-overlay);
+	background: var(--surface-modal-opaque);
+	box-shadow: var(--shadow-overlay);
+	list-style: none;
+}
+
+.pool-tools-options button {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-3);
+	border: 0;
+	border-radius: var(--radius-control);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.pool-tools-options button:hover {
+	background: var(--interactive-bg-hover);
+	color: var(--text);
+}
+
+.pool-tools-options button.active {
+	background: var(--accent-soft);
+	box-shadow: inset 2px 0 0 var(--accent);
+	color: var(--text);
+	font-weight: 700;
+}
+
 .vault-more-actions summary,
 .vault-backing-details summary {
 	cursor: pointer;
@@ -2829,31 +2926,21 @@ span.rep-price-status.stale,
 	color: var(--text-secondary);
 }
 
-.pool-tools-options {
-	display: grid;
-	gap: var(--space-1);
-	padding-bottom: var(--space-2);
-}
-
 .pool-context {
 	display: grid;
 	gap: var(--space-3);
 }
 
-.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
+.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] {
 	border-bottom: 0;
 }
 
+/* Each launcher spans three shared rows (button, description, unavailable reason), so captions line up across columns whether or not an action is blocked. */
 .vault-primary-actions {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+	gap: var(--space-2) var(--space-3);
 	align-items: start;
-	gap: var(--space-3);
-}
-
-.vault-primary-actions > * {
-	flex: 0 1 15rem;
-	min-width: 0;
 }
 
 .vault-health-status {
@@ -2898,19 +2985,23 @@ span.rep-price-status.stale,
 	}
 
 	.pool-workspace-navigation {
-		flex-wrap: wrap;
+		gap: var(--space-2);
 	}
 
-	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
-		max-width: 100%;
+	/* Tighter tabs keep all three pool tabs and the tools trigger on one row at phone widths. */
+	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] {
+		gap: var(--space-1);
 	}
 
+	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] .view-tab,
+	.pool-tools-trigger.view-tab {
+		padding-inline: 0.45rem;
+	}
+
+	/* The trigger sits at the right edge on narrow screens, so the menu opens toward the content. */
 	.pool-tools-options {
-		justify-items: start;
-	}
-
-	.vault-primary-actions > * {
-		flex: 1 1 10rem;
+		right: 0;
+		left: auto;
 	}
 }
 
@@ -2981,13 +3072,32 @@ span.rep-price-status.stale,
 .pool-directory-details {
 	grid-column: 1 / -1;
 }
+/* Button, description, then any blocker, stacked per column: equal-height buttons keep the columns aligned, and each blocker stays directly under its own description. */
 .vault-action-launcher {
-	display: grid;
-	gap: var(--space-2);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+	padding-bottom: var(--space-2);
+}
+.vault-action-launcher > .tx-action {
+	display: contents;
+}
+.vault-action-launcher .tx-action-row {
+	order: 0;
 }
 .vault-action-launcher > .detail {
+	order: 1;
 	margin: 0;
 	font-size: 0.8125rem;
+}
+.vault-action-launcher .tx-action-feedback {
+	order: 2;
+	min-block-size: 0;
+}
+.vault-action-launcher .tx-action-notice {
+	font-size: 0.8125rem;
+	color: var(--muted);
 }
 .staged-operation-card {
 	display: grid;
@@ -3062,6 +3172,41 @@ span.rep-price-status.stale,
 
 .pool-reference-details .read-only-detail-accordion {
 	border: 0;
+}
+
+/* Fixed columns keep the pool parameters in even rows instead of orphaning the last one; labels and values stay top-aligned across a row. */
+.pool-reference-details .selected-pool-context-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0 var(--space-4);
+}
+
+.pool-reference-details .selected-pool-context-grid > div {
+	align-content: start;
+}
+
+.pool-reference-details .question-preview-meta {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+/* The question ID takes the full row instead of shrinking to its text, which the negative hover-padding offset leaves one character short. */
+.pool-reference-details .question-preview-meta .copy-value-wrap {
+	display: flex;
+}
+
+/* A copyable address keeps its touch-target height, but a button centres its content, so start the text on the same line as the neighbouring metric values. */
+.pool-reference-details .selected-pool-context-grid .address-value.copyable {
+	display: flex;
+	align-items: flex-start;
+}
+
+@media (max-width: 64rem) {
+	.pool-reference-details .selected-pool-context-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.pool-reference-details .selected-pool-context-grid > :last-child:nth-child(odd) {
+		grid-column: 1 / -1;
+	}
 }
 
 .operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group,
@@ -3264,6 +3409,7 @@ span.rep-price-status.stale,
 }
 /* Reserve the busy label width so the address input does not shrink while a refresh runs. */
 .pool-selection-control .lookup-field-controls > .actions {
+	justify-content: flex-start;
 	min-inline-size: 11.75rem;
 }
 @media (max-width: 40rem) {
@@ -3292,6 +3438,53 @@ span.rep-price-status.stale,
 
 .pool-page-toolbar .pool-selection-control {
 	justify-self: stretch;
+}
+
+/* A loaded pool's address reads as a value: monospace, truncated on narrow screens, with its copy and refresh actions beside it. */
+.pool-address-display {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.pool-address-display-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	min-width: 0;
+}
+
+.pool-address-display-value {
+	flex: 0 1 auto;
+	min-width: 0;
+	font-family: var(--font-family-mono);
+	font-size: 0.9rem;
+	color: var(--value);
+}
+
+.pool-address-display-actions {
+	display: flex;
+	flex: none;
+	gap: var(--space-2);
+}
+
+.pool-address-display-actions button {
+	min-height: 2.5rem;
+	padding: 0.45rem 0.9rem;
+	font-size: var(--font-caption);
+}
+
+@media (max-width: 40rem) {
+	.pool-address-display-row {
+		flex-wrap: nowrap;
+		gap: var(--space-2);
+	}
+
+	.pool-address-display-value {
+		flex: 1 1 auto;
+		font-size: var(--font-label);
+	}
 }
 
 .pool-back-link {
@@ -3450,7 +3643,23 @@ span.rep-price-status.stale,
 }
 
 .pool-action-control {
+	display: flex;
 	flex: none;
+	align-items: center;
+	min-height: 2.75rem;
+}
+
+/* The open tab's row names where its work is instead of offering a control that would do nothing. */
+.pool-action-current {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	padding: 0 var(--space-3);
+	border: 1px dashed var(--divider-subtle);
+	border-radius: var(--radius-control);
+	color: var(--muted);
+	font-size: var(--font-caption);
+	font-weight: 600;
 }
 
 @media (max-width: 40rem) {
@@ -3468,6 +3677,15 @@ span.rep-price-status.stale,
 }
 
 /* First-run role guide on the pool directory: flat role columns divided by rules, stacked on narrow screens. */
+.first-run-role-guide > .section-block-header {
+	align-items: center;
+}
+
+.first-run-role-guide .section-block-actions {
+	display: flex;
+	align-items: center;
+}
+
 .first-run-roles {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3499,7 +3717,7 @@ span.rep-price-status.stale,
 	/* Keep Dismiss beside the title so the guide stays short above the pool list on narrow screens. */
 	.first-run-role-guide > .section-block-header {
 		flex-direction: row;
-		align-items: start;
+		align-items: center;
 		justify-content: space-between;
 	}
 
@@ -3507,4 +3725,20 @@ span.rep-price-status.stale,
 		gap: var(--space-1);
 		padding-top: var(--space-2);
 	}
+}
+
+/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. */
+:is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *) {
+	margin-inline-start: -0.25rem;
+}
+
+/* Inline warnings (a clamped liquidation, a withdrawal that empties the vault, a lifecycle blocker) share one quiet warning treatment. */
+.notice.warning {
+	margin: 0;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--warning-border);
+	border-left-width: 3px;
+	background: var(--notice-warning-gradient);
+	color: var(--text);
+	font-size: 0.875rem;
 }

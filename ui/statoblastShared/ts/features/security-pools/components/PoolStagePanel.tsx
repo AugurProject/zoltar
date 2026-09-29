@@ -73,8 +73,9 @@ export function PoolActionCard({ currentTimestamp, currentView, items, onChange 
 					{items.map(item => {
 						const { tab } = item
 						let control: ComponentChildren = undefined
-						// A row for the open tab needs no control: its work is already on screen below.
-						if (tab !== undefined && tab !== currentView)
+						// A row for the open tab keeps its control slot, marked as already shown below, so rows do not jump when tabs change.
+						if (tab !== undefined && tab === currentView) control = <span className='pool-action-current'>{copy.actionShownBelow}</span>
+						else if (tab !== undefined)
 							control = (
 								<button type='button' className='link' onClick={() => onChange(tab)}>
 									{copy.actionButtonLabels[tab]}

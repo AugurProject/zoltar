@@ -296,9 +296,9 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(document.body).getByRole('button', { name: 'universe' }).getAttribute('aria-expanded')).toBe('false')
 	})
 
-	void test('shows the role guide on the open-pool landing view until it is dismissed', async () => {
+	void test('shows the role guide on the browse-pools landing view until it is dismissed', async () => {
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
-		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
+		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'browse' })))
 		cleanupRenderedComponent = firstRender.cleanup
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'New here? Start with your role' })).not.toBeNull()
@@ -311,10 +311,15 @@ void describe('SecurityPoolsSection', () => {
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined
 
-		const secondRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
+		const secondRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'browse' })))
 		cleanupRenderedComponent = secondRender.cleanup
 		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
+
+		const openRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
+		await secondRender.cleanup()
+		cleanupRenderedComponent = openRender.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 	})
 
 	void test('renders one route heading in create and empty pool page modes', async () => {
@@ -355,7 +360,8 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
+		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
+		expect(document.body.querySelector('.pool-address-display')).not.toBeNull()
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')

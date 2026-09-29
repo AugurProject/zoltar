@@ -50,7 +50,21 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, selectedPoolRepPrice, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({
+	activeView,
+	createPool,
+	loadingUniverseDirectoryPools,
+	onActiveUniverseChange,
+	onActiveViewChange,
+	onLoadUniverseDirectoryPools,
+	onOpenSecurityPool,
+	overview,
+	securityPoolUniverseDirectoryError,
+	selectedPoolRepPrice,
+	universeDirectoryPools,
+	workflow,
+	zoltarUniverse,
+}: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
@@ -68,18 +82,9 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 		<div className='route-view-flow'>
 			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
 			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
-			{/* The role guide follows the address entry so the landing's primary action stays first on narrow screens. */}
-			{view === 'open' ? <FirstRunRoleGuide /> : undefined}
-			{view === 'browse' ? (
-				<SecurityPoolsOverviewSection
-					{...overview}
-					onSelectSecurityPool={(securityPoolAddress, universeId) => {
-						onActiveUniverseChange?.(universeId)
-						workflow.onSecurityPoolAddressChange(securityPoolAddress)
-						openView('operate', securityPoolAddress)
-					}}
-				/>
-			) : undefined}
+			{/* Browse pools is the landing route, so first-time visitors meet the role guide there. */}
+			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
+			{view === 'browse' ? <SecurityPoolsOverviewSection {...overview} onSelectSecurityPool={onOpenSecurityPool} /> : undefined}
 
 			{view === 'create' ? (
 				<SecurityPoolSection

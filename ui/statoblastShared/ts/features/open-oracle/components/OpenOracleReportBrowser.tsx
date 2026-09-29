@@ -45,7 +45,7 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 				</button>
 			}
 			metrics={[
-				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
+				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={openOracleCopy.formatReportPriceUnit(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
 				{ label: openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), value: <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} /> },
 				{ label: openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), value: <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} /> },
 				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.reportTimestamp, openOracleCopy.reportBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.reportTimestamp} /> },

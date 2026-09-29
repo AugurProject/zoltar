@@ -1068,4 +1068,40 @@ describe('SecurityPoolsOverviewSection', () => {
 		expect(requests.map(request => request.pageIndex)).toEqual([0, 0])
 		expect(requests[1]?.requestKey).not.toBe(firstRequest.requestKey)
 	})
+
+	test('discovers pools once on open when nothing is downloaded for the universe, and keeps rescanning manual', async () => {
+		const requests: number[] = []
+		const props = createProps({
+			autoDiscoverWhenEmpty: true,
+			onLoadSecurityPoolPage: pageIndex => {
+				requests.push(pageIndex)
+			},
+			securityPoolPage: undefined,
+			securityPools: [],
+		})
+		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(requests).toEqual([0])
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} securityPoolPage={{ pageIndex: 0, pageSize: 6, poolCount: 0n, pools: [], requestKey: 'unrelated' }} />, renderedComponent.container)
+		})
+		await act(() => {
+			render(<SecurityPoolsOverviewSection {...props} />, renderedComponent.container)
+		})
+		expect(requests).toEqual([0])
+	})
+
+	test('does not auto-discover when pools for the universe are already downloaded or auto-discovery is off', async () => {
+		const requests: number[] = []
+		const onLoadSecurityPoolPage = (pageIndex: number) => {
+			requests.push(pageIndex)
+		}
+		const downloaded = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ autoDiscoverWhenEmpty: true, onLoadSecurityPoolPage, securityPoolPage: undefined })} />)
+		await downloaded.cleanup()
+		resetLocalEntityStoreForTesting()
+		const manual = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onLoadSecurityPoolPage, securityPoolPage: undefined, securityPools: [] })} />)
+		cleanupRenderedComponent = manual.cleanup
+		expect(requests).toEqual([])
+		expect(within(document.body).getByRole('button', { name: 'Discover pools' })).not.toBeNull()
+	})
 })

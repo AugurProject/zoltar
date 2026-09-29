@@ -67,14 +67,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(within(objectHeader).getByRole('heading', { name: 'Will this resolve?' })).not.toBeNull()
 		expect(objectHeader.querySelector('.pool-object-meta .badge')?.textContent).toBe('Operational')
 		expect(within(objectHeader).queryByText('Known vaults')).toBeNull()
-		expect(within(objectHeader).queryByText('Statoblast security multiplier')).toBeNull()
+		expect(within(objectHeader).queryByText('Security multiplier')).toBeNull()
 		expect(within(objectHeader).queryByText('Initial report priority fee')).toBeNull()
 		const details = document.body.querySelector('.pool-reference-details details')
 		expect(details?.hasAttribute('open')).toBe(false)
 		expect(details?.textContent).toContain('Initial report priority fee')
 		expect(details?.textContent).toContain('Question description')
 		expect(details?.querySelectorAll('button[aria-label^="Copy identifier"]')).toHaveLength(1)
-		expect(within(document.body).getByText('Settlement collateral / standing commitments')).not.toBeNull()
+		expect(within(document.body).getByText('Collateral in use / capacity')).not.toBeNull()
 		const tabList = within(document.body).getByRole('tablist', { name: 'Selected pool views' })
 		expect(tabList.getAttribute('data-orientation')).toBe('horizontal')
 		expect(tabList.getAttribute('data-size')).toBe('compact')
@@ -276,7 +276,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Selected pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
-		expect(documentQueries.getByText('Settlement collateral / standing commitments')).not.toBeNull()
+		expect(documentQueries.getByText('Collateral in use / capacity')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Underwriting commitments')).toBeNull()
 		expect(documentQueries.getByText('Open Oracle price')).not.toBeNull()
@@ -284,7 +284,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		expect(document.body.querySelectorAll('.selected-pool-object-header')).toHaveLength(1)
 		expect(documentQueries.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
-		expect(documentQueries.getByRole('textbox', { name: 'Security pool address' })).not.toBeNull()
+		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
+		expect(document.body.querySelector('.pool-address-display')).not.toBeNull()
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault Operations' })).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault lookup' })).toBeNull()
@@ -292,6 +293,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(vaultSummaryHeading).not.toBeNull()
 		expect(documentQueries.queryByRole('textbox', { name: 'Vault owner address' })).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Vault actions' })).not.toBeNull()
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'More tools' })))
 		expect(documentQueries.getByRole('button', { name: 'Staged operations' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'Price oracle' })).not.toBeNull()
 		expect(documentQueries.getAllByRole('button', { name: 'Claim fees' }).length).toBeGreaterThan(0)
@@ -304,7 +306,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByText('Oracle Status')).toBeNull()
 		expect(documentQueries.queryByText('After market end')).toBeNull()
 		expect(documentQueries.queryByText('Manager')).toBeNull()
-		expect(documentQueries.getByText('Statoblast security multiplier')).not.toBeNull()
+		expect(documentQueries.getByText('Security multiplier')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'All vaults' })).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: 'My vault' })).not.toBeNull()
 
@@ -497,7 +499,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			{
 				poolOracleManagerDetails: validOracle(),
 				securityVault: createSecurityVaultProps({
-					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, securityPoolAddress: selectedPoolAddress }),
+					// Redemption requires the commitment to be exited first.
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, securityPoolAddress: selectedPoolAddress, underwritingLimitAttoEth: 0n }),
 					securityVaultForm: filledVaultForm(selectedPoolAddress),
 					walletRepBalanceAttoRep: 10n * 10n ** 18n,
 				}),

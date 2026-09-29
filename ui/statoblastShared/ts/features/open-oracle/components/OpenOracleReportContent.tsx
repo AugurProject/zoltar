@@ -254,7 +254,7 @@ export function renderSelectedReportActionSection({
 							: renderReportSection(openOracleCopy.currentReportState, [
 									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(token1Symbol, token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
+									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatReportPriceUnit(token1Symbol, token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
 								])}
 						<label className='field'>
 							<span>{openOracleCopy.tokenToSwapOut}</span>
@@ -302,7 +302,13 @@ export function renderSelectedReportActionSection({
 								/>
 							</label>
 						</div>
-						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
+						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : (
+							<p className='detail'>
+								{disputeSubmission.maximumNewAmount1 === undefined
+									? openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))
+									: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))}
+							</p>
+						)}
 						{sharedApprovalGuardMessage === undefined ? undefined : (
 							// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
 							<WalletActionFixReason availability={disputeActionAvailability} id={sharedApprovalGuardMessageId}>

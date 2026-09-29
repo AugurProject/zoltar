@@ -3,7 +3,7 @@ import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -49,6 +49,7 @@ function parseOption<TValue extends string>(options: readonly TValue[], value: s
 export function SecurityPoolsOverviewSection({
 	accountState,
 	activeUniverseId,
+	autoDiscoverWhenEmpty = false,
 	currentTimestamp,
 	environmentRefreshKey,
 	loadingSecurityPoolPage,
@@ -81,6 +82,18 @@ export function SecurityPoolsOverviewSection({
 		toDownloadedItem: pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress }),
 	})
 	const { discovery, downloaded, normalizedSearchText, searchText } = directory
+	// Opening Browse pools with nothing downloaded for this universe scans the first page once per context; the scan button stays for later pages and rescans.
+	const autoDiscoveryKey = `${discoveryContextKey}:${activeUniverseId.toString()}`
+	const lastAutoDiscoveryKeyRef = useRef<string | undefined>(undefined)
+	const hasDownloadedUniversePools = downloaded.entries.some(entry => entry.data.universeId === activeUniverseId)
+	const discoverNextRef = useRef(discovery.discoverNext)
+	discoverNextRef.current = discovery.discoverNext
+	useEffect(() => {
+		if (!autoDiscoverWhenEmpty || hasDownloadedUniversePools || discovery.hasScanned || discovery.loading || discovery.loadFailed) return
+		if (lastAutoDiscoveryKeyRef.current === autoDiscoveryKey) return
+		lastAutoDiscoveryKeyRef.current = autoDiscoveryKey
+		discoverNextRef.current()
+	}, [autoDiscoverWhenEmpty, autoDiscoveryKey, discovery.hasScanned, discovery.loadFailed, discovery.loading, hasDownloadedUniversePools])
 	// Once the user has scanned, the last scanned page (one bounded read) refreshes on new blocks and keeps its cached pools current.
 	useBlockRefresh(() => onRefreshSecurityPoolPage?.(), onRefreshSecurityPoolPage !== undefined && discovery.hasScanned)
 	const rows = derivePoolBrowseRows(directory.entries)

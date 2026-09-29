@@ -189,7 +189,7 @@ describe('LiquidationModal', () => {
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, actionLabel)
+		expectTransactionButtonDisabled(document.body, actionLabel, 'Liquidation is unavailable because this pool has ended.')
 	})
 
 	test('defaults queued liquidation timeout copy to 5 minutes', async () => {
@@ -1917,6 +1917,44 @@ describe('LiquidationModal', () => {
 		expect(documentQueries.getByText('Receiver vault REP backing')).not.toBeNull()
 		expect(documentQueries.getByRole('button', { name: `Copy address ${callerVaultAddress}` })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Caller Vault After Liquidation' })).toBeNull()
+	})
+
+	test('clamps a delegated request above the approval limits and explains the clamp instead of blocking', async () => {
+		const receiverVault = getAddress('0x0000000000000000000000000000000000000002')
+		const renderedComponent = await renderLiquidationModalAt(1_900_000_000n, {
+			liquidationDebtEthAmount: '5',
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: ATTO_ETH_PER_ETH, lastSettlementTimestamp: 1_900_000_000n, priceValidUntilTimestamp: 1_900_001_000n }),
+			liquidationReceiverVault: receiverVault,
+			liquidationApprovalId: `0x${'12'.repeat(32)}`,
+			liquidationApprovalDetails: createLiquidationApprovalDetails(receiverVault),
+			liquidationReceiverVaultSummaryResolved: true,
+			receiverVaultSummary: createTargetVaultSummary({ vaultAddress: receiverVault }),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(within(document.body).getByText('The approval limits this liquidation to 3 ETH; the registry reserves at most that amount.')).not.toBeNull()
+		expect(getTransactionButtonState(document.body, 'Execute vault liquidation').reason).not.toBe('Available or per-liquidation approval quota is below the requested commitment.')
+	})
+
+	test('blocks an unhealthy target until the price moves the minimum distance past its liquidation threshold', async () => {
+		const targetVaultSummary = createTargetVaultSummary({ vaultAddress: defaultTargetVaultAddress, vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, underwritingLimitAttoEth: 10n * ATTO_ETH_PER_ETH })
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 5_555_555_555_555_555_555n, minLiquidationPriceDistanceBps: 1_000n }),
+			targetVaultSummary,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation', 'The price must move at least 10% past this vault’s liquidation threshold before it can be liquidated.')
+	})
+
+	test('blocks liquidating a target vault that has bad debt', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 3n * ATTO_ETH_PER_ETH }),
+			targetVaultSummary: createTargetVaultSummary({ badDebtAttoEth: 1n, vaultAddress: defaultTargetVaultAddress }),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expectTransactionButtonDisabled(document.body, 'Execute vault liquidation', 'The target vault has bad debt, so it cannot be liquidated.')
 	})
 
 	test('shows delegated receiver approval quota, reservation, expiry, and health limits', async () => {

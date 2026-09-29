@@ -1,3 +1,4 @@
+import { useRef } from 'preact/hooks'
 import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { usePriceOracleManager } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
@@ -29,11 +30,15 @@ export function useOpenOracleRoute({
 }) {
 	const priceOracleManager = usePriceOracleManager(walletScopedHookConfig)
 	const { loadPoolOracleManager, poolOracleManagerDetails } = priceOracleManager
+	// Settlement completes after a wallet round trip; the pool oracle manager open by then is read through a ref, not the render that started it.
+	const poolOracleManagerAddressRef = useRef(poolOracleManagerDetails?.managerAddress)
+	poolOracleManagerAddressRef.current = poolOracleManagerDetails?.managerAddress
 	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
 		enabled: (route === 'open-oracle' || route === 'pools') && canReadOnchainData,
 		onReportSettled: async () => {
-			if (poolOracleManagerDetails?.managerAddress !== undefined) await loadPoolOracleManager(poolOracleManagerDetails.managerAddress)
+			const managerAddress = poolOracleManagerAddressRef.current
+			if (managerAddress !== undefined) await loadPoolOracleManager(managerAddress)
 		},
 	})
 	const openOracleViews: readonly OpenOracleView[] = ['browse', 'create', 'selected-report']

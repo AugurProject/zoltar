@@ -37,6 +37,7 @@ export const attoEthRaised = 'ETH raised'
 export const attoRepSold = 'REP sold'
 export const minBid = 'Min bid'
 export const winningThreshold = 'Winning threshold'
+export const reservePrice = 'Reserve price'
 export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
 export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH / REP from depth chart`

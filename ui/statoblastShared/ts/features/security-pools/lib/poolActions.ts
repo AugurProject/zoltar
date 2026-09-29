@@ -22,6 +22,7 @@ type PoolActionId =
 	| 'claimForkSettlement'
 	| 'redeemShares'
 	| 'withdrawVaultRep'
+	| 'exitVaultCommitment'
 	| 'claimFees'
 
 type PoolActionTone = 'attention' | 'action' | 'info'
@@ -41,6 +42,8 @@ export type PoolAccountVault = {
 	claimableFeesAttoEth: bigint
 	disputeStakedAttoRep: bigint
 	repAttoRep: bigint
+	/** REP redemption reverts while the vault keeps a commitment, so a committed vault must exit it first. */
+	underwritingLimitAttoEth?: bigint
 }
 
 export type PoolActionInput = {
@@ -111,7 +114,10 @@ function getForkMigrationItems(input: PoolActionInput): PoolActionItem[] {
 function getSettledItems(input: PoolActionInput): PoolActionItem[] {
 	const items: PoolActionItem[] = []
 	if (hasShares(input.shareBalances) && isEnabled(input.poolState, 'redeemShares')) items.push({ id: 'redeemShares', tab: 'trading', tone: 'action' })
-	if (input.vault !== undefined && input.vault.repAttoRep > 0n && isEnabled(input.poolState, 'redeemRepFromVault')) items.push({ amount: { unit: 'REP', value: input.vault.repAttoRep }, id: 'withdrawVaultRep', tab: 'vaults', tone: 'action' })
+	if (input.vault !== undefined && input.vault.repAttoRep > 0n && isEnabled(input.poolState, 'redeemRepFromVault')) {
+		const committed = (input.vault.underwritingLimitAttoEth ?? 0n) > 0n
+		items.push({ amount: { unit: 'REP', value: input.vault.repAttoRep }, id: committed ? 'exitVaultCommitment' : 'withdrawVaultRep', tab: 'vaults', tone: 'action' })
+	}
 	const stake = input.vault?.disputeStakedAttoRep ?? 0n
 	if (stake > 0n) items.push({ amount: { unit: 'REP', value: stake }, id: 'withdrawEscalation', tab: 'reporting', tone: 'action' })
 	if (input.accountConnected && input.hasForkActivity && input.forkClaimAvailable === true) items.push({ id: 'claimForkSettlement', tab: 'fork-workflow', tone: 'action' })

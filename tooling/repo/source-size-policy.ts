@@ -37,7 +37,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 725],
 		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 609],
-		['ui/statoblastShared/ts/features/open-oracle/lib/openOracle.ts', 682],
 	]),
 	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [
 		['augurScan/browser/app.ts', 1696],

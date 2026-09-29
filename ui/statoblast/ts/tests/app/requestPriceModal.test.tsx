@@ -17,6 +17,7 @@ import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { RequestPriceModal } from '../../app/transactions/RequestPriceModal.js'
+import { PriceRequestPreview } from '../../app/transactions/PriceRequestPreview.js'
 import { TransactionStepsModal, embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import type { RequestPriceReview } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
@@ -1023,6 +1024,19 @@ test('keeps the empty price form compact until an estimate is entered', async ()
 	}
 })
 
+test('does not show a price prompt that contradicts a visible waiting reason', async () => {
+	const dom = installDomEnvironment()
+	const rendered = await renderIntoDocument(<PriceRequestPreview requestValue={12n} prompt='Waiting for the current request to finish.' reason='Waiting for the current request to finish.' error={undefined} preparing={false} hideReason={false} onClose={() => undefined} />)
+	try {
+		expect(rendered.container.querySelector('.price-request-estimate-prompt')).toBeNull()
+		expect(rendered.container.textContent).not.toContain('Enter a starting price.')
+		expect(rendered.container.textContent?.split('Waiting for the current request to finish.').length).toBe(2)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test('keeps the preview while satisfied approvals are skipped before the final review is ready', async () => {
 	const dom = installDomEnvironment()
 	const ready = createDeferred<void>()
@@ -1045,6 +1059,8 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		expect(transactionSteps.value?.activeIndex).toBe(-1)
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Preparing funding and approvals/ }).hasAttribute('disabled')).toBe(true)
+		// The busy button carries the preparing state; the prompt paragraph does not repeat it.
+		expect(rendered.container.querySelector('.price-request-estimate-prompt')).toBeNull()
 		expect(queries.queryByRole('button', { name: /Request new price/ })).toBeNull()
 		ready.resolve()
 		await settle()

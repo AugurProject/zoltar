@@ -23,7 +23,7 @@ import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/Trans
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
-import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
@@ -203,7 +203,7 @@ export function SecurityPoolSection({
 				label={statoblastAppCopy.statoblastSecurityMultiplierBps}
 				onChange={statoblastSecurityMultiplierBps => onSecurityPoolFormChange({ statoblastSecurityMultiplierBps })}
 				onErrorRevealedChange={setMultiplierErrorRevealed}
-				unit={commonCopy.multiplierUnit}
+				unit={securityPoolCopy.securityMultiplierInputUnit}
 				value={securityPoolForm.statoblastSecurityMultiplierBps}
 			/>
 			<AmountField
@@ -216,7 +216,7 @@ export function SecurityPoolSection({
 				label={securityPoolCopy.initialReportPriorityFee}
 				onChange={initialReportPriorityFeeEth => onSecurityPoolFormChange({ initialReportPriorityFeeEth })}
 				onErrorRevealedChange={setPriorityFeeErrorRevealed}
-				unit={commonCopy.eth}
+				unit={securityPoolCopy.initialReportPriorityFeeUnit}
 				value={securityPoolForm.initialReportPriorityFeeEth}
 			/>
 			<div className='field'>
@@ -274,7 +274,7 @@ export function SecurityPoolSection({
 									<AddressValue address={securityPoolResult.securityPoolAddress} responsiveAbbreviation />
 								</MetricField>
 								<MetricField label={statoblastAppCopy.statoblastSecurityMultiplierBps}>{formatStatoblastSecurityMultiplier(securityPoolResult.statoblastSecurityMultiplierBps)}</MetricField>
-								<MetricField label={securityPoolCopy.initialReportPriorityFee}>{formatCurrencyBalanceWithUnit(securityPoolResult.initialReportPriorityFeeAttoEthPerGas, commonCopy.eth, 18)}</MetricField>
+								<MetricField label={securityPoolCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(securityPoolResult.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 							</>
 						}
 					/>
@@ -349,7 +349,7 @@ export function SecurityPoolSection({
 						) : undefined}
 
 						{questionSource === 'new' && marketResult === undefined ? (
-							<SectionBlock description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
+							<SectionBlock className='security-pool-create-question' description={securityPoolCopy.createQuestionForPoolDetail} title={commonCopy.createQuestion} variant='plain'>
 								<MarketCreateQuestionSection
 									accountAddress={accountState.address}
 									formDisabled={questionSourceLocked}

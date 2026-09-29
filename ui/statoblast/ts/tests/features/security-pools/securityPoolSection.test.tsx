@@ -91,7 +91,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewSignal: undefined })), renderedComponent.container)
 		})
 		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Create pool' }))
-		expect((queries.getByRole('textbox', { name: 'Statoblast security multiplier' }) as HTMLInputElement).disabled).toBe(false)
+		expect((queries.getByRole('textbox', { name: 'Security multiplier' }) as HTMLInputElement).disabled).toBe(false)
 	})
 
 	test('shows wallet-pending pool creation without an app cancel action', async () => {
@@ -123,7 +123,7 @@ describe('SecurityPoolSection', () => {
 		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
 		expect(queries.getByText('User rejected the request')).not.toBeNull()
 		expect(queries.queryByRole('button', { name: 'Close' })).toBeNull()
-		expect((queries.getByRole('textbox', { name: 'Statoblast security multiplier' }) as HTMLInputElement).disabled).toBe(false)
+		expect((queries.getByRole('textbox', { name: 'Security multiplier' }) as HTMLInputElement).disabled).toBe(false)
 		expect(queries.getByRole('button', { name: 'Create pool' }).hasAttribute('disabled')).toBe(false)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 	})
@@ -303,11 +303,11 @@ describe('SecurityPoolSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Statoblast security multiplier' })
-		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Up to four decimal places; higher values require more REP.', '×'])
+		const statoblastSecurityMultiplierBpsInput = documentQueries.getByRole('textbox', { name: 'Security multiplier' })
+		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Up to four decimal places; higher values require more REP.', 'times'])
 		expect((statoblastSecurityMultiplierBpsInput as HTMLInputElement).inputMode).toBe('decimal')
 		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial report priority fee' })
-		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'ETH'])
+		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'ETH per gas'])
 		expect((priorityFeeInput as HTMLInputElement).value).toBe('0.00000001')
 	})
 
@@ -345,9 +345,9 @@ describe('SecurityPoolSection', () => {
 
 	test('associates invalid multiplier guidance and disables creation', async () => {
 		for (const [value, message] of [
-			['', 'Enter a Statoblast security multiplier of at least 1.0002×.'],
-			['1', 'Statoblast security multiplier must be at least 1.0002×.'],
-			['1.0001', 'Statoblast security multiplier must be at least 1.0002×.'],
+			['', 'Enter a security multiplier of at least 1.0002×.'],
+			['1', 'Security multiplier must be at least 1.0002×.'],
+			['1.0001', 'Security multiplier must be at least 1.0002×.'],
 			['bad', 'Enter a multiplier with at most 4 decimal places.'],
 			['2.00001', 'Enter a multiplier with at most 4 decimal places.'],
 		] as const) {
@@ -365,7 +365,7 @@ describe('SecurityPoolSection', () => {
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
 
-			const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast security multiplier' })
+			const multiplierInput = within(document.body).getByRole('textbox', { name: 'Security multiplier' })
 			expect(multiplierInput.getAttribute('aria-invalid')).toBeNull()
 			expectTransactionButtonDisabled(document.body, 'Create pool', message)
 			expect(document.body.textContent?.split(message).length).toBe(2)
@@ -386,7 +386,7 @@ describe('SecurityPoolSection', () => {
 		}
 	})
 
-	test('accepts a Statoblast security multiplier with four decimal places', async () => {
+	test('accepts a security multiplier with four decimal places', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(
 				SecurityPoolSection,
@@ -401,7 +401,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const multiplierInput = within(document.body).getByRole('textbox', { name: 'Statoblast security multiplier' })
+		const multiplierInput = within(document.body).getByRole('textbox', { name: 'Security multiplier' })
 		await act(() => {
 			multiplierInput.dispatchEvent(new Event('blur'))
 		})
@@ -535,7 +535,7 @@ describe('SecurityPoolSection', () => {
 			render(h(SecurityPoolSection, { ...baseProps, questionAndPoolCreating: true }), renderedComponent.container)
 		})
 		expect((documentQueries.getByRole('textbox', { name: 'Title' }).closest('fieldset') as HTMLFieldSetElement | null)?.disabled).toBe(true)
-		expect((documentQueries.getByRole('textbox', { name: 'Statoblast security multiplier' }) as HTMLInputElement).disabled).toBe(true)
+		expect((documentQueries.getByRole('textbox', { name: 'Security multiplier' }) as HTMLInputElement).disabled).toBe(true)
 	})
 
 	test('applies the normal pool guards to partial-success retries', async () => {
@@ -551,7 +551,7 @@ describe('SecurityPoolSection', () => {
 		await act(() => {
 			render(h(SecurityPoolSection, { ...baseProps, accountState: createAccountState(), duplicateOriginPoolExists: true }), renderedComponent.container)
 		})
-		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
+		expectTransactionButtonDisabled(document.body, 'Retry pool creation', 'A pool for this question, security multiplier, and priority fee already exists.')
 
 		await act(() => {
 			render(h(SecurityPoolSection, { ...baseProps, accountState: createAccountState(), zoltarUniverseHasForked: true }), renderedComponent.container)
@@ -640,7 +640,7 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateCheckRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Checking duplicate…', 'Checking whether a pool already exists for this question, Statoblast security multiplier, and priority fee.')
+		expectTransactionButtonDisabled(document.body, 'Checking duplicate…', 'Checking whether a pool already exists for this question, security multiplier, and priority fee.')
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
@@ -670,8 +670,8 @@ describe('SecurityPoolSection', () => {
 			),
 		)
 		cleanupRenderedComponent = duplicateRender.cleanup
-		expectTransactionButtonDisabled(document.body, 'Pool already exists', 'A pool for this question, Statoblast security multiplier, and priority fee already exists.')
-		expect(document.body.textContent).toContain('Change the priority fee or Statoblast security multiplier to create a different origin pool.')
+		expectTransactionButtonDisabled(document.body, 'Pool already exists', 'A pool for this question, security multiplier, and priority fee already exists.')
+		expect(document.body.textContent).toContain('Change the priority fee or security multiplier to create a different origin pool.')
 		expect(document.querySelector(`a[href*='${duplicatePoolAddress}']`)).not.toBeNull()
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined

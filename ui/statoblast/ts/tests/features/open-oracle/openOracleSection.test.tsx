@@ -13,7 +13,8 @@ import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReport
 import { renderSelectedReportActionSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleReportContent.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import type { OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import { openOracleReportDownloadStore } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
 import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -162,6 +163,8 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		token2Decimals: 18,
 		token2Symbol: 'WETH',
 		trackDisputes: false,
+		feesOnlyAtHalt: false,
+		flexibleEscalation: false,
 		...overrides,
 	}
 }

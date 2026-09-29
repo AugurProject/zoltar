@@ -10,11 +10,11 @@ import { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import {
 	addOpenOracleBountyBuffer,
-	deriveOpenOracleDisputeSubmissionDetails,
 	formatOpenOracleDisputeWriteErrorMessage,
 	formatOpenOracleFeePercentage,
 	formatOpenOracleMultiplier,
 	formatOpenOracleSettleWriteErrorMessage,
+	getOpenOracleCreateGuardMessage,
 	getOpenOracleCreateValidationMessage,
 	getOpenOracleDisputeAvailability,
 	getOpenOracleReportStatus,
@@ -22,6 +22,7 @@ import {
 	getOpenOracleSettleAvailability,
 	parseOpenOracleCreateFormSubmission,
 } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import { loadOpenOracleInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/openOraclePricing.js'
 import { getDefaultOpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -167,6 +168,31 @@ function createOpenOracleLifecycleReport(
 	}
 }
 
+function createDisputeSubmissionPreviewReport() {
+	return {
+		currentAmount1: 100n,
+		currentAmount2: 50n,
+		currentBlockNumber: 0n,
+		currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
+		currentTime: 200n,
+		disputeDelay: 10n,
+		escalationHalt: 200n,
+		feePercentage: 1_000_000n,
+		feesOnlyAtHalt: false,
+		flexibleEscalation: false,
+		isDistributed: false,
+		multiplier: 20_000n,
+		protocolFee: 500_000n,
+		reportTimestamp: 100n,
+		settlementTime: 200n,
+		timeType: true,
+		token1: REP_ADDRESS,
+		token1Symbol: 'REP',
+		token2: WETH_ADDRESS,
+		token2Symbol: 'WETH',
+	}
+}
+
 function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof deriveOpenOracleDisputeSubmissionDetails>[0]> = {}) {
 	return deriveOpenOracleDisputeSubmissionDetails({
 		approvedToken1Amount: 1_000n,
@@ -174,26 +200,7 @@ function createDisputeSubmissionPreview(overrides: Partial<Parameters<typeof der
 		disputeNewAmount1Input: '200',
 		disputeNewAmount2Input: '80',
 		disputeTokenToSwap: 'token1',
-		reportDetails: {
-			currentAmount1: 100n,
-			currentAmount2: 50n,
-			currentBlockNumber: 0n,
-			currentReporter: getAddress(addressString(TEST_ADDRESSES[1])),
-			currentTime: 200n,
-			disputeDelay: 10n,
-			escalationHalt: 200n,
-			feePercentage: 1_000_000n,
-			isDistributed: false,
-			multiplier: 20_000n,
-			protocolFee: 500_000n,
-			reportTimestamp: 100n,
-			settlementTime: 200n,
-			timeType: true,
-			token1: REP_ADDRESS,
-			token1Symbol: 'REP',
-			token2: WETH_ADDRESS,
-			token2Symbol: 'WETH',
-		},
+		reportDetails: createDisputeSubmissionPreviewReport(),
 		token1AllowanceError: undefined,
 		token1Balance: 1_000n,
 		token1BalanceError: undefined,
@@ -602,6 +609,8 @@ describe('Open Oracle helpers', () => {
 					disputeDelay: 10n,
 					escalationHalt: 200n,
 					feePercentage: 1_000_000n,
+					feesOnlyAtHalt: false,
+					flexibleEscalation: false,
 					isDistributed: false,
 					multiplier: 20_000n,
 					protocolFee: 500_000n,
@@ -656,6 +665,29 @@ describe('Open Oracle helpers', () => {
 		}
 	})
 
+	test('dispute submission helper skips fees before the escalation halt when fees apply only at halt', () => {
+		const baseReport = createDisputeSubmissionPreviewReport()
+		const beforeHaltToken1 = createDisputeSubmissionPreview({ reportDetails: { ...baseReport, feesOnlyAtHalt: true } })
+		expect(beforeHaltToken1.token1ContributionAmount).toBe(300n)
+		expect(beforeHaltToken1.canSubmit).toBe(true)
+		const beforeHaltToken2 = createDisputeSubmissionPreview({ disputeNewAmount2Input: '120', disputeTokenToSwap: 'token2', reportDetails: { ...baseReport, feesOnlyAtHalt: true } })
+		expect(beforeHaltToken2.token2ContributionAmount).toBe(170n)
+		const atHalt = createDisputeSubmissionPreview({ disputeNewAmount1Input: '101', reportDetails: { ...baseReport, escalationHalt: 100n, feesOnlyAtHalt: true } })
+		expect(atHalt.expectedNewAmount1).toBe(101n)
+		expect(atHalt.token1ContributionAmount).toBe(216n)
+	})
+
+	test('dispute submission helper accepts any base amount up to the halt with flexible escalation', () => {
+		const flexibleReport = { ...createDisputeSubmissionPreviewReport(), escalationHalt: 300n, flexibleEscalation: true, multiplier: 200n }
+		const flexible = createDisputeSubmissionPreview({ disputeNewAmount1Input: '250', reportDetails: flexibleReport })
+		expect(flexible.expectedNewAmount1).toBe(200n)
+		expect(flexible.canSubmit).toBe(true)
+		expect(flexible.token1ContributionAmount).toBe(365n)
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '301', reportDetails: flexibleReport }).inputBlockMessage?.message).toBe('New base token amount must be between 200 and 300 for this dispute.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '199', reportDetails: flexibleReport }).inputBlockMessage?.message).toBe('New base token amount must be between 200 and 300 for this dispute.')
+		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '250', reportDetails: { ...flexibleReport, flexibleEscalation: false } }).inputBlockMessage?.message).toBe('New base token amount must be exactly 200 for this dispute.')
+	})
+
 	test('dispute submission blockers use base and quote token terminology', () => {
 		expect(createDisputeSubmissionPreview({ disputeNewAmount1Input: '' }).blockMessage?.message).toBe('Enter a valid new base token amount.')
 		expect(createDisputeSubmissionPreview({ disputeNewAmount2Input: '0' }).blockMessage?.message).toBe('Enter a valid new quote token amount greater than zero.')
@@ -670,6 +702,14 @@ describe('Open Oracle helpers', () => {
 		expect(preview.canSubmit).toBe(false)
 		expect(preview.inputBlockMessage?.message).toBe('These amounts would swap out REP, not WETH. Select REP or change the proposed price.')
 		expect(preview.blockMessage).toEqual(preview.inputBlockMessage)
+	})
+
+	test('create guard and parameter validation share the enforced ETH value rule', () => {
+		const guardInput = { isOnActiveAppChain: true, settlerRewardInput: '0.1', walletBalanceAttoEth: 10n ** 18n, walletConnected: true }
+		const equalityMessage = 'ETH value to send must equal the settler reward for ERC-20 token pairs.'
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, ethValueInput: '0.2' })).toBe(equalityMessage)
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, ethValueInput: '0.05' })).toBe(equalityMessage)
+		expect(getOpenOracleCreateGuardMessage({ ...guardInput, ethValueInput: '0.1' })).toBeUndefined()
 	})
 
 	test('open oracle fee and multiplier formatters render human values', () => {
@@ -954,9 +994,12 @@ describe('Open Oracle helpers', () => {
 		const gasFailure = 'Transaction failed after using its full gas limit. Open the transaction details before retrying.'
 		expect(formatOpenOracleSettleWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error(gasFailure))).toBe(gasFailure)
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('This report requires a higher settlement gas limit because it executes a callback on settlement. Retry with the updated UI.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement'))).toBe('This report is not ready to settle.')
-		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: no initial report'))).toBe('This report is invalid because its atomic initial report is missing.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x98bdb2e0'))).toBe('Settlement did not leave enough gas for this report’s settlement callback. Retry settling and keep the gas limit the wallet suggests; do not lower it.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: SettleTooEarly()'))).toBe('This report is not ready to settle.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: 0x3edf6050'))).toBe('This report is not ready to settle.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: settlement callback failed'))).toBe('Transaction failed while settling the report. Reason: settlement callback failed')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: AlreadySettled()'))).toBe('This report is already settled.')
+		expect(formatOpenOracleSettleWriteErrorMessage(new Error('execution reverted: NoReportYet()'))).toBe('This report is invalid because its atomic initial report is missing.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute too early'))).toBe('This report is not ready to dispute.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: dispute period expired'))).toBe('Dispute window closed. Settle report instead.')
 		expect(formatOpenOracleDisputeWriteErrorMessage(new Error('execution reverted: report settled'))).toBe('This report is already settled.')

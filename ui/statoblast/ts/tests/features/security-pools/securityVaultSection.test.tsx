@@ -291,7 +291,7 @@ describe('SecurityVaultSection', () => {
 		const input = within(dialog).getByLabelText('Commitment limit')
 		fireEvent.input(input, { target: { value: '3' } })
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
-		const sharedReason = within(dialog).getAllByText(lifecycleState === 'ended' ? 'REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.' : 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
+		const sharedReason = within(dialog).getAllByText(lifecycleState === 'ended' ? 'Commitments can only be lowered after the question resolves.' : 'New vault REP backing is unavailable after this question ends. Fork-continuation child pools remain fundable.')
 		expect(sharedReason).toHaveLength(1)
 		const sharedReasonId = sharedReason[0]?.id
 		expect(sharedReasonId).toBeTruthy()
@@ -301,6 +301,149 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Set commitment limit' }))
 		expect(submitted).toBe('0')
+	})
+
+	test('lowers the commitment directly after resolution without oracle funding or a starting price', async () => {
+		let submitted: string | undefined
+		const props = createSecurityVaultSectionProps({
+			accountState: createAccountState({ ethBalanceAttoEth: 0n }),
+			modalFirst: true,
+			oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, requestPriceCostAttoEth: 10n ** 18n }),
+			poolState: createEndedPoolState(),
+			securityVaultDetails: createSecurityVaultDetails({ underwritingLimitAttoEth: 2n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2n * 10n ** 18n, settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 0n }),
+			onSetVaultUnderwritingLimit: limit => {
+				submitted = limit
+			},
+		})
+		cleanupRenderedComponent = (await renderIntoDocument(<SecurityVaultSection {...props} />)).cleanup
+		const page = within(document.body)
+		expect(page.queryByText('A new Open Oracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.')).toBeNull()
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
+		expect(dialog.queryByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })).toBeNull()
+		expect(dialog.getByText('The question has resolved, so this change goes straight to the pool without an oracle price. Commitments can only be lowered now; set 0 ETH to unlock REP redemption.')).toBeDefined()
+		fireEvent.input(dialog.getByLabelText('Commitment limit'), { target: { value: '0' } })
+		expectTransactionButtonEnabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit')
+		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
+		expect(submitted).toBe('0')
+	})
+
+	test('reports a direct commitment change after resolution as executed rather than a missing queue entry', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+						poolState: createEndedPoolState(),
+						securityVaultResult: { action: 'setVaultUnderwritingLimit', hash: '0x1234000000000000000000000000000000000000000000000000000000000000' },
+					})}
+				/>,
+			)
+		).cleanup
+		expect(within(document.body).getByText('Commitment limit changed')).toBeDefined()
+	})
+
+	test('fills the commitment maximum at the execution oracle price instead of the UI price', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						repPerEthPrice: 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
+		fireEvent.click(dialog.getByRole('button', { name: 'Max' }))
+		// 12 REP backing plus 3 REP staked at a 2x multiplier supports 2.5 ETH at the 3 REP/ETH oracle price, not 7.5 ETH at the UI price.
+		const input = dialog.getByLabelText('Commitment limit')
+		if (!(input instanceof HTMLInputElement)) throw new Error('Expected commitment input')
+		expect(input.value).toMatch(/^2\.50*$/)
+		expect(dialog.queryByRole('checkbox', { name: /I understand/ })).toBeNull()
+	})
+
+	test('bounds the withdrawal maximum at the execution oracle price instead of the UI price', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						repPerEthPrice: 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '7' },
+					})}
+				/>,
+			)
+		).cleanup
+		// The oracle price locks 24 REP for the 4 ETH commitment, leaving 6 REP; the UI price would have offered 20.
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Reduce the withdrawal to 6\u00a0REP or less.')
+	})
+
+	test('explains when a withdrawal leaves less than the vault minimum and exits the whole vault', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails(),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 0n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '5' },
+					})}
+				/>,
+			)
+		).cleanup
+		expect(document.body.textContent?.replaceAll('\u00a0', ' ')).toContain('This leaves less than the 10 REP vault minimum, so the whole vault is withdrawn instead.')
+		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+	})
+
+	test('does not promise a whole-vault exit for a withdrawal the guard blocks', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						repPerEthPrice: 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '25' },
+					})}
+				/>,
+			)
+		).cleanup
+		// 25 REP would leave 5 REP (below the minimum), but only 6 REP is withdrawable, so the only message is the blocker.
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Reduce the withdrawal to 6 REP or less.')
+		expect(document.body.textContent).not.toContain('so the whole vault is withdrawn instead')
+	})
+
+	test('blocks REP redemption until the commitment is set to zero', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails(),
+						poolState: createEndedPoolState(),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 2n * 10n ** 18n }),
+					})}
+				/>,
+			)
+		).cleanup
+		expectTransactionButtonDisabled(document.body, 'Redeem REP', 'Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.')
+	})
+
+	test('starts the deposit dialog empty with the custom approval amount collapsed and no satisfied approval at zero', async () => {
+		const props = createSecurityVaultSectionProps({ modalFirst: true, securityVaultRepApproval: { error: undefined, loading: false, value: 0n } })
+		cleanupRenderedComponent = (await renderIntoDocument(<SecurityVaultSection {...props} />)).cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Deposit REP' }))
+		const dialog = within(document.body).getByRole('dialog', { name: 'Deposit REP' })
+		expect(dialog.querySelector('.approval-sufficient')).toBeNull()
+		const disclosure = dialog.querySelector('details.approval-amount-disclosure')
+		if (disclosure === null) throw new Error('Expected the custom approval disclosure')
+		expect(disclosure.hasAttribute('open')).toBe(false)
+		expect(disclosure.querySelector('summary')?.textContent).toBe('Advanced: custom approval amount')
+		expect(disclosure.textContent).toContain('REP approval amount')
 	})
 
 	test.each([false, true])('shows the oracle prerequisite before opening the commitment form: fresh=%s', async fresh => {
@@ -670,7 +813,8 @@ describe('SecurityVaultSection', () => {
 		const group = dialog.querySelector('.tx-action-group')
 		expect(group?.querySelectorAll('[role="note"]').length).toBe(1)
 		const notice = group?.querySelector('[role="note"]')
-		expect(notice?.textContent).toBe(amount === '' ? 'Enter a valid REP deposit amount.' : 'Enter an amount greater than zero.')
+		// An empty field is the starting state, so it asks for an amount instead of reporting an invalid one.
+		expect(notice?.textContent).toBe('Enter an amount greater than zero.')
 		for (const button of group?.querySelectorAll('.tx-action-button') ?? []) {
 			expect(button.getAttribute('aria-describedby')).toBe(notice?.id)
 		}
@@ -1269,7 +1413,8 @@ describe('SecurityVaultSection', () => {
 						isPriceValid: false,
 						requestPriceCostAttoEth: 1n,
 					},
-					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+					repPerEthPrice: 3n * 10n ** 18n,
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 10n ** 18n }),
 					securityVaultForm: {
 						depositAmount: '',
 						repWithdrawAmount: '1',
@@ -1295,7 +1440,8 @@ describe('SecurityVaultSection', () => {
 				<SecurityVaultSection
 					{...createSecurityVaultSectionProps({
 						oracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
-						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+						repPerEthPrice: 3n * 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 10n ** 18n }),
 						onWithdrawRep: price => {
 							submitted = price
 						},
@@ -1369,7 +1515,8 @@ describe('SecurityVaultSection', () => {
 							priceValidUntilTimestamp: 10n,
 							requestPriceCostAttoEth: 1n * 10n ** 18n,
 						}),
-						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+						repPerEthPrice: 3n * 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 10n ** 18n }),
 						securityVaultForm: {
 							depositAmount: '',
 							repWithdrawAmount: '1',
@@ -1481,6 +1628,7 @@ describe('SecurityVaultSection', () => {
 					poolState: createEndedPoolState(),
 					securityVaultDetails: createSecurityVaultDetails({
 						disputeStakedAttoRep: 0n,
+						underwritingLimitAttoEth: 0n,
 					}),
 					securityVaultForm: {
 						depositAmount: '1',
@@ -1698,7 +1846,7 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 			const props = createSecurityVaultSectionProps({
 				modalFirst: true,
 				securityVaultActiveAction: active.value,
-				securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+				securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 10n ** 18n }),
 				oracleManagerDetails: createOracleManagerDetails(),
 				accountState: createAccountState({ ethBalanceAttoEth: 10n ** 18n }),
 			})
@@ -1745,7 +1893,7 @@ test('ended vault REP redemption submits once without a confirmation and stays d
 				{...createSecurityVaultSectionProps({
 					modalFirst: true,
 					poolState: createEndedPoolState(),
-					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 0n }),
 					securityVaultActiveAction: active.value,
 					onRedeemRepFromVault: () => {
 						calls += 1
