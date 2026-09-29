@@ -1,69 +1,31 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { encodeAbiParameters, encodeEventTopics, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createSecurityPool, getOriginSecurityPoolAddress } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import type { WriteClient as UiWriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { DAY, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
 import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient as SolidityWriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
+import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
 import { createQuestion } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
-import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
 import { ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
-
-function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
-	const globalWindow = globalThis as typeof globalThis & { window?: Window }
-	if (globalWindow.window === undefined) globalWindow.window = globalThis as Window & typeof globalThis
-	const request: InjectedEthereum['request'] = async args => {
-		if (args.method === 'eth_accounts' || args.method === 'eth_requestAccounts') return [accountAddress] as never
-		return (await mockWindow.request(args)) as never
-	}
-	const injectedEthereum: InjectedEthereum = {
-		on: mockWindow.on,
-		removeListener: mockWindow.removeListener,
-		request,
-	}
-	globalWindow.window.ethereum = injectedEthereum
-}
+import { useSepoliaAnvilUiEnvironment } from './testSupport/sepoliaAnvilUi.js'
 
 describe('security pool creation helper', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
-	let mockWindow: AnvilWindowEthereum
-	let client: SolidityWriteClient
-
-	beforeEach(async () => {
-		mockWindow = getAnvilWindowEthereum()
-		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
-		installInjectedEthereum(mockWindow)
-		// Preserve the seeded token addresses while exercising UI writes on Sepolia.
-		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
-		await setupTestAccounts(mockWindow)
-		await ensureProxyDeployerDeployed(client)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
-	})
+	const anvil = useSepoliaAnvilUiEnvironment()
 
 	test('creates a binary question and pool with one atomic transaction', async () => {
-		const questionData = { title: 'Atomic question', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionData = { title: 'Atomic question', description: '', startTime: 0n, endTime: (await anvil.getMockWindow().getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
-		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), questionId, 20_000n, 10_000_000_000n)).toBeUndefined()
+		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(anvil.walletAddress), questionId, 20_000n, 10_000_000_000n)).toBeUndefined()
 		const submittedHashes: string[] = []
 		const preparedPreviews: TransactionRequestPreview[] = []
 		const result = await createSecurityPool(
-			createWalletWriteClient(addressString(TEST_ADDRESSES[0]), { onTransactionPrepared: preview => preparedPreviews.push(preview), onTransactionSubmitted: hash => submittedHashes.push(hash) }),
+			createWalletWriteClient(anvil.walletAddress, { onTransactionPrepared: preview => preparedPreviews.push(preview), onTransactionSubmitted: hash => submittedHashes.push(hash) }),
 			{
 				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 				questionId,
@@ -80,32 +42,30 @@ describe('security pool creation helper', () => {
 		expect(result.questionCreatedAt).toBeGreaterThan(0n)
 		expect(result.questionId).toBe(`0x${questionId.toString(16).padStart(64, '0')}`)
 		expect(result.securityPoolAddress).toBe(getSecurityPoolAddresses(zeroAddress, 0n, questionId, 20_000n).securityPool)
-		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), questionId, 20_000n, 10_000_000_000n)).toBe(result.securityPoolAddress)
+		expect(await getOriginSecurityPoolAddress(createWalletWriteClient(anvil.walletAddress), questionId, 20_000n, 10_000_000_000n)).toBe(result.securityPoolAddress)
 	})
 
 	test('rolls back question creation when the pool deployment fails', async () => {
-		const questionData = { title: 'Atomic rollback', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionData = { title: 'Atomic rollback', description: '', startTime: 0n, endTime: (await anvil.getMockWindow().getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
-		const walletClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]))
+		const walletClient = createWalletWriteClient(anvil.walletAddress)
 		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 10_000n }, questionData)).rejects.toThrow('Security pool deployment would revert: Multiplier must exceed 10001 BPS')
 		const createdAt = await walletClient.readContract({ address: getInfraContractAddresses().zoltarQuestionData, abi: ZoltarQuestionData_ZoltarQuestionData.abi, functionName: 'questionCreatedTimestamp', args: [questionId] })
 		expect(createdAt).toBe(0n)
 	})
 
 	test('identifies a failing question creation before requesting a wallet transaction', async () => {
-		const questionData = { title: 'Already created question', description: '', startTime: 0n, endTime: (await mockWindow.getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
+		const questionData = { title: 'Already created question', description: '', startTime: 0n, endTime: (await anvil.getMockWindow().getTime()) + DAY, numTicks: 0n, displayValueMin: 0n, displayValueMax: 0n, answerUnit: '' }
 		const questionId = getQuestionId(questionData, ['Yes', 'No'])
-		await createQuestion(client, questionData, ['Yes', 'No'])
+		await createQuestion(anvil.getClient(), questionData, ['Yes', 'No'])
 		const submittedHashes: string[] = []
-		const walletClient = createWalletWriteClient(addressString(TEST_ADDRESSES[0]), { onTransactionSubmitted: hash => submittedHashes.push(hash) })
+		const walletClient = createWalletWriteClient(anvil.walletAddress, { onTransactionSubmitted: hash => submittedHashes.push(hash) })
 		await expect(createSecurityPool(walletClient, { initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId, statoblastSecurityMultiplierBps: 20_000n }, questionData)).rejects.toThrow('Question creation would revert: Question already exists and cannot be created twice')
 		expect(submittedHashes).toEqual([])
 	})
 
-	afterEach(() => resetActiveEnvironmentForTesting())
-
 	test('returns the deployed security pool address from the deployment receipt', async () => {
-		const currentTimestamp = await mockWindow.getTime()
+		const currentTimestamp = await anvil.getMockWindow().getTime()
 		const questionData = {
 			title: 'Test question for security pool creation',
 			description: '',
@@ -118,9 +78,9 @@ describe('security pool creation helper', () => {
 		}
 		const outcomes = ['Yes', 'No']
 		const questionId = getQuestionId(questionData, outcomes)
-		await createQuestion(client, questionData, outcomes)
+		await createQuestion(anvil.getClient(), questionData, outcomes)
 
-		const result = await createSecurityPool(createWalletWriteClient(addressString(TEST_ADDRESSES[0])), {
+		const result = await createSecurityPool(createWalletWriteClient(anvil.walletAddress), {
 			initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 			questionId,
 			statoblastSecurityMultiplierBps: 20_000n,
@@ -152,7 +112,7 @@ describe('security pool creation helper', () => {
 		const preparedPreviews: TransactionRequestPreview[] = []
 		const fakeClientBase: Pick<UiWriteClient, 'account' | 'onTransactionPrepared' | 'sendTransaction' | 'waitForTransactionReceipt'> = {
 			account: {
-				address: addressString(TEST_ADDRESSES[0]) as Address,
+				address: anvil.walletAddress,
 				type: 'json-rpc',
 			},
 			onTransactionPrepared: preview => {
