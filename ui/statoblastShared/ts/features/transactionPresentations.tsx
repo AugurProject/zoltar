@@ -16,6 +16,7 @@ import type { ForkAuctionActionResult, ReportingActionResult, SecurityPoolCreati
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from './truth-auctions/lib/forkAuction.js'
 import { formatStatoblastSecurityMultiplier } from './markets/lib/trading.js'
 import { formatInitialReportPriorityFee, formatInitialReportPriorityFeeInput } from './security-pools/lib/priorityFee.js'
+import { getLiquidationExecutionFailureDetail } from './security-pools/lib/liquidation.js'
 
 type SecurityPoolCreationTransactionContext = {
 	initialReportPriorityFeeEth?: string | undefined
@@ -212,7 +213,7 @@ export function createLiquidationTransactionIntent(context?: LiquidationTransact
 
 export function createLiquidationSuccessPresentation(result: SecurityPoolOverviewActionResult, context?: LiquidationTransactionContext) {
 	// A staged liquidation that ran and reverted is a failure, whichever caller builds the presentation.
-	if (result.stagedExecution?.success === false) return createLiquidationFailurePresentation(result, result.stagedExecution.errorMessage ?? securityPoolCopy.stagedOperationFailedDetail, context)
+	if (result.stagedExecution?.success === false) return createLiquidationFailurePresentation(result, getLiquidationExecutionFailureDetail(result.stagedExecution.errorMessage) ?? securityPoolCopy.stagedOperationFailedDetail, context)
 	let queuedOperationDetail: string = transactionCopy.liquidationRequestSubmittedDetail
 	if (result.queuedOperation !== undefined && result.stagedExecution === undefined) {
 		queuedOperationDetail = result.queuedOperation.isPendingSlot ? transactionCopy.formatQueuedLiquidationAutoExecutionDetail(result.queuedOperation.operationId.toString()) : transactionCopy.formatQueuedLiquidationManualExecutionDetail(result.queuedOperation.operationId.toString())

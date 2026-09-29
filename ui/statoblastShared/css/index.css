@@ -2996,7 +2996,7 @@ span.rep-price-status.stale,
 	border-bottom: 0;
 }
 
-/* Each launcher spans three shared rows (button, description, unavailable reason), so captions line up across columns whether or not an action is blocked. */
+/* Equal-width launcher columns; each launcher stacks its own button, description, and blocker. */
 .vault-primary-actions {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));

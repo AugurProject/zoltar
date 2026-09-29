@@ -134,6 +134,15 @@ describe('transaction presentations', () => {
 		})
 		expect(liquidationPresentation.tone).toBe('error')
 		expect(liquidationPresentation.title).toBe('Liquidation failed')
+		const revertedPresentation = createLiquidationSuccessPresentation({
+			action: 'queueLiquidation',
+			hash: transactionHash,
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			queuedOperation: { operation: 'liquidation', operationId: 5n, isPendingSlot: false },
+			stagedExecution: { operation: 'liquidation', operationId: 5n, success: false, errorMessage: 'Liquidation distance too low' },
+		})
+		// The contract revert string is shown in the same plain language as the liquidation modal.
+		expect(revertedPresentation.detail).toBe('The oracle price has not moved far enough past the target vault’s liquidation threshold.')
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
