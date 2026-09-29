@@ -22,6 +22,7 @@ describe('test impact recommendations', () => {
 		expect(commandsFor(['tooling/ui/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
 		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
+		expect(commandsFor(['tooling/ui/productionWorkflowScenarios.ts'])).toEqual(['bun run test:browser:workflow'])
 	})
 
 	test('maps quote behavior to unit and deterministic fork coverage', () => {
@@ -105,7 +106,7 @@ describe('test impact recommendations', () => {
 		expect(combinedCommands).toEqual(
 			expect.arrayContaining([
 				'bun run ensure-contract-artifacts && cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/productionBuild.test.ts',
-				"bun run ensure-contract-artifacts && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun ../../tooling/testing/bun-test.mts --timeout 600000 --test-name-pattern 'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)' tests/productionBuild.test.ts",
+				"bun run ensure-contract-artifacts && cd bots/liquidator && RUN_PRODUCTION_BROWSER_WORKFLOWS=1 bun ../../tooling/testing/bun-test.mts --timeout 600000 --test-name-pattern '^production workflow:' tests/productionBuild.test.ts",
 				'cd bots/liquidator && bun ../../tooling/testing/bun-test.mts tests/productionBuild.test.ts',
 			]),
 		)

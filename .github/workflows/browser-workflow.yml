@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
+      build-inputs:
+        type: string
+        default: ""
       prepared:
         type: boolean
         default: false
@@ -19,8 +22,34 @@ env:
   FOUNDRY_VERSION: v1.5.1
 
 jobs:
+  prepare:
+    name: Prepare standalone browser inputs
+    if: inputs.prepared != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ci
+        with:
+          foundry: "false"
+          build-inputs: ${{ inputs.build-inputs }}
+      - name: Build production UI once for all browser scenarios
+        run: |
+          bun run ui:build:apps
+          bun run ui:build:prod:current
+      - name: Read canonical UI artifact metadata
+        id: projects
+        run: bun ./tooling/repo/query-projects.mts --github-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: domain-production-ui
+          path: ${{ steps.projects.outputs.ui_artifact_outputs }}
+          if-no-files-found: error
+          retention-days: 1
+
   browser-smoke:
     name: Production browser smoke
+    needs: prepare
     # Automatic smoke coverage is owned by CI Gate.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -28,13 +57,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+      - uses: actions/download-artifact@v5
+        with:
+          name: domain-production-ui
+          path: ui
       - name: Run production browser smoke tier
         run: bun run test:browser:smoke
+        env:
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
 
   browser-workflow:
-    name: Production browser workflow
+    name: Production browser workflow (${{ matrix.scenario }})
+    needs: prepare
+    if: always() && !cancelled() && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [auction-boot, pool-recovery, reporting-migration, deployment-auction]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -53,16 +94,16 @@ jobs:
           fi
       - uses: ./.github/actions/setup-ci
         if: steps.scope.outputs.core == 'true'
+        with:
+          build-inputs: ${{ inputs.build-inputs }}
       - uses: actions/download-artifact@v5
-        if: inputs.prepared
+        if: steps.scope.outputs.core == 'true'
         with:
           name: domain-production-ui
           path: ui
-      - name: Refresh split UI package installs
-        if: inputs.prepared
-        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - name: Run production browser workflow tier
         if: steps.scope.outputs.core == 'true'
         run: bun run test:browser:workflow
         env:
-          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: ${{ inputs.prepared && '1' || '0' }}
+          ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: "1"
+          ZOLTAR_BROWSER_WORKFLOW_SCENARIO: ${{ matrix.scenario }}
