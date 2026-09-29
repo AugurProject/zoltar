@@ -17,6 +17,13 @@ function createMouseDownOutside() {
 	return outsideButton
 }
 
+type DropdownProps = Parameters<typeof EnumDropdown<string>>[0]
+
+const yesNoOptions = [
+	{ label: 'Yes', value: 'yes' },
+	{ label: 'No', value: 'no' },
+]
+
 describe('EnumDropdown', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
@@ -28,20 +35,16 @@ describe('EnumDropdown', () => {
 		},
 	})
 
-	test('renders an explicit placeholder without silently selecting the first option', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				ariaLabel='Outcome'
-				options={[
-					{ label: 'Yes', value: 'yes' },
-					{ label: 'No', value: 'no' },
-				]}
-				value={undefined}
-				onChange={() => undefined}
-				placeholder='Select outcome side'
-			/>,
-		)
+	/** Renders an unselected Yes/No dropdown unless the test overrides its props. */
+	async function renderDropdown(overrides: Partial<DropdownProps> = {}) {
+		const props: DropdownProps = { options: yesNoOptions, value: undefined, onChange: () => undefined, placeholder: 'Select outcome side', ...overrides }
+		const renderedComponent = await renderIntoDocument(<EnumDropdown {...props} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		return async (nextOverrides: Partial<DropdownProps>) => await act(() => render(<EnumDropdown {...props} {...nextOverrides} />, renderedComponent.container))
+	}
+
+	test('renders an explicit placeholder without silently selecting the first option', async () => {
+		await renderDropdown({ ariaLabel: 'Outcome' })
 
 		const documentQueries = within(document.body)
 		const trigger = documentQueries.getByRole('button', { name: 'Outcome: Select outcome side' })
@@ -60,21 +63,12 @@ describe('EnumDropdown', () => {
 
 	test('opens and closes from keyboard and outside interaction events', async () => {
 		let changedValue: string | undefined
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				ariaLabel='Outcome'
-				options={[
-					{ label: 'Yes', value: 'yes' },
-					{ label: 'No', value: 'no' },
-				]}
-				value={undefined}
-				onChange={value => {
-					changedValue = value
-				}}
-				placeholder='Select outcome side'
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderDropdown({
+			ariaLabel: 'Outcome',
+			onChange: value => {
+				changedValue = value
+			},
+		})
 		const documentQueries = within(document.body)
 		const trigger = documentQueries.getByRole('button', { name: 'Outcome: Select outcome side' })
 
@@ -119,18 +113,7 @@ describe('EnumDropdown', () => {
 	})
 
 	test('keeps the menu open for internal Tab focus and closes after Tab moves outside', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				options={[
-					{ label: 'Yes', value: 'yes' },
-					{ label: 'No', value: 'no' },
-				]}
-				value={undefined}
-				onChange={() => undefined}
-				placeholder='Select outcome side'
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderDropdown()
 		const trigger = within(document.body).getByRole('button', { name: 'Select outcome side' })
 
 		await act(() => {
@@ -158,38 +141,30 @@ describe('EnumDropdown', () => {
 	})
 
 	test('includes the selected value in the trigger accessible name when labeled', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				ariaLabel='Question type'
-				options={[
-					{ label: 'Binary', value: 'binary' },
-					{ label: 'Categorical', value: 'categorical' },
-				]}
-				value='binary'
-				onChange={() => undefined}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderDropdown({
+			ariaLabel: 'Question type',
+			options: [
+				{ label: 'Binary', value: 'binary' },
+				{ label: 'Categorical', value: 'categorical' },
+			],
+			value: 'binary',
+		})
 
 		expect(within(document.body).getByRole('button', { name: 'Question type: Binary' })).not.toBeNull()
 	})
 
 	test('handles Escape and reverse-arrow navigation across dropdown options', async () => {
 		let changedValue: string | undefined
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				options={[
-					{ label: 'Red', value: 'red' },
-					{ label: 'Blue', value: 'blue' },
-				]}
-				value={undefined}
-				onChange={value => {
-					changedValue = value
-				}}
-				placeholder='Pick color'
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderDropdown({
+			options: [
+				{ label: 'Red', value: 'red' },
+				{ label: 'Blue', value: 'blue' },
+			],
+			onChange: value => {
+				changedValue = value
+			},
+			placeholder: 'Pick color',
+		})
 
 		const documentQueries = within(document.body)
 		const trigger = documentQueries.getByRole('button', { name: 'Pick color' })
@@ -219,19 +194,7 @@ describe('EnumDropdown', () => {
 	})
 
 	test('does not open when disabled', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				disabled
-				options={[
-					{ label: 'Yes', value: 'yes' },
-					{ label: 'No', value: 'no' },
-				]}
-				value={undefined}
-				onChange={() => undefined}
-				placeholder='Select outcome side'
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderDropdown({ disabled: true })
 
 		const trigger = within(document.body).getByRole('button', { name: 'Select outcome side' })
 		await act(() => {
@@ -241,40 +204,29 @@ describe('EnumDropdown', () => {
 	})
 
 	test('closes an open menu when it becomes disabled', async () => {
-		const options = [
-			{ label: 'Yes', value: 'yes' },
-			{ label: 'No', value: 'no' },
-		] as const
-		const renderedComponent = await renderIntoDocument(<EnumDropdown disabled={false} options={options} value={undefined} onChange={() => undefined} placeholder='Select outcome side' />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		const rerender = await renderDropdown({ disabled: false })
 
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('button', { name: 'Select outcome side' }))
 		})
 		expect(within(document.body).getAllByRole('option')).toHaveLength(2)
 
-		await act(() => {
-			render(<EnumDropdown disabled options={options} value={undefined} onChange={() => undefined} placeholder='Select outcome side' />, renderedComponent.container)
-		})
+		await rerender({ disabled: true })
 		expect(document.querySelector('.enum-dropdown-menu')).toBeNull()
 	})
 
 	test('closes via Escape from the trigger', async () => {
 		let changedValue: string | undefined
-		const renderedComponent = await renderIntoDocument(
-			<EnumDropdown
-				options={[
-					{ label: 'High', value: 'high' },
-					{ label: 'Low', value: 'low' },
-				]}
-				value={undefined}
-				onChange={value => {
-					changedValue = value
-				}}
-				placeholder='Select'
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		await renderDropdown({
+			options: [
+				{ label: 'High', value: 'high' },
+				{ label: 'Low', value: 'low' },
+			],
+			onChange: value => {
+				changedValue = value
+			},
+			placeholder: 'Select',
+		})
 
 		const trigger = within(document.body).getByRole('button', { name: 'Select' })
 		await act(() => {

@@ -13,28 +13,20 @@ import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { ZoltarRoutes } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarRoutes.js'
 import { ZoltarWorkspaceProvider } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
 import { describe, expect, mock, test } from 'bun:test'
+import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
+	return createForkedUniverseSummary({
 		childUniverses: [
 			{ exists: true, forkTime: 0n, outcomeIndex: 0n, outcomeLabel: 'Yes', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 2n },
 			{ exists: false, forkTime: 0n, outcomeIndex: 1n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n },
 		],
-		forkQuestionDetails: undefined,
-		forkThresholdAttoRep: 1n,
-		forkTime: 1n,
-		forkingOutcomeIndex: 0n,
-		hasForked: true,
 		lineage: [
 			{ outcomeLabel: undefined, universeId: 0n },
 			{ outcomeLabel: 'Alpha', universeId: 1n },
 		],
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
-		totalTheoreticalSupplyAttoRep: 1n,
-		universeId: 1n,
 		...overrides,
-	}
+	})
 }
 
 /** The operation slice the Zoltar route containers read; each test overrides the universe and view. */

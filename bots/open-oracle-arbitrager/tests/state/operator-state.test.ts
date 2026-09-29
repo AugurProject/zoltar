@@ -1,4 +1,4 @@
-import { emptySettlementSnapshot, parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
+import { parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { completeSuccessfulPoll } from '../../src/runtime/poll-completion.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -14,8 +14,10 @@ import type { ExecutionRecord } from '#state/execution-record'
 import { isSnapshot } from '#dashboard/snapshot-validation'
 import { operatorNoticePresentation, pauseFailurePresentation } from '#dashboard/dashboard-notice'
 import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
-import { publicPollFailure } from '#state/public-failures'
+import { publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import type { PositionRecord } from '#state/position-store'
+import { operatorStateFixture } from '../support/operator-state.ts'
+import { openPositionFixture } from '../support/position-record.ts'
 
 const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -23,29 +25,61 @@ const submission = { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: 
 const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
 const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, savedWallet: undefined, wallet: undefined } as const
 
-function capabilityState(): OperatorState {
+function executionRecordFixture(): ExecutionRecord {
 	return {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		endpointChecks: [],
-		executionHistory: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		operationLog: [],
-		opportunities: [],
-		paused: false,
-		positions: [],
-		priceHistory: [],
-		reportPaths: [],
-		status: 'syncing',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
+		actualGasCostEth: '0.002',
+		blockNumber: '100',
+		direction: 'sell-rep',
+		estimatedNetProfitWeth: '0.05',
+		estimatedProfitBeforeGasEth: '0.052',
+		executedAt: '2026-07-24T00:00:00.000Z',
+		pool: address,
+		poolFee: 10_000,
+		reportId: '7',
+		requiredToken: '1',
+		requiredWeth: '2',
+		token: address,
+		tokenSymbol: 'REP',
+		trackedNetProfitEth: '0.05',
+		transactionHash: `0x${'12'.repeat(32)}`,
 	}
+}
+
+async function historyPath(prefix = 'zoltar-arbitrager-test-', ...segments: string[]) {
+	const directory = await mkdtemp(join(tmpdir(), prefix))
+	temporaryDirectories.push(directory)
+	return join(directory, ...segments, 'history.jsonl')
+}
+
+const entryHash = `0x${'ab'.repeat(32)}` as const
+const lifecycleHash = `0x${'cd'.repeat(32)}` as const
+
+/** A one-unit open position on the fixture token with no mined gas; tests override the accounting they exercise. */
+function position(overrides: Partial<PositionRecord>): PositionRecord {
+	return openPositionFixture({
+		account: address,
+		actualEntryGasCostEth: '0',
+		capitalAtRiskWeth: '1',
+		entryTransactionHash: entryHash,
+		entryTransactionHashes: [entryHash],
+		gasExpenditures: [],
+		hedgeAmountToken: '1',
+		lockedToken: '1',
+		lockedWeth: '1',
+		openedAt: new Date(0).toISOString(),
+		reportId: '1',
+		token: address,
+		...overrides,
+	})
+}
+
+const entryAndLifecycleGas = [
+	{ costEth: '0.01', minedAt: new Date(0).toISOString(), transactionHash: entryHash },
+	{ costEth: '0.005', minedAt: new Date(1).toISOString(), transactionHash: lifecycleHash },
+]
+
+function capabilityState(): OperatorState {
+	return operatorStateFixture()
 }
 
 test('publishes skipped reports beside evaluated opportunities with only their scan reason', () => {
@@ -379,17 +413,11 @@ describe('operator strategy settings', () => {
 	})
 
 	test('clears wallet-derived balances and decisions when the signer identity changes', () => {
-		const state: OperatorState = {
+		const state = operatorStateFixture({
 			activeReportCount: 1,
 			balances: { availableEth: '1', availableRep: '2', availableWeth: '3', repValueWeth: '4', totalValueWeth: '8' },
 			blockNumber: '100',
 			blockTimestamp: '1000',
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
 			opportunities: [
 				{
 					centralizedPriceDeviationBps: '25',
@@ -410,16 +438,8 @@ describe('operator strategy settings', () => {
 					windowUnit: 'blocks',
 				},
 			],
-			paused: false,
-			positions: [],
 			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			priceHistory: [],
-			reportPaths: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		})
 		clearWalletDerivedState(state)
 		expect(state.balances).toBeUndefined()
 		expect(state.opportunities).toEqual([])
@@ -428,56 +448,14 @@ describe('operator strategy settings', () => {
 
 describe('operator execution history', () => {
 	test('subtracts nonzero lifecycle gas from open hedged P&L and separates realized P&L', () => {
-		const base = {
-			account: address,
+		const base = position({
 			actualEntryGasCostEth: '0.01',
-			capitalAtRiskWeth: '1',
-			closedAt: undefined,
-			direction: 'sell-rep',
-			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
-			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
-			gasExpenditures: [
-				{ costEth: '0.01', minedAt: new Date(0).toISOString(), transactionHash: `0x${'ab'.repeat(32)}` as Hex },
-				{ costEth: '0.005', minedAt: new Date(1).toISOString(), transactionHash: `0x${'cd'.repeat(32)}` as Hex },
-			],
-			historyOutbox: undefined,
-			hedgeAmountToken: '1',
-			hedgeWeth: '1',
-			hedgedProfitBeforeGasEth: '0.1',
+			gasExpenditures: entryAndLifecycleGas,
 			lifecycleGasCostEth: '0.02',
-			lifecycleReceiptRecovered: false,
-			lifecycleTargetBlockNumber: undefined,
-			lifecycleTokenDecimals: undefined,
-			lifecycleTransactionHashes: [],
 			lifecycleUpdatedAt: new Date(0).toISOString(),
-			lifecycleWalletTokenBefore: undefined,
-			lifecycleWalletWethBefore: undefined,
-			lockedToken: '1',
-			lockedWeth: '1',
-			manualReconciliation: undefined,
-			openedAt: new Date(0).toISOString(),
-			realizedNetProfitEth: undefined,
-			reportId: '1',
-			status: 'open',
-			token: address,
-			tokenSymbol: 'REP',
-			withdrawnToken: '0',
-			withdrawnWeth: '0',
-		} satisfies PositionRecord
-		const state: OperatorState = {
-			activeReportCount: 0,
+		})
+		const state = operatorStateFixture({
 			consecutivePollFailures: 2,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
-			opportunities: [],
-			paused: false,
 			positions: [base, { ...base, closedAt: new Date(1).toISOString(), realizedNetProfitEth: '-0.04', reportId: '2', status: 'closed' }],
 			positionArchive: {
 				gasSpentByUtcDay: { [new Date().toISOString().slice(0, 10)]: '0.01' },
@@ -485,11 +463,7 @@ describe('operator execution history', () => {
 				positionCount: 3,
 				realizedNetProfitEth: '0.2',
 			},
-			priceHistory: [],
-			reportPaths: [],
 			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
 			settlements: settlementSnapshot({
 				now: new Date(),
 				queue: [],
@@ -521,8 +495,7 @@ describe('operator execution history', () => {
 				unclaimedRewardAttoEth: undefined,
 				withdrawalDecision: 'unavailable',
 			}),
-			transactionActivity: [],
-		}
+		})
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.consecutivePollFailures).toBe(2)
 		expect(snapshot.positionRecordCount).toBe(5)
@@ -534,61 +507,8 @@ describe('operator execution history', () => {
 	})
 
 	test('excludes staged entry quotes from actual position P&L totals', () => {
-		const base = {
-			account: address,
-			actualEntryGasCostEth: '0',
-			capitalAtRiskWeth: '1',
-			closedAt: undefined,
-			direction: 'sell-rep',
-			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
-			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
-			gasExpenditures: [],
-			historyOutbox: undefined,
-			hedgeAmountToken: '1',
-			hedgeWeth: '1',
-			hedgedProfitBeforeGasEth: '9',
-			lifecycleGasCostEth: '0',
-			lifecycleReceiptRecovered: false,
-			lifecycleTargetBlockNumber: undefined,
-			lifecycleTokenDecimals: undefined,
-			lifecycleTransactionHashes: [],
-			lifecycleUpdatedAt: undefined,
-			lifecycleWalletTokenBefore: undefined,
-			lifecycleWalletWethBefore: undefined,
-			lockedToken: '1',
-			lockedWeth: '1',
-			manualReconciliation: undefined,
-			openedAt: new Date(0).toISOString(),
-			realizedNetProfitEth: undefined,
-			reportId: '1',
-			status: 'pending-entry',
-			token: address,
-			tokenSymbol: 'REP',
-			withdrawnToken: '0',
-			withdrawnWeth: '0',
-		} satisfies PositionRecord
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
-			opportunities: [],
-			paused: false,
-			positions: [base, { ...base, reportId: '2', status: 'recovery-required' }],
-			priceHistory: [],
-			reportPaths: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const base = position({ hedgedProfitBeforeGasEth: '9', status: 'pending-entry' })
+		const state = operatorStateFixture({ positions: [base, { ...base, reportId: '2', status: 'recovery-required' }], status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0')
@@ -596,42 +516,19 @@ describe('operator execution history', () => {
 	})
 
 	test('excludes ambiguous lifecycle receipts from actual P&L while retaining manually recorded realized P&L', () => {
-		const pending = {
-			account: address,
+		const pending = position({
 			actualEntryGasCostEth: '0.01',
-			capitalAtRiskWeth: '1',
-			closedAt: undefined,
-			direction: 'sell-rep',
-			entryTransactionHash: `0x${'ab'.repeat(32)}` as Hex,
-			entryTransactionHashes: [`0x${'ab'.repeat(32)}` as Hex],
-			gasExpenditures: [
-				{ costEth: '0.01', minedAt: new Date(0).toISOString(), transactionHash: `0x${'ab'.repeat(32)}` as Hex },
-				{ costEth: '0.005', minedAt: new Date(1).toISOString(), transactionHash: `0x${'cd'.repeat(32)}` as Hex },
-			],
-			historyOutbox: undefined,
-			hedgeAmountToken: '1',
-			hedgeWeth: '1',
+			gasExpenditures: entryAndLifecycleGas,
 			hedgedProfitBeforeGasEth: '9',
-			lifecycleGasCostEth: '0',
-			lifecycleReceiptRecovered: false,
 			lifecycleTargetBlockNumber: '123',
 			lifecycleTokenDecimals: '18',
-			lifecycleTransactionHashes: [`0x${'cd'.repeat(32)}` as Hex],
+			lifecycleTransactionHashes: [lifecycleHash],
 			lifecycleUpdatedAt: new Date(1).toISOString(),
 			lifecycleWalletTokenBefore: '1',
 			lifecycleWalletWethBefore: '1',
-			lockedToken: '1',
-			lockedWeth: '1',
-			manualReconciliation: undefined,
-			openedAt: new Date(0).toISOString(),
-			realizedNetProfitEth: undefined,
 			reportId: '3',
 			status: 'recovery-required',
-			token: address,
-			tokenSymbol: 'REP',
-			withdrawnToken: '0',
-			withdrawnWeth: '0',
-		} satisfies PositionRecord
+		})
 		const manuallyClosed = {
 			...pending,
 			closedAt: new Date(2).toISOString(),
@@ -649,83 +546,24 @@ describe('operator execution history', () => {
 			reportId: '4',
 			status: 'closed',
 		} satisfies PositionRecord
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
-			opportunities: [],
-			paused: false,
-			positions: [pending, manuallyClosed],
-			priceHistory: [],
-			reportPaths: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ positions: [pending, manuallyClosed], status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0')
 		expect(snapshot.totalRealizedNetProfitEth).toBe('-0.2')
 	})
 
-	test('persists valid records and calculates totals', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'history.jsonl')
-		const record: ExecutionRecord = {
-			actualGasCostEth: '0.002',
-			blockNumber: '100',
-			direction: 'sell-rep',
-			estimatedNetProfitWeth: '0.05',
-			estimatedProfitBeforeGasEth: '0.052',
-			executedAt: '2026-07-24T00:00:00.000Z',
-			pool: address,
-			poolFee: 10_000,
-			reportId: '7',
-			requiredToken: '1',
-			requiredWeth: '2',
-			token: address,
-			tokenSymbol: 'REP',
-			trackedNetProfitEth: '0.05',
-			transactionHash: `0x${'12'.repeat(32)}` as Hex,
-		}
+	test('persists valid records idempotently across a replayed outbox and calculates totals', async () => {
+		const path = await historyPath()
+		const record = executionRecordFixture()
 		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBeTrue()
 		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBeFalse()
+		expect((await readFile(path, 'utf8')).trim().split('\n')).toHaveLength(1)
 		// A crash between the read and the append can still leave a duplicated line behind.
 		await appendFile(path, `${JSON.stringify({ chainId: 1, record })}\n`, { encoding: 'utf8' })
 		const history = await loadExecutionHistory(path, 1)
 		expect(history).toEqual([record])
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			executionHistory: history,
-			endpointChecks: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			opportunities: [],
-			operationLog: [],
-			paused: false,
-			positions: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			priceHistory: [],
-			reportPaths: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ executionHistory: history, status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
@@ -733,34 +571,14 @@ describe('operator execution history', () => {
 	})
 
 	test('rejects malformed execution history instead of silently understating accounting', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'history.jsonl')
+		const path = await historyPath()
 		await writeFile(path, '{"transactionHash":"torn"', 'utf8')
 		await expect(loadExecutionHistory(path, 1)).rejects.toThrow('line 1')
 	})
 
 	test('rejects valid execution history bound to another chain', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-history-chain-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'history.jsonl')
-		const record: ExecutionRecord = {
-			actualGasCostEth: '0.002',
-			blockNumber: '100',
-			direction: 'sell-rep',
-			estimatedNetProfitWeth: '0.05',
-			estimatedProfitBeforeGasEth: '0.052',
-			executedAt: '2026-07-24T00:00:00.000Z',
-			pool: address,
-			poolFee: 10_000,
-			reportId: '7',
-			requiredToken: '1',
-			requiredWeth: '2',
-			token: address,
-			tokenSymbol: 'REP',
-			trackedNetProfitEth: '0.05',
-			transactionHash: `0x${'12'.repeat(32)}` as Hex,
-		}
+		const path = await historyPath('zoltar-arbitrager-history-chain-')
+		const record = executionRecordFixture()
 		await appendExecutionHistoryIfMissing(path, record, 1)
 		await expect(loadExecutionHistory(path, 11_155_111)).rejects.toThrow('belongs to another chain')
 	})
@@ -809,62 +627,12 @@ describe('operator execution history', () => {
 				throw Object.assign(new Error('missing history'), { code: 'ENOENT' })
 			},
 		}
-		await appendExecutionHistoryIfMissing(
-			'/history.jsonl',
-			{
-				actualGasCostEth: '0.002',
-				blockNumber: '100',
-				direction: 'sell-rep',
-				estimatedNetProfitWeth: '0.05',
-				estimatedProfitBeforeGasEth: '0.052',
-				executedAt: '2026-07-24T00:00:00.000Z',
-				pool: address,
-				poolFee: 10_000,
-				reportId: '7',
-				requiredToken: '1',
-				requiredWeth: '2',
-				token: address,
-				tokenSymbol: 'REP',
-				trackedNetProfitEth: '0.05',
-				transactionHash: `0x${'12'.repeat(32)}` as Hex,
-			},
-			1,
-			filesystem,
-		)
+		await appendExecutionHistoryIfMissing('/history.jsonl', executionRecordFixture(), 1, filesystem)
 		expect(events).toEqual(['readFile', 'mkdir', 'file:chmod', 'file:append', 'file:sync', 'file:close', 'directory:sync', 'directory:close'])
 	})
 
-	test('drains a replayed durable history outbox idempotently after restart', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'history.jsonl')
-		const record: ExecutionRecord = {
-			actualGasCostEth: '0.002',
-			blockNumber: '100',
-			direction: 'sell-rep',
-			estimatedNetProfitWeth: '0.05',
-			estimatedProfitBeforeGasEth: '0.052',
-			executedAt: '2026-07-24T00:00:00.000Z',
-			pool: address,
-			poolFee: 10_000,
-			reportId: '7',
-			requiredToken: '1',
-			requiredWeth: '2',
-			token: address,
-			tokenSymbol: 'REP',
-			trackedNetProfitEth: '0.05',
-			transactionHash: `0x${'12'.repeat(32)}` as Hex,
-		}
-		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBe(true)
-		expect(await appendExecutionHistoryIfMissing(path, record, 1)).toBe(false)
-		expect((await readFile(path, 'utf8')).trim().split('\n')).toHaveLength(1)
-		expect(await loadExecutionHistory(path, 1)).toEqual([record])
-	})
-
 	test('preflights and locks down the execution history destination', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'nested', 'history.jsonl')
+		const path = await historyPath(undefined, 'nested')
 		await ensureExecutionHistoryWritable(path)
 		const file = Bun.file(path)
 		expect(await file.exists()).toBe(true)
@@ -872,9 +640,7 @@ describe('operator execution history', () => {
 	})
 
 	test('keeps full-history totals while bounding the dashboard record window', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-test-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'history.jsonl')
+		const path = await historyPath()
 		const records = Array.from({ length: 501 }, (_, index) => ({
 			actualGasCostEth: '0.001',
 			blockNumber: index.toString(),
@@ -895,28 +661,7 @@ describe('operator execution history', () => {
 		await writeFile(path, `${records.map(record => JSON.stringify({ chainId: 1, record })).join('\n')}\n`, 'utf8')
 		const history = await loadExecutionHistory(path, 1)
 		expect(history).toHaveLength(501)
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			executionHistory: history,
-			endpointChecks: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			opportunities: [],
-			operationLog: [],
-			paused: false,
-			positions: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			priceHistory: [],
-			reportPaths: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ executionHistory: history, status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, execute: true, wallet: address })
 		expect(snapshot.executionHistory).toHaveLength(500)
 		expect(snapshot.executionHistoryRecordCount).toBe(501)

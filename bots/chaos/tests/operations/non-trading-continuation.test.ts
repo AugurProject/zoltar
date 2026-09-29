@@ -4,19 +4,9 @@ import { reevaluateOperationContinuation } from '../../src/operations/catalog.ts
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
 import type { EcosystemSnapshot, OperationPlan } from '../../src/operations/types.ts'
 import { decodeFunctionData } from '@zoltar/bot-shared/ethereum'
-import { address, hash, snapshotFixture } from './fixture.ts'
+import { address, hash, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-const options = {
-	allowHighRisk: true,
-	allowIrreversibleOperations: true,
-	maximumBlockIntervalSeconds: 15,
-	maximumGasCostAttoEth: (10n ** 14n).toString(),
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: (10n ** 16n).toString(),
-	minimumRepReserveAttoRep: (10n ** 18n).toString(),
-	seed: 2,
-} as const
+const options = planningOptionsFixture({ maximumGasCostAttoEth: (10n ** 14n).toString(), seed: 2 })
 
 function requiredPlan(snapshot: EcosystemSnapshot, definitionId: string, planningOptions = options) {
 	const plan = eligibleOperationPlans(snapshot, planningOptions).find(candidate => candidate.definitionId === definitionId)

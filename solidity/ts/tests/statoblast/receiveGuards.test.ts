@@ -10,29 +10,18 @@ import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import assert from '../../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
-import { useStatoblastReceiveGuardsFixture, type StatoblastReceiveGuardsFixture } from './fixture'
+import { useStatoblastReceiveGuardsFixture } from './fixture'
 
 describe('Statoblast: receive guards', () => {
 	const fixture = useStatoblastReceiveGuardsFixture()
 
 	const { repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, testInternalSenderBalance, sendEthAndWait } = fixture
 
-	let mockWindow: StatoblastReceiveGuardsFixture['mockWindow']
-	let client: StatoblastReceiveGuardsFixture['client']
-	let securityPoolAddresses: StatoblastReceiveGuardsFixture['securityPoolAddresses']
-	let questionId: StatoblastReceiveGuardsFixture['questionId']
-
-	beforeEach(() => {
-		mockWindow = fixture.mockWindow
-		client = fixture.client
-		securityPoolAddresses = fixture.securityPoolAddresses
-		questionId = fixture.questionId
-	})
-
 	const expectUnauthorizedEthSendToReject = async (to: Address, value: bigint, expectedReason: RegExp) => {
+		const { mockWindow, client } = fixture
 		const unauthorizedSender = createWriteClient(mockWindow, TEST_ADDRESSES[6])
 		await mockWindow.setBalance(unauthorizedSender.account.address, testInternalSenderBalance)
 		const targetBalanceBefore = await getETHBalance(client, to)
@@ -44,6 +33,7 @@ describe('Statoblast: receive guards', () => {
 	}
 
 	test('SecurityPool receive restricts unauthorized senders', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const forkerAddress = getInfraContractAddresses().securityPoolForker
 		const poolAddress = securityPoolAddresses.securityPool
 
@@ -105,6 +95,7 @@ describe('Statoblast: receive guards', () => {
 	})
 
 	test('SecurityPoolForker receive restricts unauthorized senders', async () => {
+		const { mockWindow, client, securityPoolAddresses, questionId } = fixture
 		const forkerAddress = getInfraContractAddresses().securityPoolForker
 
 		// Setup to create a child pool so truthAuction is registered

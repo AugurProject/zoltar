@@ -159,6 +159,7 @@ type LiquidationSimulation = {
 	}
 }
 
+/** @internal Exported for regression tests of liquidation submission guards. */
 export function simulateLiquidation({
 	callerVaultSummary,
 	requestedDebtAttoEth,

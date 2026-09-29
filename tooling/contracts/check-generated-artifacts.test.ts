@@ -4,13 +4,10 @@ import { expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
-import { assertGeneratedArtifactsClean, type GitRunner } from './check-generated-artifacts.mts'
+import type { GitRunner } from '../repo/git.mts'
+import { assertGeneratedArtifactsClean } from './check-generated-artifacts.mts'
 
-const cleanGit: GitRunner = () => ({
-	status: 0,
-	stderr: '',
-	stdout: '',
-})
+const cleanGit: GitRunner = () => ''
 
 const generatedFixtureFiles = [
 	...augurScanMetadataOutputs,
@@ -109,11 +106,7 @@ test('generated artifact checker resolves shared import-map outputs from the rep
 for (const trackedPath of ['augurScan/config/abis.json', 'ui/zoltar/vendor/isows/native.js', 'ui/coreShared/js/index.js', 'ui/zoltar/dist/index.html', 'ui/zoltar/tsconfig.tsbuildinfo', 'ui/coreShared/ts/contractArtifact.d.ts']) {
 	test(`generated artifact checker rejects tracked ${trackedPath}`, async () => {
 		const repositoryRoot = await createGeneratedArtifactFixture()
-		const trackedGeneratedPathGit: GitRunner = () => ({
-			status: 0,
-			stderr: '',
-			stdout: `${trackedPath}\n`,
-		})
+		const trackedGeneratedPathGit: GitRunner = () => trackedPath
 
 		try {
 			await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: trackedGeneratedPathGit })).rejects.toThrow('Generated artifacts must remain untracked')
@@ -125,11 +118,7 @@ for (const trackedPath of ['augurScan/config/abis.json', 'ui/zoltar/vendor/isows
 
 test('generated artifact checker rejects a tracked generated path missing from the worktree', async () => {
 	const repositoryRoot = await createGeneratedArtifactFixture()
-	const trackedMissingPathGit: GitRunner = () => ({
-		status: 0,
-		stderr: '',
-		stdout: 'ui/statoblast/dist/index.html\n',
-	})
+	const trackedMissingPathGit: GitRunner = () => 'ui/statoblast/dist/index.html'
 
 	try {
 		await expect(assertGeneratedArtifactsClean({ repositoryRoot, runGit: trackedMissingPathGit })).rejects.toThrow('Generated artifacts must remain untracked')

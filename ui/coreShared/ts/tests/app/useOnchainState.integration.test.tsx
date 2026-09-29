@@ -3,7 +3,7 @@ import { createDeferred } from '../testUtils/deferred.js'
 
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { installDomTestLifecycle } from '../testUtils/domTestLifecycle.js'
+import { installDomTestLifecycle, requireHookState } from '../testUtils/domTestLifecycle.js'
 import { describe, expect, mock, spyOn, test } from 'bun:test'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
@@ -205,11 +205,6 @@ function trackBlockWatcherStarts() {
 		}
 	})
 	return { restore: () => spy.mockRestore(), starts, stops: () => stops }
-}
-
-function requireHookState(state: UseOnchainStateState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
 }
 
 let cleanupRenderedComponent: (() => Promise<void>) | undefined

@@ -1,4 +1,5 @@
 import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
+import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { getZoltarAddress, forkUniverse } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approveToken } from '../../testSupport/simulator/utils/utilities'
 import { getInfraContractAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -7,9 +8,10 @@ import { TEST_ADDRESSES, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simu
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, type Abi, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { useStatoblastVaultAccountingFixture } from '../statoblast/fixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
+import { deployContract } from '../../testSupport/deployContract'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
 
@@ -18,28 +20,6 @@ type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const unit = 1_000_000n
 const attoEthToAttoSharesAbi = [{ type: 'function', name: 'attoEthToAttoShares', stateMutability: 'view', inputs: [{ name: 'amountAttoEth', type: 'uint256' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
 const attoSharesToAttoEthAbi = [{ type: 'function', name: 'attoSharesToAttoEth', stateMutability: 'view', inputs: [{ name: 'amountAttoShares', type: 'uint256' }], outputs: [{ type: 'uint256' }] }] as const satisfies Abi
-const receiveRequestParameter = {
-	type: 'tuple',
-	components: [
-		{ name: 'version', type: 'uint8' },
-		{ name: 'operation', type: 'uint8' },
-		{ name: 'shareToken', type: 'address' },
-		{ name: 'securityPool', type: 'address' },
-		{ name: 'pair', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'questionId', type: 'uint256' },
-		{ name: 'invalidTokenId', type: 'uint256' },
-		{ name: 'yesTokenId', type: 'uint256' },
-		{ name: 'noTokenId', type: 'uint256' },
-		{ name: 'longOutcome', type: 'uint8' },
-		{ name: 'completeSetShares', type: 'uint256' },
-		{ name: 'maxLongSharesIn', type: 'uint256' },
-		{ name: 'minEthOut', type: 'uint256' },
-		{ name: 'payoutRecipient', type: 'address' },
-		{ name: 'refundRecipient', type: 'address' },
-		{ name: 'deadline', type: 'uint256' },
-	],
-} as const
 
 describe('trading against authoritative Zoltar contracts', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
@@ -51,12 +31,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 	let pairArtifact: TradingContracts['contracts/trading/TwoWayConstantProductPair.sol']['TwoWayConstantProductPair']
 	let routerArtifact: TradingContracts['contracts/trading/TwoWayConstantProductRouter.sol']['TwoWayConstantProductRouter']
 
-	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = []) {
-		const hash = await fixture.client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` as Hex, args }) })
-		const receipt = await fixture.client.waitForTransactionReceipt({ hash })
-		if (receipt.status === 'reverted' || receipt.contractAddress === undefined) throw new Error('Trading deployment failed')
-		return receipt.contractAddress
-	}
+	const deploy = async (artifact: Readonly<{ abi: Abi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = []) => await deployContract(fixture.client, encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args }))
 
 	async function shareBalance(owner: Address, outcome: 0n | 1n | 2n) {
 		return await fixture.client.readContract({ abi: statoblast_tokens_ShareToken_ShareToken.abi, address: fixture.securityPoolAddresses.shareToken, functionName: 'balanceOf', args: [owner, outcome] })
@@ -169,7 +144,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const exactExitEth = await fixture.client.readContract({ abi: attoSharesToAttoEthAbi, address: fixture.securityPoolAddresses.securityPool, functionName: 'attoSharesToAttoEth', args: [exitAmount] })
 		const acceptedMinimumEth = exactExitEth
 		expect(acceptedMinimumEth).toBeGreaterThan(0n)
-		const exitData = (minimumEth: bigint) => encodeAbiParameters([receiveRequestParameter], [[1, 0, shareTokenAddress, fixture.securityPoolAddresses.securityPool, pair, universeId, fixture.questionId, ids[0], ids[1], ids[2], 1, exitAmount, entry.result.totalLongShares, minimumEth, account, account, deadline]])
+		const exitData = (minimumEth: bigint) => encodeReceiveRequest([1, 0, shareTokenAddress, fixture.securityPoolAddresses.securityPool, pair, universeId, fixture.questionId, ids[0], ids[1], ids[2], 1, exitAmount, entry.result.totalLongShares, minimumEth, account, account, deadline])
 		const balancesBeforeSlippage = await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])
 		await expect(fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, [ids[0], ids[1]], [exitAmount, entry.result.totalLongShares], exitData(exactExitEth + 1n)] })).rejects.toThrow()
 		expect(await Promise.all([shareBalance(account, 0n), shareBalance(account, 1n), shareBalance(account, 2n)])).toEqual(balancesBeforeSlippage)

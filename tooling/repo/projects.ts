@@ -273,7 +273,7 @@ export const projects: readonly Project[] = [
 		id: 'chaos',
 		path: 'bots/chaos',
 		type: 'bot',
-		dependencies: ['shared-core', 'bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'shared-zoltar', 'shared-trading', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/chaos'),
 			test: packageTask('bots/chaos', 'test'),

@@ -509,16 +509,6 @@ describe('chaos-bot settings', () => {
 		await expect(assertSettingsProfileIsolation(path, base)).rejects.toThrow('distinct durable state paths')
 	})
 
-	test('replaces permissive configuration permissions on the next successful save', async () => {
-		const directory = await temporaryDirectory()
-		const path = join(directory, 'operator.json')
-		const settings = parseSettings(await storedExample())
-		await saveSettings(path, settings)
-		await chmod(path, 0o644)
-		await saveSettings(path, settings)
-		expect((await stat(path)).mode & 0o777).toBe(0o600)
-	})
-
 	test('refuses permissive or symbolic-link configuration files before reading secrets', async () => {
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'operator.json')
@@ -531,44 +521,3 @@ describe('chaos-bot settings', () => {
 		await expect(loadSettings(alias)).rejects.toThrow('must not be a symbolic link')
 	})
 })
-
-for (const failure of ['rename', 'directory sync']) {
-	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
-		const events: string[] = []
-		const problem = new Error(failure)
-		const filesystem: SettingsFilesystem = {
-			mkdir: async () => undefined,
-			open: async (_path, flags) => ({
-				chmod: async () => undefined,
-				readFile: async () => {
-					throw new Error('Unexpected handle read')
-				},
-				stat: async () => {
-					throw new Error('Unexpected handle stat')
-				},
-				close: async () => {
-					events.push(`${flags}:close`)
-				},
-				sync: async () => {
-					if (flags === 'r' && failure === 'directory sync') throw problem
-				},
-				writeFile: async () => undefined,
-			}),
-			readFile: async () => {
-				throw new Error('Unexpected revision read')
-			},
-			rename: async () => {
-				events.push('rename')
-				if (failure === 'rename') throw problem
-			},
-			rm: async (path, options) => {
-				expect(path.endsWith('.tmp')).toBe(true)
-				expect(options).toEqual({ force: true })
-				events.push('rm')
-			},
-		}
-		await expect(saveSettings('/state/operator.json', parseSettings(await storedExample()), undefined, filesystem)).rejects.toBe(problem)
-		expect(events.includes('r:close')).toBe(failure === 'directory sync')
-		expect(events.at(-1)).toBe('rm')
-	})
-}

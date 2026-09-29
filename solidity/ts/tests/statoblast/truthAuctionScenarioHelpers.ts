@@ -4,7 +4,8 @@ import { approveToken, getChildUniverseId, getERC20Balance } from '../../testSup
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRepToVault, manipulatePriceOracle, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { createQuestion, getQuestionId as buildQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId as buildQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, getTotalUnderwritingLimitAttoEth } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
@@ -60,6 +61,11 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 	statoblastSecurityMultiplierBps,
 	transferRepToAddress,
 }: StatoblastTruthAuctionScenarioContext) {
+	const getYesChildPool = () => {
+		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
+		return { yesUniverse, yesSecurityPool: getSecurityPoolAddresses(getFixtureSecurityPoolAddresses().securityPool, yesUniverse, getQuestionId(), statoblastSecurityMultiplierBps) }
+	}
+
 	const finalizeQuestionAsYesWithoutFork = async () => {
 		const client = getClient()
 		const mockWindow = getMockWindow()
@@ -93,6 +99,19 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		await approveToken(effectiveForkingClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(effectiveForkingClient, genesisUniverse, forkSourceQuestionId)
 		return await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
+	}
+
+	// Deposits twice the fork threshold, ends the question, refreshes the price, and forks the universe on the pool's own game.
+	const forkOwnGameAfterQuestionEnd = async () => {
+		const client = getClient()
+		const mockWindow = getMockWindow()
+		const securityPoolAddresses = getFixtureSecurityPoolAddresses()
+		const endTime = await getQuestionEndDate(client, getQuestionId())
+		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
+		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
+		await mockWindow.setTime(endTime + 10000n)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 	}
 
 	const setupStartedTruthAuction = async (titlePrefix: string) => {
@@ -229,6 +248,8 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 
 	return {
 		finalizeQuestionAsYesWithoutFork,
+		forkOwnGameAfterQuestionEnd,
+		getYesChildPool,
 		setupFinalizedTruthAuctionWithMixedBids,
 		setupOwnForkWithEscrow,
 		setupStartedTruthAuction,

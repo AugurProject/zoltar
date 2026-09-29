@@ -96,9 +96,10 @@ export function SecurityPoolSection({
 		if (ownsTransactionReview && reviewWorkflow?.steps[reviewWorkflow.activeIndex]?.phase === 'failed') (onDismissSecurityPoolReview ?? reviewWorkflow.cancel)()
 	}, [ownsTransactionReview, reviewWorkflow, onDismissSecurityPoolReview])
 	// The wallet confirms normal pool creation. Keep an escape if a pre-wallet review is unexpectedly published.
-	const inlineTransactionReview = ownsTransactionReview ? (
-		<TransactionStepsContent cancelable={reviewWorkflow.steps[reviewWorkflow.activeIndex]?.phase === 'review'} contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible onClose={onDismissSecurityPoolReview} />
-	) : undefined
+	const inlineTransactionReview =
+		ownsTransactionReview && reviewWorkflow.showReviewDialog ? (
+			<TransactionStepsContent cancelable={reviewWorkflow.steps[reviewWorkflow.activeIndex]?.phase === 'review'} contextKey='security-pool-creation' focusOnMount heading={transactionReviewCopy.transactionReview} keepActionsVisible onClose={onDismissSecurityPoolReview} />
+		) : undefined
 	const panelRef = useRef<HTMLDivElement>(null)
 	const returnFocusAfterReview = useRef(false)
 	// Leaving the card (for example through the route tabs) would strand a review that only this card renders.

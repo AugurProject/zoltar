@@ -4,19 +4,16 @@ import { PoolDirectoryRow } from './PoolDirectoryRow.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { useMemo, useState } from 'preact/hooks'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { DiscoveryControl, LocalCollectionSwitcher } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
-import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
+import { LocalBrowseBar, LocalBrowseSearchField, LocalCollectionEmptyState } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
-import { useDownloadedEntities, useFavorites } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
-import { usePagedDiscovery, type DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
+import { useLocalBrowseDirectory } from '@zoltar/ui-core-shared/hooks/useLocalBrowseDirectory.js'
+import type { DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
-import { buildLocalBrowseEntries, normalizeLocalSearchText, type LocalBrowseCollection } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { getWalletScopedAccountAddress } from '@zoltar/ui-core-shared/wallet/network.js'
 import { SECURITY_POOL_PAGE_SIZE } from '@zoltar/ui-core-shared/lib/pagination.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -64,43 +61,30 @@ export function SecurityPoolsOverviewSection({
 	securityPoolPageFreshness,
 	securityPoolOverviewError,
 }: SecurityPoolsOverviewSectionProps) {
-	const [collection, setCollection] = useState<LocalBrowseCollection>('favorites')
-	const [searchText, setSearchText] = useState('')
 	const [stateFilter, setStateFilter] = useState<PoolStateFilter>('all')
 	const [sortKey, setSortKey] = useState<PoolSortKey>('recent')
-	const favorites = useFavorites('statoblast', 'pool')
-	const downloaded = useDownloadedEntities('statoblast', 'pool', securityPoolDownloadStore)
 	const scopedAccountAddress = getWalletScopedAccountAddress(accountState.address, accountState.chainId)
 	const receivedPage = useMemo((): DiscoveredPage<ListedSecurityPool> | undefined => {
 		if (securityPoolPage === undefined) return undefined
 		return { items: securityPoolPage.pools, pageIndex: securityPoolPage.pageIndex, pageSize: securityPoolPage.pageSize, requestKey: securityPoolPage.requestKey, totalCount: securityPoolPage.poolCount }
 	}, [securityPoolPage])
 	const discoveryContextKey = `${environmentRefreshKey.toString()}:${scopedAccountAddress?.toLowerCase() ?? 'no-account'}`
-	const discovery = usePagedDiscovery({
+	const directory = useLocalBrowseDirectory({
+		app: 'statoblast',
 		contextKey: discoveryContextKey,
+		externalLoading: loadingSecurityPoolPage,
+		kind: 'pool',
 		loadPage: (pageIndex, requestKey) => onLoadSecurityPoolPage(pageIndex, SECURITY_POOL_PAGE_SIZE, requestKey),
-		onItems: pools => downloaded.record(pools.map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress }))),
 		pageSize: SECURITY_POOL_PAGE_SIZE,
 		receivedPage,
+		refreshedItems: securityPoolPage === undefined || !securityPoolPage.requestKey.startsWith(`${discoveryContextKey}:`) ? undefined : securityPoolPage.pools,
+		store: securityPoolDownloadStore,
+		toDownloadedItem: pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress }),
 	})
-	const discoveryLoading = discovery.loading || loadingSecurityPoolPage
+	const { discovery, downloaded, normalizedSearchText, searchText } = directory
 	// Once the user has scanned, the last scanned page (one bounded read) refreshes on new blocks and keeps its cached pools current.
 	useBlockRefresh(() => onRefreshSecurityPoolPage?.(), onRefreshSecurityPoolPage !== undefined && discovery.hasScanned)
-	// Only a new page object (a completed scan or a block refresh) is recorded; the recorder is read through a ref.
-	const recordPoolsRef = useRef(downloaded.record)
-	recordPoolsRef.current = downloaded.record
-	useEffect(() => {
-		if (securityPoolPage === undefined || !discovery.hasScanned || !securityPoolPage.requestKey.startsWith(`${discoveryContextKey}:`)) return
-		recordPoolsRef.current(securityPoolPage.pools.map(pool => ({ data: toCachedSecurityPool(pool), id: pool.securityPoolAddress })))
-	}, [securityPoolPage, discovery.hasScanned, discoveryContextKey])
-	const discover = () => {
-		setCollection('downloaded')
-		discovery.discoverNext()
-	}
-	const favoriteEntries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')
-	const collectionEntries = collection === 'favorites' ? favoriteEntries : buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'downloaded')
-	const rows = derivePoolBrowseRows(collectionEntries)
-	const normalizedSearchText = normalizeLocalSearchText(searchText)
+	const rows = derivePoolBrowseRows(directory.entries)
 	const universeRows = rows.filter(row => row.pool.universeId === activeUniverseId)
 	const visibleRows = sortPoolBrowseRows(filterPoolBrowseRows(rows, { activeUniverseId, normalizedSearchText, stateFilter }), sortKey, currentTimestamp)
 	const otherUniverseCount = rows.length - universeRows.length
@@ -117,42 +101,37 @@ export function SecurityPoolsOverviewSection({
 		)
 
 	const content = (() => {
-		if (rows.length === 0) {
-			if (discoveryLoading) return <SkeletonList label={securityPoolCopy.loadingSecurityPools} />
-			if (collection === 'favorites' && downloaded.entries.length > 0)
-				return (
-					<EmptyState
-						title={securityPoolCopy.noFavoritePools}
-						detail={securityPoolCopy.noFavoritePoolsWithDownloadsDetail}
-						actions={
-							<>
-								{openSearchedAddress}
-								<button className='secondary' type='button' onClick={() => setCollection('downloaded')}>
-									{securityPoolCopy.showDownloadedPools}
-								</button>
-							</>
-						}
-					/>
-				)
-			if (discovery.hasScanned && discovery.totalCount === 0n)
-				return (
-					<EmptyState
-						title={securityPoolCopy.noSecurityPools}
-						actions={
-							<>
-								{openSearchedAddress}
-								{onCreateSecurityPool === undefined ? undefined : (
-									<button className={openSearchedAddress === undefined ? 'primary' : 'secondary'} type='button' onClick={onCreateSecurityPool}>
-										{commonCopy.createSecurityPoolAction}
-									</button>
-								)}
-							</>
-						}
-					/>
-				)
-			if (collection === 'favorites') return <EmptyState title={securityPoolCopy.noFavoritePools} detail={securityPoolCopy.noFavoritePoolsDetail} actions={openSearchedAddress} />
-			return <EmptyState title={securityPoolCopy.noDownloadedPools} detail={securityPoolCopy.noDownloadedPoolsDetail} actions={openSearchedAddress} />
-		}
+		if (rows.length === 0 && discoveryLoading) return <SkeletonList label={securityPoolCopy.loadingSecurityPools} />
+		if (rows.length === 0)
+			return (
+				<LocalCollectionEmptyState
+					action={openSearchedAddress}
+					copy={{
+						downloadedEmpty: securityPoolCopy.noDownloadedPools,
+						downloadedEmptyDetail: securityPoolCopy.noDownloadedPoolsDetail,
+						favoritesEmpty: securityPoolCopy.noFavoritePools,
+						favoritesEmptyDetail: securityPoolCopy.noFavoritePoolsDetail,
+						favoritesEmptyWithDownloadsDetail: securityPoolCopy.noFavoritePoolsWithDownloadsDetail,
+						showDownloaded: securityPoolCopy.showDownloadedPools,
+					}}
+					directory={directory}
+					registryEmpty={
+						<EmptyState
+							title={securityPoolCopy.noSecurityPools}
+							actions={
+								<>
+									{openSearchedAddress}
+									{onCreateSecurityPool === undefined ? undefined : (
+										<button className={openSearchedAddress === undefined ? 'primary' : 'secondary'} type='button' onClick={onCreateSecurityPool}>
+											{commonCopy.createSecurityPoolAction}
+										</button>
+									)}
+								</>
+							}
+						/>
+					}
+				/>
+			)
 		if (visibleRows.length === 0) return <EmptyState title={commonCopy.noMatches} detail={securityPoolCopy.poolFiltersEmpty} actions={openSearchedAddress} />
 		return (
 			<div className='comparison-record-list'>
@@ -171,24 +150,16 @@ export function SecurityPoolsOverviewSection({
 
 	return (
 		<SectionBlock density='compact' variant='plain'>
-			<ErrorNotice message={securityPoolOverviewError ?? (discovery.loadFailed ? securityPoolCopy.poolPageLoadError : undefined)} />
-			{securityPoolOverviewError === undefined && !discovery.loadFailed ? undefined : (
-				<div className='actions pool-registry-recovery-actions'>
-					<button className='secondary' type='button' onClick={discovery.retry} disabled={discoveryLoading}>
-						{discoveryLoading ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
-					</button>
-				</div>
-			)}
-			<div className='local-browse-bar'>
-				<LocalCollectionSwitcher collection={collection} downloadedCount={downloaded.entries.length} favoritesCount={favoriteEntries.length} onChange={setCollection} />
-				{discovery.hasScanned && securityPoolPageFreshness !== undefined ? <UpdatedAgo {...securityPoolPageFreshness} /> : undefined}
-				<DiscoveryControl discovery={{ ...discovery, discoverNext: discover, loading: discoveryLoading }} discoverLabel={securityPoolCopy.discoverPools} emphasize={downloaded.entries.length === 0} nounPlural={securityPoolCopy.poolCountPlural} />
-			</div>
+			<RetryableNotice
+				actionsClassName='pool-registry-recovery-actions'
+				disabled={discovery.loading}
+				message={securityPoolOverviewError ?? (discovery.loadFailed ? securityPoolCopy.poolPageLoadError : undefined)}
+				onRetry={discovery.retry}
+				retryLabel={discovery.loading ? <LoadingText>{securityPoolCopy.retryingSecurityPoolsTruncated}</LoadingText> : securityPoolCopy.retryLoadingPools}
+			/>
+			<LocalBrowseBar directory={directory} discoverLabel={securityPoolCopy.discoverPools} freshness={securityPoolPageFreshness} nounPlural={securityPoolCopy.poolCountPlural} />
 			<div className='filter-toolbar pool-browse-toolbar'>
-				<label className='field'>
-					<span>{securityPoolCopy.searchDownloadedPools}</span>
-					<FormInput value={searchText} onInput={event => setSearchText(event.currentTarget.value)} placeholder={securityPoolCopy.poolSearchPlaceholder} />
-				</label>
+				<LocalBrowseSearchField label={securityPoolCopy.searchDownloadedPools} onChange={directory.setSearchText} placeholder={securityPoolCopy.poolSearchPlaceholder} value={searchText} />
 				<label className='field'>
 					<span>{securityPoolCopy.systemState}</span>
 					<select value={stateFilter} onChange={event => setStateFilter(parseOption(STATE_FILTER_OPTIONS, event.currentTarget.value) ?? 'all')}>

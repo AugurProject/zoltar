@@ -1,17 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { eligibleOperationPlans } from '../support/operation-plans.ts'
-import { snapshotFixture } from './fixture.ts'
+import { planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-const planningOptions = {
-	allowHighRisk: true,
-	allowIrreversibleOperations: true,
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maximumBlockIntervalSeconds: 15,
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: (10n ** 16n).toString(),
-	minimumRepReserveAttoRep: (10n ** 18n).toString(),
-	seed: 0x1234_5678,
-} as const
+const planningOptions = planningOptionsFixture()
 
 function plan(snapshot: ReturnType<typeof snapshotFixture>, definitionId: string) {
 	return eligibleOperationPlans(snapshot, planningOptions).find(candidate => candidate.definitionId === definitionId)

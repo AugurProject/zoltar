@@ -1,8 +1,6 @@
 import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getEthRaiseCapAttoEth, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
-import { getChildUniverseId } from '../testSupport/simulator/utils/utilities'
 import { finalizeTruthAuction, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -11,32 +9,19 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { getSettlementCollateralAttoEth, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getSecurityPoolForkerForkData } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getMaxRepBeingSoldAttoRep } from '../testSupport/simulator/utils/contracts/auction'
-import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture } from './statoblast/fixture'
+import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 
 describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { PRICE_PRECISION, formatStorageSlot, genesisUniverse, getMappingStorageSlot, repDeposit, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
-
-	let client: StatoblastForkMigrationFixture['client']
-	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
-	let questionData: StatoblastForkMigrationFixture['questionData']
-	let questionId: StatoblastForkMigrationFixture['questionId']
-	let securityPoolAddresses: StatoblastForkMigrationFixture['securityPoolAddresses']
-
-	beforeEach(() => {
-		client = fixture.client
-		mockWindow = fixture.mockWindow
-		questionData = fixture.questionData
-		questionId = fixture.questionId
-		securityPoolAddresses = fixture.securityPoolAddresses
-	})
+	const { PRICE_PRECISION, formatStorageSlot, getMappingStorageSlot, repDeposit, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
 
 	test('cannot mint collateral after all pool-held REP was escrowed', async () => {
+		const { client, mockWindow, questionData, securityPoolAddresses } = fixture
 		const victim = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const victimDepositAttoEth = 1n * 10n ** 18n
 
@@ -50,6 +35,7 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 	})
 
 	test('full-limit escrow checks cannot be bypassed by bad debt, and zero-pool-REP repair remains funded', async () => {
+		const { client, mockWindow, questionData, securityPoolAddresses } = fixture
 		const settlementCollateralAttoEth = 1n * 10n ** 18n
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
@@ -80,8 +66,7 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 		strictEqualTypeSafe(parentForkData.auctionableAttoRepAtFork, 0n, 'the fork should snapshot no pool-held REP')
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
 		await startTruthAuction(client, yesSecurityPool.securityPool)
 

@@ -17,20 +17,10 @@ import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-stat
 import { SecurityPoolsOverviewSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsOverviewSection.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { SecurityPoolsOverviewSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 function createSecurityPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
 	const securityPool: ListedSecurityPool = {
@@ -594,7 +584,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByRole('link', { name: '0x1' })).toBeNull()
 		expect(poolCardQueries.queryByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).toBeNull()
-		expect(poolCardQueries.queryByRole('button', { name: 'Review liquidation' })).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
 		const browseSection = poolCard.closest('.section-block')
 		if (!(browseSection instanceof HTMLElement)) throw new Error('Expected browse section')

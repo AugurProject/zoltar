@@ -17,7 +17,7 @@ import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 
-export { clampPercentage, estimateBidRep, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, isFullReadClient } from './ForkAuctionPresentationState.js'
+export { clampPercentage, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, isFullReadClient } from './ForkAuctionPresentationState.js'
 
 function sameBigIntArray(left: bigint[], right: bigint[]) {
 	return left.length === right.length && left.every((value, index) => value === right[index])

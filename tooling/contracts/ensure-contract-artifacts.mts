@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
+import { isMissingPathError, pathExists } from '../repo/fs.mts'
 import { repositoryRoot } from '../repo/root.mts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
 import { walkFiles } from '../repo/walk.mts'
@@ -23,35 +24,17 @@ const sharedFreshnessInputs = [path.join(repositoryRoot, 'shared/tsconfig.base.j
 const unexpectedSharedSourceOutputSuffixes = ['.js', '.js.map', '.d.ts', '.d.ts.map']
 const sharedTypeScriptSourceSuffixes = ['.ts', '.tsx', '.mts', '.cts']
 
-function isMissingPathError(error: unknown): error is NodeJS.ErrnoException {
-	return error instanceof Error && 'code' in error && error.code === 'ENOENT'
-}
-
-async function exists(filePath: string): Promise<boolean> {
-	try {
-		await fs.stat(filePath)
-		return true
-	} catch (error) {
-		if (!isMissingPathError(error)) throw error
-		return false
-	}
-}
-
 export async function removeDeprecatedContractArtifactOutputs(root = repositoryRoot): Promise<void> {
 	for (const relativePath of deprecatedContractArtifactRelativePaths) {
 		const deprecatedOutputPath = path.join(root, relativePath)
-		if (!(await exists(deprecatedOutputPath))) continue
+		if (!(await pathExists(deprecatedOutputPath))) continue
 		await fs.rm(deprecatedOutputPath, { force: true })
 		console.log(`Removed deprecated generated contract artifact: ${relativePath}`)
 	}
 }
 
-async function getFilesRecursively(directoryPath: string): Promise<string[]> {
-	return await walkFiles(directoryPath)
-}
-
 export async function removeUnexpectedSharedSourceOutputs(root = repositoryRoot): Promise<void> {
-	const sourceFiles = (await Promise.all(sharedPackages.map(entry => getFilesRecursively(path.join(root, entry.path, 'ts'))))).flat()
+	const sourceFiles = (await Promise.all(sharedPackages.map(entry => walkFiles(path.join(root, entry.path, 'ts'))))).flat()
 	const sourceFileSet = new Set(sourceFiles)
 	for (const sourceFile of sourceFiles) {
 		const outputSuffix = unexpectedSharedSourceOutputSuffixes.find(suffix => sourceFile.endsWith(suffix))
@@ -102,13 +85,13 @@ async function writeFreshnessHash(cachePath: string, hash: string): Promise<void
 
 async function getArtifactRegenerationReason(): Promise<string | undefined> {
 	for (const outputPath of requiredOutputs) {
-		if (!(await exists(outputPath))) return `missing generated file: ${path.relative(repositoryRoot, outputPath)}`
+		if (!(await pathExists(outputPath))) return `missing generated file: ${path.relative(repositoryRoot, outputPath)}`
 	}
 
 	const contractsJsonPath = path.join(solidityRoot, 'artifacts', 'Contracts.json')
 	if (!(await contractsJsonIsReadable(contractsJsonPath))) return 'solidity/artifacts/Contracts.json is unreadable'
 
-	const contractSourceFiles = await getFilesRecursively(contractsRoot)
+	const contractSourceFiles = await walkFiles(contractsRoot)
 	const currentFreshnessHash = await computeFreshnessHash([...freshnessInputs, ...contractSourceFiles])
 	const cachedFreshnessHash = await readFreshnessHash(contractFreshnessCachePath)
 	if (cachedFreshnessHash !== currentFreshnessHash) return 'Solidity sources or artifact generation inputs changed since the last generated outputs'
@@ -117,7 +100,7 @@ async function getArtifactRegenerationReason(): Promise<string | undefined> {
 }
 
 async function syncContractFreshnessHash(): Promise<void> {
-	const contractSourceFiles = await getFilesRecursively(contractsRoot)
+	const contractSourceFiles = await walkFiles(contractsRoot)
 	await writeFreshnessHash(contractFreshnessCachePath, await computeFreshnessHash([...freshnessInputs, ...contractSourceFiles]))
 }
 
@@ -158,10 +141,10 @@ export function getRequiredContractArtifactRelativePaths(): string[] {
 async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
 	for (const relativePath of await getRequiredSharedOutputRelativePaths()) {
 		const outputPath = path.join(repositoryRoot, relativePath)
-		if (!(await exists(outputPath))) return `missing shared build output: ${path.relative(repositoryRoot, outputPath)}`
+		if (!(await pathExists(outputPath))) return `missing shared build output: ${path.relative(repositoryRoot, outputPath)}`
 	}
 
-	const sharedSourceFiles = (await Promise.all(sharedSourceRoots.map(getFilesRecursively))).flat()
+	const sharedSourceFiles = (await Promise.all(sharedSourceRoots.map(root => walkFiles(root)))).flat()
 	const currentFreshnessHash = await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles])
 	const cachedFreshnessHash = await readFreshnessHash(sharedFreshnessCachePath)
 	if (cachedFreshnessHash !== currentFreshnessHash) return 'Shared TypeScript sources or build inputs changed since the last shared package outputs'
@@ -171,7 +154,7 @@ async function getSharedBuildRegenerationReason(): Promise<string | undefined> {
 
 async function syncSharedFreshnessHash(): Promise<void> {
 	await removeUnexpectedSharedSourceOutputs()
-	const sharedSourceFiles = (await Promise.all(sharedSourceRoots.map(getFilesRecursively))).flat()
+	const sharedSourceFiles = (await Promise.all(sharedSourceRoots.map(root => walkFiles(root)))).flat()
 	await writeFreshnessHash(sharedFreshnessCachePath, await computeFreshnessHash([...sharedFreshnessInputs, ...sharedSourceFiles]))
 }
 

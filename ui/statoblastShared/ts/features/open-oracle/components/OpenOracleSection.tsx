@@ -3,7 +3,7 @@ import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/Tran
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import { withActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import { useEffect, useMemo, useState } from 'preact/hooks'
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -19,7 +19,7 @@ import { getOpenOracleReportEntityId, openOracleReportDownloadStore, toCachedOpe
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '../../oracleTypes.js'
-import { BROWSE_PAGE_SIZE, getEffectiveOpenOracleReportDetails, getOpenOracleCreateFieldErrorId, getSelectedWithdrawalBalance, loadBrowseReportPage, type SelectedReportModal } from './OpenOracleReportContent.js'
+import { BROWSE_PAGE_SIZE, getEffectiveOpenOracleReportDetails, getOpenOracleCreateFieldErrorId, loadBrowseReportPage, type SelectedReportModal } from './OpenOracleReportContent.js'
 import { OpenOracleReportBrowser } from './OpenOracleReportBrowser.js'
 import { OpenOracleReportDetailsCard } from './OpenOracleReportDetailsCard.js'
 
@@ -72,9 +72,11 @@ export function OpenOracleSection({
 	const [touchedCreateFields, setTouchedCreateFields] = useState<ReadonlySet<OpenOracleCreateField>>(new Set())
 	const [dismissedCreateSuccessKey, setDismissedCreateSuccessKey] = useState<string | undefined>(undefined)
 	const changeSelectedReportModal = (modal: SelectedReportModal) => {
-		if (getSelectedWithdrawalBalance(selectedReportModal) !== undefined && modal !== selectedReportModal) onCancelOpenOracleWithdrawalBalanceCheck()
 		setSelectedReportModal(modal)
 	}
+	const cancelWithdrawal = useRef(onCancelOpenOracleWithdrawalBalanceCheck)
+	cancelWithdrawal.current = onCancelOpenOracleWithdrawalBalanceCheck
+	useEffect(() => () => cancelWithdrawal.current(), [view])
 	const isConnected = accountState.address !== undefined
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const createValidation = getOpenOracleCreateValidation({ form: openOracleCreateForm })

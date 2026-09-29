@@ -1,19 +1,8 @@
-import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
+import type { ZoltarQuestionData } from '@zoltar/zoltar-shared/questions/questionId'
 import { ZoltarQuestionData_ZoltarQuestionData } from '../../../../types/contractArtifact'
 import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { CONTRACT_PAGE_SIZE } from './pagination'
-
-type QuestionData = {
-	title: string
-	description: string
-	startTime: bigint
-	endTime: bigint
-	numTicks: bigint
-	displayValueMin: bigint
-	displayValueMax: bigint
-	answerUnit: string
-}
 
 export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) => {
 	let currentIndex = 0n
@@ -43,30 +32,7 @@ export const getQuestionData = async (client: ReadClient, questionId: bigint) =>
 	return { questionId, title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }
 }
 
-export const getQuestionId = (questionData: QuestionData, outcomeOptions: readonly string[]): bigint => {
-	const encodedData = encodeAbiParameters(
-		[
-			{
-				type: 'tuple',
-				components: [
-					{ name: 'title', type: 'string' },
-					{ name: 'description', type: 'string' },
-					{ name: 'startTime', type: 'uint256' },
-					{ name: 'endTime', type: 'uint256' },
-					{ name: 'numTicks', type: 'uint120' },
-					{ name: 'displayValueMin', type: 'int256' },
-					{ name: 'displayValueMax', type: 'int256' },
-					{ name: 'answerUnit', type: 'string' },
-				],
-			},
-			{ type: 'string[]' },
-		],
-		[questionData, outcomeOptions],
-	)
-	return BigInt(keccak256(encodedData))
-}
-
-export const createQuestion = async (client: WriteClient, questionData: QuestionData, outcomeLabels: string[]) =>
+export const createQuestion = async (client: WriteClient, questionData: ZoltarQuestionData, outcomeLabels: string[]) =>
 	await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: ZoltarQuestionData_ZoltarQuestionData.abi,

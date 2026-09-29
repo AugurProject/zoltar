@@ -1,11 +1,10 @@
 import { registerTransactionReviewScope } from '../transactions/transactionReviewScope.js'
 import { transactionSteps } from '../transactions/transactionSteps.js'
 import { TransactionStepsContent } from './TransactionStepsContent.js'
-import * as commonCopy from '../copy/common.js'
+import { ModalFrame } from './ModalFrame.js'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { TransactionReviewActiveContext } from './TransactionActionButton.js'
 import { useModalFocusIsolation } from '../hooks/useModalFocusIsolation.js'
-import { shouldCloseOnBackdropClick } from '../lib/modalBackdrop.js'
 import type { OperationModalProps } from '../types/components.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 
@@ -47,7 +46,7 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 	// A workflow made only of approvals was started by the form's own approve control, which already shows the amount and its pending state.
 	const approvalOnly = !hostsExternalReview && ownedWorkflow !== undefined && activeStep !== undefined && ownedWorkflow.steps.every(step => step.spender !== undefined)
 	const singleFormAction = confirmSingleStepFromForm && ownedWorkflow?.steps.length === 1
-	const showSteps = activeStep !== undefined && !approvalOnly && !singleFormAction
+	const showSteps = ownedWorkflow?.showReviewDialog === true && activeStep !== undefined && !approvalOnly && !singleFormAction
 	useEffect(() => {
 		if (ownedWorkflow === undefined || activeStep === undefined || (!approvalOnly && !singleFormAction) || activeStep.phase !== 'review') return
 		ownedWorkflow.confirmStep(ownedWorkflow.activeIndex)
@@ -127,43 +126,27 @@ export function OperationModal({ children, confirmSingleStepFromForm = false, cl
 		if (ownsWorkflow) workflow.cancel()
 	}
 	return (
-		<div
-			className='modal-backdrop'
-			role='presentation'
-			onClick={() => {
-				if (shouldCloseOnBackdropClick(dialogRef.current)) requestClose()
-			}}
-		>
-			<section ref={dialogRef} className='modal-panel operation-modal-panel' role='dialog' tabIndex={-1} aria-busy={cannotClose || undefined} aria-modal='true' aria-labelledby={titleId} aria-describedby={descriptionId} onClick={event => event.stopPropagation()}>
-				<div className='modal-header'>
-					<div className='modal-header-title'>
-						<h3 id={titleId}>{title}</h3>
-					</div>
-					<button ref={closeButtonRef} className='quiet modal-close-button' type='button' aria-label={commonCopy.close} title={commonCopy.close} disabled={cannotClose} onClick={requestClose}>
-						×
-					</button>
+		<ModalFrame busy={cannotClose} closeButtonRef={closeButtonRef} closeDisabled={cannotClose} describedBy={descriptionId} dialogRef={dialogRef} focusable onClose={requestClose} panelClassName='operation-modal-panel' title={title} titleId={titleId}>
+			{/* Only this region scrolls, so the title and close control stay pinned. */}
+			<div className='operation-modal-scroll'>
+				{description === undefined ? undefined : (
+					<p id={descriptionId} className='detail'>
+						{description}
+					</p>
+				)}
+				{/* While the review runs the form stays visible for reference but cannot be edited, and its action row steps aside for the review's. */}
+				<div className='operation-modal-body' inert={showSteps || undefined}>
+					<TransactionReviewActiveContext.Provider value={showSteps}>{children}</TransactionReviewActiveContext.Provider>
 				</div>
-				{/* Only this region scrolls, so the title and close control stay pinned. */}
-				<div className='operation-modal-scroll'>
-					{description === undefined ? undefined : (
-						<p id={descriptionId} className='detail'>
-							{description}
-						</p>
-					)}
-					{/* While the review runs the form stays visible for reference but cannot be edited, and its action row steps aside for the review's. */}
-					<div className='operation-modal-body' inert={showSteps || undefined}>
-						<TransactionReviewActiveContext.Provider value={showSteps}>{children}</TransactionReviewActiveContext.Provider>
+				{showSteps ? (
+					<div className='operation-modal-steps'>
+						{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
+						<GlobalTransactionPresentationProvider transaction={modalTransaction}>
+							<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
+						</GlobalTransactionPresentationProvider>
 					</div>
-					{showSteps ? (
-						<div className='operation-modal-steps'>
-							{/* The dialog already shows its context rows above the form, so the step review only keeps the rows it does not cover. */}
-							<GlobalTransactionPresentationProvider transaction={modalTransaction}>
-								<TransactionStepsContent contextKey={titleId} focusOnMount keepActionsVisible onClose={returnToForm} />
-							</GlobalTransactionPresentationProvider>
-						</div>
-					) : undefined}
-				</div>
-			</section>
-		</div>
+				) : undefined}
+			</div>
+		</ModalFrame>
 	)
 }

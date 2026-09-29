@@ -2,14 +2,10 @@
 
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { useForkAuctionInteractionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionInteractionState.js'
 import { describe, expect, test } from 'bun:test'
-import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-
-type InteractionProps = Parameters<typeof useForkAuctionInteractionState>[0]
-type InteractionState = ReturnType<typeof useForkAuctionInteractionState>
+import { renderHookWithProps } from '../../support/renderHook.js'
 
 const poolAddress: Address = '0x00000000000000000000000000000000000000aa'
 const caseVariantPoolAddress: Address = '0x00000000000000000000000000000000000000AA'
@@ -24,10 +20,8 @@ describe('useForkAuctionInteractionState', () => {
 		},
 	})
 
-	test('reconciles a migration result with equivalent pool address casing', async () => {
-		let hookState: InteractionState | undefined
-		let setHarnessProps: ((update: (current: InteractionProps) => InteractionProps) => void) | undefined
-		const initialProps: InteractionProps = {
+	async function renderInteractionState() {
+		const hook = await renderHookWithProps(useForkAuctionInteractionState, {
 			accountAddress: '0x0000000000000000000000000000000000000001',
 			connectedWalletDisputeStakedAttoRep: undefined,
 			forkAuctionActiveAction: undefined,
@@ -37,75 +31,42 @@ describe('useForkAuctionInteractionState', () => {
 			reportingDetails: undefined,
 			securityPoolAddress: poolAddress,
 			startTruthAuctionSecurityPoolAddress: undefined,
-		}
+		})
+		cleanupRenderedComponent = hook.cleanup
+		return hook
+	}
 
-		function Harness() {
-			const [props, setProps] = useState<InteractionProps>(initialProps)
-			setHarnessProps = update => setProps(update)
-			hookState = useForkAuctionInteractionState(props)
-			return <div />
-		}
-
-		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		if (hookState === undefined || setHarnessProps === undefined) throw new Error('Interaction harness did not render')
+	test('reconciles a migration result with equivalent pool address casing', async () => {
+		const hook = await renderInteractionState()
 
 		await act(() => {
-			hookState?.beginVaultMigrationProgress()
+			hook.state().beginVaultMigrationProgress()
 		})
-		expect(hookState.isVaultMigrationPending).toBe(true)
+		expect(hook.state().isVaultMigrationPending).toBe(true)
 
-		await act(() => {
-			setHarnessProps?.(current => ({
-				...current,
-				forkAuctionResult: {
-					action: 'migrateVault',
-					hash: '0x1234',
-					securityPoolAddress: caseVariantPoolAddress,
-					universeId: 1n,
-				},
-			}))
+		await hook.setProps({
+			forkAuctionResult: {
+				action: 'migrateVault',
+				hash: '0x1234',
+				securityPoolAddress: caseVariantPoolAddress,
+				universeId: 1n,
+			},
 		})
 
-		expect(hookState.hasCompletedVaultMigration).toBe(true)
-		expect(hookState.isVaultMigrationPending).toBe(false)
+		expect(hook.state().hasCompletedVaultMigration).toBe(true)
+		expect(hook.state().isVaultMigrationPending).toBe(false)
 	})
 
 	test('clears pending vault migration state when a started write ends without a result or error', async () => {
-		let hookState: InteractionState | undefined
-		let setHarnessProps: ((update: (current: InteractionProps) => InteractionProps) => void) | undefined
-		const initialProps: InteractionProps = {
-			accountAddress: '0x0000000000000000000000000000000000000001',
-			connectedWalletDisputeStakedAttoRep: undefined,
-			forkAuctionActiveAction: undefined,
-			forkAuctionError: undefined,
-			forkAuctionResult: undefined,
-			hasStartedTruthAuction: false,
-			reportingDetails: undefined,
-			securityPoolAddress: poolAddress,
-			startTruthAuctionSecurityPoolAddress: undefined,
-		}
-
-		function Harness() {
-			const [props, setProps] = useState<InteractionProps>(initialProps)
-			setHarnessProps = update => setProps(update)
-			hookState = useForkAuctionInteractionState(props)
-			return <div />
-		}
-
-		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		if (hookState === undefined || setHarnessProps === undefined) throw new Error('Interaction harness did not render')
+		const hook = await renderInteractionState()
 
 		await act(() => {
-			hookState?.beginVaultMigrationProgress()
-			setHarnessProps?.(current => ({ ...current, forkAuctionActiveAction: 'migrateVault' }))
+			hook.state().beginVaultMigrationProgress()
+			hook.renderProps({ forkAuctionActiveAction: 'migrateVault' })
 		})
-		expect(hookState.isVaultMigrationPending).toBe(true)
+		expect(hook.state().isVaultMigrationPending).toBe(true)
 
-		await act(() => {
-			setHarnessProps?.(current => ({ ...current, forkAuctionActiveAction: undefined }))
-		})
-		expect(hookState.isVaultMigrationPending).toBe(false)
+		await hook.setProps({ forkAuctionActiveAction: undefined })
+		expect(hook.state().isVaultMigrationPending).toBe(false)
 	})
 })

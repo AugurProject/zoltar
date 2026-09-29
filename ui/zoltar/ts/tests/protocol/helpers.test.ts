@@ -4,22 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
-import {
-	bigintToAddress,
-	getEscalationSideLabel,
-	getForkOutcomeKey,
-	getMarketType,
-	getMinBigintValue,
-	getProtocolPageOffset,
-	getQuestionId,
-	getQuestionIdHex,
-	hasTimestamp,
-	hasTimestampAndNumber,
-	isBigintTriple,
-	isStringArray,
-	requireUniverseTupleArray,
-	requireSecurityVaultTupleArray,
-} from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { bigintToAddress, getEscalationSideLabel, getForkOutcomeKey, getMarketType, getMinBigintValue, getProtocolPageOffset, getQuestionIdHex, hasTimestamp, hasTimestampAndNumber, isBigintTriple, isStringArray, requireUniverseTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 
 const questionData = {
 	title: 'Test question',
@@ -67,12 +53,6 @@ describe('contracts helpers', () => {
 		const validUniverseSummary: Array<[bigint, bigint, bigint, `0x${string}`, bigint]> = [[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000a1'), 4n]]
 		expect(requireUniverseTupleArray(validUniverseSummary, 'universe summary')).toEqual(validUniverseSummary)
 		expect(() => requireUniverseTupleArray([[1n, 2n, 3n, getAddress('0x00000000000000000000000000000000000000b2'), 4n, 5n] as never], 'universe summary')).toThrow('Unexpected universe summary response')
-
-		const validVaultTuple: Array<[bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n]]
-		expect(requireSecurityVaultTupleArray(validVaultTuple, 'vault response')).toEqual(validVaultTuple)
-		const legacyVaultTuple: Array<[bigint, bigint, bigint, bigint, bigint]> = [[1n, 2n, 3n, 4n, 5n]]
-		expect(requireSecurityVaultTupleArray(legacyVaultTuple, 'vault response')).toEqual(legacyVaultTuple)
-		expect(() => requireSecurityVaultTupleArray([[1n, 2n, 3n] as never], 'vault response')).toThrow('Unexpected vault response')
 	})
 
 	test('question id helpers are deterministic and convert values consistently', () => {

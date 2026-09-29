@@ -111,6 +111,10 @@
 			"bun": "./ts/components/SimulationBanner.tsx",
 			"default": "./js/components/SimulationBanner.js"
 		},
+		"./components/SimulationControlFields.js": {
+			"bun": "./ts/components/SimulationControlFields.tsx",
+			"default": "./js/components/SimulationControlFields.js"
+		},
 		"./components/Skeleton.js": {
 			"bun": "./ts/components/Skeleton.tsx",
 			"default": "./js/components/Skeleton.js"
@@ -542,6 +546,10 @@
 		"./components/LocalBrowseControls.js": {
 			"bun": "./ts/components/LocalBrowseControls.tsx",
 			"default": "./js/components/LocalBrowseControls.js"
+		},
+		"./components/ModalFrame.js": {
+			"bun": "./ts/components/ModalFrame.tsx",
+			"default": "./js/components/ModalFrame.js"
 		},
 		"./components/RouteHeader.js": {
 			"bun": "./ts/components/RouteHeader.tsx",
@@ -1042,6 +1050,10 @@
 		"./tests/components/universeBrowser.test.js": {
 			"bun": "./ts/tests/components/universeBrowser.test.tsx",
 			"default": "./js/tests/components/universeBrowser.test.js"
+		},
+		"./tests/components/universeLink.test.js": {
+			"bun": "./ts/tests/components/universeLink.test.tsx",
+			"default": "./js/tests/components/universeLink.test.js"
 		}
 	},
 	"version": "1.0.0"

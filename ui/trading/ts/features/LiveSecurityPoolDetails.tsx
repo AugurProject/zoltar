@@ -2,11 +2,12 @@ import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLa
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
 import { formatMultiplier, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { formatUnderwritingLimits, formatMintingCapacity } from '../lib/format.js'
+import { formatEthAmountPair } from '../lib/format.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -86,14 +87,7 @@ export function LiveSecurityPoolDetails({
 							{refreshMessage}
 						</p>
 					)}
-					<ErrorNotice message={errorMessage} />
-					{errorMessage !== undefined && !refreshing ? (
-						<div className='actions'>
-							<button className='secondary' type='button' disabled={workflowLocked} onClick={retry}>
-								{hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool}
-							</button>
-						</div>
-					) : null}
+					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool} />
 
 					{market.loadError !== undefined ? (
 						<ReadOnlyDetailAccordion title={liveCopy.poolDetails}>
@@ -119,7 +113,7 @@ export function LiveSecurityPoolDetails({
 										)}
 									</MetricField>
 									{market.questionOutcome === 3 ? undefined : <MetricField label={liveCopy.outcome}>{questionOutcomeLabel(market.questionOutcome)}</MetricField>}
-									<MetricField label={liveCopy.mintingCapacity}>{formatMintingCapacity(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
+									<MetricField label={liveCopy.mintingCapacity}>{formatEthAmountPair(market.settlementCollateralAttoEth, market.mintingCapacityCeilingAttoEth)}</MetricField>
 								</DataGrid>
 							</div>
 							{market.pair === undefined ? (
@@ -142,7 +136,7 @@ export function LiveSecurityPoolDetails({
 									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
-									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatUnderwritingLimits(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
+									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>
 								</DataGrid>
 							</ReadOnlyDetailAccordion>
 							<BackingDetails market={market} />
@@ -156,16 +150,6 @@ export function LiveSecurityPoolDetails({
 
 export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, workflowLocked, retry }: { discoveryState: 'loading' | 'ready' | 'error'; discoveryError: string | undefined; workflowLocked: boolean; retry(): void }) {
 	if (discoveryState === 'loading') return <EmptyState live title={liveCopy.loadingSecurityPoolDetails} />
-	if (discoveryState === 'error')
-		return (
-			<>
-				<ErrorNotice message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} />
-				<div className='actions'>
-					<button className='secondary' type='button' disabled={workflowLocked} onClick={retry}>
-						{liveCopy.retryDiscovery}
-					</button>
-				</div>
-			</>
-		)
+	if (discoveryState === 'error') return <RetryableNotice disabled={workflowLocked} message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} onRetry={retry} retryLabel={liveCopy.retryDiscovery} />
 	return <EmptyState title={liveCopy.noPoolSelected} detail={liveCopy.securityPoolUnavailableInUniverse} />
 }

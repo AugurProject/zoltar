@@ -45,7 +45,7 @@ import {
 } from '../lib/securityVaultAvailability.js'
 import { deriveTokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { getActiveAppChainWalletBlocker, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import {
 	DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES,
 	doesSecurityVaultExistOnchain,
@@ -79,6 +79,7 @@ export function SecurityVaultSection({
 	onRedeemRepFromVault,
 	onSecurityVaultFormChange,
 	oracleManagerDetails,
+	onViewPriceOracle,
 	onViewStagedOperations,
 	onWithdrawRep,
 	repPerEthPrice,
@@ -310,7 +311,10 @@ export function SecurityVaultSection({
 			depositRepActionLabel,
 			depositRepToVaultEnabled,
 			hasClaimableFees,
-			onOpenModal: setVaultActionModal,
+			onOpenModal: modal => {
+				if (modal === 'claim-fees') onRedeemFees()
+				else setVaultActionModal(modal)
+			},
 			repExitActionLabel,
 			repExitDisabledReasonId,
 			repExitEnabled,
@@ -386,7 +390,19 @@ export function SecurityVaultSection({
 	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
+			{currentSelectedVaultDetails !== undefined && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice) ? (
+				<div>
+					<InlineHint message={securityPoolCopy.commitmentNeedsOracleReport} />
+					{onViewPriceOracle === undefined ? undefined : (
+						<button type='button' className='secondary' disabled={securityVaultActiveAction !== undefined} onClick={onViewPriceOracle}>
+							{securityPoolCopy.openPriceOracle}
+						</button>
+					)}
+				</div>
+			) : undefined}
 			<VaultActionLaunchers
+				claimingFees={securityVaultActiveAction === 'redeemFees'}
+				redeemRepAction={effectiveRepExitMode === 'redeem' ? repExitActionButton : undefined}
 				refreshVaultActionsDescriptionId={refreshVaultActionsDescriptionId}
 				securityVaultError={securityVaultError}
 				showMissingVaultNotice={showMissingVaultNotice}
@@ -416,7 +432,7 @@ export function SecurityVaultSection({
 				confirmSingleStepFromForm
 				closeOnSuccessKey={(securityVaultResult?.action === 'queueWithdrawRep' || securityVaultResult?.action === 'redeemRepFromVault') && securityVaultResult.stagedExecution?.success !== false ? securityVaultResult.hash : undefined}
 				context={vaultTransactionContext}
-				isOpen={vaultActionModal === 'withdraw-rep'}
+				isOpen={vaultActionModal === 'withdraw-rep' && effectiveRepExitMode === 'withdraw'}
 				onClose={closeVaultActionModal}
 				title={repExitActionLabel}
 			>
@@ -462,24 +478,6 @@ export function SecurityVaultSection({
 			<VaultBackingFactorModal context={vaultTransactionContext} isOpen={vaultActionModal === 'adjust-backing'} onClose={closeVaultActionModal} result={securityVaultResult} error={securityVaultError}>
 				{adjustmentForm}
 			</VaultBackingFactorModal>
-			<OperationModal confirmSingleStepFromForm closeOnSuccessKey={securityVaultResult?.action === 'redeemFees' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'claim-fees'} onClose={closeVaultActionModal} title={securityPoolCopy.claimFeesTitle}>
-				<MetricGrid>
-					<MetricField label={securityPoolCopy.claimableFees}>{currentSelectedVaultDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue exactWhenRoundedToZero value={currentSelectedVaultDetails.claimableFeesAttoEth} suffix={commonCopy.eth} />}</MetricField>
-					<MetricField label={securityPoolCopy.vault}>{selectedVaultOwner === undefined ? commonCopy.noneSelected : <AddressValue address={selectedVaultOwner} />}</MetricField>
-				</MetricGrid>
-				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={securityPoolCopy.claimFees}
-						pendingLabel={securityPoolCopy.claimingFees}
-						onClick={onRedeemFees}
-						pending={securityVaultActiveAction === 'redeemFees'}
-						availability={withWalletGuardFirst({ disabled: !claimFeesEnabled || !canUseLoadedVaultActions || !hasClaimableFees, reason: canUseLoadedVaultActions && !hasClaimableFees ? securityPoolCopy.noClaimableFeesReason : claimFeesLauncherBlocker }, { reason: claimFeesLauncherBlocker, walletBlocker })}
-					/>
-					<button className='secondary' type='button' disabled={securityVaultActiveAction !== undefined} onClick={closeVaultActionModal}>
-						{commonCopy.cancel}
-					</button>
-				</div>
-			</OperationModal>
 		</>
 	) : (
 		<>

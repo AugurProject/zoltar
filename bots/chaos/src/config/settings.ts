@@ -1,17 +1,16 @@
-import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
-import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
+import { contentRevision, durableFilesystem, parseJsonDocument, serializeWritesToPath, writeRevisionedFile, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { assertProfileCandidates, networkProfilePath } from '@zoltar/bot-shared/config/profiles'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { getAddress, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, nonemptyString, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
-import { createHash, randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
+import { resolve } from 'node:path'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
+import { readOwnerFile, type OwnerFileHandle } from '../state/owner-files.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
 import { assertSepoliaUniswapFactory, canonicalDeployment } from './canonical-deployment.ts'
 import { deploymentFactoryId, executionProfileId } from './execution-profile.ts'
@@ -113,36 +112,9 @@ export type OperatorSettings = {
 
 type JsonRecord = Record<string, unknown>
 
-type SettingsFileHandle = {
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
-	readFile: (options: { encoding: 'utf8' }) => Promise<string>
-	stat: () => Promise<{
-		isFile: () => boolean
-		mode: number
-		uid: number
-	}>
-	sync: () => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
+export type SettingsFilesystem = Omit<RevisionedFileFilesystem, 'open'> & {
+	open: (path: string, flags: 'r' | 'wx' | number, mode?: number) => Promise<OwnerFileHandle>
 }
-
-export type SettingsFilesystem = {
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'r' | 'wx' | number, mode?: number) => Promise<SettingsFileHandle>
-	readFile: (path: string, encoding: 'utf8') => Promise<string>
-	rename: (oldPath: string, newPath: string) => Promise<unknown>
-	rm: (path: string, options: { force: true }) => Promise<unknown>
-}
-
-const settingsFilesystem: SettingsFilesystem = {
-	mkdir,
-	open,
-	readFile,
-	rename,
-	rm,
-}
-
-const settingsWriteQueues = new Map<string, Promise<void>>()
 
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
@@ -426,119 +398,48 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 	}
 }
 
-function revision(contents: string) {
-	return `sha256:${createHash('sha256').update(contents).digest('hex')}`
-}
-
 export function configurationRevisionConflict() {
 	const error = new Error('The chaos-bot configuration changed after this editor loaded. Reload it, review the newer values, and apply your change again.')
 	error.name = CONFIGURATION_REVISION_CONFLICT
 	return error
 }
 
-export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONFIG'] ?? defaultSettingsPath), filesystem: SettingsFilesystem = settingsFilesystem) {
+export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONFIG'] ?? defaultSettingsPath), filesystem: SettingsFilesystem = durableFilesystem) {
 	let contents: string
-	let handle: SettingsFileHandle | undefined
 	try {
-		handle = await filesystem.open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
-		const metadata = await handle.stat()
-		if (!metadata.isFile()) {
-			throw new Error(`Chaos-bot configuration ${path} must be a regular file`)
-		}
-		if ((metadata.mode & 0o777) !== 0o600) {
-			throw new Error(`Chaos-bot configuration ${path} must have owner-only mode 0600`)
-		}
-		if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
-			throw new Error(`Chaos-bot configuration ${path} must be owned by the bot process user`)
-		}
-		contents = await handle.readFile({ encoding: 'utf8' })
+		contents = await readOwnerFile(path, filesystem, 'Chaos-bot configuration')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') {
-			throw new Error(`Missing chaos-bot configuration at ${path}. Copy config/operator.example.json there and edit it.`)
-		}
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ELOOP') {
-			throw new Error(`Chaos-bot configuration ${path} must not be a symbolic link`)
-		}
-		throw error
-	} finally {
-		await handle?.close()
-	}
-	let parsed: unknown
-	try {
-		parsed = JSON.parse(contents)
-	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`Chaos-bot configuration is not valid JSON: ${error.message}`)
+		if (isErrorCode(error, 'ENOENT')) throw new Error(`Missing chaos-bot configuration at ${path}. Copy config/operator.example.json there and edit it.`)
 		throw error
 	}
+	const parsed = parseJsonDocument(contents, 'Chaos-bot configuration')
 	const raw = requiredRecord(parsed, 'operator settings')
 	const settings = parseSettings(raw)
-	return { path, revision: revision(contents), settings, needsDeploymentPin: !('deploymentPin' in raw) }
+	return { path, revision: contentRevision(contents), settings, needsDeploymentPin: !('deploymentPin' in raw) }
 }
 
-export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision?: string, filesystem: SettingsFilesystem = settingsFilesystem) {
+export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision?: string, filesystem: SettingsFilesystem = durableFilesystem) {
 	const resolvedPath = resolve(path)
 	const contents = `${JSON.stringify(serializedSettings(settings), undefined, 2)}\n`
-	const savedRevision = revision(contents)
-	const previous = settingsWriteQueues.get(resolvedPath)
-	const write = (previous === undefined ? Promise.resolve() : previous.catch(() => undefined)).then(async () => {
-		await filesystem.mkdir(dirname(resolvedPath), { mode: 0o700, recursive: true })
-		const temporaryPath = `${resolvedPath}.${process.pid.toString()}.${randomUUID()}.tmp`
-		try {
-			const handle = await filesystem.open(temporaryPath, 'wx', 0o600)
-			try {
-				await handle.writeFile(contents, { encoding: 'utf8' })
-				await handle.chmod(0o600)
-				await handle.sync()
-			} finally {
-				await handle.close()
-			}
-			if (expectedRevision !== undefined) {
-				let current: string
-				try {
-					current = await filesystem.readFile(resolvedPath, 'utf8')
-				} catch (error) {
-					if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') throw configurationRevisionConflict()
-					throw error
-				}
-				if (revision(current) !== expectedRevision) throw configurationRevisionConflict()
-			}
-			await renameAndSyncDirectory(temporaryPath, resolvedPath, filesystem)
-		} catch (error) {
-			await filesystem.rm(temporaryPath, { force: true })
-			throw error
-		}
-	})
-	const tracked = write.finally(() => {
-		if (settingsWriteQueues.get(resolvedPath) === tracked) settingsWriteQueues.delete(resolvedPath)
-	})
-	settingsWriteQueues.set(resolvedPath, tracked)
-	await tracked
-	return savedRevision
-}
-
-function settingsProfilePath(path: string, network: NetworkName) {
-	return `${path}.${network}.profile`
+	return await serializeWritesToPath(resolvedPath, () => writeRevisionedFile(resolvedPath, contents, { conflict: configurationRevisionConflict, expectedRevision, filesystem }))
 }
 
 function settingsProfilePathForNetwork(path: string, network: OperatorNetworkSettings) {
-	if (network.kind !== 'custom') return settingsProfilePath(path, network.name)
+	if (network.kind !== 'custom') return networkProfilePath(path, network.name)
 	const chainId = customNetworkChainId(network.chainId, 'Custom profile chain ID')
 	return `${path}.custom-chain-${chainId.toString()}.profile`
 }
 
-type ProfileCandidate = {
-	expectedChainId: number
+/** Profiles are keyed by chain ID; a preset profile file must also hold that preset's settings. */
+type SettingsProfileCandidate = {
+	expected: number
 	expectedPreset?: NetworkName | undefined
 	settings: OperatorSettings
 }
 
-function activeProfileCandidate(settings: OperatorSettings): ProfileCandidate {
-	return { expectedChainId: settings.network.chainId, settings }
-}
-
-function presetProfileCandidate(expectedPreset: NetworkName, settings: OperatorSettings): ProfileCandidate {
+function presetProfileCandidate(expectedPreset: NetworkName, settings: OperatorSettings): SettingsProfileCandidate {
 	return {
-		expectedChainId: expectedPreset === 'mainnet' ? 1 : 11_155_111,
+		expected: expectedPreset === 'mainnet' ? 1 : 11_155_111,
 		expectedPreset,
 		settings,
 	}
@@ -546,42 +447,32 @@ function presetProfileCandidate(expectedPreset: NetworkName, settings: OperatorS
 
 async function loadProfile(path: string, network: NetworkName) {
 	try {
-		return (await loadSettings(settingsProfilePath(path, network))).settings
+		return (await loadSettings(networkProfilePath(path, network))).settings
 	} catch (error) {
 		if (error instanceof Error && error.message.startsWith('Missing chaos-bot configuration')) return undefined
 		throw error
 	}
 }
 
-async function assertProfileCandidates(path: string, candidates: readonly ProfileCandidate[]) {
-	for (const candidate of candidates) {
-		if (candidate.expectedPreset !== undefined && (candidate.settings.network.kind === 'custom' || candidate.settings.network.name !== candidate.expectedPreset || candidate.settings.network.chainId !== candidate.expectedChainId)) {
-			throw new Error(`The ${candidate.expectedPreset} profile contains ${candidate.settings.network.name} settings`)
-		}
-		if (candidate.settings.network.chainId !== candidate.expectedChainId) throw new Error('A chain profile changed its configured chain ID')
-	}
-	const reservedPathNames = new Set([path, settingsProfilePath(path, 'mainnet'), settingsProfilePath(path, 'sepolia'), ...candidates.map(candidate => settingsProfilePathForNetwork(path, candidate.settings.network))])
-	const reservedPaths = await Promise.all([...reservedPathNames].map(persistentPathIdentity))
-	const statePaths: { candidate: ProfileCandidate; identity: Awaited<ReturnType<typeof persistentPathIdentity>> }[] = []
-	for (const candidate of candidates) {
-		const identity = await persistentPathIdentity(candidate.settings.runtime.stateFile)
-		if (reservedPaths.some(reserved => persistentPathIdentitiesMatch(reserved, identity))) throw new Error('The durable state path must not reuse the active configuration or chain profile files')
-		statePaths.push({ candidate, identity })
-	}
-	for (const [index, current] of statePaths.entries()) {
-		for (const target of statePaths.slice(index + 1)) {
-			if (target.candidate.expectedChainId !== current.candidate.expectedChainId && persistentPathIdentitiesMatch(current.identity, target.identity)) {
-				throw new Error('Chain profiles with different chain IDs must use distinct durable state paths')
-			}
-		}
-	}
-}
-
 export async function assertSettingsProfileIsolation(path: string, active: OperatorSettings) {
 	const mainnet = await loadProfile(path, 'mainnet')
 	const sepolia = await loadProfile(path, 'sepolia')
-	const candidates: ProfileCandidate[] = [activeProfileCandidate(active)]
+	const candidates: SettingsProfileCandidate[] = [{ expected: active.network.chainId, settings: active }]
 	if (mainnet !== undefined) candidates.push(presetProfileCandidate('mainnet', mainnet))
 	if (sepolia !== undefined) candidates.push(presetProfileCandidate('sepolia', sepolia))
-	await assertProfileCandidates(path, candidates)
+	await assertProfileCandidates({
+		assertIdentity: candidate => {
+			if (candidate.expectedPreset !== undefined && (candidate.settings.network.kind === 'custom' || candidate.settings.network.name !== candidate.expectedPreset || candidate.settings.network.chainId !== candidate.expected)) {
+				throw new Error(`The ${candidate.expectedPreset} profile contains ${candidate.settings.network.name} settings`)
+			}
+			if (candidate.settings.network.chainId !== candidate.expected) throw new Error('A chain profile changed its configured chain ID')
+		},
+		candidates,
+		durablePaths: candidate => [candidate.settings.runtime.stateFile],
+		errors: {
+			crossChainPathReuse: 'Chain profiles with different chain IDs must use distinct durable state paths',
+			reservedPathReuse: 'The durable state path must not reuse the active configuration or chain profile files',
+		},
+		reservedPaths: [...new Set([path, networkProfilePath(path, 'mainnet'), networkProfilePath(path, 'sepolia'), ...candidates.map(candidate => settingsProfilePathForNetwork(path, candidate.settings.network))])],
+	})
 }

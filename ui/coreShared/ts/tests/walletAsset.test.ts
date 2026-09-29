@@ -244,18 +244,11 @@ describe('wallet_watchAsset requests', () => {
 		expect(await requestWalletWatchAsset(GENESIS_REP_ADDRESS, dependencies)).toEqual({ status: 'unsupported' })
 	})
 
-	test('normalizes an expected provider error as a failed request', async () => {
-		const { dependencies } = createRequestDependencies({
-			requestError: new Error('Wallet RPC unavailable'),
-		})
-
-		expect(await requestWalletWatchAsset(GENESIS_REP_ADDRESS, dependencies)).toEqual({ status: 'failed' })
-	})
-
-	test('normalizes malformed provider rejections as failed requests', async () => {
-		const { dependencies } = createRequestDependencies({
-			requestError: 'wallet unavailable',
-		})
+	test.each([
+		{ name: 'an expected provider error', requestError: new Error('Wallet RPC unavailable') },
+		{ name: 'a malformed provider rejection', requestError: 'wallet unavailable' },
+	])('normalizes $name as a failed request', async ({ requestError }) => {
+		const { dependencies } = createRequestDependencies({ requestError })
 
 		expect(await requestWalletWatchAsset(GENESIS_REP_ADDRESS, dependencies)).toEqual({ status: 'failed' })
 	})

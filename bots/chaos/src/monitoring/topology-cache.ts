@@ -1,9 +1,12 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
-import { mkdir, open, opendir, rename, rm } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { QuestionSnapshot } from '../operations/types.ts'
+import { collectionDigest, manifestWithDigest, sha256 } from '../state/content-digest.ts'
+import { isExistingTargetError, ownerDirectory, ownerFilesystem, readOwnerFile, syncOwnerDirectory, writeOwnerFile } from '../state/owner-files.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 
 export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
@@ -419,84 +422,12 @@ function sameIdentity(left: ImmutableTopologyIdentity, right: ImmutableTopologyI
 	return left.chainId === right.chainId && addressFields.every(field => left[field]?.toLowerCase() === right[field]?.toLowerCase())
 }
 
-function sha256(value: string | Uint8Array) {
-	return `0x${createHash('sha256').update(value).digest('hex')}` as Hex
-}
-
-function collectionDigest(digests: readonly Hex[]) {
-	const hasher = createHash('sha256')
-	for (let ordinal = 0; ordinal < digests.length; ordinal += 1) hasher.update(`${ordinal.toString()}:${digests[ordinal] ?? ''}\n`, 'utf8')
-	return `0x${hasher.digest('hex')}` as Hex
-}
-
 function manifestPayload(parameters: Omit<TopologyManifestPayload, 'manifestSchemaVersion' | 'payloadSchemaVersion' | 'storeSchemaVersion'>): TopologyManifestPayload {
 	return {
 		...parameters,
 		manifestSchemaVersion: TOPOLOGY_MANIFEST_SCHEMA_VERSION,
 		payloadSchemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION,
 		storeSchemaVersion: TOPOLOGY_STORE_SCHEMA_VERSION,
-	}
-}
-
-function manifestWithDigest(payload: TopologyManifestPayload): TopologyManifest {
-	return { ...payload, manifestDigest: sha256(JSON.stringify(payload)) }
-}
-
-function errorCode(error: unknown) {
-	return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' ? error.code : undefined
-}
-
-async function ownerDirectory(path: string, label: string) {
-	let handle: Awaited<ReturnType<typeof open>> | undefined
-	try {
-		handle = await open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
-		const metadata = await handle.stat()
-		if (!metadata.isDirectory()) throw new Error(`${label} ${path} must be a directory`)
-		if ((metadata.mode & 0o777) !== 0o700) throw new Error(`${label} ${path} must have owner-only mode 0700`)
-		if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) throw new Error(`${label} ${path} must be owned by the bot process user`)
-	} catch (error) {
-		if (errorCode(error) === 'ELOOP') throw new Error(`${label} ${path} must not be a symbolic link`)
-		throw error
-	} finally {
-		await handle?.close()
-	}
-}
-
-async function readOwnerFile(path: string, maximumBytes: number, label: string) {
-	let handle: Awaited<ReturnType<typeof open>> | undefined
-	try {
-		handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
-		const metadata = await handle.stat()
-		if (!metadata.isFile()) throw new Error(`${label} ${path} must be a regular file`)
-		if ((metadata.mode & 0o777) !== 0o600) throw new Error(`${label} ${path} must have owner-only mode 0600`)
-		if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) throw new Error(`${label} ${path} must be owned by the bot process user`)
-		if (metadata.size > maximumBytes) throw new Error(`${label} ${path} exceeds its ${maximumBytes.toString()}-byte safety limit`)
-		return await handle.readFile()
-	} catch (error) {
-		if (errorCode(error) === 'ELOOP') throw new Error(`${label} ${path} must not be a symbolic link`)
-		throw error
-	} finally {
-		await handle?.close()
-	}
-}
-
-async function writeOwnerFile(path: string, contents: string | Uint8Array) {
-	const handle = await open(path, 'wx', 0o600)
-	try {
-		await handle.writeFile(contents)
-		await handle.chmod(0o600)
-		await handle.sync()
-	} finally {
-		await handle.close()
-	}
-}
-
-async function syncDirectory(path: string) {
-	const handle = await open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
-	try {
-		await handle.sync()
-	} finally {
-		await handle.close()
 	}
 }
 
@@ -510,15 +441,6 @@ function generationDirectory(statePath: string, digest: Hex) {
 
 function chunkFilename(kind: CollectionKind, ordinal: number, digest: Hex) {
 	return `${kind}-${ordinal.toString()}-${digest.slice(2)}.json`
-}
-
-function parseJson(contents: Uint8Array, label: string) {
-	try {
-		return JSON.parse(Buffer.from(contents).toString('utf8')) as unknown
-	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`${label} is not valid JSON: ${error.message}`)
-		throw error
-	}
 }
 
 function parsePointer(value: unknown): TopologyPointer {
@@ -733,8 +655,8 @@ function loadedRecordItemCount(kind: CollectionKind, value: unknown) {
 	return 1 + vaults.length
 }
 
-function parseChunkRecords(contents: Uint8Array, kind: CollectionKind, ordinal: number) {
-	const chunk = requiredRecord(parseJson(contents, `Immutable topology ${kind} chunk ${ordinal.toString()}`), `immutable topology ${kind} chunk ${ordinal.toString()}`)
+function parseChunkRecords(contents: string, kind: CollectionKind, ordinal: number) {
+	const chunk = requiredRecord(parseJsonDocument(contents, `Immutable topology ${kind} chunk ${ordinal.toString()}`), `immutable topology ${kind} chunk ${ordinal.toString()}`)
 	assertExactKeys(chunk, ['kind', 'ordinal', 'records', 'schemaVersion'], `immutable topology ${kind} chunk ${ordinal.toString()}`)
 	if (chunk['schemaVersion'] !== TOPOLOGY_CHUNK_SCHEMA_VERSION || chunk['kind'] !== kind || chunk['ordinal'] !== ordinal.toString()) throw new Error(`Immutable topology ${kind} chunk ${ordinal.toString()} identity is invalid`)
 	if (!Array.isArray(chunk['records']) || chunk['records'].length === 0 || chunk['records'].length > TOPOLOGY_CHUNK_RECORDS) {
@@ -746,9 +668,9 @@ function parseChunkRecords(contents: Uint8Array, kind: CollectionKind, ordinal: 
 async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	const generationPath = generationDirectory(statePath, digest)
-	await ownerDirectory(storePath, 'Immutable topology store')
-	await ownerDirectory(generationPath, 'Immutable topology generation')
-	const rawManifest = parseJson(await readOwnerFile(`${generationPath}/manifest.json`, IMMUTABLE_TOPOLOGY_MANIFEST_BYTES, 'Immutable topology manifest'), 'Immutable topology manifest')
+	await ownerDirectory(storePath, ownerFilesystem, 'Immutable topology store')
+	await ownerDirectory(generationPath, ownerFilesystem, 'Immutable topology generation')
+	const rawManifest = parseJsonDocument(await readOwnerFile(`${generationPath}/manifest.json`, ownerFilesystem, 'Immutable topology manifest', IMMUTABLE_TOPOLOGY_MANIFEST_BYTES), 'Immutable topology manifest')
 	const manifestRecord = requiredRecord(rawManifest, 'immutable topology manifest')
 	// Older payloads retained unbounded registries or possibly truncated labels.
 	// Discard them before reading any committed payload into the process.
@@ -798,10 +720,10 @@ async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: 
 		for (let ordinal = 0; ordinal < expectedChunks; ordinal += 1) {
 			const file = files[kind].get(ordinal)
 			if (file === undefined) throw new Error(`Immutable topology ${kind} collection is missing chunk ${ordinal.toString()}`)
-			const contents = await readOwnerFile(`${generationPath}/${file.name}`, IMMUTABLE_TOPOLOGY_SEGMENT_BYTES, `Immutable topology ${kind} chunk`)
+			const contents = await readOwnerFile(`${generationPath}/${file.name}`, ownerFilesystem, `Immutable topology ${kind} chunk`, IMMUTABLE_TOPOLOGY_SEGMENT_BYTES)
 			const actualDigest = sha256(contents)
 			if (actualDigest !== file.digest) throw new Error(`Immutable topology ${kind} chunk ${ordinal.toString()} digest does not match its immutable filename`)
-			const nextCommittedBytes = committedBytes + BigInt(contents.byteLength)
+			const nextCommittedBytes = committedBytes + BigInt(Buffer.byteLength(contents, 'utf8'))
 			if (nextCommittedBytes > BigInt(commitment.committedBytes)) throw new Error(`Immutable topology ${kind} collection committed bytes exceed its manifest commitment`)
 			const records = parseChunkRecords(contents, kind, ordinal)
 			const nextRecordCount = recordCount + BigInt(records.length)
@@ -844,19 +766,19 @@ async function loadGeneration(statePath: string, digest: Hex, expectedIdentity: 
 async function loadImmutableTopologyCache(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	try {
-		await ownerDirectory(storePath, 'Immutable topology store')
+		await ownerDirectory(storePath, ownerFilesystem, 'Immutable topology store')
 	} catch (error) {
-		if (errorCode(error) === 'ENOENT') return undefined
+		if (isErrorCode(error, 'ENOENT')) return undefined
 		throw error
 	}
-	let pointerContents: Uint8Array
+	let pointerContents: string
 	try {
-		pointerContents = await readOwnerFile(`${storePath}/current.json`, IMMUTABLE_TOPOLOGY_MANIFEST_BYTES, 'Immutable topology pointer')
+		pointerContents = await readOwnerFile(`${storePath}/current.json`, ownerFilesystem, 'Immutable topology pointer', IMMUTABLE_TOPOLOGY_MANIFEST_BYTES)
 	} catch (error) {
-		if (errorCode(error) === 'ENOENT') return undefined
+		if (isErrorCode(error, 'ENOENT')) return undefined
 		throw error
 	}
-	const pointer = parsePointer(parseJson(pointerContents, 'Immutable topology pointer'))
+	const pointer = parsePointer(parseJsonDocument(pointerContents, 'Immutable topology pointer'))
 	return await loadGeneration(statePath, pointer.manifestDigest, parseIdentity(expectedIdentity, 'expected immutable topology identity'), limits)
 }
 
@@ -864,34 +786,29 @@ async function loadImmutableTopologyCache(statePath: string, expectedIdentity: I
 export async function validateImmutableTopologySidecarIfPresent(statePath: string, expectedIdentity: ImmutableTopologyIdentity, limits?: ImmutableTopologyResidentLimits) {
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	try {
-		await ownerDirectory(storePath, 'Immutable topology store')
+		await ownerDirectory(storePath, ownerFilesystem, 'Immutable topology store')
 	} catch (error) {
-		if (errorCode(error) === 'ENOENT') return 'absent' as const
+		if (isErrorCode(error, 'ENOENT')) return 'absent' as const
 		throw error
 	}
-	let pointerContents: Uint8Array
+	let pointerContents: string
 	try {
-		pointerContents = await readOwnerFile(`${storePath}/current.json`, IMMUTABLE_TOPOLOGY_MANIFEST_BYTES, 'Immutable topology pointer')
+		pointerContents = await readOwnerFile(`${storePath}/current.json`, ownerFilesystem, 'Immutable topology pointer', IMMUTABLE_TOPOLOGY_MANIFEST_BYTES)
 	} catch (error) {
-		if (errorCode(error) === 'ENOENT') return 'absent' as const
+		if (isErrorCode(error, 'ENOENT')) return 'absent' as const
 		throw error
 	}
-	const pointer = parsePointer(parseJson(pointerContents, 'Immutable topology pointer'))
+	const pointer = parsePointer(parseJsonDocument(pointerContents, 'Immutable topology pointer'))
 	const loaded = await loadGeneration(statePath, pointer.manifestDigest, parseIdentity(expectedIdentity, 'expected immutable topology identity'), limits)
 	return loaded === undefined ? ('rebuild-required' as const) : ('valid' as const)
 }
 
-function isExistingTargetError(error: unknown) {
-	const code = errorCode(error)
-	return code === 'EEXIST' || code === 'ENOTEMPTY'
-}
-
 async function currentGenerationName(storePath: string) {
 	try {
-		const pointer = parsePointer(parseJson(await readOwnerFile(`${storePath}/current.json`, IMMUTABLE_TOPOLOGY_MANIFEST_BYTES, 'Immutable topology pointer'), 'Immutable topology pointer'))
+		const pointer = parsePointer(parseJsonDocument(await readOwnerFile(`${storePath}/current.json`, ownerFilesystem, 'Immutable topology pointer', IMMUTABLE_TOPOLOGY_MANIFEST_BYTES), 'Immutable topology pointer'))
 		return pointer.manifestDigest.slice(2)
 	} catch (error) {
-		if (errorCode(error) === 'ENOENT') return undefined
+		if (isErrorCode(error, 'ENOENT')) return undefined
 		throw error
 	}
 }
@@ -909,7 +826,7 @@ async function pruneGenerations(storePath: string, retainedGeneration: string | 
 		if (!GENERATION_NAME.test(entry.name) && !TEMPORARY_GENERATION_NAME.test(entry.name) && !TEMPORARY_POINTER_NAME.test(entry.name)) continue
 		await rm(`${storePath}/${entry.name}`, { force: true, recursive: true })
 	}
-	await syncDirectory(storePath)
+	await syncOwnerDirectory(storePath, ownerFilesystem)
 	return !incomplete
 }
 
@@ -927,7 +844,7 @@ async function writeCollection(path: string, kind: CollectionKind, source: Itera
 		if (byteLength > IMMUTABLE_TOPOLOGY_SEGMENT_BYTES) throw new Error(`Immutable topology ${kind} chunk exceeds its ${IMMUTABLE_TOPOLOGY_SEGMENT_BYTES.toString()}-byte safety limit`)
 		if (BigInt(byteLength) > budget.remainingBytes) throw new Error('Immutable topology cache exceeds its aggregate committed-byte safety limit')
 		const digest = sha256(chunk)
-		await writeOwnerFile(`${path}/${chunkFilename(kind, digests.length, digest)}`, chunk)
+		await writeOwnerFile(`${path}/${chunkFilename(kind, digests.length, digest)}`, chunk, ownerFilesystem)
 		digests.push(digest)
 		committedBytes += BigInt(byteLength)
 		budget.remainingBytes -= BigInt(byteLength)
@@ -963,13 +880,13 @@ export async function saveImmutableTopologyCache(statePath: string, identity: Im
 	assertTopologyResidentBounds(cache, limits)
 	const storePath = immutableTopologySidecarDirectory(statePath)
 	await mkdir(storePath, { mode: 0o700, recursive: true })
-	await ownerDirectory(storePath, 'Immutable topology store')
+	await ownerDirectory(storePath, ownerFilesystem, 'Immutable topology store')
 	if (!(await pruneGenerations(storePath, await currentGenerationName(storePath)))) {
 		throw new Error(`Immutable topology store cleanup reached its ${TOPOLOGY_STORE_MAXIMUM_ENTRIES.toString()}-entry per-cycle safety limit; retry to continue bounded cleanup`)
 	}
 	const temporaryPath = `${storePath}/.tmp-${process.pid.toString()}-${randomUUID()}`
 	await mkdir(temporaryPath, { mode: 0o700 })
-	await ownerDirectory(temporaryPath, 'Temporary immutable topology generation')
+	await ownerDirectory(temporaryPath, ownerFilesystem, 'Temporary immutable topology generation')
 	let renamedGeneration = false
 	try {
 		const budget = { remainingBytes: BigInt(IMMUTABLE_TOPOLOGY_MAXIMUM_COMMITTED_BYTES) }
@@ -996,14 +913,14 @@ export async function saveImmutableTopologyCache(statePath: string, identity: Im
 		)
 		const manifestContents = `${JSON.stringify(manifest)}\n`
 		if (Buffer.byteLength(manifestContents, 'utf8') > IMMUTABLE_TOPOLOGY_MANIFEST_BYTES) throw new Error('Immutable topology manifest exceeds its fixed safety envelope')
-		await writeOwnerFile(`${temporaryPath}/manifest.json`, manifestContents)
-		await syncDirectory(temporaryPath)
+		await writeOwnerFile(`${temporaryPath}/manifest.json`, manifestContents, ownerFilesystem)
+		await syncOwnerDirectory(temporaryPath, ownerFilesystem)
 		const generationName = manifest.manifestDigest.slice(2)
 		const targetPath = `${storePath}/${generationName}`
 		try {
 			await rename(temporaryPath, targetPath)
 			renamedGeneration = true
-			await syncDirectory(storePath)
+			await syncOwnerDirectory(storePath, ownerFilesystem)
 		} catch (error) {
 			if (!isExistingTargetError(error)) throw error
 			await rm(temporaryPath, { force: true, recursive: true })
@@ -1011,14 +928,14 @@ export async function saveImmutableTopologyCache(statePath: string, identity: Im
 		await loadGeneration(statePath, manifest.manifestDigest, parsedIdentity, limits)
 		const pointerPath = `${storePath}/current.json`
 		const temporaryPointerPath = `${storePath}/.current-${process.pid.toString()}-${randomUUID()}.json`
-		await writeOwnerFile(temporaryPointerPath, `${JSON.stringify({ manifestDigest: manifest.manifestDigest, schemaVersion: TOPOLOGY_POINTER_SCHEMA_VERSION } satisfies TopologyPointer)}\n`)
+		await writeOwnerFile(temporaryPointerPath, `${JSON.stringify({ manifestDigest: manifest.manifestDigest, schemaVersion: TOPOLOGY_POINTER_SCHEMA_VERSION } satisfies TopologyPointer)}\n`, ownerFilesystem)
 		try {
 			await rename(temporaryPointerPath, pointerPath)
 		} catch (error) {
 			await rm(temporaryPointerPath, { force: true })
 			throw error
 		}
-		await syncDirectory(storePath)
+		await syncOwnerDirectory(storePath, ownerFilesystem)
 		if (!(await pruneGenerations(storePath, generationName))) throw new Error(`Immutable topology store cleanup reached its ${TOPOLOGY_STORE_MAXIMUM_ENTRIES.toString()}-entry per-cycle safety limit`)
 	} catch (error) {
 		if (!renamedGeneration) await rm(temporaryPath, { force: true, recursive: true })

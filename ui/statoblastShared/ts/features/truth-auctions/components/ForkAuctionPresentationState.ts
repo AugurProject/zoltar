@@ -1,16 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { estimateRepPurchased } from '../lib/truthAuctionBook.js'
 import type { ReadClient, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
-
-export function estimateBidRep(bidAmount: string, bidPrice: bigint | undefined) {
-	if (bidPrice === undefined) return undefined
-	const parsedBidAmount = bidAmount.trim() === '' ? 0n : tryParseTruthAuctionAmountInput(bidAmount)
-	if (parsedBidAmount === undefined) return undefined
-	return estimateRepPurchased(parsedBidAmount, bidPrice)
-}
 
 export function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
 	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable

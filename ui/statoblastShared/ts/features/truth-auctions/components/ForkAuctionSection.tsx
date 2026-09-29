@@ -6,7 +6,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ImportedForkSettlementSection } from '../../reporting/components/ImportedForkSettlementSection.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -38,20 +38,12 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	})
 	const submitBidSection = (
 		<ForkAuctionSubmitBidSection
-			auctionSecurityPoolAddress={model.auctionSecurityPoolAddress}
-			enteredBidAmount={model.enteredBidAmount}
-			enteredBidPrice={model.enteredBidPrice}
-			estimatedAttoRep={model.estimatedAttoRep}
 			onBidAmountChange={submitBidAmount => model.onForkAuctionFormChange({ submitBidAmount })}
 			onBidPriceChange={submitBidPrice => model.onForkAuctionFormChange({ submitBidPrice })}
-			questionTitle={model.selectedAuctionChildPool?.marketDetails.title ?? model.previewPool?.marketDetails.title}
-			resultingBidBalanceAttoEth={model.resultingBidBalanceAttoEth}
-			selectedAuctionLabel={model.selectedAuctionLabel}
 			submitBidAction={submitBidAction}
 			submitBidAmount={model.forkAuctionForm.submitBidAmount}
 			submitBidPreviewPrice={model.submitBidPreviewTickSummary?.price}
 			submitBidPrice={model.forkAuctionForm.submitBidPrice}
-			submittedBidPrice={model.submittedBidPrice}
 		/>
 	)
 	useEffect(() => {
@@ -268,14 +260,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					<strong>{forkAuctionCopy.pendingRefund}: </strong>
 					{pendingRefundDisplay}
 				</p>
-				<ErrorNotice message={model.pendingEthRefundError} />
-				{model.pendingEthRefundError === undefined ? undefined : (
-					<div className='actions'>
-						<button className='secondary' disabled={model.loadingPendingEthRefund} onClick={() => model.setPendingEthRefundRetryNonce(currentNonce => currentNonce + 1)} type='button'>
-							{forkAuctionCopy.retryPendingRefund}
-						</button>
-					</div>
-				)}
+				<RetryableNotice disabled={model.loadingPendingEthRefund} message={model.pendingEthRefundError} onRetry={() => model.setPendingEthRefundRetryNonce(currentNonce => currentNonce + 1)} retryLabel={forkAuctionCopy.retryPendingRefund} />
 				<div className='actions'>{withdrawRefundAction}</div>
 			</SectionBlock>
 		)

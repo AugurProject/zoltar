@@ -23,16 +23,8 @@ import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features
 import type { SecurityVaultSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, test } from 'bun:test'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createOracleManagerDetails as createBaseOracleManagerDetails } from './workflow/builders.js'
 
 function createSecurityVaultDetails(overrides: Partial<SecurityVaultDetails> = {}): SecurityVaultDetails {
 	return {
@@ -100,26 +92,15 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 }
 
 function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVaultSectionProps['oracleManagerDetails']>> = {}): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
-	return {
-		callbackStateHash: undefined,
-		exactToken1Report: undefined,
-		isPriceValid: true,
+	return createBaseOracleManagerDetails({
 		lastPrice: 3n * 10n ** 18n,
-		lastSettlementTimestamp: 1n,
-		managerAddress: zeroAddress,
-		openOracleAddress: zeroAddress,
-		pendingOperation: undefined,
-		pendingOperationSlotId: 0n,
-		pendingSettlementOperationIds: [],
-		pendingSettlementQueueCapacity: 4n,
-		pendingReportId: 0n,
 		priceValidUntilTimestamp: 10n,
 		queuedOperationCostAttoEth: 0n,
 		requestPriceCostAttoEth: 0n,
 		token1: undefined,
 		token2: undefined,
 		...overrides,
-	}
+	})
 }
 
 function createEndedPoolState() {
@@ -320,6 +301,39 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Set commitment limit' }))
 		expect(submitted).toBe('0')
+	})
+
+	test.each([false, true])('shows the oracle prerequisite before opening the commitment form: fresh=%s', async fresh => {
+		let openedOracle = false
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<ChainTimestampContext.Provider value={signal(2n)}>
+					<SecurityVaultSection
+						{...createSecurityVaultSectionProps({
+							modalFirst: true,
+							oracleManagerDetails: createOracleManagerDetails({ isPriceValid: fresh }),
+							securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+							onViewPriceOracle: () => {
+								openedOracle = true
+							},
+						})}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+		).cleanup
+		const page = within(document.body)
+		expect(page.queryByRole('dialog')).toBeNull()
+		const openOracle = page.queryByRole('button', { name: 'Open price oracle' })
+		expect(openOracle !== null).toBe(!fresh)
+		if (openOracle !== null) {
+			expect(document.body.textContent).toContain('A new Open Oracle report is needed')
+			fireEvent.click(openOracle)
+			expect(openedOracle).toBe(true)
+		}
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const fields = [...dialog.querySelectorAll('input')]
+		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }).id)
 	})
 
 	test.each([
@@ -1089,19 +1103,16 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Redeem REP')).toEqual({ disabled: true, reason: 'Connect a wallet before redeeming REP.' })
 	})
 
-	test('shows explicit modal-first vault blockers when the wallet is disconnected', async () => {
+	test.each([
+		['shows explicit modal-first vault blockers when the wallet is disconnected', { depositAmount: '1', repWithdrawAmount: '1', targetHealthFactor: '2' }],
+		['disables modal-first vault launchers when a guard blocker is present', {}],
+	] as const)('%s', async (_name, formAmounts) => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
 				{...createSecurityVaultSectionProps({
 					accountState: createAccountState({ address: undefined }),
 					modalFirst: true,
-					securityVaultForm: {
-						depositAmount: '1',
-						repWithdrawAmount: '1',
-						targetHealthFactor: '2',
-						securityPoolAddress: zeroAddress,
-						selectedVaultOwner: zeroAddress,
-					},
+					securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, ...formAmounts },
 				})}
 			/>,
 		)
@@ -1528,24 +1539,6 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Redeem REP', 'Settle escalation deposits before redeeming REP.')
 	})
 
-	test('disables modal-first vault launchers when a guard blocker is present', async () => {
-		const renderedComponent = await renderIntoDocument(
-			<SecurityVaultSection
-				{...createSecurityVaultSectionProps({
-					accountState: createAccountState({ address: undefined }),
-					modalFirst: true,
-				})}
-			/>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		const depositLauncher = documentQueries.getByRole('button', { name: 'Deposit REP' })
-		if (!(depositLauncher instanceof HTMLButtonElement)) throw new Error('Expected a deposit launcher button')
-		expect(depositLauncher.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Connect a wallet before depositing REP.')
-	})
-
 	test('keeps modal-first vault launchers disabled off Sepolia with recovery guidance', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection
@@ -1620,7 +1613,7 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 
-	for (const action of ['queueWithdrawRep', 'redeemFees', 'redeemRepFromVault'] as const) {
+	for (const action of ['queueWithdrawRep'] as const) {
 		test(`closes the vault dialog for a matching ${action} success`, async () => {
 			const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 			const result = signal<SecurityVaultSectionProps['securityVaultResult']>(undefined)
@@ -1632,7 +1625,6 @@ describe('SecurityVaultSection', () => {
 								modalFirst: true,
 								securityVaultResult: result.value,
 								securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
-								...(action === 'redeemRepFromVault' ? { poolState: evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false }) } : {}),
 							})}
 						/>
 					</GlobalTransactionPresentationProvider>
@@ -1689,7 +1681,7 @@ test('deposit submits from the approval form without replacing it with another r
 	}
 })
 
-for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault', 'redeemFees'] as const) {
+for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 	test(`${action} keeps its form and review scope open when Cancel is pressed while pending`, async () => {
 		const dom = installDomEnvironment()
 		const active = signal<SecurityVaultSectionProps['securityVaultActiveAction']>(undefined)
@@ -1709,14 +1701,13 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 				securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
 				oracleManagerDetails: createOracleManagerDetails(),
 				accountState: createAccountState({ ethBalanceAttoEth: 10n ** 18n }),
-				...(action === 'redeemRepFromVault' ? { poolState: createEndedPoolState() } : {}),
 			})
 			return <SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: '1', repWithdrawAmount: '1' }} onDepositRepToVault={submit} onWithdrawRep={submit} onRedeemRepFromVault={submit} onRedeemFees={submit} />
 		}
 		const rendered = await renderIntoDocument(<Harness />)
 		try {
 			await act(() => fireEvent.click(within(document.body).getByRole('button', { name: label })))
-			const dialog = within(document.body).getByRole('dialog', { name: action === 'redeemFees' ? 'Claim fees' : label })
+			const dialog = within(document.body).getByRole('dialog', { name: label })
 			await act(() => fireEvent.click(within(dialog).getByRole('button', { name: label })))
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('wallet')
 			await review
@@ -1743,3 +1734,40 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 		}
 	})
 }
+
+test('ended vault REP redemption submits once without a confirmation and stays disabled while pending', async () => {
+	const dom = installDomEnvironment()
+	const active = signal<SecurityVaultSectionProps['securityVaultActiveAction']>(undefined)
+	let calls = 0
+	function Harness() {
+		return (
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: createEndedPoolState(),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+					securityVaultActiveAction: active.value,
+					onRedeemRepFromVault: () => {
+						calls += 1
+						active.value = 'redeemRepFromVault'
+					},
+				})}
+			/>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const page = within(document.body)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Redeem REP' })))
+		expect(calls).toBe(1)
+		expect(page.queryByRole('dialog')).toBeNull()
+		const pending = page.getByRole('button', { name: 'Redeeming REP…' })
+		expect(pending.hasAttribute('disabled')).toBe(true)
+		if (!(pending instanceof HTMLButtonElement)) throw new Error('Expected redemption button')
+		await act(() => pending.click())
+		expect(calls).toBe(1)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})

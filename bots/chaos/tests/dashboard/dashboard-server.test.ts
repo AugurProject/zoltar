@@ -172,40 +172,6 @@ describe('chaos dashboard server', () => {
 		})
 	})
 
-	test('returns the container-network hint for anvil using Bun transport failure text', async () => {
-		const server = startDashboardServer(
-			0,
-			controller({
-				setConnectivity: () => {
-					throw new EndpointCheckFailure('RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?', [
-						{
-							chainId: undefined,
-							checkedAt: '2026-09-01T00:00:00.000Z',
-							error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
-							kind: 'read-rpc',
-							status: 'failed',
-							target: 'http://anvil:8545',
-						},
-					])
-				},
-			}),
-		)
-		servers.push(server)
-		const response = await dashboardFetch(new URL('/api/connectivity', server.url), {
-			body: JSON.stringify({
-				connectivity: { publicRpcUrls: ['http://anvil:8545'], quorumRpcUrls: [], readRpcUrl: 'http://anvil:8545', rpcQuorum: 1 },
-				revision: 'revision',
-			}),
-			headers: { 'content-type': 'application/json', origin: server.url.origin },
-			method: 'PUT',
-		})
-
-		expect(response.status).toBe(400)
-		expect(await response.json()).toEqual({
-			error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname anvil must resolve from the bot process; Docker service names like anvil only work when the bot shares that container network.',
-		})
-	})
-
 	test.each(['RPC URLs must not exceed 2048 characters', 'At most 8 read quorum RPC URLs are supported', 'RPC quorum 2 requires at least 2 healthy read endpoints'])('returns safe connectivity validation failures verbatim: %s', async message => {
 		const server = startDashboardServer(
 			0,

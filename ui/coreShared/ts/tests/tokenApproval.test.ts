@@ -62,118 +62,43 @@ describe('token approval helpers', () => {
 		})
 	})
 
-	test('formats shared shortage and partial-approval messages in token units', () => {
-		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
+	const shortfallRequirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
 
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: undefined,
-				draftAmount: '',
-				guardMessage: undefined,
-				nextApprovalAmount: undefined,
-				requiredAmount: 25n * ONE,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
-
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: undefined,
-				draftAmount: '24.5',
-				guardMessage: undefined,
-				nextApprovalAmount: 24_500_000_000_000_000_000n,
-				requiredAmount: 25n * ONE,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
-	})
+	/** Resolves the status of approving ETH before an initial report, defaulting to the 25-needed, 24-approved shortfall. */
+	const statusMessage = (overrides: Partial<Parameters<typeof resolveTokenApprovalStatusMessage>[0]>) =>
+		resolveTokenApprovalStatusMessage({
+			actionLabel: 'submitting the initial report',
+			amountValidationMessage: undefined,
+			draftAmount: '',
+			guardMessage: undefined,
+			nextApprovalAmount: shortfallRequirement.targetAmount,
+			requiredAmount: shortfallRequirement.requiredAmount,
+			requirement: shortfallRequirement,
+			tokenLabel: 'ETH',
+			tokenUnits: 18,
+			...overrides,
+		})
 
 	test('resolveTokenApprovalStatusMessage hides loading-only approval states', () => {
 		const requirement = deriveTokenApprovalRequirement(25n * ONE, undefined)
 
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: undefined,
-				draftAmount: '',
-				guardMessage: undefined,
-				nextApprovalAmount: requirement.targetAmount,
-				requiredAmount: requirement.requiredAmount,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBeUndefined()
+		expect(statusMessage({ nextApprovalAmount: requirement.targetAmount, requiredAmount: requirement.requiredAmount, requirement })).toBeUndefined()
 	})
 
 	test('resolveTokenApprovalStatusMessage prioritizes guard and validation messages', () => {
-		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
-
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: undefined,
-				draftAmount: '',
-				guardMessage: 'Connect a wallet before approving tokens.',
-				nextApprovalAmount: requirement.targetAmount,
-				requiredAmount: requirement.requiredAmount,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBe('Connect a wallet before approving tokens.')
-
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: 'Approval amount must be a decimal number.',
-				draftAmount: '24',
-				guardMessage: undefined,
-				nextApprovalAmount: 24n * ONE,
-				requiredAmount: requirement.requiredAmount,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBe('Approval amount must be a decimal number.')
+		expect(statusMessage({ guardMessage: 'Connect a wallet before approving tokens.' })).toBe('Connect a wallet before approving tokens.')
+		expect(statusMessage({ amountValidationMessage: 'Approval amount must be a decimal number.', draftAmount: '24', nextApprovalAmount: 24n * ONE })).toBe('Approval amount must be a decimal number.')
 	})
 
-	test('resolveTokenApprovalStatusMessage preserves needed and partial approval copy', () => {
-		const requirement = deriveTokenApprovalRequirement(25n * ONE, 24n * ONE)
+	test.each([
+		{ label: 'no next approval amount', nextApprovalAmount: undefined },
+		{ label: 'the exact default target', nextApprovalAmount: shortfallRequirement.targetAmount },
+	])('resolveTokenApprovalStatusMessage formats the needed shortfall in token units with $label', ({ nextApprovalAmount }) => {
+		expect(statusMessage({ nextApprovalAmount })).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
+	})
 
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: undefined,
-				draftAmount: '',
-				guardMessage: undefined,
-				nextApprovalAmount: requirement.targetAmount,
-				requiredAmount: requirement.requiredAmount,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
-
-		expect(
-			resolveTokenApprovalStatusMessage({
-				actionLabel: 'submitting the initial report',
-				amountValidationMessage: undefined,
-				draftAmount: '24.5',
-				guardMessage: undefined,
-				nextApprovalAmount: 24_500_000_000_000_000_000n,
-				requiredAmount: 25n * ONE,
-				requirement,
-				tokenLabel: 'ETH',
-				tokenUnits: 18,
-			}),
-		).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
+	test('resolveTokenApprovalStatusMessage formats a partial custom approval in token units', () => {
+		expect(statusMessage({ draftAmount: '24.5', nextApprovalAmount: 24_500_000_000_000_000_000n })).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {

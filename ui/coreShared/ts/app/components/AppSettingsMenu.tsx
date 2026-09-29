@@ -1,5 +1,6 @@
 import { MAINNET_ENABLED } from '../../wallet/networkAvailability.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
+import { useDisclosurePopover } from '../../hooks/useDisclosurePopover.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
 import { readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../wallet/rpcConfig.js'
@@ -8,13 +9,11 @@ import type { ComponentChildren } from 'preact'
 import { ThemeSetting } from './ThemeSetting.js'
 
 export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onEnvironmentChanged: () => Promise<void>; settingsContent?: ComponentChildren }) {
-	const [open, setOpen] = useState(false)
+	const { containerRef, open, toggle, triggerRef } = useDisclosurePopover({ closeOnFocusOutside: false })
 	const [selectedNetwork, setSelectedNetwork] = useState<RpcNetworkId>(getActiveNetworkProfile().id)
 	const [rpcUrls, setRpcUrls] = useState(() => readNetworkRpcUrls())
 	const [error, setError] = useState<string | undefined>(undefined)
 	const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
-	const menuRef = useRef<HTMLDivElement>(null)
-	const triggerRef = useRef<HTMLButtonElement>(null)
 	const firstControlRef = useRef<HTMLSelectElement>(null)
 	const defaults: Record<RpcNetworkId, string> = {
 		mainnet: MAINNET_NETWORK_PROFILE.chain.rpcUrls.default.http[0] ?? '',
@@ -23,22 +22,7 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 	}
 
 	useEffect(() => {
-		if (!open) return
-		firstControlRef.current?.focus()
-		const closeOnOutsideClick = (event: MouseEvent) => {
-			if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setOpen(false)
-		}
-		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			setOpen(false)
-			triggerRef.current?.focus()
-		}
-		document.addEventListener('mousedown', closeOnOutsideClick)
-		document.addEventListener('keydown', closeOnEscape)
-		return () => {
-			document.removeEventListener('mousedown', closeOnOutsideClick)
-			document.removeEventListener('keydown', closeOnEscape)
-		}
+		if (open) firstControlRef.current?.focus()
 	}, [open])
 
 	const saveRpc = async () => {
@@ -55,8 +39,8 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 	}
 
 	return (
-		<div className='app-settings' ref={menuRef}>
-			<button ref={triggerRef} className='app-settings-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' onClick={() => setOpen(value => !value)}>
+		<div className='app-settings' ref={containerRef}>
+			<button ref={triggerRef} className='app-settings-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' onClick={toggle}>
 				<svg className='app-settings-icon' viewBox='0 0 24 24' width='16' height='16' aria-hidden='true' focusable='false'>
 					<path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M4 6h9M17 6h3M15 4v4M4 12h3M11 12h9M9 10v4M4 18h11M19 18h1M17 16v4' />
 				</svg>

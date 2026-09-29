@@ -12,32 +12,21 @@ import { QuestionOutcome } from '../testSupport/simulator/types/types'
 import { OperationType, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
 import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import assert from '../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { decodeEventLog, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getMaxRepBeingSoldAttoRep, getMinBidSizeAttoEth } from '../testSupport/simulator/utils/contracts/auction'
 import { getActiveStagedOperationCount, getStagedOperation, getStagedOperationCounter } from '../testSupport/simulator/utils/contracts/statoblast'
 import { addRepToMigrationBalance, splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, ReputationToken_ReputationToken } from '../types/contractArtifact'
-import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './statoblast/fixture'
+import { useStatoblastTruthAuctionFixture } from './statoblast/fixture'
 
 describe('Truth-auction ownership overflow regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
 
 	const { PRICE_PRECISION, genesisUniverse, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture
 
-	let client: StatoblastTruthAuctionFixture['client']
-	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
-	let questionId: StatoblastTruthAuctionFixture['questionId']
-	let securityPoolAddresses: StatoblastTruthAuctionFixture['securityPoolAddresses']
-
-	beforeEach(() => {
-		client = fixture.client
-		mockWindow = fixture.mockWindow
-		questionId = fixture.questionId
-		securityPoolAddresses = fixture.securityPoolAddresses
-	})
-
 	test('a full-cap winner can value REP without bypassing a tiny migrated vault live capacity commitment', async () => {
+		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
 		const minimumVaultRep = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddresses.securityPool,

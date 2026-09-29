@@ -1,13 +1,11 @@
+import { copyText, requiredElementFinder } from './domHelpers'
+
 const explorer = document.querySelector('#invariant-explorer')
 if (!(explorer instanceof HTMLElement)) {
 	throw new Error('Invariant explorer controls are missing')
 }
 
-function requiredElement<T extends Element>(root: ParentNode, selector: string, expected: new () => T): T {
-	const found = root.querySelector(selector)
-	if (!(found instanceof expected)) throw new Error(`Required invariant explorer element ${selector} is missing or has the wrong type`)
-	return found
-}
+const requiredElement = requiredElementFinder('invariant explorer')
 
 const keywordInput = requiredElement(explorer, '[data-invariant-filter]', HTMLInputElement)
 const typeSelect = requiredElement(explorer, '[data-invariant-type]', HTMLSelectElement)
@@ -42,25 +40,6 @@ function metadataValue(entry: HTMLDetailsElement, label: string): string {
 
 function incrementCount(counts: Map<string, number>, value: string): void {
 	counts.set(value, (counts.get(value) ?? 0) + 1)
-}
-
-async function copyText(value: string): Promise<boolean> {
-	try {
-		await navigator.clipboard.writeText(value)
-		return true
-	} catch (error) {
-		if (!(error instanceof DOMException) && !(error instanceof TypeError)) throw error
-		const input = document.createElement('textarea')
-		input.value = value
-		input.setAttribute('readonly', '')
-		input.style.position = 'fixed'
-		input.style.opacity = '0'
-		document.body.append(input)
-		input.select()
-		const copied = document.execCommand('copy')
-		input.remove()
-		return copied
-	}
 }
 
 function permalink(entry: HTMLDetailsElement): string {

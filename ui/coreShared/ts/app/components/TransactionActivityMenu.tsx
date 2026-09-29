@@ -1,4 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'preact/hooks'
+import { useEffect, useId, useRef } from 'preact/hooks'
+import { useDisclosurePopover } from '../../hooks/useDisclosurePopover.js'
+import { abbreviateAddress } from '../../lib/address.js'
 import * as copy from '../../copy/transactionActivity.js'
 import { Badge } from '../../components/Badge.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
@@ -25,10 +27,6 @@ function getStatusPresentation(entry: TransactionActivityEntry): { label: string
 	}
 }
 
-function formatShortHash(hash: string) {
-	return `${hash.slice(0, 10)}…${hash.slice(-6)}`
-}
-
 function ActivityRow({ entry }: { entry: TransactionActivityEntry }) {
 	const status = getStatusPresentation(entry)
 	const submittedSeconds = BigInt(Math.floor(entry.submittedAt / 1_000))
@@ -44,10 +42,10 @@ function ActivityRow({ entry }: { entry: TransactionActivityEntry }) {
 					{formatRelativeTimestamp(submittedSeconds, getWallClockTimestamp())}
 				</time>
 				{explorerUrl === undefined ? (
-					<span className='transaction-activity-hash'>{formatShortHash(entry.hash)}</span>
+					<span className='transaction-activity-hash'>{abbreviateAddress(entry.hash, 10, 6)}</span>
 				) : (
 					<a className='transaction-activity-hash' href={explorerUrl} target='_blank' rel='noreferrer' aria-label={copy.formatViewTransaction(entry.hash)}>
-						{formatShortHash(entry.hash)}
+						{abbreviateAddress(entry.hash, 10, 6)}
 					</a>
 				)}
 			</div>
@@ -63,36 +61,19 @@ function ActivityRow({ entry }: { entry: TransactionActivityEntry }) {
 
 /** Header control listing recent transactions of the connected account, with a count of those still pending. */
 export function TransactionActivityMenu() {
-	const [open, setOpen] = useState(false)
-	const menuRef = useRef<HTMLDivElement>(null)
-	const triggerRef = useRef<HTMLButtonElement>(null)
+	const { containerRef, open, toggle, triggerRef } = useDisclosurePopover({ closeOnFocusOutside: false })
 	const panelRef = useRef<HTMLDivElement>(null)
 	const titleId = useId()
 	const entries = transactionActivity.value.entries
 	const pendingCount = countPendingTransactionActivity(entries)
 
 	useEffect(() => {
-		if (!open) return
-		panelRef.current?.focus()
-		const closeOnOutsideClick = (event: MouseEvent) => {
-			if (event.target instanceof Node && !menuRef.current?.contains(event.target)) setOpen(false)
-		}
-		const closeOnEscape = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape') return
-			setOpen(false)
-			triggerRef.current?.focus()
-		}
-		document.addEventListener('mousedown', closeOnOutsideClick)
-		document.addEventListener('keydown', closeOnEscape)
-		return () => {
-			document.removeEventListener('mousedown', closeOnOutsideClick)
-			document.removeEventListener('keydown', closeOnEscape)
-		}
+		if (open) panelRef.current?.focus()
 	}, [open])
 
 	return (
-		<div className='app-settings transaction-activity' ref={menuRef}>
-			<button ref={triggerRef} className='app-settings-trigger transaction-activity-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' aria-label={copy.formatActivityTriggerLabel(pendingCount)} onClick={() => setOpen(value => !value)}>
+		<div className='app-settings transaction-activity' ref={containerRef}>
+			<button ref={triggerRef} className='app-settings-trigger transaction-activity-trigger' type='button' aria-expanded={open} aria-haspopup='dialog' aria-label={copy.formatActivityTriggerLabel(pendingCount)} onClick={toggle}>
 				{/* Narrow toolbars show the clock alone; the accessible name always carries the label and pending count. */}
 				<svg className='transaction-activity-icon' aria-hidden='true' viewBox='0 0 16 16' width='16' height='16'>
 					<circle cx='8' cy='8' r='6.25' fill='none' stroke='currentColor' stroke-width='1.5' />

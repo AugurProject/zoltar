@@ -1,3 +1,4 @@
+import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
@@ -86,7 +87,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
 	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const { finalSubmittedHash, submittedHash } = getRunSubmission(run.current)
+	const { finalSubmittedHash, submittedHash, inFlight } = getRunSubmission(run.current)
+	const canRetry = failureLatched && valid && !running && !inFlight
 	const completedRequest = finalSubmittedHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalSubmittedHash && (closeOnSuccessKey === undefined || closeOnSuccessKey === finalSubmittedHash)
 	const awaitingResult = (finalReceiptConfirmed || finalSubmittedHash !== undefined) && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
@@ -100,7 +102,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
-	if (preparationPaused) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
+	if (preparationPaused) previewPrompt = priceRequestCopy.waitingForPriceRequest
 
 	useLayoutEffect(() => {
 		if (review === undefined) return
@@ -171,8 +173,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (!valid || review === undefined || key === undefined || running || attempted === key || preparationPaused || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
+			const releasePreparation = registerTransactionPreparationScope(cancellation.signal)
 			embeddedTransactionSteps.value = cancellation.signal
 			const cancel = () => {
+				releasePreparation()
 				const firstDetach = run.current?.signal === cancellation.signal && run.current.submissionOutstanding !== true
 				const { steps: currentSteps } = cancelTransactionReview(cancellation.signal)
 				const steps = currentSteps ?? (run.current?.signal === cancellation.signal ? run.current.steps : undefined)
@@ -204,6 +208,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			setAttempted(key)
 			setRunning(true)
 			void Promise.resolve(confirm.current({ ...review, proposedRepPerEthPrice: proposedPrice }, cancellation.signal)).finally(() => {
+				releasePreparation()
 				if (mounted.current && run.current?.signal === cancellation.signal) setRunning(false)
 				if (embeddedTransactionSteps.value === cancellation.signal) embeddedTransactionSteps.value = undefined
 			})
@@ -272,6 +277,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
 							failedPlan={failedPlan}
+							onRetry={canRetry ? retryPreparation : undefined}
 							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
 							error={confirmationGuardMessage}
 							errorWalletBlocker={confirmationWalletBlocker}

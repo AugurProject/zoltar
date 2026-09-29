@@ -132,6 +132,24 @@ function refundGeneration(log: ReturnType<typeof refundLog>) {
 	return keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'uint256' }], [log.blockHash, log.transactionHash, BigInt(log.logIndex)]))
 }
 
+type ProtocolIndexContext = Parameters<typeof updateProtocolIndex>[0]
+
+/** A protocol-index update for the fixture signer starting and anchored at block 10; tests override what they exercise. */
+function indexContext(client: ChaosReadClient, overrides: Partial<ProtocolIndexContext> = {}): ProtocolIndexContext {
+	return { anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1), ...overrides }
+}
+
+/** A read client exposing only `implementation`; any other method call fails the test. */
+function strictReadClient(implementation: object) {
+	return new Proxy({} as ChaosReadClient, {
+		get(_target, property) {
+			const value: unknown = Reflect.get(implementation, property)
+			if (value === undefined) throw new Error(`Unexpected method ${String(property)}`)
+			return value
+		},
+	})
+}
+
 function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: bigint[] = [], canonicalBlockHash = (blockNumber: bigint) => hash(Number(blockNumber)), maximumLogRange?: bigint, logFailure?: Error | ((fromBlock: bigint, toBlock: bigint) => Error | undefined)) {
 	const implementation = {
 		async getBlock(parameters: { blockNumber?: bigint }) {
@@ -158,13 +176,7 @@ function eventIndexClient(logs: ReturnType<typeof canonicalLog>[], oracleReads: 
 			return hash(900 + Number(reportId))
 		},
 	}
-	return new Proxy({} as ChaosReadClient, {
-		get(_target, property) {
-			const value = implementation[property as keyof typeof implementation]
-			if (value === undefined) throw new Error(`Unexpected method ${String(property)}`)
-			return value
-		},
-	})
+	return strictReadClient(implementation)
 }
 
 describe('durable protocol index', () => {
@@ -254,7 +266,7 @@ describe('durable protocol index', () => {
 	test('does not invent refund episodes when the available history begins mid-episode', async () => {
 		const knownEpisode = refundLog({ amount: 4n, blockNumber: 45n, logIndex: 0 })
 		const client = eventIndexClient([refundLog({ amount: 2n, pending: 7n, blockNumber: 42n, logIndex: 0 }), refundLog({ amount: 7n, withdrawn: true, blockNumber: 43n, logIndex: 0 }), knownEpisode], [], undefined, undefined, from => (from < 42n ? new Error('pruned history unavailable') : undefined))
-		const update = await updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 50n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })
+		const update = await updateProtocolIndex(indexContext(client, { anchorBlockNumber: 50n, auctionAddresses: [address(20)], startBlock: 0n }))
 		expect(update.complete).toBe(false)
 		expect(update.index.auctionRefunds[address(20).toLowerCase()]).toEqual({ generation: refundGeneration(knownEpisode), pendingAttoEth: 4n.toString() })
 	})
@@ -262,90 +274,40 @@ describe('durable protocol index', () => {
 	test('preserves failures when even the anchor logs are pruned or a boundary probe times out', async () => {
 		for (const failure of [(from: bigint) => (from < 100n ? new Error('pruned history unavailable') : new Error('request timed out')), () => new Error('pruned history unavailable')]) {
 			const client = eventIndexClient([], [], undefined, undefined, failure)
-			await expect(updateProtocolIndex({ ...indexDeployments, ...indexTrust, anchorBlockNumber: 100n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], startBlock: 0n, wallet: address(1) })).rejects.toThrow()
+			await expect(updateProtocolIndex(indexContext(client, { anchorBlockNumber: 100n, startBlock: 0n }))).rejects.toThrow()
 		}
 	})
 
 	test('subdivides provider-limited log ranges without losing or duplicating canonical history', async () => {
-		const update = await updateProtocolIndex({
-			anchorBlockNumber: 120n,
-			auctionAddresses: [],
-			chainId: 31337,
-			client: eventIndexClient([migrationRepSplitLog({ amount: 1n, blockNumber: 1n, cumulative: 1n, logIndex: 0 }), migrationRepSplitLog({ amount: 2n, blockNumber: 51n, cumulative: 3n, logIndex: 0 }), migrationRepSplitLog({ amount: 3n, blockNumber: 101n, cumulative: 6n, logIndex: 0 })], [], undefined, 50n),
-			escalationGames: [],
-			maxBlockSpan: 120n,
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 1n,
-			wallet: address(1),
-		})
+		const update = await updateProtocolIndex(
+			indexContext(eventIndexClient([migrationRepSplitLog({ amount: 1n, blockNumber: 1n, cumulative: 1n, logIndex: 0 }), migrationRepSplitLog({ amount: 2n, blockNumber: 51n, cumulative: 3n, logIndex: 0 }), migrationRepSplitLog({ amount: 3n, blockNumber: 101n, cumulative: 6n, logIndex: 0 })], [], undefined, 50n), {
+				anchorBlockNumber: 120n,
+				maxBlockSpan: 120n,
+				startBlock: 1n,
+			}),
+		)
 		expect(update.index.migrationRepSplits).toEqual([{ childMigrationRepAmountAttoRep: 6n.toString(), childUniverseId: deriveChildUniverseId(0n, 1n).toString(), outcomeIndex: '1', universeId: '0' }])
 	})
 
 	test('does not mask non-range log failures by subdividing', async () => {
-		await expect(
-			updateProtocolIndex({
-				anchorBlockNumber: 120n,
-				auctionAddresses: [],
-				chainId: 31337,
-				client: eventIndexClient([], [], undefined, undefined, new Error('eth_getLogs permission denied')),
-				escalationGames: [],
-				maxBlockSpan: 120n,
-				...indexDeployments,
-				...indexTrust,
-				startBlock: 1n,
-				wallet: address(1),
-			}),
-		).rejects.toThrow('Log scan failed for blocks 1 through 120: eth_getLogs permission denied')
+		await expect(updateProtocolIndex(indexContext(eventIndexClient([], [], undefined, undefined, new Error('eth_getLogs permission denied')), { anchorBlockNumber: 120n, maxBlockSpan: 120n, startBlock: 1n }))).rejects.toThrow('Log scan failed for blocks 1 through 120: eth_getLogs permission denied')
 	})
 
 	test('keeps one refund generation across accumulation and advances it after withdrawal', async () => {
 		const firstDeferred = refundLog({ amount: 5n, blockNumber: 10n, logIndex: 0 })
 		const accumulated = refundLog({ amount: 3n, blockNumber: 11n, logIndex: 0, pending: 8n })
-		const initial = await updateProtocolIndex({
-			anchorBlockNumber: 11n,
-			auctionAddresses: [address(20)],
-			chainId: 31337,
-			client: eventIndexClient([accumulated, firstDeferred]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const initial = await updateProtocolIndex(indexContext(eventIndexClient([accumulated, firstDeferred]), { anchorBlockNumber: 11n, auctionAddresses: [address(20)] }))
 		expect(initial.index).toMatchObject({
 			auctionRefunds: {
 				[address(20).toLowerCase()]: { generation: refundGeneration(firstDeferred), pendingAttoEth: 8n.toString() },
 			},
 		})
 
-		const withdrawn = await updateProtocolIndex({
-			anchorBlockNumber: 12n,
-			auctionAddresses: [address(20)],
-			chainId: 31337,
-			client: eventIndexClient([refundLog({ amount: 8n, blockNumber: 12n, logIndex: 0, withdrawn: true })]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			previous: initial.index,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const withdrawn = await updateProtocolIndex(indexContext(eventIndexClient([refundLog({ amount: 8n, blockNumber: 12n, logIndex: 0, withdrawn: true })]), { anchorBlockNumber: 12n, auctionAddresses: [address(20)], previous: initial.index }))
 		expect(withdrawn.index).toMatchObject({ auctionRefunds: {} })
 
 		const laterDeferred = refundLog({ amount: 8n, blockNumber: 13n, logIndex: 0 })
-		const later = await updateProtocolIndex({
-			anchorBlockNumber: 13n,
-			auctionAddresses: [address(20)],
-			chainId: 31337,
-			client: eventIndexClient([laterDeferred]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			previous: withdrawn.index,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const later = await updateProtocolIndex(indexContext(eventIndexClient([laterDeferred]), { anchorBlockNumber: 13n, auctionAddresses: [address(20)], previous: withdrawn.index }))
 		expect(later.index).toMatchObject({
 			auctionRefunds: {
 				[address(20).toLowerCase()]: { generation: refundGeneration(laterDeferred), pendingAttoEth: 8n.toString() },
@@ -374,64 +336,19 @@ describe('durable protocol index', () => {
 			},
 		]
 		for (const candidate of cases) {
-			await expect(
-				updateProtocolIndex({
-					anchorBlockNumber: 10n,
-					auctionAddresses: [address(20)],
-					chainId: 31337,
-					client: eventIndexClient(candidate.logs),
-					escalationGames: [],
-					...indexDeployments,
-					...indexTrust,
-					startBlock: 10n,
-					wallet: address(1),
-				}),
-			).rejects.toThrow(candidate.expected)
+			await expect(updateProtocolIndex(indexContext(eventIndexClient(candidate.logs), { auctionAddresses: [address(20)] }))).rejects.toThrow(candidate.expected)
 		}
 	})
 
 	test('rejects a persisted refund generation across a reorg and derives the replacement generation', async () => {
 		const originalLog = refundLog({ amount: 8n, blockNumber: 10n, logIndex: 0 })
-		const original = await updateProtocolIndex({
-			anchorBlockNumber: 10n,
-			auctionAddresses: [address(20)],
-			chainId: 31337,
-			client: eventIndexClient([originalLog]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const original = await updateProtocolIndex(indexContext(eventIndexClient([originalLog]), { auctionAddresses: [address(20)] }))
 		const replacementBlockHash = hash(999)
 		const replacementLog = { ...originalLog, blockHash: replacementBlockHash }
 		const replacementClient = eventIndexClient([replacementLog], [], blockNumber => (blockNumber === 10n ? replacementBlockHash : hash(Number(blockNumber))))
-		await expect(
-			updateProtocolIndex({
-				anchorBlockNumber: 10n,
-				auctionAddresses: [address(20)],
-				chainId: 31337,
-				client: replacementClient,
-				escalationGames: [],
-				...indexDeployments,
-				...indexTrust,
-				previous: original.index,
-				startBlock: 10n,
-				wallet: address(1),
-			}),
-		).rejects.toBeInstanceOf(ChaosProtocolIndexReorgError)
+		await expect(updateProtocolIndex(indexContext(replacementClient, { auctionAddresses: [address(20)], previous: original.index }))).rejects.toBeInstanceOf(ChaosProtocolIndexReorgError)
 
-		const replacement = await updateProtocolIndex({
-			anchorBlockNumber: 10n,
-			auctionAddresses: [address(20)],
-			chainId: 31337,
-			client: replacementClient,
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const replacement = await updateProtocolIndex(indexContext(replacementClient, { auctionAddresses: [address(20)] }))
 		expect(replacement.index.auctionRefunds[address(20).toLowerCase()]?.generation).toBe(refundGeneration(replacementLog))
 		expect(refundGeneration(replacementLog)).not.toBe(refundGeneration(originalLog))
 	})
@@ -444,17 +361,7 @@ describe('durable protocol index', () => {
 			logIndex: 0,
 			topics: [reportSubmittedTopic, toHex(42n, { size: 32 })],
 		})
-		const update = await updateProtocolIndex({
-			anchorBlockNumber: 10n,
-			auctionAddresses: [],
-			chainId: 31337,
-			client: eventIndexClient([signerReport]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const update = await updateProtocolIndex(indexContext(eventIndexClient([signerReport])))
 		const report = update.index.reports[0]
 		if (report === undefined) throw new Error('Expected the signer report to be indexed')
 		expect(report).toMatchObject({
@@ -488,19 +395,13 @@ describe('durable protocol index', () => {
 				return []
 			},
 		}
-		const client = new Proxy({} as ChaosReadClient, {
-			get(_target, property) {
-				const value = implementation[property as keyof typeof implementation]
-				if (value === undefined) throw new Error(`Unexpected method ${String(property)}`)
-				return value
-			},
-		})
-		const update = await updateProtocolIndex({ anchorBlockNumber: 12n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], maxBlockSpan: 3n, ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1) })
+		const client = strictReadClient(implementation)
+		const update = await updateProtocolIndex(indexContext(client, { anchorBlockNumber: 12n, maxBlockSpan: 3n }))
 		expect(update.complete).toBe(true)
 		expect(update.index.cursor).toEqual({ blockHash: hash(12), blockNumber: '12' })
 		expect(update.index.escalationDeposits).toEqual([])
 		changed = true
-		await expect(updateProtocolIndex({ anchorBlockNumber: 13n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], ...indexDeployments, ...indexTrust, previous: update.index, startBlock: 10n, wallet: address(1) })).rejects.toBeInstanceOf(ChaosProtocolIndexReorgError)
+		await expect(updateProtocolIndex(indexContext(client, { anchorBlockNumber: 13n, previous: update.index }))).rejects.toBeInstanceOf(ChaosProtocolIndexReorgError)
 	})
 
 	test('ignores unrelated OpenOracle logs without trying to decode a report id', async () => {
@@ -514,14 +415,8 @@ describe('durable protocol index', () => {
 				return parameters.address === address(6) ? [{ address: address(6), blockHash: hash(10), blockNumber: 10n, data: '0x', logIndex: 0, removed: false, topics: [hash(777)], transactionHash: hash(500), transactionIndex: 0 }] : []
 			},
 		}
-		const client = new Proxy({} as ChaosReadClient, {
-			get(_target, property) {
-				const value = implementation[property as keyof typeof implementation]
-				if (value === undefined) throw new Error(`Unexpected method ${String(property)}`)
-				return value
-			},
-		})
-		const update = await updateProtocolIndex({ anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client, escalationGames: [], ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1) })
+		const client = strictReadClient(implementation)
+		const update = await updateProtocolIndex(indexContext(client))
 		expect(update.complete).toBe(true)
 		expect(update.index.reports).toEqual([])
 	})
@@ -610,17 +505,7 @@ describe('durable protocol index', () => {
 			topics: [reportSettledTopic, toHex(1n, { size: 32 })],
 		})
 
-		const update = await updateProtocolIndex({
-			anchorBlockNumber: 10n,
-			auctionAddresses: [],
-			chainId: 31337,
-			client: eventIndexClient([settled, submitted]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const update = await updateProtocolIndex(indexContext(eventIndexClient([settled, submitted])))
 
 		expect(update.index.reports).toEqual([])
 	})
@@ -647,17 +532,7 @@ describe('durable protocol index', () => {
 		const firstWalletSplit = migrationRepSplitLog({ amount: 3n, blockNumber: 10n, cumulative: 3n, logIndex: 0 })
 		const poolSplit = childRepSplitLog({ blockNumber: 11n, cumulative: 40n, logIndex: 0 })
 		const secondWalletSplit = migrationRepSplitLog({ amount: 2n, blockNumber: 12n, cumulative: 5n, logIndex: 0 })
-		const update = await updateProtocolIndex({
-			anchorBlockNumber: 12n,
-			auctionAddresses: [],
-			chainId: 31337,
-			client: eventIndexClient([secondWalletSplit, poolSplit, firstWalletSplit]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const update = await updateProtocolIndex(indexContext(eventIndexClient([secondWalletSplit, poolSplit, firstWalletSplit]), { anchorBlockNumber: 12n }))
 		expect(update.index.migrationRepSplits).toEqual([
 			{
 				childMigrationRepAmountAttoRep: 5n.toString(),
@@ -667,18 +542,7 @@ describe('durable protocol index', () => {
 			},
 		])
 		expect(update.index.childRepSplits).toEqual([{ childPoolRepSplitAttoRep: 40n.toString(), outcomeIndex: '1', pool: address(22) }])
-		const advanced = await updateProtocolIndex({
-			anchorBlockNumber: 13n,
-			auctionAddresses: [],
-			chainId: 31337,
-			client: eventIndexClient([childRepSplitLog({ blockNumber: 13n, cumulative: 60n, logIndex: 1 }), migrationRepSplitLog({ amount: 2n, blockNumber: 13n, cumulative: 7n, logIndex: 0 })]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			previous: update.index,
-			startBlock: 10n,
-			wallet: address(1),
-		})
+		const advanced = await updateProtocolIndex(indexContext(eventIndexClient([childRepSplitLog({ blockNumber: 13n, cumulative: 60n, logIndex: 1 }), migrationRepSplitLog({ amount: 2n, blockNumber: 13n, cumulative: 7n, logIndex: 0 })]), { anchorBlockNumber: 13n, previous: update.index }))
 		expect(advanced.index.migrationRepSplits[0]?.childMigrationRepAmountAttoRep).toBe('7')
 		expect(advanced.index.childRepSplits[0]?.childPoolRepSplitAttoRep).toBe('60')
 	})
@@ -713,16 +577,14 @@ describe('durable protocol index', () => {
 			},
 		]
 		for (const candidate of cases) {
-			await expect(updateProtocolIndex({ anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client: eventIndexClient(candidate.logs), escalationGames: [], ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1) })).rejects.toThrow(candidate.expected)
+			await expect(updateProtocolIndex(indexContext(eventIndexClient(candidate.logs)))).rejects.toThrow(candidate.expected)
 		}
 	})
 
 	test('binds persisted progress to both canonical migration emitters', async () => {
-		const initial = await updateProtocolIndex({ anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client: eventIndexClient([]), escalationGames: [], ...indexDeployments, ...indexTrust, startBlock: 10n, wallet: address(1) })
-		await expect(updateProtocolIndex({ anchorBlockNumber: 11n, auctionAddresses: [], chainId: 31337, client: eventIndexClient([]), escalationGames: [], ...indexDeployments, ...indexTrust, previous: initial.index, startBlock: 10n, wallet: address(1), zoltar: address(99) })).rejects.toThrow('Zoltar deployment changed')
-		await expect(updateProtocolIndex({ anchorBlockNumber: 11n, auctionAddresses: [], chainId: 31337, client: eventIndexClient([]), escalationGames: [], ...indexDeployments, ...indexTrust, previous: initial.index, securityPoolForker: address(99), startBlock: 10n, wallet: address(1) })).rejects.toThrow(
-			'SecurityPoolForker deployment changed',
-		)
+		const initial = await updateProtocolIndex(indexContext(eventIndexClient([])))
+		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, zoltar: address(99) }))).rejects.toThrow('Zoltar deployment changed')
+		await expect(updateProtocolIndex(indexContext(eventIndexClient([]), { anchorBlockNumber: 11n, previous: initial.index, securityPoolForker: address(99) }))).rejects.toThrow('SecurityPoolForker deployment changed')
 	})
 
 	test('retains more than ten thousand distinct durable migration routes', async () => {
@@ -749,18 +611,7 @@ describe('durable protocol index', () => {
 			startBlock: '1',
 			wallet: address(1),
 		}
-		const update = await updateProtocolIndex({
-			anchorBlockNumber: 10n,
-			auctionAddresses: [],
-			chainId: 31337,
-			client: eventIndexClient([]),
-			escalationGames: [],
-			...indexDeployments,
-			...indexTrust,
-			previous,
-			startBlock: 1n,
-			wallet: address(1),
-		})
+		const update = await updateProtocolIndex(indexContext(eventIndexClient([]), { previous, startBlock: 1n }))
 		expect(update.index.migrationRepSplits).toHaveLength(routeCount)
 		expect(update.index.childRepSplits).toHaveLength(routeCount)
 	})
@@ -787,14 +638,8 @@ describe('durable protocol index', () => {
 				return { hash: hash(Number(number)), number, timestamp: 1_000n }
 			},
 		}
-		const client = new Proxy({} as ChaosReadClient, {
-			get(_target, property) {
-				const value = implementation[property as keyof typeof implementation]
-				if (value === undefined) throw new Error(`Unexpected method ${String(property)}`)
-				return value
-			},
-		})
-		const update = await updateProtocolIndex({ anchorBlockNumber: 10n, auctionAddresses: [address(20)], chainId: 31337, client, escalationGames: [{ escalationGame: address(21), pool: address(22) }], ...indexDeployments, ...indexTrust, previous: terminalIndex, startBlock: 1n, wallet: address(1) })
+		const client = strictReadClient(implementation)
+		const update = await updateProtocolIndex(indexContext(client, { auctionAddresses: [address(20)], escalationGames: [{ escalationGame: address(21), pool: address(22) }], previous: terminalIndex, startBlock: 1n }))
 		expect(update.index.auctionBids).toEqual({})
 		expect(update.index.escalationDeposits).toEqual([])
 	})
@@ -856,14 +701,8 @@ describe('durable protocol index', () => {
 				]
 			},
 		}
-		const client = new Proxy({} as ChaosReadClient, {
-			get(_target, property) {
-				const value = implementation[property as keyof typeof implementation]
-				if (value === undefined) throw new Error(`Unexpected method ${String(property)}`)
-				return value
-			},
-		})
-		const update = await updateProtocolIndex({ anchorBlockNumber: 10n, auctionAddresses: [], chainId: 31337, client, escalationGames: [{ escalationGame: game, pool }], ...indexDeployments, ...indexTrust, previous, startBlock: 1n, wallet: address(1) })
+		const client = strictReadClient(implementation)
+		const update = await updateProtocolIndex(indexContext(client, { escalationGames: [{ escalationGame: game, pool }], previous, startBlock: 1n }))
 		expect(update.index.escalationDeposits).toEqual([])
 	})
 })

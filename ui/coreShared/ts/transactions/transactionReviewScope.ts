@@ -18,3 +18,16 @@ export function registerTransactionReviewScope(scope: AbortSignal) {
 export function isEmbeddedTransactionReview(scope: AbortSignal | undefined) {
 	return scope !== undefined && modalScopes.value.includes(scope)
 }
+
+// The price form prepares its funding plan before the user presses any transaction button.
+// Only these explicitly registered scopes wait for that first action in the form.
+const preparationScopes = new WeakSet<AbortSignal>()
+
+export function registerTransactionPreparationScope(scope: AbortSignal) {
+	preparationScopes.add(scope)
+	return () => preparationScopes.delete(scope)
+}
+
+export function isTransactionPreparationScope(scope: AbortSignal | undefined) {
+	return scope !== undefined && preparationScopes.has(scope)
+}

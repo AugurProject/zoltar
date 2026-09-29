@@ -107,16 +107,27 @@ describe('runWriteAction', () => {
 		}
 	})
 
-	test('uses the provided missing-wallet message when no wallet is connected', async () => {
+	test.each([
+		{ channel: 'setErrorMessage', missingWalletMessage: 'Connect a wallet before creating a question', useOnWriteError: false },
+		{ channel: 'onWriteError', missingWalletMessage: 'Please connect your wallet', useOnWriteError: true },
+	])('reports the provided missing-wallet message through $channel when no wallet is connected', async ({ missingWalletMessage, useOnWriteError }) => {
 		let errorMessage: string | undefined
+		let onWriteErrorMessage: string | undefined
 
 		await runWriteAction(
 			{
 				accountAddress: undefined,
-				missingWalletMessage: 'Connect a wallet before creating a question',
+				missingWalletMessage,
 				onTransactionFinished: () => undefined,
 				onTransactionRequested: () => undefined,
 				refreshState: async () => undefined,
+				...(useOnWriteError
+					? {
+							onWriteError: (message: string) => {
+								onWriteErrorMessage = message
+							},
+						}
+					: {}),
 				setErrorMessage: message => {
 					errorMessage = message
 				},
@@ -125,7 +136,8 @@ describe('runWriteAction', () => {
 			'Failed to create question',
 		)
 
-		expect(errorMessage).toBe('Connect a wallet before creating a question')
+		expect(useOnWriteError ? onWriteErrorMessage : errorMessage).toBe(missingWalletMessage)
+		expect(useOnWriteError ? errorMessage : onWriteErrorMessage).toBeUndefined()
 	})
 
 	test('uses the action fallback when the write action fails', async () => {
@@ -271,10 +283,14 @@ describe('runWriteAction', () => {
 		expect(getInFlightTransactionCount(transactionState)).toBe(0)
 	})
 
-	test('fails before requesting a transaction when the active wallet account changed', async () => {
+	test.each([
+		{ name: 'the active wallet account changed', backend: { accounts: [nextWalletAddress] }, expectedError: 'Wallet account changed. Review the action with the connected account and try again' },
+		{ name: 'the wallet disconnects', backend: { accounts: [] }, expectedError: 'Wallet account is no longer connected. Reconnect your wallet and try again' },
+		{ name: 'the wallet network changes', backend: { chainId: '0x5' }, expectedError: 'Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum mainnet and try again' },
+	])('fails before requesting a transaction when $name', async ({ backend, expectedError }) => {
 		let errorMessage: string | undefined
 		let transactionRequested = false
-		installWalletBackend({ accounts: [nextWalletAddress] })
+		installWalletBackend(backend)
 
 		await runWriteAction(
 			{
@@ -294,7 +310,7 @@ describe('runWriteAction', () => {
 		)
 
 		expect(transactionRequested).toBe(false)
-		expect(errorMessage).toBe('Wallet account changed. Review the action with the connected account and try again')
+		expect(errorMessage).toBe(expectedError)
 	})
 
 	test('does not start a write when the environment changes during wallet preflight', async () => {
@@ -340,86 +356,12 @@ describe('runWriteAction', () => {
 		expect(refreshExecuted).toBe(false)
 	})
 
-	test('fails before requesting a transaction when the wallet disconnects', async () => {
-		let errorMessage: string | undefined
-		let transactionRequested = false
-		installWalletBackend({ accounts: [] })
-
-		await runWriteAction(
-			{
-				accountAddress: walletAddress,
-				missingWalletMessage: 'Connect wallet',
-				onTransactionFinished: () => undefined,
-				onTransactionRequested: () => {
-					transactionRequested = true
-				},
-				refreshState: async () => undefined,
-				setErrorMessage: message => {
-					errorMessage = message
-				},
-			},
-			async () => ({ hash: transactionHash }),
-			'Failed to report on outcome',
-		)
-
-		expect(transactionRequested).toBe(false)
-		expect(errorMessage).toBe('Wallet account is no longer connected. Reconnect your wallet and try again')
-	})
-
-	test('fails before requesting a transaction when the wallet network changes', async () => {
-		let errorMessage: string | undefined
-		let transactionRequested = false
-		installWalletBackend({ chainId: '0x5' })
-
-		await runWriteAction(
-			{
-				accountAddress: walletAddress,
-				missingWalletMessage: 'Connect wallet',
-				onTransactionFinished: () => undefined,
-				onTransactionRequested: () => {
-					transactionRequested = true
-				},
-				refreshState: async () => undefined,
-				setErrorMessage: message => {
-					errorMessage = message
-				},
-			},
-			async () => ({ hash: transactionHash }),
-			'Failed to report on outcome',
-		)
-
-		expect(transactionRequested).toBe(false)
-		expect(errorMessage).toBe('Transaction failed while attempting to report on outcome. Reason: Wallet network changed. Switch to Ethereum mainnet and try again')
-	})
-
-	test('passes the validated active chain to the write action', async () => {
-		let activeChainId: string | undefined
-
-		await runWriteAction(
-			{
-				accountAddress: walletAddress,
-				missingWalletMessage: 'Connect wallet',
-				onTransactionFinished: () => undefined,
-				onTransactionRequested: () => undefined,
-				refreshState: async () => undefined,
-				setErrorMessage: () => undefined,
-			},
-			async (_walletAddress, activeWallet) => {
-				activeChainId = activeWallet.chainId
-				return { hash: transactionHash }
-			},
-			'Failed to report on outcome',
-		)
-
-		expect(activeChainId).toBe(MAINNET_NETWORK_PROFILE.chainIdHex)
-	})
-
-	test('accepts an equivalent zero-padded active chain ID', async () => {
+	test.each([MAINNET_NETWORK_PROFILE.chainIdHex, '0x01'])('passes the validated active chain %s to the write action', async chainId => {
 		let activeChainId: string | undefined
 		let transactionRequested = false
 		let writeExecuted = false
 		let errorMessage: string | undefined
-		installWalletBackend({ chainId: '0x01' })
+		installWalletBackend({ chainId })
 
 		await runWriteAction(
 			{
@@ -444,7 +386,7 @@ describe('runWriteAction', () => {
 
 		expect(transactionRequested).toBe(true)
 		expect(writeExecuted).toBe(true)
-		expect(activeChainId).toBe('0x01')
+		expect(activeChainId).toBe(chainId)
 		expect(errorMessage).toBeUndefined()
 	})
 
@@ -609,28 +551,6 @@ describe('runWriteAction', () => {
 		)
 		expect(canceled).toBe(false)
 		expect(failure).toContain('RPC request aborted')
-	})
-
-	test('delegates missing-wallet errors to onWriteError when provided', async () => {
-		let onWriteErrorMessage: string | undefined
-
-		await runWriteAction(
-			{
-				accountAddress: undefined,
-				missingWalletMessage: 'Please connect your wallet',
-				onTransactionFinished: () => undefined,
-				onTransactionRequested: () => undefined,
-				refreshState: async () => undefined,
-				onWriteError: message => {
-					onWriteErrorMessage = message
-				},
-				setErrorMessage: () => undefined,
-			},
-			async () => ({ hash: transactionHash }),
-			'Failed to report on outcome',
-		)
-
-		expect(onWriteErrorMessage).toBe('Please connect your wallet')
 	})
 
 	test('prefers onWriteError over setErrorMessage when provided', async () => {

@@ -167,10 +167,21 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		return details
 	}
 
+	/** Reloads the vault details and, while the selection still matches, the vault's REP balance and optionally its REP allowance. */
+	const reloadSecurityVaultRepState = async (securityPoolAddress: Address, vaultAddress: Address, isCurrentSelection: () => boolean, includeAllowance = false) => {
+		const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
+		if (details === undefined || !isCurrentSelection()) return
+		await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
+		if (!includeAllowance || !isCurrentSelection()) return
+		await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
+	}
+
+	const createVaultWriteClient = (vaultAddress: Address, context: WriteActionContext) => dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
+
 	const matchesLoadedSecurityVault = (details: SecurityVaultDetails | undefined, securityPoolAddress: Address, vaultAddress: Address) => details !== undefined && sameAddress(details.securityPoolAddress, securityPoolAddress) && sameAddress(details.vaultAddress, vaultAddress)
 
 	const refreshVaultFees = async (vaultAddress: Address, securityPoolAddress: Address, context: WriteActionContext) => {
-		await dependencies.updateSecurityVaultFees(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), securityPoolAddress, vaultAddress)
+		await dependencies.updateSecurityVaultFees(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
 	}
 
 	const assertFreshRequestFunding = async (writeClient: TWriteClient, managerAddress: Address, vaultAddress: Address, requiredCostAttoEth: bigint, actionLabel: string, walletBalanceAttoEth: bigint | undefined, proposedRepPerEthPrice?: bigint) => {
@@ -351,7 +362,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const vaultAdmissionClosed = await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)
 				if (!isCurrentSelection()) return undefined
 				if (vaultAdmissionClosed) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
-				return await dependencies.approveErc20(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
+				return await dependencies.approveErc20(createVaultWriteClient(vaultAddress, context), details.repToken, securityPoolAddress, approvalAmount, 'approveRep')
 			},
 			'Failed to approve REP',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -380,17 +391,10 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (currentRepBalanceAttoRep < depositAmount) throw new Error(`Insufficient REP balance. Wallet balance is ${formatCurrencyBalanceWithUnit(currentRepBalanceAttoRep, 'REP')} but the deposit amount is ${formatCurrencyBalanceWithUnit(depositAmount, 'REP')}.`)
 				if (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress)) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.depositRepToVaultToSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), securityPoolAddress, depositAmount, targetHealthFactorBps)
+				return await dependencies.depositRepToVaultToSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, depositAmount, targetHealthFactorBps)
 			},
 			'Failed to deposit REP',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-				if (details === undefined) return
-				if (!isCurrentSelection()) return
-				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
-				if (!isCurrentSelection()) return
-				await reloadSecurityVaultRepAllowance(details.repToken, vaultAddress, securityPoolAddress)
-			},
+			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection, true),
 		)
 	}
 
@@ -398,7 +402,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		const managerDetails = await dependencies.loadOracleManagerDetails(details.managerAddress)
 		context.assertActive()
 		const funding = resolveOracleOperationEthFunding({ managerDetails })
-		const writeClient = dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal })
+		const writeClient = createVaultWriteClient(vaultAddress, context)
 		const walletBalanceAttoEth = funding?.costAttoEth !== undefined && funding.costAttoEth > 0n ? await dependencies.createConnectedReadClient().getBalance({ address: vaultAddress }) : undefined
 		if (funding?.costAttoEth !== undefined && funding.costAttoEth > 0n) {
 			await assertFreshRequestFunding(writeClient, details.managerAddress, vaultAddress, funding.costAttoEth, 'queue this vault operation', walletBalanceAttoEth, proposedRepPerEthPrice)
@@ -445,7 +449,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				if (!isCurrentSelection()) return undefined
 				await refreshVaultFees(vaultAddress, securityPoolAddress, context)
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.redeemSecurityVaultFees(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), securityPoolAddress, vaultAddress)
+				return await dependencies.redeemSecurityVaultFees(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
 			},
 			'Failed to redeem fees',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
@@ -463,15 +467,10 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
 				if (!isCurrentSelection()) return undefined
-				return await dependencies.redeemRepFromVaultFromSecurityPool(dependencies.createWalletWriteClient(vaultAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), securityPoolAddress, vaultAddress)
+				return await dependencies.redeemRepFromVaultFromSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
 			},
 			'Failed to redeem REP',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-				if (details === undefined) return
-				if (!isCurrentSelection()) return
-				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
-			},
+			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection),
 		)
 	}
 
@@ -500,12 +499,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				return queuedOperations.track(details.managerAddress, { ...result, action: 'queueWithdrawRep' })
 			},
 			'Failed to withdraw REP',
-			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
-				const details = await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
-				if (details === undefined) return
-				if (!isCurrentSelection()) return
-				await reloadSecurityVaultRepBalance(details.repToken, vaultAddress)
-			},
+			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => await reloadSecurityVaultRepState(securityPoolAddress, vaultAddress, isCurrentSelection),
 		)
 	}
 

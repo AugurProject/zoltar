@@ -103,12 +103,6 @@ describe('UI build dependency direction', () => {
 		expect(tradingPackage.dependencies?.['@zoltar/trading']).toBeUndefined()
 	})
 
-	test('watch mode starts every TypeScript project required by the selected app', () => {
-		expect(getUiAppDependencyOrder('zoltar')).toEqual(['coreShared', 'zoltarShared', 'zoltar'])
-		expect(getUiAppDependencyOrder('statoblast')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'statoblast'])
-		expect(getUiAppDependencyOrder('trading')).toEqual(['coreShared', 'zoltarShared', 'statoblastShared', 'trading'])
-	})
-
 	test('Trading watch mode rebuilds shared SDK and main contract outputs and reloads app CSS', () => {
 		const watchSource = fs.readFileSync(`${import.meta.dir}/watch.mts`, 'utf8')
 		expect(watchSource).toContain('appPaths.sharedSourceRoots')

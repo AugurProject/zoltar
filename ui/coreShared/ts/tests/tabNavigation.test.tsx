@@ -1,10 +1,10 @@
 /// <reference types='bun-types' />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { h } from 'preact'
 import { TabNavigation, TabNavigationUnavailableReasons } from '../components/TabNavigation.js'
 import type { RouteTabDefinition } from '../types/components.js'
-import { installDomEnvironment } from './testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from './testUtils/domTestLifecycle.js'
 import { fireEvent, waitFor, within } from './testUtils/queries'
 import { renderIntoDocument } from './testUtils/renderIntoDocument.js'
 import { installTestRouting } from './testUtils/testRouting.js'
@@ -26,24 +26,16 @@ function createProps(overrides: Partial<Parameters<typeof TabNavigation>[0]> = {
 }
 
 describe('TabNavigation', () => {
-	let cleanupDom: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	beforeEach(() => {
-		installTestRouting()
-		cleanupDom = installDomEnvironment('http://localhost/#/zoltar?universe=7&zoltarView=create&simulate=1').cleanup
-	})
-
-	afterEach(async () => {
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
-		cleanupDom?.()
-		cleanupDom = undefined
+	const { trackRendered } = installDomTestLifecycle({
+		beforeTest: () => {
+			installTestRouting()
+		},
+		url: 'http://localhost/#/zoltar?universe=7&zoltarView=create&simulate=1',
 	})
 
 	test('renders the user-facing application section labels', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps()))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('navigation', { name: 'Application sections' })).not.toBeNull()
@@ -58,7 +50,7 @@ describe('TabNavigation', () => {
 
 	test('omits an empty navigation landmark when only one application section is available', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ tabs: [{ hash: '#/zoltar', label: 'Questions', route: 'zoltar' }] })))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('link', { name: 'Questions' })).toBeNull()
@@ -72,7 +64,7 @@ describe('TabNavigation', () => {
 			{ hash: '#/help', label: 'Help', route: 'help' },
 		]
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ moreTabs, route: 'help', onRouteChange: route => void routeChanges.push(route) })))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const documentQueries = within(document.body)
 		const moreButton = documentQueries.getByRole('button', { name: 'More' })
@@ -99,7 +91,7 @@ describe('TabNavigation', () => {
 
 	test('keeps the first tab current when the route is unknown', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps({ route: 'not-found' })))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		expect(within(document.body).getByRole('link', { name: 'Deploy' }).getAttribute('aria-current')).toBe('page')
 	})
@@ -120,7 +112,7 @@ describe('TabNavigation', () => {
 			),
 		)
 		const reasons = await renderIntoDocument(h(TabNavigationUnavailableReasons, { tabs: disabledTabs }))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const documentQueries = within(document.body)
 		const zoltarTab = documentQueries.getByRole('link', { name: 'Zoltar' }) as HTMLAnchorElement
@@ -141,7 +133,7 @@ describe('TabNavigation', () => {
 	test('explains a shared lock once instead of repeating it per tab', async () => {
 		const disabledReason = 'Transaction in progress.'
 		const rendered = await renderIntoDocument(h(TabNavigationUnavailableReasons, { tabs: DEFAULT_TABS.map(tab => ({ ...tab, disabled: true, disabledReason })) }))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const reasons = document.body.querySelectorAll('.tab-nav-unavailable .disabled-reason')
 		expect(reasons.length).toBe(1)
@@ -150,7 +142,7 @@ describe('TabNavigation', () => {
 
 	test('keeps shared and destination-owned query state in top-level tab hrefs', async () => {
 		const rendered = await renderIntoDocument(h(TabNavigation, createProps()))
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('link', { name: 'Deploy' }).getAttribute('href')).toBe('#/deploy?universe=7&simulate=1')
@@ -171,7 +163,7 @@ describe('TabNavigation', () => {
 				}),
 			),
 		)
-		cleanupRenderedComponent = rendered.cleanup
+		trackRendered(rendered)
 
 		const securityPoolsLink = within(document.body).getByRole('link', { name: 'Security pools' })
 		const locationBeforeClicks = window.location.href

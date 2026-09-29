@@ -15,6 +15,11 @@ import { resetRepPriceCacheForTesting, useRepPrices } from '@zoltar/ui-statoblas
 import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
+import { createRepPriceProbe, readRepPriceProbe } from './repPriceProbe.js'
+
+const PriceProbe = createRepPriceProbe(useRepPrices)
+const REP_PER_ETH = 10n ** 18n
+const REP_PER_USDC = 10n ** 6n
 
 function createSimulationController(): SimulationController {
 	const selectedAccount = '0x00000000000000000000000000000000000000a1' as Address
@@ -38,8 +43,8 @@ function createSimulationController(): SimulationController {
 					blockCountSinceReset: 0n,
 					currentTimestamp: 0n,
 					queryDelayMilliseconds: 0,
-					repPerEthPrice: 10n ** 18n,
-					repPerUsdcPrice: 10n ** 6n,
+					repPerEthPrice: REP_PER_ETH,
+					repPerUsdcPrice: REP_PER_USDC,
 					selectedAccount,
 					snapshot: {},
 					transactionCountSinceReset: 0n,
@@ -53,8 +58,8 @@ function createSimulationController(): SimulationController {
 		mintRep: async () => undefined,
 		mineBlock: async () => undefined,
 		queryDelayMilliseconds: 0,
-		repPerEthPrice: 10n ** 18n,
-		repPerUsdcPrice: 10n ** 6n,
+		repPerEthPrice: REP_PER_ETH,
+		repPerUsdcPrice: REP_PER_USDC,
 		reset: async () => undefined,
 		selectAccount: async () => undefined,
 		selectedAccount,
@@ -75,23 +80,53 @@ function createSimulationController(): SimulationController {
 	}
 }
 
-function PriceProbe({ captureRefresh, enabled = true }: { captureRefresh?: (refresh: () => void) => void; enabled?: boolean; renderKey?: string }) {
-	const { isLoadingRepPrices, isRefreshingRepPrices, repPerEthFailure, repPerEthPrice, refreshRepPrices, repUsdcFailure, repUsdcPrice } = useRepPrices({ enabled })
-	captureRefresh?.(refreshRepPrices)
+function createRpcError() {
+	const error = new Error('RPC request failed')
+	error.name = 'RpcRequestError'
+	return error
+}
 
-	return (
-		<div>
-			<span data-testid='rep-per-eth'>{repPerEthPrice?.toString() ?? '-'}</span>
-			<span data-testid='rep-per-eth-failure'>{repPerEthFailure ?? '-'}</span>
-			<span data-testid='rep-per-usdc'>{repUsdcPrice?.toString() ?? '-'}</span>
-			<span data-testid='rep-per-usdc-failure'>{repUsdcFailure ?? '-'}</span>
-			<span data-testid='rep-loading'>{isLoadingRepPrices ? 'loading' : 'ready'}</span>
-			<span data-testid='rep-refreshing'>{isRefreshingRepPrices ? 'refreshing' : 'idle'}</span>
-			<button type='button' onClick={refreshRepPrices}>
-				Refresh REP prices
-			</button>
-		</div>
-	)
+const rejectOnchainQuote = async (): Promise<never> => {
+	throw new Error('Simulation mock pricing should not hit the onchain quoter')
+}
+
+/** A read client for `profile` whose reads and simulations default to the simulation mock-pricing path. */
+function createReadClient(options: { profile?: ChainBackend['profile']; readContract?: () => Promise<unknown>; simulateContract?: () => Promise<never> } = {}): ReadClient {
+	const readClient: ReadClient = {
+		...createPublicClient({ chain: (options.profile ?? createFakeSimulationProfile()).chain, transport: http('http://127.0.0.1:8545') }),
+	}
+	const readContract = options.readContract ?? (async () => 'REP')
+	readClient.readContract = async () => (await readContract()) as never
+	readClient.simulateContract = options.simulateContract ?? rejectOnchainQuote
+	return readClient
+}
+
+/** Activates a simulation backend serving `readClient`; `onCreateReadClient` observes each price load. */
+function installSimulationBackend(readClient: ReadClient, controller: SimulationController = createSimulationController(), onCreateReadClient?: () => void) {
+	const backend: ChainBackend = {
+		...createFakeBackend({ profile: createFakeSimulationProfile() }),
+		createReadClient: () => {
+			onCreateReadClient?.()
+			return readClient
+		},
+	}
+	return installActiveEnvironmentForTesting(backend, controller)
+}
+
+function expectDisplayedPrices(repPerEth: bigint, repPerUsdc: bigint) {
+	const probe = readRepPriceProbe()
+	expect(probe.repPerEth).toBe(repPerEth.toString())
+	expect(probe.repPerUsdc).toBe(repPerUsdc.toString())
+}
+
+function expectIdleState(refreshing: 'idle' | 'refreshing' = 'idle') {
+	const probe = readRepPriceProbe()
+	expect(probe.loading).toBe('ready')
+	expect(probe.refreshing).toBe(refreshing)
+}
+
+function delay(milliseconds: number, schedule: typeof setTimeout = setTimeout) {
+	return new Promise(resolve => schedule(resolve, milliseconds))
 }
 
 describe('useRepPrices', () => {
@@ -106,184 +141,92 @@ describe('useRepPrices', () => {
 		},
 	})
 
+	async function renderProbe(props: Parameters<typeof PriceProbe>[0] = {}) {
+		await cleanupRenderedComponent?.()
+		const rendered = await renderIntoDocument(<PriceProbe {...props} />)
+		cleanupRenderedComponent = rendered.cleanup
+		return rendered
+	}
+
 	test('loads simulation mock REP prices using the active profile REP token', async () => {
-		const profile = createFakeSimulationProfile()
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: profile.chain,
-				transport: http('http://127.0.0.1:8545'),
-			}),
-		}
-		readClient.readContract = async () => 'REP' as never
-		readClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
-		}
+		const resetEnvironment = installSimulationBackend(createReadClient())
 
-		const resetEnvironment = installActiveEnvironmentForTesting(backend, createSimulationController())
+		await renderProbe()
 
-		const renderedComponent = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
-			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
-			expect(documentQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
+			expectIdleState()
 		})
 		resetEnvironment()
 	})
 
-	test('reports missing Sepolia liquidity after the automatic quote attempt', async () => {
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: SEPOLIA_NETWORK_PROFILE.chain,
-				transport: http('http://127.0.0.1:8545'),
-			}),
+	test.each([
+		{ error: () => new Error('No Uniswap pool is available'), expectedFailure: 'no-liquidity', name: 'missing Sepolia liquidity after the automatic quote attempt' },
+		{ error: createRpcError, expectedFailure: 'rpc-error', name: 'Sepolia RPC failures separately from missing liquidity' },
+	])('reports $name', async ({ error, expectedFailure }) => {
+		const reject = async (): Promise<never> => {
+			throw error()
 		}
-		const rejectMissingPool = async () => {
-			throw new Error('No Uniswap pool is available')
-		}
-		readClient.readContract = rejectMissingPool
-		readClient.simulateContract = rejectMissingPool
 		const backend: ChainBackend = {
 			...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }),
-			createReadClient: () => readClient,
+			createReadClient: () => createReadClient({ profile: SEPOLIA_NETWORK_PROFILE, readContract: reject, simulateContract: reject }),
 		}
 		const resetEnvironment = installActiveEnvironmentForTesting(backend)
 
-		const renderedComponent = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
+		await renderProbe()
 
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth-failure').textContent).toBe('no-liquidity')
-			expect(documentQueries.getByTestId('rep-per-usdc-failure').textContent).toBe('no-liquidity')
-			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
-		})
-		resetEnvironment()
-	})
-
-	test('reports Sepolia RPC failures separately from missing liquidity', async () => {
-		const rpcError = new Error('RPC request failed')
-		rpcError.name = 'RpcRequestError'
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: SEPOLIA_NETWORK_PROFILE.chain,
-				transport: http('http://127.0.0.1:8545'),
-			}),
-		}
-		const rejectRpcRequest = async () => {
-			throw rpcError
-		}
-		readClient.readContract = rejectRpcRequest
-		readClient.simulateContract = rejectRpcRequest
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }),
-			createReadClient: () => readClient,
-		}
-		const resetEnvironment = installActiveEnvironmentForTesting(backend)
-
-		const renderedComponent = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
-
-		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth-failure').textContent).toBe('rpc-error')
-			expect(documentQueries.getByTestId('rep-per-usdc-failure').textContent).toBe('rpc-error')
-			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
+			const probe = readRepPriceProbe()
+			expect(probe.ethFailure).toBe(expectedFailure)
+			expect(probe.usdcFailure).toBe(expectedFailure)
+			expect(probe.loading).toBe('ready')
 		})
 		resetEnvironment()
 	})
 
 	test('reuses cached prices for 30 seconds without refetching', async () => {
-		const profile = createFakeSimulationProfile()
 		let readContractCount = 0
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: profile.chain,
-				transport: http('http://127.0.0.1:8545'),
+		const resetEnvironment = installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					readContractCount += 1
+					return 'REP'
+				},
 			}),
-		}
-		readClient.readContract = async () => {
-			readContractCount += 1
-			return 'REP' as never
-		}
-		readClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
-		}
+		)
 
-		const resetEnvironment = installActiveEnvironmentForTesting(backend, createSimulationController())
-
-		const firstRender = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = firstRender.cleanup
-
-		const firstQueries = within(document.body)
+		await renderProbe()
 		await waitFor(() => {
-			expect(firstQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(firstQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		})
 		expect(readContractCount).toBe(2)
 
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
+		await renderProbe()
 
-		const secondRender = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = secondRender.cleanup
-
-		const secondQueries = within(document.body)
-		expect(secondQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-		expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
-		expect(secondQueries.getByTestId('rep-loading').textContent).toBe('ready')
-		expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+		expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
+		expectIdleState()
 		expect(readContractCount).toBe(2)
 
 		resetEnvironment()
 	})
 
 	test('retains expired cached prices while refreshing them in the background', async () => {
-		const profile = createFakeSimulationProfile()
 		const simulationController = createSimulationController()
 		let readDelayMilliseconds = 0
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: profile.chain,
-				transport: http('http://127.0.0.1:8545'),
-			}),
-		}
-		readClient.readContract = async () => {
-			if (readDelayMilliseconds > 0) await new Promise(resolve => setTimeout(resolve, readDelayMilliseconds))
-			return 'REP' as never
-		}
-		readClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
 		let readClientCount = 0
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => {
-				readClientCount += 1
-				return readClient
+		const readClient = createReadClient({
+			readContract: async () => {
+				if (readDelayMilliseconds > 0) await delay(readDelayMilliseconds)
+				return 'REP'
 			},
-		}
+		})
+		const resetEnvironment = installSimulationBackend(readClient, simulationController, () => {
+			readClientCount += 1
+		})
 
-		const resetEnvironment = installActiveEnvironmentForTesting(backend, simulationController)
-
-		const firstRender = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = firstRender.cleanup
-
-		const initialQueries = within(document.body)
+		await renderProbe()
 		await waitFor(() => {
-			expect(initialQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(initialQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		})
 
 		const originalDateNow = Date.now
@@ -292,25 +235,20 @@ describe('useRepPrices', () => {
 		await cleanupRenderedComponent?.()
 		cleanupRenderedComponent = undefined
 
-		simulationController.repPerEthPrice = 2n * 10n ** 18n
-		simulationController.repPerUsdcPrice = 2n * 10n ** 6n
+		simulationController.repPerEthPrice = 2n * REP_PER_ETH
+		simulationController.repPerUsdcPrice = 2n * REP_PER_USDC
 		readDelayMilliseconds = 50
 		Reflect.set(Date, 'now', () => cachedAtMs + 31_000)
 
 		try {
-			const secondRender = await renderIntoDocument(<PriceProbe />)
-			cleanupRenderedComponent = secondRender.cleanup
+			await renderProbe()
 
-			const secondQueries = within(document.body)
-			expect(secondQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
-			expect(secondQueries.getByTestId('rep-loading').textContent).toBe('ready')
-			expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('refreshing')
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
+			expectIdleState('refreshing')
 
 			await waitFor(() => {
-				expect(secondQueries.getByTestId('rep-per-eth').textContent).toBe((2n * 10n ** 18n).toString())
-				expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((2n * 10n ** 6n).toString())
-				expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+				expectDisplayedPrices(2n * REP_PER_ETH, 2n * REP_PER_USDC)
+				expect(readRepPriceProbe().refreshing).toBe('idle')
 			})
 			// The expired cache triggers exactly one background load, not a mount load plus an expiry-timer load.
 			expect(readClientCount).toBe(2)
@@ -332,47 +270,36 @@ describe('useRepPrices', () => {
 			return originalSetTimeout(handler, timeout)
 		}) as typeof window.setTimeout
 		try {
-			const profile = createFakeSimulationProfile()
 			const simulationController = createSimulationController()
 			let readDelayMilliseconds = 0
-			const readClient: ReadClient = {
-				...createPublicClient({ chain: profile.chain, transport: http('http://127.0.0.1:8545') }),
-			}
-			readClient.readContract = async () => {
-				if (readDelayMilliseconds > 0) await new Promise(resolve => originalSetTimeout(resolve, readDelayMilliseconds))
-				return 'REP' as never
-			}
-			readClient.simulateContract = async () => {
-				throw new Error('Simulation mock pricing should not hit the onchain quoter')
-			}
-			const backend: ChainBackend = {
-				...createFakeBackend({ profile }),
-				createReadClient: () => readClient,
-			}
-			installActiveEnvironmentForTesting(backend, simulationController)
+			installSimulationBackend(
+				createReadClient({
+					readContract: async () => {
+						if (readDelayMilliseconds > 0) await delay(readDelayMilliseconds, originalSetTimeout)
+						return 'REP'
+					},
+				}),
+				simulationController,
+			)
 
-			const renderedComponent = await renderIntoDocument(<PriceProbe />)
-			cleanupRenderedComponent = renderedComponent.cleanup
-			const documentQueries = within(document.body)
+			await renderProbe()
 			await waitFor(() => {
-				expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
+				expect(readRepPriceProbe().repPerEth).toBe(REP_PER_ETH.toString())
 				expect(expiryCallback).toBeDefined()
 			})
 
-			simulationController.repPerEthPrice = 2n * 10n ** 18n
-			simulationController.repPerUsdcPrice = 2n * 10n ** 6n
+			simulationController.repPerEthPrice = 2n * REP_PER_ETH
+			simulationController.repPerUsdcPrice = 2n * REP_PER_USDC
 			readDelayMilliseconds = 50
 			const runExpiry = expiryCallback
 			if (runExpiry === undefined) throw new Error('Expected REP price expiry callback')
 			await act(() => {
 				runExpiry()
 			})
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 
 			await waitFor(() => {
-				expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((2n * 10n ** 18n).toString())
-				expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((2n * 10n ** 6n).toString())
+				expectDisplayedPrices(2n * REP_PER_ETH, 2n * REP_PER_USDC)
 			})
 		} finally {
 			window.setTimeout = originalSetTimeout
@@ -380,106 +307,70 @@ describe('useRepPrices', () => {
 	})
 
 	test('does not expose prices from the previous backend while a new backend loads', async () => {
-		const profile = createFakeSimulationProfile()
-		const firstController = createSimulationController()
-		const firstReadClient: ReadClient = {
-			...createPublicClient({ chain: profile.chain, transport: http('http://127.0.0.1:8545') }),
-		}
-		firstReadClient.readContract = async () => 'REP' as never
-		firstReadClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const firstBackend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => firstReadClient,
-		}
-		installActiveEnvironmentForTesting(firstBackend, firstController)
+		installSimulationBackend(createReadClient())
 
-		const renderedComponent = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
+		const renderedComponent = await renderProbe()
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
+			expect(readRepPriceProbe().repPerEth).toBe(REP_PER_ETH.toString())
 		})
 
 		const secondController = createSimulationController()
-		secondController.repPerEthPrice = 2n * 10n ** 18n
-		secondController.repPerUsdcPrice = 2n * 10n ** 6n
-		const secondReadClient: ReadClient = {
-			...createPublicClient({ chain: profile.chain, transport: http('http://127.0.0.1:8545') }),
-		}
-		secondReadClient.readContract = async () => {
-			await new Promise(resolve => setTimeout(resolve, 50))
-			return 'REP' as never
-		}
-		secondReadClient.simulateContract = firstReadClient.simulateContract
-		const secondBackend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => secondReadClient,
-		}
-		installActiveEnvironmentForTesting(secondBackend, secondController)
+		secondController.repPerEthPrice = 2n * REP_PER_ETH
+		secondController.repPerUsdcPrice = 2n * REP_PER_USDC
+		installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					await delay(50)
+					return 'REP'
+				},
+			}),
+			secondController,
+		)
 
 		await act(() => {
 			render(<PriceProbe renderKey='second-backend' />, renderedComponent.container)
 		})
-		expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('-')
-		expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('-')
+		expect(readRepPriceProbe().repPerEth).toBe('-')
+		expect(readRepPriceProbe().repPerUsdc).toBe('-')
 
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((2n * 10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((2n * 10n ** 6n).toString())
+			expectDisplayedPrices(2n * REP_PER_ETH, 2n * REP_PER_USDC)
 		})
 	})
 
 	test('ignores a saved refresh callback from the previous backend', async () => {
-		const profile = createFakeSimulationProfile()
-		const firstController = createSimulationController()
-		const firstReadClient: ReadClient = {
-			...createPublicClient({ chain: profile.chain, transport: http('http://127.0.0.1:8545') }),
-		}
-		firstReadClient.readContract = async () => 'REP' as never
-		firstReadClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const firstBackend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => firstReadClient,
-		}
-		installActiveEnvironmentForTesting(firstBackend, firstController)
+		installSimulationBackend(createReadClient())
 
 		let savedFirstRefresh: (() => void) | undefined
-		const renderedComponent = await renderIntoDocument(<PriceProbe captureRefresh={refresh => (savedFirstRefresh ??= refresh)} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
+		const captureRefresh = (refresh: () => void) => {
+			savedFirstRefresh ??= refresh
+		}
+		const renderedComponent = await renderProbe({ captureRefresh })
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
+			expect(readRepPriceProbe().repPerEth).toBe(REP_PER_ETH.toString())
 		})
 
 		const secondController = createSimulationController()
-		secondController.repPerEthPrice = 2n * 10n ** 18n
-		secondController.repPerUsdcPrice = 2n * 10n ** 6n
+		secondController.repPerEthPrice = 2n * REP_PER_ETH
+		secondController.repPerUsdcPrice = 2n * REP_PER_USDC
 		let releaseSecondReads: (() => void) | undefined
 		const secondReadsReleased = new Promise<void>(resolve => {
 			releaseSecondReads = resolve
 		})
 		let secondReadCount = 0
-		const secondReadClient: ReadClient = {
-			...createPublicClient({ chain: profile.chain, transport: http('http://127.0.0.1:8545') }),
-		}
-		secondReadClient.readContract = async () => {
-			secondReadCount += 1
-			await secondReadsReleased
-			return 'REP' as never
-		}
-		secondReadClient.simulateContract = firstReadClient.simulateContract
-		const secondBackend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => secondReadClient,
-		}
-		installActiveEnvironmentForTesting(secondBackend, secondController)
+		installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					secondReadCount += 1
+					await secondReadsReleased
+					return 'REP'
+				},
+			}),
+			secondController,
+		)
 
 		await act(() => {
-			render(<PriceProbe captureRefresh={refresh => (savedFirstRefresh ??= refresh)} renderKey='second-backend' />, renderedComponent.container)
+			render(<PriceProbe captureRefresh={captureRefresh} renderKey='second-backend' />, renderedComponent.container)
 		})
 		await waitFor(() => {
 			expect(secondReadCount).toBeGreaterThan(0)
@@ -494,110 +385,77 @@ describe('useRepPrices', () => {
 		releaseSecondReads()
 
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((2n * 10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((2n * 10n ** 6n).toString())
+			expectDisplayedPrices(2n * REP_PER_ETH, 2n * REP_PER_USDC)
 		})
 	})
 
 	test('clears cached prices and exposes failures when a refresh cannot quote', async () => {
-		const profile = createFakeSimulationProfile()
 		let failReads = false
-		const readClient: ReadClient = {
-			...createPublicClient({ chain: profile.chain, transport: http('http://127.0.0.1:8545') }),
-		}
-		readClient.readContract = async () => {
-			if (failReads) {
-				const error = new Error('RPC request failed')
-				error.name = 'RpcRequestError'
-				throw error
-			}
-			return 'REP' as never
-		}
-		readClient.simulateContract = async () => {
-			if (failReads) {
-				const error = new Error('RPC request failed')
-				error.name = 'RpcRequestError'
-				throw error
-			}
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
-		}
-		installActiveEnvironmentForTesting(backend, createSimulationController())
+		installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					if (failReads) throw createRpcError()
+					return 'REP'
+				},
+				simulateContract: async () => {
+					if (failReads) throw createRpcError()
+					return await rejectOnchainQuote()
+				},
+			}),
+		)
 
-		const renderedComponent = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
+		await renderProbe()
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
+			expect(readRepPriceProbe().repPerEth).toBe(REP_PER_ETH.toString())
 		})
 
 		failReads = true
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Refresh REP prices' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Refresh REP prices' }))
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('-')
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('-')
-			expect(documentQueries.getByTestId('rep-per-eth-failure').textContent).not.toBe('-')
-			expect(documentQueries.getByTestId('rep-per-usdc-failure').textContent).not.toBe('-')
+			const probe = readRepPriceProbe()
+			expect(probe.repPerEth).toBe('-')
+			expect(probe.repPerUsdc).toBe('-')
+			expect(probe.ethFailure).not.toBe('-')
+			expect(probe.usdcFailure).not.toBe('-')
 		})
 	})
 
 	test('manual refresh bypasses the 30 second cache window', async () => {
-		const profile = createFakeSimulationProfile()
 		const simulationController = createSimulationController()
 		let readContractCount = 0
 		let readDelayMilliseconds = 0
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: profile.chain,
-				transport: http('http://127.0.0.1:8545'),
+		const resetEnvironment = installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					readContractCount += 1
+					if (readDelayMilliseconds > 0) await delay(readDelayMilliseconds)
+					return 'REP'
+				},
 			}),
-		}
-		readClient.readContract = async () => {
-			readContractCount += 1
-			if (readDelayMilliseconds > 0) await new Promise(resolve => setTimeout(resolve, readDelayMilliseconds))
-			return 'REP' as never
-		}
-		readClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
-		}
+			simulationController,
+		)
 
-		const resetEnvironment = installActiveEnvironmentForTesting(backend, simulationController)
-
-		const renderedComponent = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
+		await renderProbe()
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		})
 		expect(readContractCount).toBe(2)
 
-		simulationController.repPerEthPrice = 3n * 10n ** 18n
-		simulationController.repPerUsdcPrice = 3n * 10n ** 6n
+		simulationController.repPerEthPrice = 3n * REP_PER_ETH
+		simulationController.repPerUsdcPrice = 3n * REP_PER_USDC
 		readDelayMilliseconds = 50
 
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Refresh REP prices' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Refresh REP prices' }))
 
-		expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-		expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+		expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
-			expect(documentQueries.getByTestId('rep-refreshing').textContent).toBe('refreshing')
+			expectIdleState('refreshing')
 		})
 
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((3n * 10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((3n * 10n ** 6n).toString())
-			expect(documentQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+			expectDisplayedPrices(3n * REP_PER_ETH, 3n * REP_PER_USDC)
+			expect(readRepPriceProbe().refreshing).toBe('idle')
 		})
 		expect(readContractCount).toBe(4)
 
@@ -605,44 +463,27 @@ describe('useRepPrices', () => {
 	})
 
 	test('disabled mode skips the initial fetch until the user refreshes manually', async () => {
-		const profile = createFakeSimulationProfile()
-		const simulationController = createSimulationController()
 		let readContractCount = 0
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: profile.chain,
-				transport: http('http://127.0.0.1:8545'),
+		const resetEnvironment = installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					readContractCount += 1
+					return 'REP'
+				},
 			}),
-		}
-		readClient.readContract = async () => {
-			readContractCount += 1
-			return 'REP' as never
-		}
-		readClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
-		}
+		)
 
-		const resetEnvironment = installActiveEnvironmentForTesting(backend, simulationController)
+		await renderProbe({ enabled: false })
 
-		const renderedComponent = await renderIntoDocument(<PriceProbe enabled={false} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const documentQueries = within(document.body)
-		expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe('-')
-		expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe('-')
-		expect(documentQueries.getByTestId('rep-loading').textContent).toBe('ready')
-		expect(documentQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+		expect(readRepPriceProbe().repPerEth).toBe('-')
+		expect(readRepPriceProbe().repPerUsdc).toBe('-')
+		expectIdleState()
 		expect(readContractCount).toBe(0)
 
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Refresh REP prices' }))
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Refresh REP prices' }))
 
 		await waitFor(() => {
-			expect(documentQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(documentQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		})
 		expect(readContractCount).toBe(2)
 
@@ -650,49 +491,26 @@ describe('useRepPrices', () => {
 	})
 
 	test('disabled mode shows cached prices without starting another background refresh', async () => {
-		const profile = createFakeSimulationProfile()
 		let readContractCount = 0
-		const readClient: ReadClient = {
-			...createPublicClient({
-				chain: profile.chain,
-				transport: http('http://127.0.0.1:8545'),
+		const resetEnvironment = installSimulationBackend(
+			createReadClient({
+				readContract: async () => {
+					readContractCount += 1
+					return 'REP'
+				},
 			}),
-		}
-		readClient.readContract = async () => {
-			readContractCount += 1
-			return 'REP' as never
-		}
-		readClient.simulateContract = async () => {
-			throw new Error('Simulation mock pricing should not hit the onchain quoter')
-		}
-		const backend: ChainBackend = {
-			...createFakeBackend({ profile }),
-			createReadClient: () => readClient,
-		}
+		)
 
-		const resetEnvironment = installActiveEnvironmentForTesting(backend, createSimulationController())
-
-		const firstRender = await renderIntoDocument(<PriceProbe />)
-		cleanupRenderedComponent = firstRender.cleanup
-
-		const firstQueries = within(document.body)
+		await renderProbe()
 		await waitFor(() => {
-			expect(firstQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-			expect(firstQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
+			expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
 		})
 		expect(readContractCount).toBe(2)
 
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
+		await renderProbe({ enabled: false })
 
-		const secondRender = await renderIntoDocument(<PriceProbe enabled={false} />)
-		cleanupRenderedComponent = secondRender.cleanup
-
-		const secondQueries = within(document.body)
-		expect(secondQueries.getByTestId('rep-per-eth').textContent).toBe((10n ** 18n).toString())
-		expect(secondQueries.getByTestId('rep-per-usdc').textContent).toBe((10n ** 6n).toString())
-		expect(secondQueries.getByTestId('rep-loading').textContent).toBe('ready')
-		expect(secondQueries.getByTestId('rep-refreshing').textContent).toBe('idle')
+		expectDisplayedPrices(REP_PER_ETH, REP_PER_USDC)
+		expectIdleState()
 		expect(readContractCount).toBe(2)
 
 		resetEnvironment()

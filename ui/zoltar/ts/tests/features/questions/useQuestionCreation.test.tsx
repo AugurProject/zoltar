@@ -1,9 +1,9 @@
 /// <reference types='bun-types' />
 
 import { getAddress, zeroAddress, zeroHash, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -35,29 +35,10 @@ const DEPLOYED_QUESTION_DATA: DeploymentStatus = {
 	label: 'ZoltarQuestionData',
 }
 
-function requireHookState(state: UseQuestionCreationState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-	return state
-}
-
 describe('useQuestionCreation', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 	const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
-	let resetEnvironment: (() => void) | undefined
 
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { cleanupRendered, replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	async function renderHook(
 		options: {
@@ -109,7 +90,7 @@ describe('useQuestionCreation', () => {
 			return <div />
 		}
 		const rendered = await renderIntoDocument(h(Harness, { accountAddress: initialAccountAddress, environmentRefreshKey: options.environmentRefreshKey ?? 0 }))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setQuestionForm(current => ({ ...current, endTime: '2000', startTime: '1000', title: 'Will this work?' }))
 		})
@@ -127,10 +108,10 @@ describe('useQuestionCreation', () => {
 		}
 		const remount = async (environmentRefreshKey: number) => {
 			await rendered.cleanup()
-			cleanupRenderedComponent = undefined
+			trackCleanup(undefined)
 			hookState = undefined
 			const remounted = await renderIntoDocument(h(Harness, { accountAddress: initialAccountAddress, environmentRefreshKey }))
-			cleanupRenderedComponent = remounted.cleanup
+			trackCleanup(remounted.cleanup)
 		}
 		return {
 			createQuestion,
@@ -174,8 +155,7 @@ describe('useQuestionCreation', () => {
 		await act(async () => await failed.hookState().createQuestion())
 		expect(failed.hookState().questionFeedback?.status.tone).toBe('error')
 		expect(failed.onTransactionFailed.mock.calls[0]?.[0]).toContain('wallet rejected')
-		await cleanupRenderedComponent?.()
-		cleanupRenderedComponent = undefined
+		await cleanupRendered()
 
 		const missing = await renderHook({ deploymentStatuses: [] })
 		await act(async () => await missing.hookState().createQuestion())
@@ -353,8 +333,7 @@ describe('useQuestionCreation', () => {
 			await Promise.resolve()
 		})
 
-		resetEnvironment?.()
-		resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
+		replaceEnvironment(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
 		await harness.rerenderAccount(NEXT_WALLET_ADDRESS)
 		await act(async () => {
 			harness.hookState().setQuestionForm(current => ({ ...current, endTime: '2000', startTime: '1000', title: 'Will the replacement account submit?' }))
@@ -416,7 +395,7 @@ describe('useQuestionCreation', () => {
 			return <div />
 		}
 		const rendered = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 1n }))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(async () => requireHookState(hookState).setQuestionForm(current => ({ ...current, title: 'Owner one draft' })))
 		await act(async () => {
 			render(h(Harness, { accountAddress: WALLET_ADDRESS, activeUniverseId: 2n }), rendered.container)

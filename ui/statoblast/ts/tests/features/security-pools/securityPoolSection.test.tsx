@@ -1,7 +1,7 @@
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
-import { getAddress, zeroAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -10,23 +10,13 @@ import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTra
 import { SecurityPoolSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSection.js'
 import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/retentionRate.js'
 import type { SecurityPoolSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { createTransactionStepController } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/GlobalTransactionDialog.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): SecurityPoolSectionProps {
 	return {
@@ -420,75 +410,37 @@ describe('SecurityPoolSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Create pool')
 	})
 
-	test('keeps combined question-and-pool creation disabled until the question form is valid', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					onCreateQuestionAndSecurityPool: () => undefined,
-				}),
-			),
-		)
+	const readyBinaryMarketForm = {
+		answerUnit: '',
+		categoricalOutcomes: ['', ''],
+		description: 'Pool question',
+		endTime: '1735689600',
+		marketType: 'binary',
+		scalarIncrement: '',
+		scalarMax: '',
+		scalarMin: '',
+		startTime: '',
+		title: 'Will this happen?',
+	} satisfies SecurityPoolSectionProps['marketForm']
+
+	// Renders the combined question-and-pool flow and switches the source to a new question.
+	const renderNewQuestionForm = async (overrides: Partial<SecurityPoolSectionProps>) => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onCreateQuestionAndSecurityPool: () => undefined, ...overrides })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+	}
+
+	test('keeps combined question-and-pool creation disabled until the question form is valid', async () => {
+		await renderNewQuestionForm({})
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Create question and pool').reason).toBe('Missing required fields: Title, End time')
 	})
 
-	test('enables combined question-and-pool creation when both forms are ready', async () => {
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					marketForm: {
-						answerUnit: '',
-						categoricalOutcomes: ['', ''],
-						description: 'Pool question',
-						endTime: '1735689600',
-						marketType: 'binary',
-						scalarIncrement: '',
-						scalarMax: '',
-						scalarMin: '',
-						startTime: '',
-						title: 'Will this happen?',
-					},
-					onCreateQuestionAndSecurityPool: () => undefined,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
-
-		expect(getButtonByText('Create question and pool').disabled).toBe(false)
-	})
-
 	test('blocks a duplicate question and links its existing pool', async () => {
 		const poolAddress = getAddress('0x0000000000000000000000000000000000000002')
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					existingQuestionCheck: { status: 'existing', questionId: '123', poolAddress },
-					marketForm: {
-						answerUnit: '',
-						categoricalOutcomes: ['', ''],
-						description: 'Pool question',
-						endTime: '1735689600',
-						marketType: 'binary',
-						scalarIncrement: '',
-						scalarMax: '',
-						scalarMin: '',
-						startTime: '',
-						title: 'Will this happen?',
-					},
-					onCreateQuestionAndSecurityPool: () => undefined,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		await renderNewQuestionForm({ existingQuestionCheck: { status: 'existing', questionId: '123', poolAddress }, marketForm: readyBinaryMarketForm })
 		expect(within(document.body).queryByRole('button', { name: 'Create question and pool' })).toBeNull()
 		const existingPoolLink = within(document.body).getByRole('link', { name: 'Open existing pool →' })
 		expect(existingPoolLink.getAttribute('href')).toContain(poolAddress)
@@ -501,30 +453,7 @@ describe('SecurityPoolSection', () => {
 
 	test('carries an existing question ID into the pool creation flow', async () => {
 		const onSecurityPoolFormChange = mock(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					existingQuestionCheck: { status: 'existing', questionId: '123' },
-					marketForm: {
-						answerUnit: '',
-						categoricalOutcomes: ['', ''],
-						description: 'Pool question',
-						endTime: '1735689600',
-						marketType: 'binary',
-						scalarIncrement: '',
-						scalarMax: '',
-						scalarMin: '',
-						startTime: '',
-						title: 'Will this happen?',
-					},
-					onCreateQuestionAndSecurityPool: () => undefined,
-					onSecurityPoolFormChange,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		await renderNewQuestionForm({ existingQuestionCheck: { status: 'existing', questionId: '123' }, marketForm: readyBinaryMarketForm, onSecurityPoolFormChange })
 		expectTransactionButtonDisabled(document.body, 'Create question and pool', 'This question already exists.')
 		expect(document.querySelector('.identifier-value')?.textContent).toBe('0x7b')
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Use existing question' }))
@@ -534,28 +463,7 @@ describe('SecurityPoolSection', () => {
 
 	test('keeps combined question-and-pool creation disabled for non-binary question types', async () => {
 		const onCreateQuestionAndSecurityPool = mock(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					marketForm: {
-						answerUnit: '',
-						categoricalOutcomes: ['Alpha', 'Beta'],
-						description: 'Pool question',
-						endTime: '1735689600',
-						marketType: 'categorical',
-						scalarIncrement: '',
-						scalarMax: '',
-						scalarMin: '',
-						startTime: '',
-						title: 'Will this happen?',
-					},
-					onCreateQuestionAndSecurityPool,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		await renderNewQuestionForm({ marketForm: { ...readyBinaryMarketForm, categoricalOutcomes: ['Alpha', 'Beta'], marketType: 'categorical' }, onCreateQuestionAndSecurityPool })
 
 		const button = getButtonByText('Create question and pool')
 		expect(button.disabled).toBe(true)
@@ -569,30 +477,9 @@ describe('SecurityPoolSection', () => {
 	test('submits the combined question-and-pool action instead of standalone question creation', async () => {
 		const onCreateQuestionAndSecurityPool = mock(() => undefined)
 		const onCreateMarket = mock(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolSection,
-				createProps({
-					marketForm: {
-						answerUnit: '',
-						categoricalOutcomes: ['', ''],
-						description: 'Pool question',
-						endTime: '1735689600',
-						marketType: 'binary',
-						scalarIncrement: '',
-						scalarMax: '',
-						scalarMin: '',
-						startTime: '',
-						title: 'Will this happen?',
-					},
-					onCreateMarket,
-					onCreateQuestionAndSecurityPool,
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		fireEvent.click(within(document.body).getByRole('radio', { name: 'Create a new question' }))
+		await renderNewQuestionForm({ marketForm: readyBinaryMarketForm, onCreateMarket, onCreateQuestionAndSecurityPool })
 
+		expect(getButtonByText('Create question and pool').disabled).toBe(false)
 		fireEvent.click(getButtonByText('Create question and pool'))
 		expect(onCreateQuestionAndSecurityPool).toHaveBeenCalledTimes(1)
 		expect(onCreateMarket).toHaveBeenCalledTimes(0)

@@ -3,7 +3,8 @@ import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed
 import { describe, expect, spyOn, test } from 'bun:test'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, zeroAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
+import { erc20Abi, poolAbi } from '#contracts/abi'
+import { uniswapV3FactoryAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import { networkConfiguration } from '#config/network'
 import { createTokenMetadataCache, discoverTokenPools, loadTokenMarkets } from '#monitoring/market-monitor'
 import { poolsForTokens } from '#monitoring/execution-pools'
@@ -27,7 +28,7 @@ function clientWithFactory(code: '0x' | '0x01', options: { pools?: Map<string, P
 		({ data, to }) => {
 			contractCalls += 1
 			if (to.toLowerCase() === network.factory.toLowerCase()) {
-				const decoded = decodeFunctionData({ abi: factoryAbi, data })
+				const decoded = decodeFunctionData({ abi: uniswapV3FactoryAbi, data })
 				if (decoded.functionName !== 'getPool') throw new Error(`Unexpected factory read ${decoded.functionName}`)
 				if (options.poolResult === 'invalid') return '0x'
 				return encodeAbiParameters([{ type: 'address' }], [options.poolResult === undefined ? zeroAddress : options.poolResult(Number(decoded.args[2]))])

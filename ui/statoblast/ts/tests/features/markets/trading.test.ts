@@ -4,7 +4,6 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	estimateMintCheckpoint,
-	convertMintSettlementCollateralAttoEthToAttoShares,
 	convertSettlementCollateralAttoEthToAttoShares,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	formatStatoblastSecurityMultiplier,
@@ -459,8 +458,6 @@ void describe('trading helpers', () => {
 		const firstMintShareAmount = TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
 		expect(convertSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
-		expect(convertMintSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, 0n, 0n)).toBe(firstMintShareAmount)
-		expect(convertMintSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, 9n * TOKEN_PRECISION, 10n * TOKEN_PRECISION)).toBe(1_111_111_111_111_111_111n)
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',

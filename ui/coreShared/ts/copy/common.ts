@@ -123,7 +123,8 @@ export const formatAmountExceedsBalanceError = (amount: CopyTemplateValue) => `E
 export const formatAmountPresetLabel = (percent: CopyTemplateValue) => `${percent}%`
 export const approvalAmountInvalidError = 'Approval amount must be a decimal number.'
 export const approvalAmount = 'Approval amount'
-export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `Approve ${tokenLabel}`
+export const approve = 'Approve'
+export const formatApproveValue = (tokenLabel: CopyTemplateValue) => `${approve} ${tokenLabel}`
 export const formatApprovingToken = (tokenLabel: CopyTemplateValue) => `Approving ${tokenLabel}…`
 export const approvalSatisfied = 'Approval satisfied'
 export const formatApproveTokenAmount = (amountLabel: CopyTemplateValue, tokenSymbol: CopyTemplateValue) => `Approve ${amountLabel}\u00a0${tokenSymbol}`

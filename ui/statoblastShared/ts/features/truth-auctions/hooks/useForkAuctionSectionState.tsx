@@ -19,7 +19,6 @@ import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAu
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { tryParseTruthAuctionAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -30,7 +29,6 @@ import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts
 import type { ForkAuctionSectionProps } from '../../types.js'
 import {
 	clampPercentage,
-	estimateBidRep,
 	getFinalizeTruthAuctionGuardMessage,
 	getMigrationStateBadge,
 	getMigrationWindowClosedGuardMessage,
@@ -125,12 +123,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const importedForkSettlementResolved = isPoolQuestionFinalized(activeReportingDetails)
 	const childSecurityPools = context.securityPoolAddress === undefined ? [] : context.securityPools.filter(pool => sameAddress(pool.parent, context.securityPoolAddress))
 	const enteredBidPreview = getTruthAuctionBidPreview(context.forkAuctionForm.submitBidPrice)
-	const enteredBidPrice = enteredBidPreview?.enteredPrice
-	const submittedBidPrice = enteredBidPreview?.submittedPrice
 	const enteredBidTick = enteredBidPreview?.tick
-	const enteredBidAmount = tryParseTruthAuctionAmountInput(context.forkAuctionForm.submitBidAmount)
-	const estimatedAttoRep = estimateBidRep(context.forkAuctionForm.submitBidAmount, submittedBidPrice)
-	const resultingBidBalanceAttoEth = enteredBidAmount === undefined || context.accountState.ethBalanceAttoEth === undefined || enteredBidAmount > context.accountState.ethBalanceAttoEth ? undefined : context.accountState.ethBalanceAttoEth - enteredBidAmount
 	const auctionWindow = getTruthAuctionWindow(effectiveTruthAuctionStartedAt)
 	const truthAuctionEndsAt = context.auctionTruthAuctionStatus?.auctionEndsAt ?? auctionWindow?.endsAt
 	const truthAuctionFallback = (() => {
@@ -485,12 +478,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		submitBidGuardMessage,
 		onSubmitBidForSelectedAuction,
 		isTruthAuctionDetailsLoading,
-		enteredBidAmount,
-		enteredBidPrice,
-		estimatedAttoRep,
-		resultingBidBalanceAttoEth,
 		submitBidPreviewTickSummary,
-		submittedBidPrice,
 		isMigrationRequired,
 		activeReportingDetails,
 		importedForkSettlementSides,

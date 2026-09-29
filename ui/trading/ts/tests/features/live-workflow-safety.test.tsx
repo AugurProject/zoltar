@@ -3,45 +3,35 @@ import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading.js'
 import { liveLiquidityServices } from '../../features/LiveLiquidityControls.js'
 import { liveSettlementServices } from '../../features/LiveSettlementControls.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import * as actualLive from '../../protocol/live.js'
 import type { LiveMarket } from '../../protocol/live.js'
+import type { TradingRoute } from '../../lib/routing.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { transactionActivity } from '@zoltar/ui-core-shared/transactions/transactionActivityStore.js'
 import { isMarketTransactionPending } from '../../features/live/marketTransactionActivity.js'
 import { invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { buttonByLabel, waitForDom } from '../support/dom.js'
+import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
-const pair = `0x${'33'.repeat(20)}` as Address
 const shareToken = `0x${'44'.repeat(20)}` as Address
 const secondPool = `0x${'23'.repeat(20)}` as Address
 const secondShareToken = `0x${'45'.repeat(20)}` as Address
 const childPool = `0x${'24'.repeat(20)}` as Address
 const childShareToken = `0x${'46'.repeat(20)}` as Address
-const factory = `0x${'55'.repeat(20)}` as Address
-const router = `0x${'66'.repeat(20)}` as Address
-const securityPoolFactory = `0x${'77'.repeat(20)}` as Address
 const transactionHash = `0x${'88'.repeat(32)}` as Hash
 const replacementTransactionHash = `0x${'89'.repeat(32)}` as Hash
 const secondMarketTransactionHash = `0x${'8a'.repeat(32)}` as Hash
 const forbiddenLiveCopy = ['Binary shares for', 'INVALID is insurance', 'Canonical SecurityPools', 'In a live transaction', 'illustrative', 'Market signal', 'Exact identity', 'Preview ready']
-
-function deferred<T>() {
-	let resolvePromise: (value: T) => void = () => undefined
-	let rejectPromise: (reason: Error) => void = () => undefined
-	const promise = new Promise<T>((resolve, reject) => {
-		resolvePromise = resolve
-		rejectPromise = reject
-	})
-	return { promise, resolve: resolvePromise, reject: rejectPromise }
-}
 
 async function flush() {
 	await act(async () => {
@@ -55,20 +45,6 @@ async function settleAsyncWorkflow() {
 		await Bun.sleep(10)
 	})
 	await flush()
-}
-
-async function waitForDom(predicate: () => boolean, description: string) {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		await settleAsyncWorkflow()
-		if (predicate()) return
-	}
-	throw new Error(`Timed out waiting for ${description}. Rendered text: ${document.body.textContent}`)
-}
-
-function button(label: string) {
-	const match = Array.from(document.querySelectorAll('button')).find(candidate => candidate.textContent?.trim() === label)
-	if (!(match instanceof HTMLButtonElement)) throw new Error(`Missing button: ${label}. Rendered text: ${document.body.textContent}`)
-	return match
 }
 
 function hasButton(label: string) {
@@ -89,21 +65,21 @@ describe('live workflow safety boundary', () => {
 
 	test('keeps the hash visible and every competing write locked after receipt polling and wallet context fail', async () => {
 		let connectedAccount = account
-		let positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		const secondMarketReceipt = deferred<{ status: 'success' | 'reverted' }>()
+		let positionReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
+		const secondMarketReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
 		let waitForPositionReceipt = false
 		let repricePositionReceipt = false
-		let positionBroadcast = deferred<undefined>()
-		let positionWalletWrite = deferred<undefined>()
+		let positionBroadcast = createDeferred<undefined>()
+		let positionWalletWrite = createDeferred<undefined>()
 		let deferPositionBroadcast = false
-		let deferredWalletChainRead: ReturnType<typeof deferred<number>> | undefined
-		let walletChainReadStarted: ReturnType<typeof deferred<undefined>> | undefined
+		let deferredWalletChainRead: ReturnType<typeof createDeferred<number>> | undefined
+		let walletChainReadStarted: ReturnType<typeof createDeferred<undefined>> | undefined
 		const rejectBalanceRefresh = false
 		let deferSecondPortfolioBalance = false
-		const secondPortfolioBalance = deferred<undefined>()
+		const secondPortfolioBalance = createDeferred<undefined>()
 		let deferChildDiscovery = false
-		const childDiscovery = deferred<undefined>()
-		let childBalanceStarted = deferred<undefined>()
+		const childDiscovery = createDeferred<undefined>()
+		let childBalanceStarted = createDeferred<undefined>()
 		const discoveredUniverseIds: Array<bigint | undefined> = []
 		const submittedEntries: Array<{ market: LiveMarket; minimumLongShares: bigint; result: { totalLongShares: bigint } }> = []
 		const balancedPools: Address[] = []
@@ -138,38 +114,19 @@ describe('live workflow safety boundary', () => {
 		let discoveredEndTime = 2n ** 255n
 		let discoveredLoadError: string | undefined
 		let rejectDiscovery = false
-		const market: LiveMarket = {
+		const market = etherScaleMarketFixture({
 			pool,
-			pair,
 			shareToken,
-			universeId: 1n,
-			questionId: 2n,
 			title: 'Rendered workflow market',
 			description: 'Receipt uncertainty fixture',
 			endTime: discoveredEndTime,
-			statoblastSecurityMultiplierBps: 20_000n,
 			initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n,
-			systemState: 0,
-			awaitingForkContinuation: false,
-			universeForkTime: 0n,
-			vaultCount: 1n,
 			shareTokenSupplyAttoShares: 100n * 10n ** 18n,
 			settlementCollateralAttoEth: 100n * 10n ** 18n,
-			currentRetentionRate: 10n ** 18n,
-			totalUnderwritingLimitAttoEth: 1n,
-			feeEligibleUnderwritingLimitAttoEth: 1n,
-			mintingCapacityCeilingAttoEth: 2n,
-			availableMintingCapacityAttoEth: 1n,
-			feeBps: 30n,
-			tradingStatus: 0,
-			questionOutcome: 3,
-			yesReserve: 50n * 10n ** 18n,
-			noReserve: 50n * 10n ** 18n,
-			lpTotalSupply: 50n * 10n ** 18n,
-		}
+		})
 		const secondMarket: LiveMarket = { ...market, pool: secondPool, shareToken: secondShareToken, questionId: 3n, title: 'Second rendered workflow market' }
 		const childMarket: LiveMarket = { ...market, pool: childPool, shareToken: childShareToken, universeId: 2n, questionId: 4n, title: 'Child-universe workflow market' }
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory, factory, router, feeBps: 30 }
+		const configuration = deploymentConfigurationFixture()
 		const discoverMarkets = async () => {
 			if (rejectDiscovery) throw new Error('registry RPC unavailable')
 			return {
@@ -194,9 +151,7 @@ describe('live workflow safety boundary', () => {
 			return { ...(await discoverMarkets()), universeIds: [1n, 2n], selectedUniverseId: 1n }
 		}
 		const controllerServices = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverLiveUniverseMarketPage: discoverSelectedUniverse,
 			discoverTradingMarketPage: discoverSelectedUniverse,
 			discoverUniverses: async (_client: unknown, _configuration: unknown, requestedUniverseId: bigint | undefined) => ({ ...(await discoverSelectedUniverse(undefined, undefined, requestedUniverseId)), markets: [] }),
@@ -244,16 +199,49 @@ describe('live workflow safety boundary', () => {
 		const liquidityServices = liveLiquidityServices
 		const LiveTrading = (props: Parameters<typeof ProductionLiveTrading>[0]) => <ProductionLiveTrading {...props} controllerServices={controllerServices} liquidityServices={liquidityServices} settlementServices={liveSettlementServices} />
 		const workflowLocks: boolean[] = []
+		type ViewOptions = { selectedUniverseId?: string; recordSummary?: boolean; walletConnectRequestNonce?: number }
+		const liveTradingView = (route: TradingRoute, { selectedUniverseId = '1', recordSummary = true, walletConnectRequestNonce }: ViewOptions = {}) => (
+			<LiveTrading
+				route={route}
+				configuration={configuration}
+				configurationError={undefined}
+				selectedUniverseId={selectedUniverseId}
+				onWorkflowLockChange={locked => workflowLocks.push(locked)}
+				{...(recordSummary ? { onWalletSummaryChange: recordWalletSummary } : {})}
+				{...(walletConnectRequestNonce === undefined ? {} : { walletConnectRequestNonce })}
+			/>
+		)
+		const startWalletChainRead = async (trigger: () => void) => {
+			const read = createDeferred<number>()
+			const started = createDeferred<undefined>()
+			deferredWalletChainRead = read
+			walletChainReadStarted = started
+			await act(async () => {
+				trigger()
+				await started.promise
+			})
+			return read
+		}
+		const releaseWalletChainRead = () => {
+			deferredWalletChainRead = undefined
+			walletChainReadStarted = undefined
+		}
+		const expectOnlyUniverseTwoRefreshedSince = (discoveriesBefore: number) => {
+			expect(discoveredUniverseIds.slice(discoveriesBefore)).not.toContain(1n)
+			expect(discoveredUniverseIds.at(-1)).toBe(2n)
+			expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
+		}
+		const show = async (route: TradingRoute, options?: ViewOptions) => await act(() => render(liveTradingView(route, options), rendered.container))
 		const marketRoute = `market/${pool}` as const
 		const liquidityRoute = `liquidity/${pool}` as const
 		// Manual refresh controls are gone; leaving and re-entering the addressed route runs an explicit refresh.
 		const rerouteForRefresh = async (route: 'market' | 'portfolio' | typeof marketRoute | typeof liquidityRoute, selectedUniverse = '1') => {
-			await act(() => render(<LiveTrading route='create-market' configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+			await show('create-market', { selectedUniverseId: selectedUniverse })
 			await flush()
-			await act(() => render(<LiveTrading route={route} configuration={configuration} configurationError={undefined} selectedUniverseId={selectedUniverse} onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+			await show(route, { selectedUniverseId: selectedUniverse })
 			await flush()
 		}
-		let rendered = await renderIntoDocument(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />)
+		let rendered = await renderIntoDocument(liveTradingView(marketRoute))
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'initial market details')
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
@@ -277,30 +265,24 @@ describe('live workflow safety boundary', () => {
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'recovered market details')
 		discoveredEndTime = now + 2n
 
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
-		await act(async () => {
-			button('Connect wallet').click()
-			await walletChainReadStarted?.promise
-		})
+		const unmountedConnectionChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())
 		const summariesBeforeUnmountedConnectionResolution = walletSummaries.length
 		await rendered.cleanup()
 		cleanupRendered = undefined
-		deferredWalletChainRead.resolve(configuration.chainId)
+		unmountedConnectionChainRead.resolve(configuration.chainId)
 		await settleAsyncWorkflow()
 		expect(walletSummaries).toHaveLength(summariesBeforeUnmountedConnectionResolution)
 		expect(walletListeners.size).toBe(0)
-		deferredWalletChainRead = undefined
-		walletChainReadStarted = undefined
-		const poolRoute = `security-pool/${pool}`
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
-		rendered = await renderIntoDocument(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={0} />)
+		releaseWalletChainRead()
+		const poolRoute = `security-pool/${pool}` as const
+		deferredWalletChainRead = createDeferred<number>()
+		walletChainReadStarted = createDeferred<undefined>()
+		rendered = await renderIntoDocument(liveTradingView(poolRoute, { recordSummary: false, walletConnectRequestNonce: 0 }))
 		cleanupRendered = rendered.cleanup
 		await flush()
-		await act(() => render(<LiveTrading route={poolRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await show(poolRoute, { recordSummary: false, walletConnectRequestNonce: 1 })
 		await walletChainReadStarted.promise
-		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await show('market', { recordSummary: false, walletConnectRequestNonce: 1 })
 		// The market opened earlier in this test leads the two discovered rows as a favorite, listed once.
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'browse rows')
 		expect([...document.querySelectorAll('.market-list-heading')].map(heading => heading.textContent)).toEqual(['Favorites', 'Other markets'])
@@ -309,34 +291,25 @@ describe('live workflow safety boundary', () => {
 		deferredWalletChainRead.reject(new Error('Wallet request rejected after navigation'))
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('Wallet request rejected after navigation')
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} walletConnectRequestNonce={1} />, rendered.container))
+		await show('portfolio', { recordSummary: false, walletConnectRequestNonce: 1 })
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('Wallet request rejected after navigation')
-		deferredWalletChainRead = undefined
-		walletChainReadStarted = undefined
-		await act(() => render(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		releaseWalletChainRead()
+		await show('market')
 		await settleAsyncWorkflow()
 		await flush()
 		// The lookup route is list-first: the address form sits above the same rows the browse alias shows.
 		expect(document.querySelector('.open-pool-form')).not.toBeNull()
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
-		await act(async () => {
-			button('Connect wallet').click()
-			await walletChainReadStarted?.promise
-		})
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
-		deferredWalletChainRead.resolve(configuration.chainId)
+		const midConnectChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())
+		await show('portfolio', { selectedUniverseId: '2' })
+		midConnectChainRead.resolve(configuration.chainId)
 		await settleAsyncWorkflow()
-		expect(discoveredUniverseIds.slice(discoveriesBeforeMidConnectUniverseChange)).not.toContain(1n)
-		expect(discoveredUniverseIds.at(-1)).toBe(2n)
-		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
-		deferredWalletChainRead = undefined
-		walletChainReadStarted = undefined
+		expectOnlyUniverseTwoRefreshedSince(discoveriesBeforeMidConnectUniverseChange)
+		releaseWalletChainRead()
 		deferSecondPortfolioBalance = true
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show('portfolio')
 		await waitForDom(() => document.querySelectorAll('[data-portfolio-pool]').length === 2, 'both portfolio pools')
 		expect(document.querySelectorAll('[data-portfolio-pool]')).toHaveLength(2)
 		expect(document.body.textContent).toContain(secondPool)
@@ -348,9 +321,9 @@ describe('live workflow safety boundary', () => {
 		await Bun.sleep(10)
 		await flush()
 		expect(secondPortfolioCard?.textContent).toContain('4 YES')
-		childBalanceStarted = deferred<undefined>()
+		childBalanceStarted = createDeferred<undefined>()
 		deferChildDiscovery = true
-		render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container)
+		render(liveTradingView('portfolio', { selectedUniverseId: '2' }), rendered.container)
 		expect(document.body.textContent).not.toContain(pool)
 		expect(document.body.textContent).not.toContain(secondPool)
 		await flush()
@@ -364,35 +337,23 @@ describe('live workflow safety boundary', () => {
 		const universeTwoDiscoveryCount = discoveredUniverseIds.length
 		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
 		await settleAsyncWorkflow()
-		expect(discoveredUniverseIds.slice(universeTwoDiscoveryCount)).not.toContain(1n)
-		expect(discoveredUniverseIds.at(-1)).toBe(2n)
-		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
+		expectOnlyUniverseTwoRefreshedSince(universeTwoDiscoveryCount)
 		const universeTwoChainDiscoveryCount = discoveredUniverseIds.length
 		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
 		await settleAsyncWorkflow()
-		expect(discoveredUniverseIds.slice(universeTwoChainDiscoveryCount)).not.toContain(1n)
-		expect(discoveredUniverseIds.at(-1)).toBe(2n)
-		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
+		expectOnlyUniverseTwoRefreshedSince(universeTwoChainDiscoveryCount)
 		deferChildDiscovery = false
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show('portfolio')
 		await flush()
-		deferredWalletChainRead = deferred<number>()
-		walletChainReadStarted = deferred<undefined>()
 		connectedAccount = `0x${'9c'.repeat(20)}` as Address
 		const discoveriesBeforeMidEventUniverseChange = discoveredUniverseIds.length
-		await act(async () => {
-			walletListeners.get('accountsChanged')?.([connectedAccount])
-			await walletChainReadStarted?.promise
-		})
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='2' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
-		deferredWalletChainRead.resolve(configuration.chainId)
+		const midEventChainRead = await startWalletChainRead(() => walletListeners.get('accountsChanged')?.([connectedAccount]))
+		await show('portfolio', { selectedUniverseId: '2' })
+		midEventChainRead.resolve(configuration.chainId)
 		await settleAsyncWorkflow()
-		expect(discoveredUniverseIds.slice(discoveriesBeforeMidEventUniverseChange)).not.toContain(1n)
-		expect(discoveredUniverseIds.at(-1)).toBe(2n)
-		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, universeId: '2', status: 'ready', repAttoRep: 6n * 10n ** 18n })
-		deferredWalletChainRead = undefined
-		walletChainReadStarted = undefined
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		expectOnlyUniverseTwoRefreshedSince(discoveriesBeforeMidEventUniverseChange)
+		releaseWalletChainRead()
+		await show('portfolio')
 		await flush()
 		rejectDiscovery = true
 		await rerouteForRefresh('portfolio')
@@ -402,14 +363,14 @@ describe('live workflow safety boundary', () => {
 		expect(document.body.textContent).not.toContain('Retry balances')
 		rejectDiscovery = false
 		await rerouteForRefresh('portfolio')
-		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show(marketRoute)
 		await flush()
 		connectedAccount = `0x${'9a'.repeat(20)}` as Address
 		await act(async () => walletListeners.get('accountsChanged')?.([connectedAccount]))
 		await settleAsyncWorkflow()
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		expect(document.body.textContent).not.toContain('Reconnect before simulating or submitting')
-		await act(() => render(<LiveTrading route={`security-pool/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show(`security-pool/${pool}`)
 		await settleAsyncWorkflow()
 		const summariesBeforeChainRefresh = walletSummaries.length
 		await act(async () => walletListeners.get('chainChanged')?.('0x7a69'))
@@ -417,7 +378,7 @@ describe('live workflow safety boundary', () => {
 		expect(walletSummaries.length).toBeGreaterThan(summariesBeforeChainRefresh)
 		expect(walletSummaries.at(-1)).toMatchObject({ account: connectedAccount, ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, status: 'ready' })
 		expect(document.body.textContent).not.toContain('Refreshing wallet context')
-		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show(marketRoute)
 		await settleAsyncWorkflow()
 		await waitForDom(() => document.body.textContent?.includes('1 YES') === true, 'wallet balances for the addressed market')
 
@@ -434,15 +395,15 @@ describe('live workflow safety boundary', () => {
 		}
 		await typeAmount('0.01')
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'entry estimate')
-		expect(button('Buy YES').classList.contains('tx-action-button')).toBeTrue()
+		expect(buttonByLabel('Buy YES').classList.contains('tx-action-button')).toBeTrue()
 		expect(hasButton('Preview trade')).toBeFalse()
 		deferPositionBroadcast = true
 		waitForPositionReceipt = true
 		repricePositionReceipt = true
-		positionReceipt = deferred<{ status: 'success' | 'reverted' }>()
-		positionBroadcast = deferred<undefined>()
-		positionWalletWrite = deferred<undefined>()
-		await act(async () => button('Buy YES').click())
+		positionReceipt = createDeferred<{ status: 'success' | 'reverted' }>()
+		positionBroadcast = createDeferred<undefined>()
+		positionWalletWrite = createDeferred<undefined>()
+		await act(async () => buttonByLabel('Buy YES').click())
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy YES: checking the latest price before your wallet opens')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
@@ -462,7 +423,7 @@ describe('live workflow safety boundary', () => {
 		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: transactionHash, scope: [`market:${pool.toLowerCase()}`], status: 'pending' })
 		expect(isMarketTransactionPending(pool)).toBeTrue()
 		expect(isMarketTransactionPending(secondPool)).toBeFalse()
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show('portfolio')
 		await settleAsyncWorkflow()
 		expect(document.querySelectorAll('[data-portfolio-pool]').length).toBeGreaterThan(0)
 		expect(transactionActivity.value.entries[0]?.status).toBe('pending')
@@ -472,8 +433,7 @@ describe('live workflow safety boundary', () => {
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforePortfolioRefresh)
 		// Another market's ticket shows none of this trade's status or hash and stays usable: one trade runs per market.
-		const renderSecondMarket = async () =>
-			await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		const renderSecondMarket = async () => await show(`market/${secondPool}`)
 		await renderSecondMarket()
 		await waitForDom(() => document.body.textContent?.includes('4 YES') === true, 'second market balances during a pending trade')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
@@ -489,8 +449,8 @@ describe('live workflow safety boundary', () => {
 			secondAmountInput.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 		await waitForDom(() => document.querySelector('.transaction-review-primary') !== null, 'second market entry estimate')
-		expect(button('Buy YES').disabled).toBeFalse()
-		await act(async () => button('Buy YES').click())
+		expect(buttonByLabel('Buy YES').disabled).toBeFalse()
+		await act(async () => buttonByLabel('Buy YES').click())
 		await waitForDom(() => document.body.textContent?.includes('Buy YES sent. Waiting for confirmation') === true, 'second market pending trade')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(secondMarketTransactionHash)
 		expect(document.querySelector('.transaction-hash')?.textContent).not.toContain(transactionHash)
@@ -510,13 +470,13 @@ describe('live workflow safety boundary', () => {
 		await act(async () => invalidateAppData())
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBe(discoveriesOnSecondPendingMarket)
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show('portfolio')
 		await settleAsyncWorkflow()
 		const discoveriesBeforeSecondPortfolioRefresh = discoveredUniverseIds.length
 		await act(async () => invalidateAppData())
 		await settleAsyncWorkflow()
 		expect(discoveredUniverseIds.length).toBeGreaterThan(discoveriesBeforeSecondPortfolioRefresh)
-		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show(marketRoute)
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).toContain('Buy YES sent. Waiting for confirmation')
 		expect(document.querySelector('.transaction-hash')?.textContent).toContain(transactionHash)
@@ -555,7 +515,7 @@ describe('live workflow safety boundary', () => {
 		expect(transactionActivity.value.entries.find(entry => entry.hash === replacementTransactionHash)?.status).toBe('confirmed')
 		expect(isMarketTransactionPending(secondPool)).toBeFalse()
 		expect(document.querySelector<HTMLInputElement>('[role="tabpanel"] input[name="amount"]')?.disabled).toBeFalse()
-		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show(marketRoute)
 		await settleAsyncWorkflow()
 		expect(document.body.textContent).not.toContain('The transaction reverted on-chain')
 		deferPositionBroadcast = false
@@ -566,27 +526,27 @@ describe('live workflow safety boundary', () => {
 		await typeAmount('0.02')
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 
-		await act(async () => button('Sell').click())
+		await act(async () => buttonByLabel('Sell').click())
 		expect(document.querySelector('[role="tabpanel"] .tx-action-button')).not.toBeNull()
 		expect(document.querySelector('[role="tabpanel"] .pool-mechanics')).toBeNull()
 		expect(document.body.textContent).not.toContain('Factory discovery')
 		expect(document.querySelector('.market-list')).toBeNull()
 		expect(document.querySelector('.market-stack')).not.toBeNull()
-		await act(() => render(<LiveTrading route={`market/${secondPool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await renderSecondMarket()
 		await settleAsyncWorkflow()
 		expect(document.querySelector('.transaction-hash')).toBeNull()
 		expect(document.body.textContent).toContain('Second rendered workflow market')
-		await act(() => render(<LiveTrading route={marketRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show(marketRoute)
 		await settleAsyncWorkflow()
-		await act(() => render(<LiveTrading route={liquidityRoute} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={locked => workflowLocks.push(locked)} />, rendered.container))
+		await show(liquidityRoute, { recordSummary: false })
 		await flush()
 		await waitForDom(() => hasButton('Remove'), 'liquidity controls')
-		await act(async () => button('Remove').click())
+		await act(async () => buttonByLabel('Remove').click())
 		expect(hasButton('Approve exact LP amount')).toBeFalse()
 		expect(hasButton('Remove liquidity')).toBeTrue()
 		expect(hasButton('Simulate liquidity transaction')).toBeFalse()
 		// A universe without pools shows the route-level empty state once; the portfolio list does not add a second one.
-		await act(() => render(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='3' onWorkflowLockChange={locked => workflowLocks.push(locked)} onWalletSummaryChange={recordWalletSummary} />, rendered.container))
+		await show('portfolio', { selectedUniverseId: '3' })
 		await settleAsyncWorkflow()
 		await waitForDom(() => document.body.textContent?.includes('No security pools are deployed in the selected universe.') === true, 'empty universe portfolio')
 		expect(document.querySelectorAll('.empty-state')).toHaveLength(1)

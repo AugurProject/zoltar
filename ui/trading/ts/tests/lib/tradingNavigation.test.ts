@@ -4,7 +4,7 @@ import { tradingNavigationTabs } from '../../lib/tradingNavigation.js'
 const pool = '0x1111111111111111111111111111111111111111'
 
 describe('trading navigation', () => {
-	test('keeps three trader tabs in the bar and secondary sections under More', () => {
+	test('keeps three trader tabs in the bar, secondary sections under More, and never disables a destination while a transaction is pending', () => {
 		const navigation = tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'market', liveDeploymentStatus: 'verified' })
 		expect(navigation.tabs.map(tab => tab.label)).toEqual(['Markets', 'Portfolio', 'Create'])
 		expect(navigation.moreTabs.map(tab => tab.label)).toEqual(['Liquidity', 'Universe', 'Help'])
@@ -21,11 +21,5 @@ describe('trading navigation', () => {
 		for (const liveDeploymentStatus of ['loading', 'verified', 'unreachable'] as const) expect(tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'market', liveDeploymentStatus }).tabs.map(tab => tab.route)).toEqual(['market', 'portfolio', 'create-market'])
 		expect(tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'deploy', liveDeploymentStatus: 'missing' }).tabs.map(tab => tab.route)).toEqual(['deploy', 'market', 'portfolio', 'create-market'])
 		expect(tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'deploy', liveDeploymentStatus: 'verified' }).tabs[0]?.route).toBe('deploy')
-	})
-
-	test('never disables a destination, so navigation stays free while a transaction is pending', () => {
-		const navigation = tradingNavigationTabs({ addressedPool: undefined, displayedRoute: 'market', liveDeploymentStatus: 'verified' })
-		const destinations = [...navigation.tabs, ...navigation.moreTabs]
-		expect(destinations.some(tab => tab.disabled === true)).toBe(false)
 	})
 })

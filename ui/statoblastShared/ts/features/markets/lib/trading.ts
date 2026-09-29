@@ -137,13 +137,6 @@ export function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bi
 	return divideRoundedUp(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
 }
 
-export function convertMintSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
-	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
-	if (shareTokenSupplyAttoShares === 0n) return settlementCollateralAttoEth === 0n ? amountAttoEth : undefined
-	if (settlementCollateralAttoEth === 0n) return undefined
-	return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth
-}
-
 export function getShareSettlementBalances(shareBalances: TradingShareBalances | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
 	if (shareBalances === undefined) return undefined
 	return {
@@ -332,8 +325,8 @@ export function getTradingMigrateSharesGuardMessage({
 }
 
 export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isOnActiveAppChain }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isOnActiveAppChain: boolean }) {
-	if (!hasSelectedPool) return 'Select a pool before redeeming shares.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before redeeming shares.' })
+	if (!hasSelectedPool) return tradingCopy.shareRedemptionPoolRequiredReason
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: tradingCopy.shareRedemptionWalletRequiredReason })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	return undefined
 }

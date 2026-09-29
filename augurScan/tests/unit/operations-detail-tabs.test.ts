@@ -4,15 +4,12 @@ import type { JsonRecord } from '../../browser/api-validation.ts'
 import { Window } from 'happy-dom'
 import { renderOperationsDetail } from '../../browser/operations-detail.ts'
 import { createOperationsComponents } from '../../browser/operations-components.ts'
+import { overrideGlobals } from '../support/global-overrides.ts'
 
 function renderDetail(kind: OperationsDetailRoute['kind'], tab: string, data: JsonRecord, check: (load: ReturnType<typeof mock>) => void) {
 	const browser = new Window({ url: `http://localhost/${kind}/0x01?tab=${tab}` })
 	const load = mock(async () => true)
-	const originals = new Map<string, PropertyDescriptor | undefined>()
-	for (const [key, value] of Object.entries({ window: browser, document: browser.document, location: browser.location, HTMLAnchorElement: browser.HTMLAnchorElement })) {
-		originals.set(key, Object.getOwnPropertyDescriptor(globalThis, key))
-		Object.defineProperty(globalThis, key, { configurable: true, value })
-	}
+	const restoreGlobals = overrideGlobals({ window: browser, document: browser.document, location: browser.location, HTMLAnchorElement: browser.HTMLAnchorElement })
 	try {
 		document.body.innerHTML = '<main id="operations-content"></main><p id="operations-status"></p>'
 		const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
@@ -58,10 +55,7 @@ function renderDetail(kind: OperationsDetailRoute['kind'], tab: string, data: Js
 		)
 		check(load)
 	} finally {
-		for (const [key, descriptor] of originals) {
-			if (descriptor === undefined) Reflect.deleteProperty(globalThis, key)
-			else Object.defineProperty(globalThis, key, descriptor)
-		}
+		restoreGlobals()
 		void browser.happyDOM.close()
 	}
 }

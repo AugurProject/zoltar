@@ -1,10 +1,9 @@
 /// <reference types='bun-types' />
 
 import { createPublicClient, getAddress, http, zeroAddress, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -25,12 +24,6 @@ function announceNewBlock() {
 	const latest = appBlockWatcher.getLatestBlockNumber()
 	if (latest === undefined) appBlockWatcher.reportBlock(1n)
 	appBlockWatcher.reportBlock((latest ?? 1n) + 1n)
-}
-
-function requireHookState(state: UseZoltarUniverseState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
 }
 
 function createZoltarDeploymentStatus(): DeploymentStatus {
@@ -91,22 +84,7 @@ function createZoltarUniverseDependencies(overrides: Partial<UseZoltarUniverseDe
 }
 
 describe('useZoltarUniverse', () => {
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-	let resetEnvironment: (() => void) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: NEXT_WALLET_ADDRESS }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			resetEnvironment?.()
-			resetEnvironment = undefined
-			resetActiveEnvironmentForTesting()
-			mock.restore()
-		},
-	})
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: NEXT_WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test('does not request a child-universe transaction when the active wallet account changed', async () => {
 		const onTransactionRequested = mock(() => undefined)
@@ -129,7 +107,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).createChildUniverse(0n)
@@ -184,7 +162,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			void requireHookState(hookState).loadZoltarQuestionPage(0, 10)
@@ -243,7 +221,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness activeUniverseId={1n} />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await waitFor(() => expect(loadZoltarUniverseSummary).toHaveBeenCalledTimes(1))
 		await act(async () => await requireHookState(hookState).loadZoltarQuestionPage(0, 10))
 
@@ -284,7 +262,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestion('0x00099')
@@ -330,7 +308,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let olderRequest: Promise<void> | undefined
 		await act(async () => {
@@ -377,7 +355,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestion('0x2')
@@ -430,7 +408,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let exactRequest: Promise<void> | undefined
 		await act(async () => {
@@ -476,7 +454,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let exactRequest: Promise<void> | undefined
 		await act(async () => {
@@ -525,7 +503,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await waitFor(() => {
 			expect(requireHookState(hookState).zoltarUniverseError).toBe('Failed to load Zoltar universe. Reason: universe RPC failed')
@@ -557,7 +535,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => undefined)
 		expect(loadZoltarQuestionCount).not.toHaveBeenCalled()
@@ -590,7 +568,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, { deployed: false }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
 		})
@@ -628,7 +606,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, { deployed: true }))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(() => {
 			render(h(Harness, { deployed: false }), renderedComponent.container)
@@ -683,7 +661,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		void requireHookState(hookState).loadZoltarQuestionPage(0, 10)
 		await waitFor(() => expect(countCall).toBe(1))
@@ -731,7 +709,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
 		})
@@ -803,7 +781,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
 		})
@@ -863,7 +841,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
 		})
@@ -910,7 +888,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
@@ -950,7 +928,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let failure: unknown
 		await act(async () => {
@@ -998,7 +976,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
@@ -1055,7 +1033,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)
@@ -1112,7 +1090,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		let supersededRequest: Promise<void> | undefined
 		await act(async () => {
@@ -1170,7 +1148,7 @@ describe('useZoltarUniverse', () => {
 			return <div />
 		}
 		const renderedComponent = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			await requireHookState(hookState).loadZoltarQuestionPage(0, 10)

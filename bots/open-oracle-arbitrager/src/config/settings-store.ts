@@ -7,18 +7,16 @@ import { validateConnectivitySettings, validateIndependentReadRpcUrls, type Conn
 import { decimalWeth, parseDecimalWeth, type MutableStrategy, type StrategySettings } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { parseSettlementSettings, settlementJournalPath, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
-import { renameAndSyncDirectory } from '@zoltar/bot-shared/config/durable-replacement'
-import { persistentPathIdentitiesMatch, persistentPathIdentity } from '@zoltar/bot-shared/config/persistent-path'
-import { assertCompatibleProfileProcessMode, chainSpecificPath } from '@zoltar/bot-shared/config/profiles'
+import { contentRevision, parseJsonDocument, readFileIfPresent, writeRevisionedFile, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { assertProfileCandidates, chainSpecificPath, networkProfilePath, storedNetworkProfileCandidates, switchNetworkProfile, type ProfileCandidate } from '@zoltar/bot-shared/config/profiles'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { integer as validateInteger, record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
-import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 
 const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
 export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
@@ -52,29 +50,6 @@ export type PersistedOperatorSettings = {
 	strategy: MutableStrategy
 	submission: SubmissionSettings
 	tokenAddresses: readonly Address[]
-}
-
-type OperatorSettingsFileHandle = {
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
-	sync: () => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
-}
-
-export type OperatorSettingsFilesystem = {
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<OperatorSettingsFileHandle>
-	readFile: (path: string, encoding: 'utf8') => Promise<string>
-	rename: (oldPath: string, newPath: string) => Promise<unknown>
-	rm: (path: string, options: { force: true }) => Promise<unknown>
-}
-
-const operatorSettingsFilesystem: OperatorSettingsFilesystem = {
-	mkdir,
-	open,
-	readFile,
-	rename,
-	rm,
 }
 
 function defaultCentralizedMarkets(assetAddress: `0x${string}`, assetChainId: number) {
@@ -360,123 +335,75 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 	}
 }
 
-export function operatorProfilePath(path: string, network: NetworkName) {
-	return `${path}.${network}.profile`
-}
+const operatorNetwork = (settings: PersistedOperatorSettings) => settings.network
 
-type OperatorProfileCandidate = { expectedNetwork: NetworkName; settings: PersistedOperatorSettings }
-
-async function persistentPathIdentities(paths: readonly string[]) {
-	return await Promise.all(paths.map(persistentPathIdentity))
-}
-
-async function durableJournalIdentities(settings: PersistedOperatorSettings) {
-	return await persistentPathIdentities(durableJournalPaths(settings.runtime))
-}
-
-function identitiesContainMatch(identities: readonly Awaited<ReturnType<typeof persistentPathIdentity>>[], target: Awaited<ReturnType<typeof persistentPathIdentity>>) {
-	return identities.some(identity => persistentPathIdentitiesMatch(identity, target))
-}
-
-async function assertOperatorProfileCandidates(path: string, candidates: readonly OperatorProfileCandidate[]) {
-	const reservedPaths = await persistentPathIdentities([path, operatorProfilePath(path, 'mainnet'), operatorProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path, 'mainnet'), executorDeploymentIntentPath(path, 'sepolia')])
-	const candidatePaths: { candidate: OperatorProfileCandidate; durablePaths: Awaited<ReturnType<typeof persistentPathIdentity>>[] }[] = []
-	for (const candidate of candidates) {
-		if (candidate.settings.network !== candidate.expectedNetwork) throw new Error(`The ${candidate.expectedNetwork} profile contains ${candidate.settings.network} settings`)
-		const durablePaths = await durableJournalIdentities(candidate.settings)
-		if (durablePaths.some((durablePath, index) => identitiesContainMatch(durablePaths.slice(index + 1), durablePath))) throw new Error(`The ${candidate.expectedNetwork} profile must use distinct durable journal paths`)
-		if (durablePaths.some(durablePath => identitiesContainMatch(reservedPaths, durablePath))) throw new Error('Durable journal paths must not reuse configuration, profile, or executor deployment intent files')
-		candidatePaths.push({ candidate, durablePaths })
-	}
-	for (let index = 0; index < candidatePaths.length; index += 1) {
-		const current = candidatePaths[index]
-		if (current === undefined) continue
-		for (const target of candidatePaths.slice(index + 1)) {
-			if (target.candidate.expectedNetwork !== current.candidate.expectedNetwork && target.durablePaths.some(targetPath => identitiesContainMatch(current.durablePaths, targetPath))) throw new Error('Mainnet and Sepolia profiles must use distinct durable journal paths')
-		}
-	}
+async function assertOperatorProfileCandidates(path: string, candidates: readonly ProfileCandidate<PersistedOperatorSettings>[]) {
+	await assertProfileCandidates({
+		assertIdentity: candidate => {
+			if (candidate.settings.network !== candidate.expected) throw new Error(`The ${candidate.expected} profile contains ${candidate.settings.network} settings`)
+		},
+		candidates,
+		durablePaths: candidate => durableJournalPaths(candidate.settings.runtime),
+		errors: {
+			crossChainPathReuse: 'Mainnet and Sepolia profiles must use distinct durable journal paths',
+			duplicatePathsWithinProfile: candidate => `The ${candidate.expected} profile must use distinct durable journal paths`,
+			reservedPathReuse: 'Durable journal paths must not reuse configuration, profile, or executor deployment intent files',
+		},
+		reservedPaths: [path, networkProfilePath(path, 'mainnet'), networkProfilePath(path, 'sepolia'), executorDeploymentIntentPath(path, 'mainnet'), executorDeploymentIntentPath(path, 'sepolia')],
+	})
 }
 
 export async function assertOperatorProfileIsolation(path: string, active: PersistedOperatorSettings) {
-	const mainnet = await loadOperatorSettings(operatorProfilePath(path, 'mainnet'))
-	const sepolia = await loadOperatorSettings(operatorProfilePath(path, 'sepolia'))
-	const candidates: OperatorProfileCandidate[] = [{ expectedNetwork: active.network, settings: active }]
-	if (mainnet !== undefined) candidates.push({ expectedNetwork: 'mainnet', settings: mainnet })
-	if (sepolia !== undefined) candidates.push({ expectedNetwork: 'sepolia', settings: sepolia })
+	const { candidates } = await storedNetworkProfileCandidates(active, operatorNetwork, network => loadOperatorSettings(networkProfilePath(path, network)))
 	await assertOperatorProfileCandidates(path, candidates)
 }
 
 export async function switchOperatorNetworkProfile(path: string, network: NetworkName, examplePath: string, preflight?: (target: PersistedOperatorSettings) => Promise<void>) {
 	const current = await loadOperatorSettingsWithRevision(path)
 	if (current === undefined) throw new Error('Operator configuration file is missing')
-	const mainnet = await loadOperatorSettings(operatorProfilePath(path, 'mainnet'))
-	const sepolia = await loadOperatorSettings(operatorProfilePath(path, 'sepolia'))
-	const storedCandidates: OperatorProfileCandidate[] = [{ expectedNetwork: current.settings.network, settings: current.settings }]
-	if (mainnet !== undefined) storedCandidates.push({ expectedNetwork: 'mainnet', settings: mainnet })
-	if (sepolia !== undefined) storedCandidates.push({ expectedNetwork: 'sepolia', settings: sepolia })
-	await assertOperatorProfileCandidates(path, storedCandidates)
-	if (current.settings.network === network) return current
-	let target = network === 'mainnet' ? mainnet : sepolia
-	if (target === undefined) {
-		const template = parseOperatorSettings(JSON.parse(await readFile(examplePath, 'utf8')))
-		const { chainId } = networkDeployment(network)
-		target = {
-			...template,
-			deployment: validateDeploymentSettings(template.deployment, network),
-			centralizedMarkets: { ...template.centralizedMarkets, assetAddress: networkDeployment(network).rep, assetChainId: chainId },
-			network,
-			networkConfigured: false,
-			paused: true,
-			privateKey: undefined,
-			runtime: {
-				...template.runtime,
-				execute: false,
-				historyFile: chainSpecificPath(current.settings.runtime.historyFile, network),
-				once: false,
-				positionFile: chainSpecificPath(current.settings.runtime.positionFile, network),
-				priceHistoryFile: chainSpecificPath(current.settings.runtime.priceHistoryFile, network),
-				ui: current.settings.runtime.ui,
-				uiHost: current.settings.runtime.uiHost,
-				uiPort: current.settings.runtime.uiPort,
-			},
-		}
-	}
-	target = { ...target, paused: true }
-	await assertOperatorProfileCandidates(path, [
-		{ expectedNetwork: current.settings.network, settings: current.settings },
-		{ expectedNetwork: network, settings: target },
-	])
-	assertCompatibleProfileProcessMode(current.settings, target)
-	await preflight?.(target)
-	await saveOperatorSettings(operatorProfilePath(path, current.settings.network), { ...current.settings, paused: true })
-	await saveOperatorSettings(operatorProfilePath(path, network), target)
-	const revision = await saveOperatorSettings(path, target, undefined, current.revision)
-	return { revision, settings: target }
+	return await switchNetworkProfile({
+		assertCandidates: candidates => assertOperatorProfileCandidates(path, candidates),
+		createProfile: async network => {
+			const template = parseOperatorSettings(JSON.parse(await readFile(examplePath, 'utf8')))
+			const { chainId } = networkDeployment(network)
+			return {
+				...template,
+				deployment: validateDeploymentSettings(template.deployment, network),
+				centralizedMarkets: { ...template.centralizedMarkets, assetAddress: networkDeployment(network).rep, assetChainId: chainId },
+				network,
+				networkConfigured: false,
+				paused: true,
+				privateKey: undefined,
+				runtime: {
+					...template.runtime,
+					execute: false,
+					historyFile: chainSpecificPath(current.settings.runtime.historyFile, network),
+					once: false,
+					positionFile: chainSpecificPath(current.settings.runtime.positionFile, network),
+					priceHistoryFile: chainSpecificPath(current.settings.runtime.priceHistoryFile, network),
+					ui: current.settings.runtime.ui,
+					uiHost: current.settings.runtime.uiHost,
+					uiPort: current.settings.runtime.uiPort,
+				},
+			}
+		},
+		current,
+		loadProfile: network => loadOperatorSettings(networkProfilePath(path, network)),
+		network,
+		networkOf: operatorNetwork,
+		preflight,
+		saveActive: (settings, expectedRevision) => saveOperatorSettings(path, settings, undefined, expectedRevision),
+		saveProfile: (network, settings) => saveOperatorSettings(networkProfilePath(path, network), settings),
+	})
 }
 
-function revision(contents: string) {
-	return `sha256:${createHash('sha256').update(contents).digest('hex')}`
+export async function loadOperatorSettingsWithRevision(path: string, filesystem?: RevisionedFileFilesystem): Promise<{ revision: string; settings: PersistedOperatorSettings } | undefined> {
+	const contents = await readFileIfPresent(path, filesystem)
+	if (contents === undefined) return undefined
+	return { revision: contentRevision(contents), settings: parseOperatorSettings(parseJsonDocument(contents, 'Operator configuration')) }
 }
 
-export async function loadOperatorSettingsWithRevision(path: string, filesystem: OperatorSettingsFilesystem = operatorSettingsFilesystem): Promise<{ revision: string; settings: PersistedOperatorSettings } | undefined> {
-	let contents: string
-	try {
-		contents = await filesystem.readFile(path, 'utf8')
-	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return undefined
-		throw error
-	}
-	let value: unknown
-	try {
-		value = JSON.parse(contents)
-	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`Operator configuration is not valid JSON: ${error.message}`)
-		throw error
-	}
-	return { revision: revision(contents), settings: parseOperatorSettings(value) }
-}
-
-export async function loadOperatorSettings(path: string, filesystem: OperatorSettingsFilesystem = operatorSettingsFilesystem): Promise<PersistedOperatorSettings | undefined> {
+export async function loadOperatorSettings(path: string, filesystem?: RevisionedFileFilesystem): Promise<PersistedOperatorSettings | undefined> {
 	return (await loadOperatorSettingsWithRevision(path, filesystem))?.settings
 }
 
@@ -486,35 +413,7 @@ export function configurationRevisionConflict() {
 	return error
 }
 
-export async function saveOperatorSettings(path: string, settings: PersistedOperatorSettings, filesystem: OperatorSettingsFilesystem = operatorSettingsFilesystem, expectedRevision?: string) {
-	const stored = serializeOperatorSettings(settings)
-	const contents = `${JSON.stringify(stored, undefined, 2)}\n`
-	const savedRevision = revision(contents)
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
-	try {
-		const fileHandle = await filesystem.open(temporaryPath, 'wx', 0o600)
-		try {
-			await fileHandle.writeFile(contents, { encoding: 'utf8' })
-			await fileHandle.chmod(0o600)
-			await fileHandle.sync()
-		} finally {
-			await fileHandle.close()
-		}
-		if (expectedRevision !== undefined) {
-			let currentContents: string
-			try {
-				currentContents = await filesystem.readFile(path, 'utf8')
-			} catch (error) {
-				if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') throw configurationRevisionConflict()
-				throw error
-			}
-			if (revision(currentContents) !== expectedRevision) throw configurationRevisionConflict()
-		}
-		await renameAndSyncDirectory(temporaryPath, path, filesystem)
-	} catch (error) {
-		await filesystem.rm(temporaryPath, { force: true })
-		throw error
-	}
-	return savedRevision
+export async function saveOperatorSettings(path: string, settings: PersistedOperatorSettings, filesystem?: RevisionedFileFilesystem, expectedRevision?: string) {
+	const contents = `${JSON.stringify(serializeOperatorSettings(settings), undefined, 2)}\n`
+	return await writeRevisionedFile(path, contents, { conflict: configurationRevisionConflict, expectedRevision, filesystem })
 }

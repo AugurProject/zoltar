@@ -948,6 +948,8 @@ button.tx-action-wallet-fix {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;
+	min-height: var(--touch-target-min);
+	padding: 0.45rem 0.8rem;
 }
 
 .app-settings-icon {
@@ -1030,9 +1032,20 @@ button.tx-action-wallet-fix {
 }
 
 .account-menu-popover {
-	width: 20rem;
-	max-width: calc(100vw - 1.5rem);
+	position: absolute;
+	z-index: var(--z-dropdown);
+	top: calc(100% + 0.5rem);
+	right: 0;
+	display: grid;
 	gap: var(--space-3);
+	width: 20rem;
+	min-width: 15rem;
+	max-width: calc(100vw - 1.5rem);
+	padding: 0.75rem;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-overlay);
+	background: var(--bg);
+	box-shadow: var(--shadow-overlay);
 }
 
 .account-menu-network {

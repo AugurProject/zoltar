@@ -1412,9 +1412,12 @@ describe('Escalation Game Test Suite', () => {
 		assert.strictEqual(noneOutcomeDepositPage.length, 0, 'none-outcome deposit paging should always return an empty page')
 	})
 
-	test('claimDepositForWinning reverts when outcome is None', async () => {
+	test.each([
+		{ name: 'None', outcome: QuestionOutcome.None, depositFirst: true },
+		{ name: 'out of enum range', outcome: 4, depositFirst: false },
+	])('claimDepositForWinning reverts when outcome is $name', async ({ outcome, depositFirst }) => {
 		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
+		if (depositFirst) await depositOnOutcome(client, escalationGame, client.account.address, QuestionOutcome.Yes, reportBond)
 		await assert.rejects(
 			writeContractAndWait(
 				client,
@@ -1423,23 +1426,7 @@ describe('Escalation Game Test Suite', () => {
 						abi: statoblast_EscalationGame_EscalationGame.abi,
 						address: escalationGame,
 						functionName: 'claimDepositForWinning',
-						args: [0n, QuestionOutcome.None],
-					}),
-			),
-		)
-	})
-
-	test('claimDepositForWinning reverts when outcome is out of enum range', async () => {
-		const escalationGame = await deployEscalationGame(client, reportBond, nonDecisionThresholdAttoRep)
-		await assert.rejects(
-			writeContractAndWait(
-				client,
-				async () =>
-					await client.writeContract({
-						abi: statoblast_EscalationGame_EscalationGame.abi,
-						address: escalationGame,
-						functionName: 'claimDepositForWinning',
-						args: [0n, 4],
+						args: [0n, outcome],
 					}),
 			),
 		)

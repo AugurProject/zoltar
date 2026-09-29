@@ -1,3 +1,5 @@
+import { ReportingOracleBlocker } from '@zoltar/ui-statoblast-shared/features/reporting/components/ReportingOracleBlocker.js'
+import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 /// <reference types="bun-types" />
 
 import { signal } from '@preact/signals'
@@ -22,6 +24,7 @@ import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
@@ -34,16 +37,6 @@ function expectPoliteFieldError(message: string) {
 	expect(error.getAttribute('role')).toBeNull()
 	expect(error.parentElement?.getAttribute('aria-live')).toBe('polite')
 	return error
-}
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
 }
 
 function createOpenOracleSectionProps(overrides: Partial<OpenOracleSectionProps> = {}): OpenOracleSectionProps {
@@ -911,17 +904,19 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle report…' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
 	test('counts down to settlement and enables the report action at zero', async () => {
 		const reloads: string[] = []
+		const settle = mock(() => undefined)
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={100n}>
 				<OpenOracleSection
 					{...createOpenOracleSectionProps({
 						activeView: 'selected-report',
 						onLoadOracleReport: () => reloads.push('report'),
+						onSettleReport: settle,
 						openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
 						openOracleReportDetails: createOpenOracleReportDetails({
 							currentReporter: '0x3000000000000000000000000000000000000000',
@@ -945,11 +940,11 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
 		expect(page.queryByText('Settle in 1s')).toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Settle report…')
+		expectTransactionButtonEnabled(document.body, 'Settle report')
 		expect(reloads).toContain('report')
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report…' })))
-		const dialog = page.getByRole('dialog')
-		expectTransactionButtonEnabled(dialog, 'Settle report #7')
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Settle report' })))
+		expect(page.queryByRole('dialog')).toBeNull()
+		expect(settle).toHaveBeenCalledTimes(1)
 	})
 
 	test('starts a new settlement countdown when the deadline refresh finds a dispute', async () => {
@@ -1084,7 +1079,7 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Settle report…' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Settle report' })).not.toBeNull()
 	})
 
 	test('shows independent credited-balance withdrawals after settlement', async () => {
@@ -1111,11 +1106,8 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByText('Your oracle balances')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Report actions' })).toBeNull()
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
-		expect(withdrawnBalances).toEqual([])
-		expect(documentQueries.getByRole('dialog', { name: 'Withdraw ETH' })).not.toBeNull()
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
-		expect(documentQueries.getByRole('button', { name: 'Confirm withdrawal' })).not.toBeNull()
-		fireEvent.click(documentQueries.getByRole('button', { name: 'Confirm withdrawal' }))
 		expect(documentQueries.queryByRole('button', { name: `Withdraw ${reportDetails.token2Symbol}` })).toBeNull()
 		expect(withdrawnBalances).toEqual(['ethAttoEth'])
 	})
@@ -1146,7 +1138,7 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, `Withdraw ${reportDetails.token1Symbol}`)
 	})
 
-	test('shows changed-balance recovery inside the withdrawal review', async () => {
+	test('shows changed-balance recovery beside the withdrawal action', async () => {
 		const reportDetails = createOpenOracleReportDetails({
 			currentReporter: '0x3000000000000000000000000000000000000000',
 			isDistributed: true,
@@ -1160,7 +1152,7 @@ describe('OpenOracleSection route create view', () => {
 					openOracleReportDetails: reportDetails,
 					openOracleWithdrawalReviewMessage: {
 						balance: 'token1',
-						message: 'Your withdrawable REPv2 balance changed. Review the updated amount and confirm again',
+						message: 'Your withdrawable REPv2 balance changed. Try withdrawing the updated balance again.',
 					},
 					openOracleWithdrawableBalances: { ethAttoEth: 0n, token1: 125n * ATTO_ETH_PER_ETH, token2: 0n },
 				})}
@@ -1171,13 +1163,12 @@ describe('OpenOracleSection route create view', () => {
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw REPv2' }))
 
-		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw REPv2' })
-		const dialogQueries = within(dialog)
-		expect(dialogQueries.getByRole('alert').textContent).toContain('Your withdrawable REPv2 balance changed. Review the updated amount and confirm again')
-		expectTransactionButtonEnabled(dialog, 'Confirm withdrawal')
+		expect(documentQueries.queryByRole('dialog')).toBeNull()
+		expect(documentQueries.getByRole('alert').textContent).toContain('Your withdrawable REPv2 balance changed. Try withdrawing the updated balance again.')
+		expectTransactionButtonEnabled(document.body, 'Withdraw REPv2')
 	})
 
-	test('cancels an in-progress withdrawal balance check when its review closes', async () => {
+	test('cancels an in-progress withdrawal balance check when leaving the report', async () => {
 		const cancelWithdrawalBalanceCheck = mock(() => undefined)
 		const reportDetails = createOpenOracleReportDetails({
 			currentReporter: '0x3000000000000000000000000000000000000000',
@@ -1199,8 +1190,8 @@ describe('OpenOracleSection route create view', () => {
 
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Withdraw ETH' }))
-		const dialog = documentQueries.getByRole('dialog', { name: 'Withdraw ETH' })
-		fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+		await renderedComponent.cleanup()
+		cleanupRenderedComponent = undefined
 
 		expect(cancelWithdrawalBalanceCheck).toHaveBeenCalledTimes(1)
 		expect(documentQueries.queryByRole('dialog', { name: 'Withdraw ETH' })).toBeNull()
@@ -1262,7 +1253,6 @@ describe('OpenOracleSection route create view', () => {
 
 	for (const [dialogName, launcherName, report] of [
 		['Dispute & swap', 'Dispute & swap', { currentAmount1: 10n * 10n ** 18n, currentAmount2: 5n * 10n ** 18n, currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, disputeDelay: 10n, escalationHalt: 20n * 10n ** 18n, multiplier: 20_000n, reportTimestamp: 100n, settlementTime: 200n }],
-		['Settle report #7', 'Settle report…', { currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 2n, timeType: true }],
 	] as const)
 		for (const [blockedAccount, fixLabel] of [
 			[createAccountState({ address: undefined }), 'Connect wallet'],
@@ -1287,4 +1277,46 @@ describe('OpenOracleSection route create view', () => {
 				await act(() => fireEvent.click(fix))
 				expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 			})
+	test('prepares the pending reporting price report and settles with one click', async () => {
+		const settle = mock(() => undefined)
+		const load = mock(() => undefined)
+		const oracle = createOpenOracleSectionProps({
+			onSettleReport: settle,
+			onLoadOracleReport: load,
+			openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: '7' },
+			openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, reportTimestamp: 100n, settlementTime: 2n, timeType: true }),
+		})
+		const rendered = await renderIntoDocument(<ReportingOracleBlocker blocked manager={createOracleManagerDetails({ pendingReportId: 7n, pendingReportReadyAtTimestamp: 102n })} now={200n} onRequest={() => undefined} requestReason={undefined} onRefresh={() => undefined} oracle={oracle} onViewReport={() => undefined} />)
+		cleanupRenderedComponent = rendered.cleanup
+		expect(load).toHaveBeenCalledWith('7')
+		expect(settle).toHaveBeenCalledTimes(0)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Settle report #7' }))
+		expect(settle).toHaveBeenCalledTimes(1)
+		expect(within(document.body).queryByRole('dialog')).toBeNull()
+	})
+	for (const [account, fixLabel] of [
+		[createAccountState({ address: undefined }), 'Connect wallet'],
+		[createAccountState({ chainId: '0x1' }), 'Switch to Sepolia'],
+	] as const) {
+		test(`offers ${fixLabel} directly on oracle settlement`, async () => {
+			const { calls, walletActions } = createWalletActions()
+			const settled = mock(() => undefined)
+			const rendered = await renderIntoDocument(
+				<WalletActionsProvider walletActions={walletActions}>
+					<OpenOracleSection
+						{...createOpenOracleSectionProps({
+							accountState: account,
+							activeView: 'selected-report',
+							onSettleReport: settled,
+							openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 200n, reportTimestamp: 100n, settlementTime: 2n, timeType: true }),
+						})}
+					/>
+				</WalletActionsProvider>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			fireEvent.click(expectWalletFixDescribesAction(document.body, 'Settle report', fixLabel))
+			expect(settled).toHaveBeenCalledTimes(0)
+			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
+		})
+	}
 })

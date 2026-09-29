@@ -2,9 +2,10 @@ import { useEffect, useId, useRef, useState } from 'preact/hooks'
 
 /**
  * State for a non-modal disclosure popover anchored to a trigger button: outside clicks and focus leaving the
- * container close it, and Escape closes it and returns focus to the trigger.
+ * container close it, and Escape closes it and returns focus to the trigger. Menus that keep their panel open while
+ * focus moves elsewhere opt out of the focus rule.
  */
-export function useDisclosurePopover() {
+export function useDisclosurePopover({ closeOnFocusOutside = true }: { closeOnFocusOutside?: boolean } = {}) {
 	const [open, setOpen] = useState(false)
 	const containerRef = useRef<HTMLDivElement>(null)
 	const triggerRef = useRef<HTMLButtonElement>(null)
@@ -20,18 +21,18 @@ export function useDisclosurePopover() {
 			setOpen(false)
 			triggerRef.current?.focus()
 		}
-		const closeOnFocusOutside = (event: FocusEvent) => {
+		const closeOnFocus = (event: FocusEvent) => {
 			if (event.target instanceof Node && containerRef.current?.contains(event.target) !== true) setOpen(false)
 		}
 		document.addEventListener('mousedown', closeOnOutsidePointer)
 		document.addEventListener('keydown', closeOnEscape)
-		document.addEventListener('focusin', closeOnFocusOutside)
+		if (closeOnFocusOutside) document.addEventListener('focusin', closeOnFocus)
 		return () => {
 			document.removeEventListener('mousedown', closeOnOutsidePointer)
 			document.removeEventListener('keydown', closeOnEscape)
-			document.removeEventListener('focusin', closeOnFocusOutside)
+			document.removeEventListener('focusin', closeOnFocus)
 		}
-	}, [open])
+	}, [open, closeOnFocusOutside])
 
 	return {
 		close: () => setOpen(false),
@@ -39,6 +40,7 @@ export function useDisclosurePopover() {
 		open,
 		panelId,
 		toggle: () => setOpen(current => !current),
+		triggerRef,
 		triggerProps: { 'aria-controls': panelId, 'aria-expanded': open, ref: triggerRef, type: 'button' as const },
 	}
 }

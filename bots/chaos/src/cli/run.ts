@@ -1,9 +1,8 @@
 #!/usr/bin/env bun
 import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 
 import { getAddress, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { acquireBotProcessLocksForShutdown, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { createBotShutdownController, runBotMain, withBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
@@ -110,42 +109,24 @@ export async function main() {
 	using shutdown = createBotShutdownController()
 	const loaded = await loadSettings()
 	await assertSettingsProfileIsolation(loaded.path, loaded.settings)
-	let locks: BotProcessLocks
-	try {
-		const acquired = await acquireBotProcessLocksForShutdown(
-			{
-				chainId: loaded.settings.network.chainId,
-				execute: loaded.settings.runtime.execute,
-				privateKey: loaded.settings.privateKey,
-				signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
-				stateFile: loaded.settings.runtime.stateFile,
-			},
-			CHAOS_PROCESS_LOCK_OPTIONS,
-			shutdown,
-		)
-		if (acquired === undefined) return
-		locks = acquired
-	} catch (error) {
-		if (error instanceof BotProcessLockAcquisitionError) {
-			await error.releaseProcessLocks()
-			throw error.acquisitionCause
-		}
-		throw error
-	}
-	try {
-		if (command.kind !== 'operator') {
-			await applyRetirementCommand(command, loaded)
-			return
-		}
-		await runChaosOperator(loaded, locks, shutdown)
-	} finally {
-		await locks.release()
-	}
+	await withBotProcessLocks(
+		{
+			chainId: loaded.settings.network.chainId,
+			execute: loaded.settings.runtime.execute,
+			privateKey: loaded.settings.privateKey,
+			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
+			stateFile: loaded.settings.runtime.stateFile,
+		},
+		CHAOS_PROCESS_LOCK_OPTIONS,
+		shutdown,
+		async locks => {
+			if (command.kind !== 'operator') {
+				await applyRetirementCommand(command, loaded)
+				return
+			}
+			await runChaosOperator(loaded, locks, shutdown)
+		},
+	)
 }
 
-if (import.meta.main) {
-	main().catch(error => {
-		console.error(errorMessage(error))
-		process.exitCode = 1
-	})
-}
+if (import.meta.main) runBotMain(main)

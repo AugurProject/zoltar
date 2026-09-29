@@ -1,3 +1,5 @@
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
+
 export const transactionErrorMessages = {
 	fullGasLimit: 'Transaction failed after using its full gas limit. Open the transaction details before retrying.',
 	canceledOrReplaced: 'Transaction canceled or replaced.',
@@ -17,10 +19,6 @@ function isTransactionErrorMessage(message: string | undefined) {
 
 const closeableErrorPatterns = ['user rejected the request', 'user rejected request', 'user denied transaction signature', 'user denied message signature', 'user denied account authorization', 'action canceled in wallet']
 const technicalWriteErrorPatterns = ['allowance', 'balance', 'call reverted', 'connector', 'erc20', 'estimategas', 'execution reverted', 'fee', 'gas', 'insufficient funds', 'internal json-rpc', 'json-rpc', 'network', 'nonce', 'replacement transaction', 'reverted', 'rpc', 'transaction', 'transfer', 'underpriced']
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
-}
 
 export function hasErrorCode(value: unknown): value is { code: number | string } {
 	return isObjectRecord(value) && (typeof value['code'] === 'number' || typeof value['code'] === 'string')

@@ -4,6 +4,7 @@ import { fetchLogsWithAdaptiveRanges, latestLogRange, newestFirstScanRanges } fr
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
 import { sendRawTransactionToRpc } from '@zoltar/bot-shared/monitoring/connectivity'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { observeReceiptWithQuorum } from '@zoltar/bot-shared/execution/receipt-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { DEFAULT_TRANSACTION_VALIDITY_BLOCKS, submitSignedTransaction } from '@zoltar/bot-shared/execution/transaction-submission'
 import type { OperatorSettings } from '#config/settings'
@@ -17,10 +18,6 @@ import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { nextStagedHistoricalRecoveryRange, recordStagedRecoveryChunk, recordStagedRecoveryGap, stagedRecoveryAnchorMatches } from '#execution/staged-recovery-journal'
 
 const MAXIMUM_RECOVERY_LOG_RANGE = 256n
-
-function missingReceipt(error: unknown) {
-	return error instanceof Error && error.message.includes('could not be found')
-}
 
 function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, pool: ReturnType<typeof createRpcEndpointPool>) {
 	const endpoints = [settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls]
@@ -38,45 +35,8 @@ function recoveryReaders(settings: OperatorSettings, wallet: WalletClient<Transp
 
 export async function finalizedReceiptWithQuorum(settings: OperatorSettings, wallet: WalletClient<Transport, Chain, Account>, hash: Hex, pool = createRpcEndpointPool([settings.connectivity.readRpcUrl, ...settings.connectivity.quorumRpcUrls])) {
 	const readers = recoveryReaders(settings, wallet, pool)
-	const observations = readers.clients.map(async ({ client, endpoint }) => {
-		try {
-			const receipt = await client.getTransactionReceipt({ hash })
-			return {
-				endpoint,
-				evidence: {
-					blockHash: receipt.blockHash,
-					blockNumber: receipt.blockNumber,
-					hash: receipt.transactionHash,
-					logs: receipt.logs.map(log => ({
-						address: log.address,
-						data: log.data,
-						topics: log.topics,
-					})),
-					status: receipt.status,
-				},
-				receipt,
-			}
-		} catch (error) {
-			if (missingReceipt(error))
-				return {
-					endpoint,
-					evidence: undefined,
-					receipt: undefined,
-				}
-			throw error
-		}
-	})
-	const evidence = await settledQuorumValue(
-		`receipt ${hash}`,
-		observations.map(async observation => {
-			const { endpoint, evidence: value } = await observation
-			return { endpoint, value }
-		}),
-		settings.connectivity.rpcQuorum,
-	)
-	if (evidence === undefined) return { observed: false as const, receipt: undefined }
-	const receipt = availableSettledValues(await Promise.allSettled(observations)).find(observation => observation.receipt !== undefined)?.receipt
-	if (receipt === undefined) throw new Error(`Receipt ${hash} quorum did not retain its matching transaction receipt`)
+	const receipt = await observeReceiptWithQuorum(readers.clients, hash, settings.connectivity.rpcQuorum)
+	if (receipt === undefined) return { observed: false as const, receipt: undefined }
 	if (
 		!(await confirmCanonicalReceiptFinality(
 			readers.clients.map(reader => reader.client),
