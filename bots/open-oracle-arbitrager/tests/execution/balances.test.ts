@@ -1,7 +1,8 @@
 import { expect, spyOn, test } from 'bun:test'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
-import { erc20Abi, multicall3Abi, quoterAbi } from '#contracts/abi'
+import { erc20Abi, multicall3Abi } from '#contracts/abi'
+import { uniswapV3QuoterAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import { networkConfiguration } from '#config/network'
 import { loadBalances } from '#execution/balances'
 import { multicallProvider } from '../helpers/multicall-provider.ts'
@@ -29,11 +30,11 @@ test('reads inventory in one batch, tolerates a reverting token, and values REP 
 				return encodeAbiParameters([{ type: 'uint256' }], [5n * 10n ** 18n])
 			}
 			if (to.toLowerCase() === network.quoter.toLowerCase()) {
-				const decoded = decodeFunctionData({ abi: quoterAbi, data })
+				const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 				if (decoded.functionName !== 'quoteExactInputSingle') throw new Error('Unexpected quote')
 				const fee = Number(decoded.args[0].fee)
-				if (fee === 3000) return encodeAbiParameters(quoterAbi[0].outputs, [3n * 10n ** 18n, 0n, 0n, 0n])
-				if (fee === 500) return encodeAbiParameters(quoterAbi[0].outputs, [2n * 10n ** 18n, 0n, 0n, 0n])
+				if (fee === 3000) return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [3n * 10n ** 18n, 0n, 0n, 0n])
+				if (fee === 500) return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [2n * 10n ** 18n, 0n, 0n, 0n])
 				throw new Error('no pool for fee tier')
 			}
 			if (to.toLowerCase() === revertingToken.toLowerCase()) throw new Error('balanceOf reverted')

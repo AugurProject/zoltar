@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bigintToSafeNumber, formatUnits, getAddress, isAddress, type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, factoryAbi, poolAbi } from '#contracts/abi'
+import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, poolAbi } from '#contracts/abi'
+import { uniswapV3FactoryAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import { batchRead, batchValue, type BatchCall, type BatchReader, type BatchResult } from '#core/batch-read'
 import { requiredBigint, requiredRpcAddress, requiredTuple } from '#core/rpc-validation'
 import { logMarketDiscoveryFailure } from '#monitoring/market-discovery-status'
@@ -193,7 +194,7 @@ export async function discoverTokenPools(
 	const fees = factory === undefined ? [] : UNISWAP_V3_FEES
 	const venues = parameters.chainId === 1 ? MAINNET_CONSTANT_PRODUCT_VENUES : []
 	const calls = parameters.tokens.flatMap(token => [
-		...(factory === undefined ? [] : fees.map(fee => ({ address: factory, abi: factoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall)),
+		...(factory === undefined ? [] : fees.map(fee => ({ address: factory, abi: uniswapV3FactoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall)),
 		...venues.map(venue => ({ address: venue.factory, abi: constantProductFactoryAbi, functionName: 'getPair', args: [token, parameters.weth] }) satisfies BatchCall),
 	])
 	const results = await batchRead(client, parameters.multicall3, calls, parameters.blockNumber)

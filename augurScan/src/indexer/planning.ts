@@ -8,7 +8,7 @@ import { createRpcRequestQueue, rpcQueueSaturationFrom } from '../rpc-request-qu
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata, ManifestContract, TokenMetadata } from '../types.ts'
 import { uniswapV4PoolConfigurations, uniswapV4PoolId } from '../uniswap.ts'
-import { compareBigint } from '../compare.ts'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 
 export type RpcBlockHeader = {
 	readonly hash: Hash

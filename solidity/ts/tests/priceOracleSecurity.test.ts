@@ -1,6 +1,26 @@
 import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS, MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS, calculateOracleMinimumWethReportAttoEth } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
+import {
+	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
+	DEFAULT_ORACLE_MINIMUM_WETH_REPORT_PARAMETERS,
+	MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
+	OPEN_ORACLE_SECURITY_MULTIPLIER_BPS,
+	ORACLE_DISPUTE_DELAY,
+	ORACLE_ESCALATION_HALT_MULTIPLIER_BPS,
+	ORACLE_FEE_PERCENTAGE,
+	ORACLE_GAS_UNITS_FOR_ONE_DISPUTE,
+	ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS,
+	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
+	ORACLE_MULTIPLIER,
+	ORACLE_PROTOCOL_FEE,
+	ORACLE_REPORT_GAS,
+	ORACLE_SETTLEMENT_GAS,
+	ORACLE_SETTLEMENT_TIME,
+	ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE,
+	ORACLE_TIME_TYPE,
+	ORACLE_TRACK_DISPUTES,
+	calculateOracleMinimumWethReportAttoEth,
+} from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
@@ -11,7 +31,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
 import { WriteClient, createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
-import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
 	OperationType,
@@ -44,7 +64,8 @@ import {
 } from '../testSupport/simulator/utils/contracts/statoblast'
 import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { approveToken, getERC20Balance, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	ReputationToken_ReputationToken,
@@ -183,19 +204,6 @@ describe('Price Oracle Refund Security Tests', () => {
 	const statoblastSecurityMultiplierBps = 20_000n
 	const EXTRA_INFO = 'test question!'
 	let securityPool: Address
-	const ORACLE_REPORT_GAS = 100000n
-	const ORACLE_SETTLEMENT_GAS = 1000000
-	const ORACLE_SETTLEMENT_TIME = 40 * 12
-	const ORACLE_DISPUTE_DELAY = 0
-	const ORACLE_PROTOCOL_FEE = 100000
-	const ORACLE_FEE_PERCENTAGE = 10000
-	const ORACLE_MULTIPLIER = 115
-	const ORACLE_TIME_TYPE = true
-	const ORACLE_TRACK_DISPUTES = true
-	const ORACLE_ESCALATION_HALT_MULTIPLIER_BPS = 100000n
-	const ORACLE_MAX_SETTLEMENT_BASE_FEE_MULTIPLIER_BPS = 30000n
-	const ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS = 1000n
-
 	const getOracleCoordinatorConstructorArgs = (): OracleCoordinatorConstructorArgs => [
 		getInfraContractAddresses().openOracle,
 		addressString(GENESIS_REPUTATION_TOKEN),

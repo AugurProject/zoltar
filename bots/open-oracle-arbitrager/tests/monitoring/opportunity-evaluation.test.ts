@@ -2,7 +2,8 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import { createPublicClient, decodeFunctionData, encodeAbiParameters, getAddress, type Hex } from '@zoltar/bot-shared/ethereum'
 import { custom } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import type { OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { constantProductPairAbi, erc20Abi, openOracleAbi, poolAbi, quoterAbi, v4QuoterAbi } from '#contracts/abi'
+import { constantProductPairAbi, erc20Abi, openOracleAbi, poolAbi } from '#contracts/abi'
+import { uniswapV3QuoterAbi, uniswapV4QuoterAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import { parseOperatorSettings } from '#config/settings-store'
 import { constantProductExactInput, constantProductExactOutput } from '#core/venue-strategy'
 import { calculateFee, calculateNextAmount1 } from '#core/strategy'
@@ -70,22 +71,22 @@ function quoterClient(options: { v3SellOut: bigint; v3BuyIn: bigint | undefined;
 	let batched = 0
 	const provider = multicallProvider(network.multicall3, ({ blockTag, data, to }) => {
 		if (to.toLowerCase() === network.quoter.toLowerCase()) {
-			const decoded = decodeFunctionData({ abi: quoterAbi, data })
+			const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 			requests.push({ blockTag, functionName: decoded.functionName, target: 'v3' })
 			if (decoded.functionName === 'quoteExactInputSingle') {
 				const amountOut = decoded.args[0].tokenIn.toLowerCase() === rep.toLowerCase() ? options.v3SellOut : options.replacementOut
-				return encodeAbiParameters(quoterAbi[0].outputs, [amountOut, 0n, 0n, 0n])
+				return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [amountOut, 0n, 0n, 0n])
 			}
 			if (options.v3BuyIn === undefined) throw new Error('buy quote unavailable')
-			return encodeAbiParameters(quoterAbi[1].outputs, [options.v3BuyIn, 0n, 0n, 0n])
+			return encodeAbiParameters(uniswapV3QuoterAbi[1].outputs, [options.v3BuyIn, 0n, 0n, 0n])
 		}
 		if (to.toLowerCase() === v4Quoter.toLowerCase()) {
-			const decoded = decodeFunctionData({ abi: v4QuoterAbi, data })
+			const decoded = decodeFunctionData({ abi: uniswapV4QuoterAbi, data })
 			requests.push({ blockTag, functionName: decoded.functionName, target: 'v4' })
 			const quotes = options.v4(Number(decoded.args[0].poolKey.fee))
 			if (quotes === undefined) throw new Error('V4 pool is not initialized')
 			const exactInput = decoded.args[0].zeroForOne ? options.replacementOut : quotes.sellOut
-			return encodeAbiParameters(v4QuoterAbi[0].outputs, [decoded.functionName === 'quoteExactInputSingle' ? exactInput : quotes.buyIn, 0n])
+			return encodeAbiParameters(uniswapV4QuoterAbi[0].outputs, [decoded.functionName === 'quoteExactInputSingle' ? exactInput : quotes.buyIn, 0n])
 		}
 		throw new Error(`Unexpected contract read ${to}`)
 	})
@@ -152,13 +153,13 @@ describe('report inspection over batched pool evaluations', () => {
 	function poolQuoterClient(quotes: (fee: number) => { buyIn: bigint; replacementOut: bigint | undefined; sellOut: bigint }) {
 		const provider = multicallProvider(network.multicall3, ({ data, to }) => {
 			if (to.toLowerCase() !== network.quoter.toLowerCase()) throw new Error(`Unexpected contract read ${to}`)
-			const decoded = decodeFunctionData({ abi: quoterAbi, data })
+			const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 			const fee = Number(decoded.args[0].fee)
-			if (decoded.functionName === 'quoteExactOutputSingle') return encodeAbiParameters(quoterAbi[1].outputs, [quotes(fee).buyIn, 0n, 0n, 0n])
-			if (decoded.args[0].tokenIn.toLowerCase() === rep.toLowerCase()) return encodeAbiParameters(quoterAbi[0].outputs, [quotes(fee).sellOut, 0n, 0n, 0n])
+			if (decoded.functionName === 'quoteExactOutputSingle') return encodeAbiParameters(uniswapV3QuoterAbi[1].outputs, [quotes(fee).buyIn, 0n, 0n, 0n])
+			if (decoded.args[0].tokenIn.toLowerCase() === rep.toLowerCase()) return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [quotes(fee).sellOut, 0n, 0n, 0n])
 			const replacementOut = quotes(fee).replacementOut
 			if (replacementOut === undefined) throw new Error('replacement quote reverted')
-			return encodeAbiParameters(quoterAbi[0].outputs, [replacementOut, 0n, 0n, 0n])
+			return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [replacementOut, 0n, 0n, 0n])
 		})
 		return createPublicClient({ chain: network.chain, transport: custom(provider) })
 	}
@@ -277,10 +278,10 @@ function independentClient(venue: 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4', op
 				)
 			}
 			if (venue === 'uniswap-v3' && to.toLowerCase() === network.quoter.toLowerCase()) {
-				const decoded = decodeFunctionData({ abi: quoterAbi, data })
+				const decoded = decodeFunctionData({ abi: uniswapV3QuoterAbi, data })
 				const exactInput = decoded.functionName === 'quoteExactInputSingle' && decoded.args[0].tokenIn.toLowerCase() === rep.toLowerCase() ? 13n * 10n ** 17n : replacement
 				const amount = decoded.functionName === 'quoteExactOutputSingle' ? 14n * 10n ** 17n : exactInput
-				return encodeAbiParameters(quoterAbi[0].outputs, [amount, 0n, 0n, 0n])
+				return encodeAbiParameters(uniswapV3QuoterAbi[0].outputs, [amount, 0n, 0n, 0n])
 			}
 			if (venue === 'uniswap-v2' && to.toLowerCase() === pair.toLowerCase()) {
 				const decoded = decodeFunctionData({ abi: constantProductPairAbi, data })
@@ -288,18 +289,18 @@ function independentClient(venue: 'uniswap-v2' | 'uniswap-v3' | 'uniswap-v4', op
 				return encodeAbiParameters([{ type: 'uint112' }, { type: 'uint112' }, { type: 'uint32' }], [options.empty ? 0n : reserveToken, reserveWeth, 0n])
 			}
 			if (venue === 'uniswap-v4' && to.toLowerCase() === v4Quoter.toLowerCase()) {
-				const decoded = decodeFunctionData({ abi: v4QuoterAbi, data })
+				const decoded = decodeFunctionData({ abi: uniswapV4QuoterAbi, data })
 				expect(decoded.args[0].poolKey.currency0).toBe('0x0000000000000000000000000000000000000000')
 				expect(decoded.args[0].poolKey.currency1).toBe(rep)
 				expect(decoded.args[0].poolKey.hooks).toBe('0x0000000000000000000000000000000000000000')
 				if (options.empty) throw new Error('uninitialized V4 pool')
-				if (decoded.functionName === 'quoteExactOutputSingle') return encodeAbiParameters(v4QuoterAbi[0].outputs, [14n * 10n ** 17n, 0n])
+				if (decoded.functionName === 'quoteExactOutputSingle') return encodeAbiParameters(uniswapV4QuoterAbi[0].outputs, [14n * 10n ** 17n, 0n])
 				if (decoded.args[0].zeroForOne) {
 					expect(decoded.args[0].exactAmount).toBe(calculateNextAmount1(report.game))
 					if (options.failReplacement) throw new Error('replacement unavailable')
-					return encodeAbiParameters(v4QuoterAbi[0].outputs, [options.replacement ?? replacement, 0n])
+					return encodeAbiParameters(uniswapV4QuoterAbi[0].outputs, [options.replacement ?? replacement, 0n])
 				}
-				return encodeAbiParameters(v4QuoterAbi[0].outputs, [13n * 10n ** 17n, 0n])
+				return encodeAbiParameters(uniswapV4QuoterAbi[0].outputs, [13n * 10n ** 17n, 0n])
 			}
 			if (to.toLowerCase() === oracle.toLowerCase()) {
 				const decoded = decodeFunctionData({ abi: openOracleAbi, data })

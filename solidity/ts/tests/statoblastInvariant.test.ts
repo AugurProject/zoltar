@@ -27,7 +27,8 @@ import {
 	queueLiquidationAtForcedPrice,
 	requestPriceIfNeededAndStageOperationWithValue,
 } from '../testSupport/simulator/utils/contracts/statoblast'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { ensureZoltarDeployed, forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getUniverseTheoreticalSupplyAttoRep, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
 import {
 	claimForkedEscalationDeposits,

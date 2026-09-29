@@ -14,7 +14,8 @@ import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/c
 import { backingUnitsToAttoRep, depositToEscalationGame, getSecurityVault, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
 	statoblast_EscalationGame_EscalationGame,

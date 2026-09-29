@@ -26,7 +26,8 @@ import {
 	isZoltarDeployed,
 	splitMigrationRep,
 } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getAnswerOptionName, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, getAnswerOptionName } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { ensureDefined, strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { ReputationToken_ReputationToken, test_RepV2GenesisMock_RepV2GenesisMock, test_statoblast_FalseReturningERC20_FalseReturningERC20, Zoltar_Zoltar } from '../types/contractArtifact'
 import { formatScalarOutcomeLabel, getScalarOutcomeIndex } from '../testSupport/simulator/utils/contracts/scalarOutcome'

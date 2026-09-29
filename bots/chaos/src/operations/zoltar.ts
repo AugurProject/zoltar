@@ -2,6 +2,8 @@ import { repSpend } from './input-funding.ts'
 import { inputInteger, inputMatches, inputText, inputList } from './input-values.ts'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
 import { erc20Abi, zoltarQuestionDataAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
+import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, eventTopic, mixSeed, ONE_TOKEN, optionAmount, planBase, tokenInventory } from './planning.ts'
 import type { EcosystemSnapshot, OperationContinuationContext, OperationDefinition, OperationEvidence, OperationPlan, PlanningOptions, QuestionSnapshot, UniverseSnapshot } from './types.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
@@ -183,13 +185,7 @@ function questionCreationDraft(kind: 'binary' | 'categorical' | 'scalar', snapsh
 	let labels: string[] = []
 	if (kind === 'binary') labels = ['Yes', 'No']
 	else if (kind === 'categorical') {
-		labels = ['Alpha', 'Beta', 'Gamma'].sort((left, right) => {
-			const leftHash = keccak256(encodeAbiParameters([{ type: 'string' }], [left]))
-			const rightHash = keccak256(encodeAbiParameters([{ type: 'string' }], [right]))
-			if (leftHash > rightHash) return -1
-			if (leftHash === rightHash) return 0
-			return 1
-		})
+		labels = sortStringArrayByKeccak(['Alpha', 'Beta', 'Gamma'])
 	}
 	if (kind !== 'scalar') labels = inputList(options, 'labels', labels)
 	const question = {
@@ -204,29 +200,7 @@ function questionCreationDraft(kind: 'binary' | 'categorical' | 'scalar', snapsh
 	}
 	if (question.endTime < question.startTime) throw new Error('Question end time must be on or after its start time')
 	if (kind === 'scalar' && question.displayValueMax <= question.displayValueMin) throw new Error('Display maximum must exceed the minimum')
-	const id = BigInt(
-		keccak256(
-			encodeAbiParameters(
-				[
-					{
-						components: [
-							{ name: 'title', type: 'string' },
-							{ name: 'description', type: 'string' },
-							{ name: 'startTime', type: 'uint48' },
-							{ name: 'endTime', type: 'uint48' },
-							{ name: 'numTicks', type: 'uint120' },
-							{ name: 'displayValueMin', type: 'int256' },
-							{ name: 'displayValueMax', type: 'int256' },
-							{ name: 'answerUnit', type: 'string' },
-						],
-						type: 'tuple',
-					},
-					{ type: 'string[]' },
-				],
-				[question, labels],
-			),
-		),
-	).toString()
+	const id = getQuestionId(question, labels).toString()
 	const discoverySnapshot: QuestionSnapshot = {
 		// Inclusion time is not known at planning, so its widest possible
 		// canonical encoding makes the persisted-byte check fail closed.

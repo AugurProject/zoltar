@@ -1,10 +1,10 @@
-import { encodeAbiParameters, getAddress, keccak256, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { isObjectRecord, requireArrayOf } from '@zoltar/core-shared/validation/guards'
 import type { ForkOutcomeKey, MarketType, QuestionData, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 
 type IntegerLike = bigint | number
 
-type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [bigint, bigint, bigint, bigint, bigint]
 export type UniverseTuple = readonly [bigint, bigint, bigint, Address, bigint]
 type StagedOperationTuple = {
 	operationValue: bigint
@@ -22,10 +22,6 @@ type DeployedChildUniverseTuple = {
 
 export function bigintToAddress(value: bigint): Address {
 	return getAddress(`0x${value.toString(16).padStart(40, '0')}`)
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null
 }
 
 function isIntegerLike(value: unknown): value is IntegerLike {
@@ -70,63 +66,19 @@ function isUniverseTuple(value: unknown): value is UniverseTuple {
 	return Array.isArray(value) && value.length === 5 && typeof value[0] === 'bigint' && typeof value[1] === 'bigint' && typeof value[2] === 'bigint' && typeof value[3] === 'string' && typeof value[4] === 'bigint'
 }
 
-export function requireUniverseTupleArray(value: unknown, context: string): UniverseTuple[] {
-	if (Array.isArray(value) && value.every(isUniverseTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
+export const requireUniverseTupleArray = requireArrayOf(isUniverseTuple)
 
 function isStagedOperationTuple(value: unknown): value is StagedOperationTuple {
 	return isObjectRecord(value) && typeof value['operationValue'] === 'bigint' && typeof value['operator'] === 'string' && isIntegerLike(value['operation']) && typeof value['targetVault'] === 'string'
 }
 
-export function requireStagedOperationTupleArray(value: unknown, context: string): StagedOperationTuple[] {
-	if (Array.isArray(value) && value.every(isStagedOperationTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
+export const requireStagedOperationTupleArray = requireArrayOf(isStagedOperationTuple)
 
 function isDeployedChildUniverseTuple(value: unknown): value is DeployedChildUniverseTuple {
 	return isObjectRecord(value) && typeof value['forkQuestionId'] === 'bigint' && typeof value['forkTime'] === 'bigint' && typeof value['forkingOutcomeIndex'] === 'bigint' && typeof value['parentUniverseId'] === 'bigint' && typeof value['reputationToken'] === 'string'
 }
 
-export function requireDeployedChildUniverseTupleArray(value: unknown, context: string): DeployedChildUniverseTuple[] {
-	if (Array.isArray(value) && value.every(isDeployedChildUniverseTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-function isSecurityVaultTuple(value: unknown): value is SecurityVaultTuple {
-	return Array.isArray(value) && (value.length === 4 || value.length === 5) && value.every(item => typeof item === 'bigint')
-}
-
-export function requireSecurityVaultTupleArray(value: unknown, context: string): SecurityVaultTuple[] {
-	if (Array.isArray(value) && value.every(isSecurityVaultTuple)) return value
-	throw new Error(`Unexpected ${context} response`)
-}
-
-export function getQuestionId(questionData: QuestionData, outcomeOptions: readonly string[]) {
-	return BigInt(
-		keccak256(
-			encodeAbiParameters(
-				[
-					{
-						type: 'tuple',
-						components: [
-							{ name: 'title', type: 'string' },
-							{ name: 'description', type: 'string' },
-							{ name: 'startTime', type: 'uint256' },
-							{ name: 'endTime', type: 'uint256' },
-							{ name: 'numTicks', type: 'uint120' },
-							{ name: 'displayValueMin', type: 'int256' },
-							{ name: 'displayValueMax', type: 'int256' },
-							{ name: 'answerUnit', type: 'string' },
-						],
-					},
-					{ type: 'string[]' },
-				],
-				[questionData, outcomeOptions],
-			),
-		),
-	)
-}
+export const requireDeployedChildUniverseTupleArray = requireArrayOf(isDeployedChildUniverseTuple)
 
 export function getQuestionIdHex(questionId: bigint) {
 	return `0x${questionId.toString(16)}`

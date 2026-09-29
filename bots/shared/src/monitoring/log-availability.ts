@@ -1,4 +1,6 @@
+import { findEarliestAvailableBlock } from '@zoltar/core-shared/evm/availability'
 import { errorChain } from '@zoltar/core-shared/errors/errorChain'
+
 function prunedLogMessage(message: string) {
 	const normalized = message.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')
 	return normalized.includes('pruned history unavailable') || normalized.includes('historical logs unavailable')
@@ -23,25 +25,6 @@ export function permanentHistoricalLogError(error: unknown): boolean {
 
 /** Like AugurScan, locate a monotonic pruned prefix using single-block probes. */
 export async function findEarliestAvailableLogBlock(startBlock: bigint, observedHead: bigint, logsAt: (blockNumber: bigint) => Promise<unknown>): Promise<bigint> {
-	if (startBlock < 0n || startBlock > observedHead) throw new Error('The log availability search start must not exceed the observed head or be negative')
-	const isAvailable = async (blockNumber: bigint) => {
-		try {
-			await logsAt(blockNumber)
-			return true
-		} catch (error) {
-			if (!permanentHistoricalLogError(error)) throw error
-			return false
-		}
-	}
-	if (await isAvailable(startBlock)) return startBlock
-	// Preserve the actual RPC error if even the head is unavailable.
-	await logsAt(observedHead)
-	let lower = startBlock
-	let upper = observedHead
-	while (lower + 1n < upper) {
-		const middle = lower + (upper - lower) / 2n
-		if (await isAvailable(middle)) upper = middle
-		else lower = middle
-	}
-	return upper
+	// Without a head-unavailable error, the actual RPC error surfaces when even the head is unavailable.
+	return await findEarliestAvailableBlock(startBlock, observedHead, logsAt, permanentHistoricalLogError)
 }

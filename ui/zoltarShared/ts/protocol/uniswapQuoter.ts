@@ -1,4 +1,5 @@
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { uniswapV3FactoryAbi, uniswapV3QuoterAbi, uniswapV4QuoterAbi } from '@zoltar/core-shared/evm/uniswapAbis'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveNetworkProfile, getActiveSimulationController } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { isRecoverableContractReadError, isRecoverableQuoteError } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -58,57 +59,9 @@ const ERC20_SYMBOL_ABI = [
 	},
 ] as const
 
-const V3_FACTORY_ABI = [
-	{
-		name: 'getPool',
-		type: 'function',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'tokenA', type: 'address' },
-			{ name: 'tokenB', type: 'address' },
-			{ name: 'fee', type: 'uint24' },
-		],
-		outputs: [{ name: 'pool', type: 'address' }],
-	},
-] as const
-
 const V4_POOL_STATE_ABI = [
 	{ type: 'function', name: 'poolManager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 	{ type: 'function', name: 'extsload', stateMutability: 'view', inputs: [{ name: 'slot', type: 'bytes32' }], outputs: [{ type: 'bytes32' }] },
-] as const
-
-const QUOTER_ABI = [
-	{
-		name: 'quoteExactInputSingle',
-		type: 'function',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{
-				name: 'params',
-				type: 'tuple',
-				components: [
-					{
-						name: 'poolKey',
-						type: 'tuple',
-						components: [
-							{ name: 'currency0', type: 'address' },
-							{ name: 'currency1', type: 'address' },
-							{ name: 'fee', type: 'uint24' },
-							{ name: 'tickSpacing', type: 'int24' },
-							{ name: 'hooks', type: 'address' },
-						],
-					},
-					{ name: 'zeroForOne', type: 'bool' },
-					{ name: 'exactAmount', type: 'uint128' },
-					{ name: 'hookData', type: 'bytes' },
-				],
-			},
-		],
-		outputs: [
-			{ name: 'amountOut', type: 'uint256' },
-			{ name: 'gasEstimate', type: 'uint256' },
-		],
-	},
 ] as const
 
 function sortTokenPair(tokenA: Address, tokenB: Address): [Address, Address] {
@@ -255,7 +208,7 @@ export async function quoteExactInput(client: ReadClient, tokenIn: Address, toke
 
 	const { result } = await client.simulateContract({
 		address: getActiveNetworkProfile().uniswapV4QuoterAddress,
-		abi: QUOTER_ABI,
+		abi: uniswapV4QuoterAbi,
 		functionName: 'quoteExactInputSingle',
 		args: [
 			{
@@ -315,39 +268,12 @@ export async function quoteBestExactInputWithSource(client: ReadClient, tokenIn:
 
 // ─── Uniswap V3 ───────────────────────────────────────────────────────────────
 
-const V3_QUOTER_ABI = [
-	{
-		name: 'quoteExactInputSingle',
-		type: 'function',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{
-				name: 'params',
-				type: 'tuple',
-				components: [
-					{ name: 'tokenIn', type: 'address' },
-					{ name: 'tokenOut', type: 'address' },
-					{ name: 'amountIn', type: 'uint256' },
-					{ name: 'fee', type: 'uint24' },
-					{ name: 'sqrtPriceLimitX96', type: 'uint160' },
-				],
-			},
-		],
-		outputs: [
-			{ name: 'amountOut', type: 'uint256' },
-			{ name: 'sqrtPriceX96After', type: 'uint160' },
-			{ name: 'initializedTicksCrossed', type: 'uint32' },
-			{ name: 'gasEstimate', type: 'uint256' },
-		],
-	},
-] as const
-
 // Returns how much tokenOut you receive for swapping `amountIn` of tokenIn via Uniswap V3.
 // Use WETH_ADDRESS for ETH (V3 does not support native ETH).
 async function quoteV3ExactInput(client: ReadClient, tokenIn: Address, tokenOut: Address, amountIn: bigint, fee: number): Promise<bigint> {
 	const { result } = await client.simulateContract({
 		address: getActiveNetworkProfile().uniswapV3QuoterAddress,
-		abi: V3_QUOTER_ABI,
+		abi: uniswapV3QuoterAbi,
 		functionName: 'quoteExactInputSingle',
 		args: [{ tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96: 0n }],
 	})
@@ -364,7 +290,7 @@ async function loadUniswapV3PoolAddress(client: ReadClient, tokenIn: Address, to
 	try {
 		const poolAddress = await client.readContract({
 			address: getActiveNetworkProfile().uniswapV3FactoryAddress,
-			abi: V3_FACTORY_ABI,
+			abi: uniswapV3FactoryAbi,
 			functionName: 'getPool',
 			args: [token0, token1, fee],
 		})
