@@ -88,10 +88,10 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun run test:browser:workflow',
 		reason: 'production browser workflow coverage changed',
-		matches: filePath => filePath === 'tooling/ui/production.mts',
+		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/productionWorkflowScenarios.ts',
 		ownedTestOptions: {
 			environment: 'RUN_PRODUCTION_BROWSER_WORKFLOWS=1',
-			testNamePattern: "'production bundle (boots the statoblast fork and auction scenario|executes deployment, reporting, fork migration, failure recovery, and truth auction finalization)'",
+			testNamePattern: "'^production workflow:'",
 			timeout: 600_000,
 		},
 		ownedTestPaths: ['tooling/ui/productionBuild.test.ts'],

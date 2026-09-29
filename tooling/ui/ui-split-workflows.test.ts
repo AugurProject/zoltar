@@ -5,6 +5,7 @@ import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { taskProjects } from '../repo/projects.ts'
 import { projectQuery } from '../repo/query-projects.mts'
+import { PRODUCTION_WORKFLOW_SCENARIOS } from './productionWorkflowScenarios.ts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
@@ -58,6 +59,38 @@ const workflowTestPaths = (workflow: Record<string, unknown>) =>
 		}),
 	)
 describe('split UI workflow definitions (pending updates when present)', () => {
+	test('CI keeps formatting and the unused incremental cache off the production build path', async () => {
+		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
+		const prepare = workflowSteps(jobs['prepare'])
+		expect(prepare.some(step => step['run'] === 'bun run format')).toBe(false)
+		expect(prepare.some(step => isRecord(step['with']) && step['with']['path'] === '.tsbuildinfo')).toBe(false)
+		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run format:check')).toBe(true)
+		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run ci:typecheck:current')).toBe(true)
+		expect(prepare.some(step => String(step['run']).includes('ci:preflight:current'))).toBe(false)
+		expect(requireRecord(jobs['checks'], 'repository checks')['needs']).toEqual(['changes', 'build-inputs'])
+		expect(requireRecord(jobs['browser-workflow'], 'browser workflow')['needs']).toEqual(['changes', 'prepare'])
+	})
+
+	test('the browser matrix covers every scenario once and each job selects its own test', async () => {
+		const workflow = await readWorkflow(browserWorkflowPath)
+		const jobs = workflowJobs(workflow)
+		const job = requireRecord(jobs['browser-workflow'], 'browser matrix job')
+		const strategy = requireRecord(job['strategy'], 'browser matrix strategy')
+		expect(strategy['fail-fast']).toBe(false)
+		expect(requireRecord(strategy['matrix'], 'browser matrix')['scenario']).toEqual(PRODUCTION_WORKFLOW_SCENARIOS)
+		const run = workflowSteps(job).find(step => step['run'] === 'bun run test:browser:workflow')
+		expect(requireRecord(run?.['env'], 'browser scenario selection')).toMatchObject({ ZOLTAR_BROWSER_WORKFLOW_SCENARIO: '${{ matrix.scenario }}', ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1' })
+		expect(job['continue-on-error']).toBeUndefined()
+		expect(job['needs']).toBe('prepare')
+		expect(job['if']).toBe("always() && !cancelled() && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
+		const prepare = requireRecord(jobs['prepare'], 'standalone browser preparation')
+		expect(prepare['if']).toBe('inputs.prepared != true')
+		const upload = workflowSteps(prepare).find(step => step['uses'] === 'actions/upload-artifact@v4')
+		expect(requireRecord(upload?.['with'], 'standalone production artifact')).toMatchObject({ name: 'domain-production-ui', path: '${{ steps.projects.outputs.ui_artifact_outputs }}' })
+		const scripts = requireRecord(requireRecord(JSON.parse(await readFile(rootPackagePath, 'utf8')), 'root package')['scripts'], 'root scripts')
+		expect(scripts['test:browser:workflow']).toContain("--test-name-pattern '^production workflow:'")
+	})
+
 	test('workflows have no time-based triggers after staged updates are activated', async () => {
 		const directory = join(repositoryRoot, '.github', 'workflows')
 		const scheduled = []
@@ -571,7 +604,7 @@ ${command}`,
 	test('clean CI emits the complete UI dependency DAG while testnet deployment stays headless', async () => {
 		const ciWorkflow = await readFile(ciWorkflowPath, 'utf8')
 		const buildIndex = ciWorkflow.indexOf('bun run ui:build:apps')
-		const preflightIndex = ciWorkflow.indexOf('bun run ci:preflight:current')
+		const preflightIndex = ciWorkflow.indexOf('bun run ui:build:prod:current')
 		expect(buildIndex).toBeGreaterThan(0)
 		expect(preflightIndex).toBeGreaterThan(buildIndex)
 
@@ -587,14 +620,14 @@ ${command}`,
 		expect(deployWorkflow).not.toContain('bun ./tooling/contracts/deploy-testnet.mts --help')
 	})
 
-	test('CI builds deployment runtime dependencies before preflight without reinstalling the workspace', async () => {
+	test('CI builds deployment runtime dependencies before bundling without reinstalling the workspace', async () => {
 		const workflow = await readWorkflow(ciWorkflowPath)
 		const prepareSteps = workflowSteps(workflowJobs(workflow)['prepare'])
-		const command = String(prepareSteps.find(step => step['name'] === 'TypeScript checks and production UI build')?.['run'])
+		const command = String(prepareSteps.find(step => step['name'] === 'Build production UI')?.['run'])
 		const lines = command.split('\n').map(line => line.trim())
 		const buildIndex = lines.indexOf('bun run ui:build:apps')
 		const refreshIndex = lines.indexOf('bun ./tooling/repo/run-project-tasks.mts setup --project-path ui/statoblast')
-		const preflightIndex = lines.indexOf('bun run ci:preflight:current')
+		const preflightIndex = lines.indexOf('bun run ui:build:prod:current')
 		expect(buildIndex).toBeGreaterThanOrEqual(0)
 		expect(refreshIndex).toBe(-1)
 		expect(preflightIndex).toBeGreaterThan(buildIndex)
