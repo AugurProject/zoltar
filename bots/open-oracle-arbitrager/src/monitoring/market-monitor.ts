@@ -1,6 +1,7 @@
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
-import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, open, rename, rm } from 'node:fs/promises'
+import { writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
+import { appendFile, mkdir, open } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { bigintToSafeNumber, formatUnits, getAddress, isAddress, type Address, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { augurMarketAbi, augurUniverseAbi, constantProductFactoryAbi, constantProductPairAbi, erc20Abi, poolAbi } from '#contracts/abi'
@@ -370,29 +371,6 @@ async function readPriceHistoryTail(path: string, maximumBytes: number) {
 	}
 }
 
-async function replacePriceHistory(path: string, points: readonly MarketPricePoint[], chainId: number) {
-	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
-	try {
-		const handle = await open(temporaryPath, 'wx', 0o600)
-		try {
-			await handle.writeFile(`${points.map(point => JSON.stringify({ chainId, point })).join('\n')}\n`, { encoding: 'utf8' })
-			await handle.sync()
-		} finally {
-			await handle.close()
-		}
-		await rename(temporaryPath, path)
-		const directoryHandle = await open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
-	} catch (error) {
-		await rm(temporaryPath, { force: true })
-		throw error
-	}
-}
-
 export async function appendPriceHistory(path: string, points: readonly MarketPricePoint[], chainId: number, options?: PriceHistoryLimits) {
 	if (points.length === 0) return
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Price history chain ID must be a positive integer')
@@ -406,7 +384,10 @@ export async function appendPriceHistory(path: string, points: readonly MarketPr
 	} finally {
 		await handle.close()
 	}
-	if (size > limits.maximumBytes) await replacePriceHistory(path, await loadPriceHistory(path, chainId, limits.maximumRecords, limits), chainId)
+	if (size > limits.maximumBytes) {
+		const retained = await loadPriceHistory(path, chainId, limits.maximumRecords, limits)
+		await writeFileAtomically(path, `${retained.map(point => JSON.stringify({ chainId, point })).join('\n')}\n`)
+	}
 }
 
 function parsePriceHistoryPoint(value: unknown): MarketPricePoint | undefined {
@@ -472,7 +453,7 @@ export async function loadPriceHistory(path: string, expectedChainId: number, ma
 		}
 		return points.slice(-maximum)
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return []
+		if (isErrorCode(error, 'ENOENT')) return []
 		throw error
 	}
 }

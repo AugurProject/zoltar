@@ -3,7 +3,7 @@ import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState, type PositionJournalFilesystem, type PositionRecord } from '#state/position-store'
+import { acquireExecutionSignerLock, acquirePositionJournalLock, archivedUtcDayGasSpentWeth, loadPositionJournal, loadPositionJournalState, manuallyReconcilePosition, savePositionJournalState, type PositionRecord } from '#state/position-store'
 import { savePositionJournal } from '../support/position-journal.ts'
 
 const directories: string[] = []
@@ -75,60 +75,6 @@ describe('durable OpenOracle position journal', () => {
 		await first.release()
 		const second = await acquireExecutionSignerLock(31_337, signer)
 		await second.release()
-	})
-
-	test('syncs journal contents and the parent directory before returning', async () => {
-		const events: string[] = []
-		let opened = 0
-		const fileHandle = {
-			chmod: async () => {
-				events.push('file:chmod')
-			},
-			close: async () => {
-				events.push('file:close')
-			},
-			sync: async () => {
-				events.push('file:sync')
-			},
-			writeFile: async () => {
-				events.push('file:write')
-			},
-		}
-		const directoryHandle = {
-			chmod: async () => {
-				throw new Error('directory chmod is unexpected')
-			},
-			close: async () => {
-				events.push('directory:close')
-			},
-			sync: async () => {
-				events.push('directory:sync')
-			},
-			writeFile: async () => {
-				throw new Error('directory write is unexpected')
-			},
-		}
-		const filesystem: PositionJournalFilesystem = {
-			mkdir: async () => {
-				events.push('mkdir')
-			},
-			open: async (_path, flags) => {
-				events.push(`open:${flags}`)
-				opened += 1
-				return opened === 1 ? fileHandle : directoryHandle
-			},
-			readFile: async () => {
-				throw new Error('read is unexpected')
-			},
-			rename: async () => {
-				events.push('rename')
-			},
-			rm: async () => {
-				events.push('rm')
-			},
-		}
-		await savePositionJournal('/positions.json', [], 1, filesystem)
-		expect(events).toEqual(['mkdir', 'open:wx', 'file:write', 'file:chmod', 'file:sync', 'file:close', 'rename', 'open:r', 'directory:sync', 'directory:close'])
 	})
 
 	test('round-trips a recoverable position with owner-only storage', async () => {

@@ -1,7 +1,9 @@
-import { collectionDigest, sha256 } from './protocol-index-digest.ts'
+import { collectionDigest, manifestWithDigest, sha256 } from './content-digest.ts'
+import { isExistingTargetError, ownerDirectory, readOwnerFile, syncOwnerDirectory, writeOwnerFile, type OwnerFileHandle } from './owner-files.ts'
 import { randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
 import { resolve } from 'node:path'
+import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
@@ -31,21 +33,6 @@ export type ProtocolIndexReference = {
 	schemaVersion: 1
 }
 
-export type ProtocolIndexFileHandle = {
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
-	readFile: (options: { encoding: 'utf8' }) => Promise<string>
-	stat: () => Promise<{
-		isDirectory: () => boolean
-		isFile: () => boolean
-		mode: number
-		size: number
-		uid: number
-	}>
-	sync: () => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
-}
-
 type ProtocolIndexDirectoryEntry = {
 	isDirectory: () => boolean
 	isFile: () => boolean
@@ -56,7 +43,7 @@ type ProtocolIndexDirectoryEntry = {
 export type ProtocolIndexFilesystem = {
 	link: (existingPath: string, newPath: string) => Promise<unknown>
 	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'r' | 'wx' | number, mode?: number) => Promise<ProtocolIndexFileHandle>
+	open: (path: string, flags: 'r' | 'wx' | number, mode?: number) => Promise<OwnerFileHandle>
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
 	readdir: (path: string, options: { withFileTypes: true }) => Promise<ProtocolIndexDirectoryEntry[]>
 	rename: (oldPath: string, newPath: string) => Promise<unknown>
@@ -507,70 +494,6 @@ function manifestPayload(identity: ProtocolIndexIdentity, collections: Record<Co
 	}
 }
 
-function manifestWithDigest(payload: ProtocolIndexManifestPayload): ProtocolIndexManifest {
-	return { ...payload, manifestDigest: sha256(JSON.stringify(payload)) }
-}
-
-function errorCode(error: unknown) {
-	return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string' ? error.code : undefined
-}
-
-async function ownerDirectory(path: string, filesystem: ProtocolIndexFilesystem, label: string) {
-	let handle: ProtocolIndexFileHandle | undefined
-	try {
-		handle = await filesystem.open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
-		const metadata = await handle.stat()
-		if (!metadata.isDirectory()) throw new Error(`${label} ${path} must be a directory`)
-		if ((metadata.mode & 0o777) !== 0o700) throw new Error(`${label} ${path} must have owner-only mode 0700`)
-		if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) throw new Error(`${label} ${path} must be owned by the bot process user`)
-	} catch (error) {
-		if (errorCode(error) === 'ELOOP') throw new Error(`${label} ${path} must not be a symbolic link`)
-		throw error
-	} finally {
-		await handle?.close()
-	}
-}
-
-async function readOwnerFile(path: string, filesystem: ProtocolIndexFilesystem, maximumBytes: number, label: string) {
-	let handle: ProtocolIndexFileHandle | undefined
-	try {
-		handle = await filesystem.open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
-		const metadata = await handle.stat()
-		if (!metadata.isFile()) throw new Error(`${label} ${path} must be a regular file`)
-		if ((metadata.mode & 0o777) !== 0o600) throw new Error(`${label} ${path} must have owner-only mode 0600`)
-		if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) throw new Error(`${label} ${path} must be owned by the bot process user`)
-		if (!Number.isSafeInteger(metadata.size) || metadata.size < 0 || metadata.size > maximumBytes) throw new Error(`${label} ${path} exceeds its ${maximumBytes.toString()}-byte safety limit`)
-		const contents = await handle.readFile({ encoding: 'utf8' })
-		if (Buffer.byteLength(contents, 'utf8') > maximumBytes) throw new Error(`${label} ${path} exceeds its ${maximumBytes.toString()}-byte safety limit`)
-		return contents
-	} catch (error) {
-		if (errorCode(error) === 'ELOOP') throw new Error(`${label} ${path} must not be a symbolic link`)
-		throw error
-	} finally {
-		await handle?.close()
-	}
-}
-
-async function writeOwnerFile(path: string, contents: string, filesystem: ProtocolIndexFilesystem) {
-	const handle = await filesystem.open(path, 'wx', 0o600)
-	try {
-		await handle.writeFile(contents, { encoding: 'utf8' })
-		await handle.chmod(0o600)
-		await handle.sync()
-	} finally {
-		await handle.close()
-	}
-}
-
-async function syncDirectory(path: string, filesystem: ProtocolIndexFilesystem) {
-	const handle = await filesystem.open(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
-	try {
-		await handle.sync()
-	} finally {
-		await handle.close()
-	}
-}
-
 function protocolIndexSidecarDirectory(statePath: string) {
 	return `${resolve(statePath)}.protocol-index-v1`
 }
@@ -672,8 +595,7 @@ function prepareProtocolIndexCollections(index: ChaosProtocolIndex) {
 }
 
 function canFallBackFromLink(error: unknown) {
-	const code = errorCode(error)
-	return code === 'ENOENT' || code === 'ENOSYS' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'EPERM' || code === 'EXDEV'
+	return isErrorCode(error, 'ENOENT', 'ENOSYS', 'ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EXDEV')
 }
 
 async function writePreparedCollection(path: string, previousPath: string | undefined, prepared: PreparedProtocolIndexCollection, filesystem: ProtocolIndexFilesystem) {
@@ -684,7 +606,7 @@ async function writePreparedCollection(path: string, previousPath: string | unde
 			try {
 				await filesystem.link(`${previousPath}/${chunk.filename}`, destination)
 				linked = true
-				const linkedContents = await readOwnerFile(destination, filesystem, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, 'Linked protocol index chunk')
+				const linkedContents = await readOwnerFile(destination, filesystem, 'Linked protocol index chunk', MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES)
 				if (linkedContents !== chunk.contents || sha256(linkedContents) !== chunk.digest) throw new Error(`Linked protocol index chunk ${chunk.filename} does not match its prepared immutable content`)
 				continue
 			} catch (error) {
@@ -777,15 +699,6 @@ function isReference(value: unknown) {
 	return typeof value === 'object' && value !== null && !Array.isArray(value) && (value as Record<string, unknown>)['kind'] === 'protocol-index-sidecar'
 }
 
-function parseJson(contents: string, label: string) {
-	try {
-		return JSON.parse(contents) as unknown
-	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`${label} is not valid JSON: ${error.message}`)
-		throw error
-	}
-}
-
 function safeCount(value: string, label: string) {
 	if (value.length > 16) throw new Error(`${label} exceeds the runtime's safe iterable range`)
 	const count = BigInt(value)
@@ -794,7 +707,7 @@ function safeCount(value: string, label: string) {
 }
 
 function parseChunkEnvelope(contents: string, kind: CollectionKind, ordinal: number) {
-	const chunk = requiredRecord(parseJson(contents, `Protocol index ${kind} chunk ${ordinal.toString()}`), `protocol index ${kind} chunk ${ordinal.toString()}`)
+	const chunk = requiredRecord(parseJsonDocument(contents, `Protocol index ${kind} chunk ${ordinal.toString()}`), `protocol index ${kind} chunk ${ordinal.toString()}`)
 	assertExactKeys(chunk, ['kind', 'ordinal', 'records', 'schemaVersion'], [], `protocol index ${kind} chunk ${ordinal.toString()}`)
 	if (chunk['schemaVersion'] !== 1 || chunk['kind'] !== kind || chunk['ordinal'] !== ordinal.toString()) throw new Error(`Protocol index ${kind} chunk ${ordinal.toString()} identity does not match its manifest position`)
 	if (!Array.isArray(chunk['records']) || chunk['records'].length === 0 || chunk['records'].length > MAXIMUM_PROTOCOL_INDEX_CHUNK_RECORDS) {
@@ -839,8 +752,8 @@ async function loadProtocolIndexGeneration(statePath: string, reference: Protoco
 	const generationPath = generationDirectory(statePath, reference.manifestDigest)
 	await ownerDirectory(storePath, filesystem, 'Protocol index store')
 	await ownerDirectory(generationPath, filesystem, 'Protocol index generation')
-	const manifestContents = await readOwnerFile(`${generationPath}/manifest.json`, filesystem, MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES, 'Protocol index manifest')
-	const manifest = parseManifest(parseJson(manifestContents, 'Protocol index manifest'), expectedChainId, reference.manifestDigest)
+	const manifestContents = await readOwnerFile(`${generationPath}/manifest.json`, filesystem, 'Protocol index manifest', MAXIMUM_PROTOCOL_INDEX_MANIFEST_BYTES)
+	const manifest = parseManifest(parseJsonDocument(manifestContents, 'Protocol index manifest'), expectedChainId, reference.manifestDigest)
 	const loaded = emptyLoadedCollections()
 	let loadedBytes = 0
 	for (const kind of COLLECTION_KINDS) {
@@ -853,9 +766,9 @@ async function loadProtocolIndexGeneration(statePath: string, reference: Protoco
 			if (digest === undefined) throw new Error(`Protocol index ${kind} collection is missing chunk ${ordinal.toString()}`)
 			let contents: string
 			try {
-				contents = await readOwnerFile(`${generationPath}/${chunkFilename(kind, ordinal, digest)}`, filesystem, MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES, 'Protocol index chunk')
+				contents = await readOwnerFile(`${generationPath}/${chunkFilename(kind, ordinal, digest)}`, filesystem, 'Protocol index chunk', MAXIMUM_PROTOCOL_INDEX_CHUNK_BYTES)
 			} catch (error) {
-				if (errorCode(error) === 'ENOENT') throw new Error(`Protocol index ${kind} collection is missing chunk ${ordinal.toString()}`)
+				if (isErrorCode(error, 'ENOENT')) throw new Error(`Protocol index ${kind} collection is missing chunk ${ordinal.toString()}`)
 				throw error
 			}
 			const actualDigest = sha256(contents)
@@ -888,11 +801,6 @@ async function loadProtocolIndexGeneration(statePath: string, reference: Protoco
 	return index
 }
 
-function isExistingTargetError(error: unknown) {
-	const code = errorCode(error)
-	return code === 'EEXIST' || code === 'ENOTEMPTY'
-}
-
 async function validateCachedGeneration(statePath: string, reference: ProtocolIndexReference, expectedChainId: number, filesystem: ProtocolIndexFilesystem) {
 	await loadProtocolIndexGeneration(statePath, reference, expectedChainId, filesystem)
 }
@@ -904,7 +812,7 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 			await validateCachedGeneration(statePath, cachedReference, index.chainId, filesystem)
 			return cachedReference
 		} catch (error) {
-			if (errorCode(error) !== 'ENOENT') throw error
+			if (!isErrorCode(error, 'ENOENT')) throw error
 			persistedReferences.get(index)?.delete(resolve(statePath))
 			if (latestPersistedReferences.get(resolve(statePath))?.manifestDigest === cachedReference.manifestDigest) latestPersistedReferences.delete(resolve(statePath))
 		}
@@ -947,11 +855,11 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 	try {
 		for (const kind of COLLECTION_KINDS) await writePreparedCollection(temporaryPath, previousGenerationPath, preparedCollections[kind], filesystem)
 		await writeOwnerFile(`${temporaryPath}/manifest.json`, manifestContents, filesystem)
-		await syncDirectory(temporaryPath, filesystem)
+		await syncOwnerDirectory(temporaryPath, filesystem)
 		try {
 			await filesystem.rename(temporaryPath, targetPath)
 			renamed = true
-			await syncDirectory(storePath, filesystem)
+			await syncOwnerDirectory(storePath, filesystem)
 		} catch (error) {
 			if (!isExistingTargetError(error)) throw error
 			await filesystem.rm(temporaryPath, { force: true, recursive: true })
@@ -963,7 +871,7 @@ export async function persistProtocolIndexGeneration(statePath: string, index: C
 	} catch (error) {
 		if (renamed) {
 			await filesystem.rm(targetPath, { force: true, recursive: true })
-			await syncDirectory(storePath, filesystem)
+			await syncOwnerDirectory(storePath, filesystem)
 		} else {
 			await filesystem.rm(temporaryPath, { force: true, recursive: true })
 		}
@@ -986,7 +894,7 @@ export async function pruneProtocolIndexGenerations(statePath: string, retainedR
 	try {
 		await ownerDirectory(storePath, filesystem, 'Protocol index store')
 	} catch (error) {
-		if (errorCode(error) === 'ENOENT') return
+		if (isErrorCode(error, 'ENOENT')) return
 		throw error
 	}
 	const retainedName = retainedReference?.manifestDigest.slice(2)
@@ -996,5 +904,5 @@ export async function pruneProtocolIndexGenerations(statePath: string, retainedR
 		if (!GENERATION_NAME.test(entry.name) && !TEMPORARY_GENERATION_NAME.test(entry.name)) continue
 		await filesystem.rm(`${storePath}/${entry.name}`, { force: true, recursive: true })
 	}
-	await syncDirectory(storePath, filesystem)
+	await syncOwnerDirectory(storePath, filesystem)
 }

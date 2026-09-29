@@ -1,36 +1,14 @@
-import { randomUUID } from 'node:crypto'
-import { lstat, mkdir, open, readFile, rename, rm } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { writeFileAtomically, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
 
-type PositionJournalFileHandle = {
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
-	sync: () => Promise<unknown>
-	writeFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
-}
-
-export type PositionJournalFilesystem = {
-	lstat?: (path: string) => Promise<{ isDirectory: () => boolean; isSymbolicLink: () => boolean; mode: number; uid: number }>
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'r' | 'wx', mode?: number) => Promise<PositionJournalFileHandle>
-	readFile: (path: string, encoding: 'utf8') => Promise<string>
-	rename: (oldPath: string, newPath: string) => Promise<unknown>
-	rm: (path: string, options: { force: true }) => Promise<unknown>
-}
+/** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
+export type PositionJournalFilesystem = RevisionedFileFilesystem
 
 export type { ExclusiveProcessLock }
-
-const positionJournalFilesystem: PositionJournalFilesystem = {
-	lstat,
-	mkdir,
-	open,
-	readFile,
-	rename,
-	rm,
-}
 
 export type ManualReconciliation = {
 	evidence: string
@@ -560,7 +538,7 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 	try {
 		contents = await readFile(path, 'utf8')
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return { archived: emptyPositionJournalArchive(), positions: [] }
+		if (isErrorCode(error, 'ENOENT')) return { archived: emptyPositionJournalArchive(), positions: [] }
 		throw error
 	}
 	let parsed: unknown
@@ -596,7 +574,7 @@ export function acquireExecutionSignerLock(chainId: number, account: Address) {
 	return acquireSharedExecutionSignerLock(chainId, account)
 }
 
-export async function savePositionJournalState(path: string, state: PositionJournalState, chainId: number, filesystem: PositionJournalFilesystem = positionJournalFilesystem) {
+export async function savePositionJournalState(path: string, state: PositionJournalState, chainId: number, filesystem?: PositionJournalFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Position journal chain ID must be a positive integer')
 	const compacted = compactPositionJournal({ archived: state.archived, positions: [...state.positions] })
 	const ids = new Set<string>()
@@ -605,27 +583,6 @@ export async function savePositionJournalState(path: string, state: PositionJour
 		if (ids.has(position.reportId)) throw new Error(`Duplicate position journal report id ${position.reportId}`)
 		ids.add(position.reportId)
 	}
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
-	try {
-		const fileHandle = await filesystem.open(temporaryPath, 'wx', 0o600)
-		try {
-			await fileHandle.writeFile(`${JSON.stringify({ archived: compacted.archived, chainId, positions: compacted.positions, version: 3 }, undefined, 2)}\n`, { encoding: 'utf8' })
-			await fileHandle.chmod(0o600)
-			await fileHandle.sync()
-		} finally {
-			await fileHandle.close()
-		}
-		await filesystem.rename(temporaryPath, path)
-		const directoryHandle = await filesystem.open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
-	} catch (error) {
-		await filesystem.rm(temporaryPath, { force: true })
-		throw error
-	}
+	await writeFileAtomically(path, `${JSON.stringify({ archived: compacted.archived, chainId, positions: compacted.positions, version: 3 }, undefined, 2)}\n`, { filesystem })
 	return compacted
 }

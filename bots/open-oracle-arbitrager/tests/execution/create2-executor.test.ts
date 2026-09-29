@@ -415,44 +415,6 @@ test('standalone deployment shares the operator signer lock and durable recovery
 	}
 })
 
-test('syncs every newly created intent directory entry before opening the journal', async () => {
-	const account = privateKeyToAccount(`0x${'11'.repeat(32)}` as Hex)
-	const salt = `0x${'22'.repeat(32)}` as Hex
-	const plan = executorDeploymentPlan(salt)
-	const serializedTransaction = await account.signTransaction({ chainId: 1, data: plan.calldata, gas: 3_000_000n, gasPrice: 1n, nonce: 0, to: deterministicDeploymentProxy })
-	const events: string[] = []
-	let directoriesCreated = false
-	await saveExecutorDeploymentIntent(
-		'/durable/a/operator/deployment.json',
-		{ account: account.address, address: plan.address, chainId: 1, salt, serializedTransaction, transactionHash: keccak256(serializedTransaction), version: 1 },
-		{
-			mkdir: () => {
-				directoriesCreated = true
-				events.push('mkdir')
-				return Promise.resolve()
-			},
-			openDirectory: path => {
-				if (!directoriesCreated && (path === '/durable/a/operator' || path === '/durable/a')) return Promise.reject(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-				return Promise.resolve({
-					close: () => Promise.resolve(),
-					sync: () => {
-						events.push(`sync:${path}`)
-						return Promise.resolve()
-					},
-				})
-			},
-			openFile: () => {
-				events.push('open-file')
-				return Promise.resolve({ chmod: () => Promise.resolve(), close: () => Promise.resolve(), sync: () => Promise.resolve(), writeFile: () => Promise.resolve() })
-			},
-			rename: () => Promise.resolve(),
-			rm: () => Promise.resolve(),
-		},
-	)
-	expect(events.slice(0, 4)).toEqual(['mkdir', 'sync:/durable/a', 'sync:/durable', 'open-file'])
-	expect(events.at(-1)).toBe('sync:/durable/a/operator')
-})
-
 test('requires three distinct read RPC origins inside the deployment primitive under the explicit quorum policy', async () => {
 	const common = {
 		chain: mainnet,

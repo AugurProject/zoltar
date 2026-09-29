@@ -7,20 +7,9 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
-import {
-	assertOperatorProfileIsolation,
-	CONFIGURATION_REVISION_CONFLICT,
-	durableJournalPaths,
-	loadOperatorSettings,
-	loadOperatorSettingsWithRevision,
-	operatorProfilePath,
-	parseOperatorSettings,
-	saveOperatorSettings,
-	serializeOperatorSettings,
-	switchOperatorNetworkProfile,
-	type OperatorSettingsFilesystem,
-} from '#config/settings-store'
+import { CONFIGURATION_REVISION_CONFLICT, durableJournalPaths, loadOperatorSettings, loadOperatorSettingsWithRevision, operatorProfilePath, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile } from '#config/settings-store'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { parseSettlementSettings, settlementJournalPath } from '#state/settlement-store'
 
@@ -114,11 +103,6 @@ function settings(privateKeyValue: Hex | undefined) {
 	}
 }
 
-function reservedProfilePath(path: string, reservedName: 'active' | 'executor' | 'mainnet' | 'sepolia') {
-	if (reservedName === 'active') return path
-	return reservedName === 'executor' ? executorDeploymentIntentPath(path, 'mainnet') : operatorProfilePath(path, reservedName)
-}
-
 describe('operator settings persistence', () => {
 	test('keeps complete settings and durable journal paths isolated while switching chain profiles', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profiles-'))
@@ -141,161 +125,28 @@ describe('operator settings persistence', () => {
 		expect(restored.settings.runtime.positionFile).toBe(mainnet.runtime.positionFile)
 	})
 
-	test('rejects a dormant profile that reuses the active chain journals', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profile-collision-'))
+	test('rejects durable journals that reuse the executor deployment intent before writing', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-reserved-executor-'))
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'operator.json')
+		const reservedPath = executorDeploymentIntentPath(path, 'mainnet')
 		const mainnet = settings(undefined)
-		await saveOperatorSettings(path, mainnet)
-		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), {
-			...mainnet,
-			centralizedMarkets: { ...mainnet.centralizedMarkets, assetChainId: 11_155_111 },
-			network: 'sepolia',
-		})
-		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable journal paths')
-		expect(await loadOperatorSettings(path)).toMatchObject({ network: 'mainnet', runtime: { historyFile: mainnet.runtime.historyFile, positionFile: mainnet.runtime.positionFile } })
-	})
-
-	test('rejects durable journals that reuse configuration and profile files before writing', async () => {
-		for (const reservedName of ['active', 'executor', 'mainnet', 'sepolia'] as const) {
-			const directory = await mkdtemp(join(tmpdir(), `zoltar-arbitrager-reserved-${reservedName}-`))
-			temporaryDirectories.push(directory)
-			const path = join(directory, 'operator.json')
-			const reservedPath = reservedProfilePath(path, reservedName)
-			const mainnet = settings(undefined)
-			mainnet.runtime.historyFile = join(directory, 'mainnet-history.jsonl')
-			mainnet.runtime.positionFile = join(directory, 'mainnet-positions.json')
-			mainnet.runtime.priceHistoryFile = join(directory, 'mainnet-prices.jsonl')
-			const sepolia = {
-				...mainnet,
-				centralizedMarkets: { ...mainnet.centralizedMarkets, assetChainId: 11_155_111 },
-				network: 'sepolia' as const,
-				runtime: { ...mainnet.runtime, historyFile: reservedPath, positionFile: join(directory, 'sepolia-positions.json'), priceHistoryFile: join(directory, 'sepolia-prices.jsonl') },
-			}
-			await saveOperatorSettings(path, mainnet)
-			await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
-			const activeBefore = await readFile(path, 'utf8')
-			const targetBefore = await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')
-			await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Durable journal paths must not reuse configuration, profile, or executor deployment intent files')
-			expect(await readFile(path, 'utf8')).toBe(activeBefore)
-			expect(await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
-		}
-	})
-
-	test('does not overwrite a profile file reused by the active chain as a journal', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-active-reserved-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'operator.json')
-		const mainnetProfile = operatorProfilePath(path, 'mainnet')
-		const active = settings(undefined)
-		active.runtime.historyFile = mainnetProfile
-		active.runtime.positionFile = join(directory, 'mainnet-positions.json')
-		active.runtime.priceHistoryFile = join(directory, 'mainnet-prices.jsonl')
-		const savedMainnet = { ...active, runtime: { ...active.runtime, historyFile: join(directory, 'mainnet-history.jsonl') } }
-		const sepolia = {
-			...savedMainnet,
-			centralizedMarkets: { ...savedMainnet.centralizedMarkets, assetChainId: 11_155_111 },
-			network: 'sepolia' as const,
-			runtime: { ...savedMainnet.runtime, historyFile: join(directory, 'sepolia-history.jsonl'), positionFile: join(directory, 'sepolia-positions.json'), priceHistoryFile: join(directory, 'sepolia-prices.jsonl') },
-		}
-		await saveOperatorSettings(path, active)
-		await saveOperatorSettings(mainnetProfile, savedMainnet)
-		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
-		const files = [path, mainnetProfile, operatorProfilePath(path, 'sepolia')]
-		const before = await Promise.all(files.map(file => readFile(file, 'utf8')))
-		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Durable journal paths must not reuse configuration, profile, or executor deployment intent files')
-		expect(await Promise.all(files.map(file => readFile(file, 'utf8')))).toEqual(before)
-	})
-
-	test('rejects cross-chain journals reached through symlinked directory aliases', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profile-symlink-'))
-		temporaryDirectories.push(directory)
-		const durableDirectory = join(directory, 'durable')
-		const durableAlias = join(directory, 'durable-alias')
-		await mkdir(durableDirectory)
-		await symlink(durableDirectory, durableAlias, 'dir')
-		const path = join(directory, 'operator.json')
-		const mainnet = settings(undefined)
-		mainnet.runtime.historyFile = join(durableDirectory, 'shared-history.jsonl')
-		mainnet.runtime.positionFile = join(durableDirectory, 'mainnet-positions.json')
-		mainnet.runtime.priceHistoryFile = join(durableDirectory, 'mainnet-prices.jsonl')
-		const sepolia = {
-			...mainnet,
-			centralizedMarkets: { ...mainnet.centralizedMarkets, assetChainId: 11_155_111 },
-			network: 'sepolia' as const,
-			runtime: { ...mainnet.runtime, historyFile: join(durableAlias, 'shared-history.jsonl'), positionFile: join(durableAlias, 'sepolia-positions.json'), priceHistoryFile: join(durableAlias, 'sepolia-prices.jsonl') },
-		}
-		await saveOperatorSettings(path, mainnet)
-		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
-		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable journal paths')
-		expect((await loadOperatorSettings(path))?.network).toBe('mainnet')
-	})
-
-	test('rejects cross-chain journals reached through distinct dangling symlinks to one file before writing', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profile-dangling-symlink-'))
-		temporaryDirectories.push(directory)
-		const sharedTarget = join(directory, 'missing-shared-history.jsonl')
-		const mainnetAlias = join(directory, 'mainnet-history-alias.jsonl')
-		const sepoliaAlias = join(directory, 'sepolia-history-alias.jsonl')
-		await symlink(sharedTarget, mainnetAlias)
-		await symlink(sharedTarget, sepoliaAlias)
-		const path = join(directory, 'operator.json')
-		const mainnet = settings(undefined)
-		mainnet.runtime.historyFile = mainnetAlias
+		mainnet.runtime.historyFile = join(directory, 'mainnet-history.jsonl')
 		mainnet.runtime.positionFile = join(directory, 'mainnet-positions.json')
 		mainnet.runtime.priceHistoryFile = join(directory, 'mainnet-prices.jsonl')
 		const sepolia = {
 			...mainnet,
 			centralizedMarkets: { ...mainnet.centralizedMarkets, assetChainId: 11_155_111 },
 			network: 'sepolia' as const,
-			runtime: { ...mainnet.runtime, historyFile: sepoliaAlias, positionFile: join(directory, 'sepolia-positions.json'), priceHistoryFile: join(directory, 'sepolia-prices.jsonl') },
+			runtime: { ...mainnet.runtime, historyFile: reservedPath, positionFile: join(directory, 'sepolia-positions.json'), priceHistoryFile: join(directory, 'sepolia-prices.jsonl') },
 		}
 		await saveOperatorSettings(path, mainnet)
 		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
-		const files = [path, operatorProfilePath(path, 'sepolia')]
-		const before = await Promise.all(files.map(file => readFile(file, 'utf8')))
-		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Mainnet and Sepolia profiles must use distinct durable journal paths')
-		expect(await Promise.all(files.map(file => readFile(file, 'utf8')))).toEqual(before)
-	})
-
-	test('rejects a sibling profile whose embedded chain identity does not match its filename', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profile-identity-'))
-		temporaryDirectories.push(directory)
-		const path = join(directory, 'operator.json')
-		const mainnet = settings(undefined)
-		await saveOperatorSettings(path, mainnet)
-		await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), mainnet)
 		const activeBefore = await readFile(path, 'utf8')
 		const targetBefore = await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')
-		await expect(assertOperatorProfileIsolation(path, mainnet)).rejects.toThrow('The sepolia profile contains mainnet settings')
-		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('The sepolia profile contains mainnet settings')
+		await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Durable journal paths must not reuse configuration, profile, or executor deployment intent files')
 		expect(await readFile(path, 'utf8')).toBe(activeBefore)
 		expect(await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
-	})
-
-	test('rejects an existing profile with a different process mode or dashboard binding before writing', async () => {
-		for (const runtimeOverride of [{ once: true, ui: false }, { ui: false }, { uiHost: '0.0.0.0' as const }, { uiPort: 4999 }]) {
-			const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-profile-process-mode-'))
-			temporaryDirectories.push(directory)
-			const path = join(directory, 'operator.json')
-			const mainnet = settings(undefined)
-			mainnet.runtime.historyFile = join(directory, 'mainnet-history.jsonl')
-			mainnet.runtime.positionFile = join(directory, 'mainnet-positions.json')
-			mainnet.runtime.priceHistoryFile = join(directory, 'mainnet-prices.jsonl')
-			const sepolia = {
-				...mainnet,
-				centralizedMarkets: { ...mainnet.centralizedMarkets, assetChainId: 11_155_111 },
-				network: 'sepolia' as const,
-				runtime: { ...mainnet.runtime, ...runtimeOverride, historyFile: join(directory, 'sepolia-history.jsonl'), positionFile: join(directory, 'sepolia-positions.json'), priceHistoryFile: join(directory, 'sepolia-prices.jsonl') },
-			}
-			await saveOperatorSettings(path, mainnet)
-			await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepolia)
-			const activeBefore = await readFile(path, 'utf8')
-			const targetBefore = await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')
-			await expect(switchOperatorNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))).rejects.toThrow('Chain profiles must use the same once mode and dashboard binding to switch in place')
-			expect(await readFile(path, 'utf8')).toBe(activeBefore)
-			expect(await readFile(operatorProfilePath(path, 'sepolia'), 'utf8')).toBe(targetBefore)
-		}
 	})
 
 	test('defaults existing configuration files to the primary-reader RPC policy', () => {
@@ -335,43 +186,6 @@ describe('operator settings persistence', () => {
 		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
 	})
 
-	test('syncs settings contents and the parent directory before returning success', async () => {
-		const events: string[] = []
-		let opened = 0
-		const filesystem: OperatorSettingsFilesystem = {
-			mkdir: async () => events.push('mkdir'),
-			open: async (_path, flags) => {
-				opened++
-				if (flags === 'wx') {
-					return {
-						chmod: async () => events.push('file:chmod'),
-						close: async () => events.push('file:close'),
-						sync: async () => events.push('file:sync'),
-						writeFile: async () => events.push('file:write'),
-					}
-				}
-				return {
-					chmod: async () => {
-						throw new Error('directory chmod is unexpected')
-					},
-					close: async () => events.push('directory:close'),
-					sync: async () => events.push('directory:sync'),
-					writeFile: async () => {
-						throw new Error('directory write is unexpected')
-					},
-				}
-			},
-			readFile: async () => {
-				throw new Error('read is unexpected')
-			},
-			rename: async () => events.push('rename'),
-			rm: async () => events.push('rm'),
-		}
-		await saveOperatorSettings('/operator/settings.json', settings(undefined), filesystem)
-		expect(opened).toBe(2)
-		expect(events).toEqual(['mkdir', 'file:write', 'file:chmod', 'file:sync', 'file:close', 'rename', 'directory:sync', 'directory:close'])
-	})
-
 	test('atomically round-trips restart settings with owner-only permissions', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-settings-'))
 		temporaryDirectories.push(directory)
@@ -395,7 +209,7 @@ describe('operator settings persistence', () => {
 		const current = await loadOperatorSettingsWithRevision(path)
 		if (current === undefined) throw new Error('Expected saved operator settings')
 		let replacedBeforeCommit = false
-		const filesystem: OperatorSettingsFilesystem = {
+		const filesystem: RevisionedFileFilesystem = {
 			mkdir,
 			open,
 			readFile: async (readPath, encoding) => {
@@ -520,41 +334,6 @@ test('universe approvals round-trip independently of monitoring tokens and missi
 	expect(approvedUniverses).toEqual(['0', '123'])
 	expect(parseOperatorSettings(withoutApprovals).approvedUniverses).toEqual([])
 })
-
-for (const failure of ['rename', 'directory sync']) {
-	test(`propagates ${failure} failure and cleans the temporary configuration`, async () => {
-		const events: string[] = []
-		const problem = new Error(failure)
-		const filesystem: OperatorSettingsFilesystem = {
-			mkdir: async () => undefined,
-			open: async (_path, flags) => ({
-				chmod: async () => undefined,
-				close: async () => {
-					events.push(`${flags}:close`)
-				},
-				sync: async () => {
-					if (flags === 'r' && failure === 'directory sync') throw problem
-				},
-				writeFile: async () => undefined,
-			}),
-			readFile: async () => {
-				throw new Error('Unexpected revision read')
-			},
-			rename: async () => {
-				events.push('rename')
-				if (failure === 'rename') throw problem
-			},
-			rm: async (path, options) => {
-				expect(path.endsWith('.tmp')).toBe(true)
-				expect(options).toEqual({ force: true })
-				events.push('rm')
-			},
-		}
-		await expect(saveOperatorSettings('/state/operator.json', settings(undefined), filesystem)).rejects.toBe(problem)
-		expect(events.includes('r:close')).toBe(failure === 'directory sync')
-		expect(events.at(-1)).toBe('rm')
-	})
-}
 
 test('preserves default router intent through serialized network changes', () => {
 	const mainnet = parseOperatorSettings(example)

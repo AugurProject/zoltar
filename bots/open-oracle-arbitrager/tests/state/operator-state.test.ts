@@ -1,4 +1,4 @@
-import { emptySettlementSnapshot, parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
+import { parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { completeSuccessfulPoll } from '../../src/runtime/poll-completion.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -16,6 +16,7 @@ import { operatorNoticePresentation, pauseFailurePresentation } from '#dashboard
 import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
 import { publicPollFailure } from '#state/public-failures'
 import type { PositionRecord } from '#state/position-store'
+import { operatorStateFixture } from '../support/operator-state.ts'
 
 const temporaryDirectories: string[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -24,28 +25,7 @@ const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'htt
 const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet: undefined, savedWallet: undefined, wallet: undefined } as const
 
 function capabilityState(): OperatorState {
-	return {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		endpointChecks: [],
-		executionHistory: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		operationLog: [],
-		opportunities: [],
-		paused: false,
-		positions: [],
-		priceHistory: [],
-		reportPaths: [],
-		status: 'syncing',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
-	}
+	return operatorStateFixture()
 }
 
 test('publishes skipped reports beside evaluated opportunities with only their scan reason', () => {
@@ -379,17 +359,11 @@ describe('operator strategy settings', () => {
 	})
 
 	test('clears wallet-derived balances and decisions when the signer identity changes', () => {
-		const state: OperatorState = {
+		const state = operatorStateFixture({
 			activeReportCount: 1,
 			balances: { availableEth: '1', availableRep: '2', availableWeth: '3', repValueWeth: '4', totalValueWeth: '8' },
 			blockNumber: '100',
 			blockTimestamp: '1000',
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
 			opportunities: [
 				{
 					centralizedPriceDeviationBps: '25',
@@ -410,16 +384,8 @@ describe('operator strategy settings', () => {
 					windowUnit: 'blocks',
 				},
 			],
-			paused: false,
-			positions: [],
 			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			priceHistory: [],
-			reportPaths: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		})
 		clearWalletDerivedState(state)
 		expect(state.balances).toBeUndefined()
 		expect(state.opportunities).toEqual([])
@@ -464,20 +430,8 @@ describe('operator execution history', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		} satisfies PositionRecord
-		const state: OperatorState = {
-			activeReportCount: 0,
+		const state = operatorStateFixture({
 			consecutivePollFailures: 2,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
-			opportunities: [],
-			paused: false,
 			positions: [base, { ...base, closedAt: new Date(1).toISOString(), realizedNetProfitEth: '-0.04', reportId: '2', status: 'closed' }],
 			positionArchive: {
 				gasSpentByUtcDay: { [new Date().toISOString().slice(0, 10)]: '0.01' },
@@ -485,11 +439,7 @@ describe('operator execution history', () => {
 				positionCount: 3,
 				realizedNetProfitEth: '0.2',
 			},
-			priceHistory: [],
-			reportPaths: [],
 			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
 			settlements: settlementSnapshot({
 				now: new Date(),
 				queue: [],
@@ -521,8 +471,7 @@ describe('operator execution history', () => {
 				unclaimedRewardAttoEth: undefined,
 				withdrawalDecision: 'unavailable',
 			}),
-			transactionActivity: [],
-		}
+		})
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.consecutivePollFailures).toBe(2)
 		expect(snapshot.positionRecordCount).toBe(5)
@@ -567,28 +516,7 @@ describe('operator execution history', () => {
 			withdrawnToken: '0',
 			withdrawnWeth: '0',
 		} satisfies PositionRecord
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
-			opportunities: [],
-			paused: false,
-			positions: [base, { ...base, reportId: '2', status: 'recovery-required' }],
-			priceHistory: [],
-			reportPaths: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ positions: [base, { ...base, reportId: '2', status: 'recovery-required' }], status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0')
@@ -649,28 +577,7 @@ describe('operator execution history', () => {
 			reportId: '4',
 			status: 'closed',
 		} satisfies PositionRecord
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			endpointChecks: [],
-			executionHistory: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			operationLog: [],
-			opportunities: [],
-			paused: false,
-			positions: [pending, manuallyClosed],
-			priceHistory: [],
-			reportPaths: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ positions: [pending, manuallyClosed], status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalHedgedProfitBeforeGasEth).toBe('0')
 		expect(snapshot.totalOpenHedgedNetProfitEth).toBe('0')
@@ -704,28 +611,7 @@ describe('operator execution history', () => {
 		await appendFile(path, `${JSON.stringify({ chainId: 1, record })}\n`, { encoding: 'utf8' })
 		const history = await loadExecutionHistory(path, 1)
 		expect(history).toEqual([record])
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			executionHistory: history,
-			endpointChecks: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			opportunities: [],
-			operationLog: [],
-			paused: false,
-			positions: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			priceHistory: [],
-			reportPaths: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ executionHistory: history, status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, fixed)
 		expect(snapshot.totalEstimatedNetProfitWeth).toBe('0.05')
 		expect(snapshot.totalActualGasCostEth).toBe('0.002')
@@ -895,28 +781,7 @@ describe('operator execution history', () => {
 		await writeFile(path, `${records.map(record => JSON.stringify({ chainId: 1, record })).join('\n')}\n`, 'utf8')
 		const history = await loadExecutionHistory(path, 1)
 		expect(history).toHaveLength(501)
-		const state: OperatorState = {
-			activeReportCount: 0,
-			balances: undefined,
-			blockNumber: undefined,
-			blockTimestamp: undefined,
-			executionHistory: history,
-			endpointChecks: [],
-			gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-			lastError: undefined,
-			lastPollAt: undefined,
-			opportunities: [],
-			operationLog: [],
-			paused: false,
-			positions: [],
-			status: 'running',
-			tokenAddresses: [],
-			tokenMarkets: [],
-			priceHistory: [],
-			reportPaths: [],
-			settlements: emptySettlementSnapshot(),
-			transactionActivity: [],
-		}
+		const state = operatorStateFixture({ executionHistory: history, status: 'running' })
 		const snapshot = operatorSnapshot(state, strategy(), submission, connectivity, { ...fixed, execute: true, wallet: address })
 		expect(snapshot.executionHistory).toHaveLength(500)
 		expect(snapshot.executionHistoryRecordCount).toBe(501)
