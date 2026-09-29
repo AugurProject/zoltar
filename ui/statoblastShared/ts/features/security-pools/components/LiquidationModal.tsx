@@ -398,14 +398,6 @@ export function LiquidationModal({
 						</button>
 					</div>
 				)}
-				<LiquidationTransactionReview
-					receiverHealthy={receiverHealthy}
-					liquidationExecutionMode={liquidationExecutionMode}
-					liquidationFundingPreview={initialPriceError === undefined ? liquidationFundingPreview : undefined}
-					liquidationSimulation={liquidationSimulation}
-					selectedPool={selectedPool}
-					walletBalanceAttoEth={walletBalanceAttoEth}
-				/>
 			</div>
 			<div className='actions liquidation-modal-actions'>
 				<TransactionActionButton
