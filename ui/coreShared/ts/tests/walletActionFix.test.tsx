@@ -147,7 +147,6 @@ describe('wallet action fix', () => {
 			</WalletActionsProvider>
 		)
 		await renderPage(<Harness />)
-		const page = within(document.body)
 		const fix = await focusAndClickConnectFix()
 		fix.blur()
 		await settle({ disabled: true, reason: 'Enter a title.' })

@@ -207,8 +207,8 @@ describe('live workflow safety boundary', () => {
 				configurationError={undefined}
 				selectedUniverseId={selectedUniverseId}
 				onWorkflowLockChange={locked => workflowLocks.push(locked)}
-				onWalletSummaryChange={recordSummary ? recordWalletSummary : undefined}
-				walletConnectRequestNonce={walletConnectRequestNonce}
+				{...(recordSummary ? { onWalletSummaryChange: recordWalletSummary } : {})}
+				{...(walletConnectRequestNonce === undefined ? {} : { walletConnectRequestNonce })}
 			/>
 		)
 		const startWalletChainRead = async (trigger: () => void) => {
@@ -274,7 +274,7 @@ describe('live workflow safety boundary', () => {
 		expect(walletSummaries).toHaveLength(summariesBeforeUnmountedConnectionResolution)
 		expect(walletListeners.size).toBe(0)
 		releaseWalletChainRead()
-		const poolRoute = `security-pool/${pool}`
+		const poolRoute = `security-pool/${pool}` as const
 		deferredWalletChainRead = createDeferred<number>()
 		walletChainReadStarted = createDeferred<undefined>()
 		rendered = await renderIntoDocument(liveTradingView(poolRoute, { recordSummary: false, walletConnectRequestNonce: 0 }))
