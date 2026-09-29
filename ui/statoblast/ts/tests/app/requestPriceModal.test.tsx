@@ -81,7 +81,7 @@ test('closes after confirmation and permits a new request when reopened after st
 			</GlobalTransactionPresentationProvider>
 		)
 	}
-	const rendered = trackRendered(await renderIntoDocument(<Harness />))
+	trackRendered(await renderIntoDocument(<Harness />))
 	const queries = within(document.body)
 	await enterPrice('3')
 	await settle()
@@ -138,7 +138,7 @@ test('keeps focus inside the price dialog when the request action becomes pendin
 			</GlobalTransactionPresentationProvider>
 		)
 	}
-	const rendered = trackRendered(await renderIntoDocument(<Harness />))
+	trackRendered(await renderIntoDocument(<Harness />))
 	const queries = within(document.body)
 	await enterPrice('3')
 	await settle()
@@ -193,7 +193,7 @@ test('closes after a confirmed request when refreshed pool state clears the revi
 			</GlobalTransactionPresentationProvider>
 		)
 	}
-	const rendered = trackRendered(await renderIntoDocument(<Harness />))
+	trackRendered(await renderIntoDocument(<Harness />))
 	const queries = within(document.body)
 	await enterPrice('3')
 	await settle()
@@ -241,7 +241,7 @@ test('prepares approval and request actions alongside editable price controls in
 			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
 		}
 	}
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<>
 				<RequestPriceModal {...props} onConfirm={onConfirm} />
@@ -333,7 +333,7 @@ test('shows preparation failure with retry and keeps manual entry available', as
 		attempts += 1
 	}
 	const preparationFailure: GlobalTransactionPresentation = { tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.', operationKey: 'price-request-preparation' }
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={preparationFailure}>
 				<RequestPriceModal {...props} onConfirm={onConfirm} />
@@ -370,7 +370,7 @@ test('allows another price request after a failed transaction step', async () =>
 		controller.startWithoutReview(0)
 		controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
-	const rendered = trackRendered(await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />))
+	trackRendered(await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />))
 	const queries = within(document.body)
 	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 	await settle()
@@ -668,7 +668,7 @@ test('keeps submitted funding and pool details beside the original action after 
 			</GlobalTransactionPresentationProvider>
 		)
 	}
-	const rendered = trackRendered(await renderIntoDocument(<Harness />))
+	trackRendered(await renderIntoDocument(<Harness />))
 	const queries = within(document.body)
 	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 	await settle()
@@ -713,7 +713,7 @@ test.each(['preparation', 'transaction step'] as const)('prepares again after a 
 		controller.startWithoutReview(0)
 		controller.failed({ kind: 'error', message: 'nonce too low' })
 	}
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={failure === 'preparation' ? { tone: 'error', title: 'Price request failed', detail: 'Uniswap quote unavailable.' } : undefined}>
 				<RequestPriceModal {...props} fetchPrice={async () => BigInt(++quoteReads === 1 ? 2 : 4) * 10n ** 18n} onConfirm={onConfirm} />
@@ -746,7 +746,7 @@ test.each(['automatic', 'manual'] as const)('prepares %s again after visiting an
 			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
 		}
 	}
-	const rendered = trackRendered(await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />))
+	trackRendered(await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />))
 	const queries = within(document.body)
 	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 	await settle()
@@ -806,7 +806,7 @@ test('canceling a slow preparation leaves an independent transaction review acti
 test('fetches only on demand, fills the editable field, and prepares the fetched price', async () => {
 	let fetches = 0
 	const prices: Array<bigint | undefined> = []
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<RequestPriceModal
 				{...props}
@@ -842,7 +842,7 @@ test('a late Uniswap result cannot overwrite a manual edit', async () => {
 		release = resolve
 	})
 	const prices: Array<bigint | undefined> = []
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<RequestPriceModal
 				{...props}
@@ -867,7 +867,7 @@ test('a late Uniswap result cannot overwrite a manual edit', async () => {
 
 test('a failed fetch preserves the input and allows fetching again or manual entry', async () => {
 	let fetches = 0
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<RequestPriceModal
 				{...props}
@@ -918,7 +918,7 @@ test('ignores a quote completed after the dialog closes and reopens', async () =
 
 test('keeps the empty price form compact until an estimate is entered', async () => {
 	let preparations = 0
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<RequestPriceModal
 				{...props}
@@ -992,7 +992,7 @@ test('does not announce submission while preparing an unconfirmed price review',
 			</GlobalTransactionPresentationProvider>
 		)
 	}
-	const rendered = trackRendered(await renderIntoDocument(<Harness />))
+	trackRendered(await renderIntoDocument(<Harness />))
 	const dialog = within(document.body).getByRole('dialog', { name: 'Request new price' })
 	await act(() => fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } }))
 	await settle()
@@ -1003,7 +1003,7 @@ test('does not announce submission while preparing an unconfirmed price review',
 test('offers the switch fix in place of a wrong-network confirmation guard', async () => {
 	const { calls, walletActions } = createWalletActions()
 	let attempts = 0
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<WalletActionsProvider walletActions={walletActions}>
 				<RequestPriceModal
@@ -1046,7 +1046,7 @@ test('prepares retries inline without a review action and requests the wallet on
 			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
 		}
 	}
-	const rendered = trackRendered(await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />))
+	trackRendered(await renderIntoDocument(<RequestPriceModal {...props} onConfirm={onConfirm} />))
 	const page = within(document.body)
 	await act(() => fireEvent.click(page.getByRole('button', { name: 'Fetch from Uniswap' })))
 	await settle()
@@ -1091,7 +1091,7 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 			</GlobalTransactionPresentationProvider>
 		)
 	}
-	const rendered = trackRendered(await renderIntoDocument(<Harness />))
+	trackRendered(await renderIntoDocument(<Harness />))
 	const queries = within(document.body)
 	await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 	await settle()
@@ -1121,7 +1121,7 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 
 test('keeps preparation paused when a retry quote fails', async () => {
 	let attempts = 0
-	const rendered = trackRendered(
+	trackRendered(
 		await renderIntoDocument(
 			<GlobalTransactionPresentationProvider transaction={{ tone: 'error', title: 'Price request failed', detail: 'Preparation failed.' }}>
 				<RequestPriceModal
