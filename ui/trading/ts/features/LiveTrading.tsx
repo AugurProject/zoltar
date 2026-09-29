@@ -16,7 +16,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { useLiveTradingController } from './liveTradingController.js'
 import { liveTradingControllerServices } from './liveTradingControllerHelpers.js'
-import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
+import type { LiveTradingControllerServices, LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
 import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
@@ -320,33 +320,37 @@ export function LiveTrading({
 								<ErrorNotice message={liveCopy.securityPoolCouldNotLoad(selected.loadError)} />
 							</SectionBlock>
 						)
+					const workflowPanelProps: LiveWorkflowPanelProps = {
+						configuration,
+						market: selected,
+						balances: selectedBalances,
+						balanceState: selectedBalanceState,
+						balanceError,
+						account,
+						walletClient,
+						networkMismatchReason,
+						wallet: ticketWallet,
+						settings: tradeSettings,
+						externallyLocked: ticketLocked,
+						refresh: () => refresh(configuration, marketPage.start, 'liquidity'),
+						onKnownReceipt: refreshWalletSummaryAfterReceipt,
+						executeWithCurrentWalletContext,
+						createGuardedWalletWrite,
+						retryBalances,
+						onWorkflowLockChange: updateLiquidityWorkflowLock,
+					}
 					if (creatingMarket)
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
 								<LiveLiquidityControls
-									configuration={configuration}
-									market={selected}
-									balances={selectedBalances}
-									balanceState={selectedBalanceState}
-									balanceError={balanceError}
-									account={account}
-									walletClient={walletClient}
-									networkMismatchReason={networkMismatchReason}
-									wallet={ticketWallet}
-									settings={tradeSettings}
+									{...workflowPanelProps}
 									walletEthAttoEth={walletEthAttoEth}
-									externallyLocked={ticketLocked}
 									nowSeconds={nowSeconds}
 									refresh={async () => {
 										await refresh(configuration, marketPage.start, 'liquidity')
 										setCreatedMarketTitle(selected.title)
 									}}
-									onKnownReceipt={refreshWalletSummaryAfterReceipt}
-									executeWithCurrentWalletContext={executeWithCurrentWalletContext}
-									createGuardedWalletWrite={createGuardedWalletWrite}
-									retryBalances={retryBalances}
-									onWorkflowLockChange={updateLiquidityWorkflowLock}
 									services={liquidityServices}
 								/>
 							</SectionBlock>
@@ -355,52 +359,8 @@ export function LiveTrading({
 						<SectionBlock className='market-workspace'>
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
-								{activeView === 'settlement' ? (
-									<LiveSettlementControls
-										configuration={configuration}
-										market={selected}
-										balances={selectedBalances}
-										balanceState={selectedBalanceState}
-										balanceError={balanceError}
-										account={account}
-										walletClient={walletClient}
-										networkMismatchReason={networkMismatchReason}
-										wallet={ticketWallet}
-										settings={tradeSettings}
-										externallyLocked={ticketLocked}
-										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
-										onKnownReceipt={refreshWalletSummaryAfterReceipt}
-										executeWithCurrentWalletContext={executeWithCurrentWalletContext}
-										createGuardedWalletWrite={createGuardedWalletWrite}
-										retryBalances={retryBalances}
-										onWorkflowLockChange={updateLiquidityWorkflowLock}
-										services={settlementServices}
-									/>
-								) : null}
-								{activeView === 'liquidity' ? (
-									<LiveLiquidityControls
-										configuration={configuration}
-										market={selected}
-										balances={selectedBalances}
-										balanceState={selectedBalanceState}
-										balanceError={balanceError}
-										account={account}
-										walletClient={walletClient}
-										networkMismatchReason={networkMismatchReason}
-										wallet={ticketWallet}
-										settings={tradeSettings}
-										walletEthAttoEth={walletEthAttoEth}
-										externallyLocked={ticketLocked}
-										nowSeconds={nowSeconds}
-										refresh={() => refresh(configuration, marketPage.start, 'liquidity')}
-										onKnownReceipt={refreshWalletSummaryAfterReceipt}
-										executeWithCurrentWalletContext={executeWithCurrentWalletContext}
-										createGuardedWalletWrite={createGuardedWalletWrite}
-										retryBalances={retryBalances}
-										onWorkflowLockChange={updateLiquidityWorkflowLock}
-										services={liquidityServices}
-									/>
-								) : null}
+								{activeView === 'settlement' ? <LiveSettlementControls {...workflowPanelProps} services={settlementServices} /> : null}
+								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 								{activeView === 'trade' && selectedPairInitialized ? <LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={ticketLocked} /> : null}
 							</div>

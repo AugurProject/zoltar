@@ -239,51 +239,27 @@ export function ReportingSection({
 	})()
 	const presetReasons = [minimumOutcomeChangeContribution.reason, maxProfitContribution.reason, maxContributionAmount.reason].filter((reason, index, reasons) => reason !== undefined && !isRedundantPresetReason(reason) && reason !== presetBlocker && reasons.indexOf(reason) === index)
 	const vaultFundingLoadingReason = usesWalletFunding && activeReportingDetails?.forkContinuation && actualReportDepositAmount !== undefined && walletDepositAmount === undefined ? reportingCopy.loadingVaultFunding : undefined
-	const reportGuardMessage =
-		vaultFundingLoadingReason ??
-		fullReportingLoadingReason ??
-		reportActionGuardMessage ??
-		reportControlsLockedReason ??
-		getReportingReportGuardMessage({
-			actualDepositAmount: actualReportDepositAmount,
-			accountAddress: accountState.address,
-			contributionFunding,
-			walletFundingAvailable: true,
-			walletDepositAmount,
-			contributionPreviewReason: reportContributionPreview?.reason,
-			isOnActiveAppChain,
-			remainingSelectedOutcomeCapacity,
-			reportAmount: reportingForm.reportAmount,
-			reportingStatus,
-			selectedOutcome,
-			selectedAmount,
-			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
-			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
-			viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
-			viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
-		})
+	const reportGuardParameters = {
+		actualDepositAmount: actualReportDepositAmount,
+		accountAddress: accountState.address,
+		contributionFunding,
+		walletFundingAvailable: true,
+		walletDepositAmount,
+		contributionPreviewReason: reportContributionPreview?.reason,
+		isOnActiveAppChain,
+		remainingSelectedOutcomeCapacity,
+		reportAmount: reportingForm.reportAmount,
+		reportingStatus,
+		selectedOutcome,
+		selectedAmount,
+		viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
+		viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
+		viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
+		viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
+	}
+	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingReportGuardMessage(reportGuardParameters)
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
-	const reportingApprovalGuardMessage =
-		vaultFundingLoadingReason ??
-		getReportingReportGuardMessage({
-			actualDepositAmount: actualReportDepositAmount,
-			accountAddress: accountState.address,
-			contributionFunding,
-			walletFundingAvailable: true,
-			walletDepositAmount,
-			contributionPreviewReason: reportContributionPreview?.reason,
-			isOnActiveAppChain,
-			remainingSelectedOutcomeCapacity,
-			reportAmount: reportingForm.reportAmount,
-			reportingStatus,
-			selectedOutcome,
-			selectedAmount,
-			requireAllowance: false,
-			viewerPoolHeldVaultRepBackingAttoRep: effectiveReportingDetails?.viewerPoolHeldVaultRepBackingAttoRep,
-			viewerVaultExists: effectiveReportingDetails?.viewerVaultExists ?? false,
-			viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
-			viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
-		})
+	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
 	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage

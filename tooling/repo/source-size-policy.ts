@@ -36,12 +36,10 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/liquidator/src/state/operator-state.ts', 668],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
-		['ui/coreShared/ts/simulation/tevmEngine.ts', 876],
+		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 725],
-		['ui/coreShared/ts/components/SimulationBanner.tsx', 646],
 		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 609],
 		['ui/statoblastShared/ts/features/open-oracle/lib/openOracle.ts', 682],
-		['ui/statoblastShared/ts/simulation/statoblastScenarios.ts', 614],
 	]),
 	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [
 		['augurScan/browser/app.ts', 1696],

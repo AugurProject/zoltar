@@ -7,7 +7,7 @@ import type { DeploymentConfiguration } from './config.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
-import { deadlineAtBlock, latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
+import { latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from './authorization.js'
 
 export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId, waitForActiveEnvironmentReady } from './runtimeClients.js'
@@ -390,12 +390,9 @@ async function simulateEntryWithExpiry(client: WalletClient, configuration: Depl
 	const {
 		blockNumber,
 		blockHash,
-		result: { simulation, deadline },
-	} = await stableSimulation(client, async block => {
-		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-		const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-		return { simulation, deadline }
-	})
+		deadline,
+		result: simulation,
+	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash }))
 	return { blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
 }
 
@@ -403,8 +400,6 @@ export async function simulateEntry(client: WalletClient, configuration: Deploym
 	requireTransactionValidityMinutes(validityMinutes)
 	return await simulateEntryWithExpiry(client, configuration, market, account, side, amount, { validityMinutes }, slippageBps)
 }
-
-type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 
 export async function submitFreshEntry(client: WalletClient, configuration: DeploymentConfiguration, account: Address, quote: Awaited<ReturnType<typeof simulateEntry>>, guardedWrite: GuardedWalletWrite): Promise<Hash> {
 	const refreshed = await simulateEntryWithExpiry(client, configuration, quote.market, account, quote.side, quote.amount, quote.deadline, quote.slippageBps)
@@ -421,9 +416,9 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 	const {
 		blockNumber,
 		blockHash,
-		result: { simulation, deadline, longBalance, maximumLongShares },
-	} = await stableSimulation(client, async block => {
-		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+		deadline,
+		result: { simulation, longBalance, maximumLongShares },
+	} = await simulateWithDeadline(client, expiry, async (block, deadline) => {
 		const quote = await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'quoteExactOutput', account, args: [side === 'YES', completeSets], blockHash: block.blockHash })
 		const longSharesSwapped = quote.result[0]
 		const totalLongShares = completeSets + longSharesSwapped
@@ -438,7 +433,7 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline)
 		const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data], blockHash: block.blockHash })
 		void simulation
-		return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, deadline, longBalance, maximumLongShares }
+		return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, longBalance, maximumLongShares }
 	})
 	return {
 		blockNumber,

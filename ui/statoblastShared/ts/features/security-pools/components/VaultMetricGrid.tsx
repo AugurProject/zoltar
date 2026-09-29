@@ -20,20 +20,35 @@ function VaultPrimaryMetric({ className, label, suffix, value }: { className?: s
 	)
 }
 
-function getAssociatedRepToneClass({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
-	if (isCurrentlyHealthy === false) return 'metric-value-danger'
-	if (isCurrentlyHealthy !== true) return undefined
-	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return 'metric-value-success'
-	if (associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return 'metric-value-warning'
-	return 'metric-value-success'
+function BadDebtMetric({ value, valueClassName }: { value: bigint; valueClassName?: string }) {
+	return (
+		<MetricField label={securityPoolCopy.badDebt} valueClassName={valueClassName}>
+			<CurrencyValue exactWhenRoundedToZero value={value} suffix={commonCopy.eth} />
+		</MetricField>
+	)
 }
 
-function getAssociatedRepStatusLabel({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
-	if (isCurrentlyHealthy === false) return securityPoolCopy.vaultHealthUnderwater
-	if (isCurrentlyHealthy !== true) return undefined
-	if (associatedRepPerCapacityBps === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined) return securityPoolCopy.vaultHealthHealthy
-	if (associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return securityPoolCopy.vaultHealthNearMinimum
-	return securityPoolCopy.vaultHealthHealthy
+function DisputeStakedMetric({ value }: { value: bigint }) {
+	return (
+		<MetricField label={commonCopy.disputeStakedAttoRep}>
+			<CurrencyValue exactWhenRoundedToZero value={value} suffix={commonCopy.rep} />
+		</MetricField>
+	)
+}
+
+function PriceValidUntilMetric({ timestamp }: { timestamp: bigint }) {
+	return (
+		<MetricField label={securityPoolCopy.priceValidUntil}>
+			<TimestampValue timestamp={timestamp} />
+		</MetricField>
+	)
+}
+
+function getAssociatedRepHealth({ associatedRepPerCapacityBps, isCurrentlyHealthy, selectedPoolStatoblastSecurityMultiplierBps }: { associatedRepPerCapacityBps: bigint | undefined; isCurrentlyHealthy: boolean | undefined; selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined }) {
+	if (isCurrentlyHealthy === false) return { statusLabel: securityPoolCopy.vaultHealthUnderwater, toneClass: 'metric-value-danger' }
+	if (isCurrentlyHealthy !== true) return { statusLabel: undefined, toneClass: undefined }
+	if (associatedRepPerCapacityBps !== undefined && selectedPoolStatoblastSecurityMultiplierBps !== undefined && associatedRepPerCapacityBps <= (selectedPoolStatoblastSecurityMultiplierBps * 105n) / 100n) return { statusLabel: securityPoolCopy.vaultHealthNearMinimum, toneClass: 'metric-value-warning' }
+	return { statusLabel: securityPoolCopy.vaultHealthHealthy, toneClass: 'metric-value-success' }
 }
 
 export function VaultMetricGrid({
@@ -50,12 +65,7 @@ export function VaultMetricGrid({
 	selectedPoolStatoblastSecurityMultiplierBps,
 	underwritingLimitAttoEth,
 }: VaultMetricGridProps) {
-	const associatedRepToneClass = getAssociatedRepToneClass({
-		associatedRepPerCapacityBps,
-		isCurrentlyHealthy,
-		selectedPoolStatoblastSecurityMultiplierBps,
-	})
-	const associatedRepStatusLabel = getAssociatedRepStatusLabel({
+	const { statusLabel: associatedRepStatusLabel, toneClass: associatedRepToneClass } = getAssociatedRepHealth({
 		associatedRepPerCapacityBps,
 		isCurrentlyHealthy,
 		selectedPoolStatoblastSecurityMultiplierBps,
@@ -76,21 +86,9 @@ export function VaultMetricGrid({
 					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
 				</div>
 				<div className='vault-preview-meta'>
-					{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? (
-						<MetricField label={securityPoolCopy.badDebt}>
-							<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
-						</MetricField>
-					) : null}
-					{disputeStakedAttoRep === undefined ? null : (
-						<MetricField label={commonCopy.disputeStakedAttoRep}>
-							<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-					)}
-					{priceValidUntilTimestamp === undefined ? null : (
-						<MetricField label={securityPoolCopy.priceValidUntil}>
-							<TimestampValue timestamp={priceValidUntilTimestamp} />
-						</MetricField>
-					)}
+					{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? <BadDebtMetric value={badDebtAttoEth} /> : undefined}
+					{disputeStakedAttoRep === undefined ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
+					{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 				</div>
 			</div>
 		)
@@ -113,16 +111,8 @@ export function VaultMetricGrid({
 				</div>
 			</div>
 			<div className='vault-risk-summary'>
-				{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? (
-					<MetricField label={securityPoolCopy.badDebt} valueClassName='metric-value-danger'>
-						<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
-					</MetricField>
-				) : undefined}
-				{disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n ? (
-					<MetricField label={commonCopy.disputeStakedAttoRep}>
-						<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
-					</MetricField>
-				) : undefined}
+				{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? <BadDebtMetric value={badDebtAttoEth} valueClassName='metric-value-danger' /> : undefined}
+				{disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n ? <DisputeStakedMetric value={disputeStakedAttoRep} /> : undefined}
 			</div>
 			<details className='vault-backing-details'>
 				<summary>{workspaceCopy.backingDetails}</summary>
@@ -138,21 +128,9 @@ export function VaultMetricGrid({
 							</span>
 						</MetricField>
 					)}
-					{badDebtAttoEth === undefined || badDebtAttoEth > 0n ? undefined : (
-						<MetricField label={securityPoolCopy.badDebt}>
-							<CurrencyValue exactWhenRoundedToZero value={badDebtAttoEth} suffix={commonCopy.eth} />
-						</MetricField>
-					)}
-					{disputeStakedAttoRep === undefined || disputeStakedAttoRep > 0n ? undefined : (
-						<MetricField label={commonCopy.disputeStakedAttoRep}>
-							<CurrencyValue exactWhenRoundedToZero value={disputeStakedAttoRep} suffix={commonCopy.rep} />
-						</MetricField>
-					)}
-					{priceValidUntilTimestamp === undefined ? undefined : (
-						<MetricField label={securityPoolCopy.priceValidUntil}>
-							<TimestampValue timestamp={priceValidUntilTimestamp} />
-						</MetricField>
-					)}
+					{badDebtAttoEth === undefined || badDebtAttoEth > 0n ? undefined : <BadDebtMetric value={badDebtAttoEth} />}
+					{disputeStakedAttoRep === undefined || disputeStakedAttoRep > 0n ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
+					{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 				</div>
 			</details>
 		</div>

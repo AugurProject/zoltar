@@ -1,13 +1,9 @@
 import * as workflowCopy from '../../copy/workflows.js'
-import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
-import type { LiveMarket, SettlementOperation, ShareOutcome } from '../../protocol/live.js'
-import type { TradeSettings } from '../../lib/tradeSettings.js'
+import type { SettlementOperation, ShareOutcome } from '../../protocol/live.js'
 import * as settlementCopy from '../../copy/settlement.js'
 import type { LiveSettlementServices } from '../LiveSettlementControls.js'
-import type { GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
-import type { BalanceState } from './liveTradingTypes.js'
+import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useQuotedTransaction } from './useQuotedTransaction.js'
 
 type SettlementSimulation = Awaited<ReturnType<LiveSettlementServices['simulate']>>
@@ -34,30 +30,19 @@ export function useSettlementWorkflowController({
 	onMigrationConfirmed,
 	onRedemptionConfirmed,
 	services,
-}: {
-	configuration: DeploymentConfiguration
-	market: LiveMarket
-	account: Address | undefined
-	walletClient: WalletClient | undefined
-	externallyLocked: boolean
-	balanceState: BalanceState
-	operation: SettlementOperation
-	parsedAmount: bigint | undefined
-	sourceOutcome: ShareOutcome
-	targetOutcomeIndexes: readonly bigint[]
-	inputBlocker: string | undefined
-	/** Every input and pool field the settlement quote depends on; a change re-quotes. */
-	contextKey: string
-	settings: TradeSettings
-	refresh(): Promise<void>
-	onKnownReceipt(): void
-	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
-	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
-	onWorkflowLockChange(locked: boolean): void
-	onMigrationConfirmed(): void
-	onRedemptionConfirmed?(): void
-	services: LiveSettlementServices
-}) {
+}: LiveWorkflowContext &
+	Readonly<{
+		operation: SettlementOperation
+		parsedAmount: bigint | undefined
+		sourceOutcome: ShareOutcome
+		targetOutcomeIndexes: readonly bigint[]
+		inputBlocker: string | undefined
+		/** Every input and pool field the settlement quote depends on; a change re-quotes. */
+		contextKey: string
+		onMigrationConfirmed(): void
+		onRedemptionConfirmed?(): void
+		services: LiveSettlementServices
+	}>) {
 	const simulationParameters = (): Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> => {
 		if (operation === 'redeem-complete-set' && parsedAmount !== undefined) return { amount: parsedAmount, validityMinutes: settings.validityMinutes, slippageBps: settings.slippageBps }
 		if (operation === 'migrate-shares') return { sourceOutcome, targetOutcomeIndexes }

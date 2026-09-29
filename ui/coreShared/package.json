@@ -111,6 +111,10 @@
 			"bun": "./ts/components/SimulationBanner.tsx",
 			"default": "./js/components/SimulationBanner.js"
 		},
+		"./components/SimulationControlFields.js": {
+			"bun": "./ts/components/SimulationControlFields.tsx",
+			"default": "./js/components/SimulationControlFields.js"
+		},
 		"./components/Skeleton.js": {
 			"bun": "./ts/components/Skeleton.tsx",
 			"default": "./js/components/Skeleton.js"

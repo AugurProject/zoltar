@@ -2,11 +2,10 @@ import { maxUint256, type Address, type WalletClient } from '@zoltar/core-shared
 import { tradingContracts } from '../generated/contractArtifact.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveMarket } from './liveMarket.js'
-import { deadlineAtBlock, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, stableSimulation, UI_SLIPPAGE_BPS, type TransactionExpiry } from './tradeQuote.js'
+import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
 
 const pair = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair
 const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter
-type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 export type LiquidityOperation = 'initialize' | 'add' | 'remove'
 
 async function simulateLiquidityWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, operation: LiquidityOperation, amount: bigint, conditionalYesBps: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
@@ -16,15 +15,13 @@ async function simulateLiquidityWithExpiry(client: WalletClient, configuration: 
 		const {
 			blockNumber,
 			blockHash,
-			result: { simulation, deadline },
-		} = await stableSimulation(client, async block => {
-			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-			const simulation =
-				pairAddress === undefined
-					? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-					: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-			return { simulation, deadline }
-		})
+			deadline,
+			result: simulation,
+		} = await simulateWithDeadline(client, expiry, async (block, deadline) =>
+			pairAddress === undefined
+				? await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'createPairAndInitializeWithEth', account, args: [market.pool, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash })
+				: await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'initializeWithEth', account, args: [pairAddress, conditionalYesBps, 0n, account, deadline], value: amount, blockHash: block.blockHash }),
+		)
 		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: 0n, expectedNoDeposit: 0n }
 	}
 	if (pairAddress === undefined) throw new Error('Pair is unavailable')
@@ -32,23 +29,17 @@ async function simulateLiquidityWithExpiry(client: WalletClient, configuration: 
 		const {
 			blockNumber,
 			blockHash,
-			result: { simulation, deadline },
-		} = await stableSimulation(client, async block => {
-			const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-			const simulation = await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockHash: block.blockHash })
-			return { simulation, deadline }
-		})
+			deadline,
+			result: simulation,
+		} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'addLiquidityWithEth', account, args: [pairAddress, maxUint256, maxUint256, 0n, account, deadline], value: amount, blockHash: block.blockHash }))
 		return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: simulation.result.liquidity, expectedYes: 0n, expectedNo: 0n, expectedYesDeposit: simulation.result.yesUsed, expectedNoDeposit: simulation.result.noUsed }
 	}
 	const {
 		blockNumber,
 		blockHash,
-		result: { simulation, deadline },
-	} = await stableSimulation(client, async block => {
-		const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
-		const simulation = await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockHash: block.blockHash })
-		return { simulation, deadline }
-	})
+		deadline,
+		result: simulation,
+	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'removeLiquidity', account, args: [amount, 0n, 0n, account, deadline], blockHash: block.blockHash }))
 	return { blockNumber, blockHash, operation, amount, conditionalYesBps, deadline, slippageBps, market, result: simulation.result, expectedLiquidity: 0n, expectedYes: simulation.result[0], expectedNo: simulation.result[1], expectedYesDeposit: 0n, expectedNoDeposit: 0n }
 }
 

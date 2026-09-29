@@ -8,11 +8,17 @@ import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core
 import { TradingTransactionHash } from './LiveTradingTransactionUi.js'
 import { resolveActionGroupMessage, transactionInFlight, transactionPendingLabel, transactionStatusText } from './live/transactionPresentation.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
+import type { PanelWallet } from './live/liveTradingTypes.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 
 const ALWAYS_AVAILABLE: ActionAvailability = { disabled: false, reason: undefined }
 
 export type WalletStep = Readonly<{ label: string; onClick(): void; disabled: boolean }>
+
+/** The connect or switch-network step shown instead of the action until the wallet is ready. */
+export function panelWalletStep(wallet: PanelWallet, walletReady: boolean, workflowLocked: boolean): WalletStep | undefined {
+	return walletReady ? undefined : { label: wallet.actionLabel, disabled: workflowLocked, onClick: () => void wallet.connect() }
+}
 
 /**
  * The one panel pattern shared by trade, liquidity, and settlement: the estimate or quote above, then the outcome
