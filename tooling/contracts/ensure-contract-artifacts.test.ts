@@ -1,18 +1,9 @@
 import { expect, test } from 'bun:test'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
+import { pathExists } from '../repo/fs.mts'
 import { getRequiredContractArtifactRelativePaths, getRequiredSharedOutputRelativePaths, removeDeprecatedContractArtifactOutputs, removeUnexpectedSharedSourceOutputs } from './ensure-contract-artifacts.mts'
-
-async function exists(filePath: string) {
-	try {
-		await access(filePath)
-		return true
-	} catch (error) {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false
-		throw error
-	}
-}
 
 test('ensure-contract-artifacts requires shared package export outputs', async () => {
 	const requiredSharedOutputs = await getRequiredSharedOutputRelativePaths()
@@ -42,8 +33,8 @@ test('ensure-contract-artifacts removes the deprecated cached contract artifact'
 
 		await removeDeprecatedContractArtifactOutputs(repositoryRoot)
 
-		expect(await exists(deprecatedArtifactPath)).toBe(false)
-		expect(await exists(currentArtifactPath)).toBe(true)
+		expect(await pathExists(deprecatedArtifactPath)).toBe(false)
+		expect(await pathExists(currentArtifactPath)).toBe(true)
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}
@@ -65,12 +56,12 @@ test('ensure-contract-artifacts removes compiled outputs that can shadow shared 
 
 		await removeUnexpectedSharedSourceOutputs(repositoryRoot)
 
-		expect(await exists(path.join(sharedSourceRoot, 'oracleInitialReport.ts'))).toBe(true)
-		expect(await exists(path.join(sharedSourceRoot, 'oracleInitialReport.js'))).toBe(false)
-		expect(await exists(path.join(sharedSourceRoot, 'oracleInitialReport.js.map'))).toBe(false)
-		expect(await exists(path.join(sharedSourceRoot, 'nested/generated.d.ts'))).toBe(false)
-		expect(await exists(path.join(sharedSourceRoot, 'nested/generated.d.ts.map'))).toBe(false)
-		expect(await exists(path.join(sharedSourceRoot, 'nested/standalone.d.ts'))).toBe(true)
+		expect(await pathExists(path.join(sharedSourceRoot, 'oracleInitialReport.ts'))).toBe(true)
+		expect(await pathExists(path.join(sharedSourceRoot, 'oracleInitialReport.js'))).toBe(false)
+		expect(await pathExists(path.join(sharedSourceRoot, 'oracleInitialReport.js.map'))).toBe(false)
+		expect(await pathExists(path.join(sharedSourceRoot, 'nested/generated.d.ts'))).toBe(false)
+		expect(await pathExists(path.join(sharedSourceRoot, 'nested/generated.d.ts.map'))).toBe(false)
+		expect(await pathExists(path.join(sharedSourceRoot, 'nested/standalone.d.ts'))).toBe(true)
 	} finally {
 		await rm(repositoryRoot, { force: true, recursive: true })
 	}

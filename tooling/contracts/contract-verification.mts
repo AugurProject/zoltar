@@ -412,16 +412,27 @@ async function pollVerificationStatus(fetchFn: ExplorerFetch, target: ExplorerTa
 	}
 }
 
+type OutcomeRecorder = { log: (message: string) => void; outcomes: VerificationOutcome[] }
+
+function recordOutcome({ log, outcomes }: OutcomeRecorder, job: VerificationJob, status: VerificationOutcome['status'], detail?: string, statusText: string = status) {
+	log(`  ${job.label} (${job.address}): ${statusText}${detail === undefined ? '' : ` (${detail})`}`)
+	outcomes.push(detail === undefined ? { id: job.id, status } : { detail, id: job.id, status })
+}
+
+function recordFailure(recorder: OutcomeRecorder, job: VerificationJob, error: unknown) {
+	recordOutcome(recorder, job, 'failed', error instanceof Error ? error.message : String(error))
+}
+
 export async function verifyContractsWithExplorer(parameters: { fetchFn: ExplorerFetch; inputs: StandardJsonInputs; jobs: readonly VerificationJob[]; log: (message: string) => void; sleep: (milliseconds: number) => Promise<void>; target: ExplorerTarget }): Promise<VerificationOutcome[]> {
 	const { inputs, jobs, log, sleep, target } = parameters
 	const fetchFn = createPacedExplorerFetch(parameters.fetchFn, target, sleep, log)
 	const outcomes: VerificationOutcome[] = []
+	const recorder = { log, outcomes }
 	const pendingSubmissions: { guid: string; job: VerificationJob }[] = []
 	for (const job of jobs) {
 		try {
 			if (await isContractAlreadyVerified(fetchFn, target, job.address)) {
-				log(`  ${job.label} (${job.address}): already verified`)
-				outcomes.push({ id: job.id, status: 'already-verified' })
+				recordOutcome(recorder, job, 'already-verified', undefined, 'already verified')
 				continue
 			}
 			const submission = await submitVerification(fetchFn, target, job, inputs[job.compilerProfile])
@@ -429,24 +440,18 @@ export async function verifyContractsWithExplorer(parameters: { fetchFn: Explore
 				log(`  ${job.label} (${job.address}): submitted (guid ${submission.guid})`)
 				pendingSubmissions.push({ guid: submission.guid, job })
 			} else {
-				log(`  ${job.label} (${job.address}): ${submission.kind} (${submission.detail})`)
-				outcomes.push({ detail: submission.detail, id: job.id, status: submission.kind })
+				recordOutcome(recorder, job, submission.kind, submission.detail)
 			}
 		} catch (error) {
-			const detail = error instanceof Error ? error.message : String(error)
-			log(`  ${job.label} (${job.address}): failed (${detail})`)
-			outcomes.push({ detail, id: job.id, status: 'failed' })
+			recordFailure(recorder, job, error)
 		}
 	}
 	for (const { guid, job } of pendingSubmissions) {
 		try {
 			const { detail, verified } = await pollVerificationStatus(fetchFn, target, guid, sleep)
-			log(`  ${job.label} (${job.address}): ${verified ? 'verified' : 'failed'} (${detail})`)
-			outcomes.push({ detail, id: job.id, status: verified ? 'verified' : 'failed' })
+			recordOutcome(recorder, job, verified ? 'verified' : 'failed', detail)
 		} catch (error) {
-			const detail = error instanceof Error ? error.message : String(error)
-			log(`  ${job.label} (${job.address}): failed (${detail})`)
-			outcomes.push({ detail, id: job.id, status: 'failed' })
+			recordFailure(recorder, job, error)
 		}
 	}
 	return outcomes
@@ -505,12 +510,12 @@ async function pollSourcifyVerification(fetchFn: ExplorerFetch, target: Sourcify
 export async function verifyContractsWithSourcify(parameters: { fetchFn: ExplorerFetch; inputs: StandardJsonInputs; jobs: readonly VerificationJob[]; log: (message: string) => void; sleep: (milliseconds: number) => Promise<void>; target: SourcifyTarget }): Promise<VerificationOutcome[]> {
 	const { fetchFn, inputs, jobs, log, sleep, target } = parameters
 	const outcomes: VerificationOutcome[] = []
+	const recorder = { log, outcomes }
 	const pendingSubmissions: { job: VerificationJob; verificationId: string }[] = []
 	for (const job of jobs) {
 		try {
 			if (await isContractVerifiedOnSourcify(fetchFn, target, job.address)) {
-				log(`  ${job.label} (${job.address}): already verified`)
-				outcomes.push({ id: job.id, status: 'already-verified' })
+				recordOutcome(recorder, job, 'already-verified', undefined, 'already verified')
 				continue
 			}
 			const input = inputs[job.compilerProfile]
@@ -527,31 +532,22 @@ export async function verifyContractsWithSourcify(parameters: { fetchFn: Explore
 				log(`  ${job.label} (${job.address}): submitted (job ${verificationId})`)
 				pendingSubmissions.push({ job, verificationId })
 			} else if (response.status === 409) {
-				const detail = sourcifyErrorText(payload, response.status)
-				log(`  ${job.label} (${job.address}): already verified (${detail})`)
-				outcomes.push({ detail, id: job.id, status: 'already-verified' })
+				recordOutcome(recorder, job, 'already-verified', sourcifyErrorText(payload, response.status), 'already verified')
 			} else {
 				const detail = sourcifyErrorText(payload, response.status)
-				const status = isMissingContractMessage(detail) ? 'not-deployed' : 'failed'
-				log(`  ${job.label} (${job.address}): ${status} (${detail})`)
-				outcomes.push({ detail, id: job.id, status })
+				recordOutcome(recorder, job, isMissingContractMessage(detail) ? 'not-deployed' : 'failed', detail)
 			}
 		} catch (error) {
-			const detail = error instanceof Error ? error.message : String(error)
-			log(`  ${job.label} (${job.address}): failed (${detail})`)
-			outcomes.push({ detail, id: job.id, status: 'failed' })
+			recordFailure(recorder, job, error)
 		}
 		await sleep(SUBMISSION_DELAY_MILLISECONDS)
 	}
 	for (const { job, verificationId } of pendingSubmissions) {
 		try {
 			const { detail, status } = await pollSourcifyVerification(fetchFn, target, verificationId, sleep)
-			log(`  ${job.label} (${job.address}): ${status} (${detail})`)
-			outcomes.push({ detail, id: job.id, status })
+			recordOutcome(recorder, job, status, detail)
 		} catch (error) {
-			const detail = error instanceof Error ? error.message : String(error)
-			log(`  ${job.label} (${job.address}): failed (${detail})`)
-			outcomes.push({ detail, id: job.id, status: 'failed' })
+			recordFailure(recorder, job, error)
 		}
 	}
 	return outcomes

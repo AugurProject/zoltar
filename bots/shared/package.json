@@ -64,8 +64,8 @@
 		"check:generated": "bun run ensure-contract-artifacts && bun ../../tooling/contracts/generate-bot-abis.mts --check",
 		"ensure-contract-artifacts": "bun ../../tooling/contracts/ensure-contract-artifacts.mts",
 		"generate:abi": "bun run ensure-contract-artifacts && bun ../../tooling/contracts/generate-bot-abis.mts",
-		"format": "bun x @biomejs/biome format --write biome.json package.json tsconfig.json src tests",
-		"format:check": "bun x @biomejs/biome format biome.json package.json tsconfig.json src tests",
+		"format": "bun x @biomejs/biome format --write .",
+		"format:check": "bun x @biomejs/biome format .",
 		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
 		"test": "bun run ensure-contract-artifacts && bun ../../tooling/testing/bun-test.mts ./tests",
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"

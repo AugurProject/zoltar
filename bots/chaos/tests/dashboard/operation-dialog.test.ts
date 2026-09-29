@@ -157,30 +157,10 @@ test(
 		const chromium = process.env['CHROMIUM_PATH'] ?? getChromiumPath()
 		if (chromium === undefined) throw new Error('Chromium or Chrome is required for the operation dialog test')
 		const session = await startChromiumSession(chromium)
-		async function evaluate(expression: string) {
-			const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-			if (typeof response !== 'object' || response === null) throw new Error('Invalid browser evaluation response')
-			const details = Reflect.get(response, 'exceptionDetails')
-			if (details !== undefined) throw new Error(JSON.stringify(details))
-			const result: unknown = Reflect.get(response, 'result')
-			if (typeof result !== 'object' || result === null) throw new Error('Browser evaluation returned no result')
-			return Reflect.get(result, 'value')
-		}
+		const { evaluate } = session
 		// A condition that throws is not yet true: right after a navigation the previous document still answers
 		// evaluations and its selectors resolve to null, so the poll keeps going until the timeout instead of failing once.
-		async function waitFor(expression: string) {
-			let lastError: unknown
-			for (let attempt = 0; attempt < 150; attempt += 1) {
-				try {
-					if ((await evaluate(expression)) === true) return
-					lastError = undefined
-				} catch (error) {
-					lastError = error
-				}
-				await Bun.sleep(100)
-			}
-			throw new Error(`Browser condition timed out: ${expression}${lastError === undefined ? '' : ` (last error: ${lastError instanceof Error ? lastError.message : String(lastError)})`}`)
-		}
+		const waitFor = async (expression: string) => await session.waitFor(expression, { attempts: 150, message: `Browser condition timed out: ${expression}`, retryFailures: true })
 		async function expectFullTokenAddress() {
 			expect(
 				await evaluate(`(() => {

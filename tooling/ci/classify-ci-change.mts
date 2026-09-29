@@ -1,6 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import * as process from 'node:process'
+import { getCommittedChangedPaths } from '../repo/changed-files.mts'
+import { runGit } from '../repo/git.mts'
 import { affectedProjects, ciScopes as registeredCiScopes, componentProjects, projectForPath, projects, taskInputMatches } from '../repo/projects.ts'
 
 export const ciScopes = registeredCiScopes()
@@ -48,21 +49,7 @@ function expandScopes(direct: ReadonlySet<CiScope>, filePaths: readonly string[]
 	return result
 }
 export function getCiChangedFiles(baseRef: string, cwd: string = process.cwd()): string[] {
-	const fields = execFileSync('git', ['diff', '--name-status', '-z', '--find-renames', '--diff-filter=ACMRTUXBD', `${baseRef}...HEAD`], { cwd, encoding: 'utf8' }).split('\0')
-	const paths: string[] = []
-	for (let index = 0; index < fields.length; ) {
-		const status = fields[index++]
-		if (status === undefined || status === '') break
-		const firstPath = fields[index++]
-		if (firstPath === undefined || firstPath === '') throw new Error(`Git returned an incomplete ${status} change record`)
-		paths.push(firstPath)
-		if (status.startsWith('R') || status.startsWith('C')) {
-			const secondPath = fields[index++]
-			if (secondPath === undefined || secondPath === '') throw new Error(`Git returned an incomplete ${status} change record`)
-			paths.push(secondPath)
-		}
-	}
-	return [...new Set(paths)].sort()
+	return getCommittedChangedPaths(baseRef, args => runGit(args, { cwd, trim: false }))
 }
 
 export function classifyCiChange(filePaths: readonly string[], options: { readonly full?: boolean; readonly fallbackReason?: string } = {}): CiChangeClassification {

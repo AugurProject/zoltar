@@ -1,16 +1,8 @@
 {
-	"extends": "../../shared/tsconfig.strict.json",
+	"extends": "../tsconfig.base.json",
 	"compilerOptions": {
-		"target": "ESNext",
-		"module": "ESNext",
-		"moduleResolution": "bundler",
 		"jsx": "react-jsx",
-		"jsxImportSource": "preact",
-		"allowImportingTsExtensions": true,
-		"skipLibCheck": true,
-		"noEmit": true,
-		"lib": ["ESNext", "DOM", "DOM.Iterable"],
-		"types": ["bun-types", "node"]
+		"jsxImportSource": "preact"
 	},
 	"include": ["src/**/*.ts", "tests/**/*.ts"]
 }

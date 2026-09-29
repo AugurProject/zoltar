@@ -5,7 +5,8 @@ import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
-import { createBrowserSmokeCommandSender, createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke, terminateBrowserProcess, waitForBrowserExit, waitForDevToolsPort } from './browserSmoke.mts'
+import { createDevToolsSession, isBrowserSmokeReady, runBrowserSmoke } from './browserSmoke.mts'
+import { createChromiumCommandSender, terminateBrowserProcess, waitForBrowserExit, waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
 
 const mountedState = {
 	body: 'Augur Statoblast\nSecurity pools',
@@ -66,7 +67,7 @@ test('browser cleanup handles a Chromium process that already exited', async () 
 test('browser commands reject when Chromium exits after the DevTools socket opens', async () => {
 	const browser = spawn(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'])
 	const socket = Object.assign(new EventTarget(), { send: () => undefined })
-	const send = createBrowserSmokeCommandSender(socket, browser, 1_000)
+	const send = createChromiumCommandSender(socket, browser, 1_000)
 	const command = send('Runtime.evaluate')
 	browser.kill()
 	await expect(command).rejects.toThrow(/Chromium exited/)
@@ -76,7 +77,7 @@ test('browser commands reject when Chromium exits after the DevTools socket open
 test('browser commands reject when the DevTools socket closes', async () => {
 	const browser = spawn(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'])
 	const socket = Object.assign(new EventTarget(), { send: () => undefined })
-	const send = createBrowserSmokeCommandSender(socket, browser, 1_000)
+	const send = createChromiumCommandSender(socket, browser, 1_000)
 	const command = send('Runtime.evaluate')
 	socket.dispatchEvent(new Event('close'))
 	await expect(command).rejects.toThrow(/connection closed/)
@@ -87,7 +88,7 @@ test('browser commands reject when the DevTools socket closes', async () => {
 test('browser commands bound a stalled DevTools response', async () => {
 	const browser = spawn(process.execPath, ['--eval', 'setInterval(() => {}, 1_000)'])
 	const socket = Object.assign(new EventTarget(), { send: () => undefined })
-	const send = createBrowserSmokeCommandSender(socket, browser, 5)
+	const send = createChromiumCommandSender(socket, browser, 5)
 	await expect(send('Runtime.evaluate')).rejects.toThrow(/did not complete within 5ms/)
 	browser.kill()
 	await waitForBrowserExit(browser)
@@ -196,7 +197,7 @@ const writeFakeChromium = async (executablePath: string, devToolsPort: number, p
 
 test('default DevTools port polling continues beyond the former 300-attempt limit', async () => {
 	let probes = 0
-	const port = await waitForDevToolsPort({
+	const port = await waitForChromiumDevToolsPort({
 		assertBrowserAvailable: () => undefined,
 		pollMilliseconds: 0,
 		readPort: async () => {

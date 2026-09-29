@@ -1,6 +1,5 @@
-import { createDevToolsCommandSender } from '../../../tooling/ui/devToolsCommands.mts'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { launchChromium } from '../../../tooling/ui/chromiumDevTools.mts'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAddress, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
@@ -62,39 +61,15 @@ let fixtureNetwork: 'mainnet' | 'sepolia' = 'mainnet'
 const fixturePauseRequests: boolean[] = []
 
 async function captureScreenshots(chromium: string, origin: string, outputDirectory: string) {
-	const profile = await mkdtemp(join(tmpdir(), 'zoltar-open-oracle-docs-'))
-	const child = Bun.spawn([chromium, '--headless', '--hide-scrollbars', '--no-sandbox', '--remote-debugging-port=0', '--run-all-compositor-stages-before-draw', `--user-data-dir=${profile}`, 'about:blank'], {
-		stderr: 'pipe',
-		stdout: 'ignore',
-	})
+	const browser = await launchChromium({ extraArgs: ['--hide-scrollbars', '--run-all-compositor-stages-before-draw'], path: chromium, profilePrefix: 'zoltar-open-oracle-docs-', target: 'browser', viewport: { height: 900, width: 1440 } })
 	try {
-		const reader = child.stderr.getReader()
-		const decoder = new TextDecoder()
-		let diagnostics = ''
-		let browserWebSocketUrl: string | undefined
-		while (browserWebSocketUrl === undefined) {
-			const chunk = await reader.read()
-			if (chunk.done) throw new Error(`Chromium stopped before exposing DevTools: ${diagnostics.trim()}`)
-			diagnostics += decoder.decode(chunk.value, { stream: true })
-			browserWebSocketUrl = diagnostics.match(/DevTools listening on (ws:\/\/\S+)/)?.[1]
-		}
-		const socket = new WebSocket(browserWebSocketUrl)
-		await new Promise<void>((resolve, reject) => {
-			socket.addEventListener('open', () => resolve(), { once: true })
-			socket.addEventListener('error', () => reject(new Error('Could not connect to Chromium DevTools')), { once: true })
-		})
 		const runtimeDiagnostics: string[] = []
-		socket.addEventListener('message', event => {
+		browser.socket.addEventListener('message', event => {
 			const response: unknown = JSON.parse(String(event.data))
 			if (typeof response !== 'object' || response === null) return
 			if ('method' in response && (response.method === 'Runtime.exceptionThrown' || response.method === 'Log.entryAdded')) runtimeDiagnostics.push(JSON.stringify(response))
 		})
-		const command = createDevToolsCommandSender(socket, {
-			isExited: () => child.exitCode !== null,
-			onExit: listener => {
-				void child.exited.then(code => listener(`code ${code}`))
-			},
-		})
+		const command = browser.send
 		let targetId = ''
 		let sessionId = ''
 		const replacePage = async (url: string, width: number, height: number) => {
@@ -1389,11 +1364,8 @@ async function captureScreenshots(chromium: string, origin: string, outputDirect
 		}
 		if (runtimeDiagnostics.length > 0) throw new Error(`Chromium reported ${runtimeDiagnostics.length.toString()} runtime or console errors: ${runtimeDiagnostics.join('\n')}`)
 		if (targetId !== '') await command('Target.closeTarget', { targetId })
-		socket.close()
 	} finally {
-		child.kill()
-		await child.exited
-		await rm(profile, { force: true, recursive: true })
+		await browser.close()
 	}
 }
 

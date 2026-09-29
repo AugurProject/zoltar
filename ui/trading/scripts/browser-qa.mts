@@ -1,65 +1,29 @@
 import { promises as fs } from 'node:fs'
+import { launchChromium } from '../../../tooling/ui/chromiumDevTools.mts'
+import { getChromiumPath } from '../../../tooling/ui/chromiumPath.ts'
 
-type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown>; error?: unknown; sessionId?: string }>
+type CdpMessage = Readonly<{ id?: number; method?: string; params?: Record<string, unknown>; sessionId?: string }>
 
 const outputDirectory = process.env.TRADING_QA_OUTPUT ?? '/tmp/zoltar-trading-qa'
 const baseUrl = process.env.TRADING_QA_URL ?? 'http://127.0.0.1:4163'
 const selectedNames = new Set((process.env.TRADING_QA_SCENARIOS ?? '').split(',').filter(name => name !== ''))
 const injectedFailure = process.env.TRADING_QA_INJECT_FAILURE
-const debuggingPort = 9227
 const simulationPath = '/?simulate=1&simScenario=trading-funded'
 // The Deployed scenario seeds a SecurityPool without a trading market, which the SecurityPools browse and market creation need.
 const deployedSimulationPath = '/?simulate=1&simScenario=deployed'
 await fs.mkdir(outputDirectory, { recursive: true })
-const userDataDirectory = await fs.mkdtemp('/tmp/zoltar-trading-qa-browser-')
-const browser = Bun.spawn({
-	cmd: ['chromium', '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking', '--disable-component-update', '--no-first-run', `--remote-debugging-port=${debuggingPort}`, `--user-data-dir=${userDataDirectory}`, 'about:blank'],
-	stdout: 'ignore',
-	stderr: 'ignore',
-})
-
-async function waitForDebugger() {
-	for (let attempt = 0; attempt < 100; attempt++) {
-		try {
-			const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/version`)
-			if (response.ok) return
-		} catch (error) {
-			if (typeof error !== 'object' || error === null || !('code' in error) || !['ConnectionRefused', 'ECONNREFUSED', 'ECONNRESET'].includes(String(error.code))) throw error
-		}
-		await Bun.sleep(100)
-	}
-	throw new Error('Chromium debugging endpoint did not start')
-}
-
-await waitForDebugger()
-const targetResponse = await fetch(`http://127.0.0.1:${debuggingPort}/json/new?about:blank`, { method: 'PUT' })
-const target: unknown = await targetResponse.json()
-if (typeof target !== 'object' || target === null || !('webSocketDebuggerUrl' in target) || typeof target.webSocketDebuggerUrl !== 'string') throw new Error('Chromium target did not expose a debugger WebSocket')
-
-const socket = new WebSocket(target.webSocketDebuggerUrl)
-await new Promise<void>((resolve, reject) => {
-	socket.addEventListener('open', () => resolve(), { once: true })
-	socket.addEventListener('error', () => reject(new Error('Debugger WebSocket failed')), { once: true })
-})
-let nextId = 1
-const pending = new Map<number, { resolve(value: Record<string, unknown>): void; reject(reason: unknown): void }>()
+// Scenario expressions poll the page for up to a minute inside one Runtime.evaluate call.
+const page = await launchChromium({ commandTimeoutMilliseconds: 120_000, extraArgs: ['--disable-background-networking', '--disable-component-update', '--no-first-run'], path: getChromiumPath() ?? 'chromium', profilePrefix: 'zoltar-trading-qa-browser-', viewport: { height: 900, width: 1440 } })
 const runtimeErrors: string[] = []
 const failedRequests: string[] = []
-socket.addEventListener('message', event => {
+page.socket.addEventListener('message', event => {
 	const candidate: unknown = JSON.parse(String(event.data))
 	if (typeof candidate !== 'object' || candidate === null) {
 		runtimeErrors.push('Chromium returned a malformed debugger message')
 		return
 	}
 	const message: CdpMessage = candidate
-	if (message.id !== undefined) {
-		const request = pending.get(message.id)
-		if (request === undefined) return
-		pending.delete(message.id)
-		if (message.error !== undefined) request.reject(message.error)
-		else request.resolve(message.result ?? {})
-		return
-	}
+	if (message.id !== undefined) return
 	if (message.method === 'Runtime.exceptionThrown') runtimeErrors.push(JSON.stringify(message.params ?? {}))
 	if (message.method === 'Runtime.consoleAPICalled' && message.params?.type === 'error') runtimeErrors.push(JSON.stringify(message.params))
 	if (message.method === 'Log.entryAdded') {
@@ -83,12 +47,9 @@ socket.addEventListener('message', event => {
 	}
 })
 
-function command(method: string, params: Record<string, unknown> = {}, sessionId?: string) {
-	const id = nextId++
-	return new Promise<Record<string, unknown>>((resolve, reject) => {
-		pending.set(id, { resolve, reject })
-		socket.send(JSON.stringify({ id, method, params, ...(sessionId === undefined ? {} : { sessionId }) }))
-	})
+async function command(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<Record<string, unknown>> {
+	const result = await page.send(method, params, sessionId)
+	return typeof result === 'object' && result !== null ? Object.fromEntries(Object.entries(result)) : {}
 }
 
 async function attachWorkerSession(sessionId: string) {
@@ -388,7 +349,5 @@ try {
 	if (runtimeErrors.length > 0) throw new Error(`Browser QA observed ${runtimeErrors.length.toString()} runtime errors`)
 	if (failedRequests.length > 0) throw new Error(`Browser QA observed ${failedRequests.length.toString()} failed requests`)
 } finally {
-	socket.close()
-	browser.kill()
-	await fs.rm(userDataDirectory, { recursive: true, force: true })
+	await page.close()
 }
