@@ -6,7 +6,7 @@ import { getAddress, keccak256, toHex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { operatorSnapshot, type OperatorSnapshot, type OperatorState } from '#state/operator-state'
 import { emptySettlementSnapshot } from '#state/settlement-store'
-import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
+import { publicOperatorFailure, publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import type { PositionRecord } from '#state/position-store'
 
 /** Every captured section lives on Settings except the operations table and the market panel. */

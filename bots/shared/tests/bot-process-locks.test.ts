@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { privateKeyToAccount } from '../src/ethereum.ts'
-import { acquireBotProcessLocks, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLockOptions } from '../src/execution/bot-process-locks.ts'
+import { acquireBotProcessLocks, createBotShutdownController, runBotMain, throwLockAcquisitionCause, withBotProcessLocks, type BotProcessLockOptions } from '../src/execution/bot-process-locks.ts'
 
 const directories: string[] = []
 const releases: (() => Promise<void>)[] = []
@@ -35,9 +35,8 @@ describe('bot process locks', () => {
 				if (stateReleases === 1) throw new Error('transient state cleanup failure')
 			},
 		}
-		let failure: unknown
-		try {
-			await acquireLiquidatorProcessLocks(
+		await expect(
+			acquireLiquidatorProcessLocks(
 				{ chainId: 1, execute: true, privateKey: `0x${'11'.repeat(32)}`, stateFile: 'state.json' },
 				{
 					acquireSigner: async () => {
@@ -45,13 +44,8 @@ describe('bot process locks', () => {
 					},
 					acquireState: async () => stateLock,
 				},
-			)
-		} catch (error) {
-			failure = error
-		}
-		expect(failure).toBeInstanceOf(BotProcessLockAcquisitionError)
-		if (!(failure instanceof BotProcessLockAcquisitionError)) throw new Error('Expected retained acquisition failure')
-		await failure.releaseProcessLocks()
+			).catch(throwLockAcquisitionCause),
+		).rejects.toThrow('signer already locked')
 		expect(stateReleases).toBe(2)
 	})
 
@@ -181,17 +175,18 @@ describe('bot process locks', () => {
 		const privateKey = `0x${'55'.repeat(32)}` as const
 		const moduleUrl = pathToFileURL(resolve(import.meta.dir, '../src/execution/bot-process-locks.ts')).href
 		const script = `
-			import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, createBotShutdownController } from ${JSON.stringify(moduleUrl)}
+			import { acquireBotProcessLocks, createBotShutdownController, withBotProcessLocks } from ${JSON.stringify(moduleUrl)}
 			using shutdown = createBotShutdownController()
 			const options = { label: 'liquidator', signerLocksInDryRun: false }
 			const settings = { chainId: 1, execute: true, privateKey: ${JSON.stringify(privateKey)}, stateFile: ${JSON.stringify(state)} }
-			const locks = await acquireBotProcessLocksForShutdown(settings, options, shutdown, async (current, currentOptions) => {
+			await withBotProcessLocks(settings, options, shutdown, async () => {
+				throw new Error('locked work must not run after shutdown')
+			}, async (current, currentOptions) => {
 				const acquired = await acquireBotProcessLocks(current, currentOptions)
 				console.log('locked-before-return')
 				await shutdown.wait(60_000)
 				return acquired
 			})
-			await locks?.release()
 		`
 		const child = Bun.spawn([process.execPath, '--eval', script], { cwd: resolve(import.meta.dir, '..'), stderr: 'pipe', stdout: 'pipe' })
 		try {
@@ -348,5 +343,53 @@ describe('bot process locks', () => {
 		await expect(Promise.race([waiting.then(() => 'stopped'), Bun.sleep(250).then(() => 'timed-out')])).resolves.toBe('stopped')
 		expect(Date.now() - startedAt).toBeLessThan(1_000)
 		expect(shutdown.isRequested()).toBe(true)
+	})
+
+	test('holds process locks only while the locked work runs', async () => {
+		const settings = { chainId: 1, execute: false, privateKey: undefined, stateFile: await stateFile('locked.json') }
+		const result = await withBotProcessLocks(settings, LIVE_ONLY, { isRequested: () => false }, async () => {
+			await expect(acquireLiquidatorProcessLocks(settings)).rejects.toThrow('already locked')
+			return 'finished'
+		})
+		expect(result).toBe('finished')
+		const successor = await acquireLiquidatorProcessLocks(settings)
+		await successor.release()
+	})
+
+	test('skips locked work when shutdown was requested during lock acquisition', async () => {
+		const settings = { chainId: 1, execute: false, privateKey: undefined, stateFile: await stateFile('stopping.json') }
+		let ran = false
+		const result = await withBotProcessLocks(settings, LIVE_ONLY, { isRequested: () => true }, async () => {
+			ran = true
+		})
+		expect(result).toBeUndefined()
+		expect(ran).toBe(false)
+		const successor = await acquireLiquidatorProcessLocks(settings)
+		await successor.release()
+	})
+
+	test('rethrows a lock acquisition failure that retained nothing unchanged', async () => {
+		const unrelated = new Error('unrelated')
+		await expect(throwLockAcquisitionCause(unrelated)).rejects.toBe(unrelated)
+	})
+
+	test('reports a failed bot entry point by message and exit code', async () => {
+		const previousExitCode = process.exitCode
+		const originalError = console.error
+		const messages: unknown[] = []
+		console.error = (...values: unknown[]) => {
+			messages.push(...values)
+		}
+		try {
+			runBotMain(async () => {
+				throw new Error('startup failed')
+			})
+			await Bun.sleep(0)
+			expect(messages).toEqual(['startup failed'])
+			expect(process.exitCode).toBe(1)
+		} finally {
+			console.error = originalError
+			process.exitCode = previousExitCode
+		}
 	})
 })

@@ -14,7 +14,7 @@ import type { ExecutionRecord } from '#state/execution-record'
 import { isSnapshot } from '#dashboard/snapshot-validation'
 import { operatorNoticePresentation, pauseFailurePresentation } from '#dashboard/dashboard-notice'
 import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
-import { publicPollFailure } from '#state/public-failures'
+import { publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import type { PositionRecord } from '#state/position-store'
 import { operatorStateFixture } from '../support/operator-state.ts'
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
-import { acquireBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { acquireBotProcessLocks, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat, readdir } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
@@ -243,9 +243,4 @@ async function main() {
 	console.log(result.message)
 }
 
-if (import.meta.main) {
-	main().catch(error => {
-		console.error(error instanceof Error ? error.message : String(error))
-		process.exitCode = 1
-	})
-}
+if (import.meta.main) runBotMain(main)

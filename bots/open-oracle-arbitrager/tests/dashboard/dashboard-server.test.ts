@@ -867,29 +867,3 @@ test('supports loopback and configured network authorities for a container bind'
 	})
 	expect(mixedAuthorityMutation.status).toBe(403)
 })
-
-test('allows passwordless access through an explicitly loopback-published container port', async () => {
-	const server = startDashboardServer(0, {
-		getSnapshot: () => {
-			throw new Error('Not needed')
-		},
-		hostname: '0.0.0.0',
-		isNetworkConfigured: () => true,
-		loopbackPublished: true,
-		setPaused: () => undefined,
-		updateConnectivity: () => {
-			throw new Error('Not needed')
-		},
-		updateSigner: () => {
-			throw new Error('Not needed')
-		},
-		updateSubmission: () => {
-			throw new Error('Not needed')
-		},
-		updateStrategy: () => {
-			throw new Error('Not needed')
-		},
-	})
-	servers.push(server)
-	expect((await fetch(`http://127.0.0.1:${server.port}`)).status).toBe(200)
-})

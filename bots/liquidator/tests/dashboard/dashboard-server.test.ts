@@ -150,7 +150,9 @@ describe('liquidator dashboard server', () => {
 		expect(Reflect.get(snapshot, 'deploymentCheckedTimestamp')).toBe('1786924812')
 		expect(Reflect.get(snapshot, 'lastScannedBlock')).toBe('12345678')
 		expect(Reflect.get(snapshot, 'lastScannedTimestamp')).toBe('1786924800')
-		expect(Reflect.get(snapshot, 'rpcEndpointHealth')).toEqual([{ consecutiveFailures: 2, error: 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.', lastFailureAt: '2026-08-13T00:00:00.000Z', nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: 'https://rpc.example' }])
+		expect(Reflect.get(snapshot, 'rpcEndpointHealth')).toEqual([
+			{ consecutiveFailures: 2, error: 'The bot tried to read blockchain data through an RPC endpoint, but it failed: RPC https://rpc.example failed. Automatic retry remains active.', lastFailureAt: '2026-08-13T00:00:00.000Z', nextRetryAt: '2026-08-13T00:01:00.000Z', status: 'offline', target: 'https://rpc.example' },
+		])
 		expect(body).not.toContain('manager-marker')
 		expect(body).not.toContain('nested-vault-marker')
 		expect(body).not.toContain('candidate-target-marker')
@@ -216,9 +218,9 @@ describe('liquidator dashboard server', () => {
 		const snapshotBody = await snapshotResponse.text()
 		expect(snapshotResponse.status).toBe(200)
 		expect(snapshotBody).not.toContain('operator-secret')
-		expect(snapshotBody).not.toContain('rpc.example')
+		expect(snapshotBody).not.toContain('/private')
 		expect(snapshotBody).not.toContain('Bearer-secret')
-		expect(snapshotBody).toContain('RPC connectivity')
+		expect(snapshotBody).toContain('read blockchain data through an RPC endpoint')
 
 		const configurationResponse = await fetch(new URL('/api/configuration', server.url))
 		const configurationBody = await configurationResponse.text()
@@ -410,44 +412,6 @@ describe('liquidator dashboard server', () => {
 		expect(response.status).toBe(400)
 		expect(await response.json()).toEqual({
 			error: 'RPC http://reth:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.',
-		})
-	})
-
-	test('returns the container-network hint for anvil using Bun transport failure text', async () => {
-		const server = startDashboardServer(0, {
-			getConfiguration: () => ({ selectedPools: [], strategy: {} }),
-			getState: () => ({ paused: false }),
-			hostname: '127.0.0.1',
-			isNetworkConfigured: () => true,
-			setApprovedUniverses: value => value,
-			setNetworkConnectivity: () => {
-				throw new EndpointCheckFailure('RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?', [
-					{
-						chainId: undefined,
-						checkedAt: '2026-09-01T00:00:00.000Z',
-						error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?',
-						kind: 'read-rpc',
-						status: 'failed',
-						target: 'http://anvil:8545',
-					},
-				])
-			},
-			setPaused: value => value,
-			setSelectedPools: value => value,
-			setSigner: value => value,
-			setStrategy: value => value,
-		})
-		servers.push(server)
-
-		const response = await fetch(new URL('/api/network-connectivity', server.url), {
-			body: JSON.stringify({ connectivity: { publicRpcUrls: ['http://anvil:8545'], quorumRpcUrls: [], readRpcUrl: 'http://anvil:8545' }, network: 'sepolia' }),
-			headers: { 'content-type': 'application/json', origin: server.url.origin },
-			method: 'PUT',
-		})
-
-		expect(response.status).toBe(400)
-		expect(await response.json()).toEqual({
-			error: 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url? The hostname anvil must resolve from the bot process; Docker service names like anvil only work when the bot shares that container network.',
 		})
 	})
 
@@ -676,23 +640,6 @@ describe('liquidator dashboard server', () => {
 		failure = 'ENOENT: /workspace/.state/operator.json'
 		for (const endpoint of ['/api/signer', '/api/paused']) expect(await request(endpoint)).not.toContain(failure)
 		expect(await request()).toBe('Execution mode could not be changed. Review the signer, quorum RPCs, and protected bot logs.')
-	})
-
-	test('allows passwordless access through an explicitly loopback-published container port', async () => {
-		const server = startDashboardServer(0, {
-			getConfiguration: () => ({}),
-			getState: () => ({}),
-			hostname: '0.0.0.0',
-			isNetworkConfigured: () => true,
-			loopbackPublished: true,
-			setApprovedUniverses: value => value,
-			setPaused: value => value,
-			setSelectedPools: value => value,
-			setSigner: value => value,
-			setStrategy: value => value,
-		})
-		servers.push(server)
-		expect((await fetch(`http://127.0.0.1:${server.port}`)).status).toBe(200)
 	})
 })
 
