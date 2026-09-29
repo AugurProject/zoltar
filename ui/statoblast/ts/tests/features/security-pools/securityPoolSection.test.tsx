@@ -277,6 +277,16 @@ describe('SecurityPoolSection', () => {
 		expect(document.body.textContent?.includes('Enter the question, choose how much REP coverage the pool should require, then deploy the pool for vaults, reporting, and trading.')).toBe(false)
 	})
 
+	test('does not repeat the selected question ID below its lookup field', async () => {
+		const renderedComponent = await renderIntoDocument(<SecurityPoolSection {...createProps()} />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const input = within(document.body).getByRole('textbox', { name: 'Question ID' })
+		if (!(input instanceof HTMLInputElement)) throw new Error('Expected question ID input')
+		expect(input.value).toBe('0x01')
+		expect(document.querySelector('.loaded-question-preview')?.textContent).toContain(createMarketDetails().title)
+		expect(document.querySelector('.loaded-question-preview .identifier-value')).toBeNull()
+	})
+
 	test('defaults to creating a new question and switches to an existing question ID on request', async () => {
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ marketDetails: undefined, onCreateQuestionAndSecurityPool: () => undefined, securityPoolForm: { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' } })))
 		cleanupRenderedComponent = renderedComponent.cleanup

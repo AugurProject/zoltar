@@ -197,7 +197,7 @@ export function ForkZoltarSection({
 
 				{selectedQuestion === undefined ? undefined : (
 					<WorkflowSubsection title={commonCopy.question}>
-						<Question question={selectedQuestion} />
+						<Question question={selectedQuestion} showIdentifier={false} />
 					</WorkflowSubsection>
 				)}
 				{selectedQuestionPresentation === undefined ? undefined : <StateHint id={selectedQuestionLookupState === 'missing' ? FORK_QUESTION_STATE_ID : undefined} presentation={selectedQuestionPresentation} />}
