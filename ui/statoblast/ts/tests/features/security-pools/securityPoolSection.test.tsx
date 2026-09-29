@@ -518,7 +518,7 @@ describe('SecurityPoolSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Create question and pool', 'This question already exists.')
 		expect(document.querySelector('.identifier-value')?.textContent).toBe('0x7b')
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Use existing question' }))
-		expect(onSecurityPoolFormChange).toHaveBeenCalledWith({ marketId: '123' })
+		expect(onSecurityPoolFormChange).toHaveBeenCalledWith({ marketId: '0x7b' })
 		expect((within(document.body).getByRole('radio', { name: 'Use a question ID' }) as HTMLInputElement).checked).toBe(true)
 	})
 

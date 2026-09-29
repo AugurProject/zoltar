@@ -1,3 +1,4 @@
+import { questionIdHex } from '../../browser/identifier-format.ts'
 import { expect, test } from 'bun:test'
 import { exactNumber, exactUnit, percentFromBps, utcDateTime } from '../../browser/format.ts'
 
@@ -19,4 +20,11 @@ test('keeps exact token units, including zero-decimal values', () => {
 	expect(exactUnit('9007199254740993123456789', 18, 'REP')).toBe('9,007,199.254740993123456789 REP')
 	expect(exactUnit('1', 18, 'REP')).toBe('0.000000000000000001 REP')
 	expect(exactUnit('9007199254740993', 0)).toBe('9,007,199,254,740,993')
+})
+
+test('question IDs display in hex without numeric precision loss', () => {
+	const id = (1n << 255n) + 26n
+	expect(questionIdHex(id.toString())).toBe(`0x${id.toString(16)}`)
+	expect(questionIdHex('0x1a')).toBe('0x1a')
+	expect(questionIdHex(null)).toBe('—')
 })

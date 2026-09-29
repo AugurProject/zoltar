@@ -1,0 +1,122 @@
+name: Set up Zoltar CI proposal
+description: Install pinned tools and dependencies, then restore or generate build inputs
+
+inputs:
+  profile:
+    description: Artifact and tool scope (full, contracts, or root); dependencies share one workspace install.
+    required: false
+    default: full
+  foundry:
+    description: Install Foundry for jobs that execute EVM tests.
+    required: false
+    default: "true"
+  build-inputs:
+    description: Same-run artifact to download instead of regenerating build inputs.
+    required: false
+    default: ""
+  verify-generated:
+    description: Always regenerate and verify generated inputs
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Validate setup profile
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+        VERIFY_GENERATED: ${{ inputs.verify-generated }}
+        BUILD_INPUTS: ${{ inputs.build-inputs }}
+      run: |
+        if [[ -n "${BUILD_INPUTS}" && ( "${VERIFY_GENERATED}" == "true" || "${PROFILE}" == "root" ) ]]; then
+          echo 'Transferred build inputs require a generated profile without regeneration.'
+          exit 1
+        fi
+        case "${PROFILE}" in full|contracts|root) ;; *) echo "Unknown setup profile: ${PROFILE}"; exit 1 ;; esac
+        if [[ "${VERIFY_GENERATED}" == "true" && "${PROFILE}" != "full" ]]; then
+          echo 'Generated freshness verification requires the full profile.'
+          exit 1
+        fi
+
+    - name: Fetch repository comparison history
+      if: github.job == 'checks'
+      shell: bash
+      run: |
+        if [[ "$(git rev-parse --is-shallow-repository)" == "true" ]]; then
+          git fetch --no-tags --prune --unshallow origin '+refs/heads/*:refs/remotes/origin/*'
+        elif ! git rev-parse --verify --quiet refs/remotes/origin/main; then
+          git fetch --no-tags --prune origin '+refs/heads/main:refs/remotes/origin/main'
+        fi
+
+    - name: Setup Bun
+      uses: ./.github/actions/setup-bun
+
+    - name: Setup Foundry / Anvil
+      if: inputs.foundry == 'true' && inputs.profile != 'root'
+      uses: foundry-rs/foundry-toolchain@v1
+      with:
+        version: ${{ env.FOUNDRY_VERSION }}
+
+    - name: Read canonical project metadata
+      id: projects
+      shell: bash
+      run: bun ./tooling/repo/query-projects.mts --github-output
+
+    - name: Cache Bun dependencies
+      uses: actions/cache@v5
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}
+
+    - name: Install dependencies
+      shell: bash
+      run: bun run projects:setup
+
+    - name: Download prepared build inputs
+      if: inputs.build-inputs != ''
+      uses: actions/download-artifact@v5
+      with:
+        name: ${{ inputs.build-inputs }}
+        path: .
+
+    - name: Cache contract build inputs
+      if: inputs.profile == 'full' && inputs.build-inputs == ''
+      id: contract-cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.projects.outputs.component_artifact_outputs }}
+        key: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}
+        # A fallback is only a compilation seed: cache-hit stays false, forcing regeneration below.
+        restore-keys: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-
+
+    - name: Cache generated project outputs
+      if: inputs.profile != 'root' && inputs.build-inputs == ''
+      id: generated-cache
+      uses: actions/cache@v5
+      with:
+        path: ${{ inputs.profile == 'contracts' && steps.projects.outputs.component_artifact_outputs || steps.projects.outputs.full_only_cache_paths }}
+        key: ${{ runner.os }}-generated-${{ inputs.profile }}-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ inputs.profile == 'contracts' && steps.projects.outputs.contract_cache_key || steps.projects.outputs.generated_cache_key }}
+
+    - name: Generate and verify generated artifacts
+      if: inputs.profile != 'root' && inputs.build-inputs == '' && (inputs.verify-generated == 'true' || steps.generated-cache.outputs.cache-hit != 'true' || (inputs.profile == 'full' && steps.contract-cache.outputs.cache-hit != 'true'))
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        if [[ "${PROFILE}" == "contracts" ]]; then
+          bun ./tooling/contracts/ensure-contract-artifacts.mts --headless
+        else
+          bun run check:generated-clean
+        fi
+
+    - name: Verify transferred build inputs
+      if: inputs.build-inputs != ''
+      shell: bash
+      env:
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        bun ./tooling/contracts/ensure-contract-artifacts.mts --headless
+        if [[ "${PROFILE}" == "full" ]]; then
+          bun ./tooling/contracts/check-generated-artifacts.mts
+        fi

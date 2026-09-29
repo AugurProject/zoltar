@@ -27,24 +27,24 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 	return (
 		<>
 			{!open || movedDeadline === undefined ? undefined : (
-				<div className='notice notice-stack-item warning closeable' role='status'>
-					<button className='notice-dismiss' type='button' aria-label={copy.dismissDeadlineNotice} onClick={() => setMovedDeadline(undefined)}>
-						<span className='notice-dismiss-icon' aria-hidden='true' />
-					</button>
-					{copy.deadlineMoved(formatReportingDeadline(movedDeadline, details.currentTime))}
-					<button className='quiet' type='button' onClick={download}>
-						{copy.updateReminder}
-					</button>
+				<div role='status'>
+					<p className='detail'>{copy.deadlineMoved(formatReportingDeadline(movedDeadline, details.currentTime))}</p>
+					<div className='actions'>
+						<button className='quiet' type='button' onClick={download}>
+							{copy.updateReminder}
+						</button>
+						<button className='quiet' type='button' aria-label={copy.dismissDeadlineNotice} onClick={() => setMovedDeadline(undefined)}>
+							{copy.dismissReminderUpdate}
+						</button>
+					</div>
 				</div>
 			)}
-			{open ? (
+			{open && movedDeadline === undefined ? (
 				<div>
 					<p className='detail'>{copy.checkBack(deadline)}</p>
-					{movedDeadline === undefined ? (
-						<button className='quiet' type='button' onClick={download}>
-							{copy.addReminder}
-						</button>
-					) : undefined}
+					<button className='quiet' type='button' onClick={download}>
+						{copy.addReminder}
+					</button>
 				</div>
 			) : undefined}
 		</>

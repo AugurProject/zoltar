@@ -70,7 +70,7 @@ async function setupContractMocks({ loadMarketDetails, createSecurityPool, getOr
 	}))
 
 	await moduleMocks.mockModule('@zoltar/ui-core-shared/wallet/clients.js', () => ({
-		createConnectedReadClient: mock(() => ({ kind: 'read-client' })),
+		createConnectedReadClient: mock(() => ({ kind: 'read-client', getBlock: async () => ({ timestamp: 1n }) })),
 		createWalletWriteClient: mock((walletAddress: Address, options: { onTransactionSubmitted: (hash: Hash) => void; reviewSignal?: AbortSignal; skipAppReview?: boolean }) => ({
 			walletAddress,
 			onTransactionSubmitted: options.onTransactionSubmitted,
@@ -145,7 +145,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			await requireState(state).loadMarketById('11')
+			await requireState(state).loadMarketById('0xb')
 		})
 		expect(requireState(state).securityPoolError).toBe('Deploy ZoltarQuestionData before selecting a question')
 		expect(requireState(state).marketDetails).toBeUndefined()
@@ -239,7 +239,7 @@ describe('useSecurityPoolCreation', () => {
 		const renderedNotFound = await renderIntoDocument(<HarnessNotFound />)
 		cleanupRenderedComponent = renderedNotFound.cleanup
 		await act(async () => {
-			await requireState(state).loadMarketById('11')
+			await requireState(state).loadMarketById('0xb')
 		})
 		expect(requireState(state).securityPoolError).toBe('No market found for that ID')
 		renderedNotFound.cleanup()
@@ -271,7 +271,7 @@ describe('useSecurityPoolCreation', () => {
 		const renderedError = await renderIntoDocument(<HarnessError />)
 		cleanupRenderedComponent = renderedError.cleanup
 		await act(async () => {
-			await requireState(state).loadMarketById('11')
+			await requireState(state).loadMarketById('0xb')
 		})
 		expect(requireState(state).securityPoolError).toBe('Failed to load market. Reason: backend offline')
 	})
@@ -314,12 +314,12 @@ describe('useSecurityPoolCreation', () => {
 
 		let firstLoadPromise = Promise.resolve()
 		await act(() => {
-			firstLoadPromise = requireState(state).loadMarketById('11')
+			firstLoadPromise = requireState(state).loadMarketById('0xb')
 		})
 
 		let secondLoadPromise = Promise.resolve()
 		await act(() => {
-			secondLoadPromise = requireState(state).loadMarketById('12')
+			secondLoadPromise = requireState(state).loadMarketById('0xc')
 		})
 
 		secondLookup.resolve(createMarketDetails({ questionId: '0x0c', title: 'Question B' }))
@@ -368,7 +368,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(originSecurityPoolExists).toHaveBeenCalledTimes(0)
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
@@ -404,7 +404,7 @@ describe('useSecurityPoolCreation', () => {
 		const renderedComponent = await renderIntoDocument(<Harness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb' }))
 		})
 		await waitFor(() => expect(getOriginSecurityPoolAddress).toHaveBeenCalledTimes(1))
 		await waitFor(() => expect(requireState(state).checkingDuplicateOriginPool).toBe(false))
@@ -446,7 +446,7 @@ describe('useSecurityPoolCreation', () => {
 		const renderedComponent = await renderIntoDocument(<Harness />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
@@ -502,14 +502,14 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(1)
 		})
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xc', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await waitFor(() => {
 			expect(originSecurityPoolExists).toHaveBeenCalledTimes(2)
@@ -604,10 +604,10 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
 		})
 		await act(() => {
-			requireState(state).loadMarketById('11')
+			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
@@ -673,15 +673,15 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeEth: '0.00000002', marketId: '11', statoblastSecurityMultiplierBps: '3' }))
-			requireState(state).loadMarketById('11')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeEth: '0.00000002', marketId: '0xb', statoblastSecurityMultiplierBps: '3' }))
+			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
 		})
 
 		await act(async () => {
-			await requireState(state).createPool('11', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+			await requireState(state).createPool('0xb', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
 		})
 
 		expect(requireState(state).securityPoolResult?.questionId).toBe('0x0b')
@@ -693,6 +693,38 @@ describe('useSecurityPoolCreation', () => {
 		expect(submittedParameters).toEqual([{ initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n, questionId: 11n, statoblastSecurityMultiplierBps: 20_000n }])
 		expect(createSecurityPool.mock.calls[0]?.[2]).toBeUndefined()
 		expect(createSecurityPool.mock.calls[0]?.[3]).toEqual({ title: 'Create security pool' })
+	})
+
+	test('rechecks chain time before submitting a pool for an ended question', async () => {
+		const createSecurityPool = mock(async () => {
+			throw new Error('Must not submit')
+		})
+		await setupContractMocks({ loadMarketDetails: mock(async () => createMarketDetails({ endTime: 1n })), createSecurityPool })
+		const { useSecurityPoolCreation } = await import(`@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js?case=${crypto.randomUUID()}`)
+		let state: UseSecurityPoolCreationState | undefined
+		const Harness = createHarness(
+			useSecurityPoolCreation,
+			{
+				accountAddress: zeroAddress,
+				deploymentStatuses: [createStatus('securityPoolFactory', true), createStatus('zoltarQuestionData', true)],
+				enabled: true,
+				onTransactionFinished: () => undefined,
+				onTransactionPresented: () => undefined,
+				onTransactionRequested: () => undefined,
+				onTransactionSubmitted: () => undefined,
+				refreshState: async () => undefined,
+				zoltarUniverseHasForked: false,
+			},
+			value => {
+				state = value
+			},
+		)
+		cleanupRenderedComponent = (await renderIntoDocument(<Harness />)).cleanup
+		await act(async () => {
+			await requireState(state).createPool('0xb', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+		})
+		expect(requireState(state).securityPoolError).toContain('This question has already ended')
+		expect(createSecurityPool).not.toHaveBeenCalled()
 	})
 
 	test('createPool shows write failures in the form and releases the transaction review', async () => {
@@ -737,7 +769,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		try {
 			await act(async () => {
-				await requireState(state).createPool('11', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+				await requireState(state).createPool('0xb', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
 			})
 
 			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
@@ -863,8 +895,8 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(async () => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
-			await requireState(state).loadMarketById('11')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
+			await requireState(state).loadMarketById('0xb')
 		})
 		expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
 
@@ -874,8 +906,8 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12' }))
-			await requireState(state).loadMarketById('12')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xc' }))
+			await requireState(state).loadMarketById('0xc')
 		})
 		expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
 
@@ -928,7 +960,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
 		})
 
 		let createPromise = Promise.resolve()
@@ -937,8 +969,8 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12' }))
-			await requireState(state).loadMarketById('12')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xc' }))
+			await requireState(state).loadMarketById('0xc')
 		})
 		expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
 
@@ -991,8 +1023,8 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
-			requireState(state).loadMarketById('11')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
@@ -1066,8 +1098,8 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
-			requireState(state).loadMarketById('11')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
@@ -1145,8 +1177,8 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
-			requireState(state).loadMarketById('11')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
@@ -1164,7 +1196,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xc' }))
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0c')
@@ -1221,8 +1253,8 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
-			requireState(state).loadMarketById('11')
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
 			expect(requireState(state).marketDetails?.questionId).toBe('0x0b')
@@ -1312,7 +1344,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '11', statoblastSecurityMultiplierBps: '2' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xb', statoblastSecurityMultiplierBps: '2' }))
 		})
 
 		let createPromise = Promise.resolve()
@@ -1321,7 +1353,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '12', statoblastSecurityMultiplierBps: '3' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, marketId: '0xc', statoblastSecurityMultiplierBps: '3' }))
 		})
 
 		await act(async () => {

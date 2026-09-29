@@ -314,6 +314,22 @@ describe('ReportingSection', () => {
 		})
 	}
 
+	test('keeps wallet approval visible and disabled when its allowance is sufficient', async () => {
+		const details = createReportingDetails({ contributionFunding: 'wallet', viewerWalletRepAllowanceAttoRep: rep(100n), viewerWalletRepBalanceAttoRep: rep(100n) })
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '10', selectedOutcome: 'yes' }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		expectTransactionButtonDisabled(document.body, 'Approval satisfied')
+		expect(document.body.textContent).toContain('After this deposit, check back before')
+	})
+
+	test('unifies active positions into one flat status section', async () => {
+		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails() })))
+		cleanupRenderedComponent = rendered.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'Your positions' })).not.toBeNull()
+		expect(document.body.textContent).not.toContain('Your status')
+		expect(document.querySelector('.reporting-settlement-section')).toBeNull()
+	})
+
 	test('describes the response deadline when low stakes end at activation', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ currentTime: 150n, activationTime: 300n, escalationEndTime: 300n }) })))
 		cleanupRenderedComponent = rendered.cleanup
@@ -347,7 +363,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).toContain('Progress to fork: 8 / 20 REP (40%)')
 		expect(document.body.querySelector('.escalation-side')?.getAttribute('style')).toContain('5.00%')
 		expect(within(document.body).queryByRole('checkbox')).toBeNull()
-		expect(document.body.textContent).toContain('Losing · worth 0 REP if it ended now')
+		expect(document.body.textContent).toContain("You're losing on Yes.")
 	})
 
 	test('does not present the chart fallback as a real threshold while reporting loads', async () => {
@@ -1279,7 +1295,7 @@ describe('ReportingSection', () => {
 		expect(document.body.querySelector('[aria-current=step]')?.textContent).toBe('Fork')
 		expect(document.body.textContent).not.toContain('Check back before')
 		expect(getEscalationMetricsSection().textContent).not.toContain('Response window ends')
-		expect(document.querySelector('.notice-stack-item')?.textContent).toContain('You have 1 REP on Yes.')
+		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('You have 1 REP on Yes.')
 		const forkTriggeredReason = 'Escalation ended without a decision. Trigger the universe fork here if this pool should fork.'
 		expect(document.body.textContent?.includes(forkTriggeredReason)).toBe(true)
 		expect(document.body.textContent?.split(forkTriggeredReason)).toHaveLength(2)
@@ -2459,9 +2475,9 @@ describe('ReportingSection', () => {
 			details.sides = details.sides.map(side => ({ ...side, balance: side.key === (winning ? 'yes' : 'no') ? rep(8n) : rep(1n) }))
 			const rendered = await renderIntoDocument(h(ReportingSectionHarness, { initialProps: createProps({ reportingDetails: details }) }))
 			cleanupRenderedComponent = rendered.cleanup
-			const status = document.querySelector('.notice-stack-item')
+			const status = document.querySelector('.reporting-viewer-status')
 			expect(status?.textContent).toContain(winning ? "You're winning on Yes. Your 1 REP would be worth about 1 REP if it ended now." : `You're losing on Yes. Add at least 7.000000000000000001 REP before ${formatReportingDeadline(300n, 150n)} or your 1 REP is lost.`)
-			expect(status?.classList.contains(winning ? 'success' : 'warning')).toBe(true)
+			expect(status?.classList.contains('notice')).toBe(false)
 			expect(status?.querySelector('strong:not(.notice-title)')?.textContent).toBe(winning ? "You're winning on Yes." : "You're losing on Yes.")
 			expect(document.body.textContent).toContain(`Check back before ${formatReportingDeadline(300n, 150n)}. Any new report can push this deadline later (up to 7 weeks after the game starts).`)
 			expect(within(document.body).getByRole('button', { name: 'Add reminder (.ics)' })).not.toBeNull()
@@ -2484,21 +2500,21 @@ describe('ReportingSection', () => {
 		details.sides = details.sides.map(side => (side.key === 'no' ? { ...side, importedUserDeposits: [{ amountAttoRep: rep(2n), cumulativeAmountAttoRep: rep(2n), parentDepositIndex: 0n, depositor: zeroAddress }] } : side))
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
-		const text = document.querySelector('.notice-stack-item')?.textContent ?? ''
+		const text = document.querySelector('.reporting-viewer-status')?.textContent ?? ''
 		expect(text).toContain("You're winning on No. Your 2 REP would be worth about 2 REP if it ended now.")
-		expect(document.querySelector('.notice-stack-item')?.classList.contains('warning')).toBe(true)
+		expect(document.querySelector('.reporting-viewer-status')?.classList.contains('notice')).toBe(false)
 		expect(within(document.body).queryByRole('button', { name: 'Take the lead…' })).toBeNull()
 		expect(text.indexOf("You're winning on No.")).toBeLessThan(text.indexOf("You're losing on Yes."))
-		expect(document.querySelector('.reporting-position')?.textContent).toContain('No · Winning · worth about 2 REP if it ended now')
+		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain("You're winning on No. Your 2 REP would be worth about 2 REP if it ended now.")
 	})
 	test('ties show no winner, link to the explanation, and label positions Tied', async () => {
 		const details = createReportingDetails()
 		details.sides = details.sides.map(side => ({ ...side, balance: rep(8n) }))
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: details })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.querySelector('.notice-stack-item')?.textContent).toContain(`No side leads right now. If this stays tied at ${formatReportingDeadline(300n, 150n)}, no side wins (see how ties resolve).`)
+		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain(`No side leads right now. If this stays tied at ${formatReportingDeadline(300n, 150n)}, no side wins (see how ties resolve).`)
 		expect(within(document.body).getByRole('link', { name: 'see how ties resolve' }).getAttribute('href')).toBe('https://augurproject.github.io/zoltar/docs/explanation/escalation-game.html')
-		expect(document.querySelector('.reporting-position')?.textContent).toContain('Tied')
+		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('No side leads right now.')
 		expect(within(document.body).queryByRole('button', { name: 'Take the lead…' })).toBeNull()
 	})
 	for (const started of [false, true]) {
@@ -2554,7 +2570,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).not.toContain('Invalid wins')
 		expect(document.body.textContent).not.toContain('Leading')
 		expect(document.body.textContent).not.toContain('no side wins')
-		expect(document.querySelector('.notice-stack-item')?.textContent).toContain('No side leads right now.')
+		expect(document.querySelector('.reporting-viewer-status')?.textContent).toContain('No side leads right now.')
 	})
 	test('calendar downloads use wall time for DTSTAMP and retain the object URL for a second', async () => {
 		const now = spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 8, 24))

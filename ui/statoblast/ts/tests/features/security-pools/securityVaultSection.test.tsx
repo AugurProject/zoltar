@@ -330,7 +330,68 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		expect(dialog.getByText(message)).not.toBeNull()
-		if (fresh || full) expect(dialog.queryByRole('button', { name: 'Manual price' })).toBeNull()
+		if (fresh || full) expect(dialog.queryByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })).toBeNull()
+	})
+
+	test('requires explicit acknowledgement above the selected UI price commitment maximum', async () => {
+		let submitted = ''
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						repPerEthPrice: 3n * 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n }),
+						onSetVaultUnderwritingLimit: limit => {
+							submitted = limit
+						},
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		const launcher = page.getByRole('button', { name: 'Set commitment limit' })
+		expect(launcher.closest('details') === null).toBe(true)
+		fireEvent.click(launcher)
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const queries = within(dialog)
+		expect(dialog.textContent).toContain('Maximum before liquidation')
+		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '3' } })
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+		fireEvent.click(queries.getByRole('checkbox', { name: /I understand/ }))
+		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
+		expect(submitted).toBe('3')
+		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '4' } })
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+	})
+
+	test.each(['3', '5'])('requires commitment risk acknowledgement only when increasing an already unhealthy limit to %s', async limit => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						repPerEthPrice: 3n * 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ underwritingLimitAttoEth: 4n * 10n ** 18n, settlementCollateralAttoEth: 0n }),
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const queries = within(dialog)
+		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: limit } })
+		if (limit === '3') {
+			expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+			expect(queries.queryByRole('checkbox', { name: /I understand/ })).toBeNull()
+			expect(dialog.textContent).not.toContain('This limit would make your vault liquidatable')
+		} else {
+			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+			fireEvent.click(queries.getByRole('checkbox', { name: /I understand/ }))
+			expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		}
 	})
 
 	test('accepts a manual initial price for a queued commitment change', async () => {
@@ -353,7 +414,7 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const queries = within(dialog)
-		fireEvent.click(queries.getByRole('button', { name: 'Manual price' }))
+		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull()
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		const input = queries.getByLabelText('Open Oracle REP / ETH starting price')
 		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
@@ -364,9 +425,8 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
 		expect(submitted).toEqual({ limit: '2', price: 125n * 10n ** 17n })
-		fireEvent.click(queries.getByRole('button', { name: 'Uniswap quote' }))
-		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toEqual({ limit: '2', price: undefined })
+		fireEvent.input(input, { target: { value: '' } })
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 	})
 
 	test('blocks a capacity reduction below collateral even after admission closes', async () => {
@@ -440,6 +500,13 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
 		fireEvent.input(within(dialog).getByLabelText('Commitment limit'), { target: { value: '3' } })
+		const startingPrice = within(dialog).queryByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })
+		if (startingPrice !== null) fireEvent.input(startingPrice, { target: { value: '3' } })
+		const acknowledgement = within(dialog).queryByRole('checkbox', { name: /I understand/ })
+		if (acknowledgement !== null) {
+			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+			fireEvent.click(acknowledgement)
+		}
 		if (blocked) expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		else expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 	})
@@ -1184,6 +1251,9 @@ describe('SecurityVaultSection', () => {
 			/>,
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
+		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
+		if (withdrawal === null) throw new Error('Expected withdrawal section')
+		fireEvent.input(within(withdrawal).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 	})
@@ -1207,7 +1277,6 @@ describe('SecurityVaultSection', () => {
 		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
 		if (withdrawal === null) throw new Error('Expected withdrawal section')
 		const page = within(withdrawal)
-		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
 		fireEvent.input(page.getByLabelText('Open Oracle REP / ETH starting price'), { target: { value: '3' } })
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
@@ -1234,7 +1303,6 @@ describe('SecurityVaultSection', () => {
 		).cleanup
 		const withdrawal = within(document.body).getByRole('heading', { name: 'Withdraw REP', exact: true }).closest('section')
 		if (!(withdrawal instanceof HTMLElement)) throw new Error('Expected withdrawal section')
-		fireEvent.click(within(withdrawal).getByRole('button', { name: 'Manual price' }))
 		expectWalletFixDescribesAction(withdrawal, 'Withdraw REP', 'Switch to Sepolia')
 	})
 

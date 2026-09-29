@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { isSelectedVaultOwnedByAccount as isSelectedVaultOwnedByAccountHelper } from '../lib/securityVault.js'
 
 export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
 
 type UseSelectedVaultWorkflowStateParams = {
 	accountAddress: Address | undefined
 	hasLoadedCurrentVault: boolean
-	selectedVaultExistsOnchain: boolean
 	initialVaultView: SelectedVaultView | undefined
 	loadingSecurityVault: boolean
 	onLoadSecurityVault: () => Promise<void> | void
@@ -24,7 +22,6 @@ type UseSelectedVaultWorkflowStateParams = {
 export function useSelectedVaultWorkflowState({
 	accountAddress,
 	hasLoadedCurrentVault,
-	selectedVaultExistsOnchain,
 	initialVaultView,
 	loadingSecurityVault,
 	onLoadSecurityVault,
@@ -36,7 +33,7 @@ export function useSelectedVaultWorkflowState({
 	showSelectedPoolWorkflowDetails,
 	view,
 }: UseSelectedVaultWorkflowStateParams) {
-	const [vaultView, updateVaultView] = useState<SelectedVaultView>(initialVaultView ?? 'browse-vaults')
+	const [vaultView, updateVaultView] = useState<SelectedVaultView>(initialVaultView ?? (accountAddress === undefined ? 'browse-vaults' : 'selected-vault'))
 	const appliedDefaultKey = useRef<string | undefined>(undefined)
 	const userSelectedView = useRef(false)
 	const defaultResolved = useRef(false)
@@ -68,8 +65,8 @@ export function useSelectedVaultWorkflowState({
 		if (userSelectedView.current || defaultResolved.current) return
 		if (!hasLoadedCurrentVault) return
 		defaultResolved.current = true
-		updateVaultView(accountAddress !== undefined && isSelectedVaultOwnedByAccountHelper(selectedVaultOwnerInput, accountAddress) && selectedVaultExistsOnchain ? 'selected-vault' : 'browse-vaults')
-	}, [accountAddress, hasLoadedCurrentVault, initialVaultView, onSecurityVaultFormChange, selectedPoolAddress, selectedVaultExistsOnchain, selectedVaultOwnerInput, selectedPoolVaultDefaultKey, vaultView])
+		updateVaultView(accountAddress === undefined ? 'browse-vaults' : 'selected-vault')
+	}, [accountAddress, hasLoadedCurrentVault, initialVaultView, onSecurityVaultFormChange, selectedPoolAddress, selectedVaultOwnerInput, selectedPoolVaultDefaultKey, vaultView])
 
 	useEffect(() => {
 		if (!showSelectedPoolWorkflowDetails || view !== 'vaults') return

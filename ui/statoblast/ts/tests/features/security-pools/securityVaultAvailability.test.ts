@@ -130,12 +130,12 @@ describe('security vault availability', () => {
 	test('builds ready launcher actions that open the matching modal', () => {
 		const opened: string[] = []
 		const actions = buildVaultReadinessActions(createReadinessInput({ onOpenModal: modal => opened.push(modal) }))
-		expect(actions.map(action => action.key)).toEqual(['deposit-rep', 'rep-exit', 'claim-fees', 'adjust-backing'])
+		expect(actions.map(action => action.key)).toEqual(['deposit-rep', 'adjust-backing', 'rep-exit', 'claim-fees'])
 		expect(actions.every(action => action.readiness === 'ready')).toBe(true)
 		for (const action of actions) action.onAction?.()
-		expect(opened).toEqual(['deposit-rep', 'withdraw-rep', 'claim-fees', 'adjust-backing'])
-		expect(actions[1]?.description).toBe(securityPoolCopy.repWithdrawalDescription)
-		expect(buildVaultReadinessActions(createReadinessInput({ repExitMode: 'redeem' }))[1]?.description).toBe(securityPoolCopy.repRedemptionDescription)
+		expect(opened).toEqual(['deposit-rep', 'adjust-backing', 'withdraw-rep', 'claim-fees'])
+		expect(actions.find(action => action.key === 'rep-exit')?.description).toBe(securityPoolCopy.repWithdrawalDescription)
+		expect(buildVaultReadinessActions(createReadinessInput({ repExitMode: 'redeem' })).find(action => action.key === 'rep-exit')?.description).toBe(securityPoolCopy.repRedemptionDescription)
 	})
 
 	test('blocks launcher actions and surfaces only visible blockers', () => {
@@ -156,9 +156,9 @@ describe('security vault availability', () => {
 		expect(actions.every(action => action.readiness === 'blocked' && action.onAction === undefined)).toBe(true)
 		expect(actions[0]).toMatchObject({ disabledReasonId: 'deposit-id' })
 		expect(actions[0]?.blocker).toBeUndefined()
-		expect(actions[1]).toMatchObject({ blocker: 'exit', disabledReasonId: 'exit-id' })
-		expect(actions[2]).toMatchObject({ blocker: 'fees' })
-		expect(actions[3]).toMatchObject({ blocker: 'adjust', disabledReasonId: 'deposit-id' })
+		expect(actions.find(action => action.key === 'rep-exit')).toMatchObject({ blocker: 'exit', disabledReasonId: 'exit-id' })
+		expect(actions.find(action => action.key === 'claim-fees')).toMatchObject({ blocker: 'fees' })
+		expect(actions.find(action => action.key === 'adjust-backing')).toMatchObject({ blocker: 'adjust', disabledReasonId: 'deposit-id' })
 		const sharedRefresh = buildVaultReadinessActions(createReadinessInput({ adjustmentBlocker: 'adjust', showSharedRefreshVaultBlocker: true }))
 		expect(sharedRefresh[3]?.blocker).toBeUndefined()
 	})
@@ -171,9 +171,9 @@ describe('security vault availability', () => {
 				walletBlocker: { kind: 'wrong-network', targetChainName: 'Sepolia' },
 			}),
 		)
-		expect(actions[1]?.blocker).toBe(securityPoolCopy.withdrawalUnavailableReason)
-		expect(actions[1]?.walletBlocker).toBeUndefined()
-		expect(actions[1]?.onAction).toBeUndefined()
+		expect(actions.find(action => action.key === 'rep-exit')?.blocker).toBe(securityPoolCopy.withdrawalUnavailableReason)
+		expect(actions.find(action => action.key === 'rep-exit')?.walletBlocker).toBeUndefined()
+		expect(actions.find(action => action.key === 'rep-exit')?.onAction).toBeUndefined()
 	})
 
 	test('marks the launchers a wallet prerequisite blocks with the typed wallet blocker', () => {
@@ -192,10 +192,10 @@ describe('security vault availability', () => {
 		)
 		expect(actions[0]).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
 		// A lifecycle-disabled launcher keeps its own described reason instead of offering a wallet fix.
-		expect(actions[1]?.blocker).toBeUndefined()
-		expect(actions[1]?.walletBlocker).toBeUndefined()
-		expect(actions[2]).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
-		expect(actions[3]).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
+		expect(actions.find(action => action.key === 'rep-exit')?.blocker).toBeUndefined()
+		expect(actions.find(action => action.key === 'rep-exit')?.walletBlocker).toBeUndefined()
+		expect(actions.find(action => action.key === 'claim-fees')).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
+		expect(actions.find(action => action.key === 'adjust-backing')).toMatchObject({ blocker: 'Switch to Sepolia.', walletBlocker })
 		expect(buildVaultReadinessActions(createReadinessInput())[0]?.walletBlocker).toBeUndefined()
 	})
 })

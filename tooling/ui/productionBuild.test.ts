@@ -6,6 +6,7 @@ import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPoo
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
 import { getChromiumPath, withChromiumTestLock } from './chromiumPath.js'
+import { productionWorkflowTestName, selectProductionWorkflowScenarios, type ProductionWorkflowScenario } from './productionWorkflowScenarios.ts'
 
 const appPathsById = new Map(UI_APP_IDS.map(appId => [appId, getUiAppPaths(appId)]))
 const repositoryRootPath = getUiCoreSharedPaths().repositoryRoot
@@ -17,7 +18,11 @@ let server: Bun.Server | undefined
 
 const chromiumPath = getChromiumPath()
 const productionBrowserTest = (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_BROWSER_TIMEOUT_MILLISECONDS)
-const productionWorkflowTest = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] === '1' ? (name: string, run: () => Promise<void>) => test(name, run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS) : test.skip
+const selectedWorkflowScenarios = selectProductionWorkflowScenarios(process.env['ZOLTAR_BROWSER_WORKFLOW_SCENARIO'])
+const productionWorkflowTest = (scenario: ProductionWorkflowScenario, run: () => Promise<void>) => {
+	const register = process.env['RUN_PRODUCTION_BROWSER_WORKFLOWS'] === '1' && selectedWorkflowScenarios.includes(scenario) ? test : test.skip
+	register(productionWorkflowTestName(scenario), run, PRODUCTION_WORKFLOW_TIMEOUT_MILLISECONDS)
+}
 const productionRebuildInvariantTest = process.env['ZOLTAR_USE_EXISTING_PRODUCTION_BUILD'] === '1' && process.env['ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS'] !== '1' ? test.skip : test
 
 beforeAll(async () => {
@@ -259,6 +264,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			let body = ''
 			for (let attempt = 0; attempt < 2400; attempt += 1) {
 				body = await readBody()
+				if (body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${body}`)
 				if (predicate(body)) return body
 				await Bun.sleep(50)
 			}
@@ -290,6 +296,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				}),
 			)
 			const parsedState = JSON.parse(state)
+			if (typeof parsedState === 'object' && parsedState !== null && 'body' in parsedState && typeof parsedState.body === 'string' && parsedState.body.includes('Simulation bootstrap failed')) throw new Error(`Production simulation failed to bootstrap: ${parsedState.body}`)
 			if (typeof parsedState === 'object' && parsedState !== null && 'body' in parsedState && typeof parsedState.body === 'string' && parsedState.body !== '' && parsedState.body !== 'Loading...' && !parsedState.body.includes('BOOTSTRAPPING') && !parsedState.body.includes('Starting simulation bootstrap')) {
 				applicationReady = true
 				break
@@ -312,7 +319,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			evaluate,
 			navigate: async url => {
-				await send('Page.navigate', { url })
+				await send('Page.navigate', { url: new URL(url, pageUrl).href })
 			},
 			pressTab: async () => {
 				await send('Input.dispatchKeyEvent', { code: 'Tab', key: 'Tab', type: 'keyDown' })
@@ -404,8 +411,7 @@ const productionBrowserScenarios = [
 ] as const
 
 for (const scenario of productionBrowserScenarios) {
-	const browserTest = scenario.workflow ? productionWorkflowTest : productionBrowserTest
-	browserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, async () => {
+	const run = async () => {
 		if (server === undefined) throw new Error('Production test server did not start')
 		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser smoke test')
 		const baseUrl = server.url.toString().replace(/\/$/, '')
@@ -420,350 +426,361 @@ for (const scenario of productionBrowserScenarios) {
 		expect(state.height).toBe(scenario.viewport.height)
 		expect(state.width).toBe(scenario.viewport.width)
 		expect(state.body).not.toContain('Failed to initialize the app environment')
+	}
+	if (scenario.workflow) productionWorkflowTest('auction-boot', run)
+	else productionBrowserTest(`production bundle boots the ${scenario.name} scenario in Chromium`, run)
+}
+
+function createWorkflowActions(driver: ProductionBrowserDriver) {
+	// Completed prerequisite labels stay in the form; submitted outcomes use the shared status panel.
+	const completeTransactionReview = async (inDialogSuccessTitle?: string, stopOnInlineText?: string) => {
+		await driver.evaluate('window.__zoltarReviewClicked = false')
+		for (let attempt = 0; attempt < 2400; attempt += 1) {
+			const result = await driver.evaluate(
+				`(() => { if (${JSON.stringify(stopOnInlineText ?? '')} && document.body.innerText.includes(${JSON.stringify(stopOnInlineText ?? '')})) return 'complete'; const status = document.querySelector('.global-transaction-dialog'); if (status) { const badge = status.querySelector('.badge')?.textContent?.trim(); const title = status.querySelector('.global-transaction-notice-header strong')?.textContent?.trim(); if (badge === 'Failed' || (${JSON.stringify(inDialogSuccessTitle ?? '')} && badge === 'Confirmed' && title === ${JSON.stringify(inDialogSuccessTitle ?? '')})) return 'complete'; if (badge === 'Pending' || badge === 'Awaiting wallet' || badge === 'Preparing') return 'waiting'; const nextAction = [...document.querySelectorAll('.transaction-step-actions .transaction-plan-action .tx-action-button')].some(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); const dismiss = status.querySelector('.global-transaction-dismiss'); if (dismiss instanceof HTMLButtonElement) dismiss.click(); return !${JSON.stringify(inDialogSuccessTitle ?? '')} && !nextAction ? 'complete' : 'waiting' } const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
+			)
+			if (result === 'complete') return
+			await Bun.sleep(50)
+		}
+		throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
+	}
+	const selectPoolTool = async (label: 'Price oracle' | 'Fork & migration') => {
+		let selected = false
+		for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
+			selected =
+				(await driver.evaluate(
+					`(() => { const tab = [...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"]')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (tab instanceof HTMLElement) { tab.click(); return true } const disclosure = document.querySelector('.pool-tools-disclosure'); if (!(disclosure instanceof HTMLDetailsElement)) return false; if (!disclosure.open) disclosure.querySelector('summary')?.click(); const button = [...disclosure.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
+				)) === true
+			if (!selected) await Bun.sleep(50)
+		}
+		if (!selected) throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
+	}
+	// Pool browsing lists favorites and downloaded pools only; scanning the registry is an explicit action.
+	const discoverPools = async () => {
+		await driver.waitForBodyWithoutText('BOOTSTRAPPING')
+		// A scan started while the simulation environment is still settling is discarded when the environment changes, so retry until one completes.
+		await driver.evaluate('window.__zoltarDiscoveryClicked = false')
+		for (let attempt = 0; attempt < 2400; attempt += 1) {
+			const state = await driver.evaluate(
+				`(() => { const button = [...document.querySelectorAll('.discovery-control button')].find(candidate => ['Discover pools', 'Discover more', 'Scan again', 'Discovering…'].includes(candidate.textContent?.trim() ?? '')); if (!(button instanceof HTMLButtonElement)) return 'missing'; const label = button.textContent?.trim(); if (window.__zoltarDiscoveryClicked && label !== 'Discover pools' && !button.disabled) return 'scanned'; if (button.disabled || (window.__zoltarDiscoveryClicked && label !== 'Discover pools')) return 'waiting'; window.__zoltarDiscoveryClicked = true; button.click(); return 'clicked' })()`,
+			)
+			if (state === 'scanned') return
+			await Bun.sleep(state === 'clicked' ? 250 : 50)
+		}
+		throw new Error(`Unable to discover pools: ${String(await driver.evaluate('document.body.innerText'))}`)
+	}
+	return { completeTransactionReview, selectPoolTool, discoverPools }
+}
+
+function productionInteractionTest(scenario: ProductionWorkflowScenario, route: string, viewport: { height: number; width: number }, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
+	productionWorkflowTest(scenario, async () => {
+		if (server === undefined) throw new Error('Production test server did not start')
+		if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser workflow test')
+		const baseUrl = server.url.toString().replace(/\/$/, '')
+		const state = JSON.parse(await loadProductionDocumentInChromium(`${baseUrl}/statoblast/${route}`, viewport, interact))
+		if (typeof state !== 'object' || state === null || !('body' in state) || typeof state.body !== 'string') throw new Error('Production workflow returned invalid document state')
+		expect(state.body).not.toContain('Failed to initialize the app environment')
+		expect(state.height).toBe(viewport.height)
+		expect(state.width).toBe(viewport.width)
 	})
 }
 
-productionWorkflowTest('production bundle executes deployment, reporting, fork migration, failure recovery, and truth auction finalization', async () => {
-	if (server === undefined) throw new Error('Production test server did not start')
-	if (chromiumPath === undefined) throw new Error('Chromium is required for the production browser workflow test')
-	const baseUrl = server.url.toString().replace(/\/$/, '')
-	const state = JSON.parse(
-		await loadProductionDocumentInChromium(`${baseUrl}/statoblast/#/deploy?simulate=1&simScenario=baseline`, { height: 900, width: 1440 }, async driver => {
-			// Completed prerequisite labels stay in the form; submitted outcomes use the shared status panel.
-			const completeTransactionReview = async (inDialogSuccessTitle?: string, stopOnInlineText?: string) => {
-				await driver.evaluate('window.__zoltarReviewClicked = false')
-				for (let attempt = 0; attempt < 2400; attempt += 1) {
-					const result = await driver.evaluate(
-						`(() => { if (${JSON.stringify(stopOnInlineText ?? '')} && document.body.innerText.includes(${JSON.stringify(stopOnInlineText ?? '')})) return 'complete'; const status = document.querySelector('.global-transaction-dialog'); if (status) { const badge = status.querySelector('.badge')?.textContent?.trim(); const title = status.querySelector('.global-transaction-notice-header strong')?.textContent?.trim(); if (badge === 'Failed' || (${JSON.stringify(inDialogSuccessTitle ?? '')} && badge === 'Confirmed' && title === ${JSON.stringify(inDialogSuccessTitle ?? '')})) return 'complete'; if (badge === 'Pending' || badge === 'Awaiting wallet' || badge === 'Preparing') return 'waiting'; const nextAction = [...document.querySelectorAll('.transaction-step-actions .transaction-plan-action .tx-action-button')].some(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); const dismiss = status.querySelector('.global-transaction-dismiss'); if (dismiss instanceof HTMLButtonElement) dismiss.click(); return !${JSON.stringify(inDialogSuccessTitle ?? '')} && !nextAction ? 'complete' : 'waiting' } const actions = document.querySelector('.transaction-step-actions'); if (!actions) return window.__zoltarReviewClicked ? 'complete' : 'waiting'; const button = [...actions.querySelectorAll('.transaction-plan-action .tx-action-button')].find(candidate => candidate instanceof HTMLButtonElement && !candidate.disabled); if (button instanceof HTMLButtonElement) { button.click(); window.__zoltarReviewClicked = true } return 'waiting' })()`,
-					)
-					if (result === 'complete') return
-					await Bun.sleep(50)
-				}
-				throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
-			}
-			const selectPoolTool = async (label: 'Price oracle' | 'Fork & migration') => {
-				let selected = false
-				for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
-					selected =
-						(await driver.evaluate(
-							`(() => { const tab = [...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"]')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (tab instanceof HTMLElement) { tab.click(); return true } const disclosure = document.querySelector('.pool-tools-disclosure'); if (!(disclosure instanceof HTMLDetailsElement)) return false; if (!disclosure.open) disclosure.querySelector('summary')?.click(); const button = [...disclosure.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
-						)) === true
-					if (!selected) await Bun.sleep(50)
-				}
-				if (!selected) throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
-			}
-			// Pool browsing lists favorites and downloaded pools only; scanning the registry is an explicit action.
-			const discoverPools = async () => {
-				await driver.waitForBodyWithoutText('BOOTSTRAPPING')
-				// A scan started while the simulation environment is still settling is discarded when the environment changes, so retry until one completes.
-				await driver.evaluate('window.__zoltarDiscoveryClicked = false')
-				for (let attempt = 0; attempt < 2400; attempt += 1) {
-					const state = await driver.evaluate(
-						`(() => { const button = [...document.querySelectorAll('.discovery-control button')].find(candidate => ['Discover pools', 'Discover more', 'Scan again', 'Discovering…'].includes(candidate.textContent?.trim() ?? '')); if (!(button instanceof HTMLButtonElement)) return 'missing'; const label = button.textContent?.trim(); if (window.__zoltarDiscoveryClicked && label !== 'Discover pools' && !button.disabled) return 'scanned'; if (button.disabled || (window.__zoltarDiscoveryClicked && label !== 'Discover pools')) return 'waiting'; window.__zoltarDiscoveryClicked = true; button.click(); return 'clicked' })()`,
-					)
-					if (state === 'scanned') return
-					await Bun.sleep(state === 'clicked' ? 250 : 50)
-				}
-				throw new Error(`Unable to discover pools: ${String(await driver.evaluate('document.body.innerText'))}`)
-			}
-			await driver.evaluate('document.body.focus()')
-			await driver.pressTab()
-			expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
-			await driver.waitForButtonEnabled('Deploy next missing')
-			await driver.clickButton('Deploy next missing')
-			const deployedBody = await driver.waitForBodyText('1 / 15')
-			expect(deployedBody).toContain('Proxy Deployer')
-			expect(deployedBody).not.toContain('Failed to initialize the app environment')
-
-			await driver.resize({ height: 844, width: 390 })
-			await driver.navigate(`${baseUrl}/statoblast/?workflow=pool#/pools?simulate=1&simScenario=security-pool`)
-			await discoverPools()
-			await driver.waitForBodyText('Will this resolve?')
-			const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
-			expect(poolOpened).toBe(true)
-			await driver.waitForBodyWithoutText('Loading vault details…')
-			await driver.waitForButtonEnabled('Deposit REP')
-			await driver.clickButton('Deposit REP')
-			await driver.waitForBodyText('REP backing')
-			await driver.setInputByLabel('REP backing', '1')
-			let depositReady = false
-			for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
-				const readiness = await driver.evaluate(
-					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
-				)
-				depositReady = readiness === true
-				if (!depositReady) await Bun.sleep(50)
-			}
-			expect(depositReady).toBe(true)
-			const failureInjected = await driver.evaluate(
-				`(() => { const workers = window.__zoltarProductionWorkers; const worker = Array.isArray(workers) ? workers.at(-1) : undefined; if (!(worker instanceof Worker)) return false; const original = worker.postMessage.bind(worker); Object.defineProperty(worker, 'postMessage', { configurable: true, value: (...args) => { const message = args[0]; if (message?.type === 'rpc' && message?.method === 'eth_sendTransaction') { Object.defineProperty(worker, 'postMessage', { configurable: true, value: original }); throw new Error('Injected production workflow failure') } return original(...args) } }); return true })()`,
-			)
-			expect(failureInjected).toBe(true)
-			await driver.clickButton('Deposit REP', 1)
-			await completeTransactionReview()
-			const failedBody = await driver.waitForBodyText('Injected production workflow failure')
-			expect(failedBody).toContain('FAILED')
-			expect(failedBody).toContain('Deposit REP')
-			await driver.clickButton('Dismiss')
-			await driver.waitForButtonEnabled('Deposit REP', 1)
-			await driver.clickButton('Deposit REP', 1)
-			await completeTransactionReview('Deposit REP')
-			const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
-			expect(poolBody).toContain('All pools')
-			await driver.clickButton('Dismiss')
-
-			await driver.resize({ height: 900, width: 1440 })
-			await driver.navigate(`${baseUrl}/statoblast/?workflow=reporting#/pools?simulate=1&simScenario=securitypoolx2`)
-			await discoverPools()
-			await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
-			const reportingPoolOpened = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-			)
-			expect(reportingPoolOpened).toBe(true)
-			await driver.waitForBodyWithoutText('Loading vault details…')
-			await driver.waitForButtonEnabled('Deposit REP')
-			await driver.clickButton('Deposit REP')
-			await driver.waitForBodyText('REP backing')
-			await driver.setInputByLabel('REP backing', '2000000')
-			let reportingDepositReady = false
-			for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
-				const readiness = await driver.evaluate(
-					`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
-				)
-				reportingDepositReady = readiness === true
-				if (!reportingDepositReady) await Bun.sleep(50)
-			}
-			expect(reportingDepositReady).toBe(true)
-			await driver.clickButton('Deposit REP', 1)
-			await completeTransactionReview('Deposit REP')
-			await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
-			await driver.clickButton('Dismiss')
-			await driver.clickButton('+1 year')
-			await selectPoolTool('Price oracle')
-			await driver.waitForButtonEnabled('Request new price…')
-			await driver.clickButton('Request new price…')
-			await driver.waitForButtonEnabled('Fetch from Uniswap')
-			expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('')
-			expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
-			expect(await driver.evaluate("[...document.querySelectorAll('.transaction-step-actions .tx-action-button')].every(button => button.disabled)")).toBe(true)
-			const priceDialogGeometry = () =>
-				driver.evaluate(`['[role="dialog"]', '.request-price-fields input', '.transaction-step-actions', '.transaction-plan-action-final button'].map(selector => {
-					const element = document.querySelector(selector)
-					if (element === null) throw new Error('Missing price dialog element: ' + selector)
-					const rect = element.getBoundingClientRect()
-					return [rect.top, rect.width, rect.height].map(value => Math.round(value))
-				})`)
-			for (const viewport of [
-				{ width: 1440, height: 900 },
-				{ width: 390, height: 844 },
-			]) {
-				await driver.resize(viewport)
-				await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
-				await driver.waitForBodyText('Enter a starting price')
-				expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
-				const emptyGeometry = await priceDialogGeometry()
-				const emptyInputWidth = await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")
-				await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, 'a')
-				await driver.waitForBodyText('Enter a positive REP per ETH price')
-				if (viewport.width > 600) expect(await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")).toBe(emptyInputWidth)
-				else {
-					expect(
-						await driver.evaluate("(() => { const error = document.querySelector('.request-price-fields .field-error'); const action = document.querySelector('.transaction-step-actions'); return error !== null && action !== null && error.getBoundingClientRect().bottom <= action.getBoundingClientRect().top })()"),
-					).toBe(true)
-					expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
-				}
-				await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
-				await driver.clickButton('Fetch from Uniswap')
-				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
-				await driver.waitForButtonEnabled('Fetch from Uniswap')
-				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-				expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
-				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
-				expect(await driver.evaluate("document.querySelectorAll('.approval-amount-field input:disabled').length")).toBe(2)
-				expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
-				await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '2')
-				await driver.waitForBodyText('Preparing funding and approvals…')
-				await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-				expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
-				await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
-				await driver.waitForBodyText('Enter a starting price')
-				expect(await priceDialogGeometry()).toEqual(emptyGeometry)
-			}
-			await driver.resize({ width: 1440, height: 900 })
-			expect(await driver.evaluate('document.querySelectorAll(\'[role="dialog"]\').length')).toBe(1)
-			await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '3')
-			await driver.waitForBodyText('Preparing funding and approvals…')
-			await driver.waitForBodyWithoutText('Preparing funding and approvals…')
-			await completeTransactionReview('Requested new price')
-			await driver.waitForTransactionStatus('Confirmed', 'Requested new price')
-			expect(await driver.evaluate("document.querySelector('.global-transaction-dialog .global-transaction-notice .badge')?.textContent?.trim()")).toBe('Confirmed')
-			const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('.global-transaction-dialog .global-transaction-dismiss'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
-			expect(priceResultDismissed).toBe(true)
-			await driver.waitForBodyWithoutText('Requested new price')
-			expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
-			await driver.clickButton('+10 min')
-			await driver.waitForBodyText('Pending request')
-			const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
-			expect(pendingReportOpened).toBe(true)
-			await driver.waitForButtonEnabled('Settle report…')
-			await driver.clickButton('Settle report…')
-			const settleLabel = await driver.evaluate("document.querySelector('.operation-modal-panel h3')?.textContent?.trim()")
-			if (typeof settleLabel !== 'string' || !/^Settle report #[0-9]+$/.test(settleLabel)) throw new Error('Missing explicit report settlement title')
-			await driver.waitForButtonEnabled(settleLabel)
-			await driver.clickButton(settleLabel)
-			const settledTitle = settleLabel.replace('Settle', 'Settled')
-			await completeTransactionReview(settledTitle)
-			await driver.waitForTransactionStatus('Confirmed', settledTitle)
-			await driver.clickButton('Dismiss')
-			const reportingPoolsOpened = await driver.evaluate(`(() => { history.back(); return true })()`)
-			expect(reportingPoolsOpened).toBe(true)
-			await selectPoolTool('Price oracle')
-			await driver.waitForButtonEnabled('Reporting')
-			await driver.clickButton('Reporting')
-			await driver.waitForBodyText('Report outcome')
-
-			const selectReportingOutcome = async (outcome: 'Yes' | 'No') => {
-				let selected = false
-				for (let attempt = 0; attempt < 100 && !selected; attempt += 1) {
-					selected =
-						(await driver.evaluate(
-							`(() => { const radio = [...document.querySelectorAll('[role="radio"]')].find(candidate => candidate.querySelector('.panel-label')?.textContent?.trim() === ${JSON.stringify(outcome)}); if (!(radio instanceof HTMLButtonElement) || radio.disabled) return false; radio.click(); return true })()`,
-						)) === true
-					if (!selected) await Bun.sleep(50)
-				}
-				if (!selected) {
-					const reportingState = await driver.evaluate(`JSON.stringify({ body: document.body?.innerText ?? '', radios: [...document.querySelectorAll('[role="radio"]')].map(radio => ({ disabled: radio.disabled, label: radio.textContent?.trim() })) })`)
-					throw new Error(`Unable to select ${outcome} reporting outcome: ${String(reportingState)}`)
-				}
-				await driver.waitForButtonEnabled('Max')
-				await driver.clickButton('Max')
-				const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
-				if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
-				const approvalLabel = `Approve ${amount} REP`
-				const reportLabel = `Report ${outcome} · ${amount} REP…`
-				const reportedTitle = `Reported ${amount} REP on ${outcome}`
-				const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)
-				if (approvalRequired === true) {
-					const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
-					const mobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_MOBILE_SCREENSHOT']
-					const captureQaScreenshots = (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') || (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '')
-					if (captureQaScreenshots) {
-						const dismissAvailable = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Dismiss' && !button.disabled)`)
-						if (dismissAvailable === true) await driver.clickButton('Dismiss')
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)}))?.scrollIntoView({ block: 'center' })`)
-					}
-					if (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') await driver.captureScreenshot(desktopScreenshotPath)
-					if (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '') {
-						await driver.resize({ height: 844, width: 390 })
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)}))?.scrollIntoView({ block: 'center' })`)
-						await driver.captureScreenshot(mobileScreenshotPath)
-						await driver.resize({ height: 900, width: 1440 })
-					}
-					await driver.clickButton(approvalLabel)
-					await completeTransactionReview(`Approved ${amount} REP`)
-					await driver.waitForButtonEnabled(reportLabel)
-					const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
-					const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
-					const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')
-					if (captureApprovedQaScreenshots) {
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(reportLabel)}))?.scrollIntoView({ block: 'center' })`)
-					}
-					if (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') await driver.captureScreenshot(approvedDesktopScreenshotPath)
-					if (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '') {
-						await driver.resize({ height: 844, width: 390 })
-						await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(reportLabel)}))?.scrollIntoView({ block: 'center' })`)
-						await driver.captureScreenshot(approvedMobileScreenshotPath)
-						await driver.resize({ height: 900, width: 1440 })
-					}
-				}
-				await driver.waitForButtonEnabled(reportLabel)
-				await driver.clickButton(reportLabel)
-				await completeTransactionReview(reportedTitle)
-				await driver.waitForTransactionStatus('Confirmed', reportedTitle)
-			}
-
-			await selectReportingOutcome('Yes')
-			await driver.waitForBodyText('Selected side is already full at')
-			await driver.waitForBodyWithoutText('Submitting report…')
-			const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
-			const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
-			const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
-			if (captureVaultLockedQaScreenshots) {
-				await driver.clickButton('Vaults')
-				await driver.waitForBodyText('New vault REP backing is unavailable after this question ends.')
-				await driver.waitForBodyWithoutText('Loading vault details…')
-				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
-				if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)
-				if (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '') {
-					await driver.resize({ height: 844, width: 390 })
-					await driver.evaluate(
-						`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const reasonId = button?.getAttribute('aria-describedby'); if (reasonId === null || reasonId === undefined) return; document.getElementById(reasonId)?.scrollIntoView({ block: 'center' }) })()`,
-					)
-					await driver.captureScreenshot(vaultLockedMobileScreenshotPath)
-					await driver.resize({ height: 900, width: 1440 })
-				}
-				await driver.clickButton('Reporting')
-				await driver.waitForBodyText('Report outcome')
-			}
-			await selectReportingOutcome('No')
-			await driver.waitForButtonEnabled('Trigger universe fork')
-			await driver.clickButton('Trigger universe fork')
-			await completeTransactionReview()
-			await driver.waitForButtonEnabled('Open fork & migration')
-			await driver.clickButton('Open fork & migration')
-			await driver.waitForBodyText('Fork & migration')
-
-			// The fork workflow view now owns the full migration flow; drive it directly.
-			await driver.waitForButtonEnabled('Migrate pool to Yes universe')
-			await driver.clickButton('Migrate pool to Yes universe')
-			await completeTransactionReview('Migrate REP to Zoltar')
-			await driver.waitForTransactionStatus('Confirmed', 'Migrate REP to Zoltar')
-			await driver.waitForButtonEnabled('Migrate vault to Yes')
-			await driver.clickButton('Migrate vault to Yes')
-			await completeTransactionReview('Migrate vault')
-			await driver.waitForTransactionStatus('Confirmed', 'Migrate vault')
-
-			await driver.resize({ height: 900, width: 1440 })
-			await driver.navigate(`${baseUrl}/statoblast/?workflow=auction#/pools?simulate=1&simScenario=securitypoolx2-auction`)
-			await discoverPools()
-			await driver.waitForBodyText('Will this resolve?')
-			const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
-			expect(universeDirectoryOpened).toBe(true)
-			await driver.waitForBodyText('Child universes')
-			const yesUniverseSelected = await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-			)
-			expect(yesUniverseSelected).toBe(true)
-			const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
-			expect(childPoolBrowserOpened).toBe(true)
-			await driver.clickButton('+1 month')
-			// Downloaded summaries are snapshots, so scan again after time travel to list the pools' current states.
-			await discoverPools()
-			let auctionPoolOpened = false
-			for (let attempt = 0; attempt < 600 && !auctionPoolOpened; attempt += 1) {
-				auctionPoolOpened =
-					(await driver.evaluate(
-						`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-					)) === true
-				if (!auctionPoolOpened) await Bun.sleep(50)
-			}
-			expect(auctionPoolOpened).toBe(true)
-			const auctionPoolBody = await driver.waitForBodyText('All pools')
-			if (auctionPoolBody.includes('Universe mismatch')) {
-				const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
-				expect(childUniverseOpened).toBe(true)
-			}
-			await driver.waitForBodyWithoutText('Universe mismatch')
-			await selectPoolTool('Fork & migration')
-			await driver.waitForButtonEnabled('Finalize truth auction')
-			await driver.clickButton('Finalize truth auction')
-			await completeTransactionReview('Finalize truth auction')
-			const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize truth auction')
-			expect(finalizedBody).toContain('Truth auction')
-		}),
+productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&simScenario=security-pool', { height: 844, width: 390 }, async driver => {
+	const { completeTransactionReview, discoverPools } = createWorkflowActions(driver)
+	await discoverPools()
+	await driver.waitForBodyText('Will this resolve?')
+	const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+	expect(poolOpened).toBe(true)
+	await driver.waitForBodyWithoutText('Loading vault details…')
+	await driver.waitForButtonEnabled('Deposit REP')
+	await driver.clickButton('Deposit REP')
+	await driver.waitForBodyText('REP backing')
+	await driver.setInputByLabel('REP backing', '1')
+	let depositReady = false
+	for (let attempt = 0; attempt < 600 && !depositReady; attempt += 1) {
+		const readiness = await driver.evaluate(
+			`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
+		)
+		depositReady = readiness === true
+		if (!depositReady) await Bun.sleep(50)
+	}
+	expect(depositReady).toBe(true)
+	const failureInjected = await driver.evaluate(
+		`(() => { const workers = window.__zoltarProductionWorkers; const worker = Array.isArray(workers) ? workers.at(-1) : undefined; if (!(worker instanceof Worker)) return false; const original = worker.postMessage.bind(worker); Object.defineProperty(worker, 'postMessage', { configurable: true, value: (...args) => { const message = args[0]; if (message?.type === 'rpc' && message?.method === 'eth_sendTransaction') { Object.defineProperty(worker, 'postMessage', { configurable: true, value: original }); throw new Error('Injected production workflow failure') } return original(...args) } }); return true })()`,
 	)
-	if (typeof state !== 'object' || state === null || !('body' in state) || typeof state.body !== 'string') throw new Error('Production workflow returned invalid document state')
-	expect(state.body).toContain('Finalize truth auction')
-	expect(state.height).toBe(900)
-	expect(state.width).toBe(1440)
+	expect(failureInjected).toBe(true)
+	await driver.clickButton('Deposit REP', 1)
+	await completeTransactionReview()
+	const failedBody = await driver.waitForBodyText('Injected production workflow failure')
+	expect(failedBody).toContain('FAILED')
+	expect(failedBody).toContain('Deposit REP')
+	await driver.clickButton('Dismiss')
+	await driver.waitForButtonEnabled('Deposit REP', 1)
+	await driver.clickButton('Deposit REP', 1)
+	await completeTransactionReview('Deposit REP')
+	const poolBody = await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+	expect(poolBody).toContain('All pools')
+	await driver.clickButton('Dismiss')
+})
+
+productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?simulate=1&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
+	const { completeTransactionReview, discoverPools, selectPoolTool } = createWorkflowActions(driver)
+	await discoverPools()
+	await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
+	const reportingPoolOpened = await driver.evaluate(
+		`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+	)
+	expect(reportingPoolOpened).toBe(true)
+	await driver.waitForBodyWithoutText('Loading vault details…')
+	await driver.waitForButtonEnabled('Deposit REP')
+	await driver.clickButton('Deposit REP')
+	await driver.waitForBodyText('REP backing')
+	await driver.setInputByLabel('REP backing', '2000000')
+	let reportingDepositReady = false
+	for (let attempt = 0; attempt < 600 && !reportingDepositReady; attempt += 1) {
+		const readiness = await driver.evaluate(
+			`(() => { const dialog = document.querySelector('[role="dialog"]'); const buttons = [...(dialog?.querySelectorAll('button') ?? [])]; const deposit = buttons.find(candidate => candidate.textContent?.trim() === 'Deposit REP'); if (deposit instanceof HTMLButtonElement && !deposit.disabled) return true; const approval = buttons.find(candidate => candidate.textContent?.trim().startsWith('Approve ') && !candidate.disabled); if (approval instanceof HTMLButtonElement) { approval.click(); return 'approval' } return false })()`,
+		)
+		reportingDepositReady = readiness === true
+		if (!reportingDepositReady) await Bun.sleep(50)
+	}
+	expect(reportingDepositReady).toBe(true)
+	await driver.clickButton('Deposit REP', 1)
+	await completeTransactionReview('Deposit REP')
+	await driver.waitForTransactionStatus('Confirmed', 'Deposit REP')
+	await driver.clickButton('Dismiss')
+	await driver.clickButton('+1 year')
+	await selectPoolTool('Price oracle')
+	await driver.waitForButtonEnabled('Request new price…')
+	await driver.clickButton('Request new price…')
+	await driver.waitForButtonEnabled('Fetch from Uniswap')
+	expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('')
+	expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
+	expect(await driver.evaluate("[...document.querySelectorAll('.transaction-step-actions .tx-action-button')].every(button => button.disabled)")).toBe(true)
+	const priceDialogGeometry = () =>
+		driver.evaluate(`['[role="dialog"]', '.request-price-fields input', '.transaction-step-actions', '.transaction-plan-action-final button'].map(selector => {
+			const element = document.querySelector(selector)
+			if (element === null) throw new Error('Missing price dialog element: ' + selector)
+			const rect = element.getBoundingClientRect()
+			return [rect.top, rect.width, rect.height].map(value => Math.round(value))
+		})`)
+	for (const viewport of [
+		{ width: 1440, height: 900 },
+		{ width: 390, height: 844 },
+	]) {
+		await driver.resize(viewport)
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
+		await driver.waitForBodyText('Enter a starting price')
+		expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
+		const emptyGeometry = await priceDialogGeometry()
+		const emptyInputWidth = await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, 'a')
+		await driver.waitForBodyText('Enter a positive REP per ETH price')
+		if (viewport.width > 600) expect(await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")).toBe(emptyInputWidth)
+		else {
+			expect(
+				await driver.evaluate("(() => { const error = document.querySelector('.request-price-fields .field-error'); const action = document.querySelector('.transaction-step-actions'); return error !== null && action !== null && error.getBoundingClientRect().bottom <= action.getBoundingClientRect().top })()"),
+			).toBe(true)
+			expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
+		}
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
+		await driver.clickButton('Fetch from Uniswap')
+		expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+		await driver.waitForButtonEnabled('Fetch from Uniswap')
+		await driver.waitForBodyWithoutText('Preparing funding and approvals…')
+		expect(await driver.evaluate("document.querySelector('.request-price-fields input')?.value")).toBe('3')
+		expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
+		expect(await driver.evaluate("document.querySelectorAll('.approval-amount-field input:disabled').length")).toBe(2)
+		expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '2')
+		await driver.waitForBodyText('Preparing funding and approvals…')
+		await driver.waitForBodyWithoutText('Preparing funding and approvals…')
+		expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
+		await driver.waitForBodyText('Enter a starting price')
+		expect(await priceDialogGeometry()).toEqual(emptyGeometry)
+	}
+	await driver.resize({ width: 1440, height: 900 })
+	expect(await driver.evaluate('document.querySelectorAll(\'[role="dialog"]\').length')).toBe(1)
+	await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '3')
+	await driver.waitForBodyText('Preparing funding and approvals…')
+	await driver.waitForBodyWithoutText('Preparing funding and approvals…')
+	await completeTransactionReview('Requested new price')
+	await driver.waitForTransactionStatus('Confirmed', 'Requested new price')
+	expect(await driver.evaluate("document.querySelector('.global-transaction-dialog .global-transaction-notice .badge')?.textContent?.trim()")).toBe('Confirmed')
+	const priceResultDismissed = await driver.evaluate(`(() => { const button = document.querySelector('.global-transaction-dialog .global-transaction-dismiss'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
+	expect(priceResultDismissed).toBe(true)
+	await driver.waitForBodyWithoutText('Requested new price')
+	expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
+	await driver.clickButton('+10 min')
+	await driver.waitForBodyText('Pending request')
+	const pendingReportOpened = await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return false; button.click(); return true })()`)
+	expect(pendingReportOpened).toBe(true)
+	await driver.waitForButtonEnabled('Settle report…')
+	await driver.clickButton('Settle report…')
+	const settleLabel = await driver.evaluate("document.querySelector('.operation-modal-panel h3')?.textContent?.trim()")
+	if (typeof settleLabel !== 'string' || !/^Settle report #[0-9]+$/.test(settleLabel)) throw new Error('Missing explicit report settlement title')
+	await driver.waitForButtonEnabled(settleLabel)
+	await driver.clickButton(settleLabel)
+	const settledTitle = settleLabel.replace('Settle', 'Settled')
+	await completeTransactionReview(settledTitle)
+	await driver.waitForTransactionStatus('Confirmed', settledTitle)
+	await driver.clickButton('Dismiss')
+	const reportingPoolsOpened = await driver.evaluate(`(() => { history.back(); return true })()`)
+	expect(reportingPoolsOpened).toBe(true)
+	await selectPoolTool('Price oracle')
+	await driver.waitForButtonEnabled('Reporting')
+	await driver.clickButton('Reporting')
+	await driver.waitForBodyText('Report outcome')
+
+	const selectReportingOutcome = async (outcome: 'Yes' | 'No') => {
+		let selected = false
+		for (let attempt = 0; attempt < 100 && !selected; attempt += 1) {
+			selected =
+				(await driver.evaluate(
+					`(() => { const radio = [...document.querySelectorAll('[role="radio"]')].find(candidate => candidate.querySelector('.panel-label')?.textContent?.trim() === ${JSON.stringify(outcome)}); if (!(radio instanceof HTMLButtonElement) || radio.disabled) return false; radio.click(); return true })()`,
+				)) === true
+			if (!selected) await Bun.sleep(50)
+		}
+		if (!selected) {
+			const reportingState = await driver.evaluate(`JSON.stringify({ body: document.body?.innerText ?? '', radios: [...document.querySelectorAll('[role="radio"]')].map(radio => ({ disabled: radio.disabled, label: radio.textContent?.trim() })) })`)
+			throw new Error(`Unable to select ${outcome} reporting outcome: ${String(reportingState)}`)
+		}
+		await driver.waitForButtonEnabled('Max')
+		await driver.clickButton('Max')
+		const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
+		if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
+		const approvalLabel = `Approve ${amount} REP`
+		const reportLabel = `Report ${outcome} · ${amount} REP…`
+		const reportedTitle = `Reported ${amount} REP on ${outcome}`
+		const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)
+		if (approvalRequired === true) {
+			const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
+			const mobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_MOBILE_SCREENSHOT']
+			const captureQaScreenshots = (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') || (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '')
+			if (captureQaScreenshots) {
+				const dismissAvailable = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Dismiss' && !button.disabled)`)
+				if (dismissAvailable === true) await driver.clickButton('Dismiss')
+				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)}))?.scrollIntoView({ block: 'center' })`)
+			}
+			if (desktopScreenshotPath !== undefined && desktopScreenshotPath !== '') await driver.captureScreenshot(desktopScreenshotPath)
+			if (mobileScreenshotPath !== undefined && mobileScreenshotPath !== '') {
+				await driver.resize({ height: 844, width: 390 })
+				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)}))?.scrollIntoView({ block: 'center' })`)
+				await driver.captureScreenshot(mobileScreenshotPath)
+				await driver.resize({ height: 900, width: 1440 })
+			}
+			await driver.clickButton(approvalLabel)
+			await completeTransactionReview(`Approved ${amount} REP`)
+			await driver.waitForButtonEnabled(reportLabel)
+			const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
+			const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']
+			const captureApprovedQaScreenshots = (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') || (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '')
+			if (captureApprovedQaScreenshots) {
+				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(reportLabel)}))?.scrollIntoView({ block: 'center' })`)
+			}
+			if (approvedDesktopScreenshotPath !== undefined && approvedDesktopScreenshotPath !== '') await driver.captureScreenshot(approvedDesktopScreenshotPath)
+			if (approvedMobileScreenshotPath !== undefined && approvedMobileScreenshotPath !== '') {
+				await driver.resize({ height: 844, width: 390 })
+				await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === ${JSON.stringify(reportLabel)}))?.scrollIntoView({ block: 'center' })`)
+				await driver.captureScreenshot(approvedMobileScreenshotPath)
+				await driver.resize({ height: 900, width: 1440 })
+			}
+		}
+		await driver.waitForButtonEnabled(reportLabel)
+		await driver.clickButton(reportLabel)
+		await completeTransactionReview(reportedTitle)
+		await driver.waitForTransactionStatus('Confirmed', reportedTitle)
+	}
+
+	await selectReportingOutcome('Yes')
+	await driver.waitForBodyText('Selected side is already full at')
+	await driver.waitForBodyWithoutText('Submitting report…')
+	const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
+	const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
+	const captureVaultLockedQaScreenshots = (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') || (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '')
+	if (captureVaultLockedQaScreenshots) {
+		await driver.clickButton('Vaults')
+		await driver.waitForBodyText('New vault REP backing is unavailable after this question ends.')
+		await driver.waitForBodyWithoutText('Loading vault details…')
+		await driver.evaluate(`([...document.querySelectorAll('button')].find(button => button.textContent?.trim() === 'Deposit REP'))?.scrollIntoView({ block: 'center' })`)
+		if (vaultLockedDesktopScreenshotPath !== undefined && vaultLockedDesktopScreenshotPath !== '') await driver.captureScreenshot(vaultLockedDesktopScreenshotPath)
+		if (vaultLockedMobileScreenshotPath !== undefined && vaultLockedMobileScreenshotPath !== '') {
+			await driver.resize({ height: 844, width: 390 })
+			await driver.evaluate(
+				`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === 'Deposit REP'); const reasonId = button?.getAttribute('aria-describedby'); if (reasonId === null || reasonId === undefined) return; document.getElementById(reasonId)?.scrollIntoView({ block: 'center' }) })()`,
+			)
+			await driver.captureScreenshot(vaultLockedMobileScreenshotPath)
+			await driver.resize({ height: 900, width: 1440 })
+		}
+		await driver.clickButton('Reporting')
+		await driver.waitForBodyText('Report outcome')
+	}
+	await selectReportingOutcome('No')
+	await driver.waitForButtonEnabled('Trigger universe fork')
+	await driver.clickButton('Trigger universe fork')
+	await completeTransactionReview()
+	await driver.waitForButtonEnabled('Open fork & migration')
+	await driver.clickButton('Open fork & migration')
+	await driver.waitForBodyText('Fork & migration')
+
+	// The fork workflow view now owns the full migration flow; drive it directly.
+	await driver.waitForButtonEnabled('Migrate pool to Yes universe')
+	await driver.clickButton('Migrate pool to Yes universe')
+	await completeTransactionReview('Migrate REP to Zoltar')
+	await driver.waitForTransactionStatus('Confirmed', 'Migrate REP to Zoltar')
+	await driver.waitForButtonEnabled('Migrate vault to Yes')
+	await driver.clickButton('Migrate vault to Yes')
+	await completeTransactionReview('Migrate vault')
+	await driver.waitForTransactionStatus('Confirmed', 'Migrate vault')
+})
+
+productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario=baseline', { height: 900, width: 1440 }, async driver => {
+	await driver.evaluate('document.body.focus()')
+	await driver.pressTab()
+	expect(await driver.evaluate('document.activeElement?.textContent?.trim()')).toBe('Skip to main content')
+	await driver.waitForButtonEnabled('Deploy next missing')
+	await driver.clickButton('Deploy next missing')
+	const deployedBody = await driver.waitForBodyText('1 / 15')
+	expect(deployedBody).toContain('Proxy Deployer')
+	expect(deployedBody).not.toContain('Failed to initialize the app environment')
+	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.
+	await driver.navigate('?workflow=auction#/pools?simulate=1&simScenario=securitypoolx2-auction')
+	const { completeTransactionReview, discoverPools, selectPoolTool } = createWorkflowActions(driver)
+	await discoverPools()
+	await driver.waitForBodyText('Will this resolve?')
+	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+	expect(universeDirectoryOpened).toBe(true)
+	await driver.waitForBodyText('Child universes')
+	const yesUniverseSelected = await driver.evaluate(
+		`(() => { const record = [...document.querySelectorAll('article.entity-card')].find(candidate => candidate.querySelector('h3')?.textContent?.trim() === 'Yes'); const link = record?.querySelector('a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+	)
+	expect(yesUniverseSelected).toBe(true)
+	const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+	expect(childPoolBrowserOpened).toBe(true)
+	await driver.clickButton('+1 month')
+	// Downloaded summaries are snapshots, so scan again after time travel to list the pools' current states.
+	await discoverPools()
+	let auctionPoolOpened = false
+	for (let attempt = 0; attempt < 600 && !auctionPoolOpened; attempt += 1) {
+		auctionPoolOpened =
+			(await driver.evaluate(
+				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
+			)) === true
+		if (!auctionPoolOpened) await Bun.sleep(50)
+	}
+	expect(auctionPoolOpened).toBe(true)
+	const auctionPoolBody = await driver.waitForBodyText('All pools')
+	if (auctionPoolBody.includes('Universe mismatch')) {
+		const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+		expect(childUniverseOpened).toBe(true)
+	}
+	await driver.waitForBodyWithoutText('Universe mismatch')
+	await selectPoolTool('Fork & migration')
+	await driver.waitForButtonEnabled('Finalize truth auction')
+	await driver.clickButton('Finalize truth auction')
+	await completeTransactionReview('Finalize truth auction')
+	const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize truth auction')
+	expect(finalizedBody).toContain('Truth auction')
+	expect(finalizedBody).toContain('Finalize truth auction')
 })

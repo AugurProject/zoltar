@@ -143,10 +143,10 @@ export function LiquidationModal({
 	const chainCurrentTimestamp = useChainTimestamp()
 	const initialPriceFieldId = useId()
 	const priceContextKey = `${liquidationManagerAddress}:${liquidationSecurityPoolAddress}:${liquidationTargetVault}`
-	const [initialPriceState, setInitialPriceState] = useState<{ key: string; value: OracleInitialPriceInput }>({ key: '', value: { source: 'automatic', price: '' } })
-	const initialPrice = initialPriceState.key === priceContextKey ? initialPriceState.value : { source: 'automatic' as const, price: '' }
+	const [initialPriceState, setInitialPriceState] = useState<{ key: string; value: OracleInitialPriceInput }>({ key: '', value: { price: '' } })
+	const initialPrice = initialPriceState.key === priceContextKey ? initialPriceState.value : { price: '' }
 	const needsInitialPrice = needsOracleInitialPrice(currentPoolOracleManagerDetails, isOracleManagerPriceUsable(currentPoolOracleManagerDetails, chainCurrentTimestamp))
-	const { proposedRepPerEthPrice, error: initialPriceError } = parseOracleInitialPrice(needsInitialPrice ? initialPrice : { source: 'automatic', price: '' })
+	const { proposedRepPerEthPrice, error: initialPriceError } = parseOracleInitialPrice(needsInitialPrice ? initialPrice : undefined)
 	const changeInitialPrice = (value: OracleInitialPriceInput) => {
 		setInitialPriceState({ key: priceContextKey, value })
 		const parsed = parseOracleInitialPrice(value)
@@ -317,7 +317,7 @@ export function LiquidationModal({
 	const liquidationBlocker = liquidationBlockers.find(blocker => blocker.reason !== undefined)
 	// The wallet prerequisite comes before every other blocker, so a disconnected wallet or wrong network offers its connect or switch fix.
 	let disabledReasonElementId = !walletGuard.blocked && delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
-	if (!walletGuard.blocked && initialPriceError !== undefined) disabledReasonElementId = initialPriceFieldId
+	if (!walletGuard.blocked && initialPriceError !== undefined && initialPrice.price !== '') disabledReasonElementId = `${initialPriceFieldId}-error`
 	const liquidationActionReason = initialPriceError ?? liquidationBlocker?.reason
 	const liquidationButtonDisabledReason = walletGuard.reason ?? (liquidationEnabled ? liquidationActionReason : undefined)
 	const queuedLiquidationOperation = getQueuedLiquidationOperation({ currentPoolOracleManagerDetails, liquidationTargetVault, securityPoolOverviewResult })
@@ -417,7 +417,7 @@ export function LiquidationModal({
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
 				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
-				{needsInitialPrice ? <OracleInitialPriceFields value={initialPrice} onChange={changeInitialPrice} disabled={securityPoolOverviewActiveAction !== undefined} fieldId={initialPriceFieldId} /> : undefined}
+				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={securityPoolOverviewActiveAction !== undefined} fieldId={initialPriceFieldId} /> : undefined}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={() => (liquidationManagerAddress === undefined ? undefined : onLoadLiquidationFundingPreview(liquidationManagerAddress, proposedRepPerEthPrice))} disabled={loadingLiquidationFundingPreview}>
@@ -450,7 +450,7 @@ export function LiquidationModal({
 						reason: liquidationButtonDisabledReason,
 						walletBlocker: walletGuard.walletBlocker,
 					}}
-					showDisabledReason={walletGuard.blocked || (initialPriceError === undefined && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary))}
+					showDisabledReason={walletGuard.blocked || ((initialPriceError === undefined || initialPrice.price === '') && !(delegatedReceiver && loadingLiquidationReceiverVaultSummary))}
 				/>
 				<button className='secondary' onClick={closeLiquidationModal}>
 					{commonCopy.cancel}

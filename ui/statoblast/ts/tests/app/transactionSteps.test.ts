@@ -455,58 +455,66 @@ for (const missing of ['balanceOf', 'allowance'] as const)
 		expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('Funding requirements changed')
 	})
 
+function createCoordinatorFundingReads(readAllowance: (token: string) => bigint, minimum = () => 3n, baseFee = () => 0n) {
+	return createMockLoaderClient({
+		getBlock: async () => ({ timestamp: 0n, number: 1n, baseFeePerGas: baseFee() }),
+		multicall: async () => {
+			throw new Error('Unexpected multicall')
+		},
+		readContract: async request => {
+			switch (request.functionName) {
+				case 'isPriceValid':
+					return false
+				case 'pendingReportId':
+					return 0n
+				case 'reputationToken':
+					return account
+				case 'gasUnitsForOneDispute':
+					return 1n
+				case 'initialReportPriorityFeeAttoEthPerGas':
+					return 1n
+				case 'targetPriceErrorForDispute':
+					return 10_000_000n
+				case 'openOracleSecurityMultiplierBps':
+					return 10_000n
+				case 'protocolFee':
+					return 0
+				case 'feePercentage':
+					return 0
+				case 'securityPool':
+					return account
+				case 'settlementCollateralAttoEth':
+					return (minimum() - 2n) * 100n
+				case 'balanceOf':
+					return 1000n
+				case 'allowance':
+					return readAllowance(request.address)
+				case 'symbol':
+					return 'REP'
+				case 'decimals':
+					return 18
+				case 'getSettlementCallbackGasLimit':
+					return 10
+				case 'gasConsumedOpenOracleReportPrice':
+					return 20n
+				default:
+					throw new Error(`Unexpected read: ${request.functionName}`)
+			}
+		},
+	})
+}
+
 for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance'] as const)
 	test(`refreshes coordinator ${change} after review before opening the wallet`, async () => {
 		const { client, sendTransaction, receipt } = setup()
 		let minimum = 3n
 		let allowance = 3n
 		let baseFeePerGas = 0n
-		const reads = createMockLoaderClient({
-			getBlock: async () => ({ timestamp: 0n, number: 1n, baseFeePerGas }),
-			multicall: async () => {
-				throw new Error('Unexpected multicall')
-			},
-			readContract: async request => {
-				switch (request.functionName) {
-					case 'isPriceValid':
-						return false
-					case 'pendingReportId':
-						return 0n
-					case 'reputationToken':
-						return account
-					case 'gasUnitsForOneDispute':
-						return 1n
-					case 'initialReportPriorityFeeAttoEthPerGas':
-						return 1n
-					case 'targetPriceErrorForDispute':
-						return 10_000_000n
-					case 'openOracleSecurityMultiplierBps':
-						return 10_000n
-					case 'protocolFee':
-						return 0
-					case 'feePercentage':
-						return 0
-					case 'securityPool':
-						return account
-					case 'settlementCollateralAttoEth':
-						return (minimum - 2n) * 100n
-					case 'balanceOf':
-						return 1000n
-					case 'allowance':
-						return allowance
-					case 'symbol':
-						return 'REP'
-					case 'decimals':
-						return 18
-					case 'getSettlementCallbackGasLimit':
-						return 10
-					case 'gasConsumedOpenOracleReportPrice':
-						return 20n
-					default:
-						throw new Error(`Unexpected read: ${request.functionName}`)
-				}
-			},
-		})
+		const reads = createCoordinatorFundingReads(
+			() => allowance,
+			() => minimum,
+			() => baseFeePerGas,
+		)
 		const reviewed = createReviewedClient({ ...client, ...reads, getGasPrice: async () => 1n, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
 		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
 		await waitForReview()
@@ -896,3 +904,43 @@ for (const ownership of ['closed', 'open', 'standalone'] as const) {
 		}
 	})
 }
+
+test.each(['external approval', 'confirmed approval', 'insufficient allowance'] as const)('plans coordinator approvals from fresh allowance after %s', async source => {
+	const { client, receipt } = setup()
+	let allowance = source === 'external approval' ? 3n : 2n
+	let allowanceReads = 0
+	const reads = createCoordinatorFundingReads(token => {
+		if (token !== account) return 1000n
+		allowanceReads += 1
+		return allowance
+	})
+	const sendTransaction = mock(async () => {
+		allowance = 4n
+		return hash
+	})
+	const prepare = () =>
+		requestOraclePrice(createReviewedClient({ ...client, ...reads, getGasPrice: async () => 1n, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }) }), account, 10n ** 18n, 0n, 122n).catch(error => error)
+	const first = prepare()
+	await waitForReview()
+	if (source === 'confirmed approval') {
+		const index = transactionSteps.value?.steps.findIndex(step => step.contractAddress === account && step.approval !== undefined)
+		if (index === undefined || index < 0) throw new Error('Missing REP approval')
+		transactionSteps.value?.confirmStep(index)
+		for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
+		expect(transactionSteps.value?.steps[index]?.phase).toBe('confirmed')
+		expect(sendTransaction).toHaveBeenCalledTimes(1)
+	}
+	transactionSteps.value?.cancel()
+	await first
+	const previousReads = allowanceReads
+	const second = prepare()
+	await waitForReview()
+	const approval = transactionSteps.value?.steps.find(step => step.contractAddress === account && step.approval !== undefined)
+	expect(allowanceReads).toBeGreaterThan(previousReads)
+	expect(approval?.approval?.approvedAmount).toBe(allowance)
+	expect(approval?.approval?.requiredAmount).toBe(3n)
+	expect(approval?.phase).toBe(source === 'insufficient allowance' ? 'review' : 'skipped')
+	expect(transactionSteps.value?.steps.at(-1)?.phase).toBe(source === 'insufficient allowance' ? 'upcoming' : 'review')
+	transactionSteps.value?.cancel()
+	await second
+})

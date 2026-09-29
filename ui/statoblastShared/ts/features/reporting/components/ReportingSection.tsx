@@ -1,3 +1,4 @@
+import { ReportingDepositPreview, getReportingApprovalLabel } from './ReportingDepositPreview.js'
 import { getReportingContributionFunding, getReportingWalletDepositAmount, getReportingWalletFundingQuote } from '../../../lib/reportingFunding.js'
 import { ReportingFundingSelector, ReportingWalletVaultHelp } from './ReportingFundingSelector.js'
 import { getDisplayedLeadingEscalationOutcome, REPORTING_OUTCOME_DROPDOWN_OPTIONS, getReportingLockedUntilMessage, getReportingOutcomeLabel, hasReportingOpened, deriveReportingStage, isReportingOutcomeEnabled, isWithdrawEscalationEnabled } from '../lib/reporting.js'
@@ -53,10 +54,6 @@ const SELECT_OUTCOME_PRESET_REASON = reportingCopy.presetOutcomeSelectionRequire
 const SELECT_OUTCOME_TO_ENABLE_REPORTING_MESSAGE = reportingCopy.reportingActivationHint
 const NO_SELECTED_SIDE_CAPACITY_REASON = reportingCopy.selectedSideCapacityEmpty
 const BELOW_MINIMUM_SELECTED_SIDE_CAPACITY_REASON = reportingCopy.selectedSideBelowMinimumReason
-const FORK_TRIGGERED_REPORT_REASON = reportingCopy.forkTriggerInstruction
-const FORK_TRIGGERED_SETTLEMENT_REASON = reportingCopy.forkRequiredSettlementReason
-const FORK_ALREADY_TRIGGERED_REPORT_REASON = reportingCopy.forkAlreadyTriggeredReportReason
-const FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON = reportingCopy.forkAlreadyTriggeredSettlementReason
 function isRedundantPresetReason(reason: string | undefined) {
 	return reason === LOAD_REPORTING_PRESETS_REASON || reason === SELECT_OUTCOME_PRESET_REASON
 }
@@ -155,7 +152,7 @@ export function ReportingSection({
 	const withdrawEscalationEnabled = isWithdrawEscalationEnabled(reportingStageKey)
 	let reportLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
-		reportLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_REPORT_REASON : FORK_TRIGGERED_REPORT_REASON
+		reportLifecycleReason = forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredReportReason : reportingCopy.forkTriggerInstruction
 	} else if (reportingStageKey === 'timedOut') {
 		reportLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (reportingStageKey === 'resolved') {
@@ -166,7 +163,7 @@ export function ReportingSection({
 	const reportControlsLocked = !reportOutcomeEnabled || reportControlsLockedReason !== undefined
 	let settlementLifecycleReason: string | undefined
 	if (reportingStageKey === 'forkTriggered') {
-		settlementLifecycleReason = forkAlreadyTriggered ? FORK_ALREADY_TRIGGERED_SETTLEMENT_REASON : FORK_TRIGGERED_SETTLEMENT_REASON
+		settlementLifecycleReason = forkAlreadyTriggered ? reportingCopy.forkAlreadyTriggeredSettlementReason : reportingCopy.forkRequiredSettlementReason
 	} else if (reportingStageKey === 'timedOut') {
 		settlementLifecycleReason = reportingCopy.refreshFinalizedOutcomeReason
 	} else if (activeReportingDetails?.settlementState === 'migration-required') {
@@ -261,6 +258,7 @@ export function ReportingSection({
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
 	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
+
 	const reportButtonGuardMessage = fullReportingLoadingReason ?? (reportActionGuardMessage === undefined ? reportGuardMessage : reportingCopy.currentOraclePriceRequired)
 	const reportActionDisabledReason = !isOnActiveAppChain ? getWrongNetworkReason() : reportButtonGuardMessage
 	// The wallet blocks reporting when it is on another network, or when no earlier reason precedes the wallet-first report guard.
@@ -329,6 +327,7 @@ export function ReportingSection({
 	const settlementSection =
 		showSettlementSection && reportingReady !== false ? (
 			<ReportingSettlementSection
+				showPositions={!showFullReporting}
 				activeReportingDetails={activeReportingDetails}
 				displayedWithdrawGuardMessage={displayedWithdrawGuardMessage}
 				effectiveReportingDetails={effectiveReportingDetails}
@@ -385,7 +384,7 @@ export function ReportingSection({
 							}}
 						/>
 					)}
-					{activeReportingDetails === undefined ? undefined : <EscalationReminderLine key={activeReportingDetails.securityPoolAddress} details={activeReportingDetails} />}
+					{activeReportingDetails === undefined || activeReportingDetails.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0) ? undefined : <EscalationReminderLine key={activeReportingDetails.securityPoolAddress} details={activeReportingDetails} />}
 					<EscalationExplainer details={effectiveReportingDetails} />
 				</>
 			) : undefined}
@@ -462,6 +461,8 @@ export function ReportingSection({
 								value={reportingForm.reportAmount}
 							/>
 
+							<ReportingDepositPreview details={effectiveReportingDetails} outcome={selectedOutcome} amount={selectedAmount} />
+
 							<div className='actions'>
 								<button
 									className='secondary'
@@ -515,13 +516,17 @@ export function ReportingSection({
 									</p>
 								</WalletActionFixReason>
 								<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
-									{reportingRepApprovalRequired ? (
+									{usesWalletFunding ? (
 										<TransactionActionButton
-											idleLabel={reportingCopy.approveAmountLabel(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
+											idleLabel={getReportingApprovalLabel(walletDepositAmount, reportingRepApprovalRequired)}
 											pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
 											onClick={onApproveReportingRep}
+											showDisabledReason={reportingRepApprovalRequired}
 											pending={reportingActiveAction === 'approveReportingRep'}
-											availability={{ disabled: !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined, reason: !isOnActiveAppChain ? getWrongNetworkReason() : reportingApprovalGuardMessage }}
+											availability={{
+												disabled: !reportingRepApprovalRequired || !isOnActiveAppChain || !reportOutcomeEnabled || reportingApprovalGuardMessage !== undefined,
+												reason: !isOnActiveAppChain ? getWrongNetworkReason() : (reportingApprovalGuardMessage ?? (!reportingRepApprovalRequired ? commonCopy.approvalSatisfied : undefined)),
+											}}
 											// While the wallet blocks both actions, the report action's reason holds the row's one wallet fix.
 											{...(reportWalletBlocker === undefined ? {} : { disabledReasonElementId: effectiveReportDisabledReasonElementId, showDisabledReason: false })}
 										/>

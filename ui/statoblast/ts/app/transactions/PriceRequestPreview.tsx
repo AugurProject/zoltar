@@ -22,7 +22,6 @@ export function PriceRequestPreview({
 	preparing,
 	hideReason,
 	onClose,
-	onReview,
 	failedPlan,
 }: {
 	requestValue: bigint | undefined
@@ -33,13 +32,12 @@ export function PriceRequestPreview({
 	preparing: boolean
 	hideReason: boolean
 	onClose: () => void
-	onReview?: (() => void) | undefined
 	failedPlan?: FailedPricePlan | undefined
 }) {
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
 	const actionButtonRef = useRef<HTMLButtonElement>(null)
-	const availability = { disabled: onReview === undefined, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
+	const availability = { disabled: true, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [error])
@@ -53,7 +51,6 @@ export function PriceRequestPreview({
 	}
 	let estimatePrompt = priceRequestCopy.enterPriceEstimate
 	if (preparing) estimatePrompt = priceRequestCopy.preparingPriceRequest
-	else if (onReview !== undefined) estimatePrompt = reason
 	return (
 		<>
 			{failedPlan === undefined ? (
@@ -87,7 +84,7 @@ export function PriceRequestPreview({
 								}
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
-								onClick={onReview ?? (() => undefined)}
+								onClick={() => undefined}
 								actionButtonRef={actionButtonRef}
 								availability={availability}
 								disabledReasonElementId={reasonId}

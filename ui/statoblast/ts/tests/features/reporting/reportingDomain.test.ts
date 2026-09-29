@@ -1,3 +1,4 @@
+import { computeEscalationTimeSinceStartFromAttritionCostAttoRep } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import { getDisplayedLeadingEscalationOutcome } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reporting.js'
 import { formatReportingDeadline } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingViewerStatus.js'
 import { getReportingStagePresentation } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingStagePresentation.js'
@@ -16,6 +17,7 @@ import {
 	getReportingMaxProfitContribution,
 	getReportingMinimumOutcomeChangeContribution,
 	previewReportingContribution,
+	previewReportingDeadline,
 } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingDomain.js'
 import { describe, expect, test } from 'bun:test'
 
@@ -595,4 +597,25 @@ test('display leaders exclude all-zero balances but retain unique positive leade
 	expect(getDisplayedLeadingEscalationOutcome(details.sides)).toBe('no')
 	expect(getDisplayedLeadingEscalationOutcome(details.sides.map(side => ({ ...side, balance: 0n })))).toBeUndefined()
 	expect(getDisplayedLeadingEscalationOutcome(details.sides.map(side => ({ ...side, balance: rep(8n) })))).toBeUndefined()
+})
+
+describe('deposit deadline preview', () => {
+	test('uses the projected median balance, including deposits that leave the timer unchanged', () => {
+		const details = createReportingDetails({ currentRequiredBond: rep(3n) })
+		const elapsed = (amount: bigint) => computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, amount)
+		details.escalationEndTime = details.activationTime + elapsed(rep(5n))
+		expect(previewReportingDeadline(details, 'no', rep(10n))).toEqual({ deadline: details.escalationEndTime, extension: 0n, reachesNonDecision: false })
+		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: details.activationTime + elapsed(rep(8n)), extension: elapsed(rep(8n)) - elapsed(rep(5n)), reachesNonDecision: false })
+	})
+	test('shows the initial response window and handles a fork instead of inventing a deadline', () => {
+		const initial = createNotStartedReportingDetails()
+		expect(previewReportingDeadline(initial, 'yes', initial.startBondAttoRep)?.deadline).toBe(initial.currentTime + 3n * 86400n)
+		const details = createReportingDetails({ currentRequiredBond: rep(3n) })
+		details.sides = details.sides.map(side => ({ ...side, balance: side.key === 'yes' ? details.nonDecisionThresholdAttoRep : 0n }))
+		expect(previewReportingDeadline(details, 'no', details.nonDecisionThresholdAttoRep)?.reachesNonDecision).toBe(true)
+	})
+	test('respects the fresh response window for resumed games', () => {
+		const details = createReportingDetails({ forkContinuation: true, forkResumedAt: 100n, forkElapsedAtStart: 4000000n, currentRequiredBond: rep(3n), escalationEndTime: 259300n })
+		expect(previewReportingDeadline(details, 'yes', rep(10n))).toEqual({ deadline: 259300n, extension: 0n, reachesNonDecision: false })
+	})
 })

@@ -293,6 +293,12 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		}
 	}
 	const forkContinuationSnapshot = await readForkContinuation(client, escalationGameAddress)
+	const continuationTiming = forkContinuationSnapshot
+		? await Promise.all([
+				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkResumedAt', args: [] }),
+				client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, address: escalationGameAddress, functionName: 'forkElapsedAtStart', args: [] }),
+			])
+		: undefined
 	const walletReportingStatePromise = loadViewerReportingWalletState(client, securityPoolAddress, accountAddress)
 	const [startBondAttoRep, nonDecisionThresholdAttoRep, activationTime, totalCostAttoRep, bindingCapital, invalidOutcomeState, yesOutcomeState, noOutcomeState, escalationEndTime, _questionOutcome, universeForkTime, hasReachedNonDecision, walletReportingState] = await Promise.all([
 		client.readContract({
@@ -427,6 +433,8 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 		activationTime,
 		totalCostAttoRep,
 		forkContinuation: forkContinuationSnapshot,
+		forkResumedAt: continuationTiming?.[0],
+		forkElapsedAtStart: continuationTiming?.[1],
 		universeId,
 		parentWithdrawalEnabled: settlementState === 'resolved',
 		...walletReportingState,

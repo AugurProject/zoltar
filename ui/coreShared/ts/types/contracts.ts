@@ -473,6 +473,8 @@ export type ActiveReportingDetails = ReportingDetailsBase & {
 	activationTime: bigint
 	totalCostAttoRep: bigint
 	forkContinuation?: boolean | undefined
+	forkResumedAt?: bigint | undefined
+	forkElapsedAtStart?: bigint | undefined
 }
 
 export type ReportingDetails =

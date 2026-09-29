@@ -1034,6 +1034,7 @@
 	background: var(--surface-inset);
 }
 
+.commitment-risk-confirmation,
 .withdraw-deposit-selection,
 .escalation-selection-control {
 	display: grid;
@@ -1042,6 +1043,7 @@
 	gap: var(--space-3);
 }
 
+.commitment-risk-confirmation input,
 .withdraw-deposit-selection input,
 .escalation-selection-control input {
 	margin: var(--space-1) 0 0;

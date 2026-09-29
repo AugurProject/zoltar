@@ -367,7 +367,7 @@ void describe('market creation helpers', () => {
 		).toThrow('Question ID is required')
 	})
 
-	test('parses security-pool market IDs as decimal and hexadecimal values', () => {
+	test('parses security-pool market IDs as hexadecimal values', () => {
 		const form: SecurityPoolFormState = {
 			initialReportPriorityFeeEth: '0.00000001',
 			marketId: '0x2a',
@@ -382,7 +382,7 @@ void describe('market creation helpers', () => {
 		expect(
 			createSecurityPoolParameters({
 				initialReportPriorityFeeEth: '0.00000001',
-				marketId: '  55  ',
+				marketId: '  0x37  ',
 				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState).questionId,
 		).toBe(55n)
@@ -392,7 +392,7 @@ void describe('market creation helpers', () => {
 				marketId: 'not-a-number',
 				statoblastSecurityMultiplierBps: '3',
 			} as SecurityPoolFormState),
-		).toThrow('Question ID must be a valid decimal or hex bigint')
+		).toThrow('Enter a valid hexadecimal question ID.')
 	})
 
 	test('validation maps scalar max/min ordering to both scalar bound fields', () => {
@@ -418,7 +418,7 @@ void describe('market creation helpers', () => {
 	test('security pool creation parameters exclude origin retention input', () => {
 		const parameters = createSecurityPoolParameters({
 			initialReportPriorityFeeEth: '0.00000001',
-			marketId: '42',
+			marketId: '0x2a',
 			statoblastSecurityMultiplierBps: '2',
 		} as SecurityPoolFormState)
 
@@ -433,7 +433,7 @@ void describe('market creation helpers', () => {
 	test('converts fractional security multipliers to basis points', () => {
 		const parameters = createSecurityPoolParameters({
 			initialReportPriorityFeeEth: '0.00000001',
-			marketId: '42',
+			marketId: '0x2a',
 			statoblastSecurityMultiplierBps: '2.5',
 		} as SecurityPoolFormState)
 
@@ -444,7 +444,7 @@ void describe('market creation helpers', () => {
 		expect(
 			createSecurityPoolParameters({
 				initialReportPriorityFeeEth: '0.0000000105',
-				marketId: '42',
+				marketId: '0x2a',
 				statoblastSecurityMultiplierBps: '2',
 			}),
 		).toEqual({
@@ -456,7 +456,7 @@ void describe('market creation helpers', () => {
 		expect(() =>
 			createSecurityPoolParameters({
 				initialReportPriorityFeeEth: '0',
-				marketId: '42',
+				marketId: '0x2a',
 				statoblastSecurityMultiplierBps: '2',
 			}),
 		).toThrow('Initial report priority fee must be greater than 0')
@@ -466,7 +466,7 @@ void describe('market creation helpers', () => {
 		for (const statoblastSecurityMultiplierBps of ['0', '1', '1.0001']) {
 			expect(() =>
 				createSecurityPoolParameters({
-					marketId: '42',
+					marketId: '0x2a',
 					statoblastSecurityMultiplierBps,
 				} as SecurityPoolFormState),
 			).toThrow('Statoblast security multiplier must be at least 1.0002')
@@ -474,10 +474,10 @@ void describe('market creation helpers', () => {
 	})
 
 	test('security pool creation revalidates the maximum priority fee before submission', () => {
-		expect(() => createSecurityPoolParameters({ marketId: '42', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 18) })).toThrow('Initial-report priority fee is too large for Open Oracle report limits.')
+		expect(() => createSecurityPoolParameters({ marketId: '0x2a', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeEth: formatUnits(MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS + 1n, 18) })).toThrow('Initial-report priority fee is too large for Open Oracle report limits.')
 	})
 })
 
 test('interprets the pool priority-fee input as ETH', () => {
-	expect(createSecurityPoolParameters({ marketId: '1', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeEth: '0.0000000105' }).initialReportPriorityFeeAttoEthPerGas).toBe(10_500_000_000n)
+	expect(createSecurityPoolParameters({ marketId: '0x1', statoblastSecurityMultiplierBps: '2', initialReportPriorityFeeEth: '0.0000000105' }).initialReportPriorityFeeAttoEthPerGas).toBe(10_500_000_000n)
 })

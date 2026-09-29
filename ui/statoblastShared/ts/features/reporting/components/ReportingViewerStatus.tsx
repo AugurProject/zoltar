@@ -1,7 +1,8 @@
 import { getDisplayedLeadingEscalationOutcome } from '../lib/reporting.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ActiveReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
-import { NoticeStack } from '@zoltar/ui-core-shared/components/NoticeStack.js'
+import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
+import { EscalationReminderLine } from './EscalationReminderLine.js'
 import * as copy from '../../../copy/reporting.js'
 import { isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import { escalationExplanationHref, formatReportingDeadline, getViewerPositions } from '../lib/reportingViewerStatus.js'
@@ -60,5 +61,11 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 				{copy.tieStatusEnd}
 			</p>
 		)
-	return <NoticeStack items={[{ id: 'reporting-viewer-status', title: copy.yourStatus, tone: !forked && positions.every(position => position.leading) ? 'success' : 'warning', detail }]} />
+	return (
+		<SectionBlock className='reporting-viewer-status' title={copy.yourPositions} variant='plain'>
+			{detail}
+			{!forked && tied ? positions.map(position => <p key={position.side.key}>{copy.forkViewerStake(position.side.label, formatCurrencyBalance(position.stake))}</p>) : undefined}
+			<EscalationReminderLine key={details.securityPoolAddress} details={details} />
+		</SectionBlock>
+	)
 }

@@ -1,5 +1,5 @@
 import type { OperationsDetailRoute } from './browser-types.ts'
-import { shortIdentifier } from './identifier-format.ts'
+import { questionIdHex, shortIdentifier } from './identifier-format.ts'
 
 const address = '0x[0-9a-fA-F]{40}'
 const hash = '0x[0-9a-fA-F]{64}'
@@ -53,5 +53,5 @@ export const routeTitle = (pathname: string): string => {
 	else if (route === 'system' && canonicalKind === 'universe') name = 'Universe'
 	else if (route === 'operations' && !pathname.startsWith('/operations')) name = `${canonicalKind?.slice(0, 1).toUpperCase()}${canonicalKind?.slice(1)}`
 	const identity = pathname.split('/').filter(Boolean).at(-1)
-	return `${name}${identity !== undefined && ['address', 'tx', 'block', 'pool', 'vault', 'report', 'auction', 'escalation', 'fork', 'trading', 'question', 'universe'].includes(canonicalKind ?? '') ? ` ${shortIdentifier(identity, 12, 8)}` : ''} · augurScan`
+	return `${name}${identity !== undefined && ['address', 'tx', 'block', 'pool', 'vault', 'report', 'auction', 'escalation', 'fork', 'trading', 'question', 'universe'].includes(canonicalKind ?? '') ? ` ${shortIdentifier(canonicalKind === 'question' ? questionIdHex(identity) : identity, 12, 8)}` : ''} · augurScan`
 }

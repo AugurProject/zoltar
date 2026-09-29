@@ -4,8 +4,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getCoordinatorInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { OpenOraclePriceInput } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOraclePriceInput.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider, unlockedTransactionActions } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -16,11 +15,23 @@ import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/Tran
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { cancelTransactionReview, isTransactionStepInFlight, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
-import { dismissGlobalTransaction } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
+import { dismissGlobalTransaction, isGlobalTransactionDismissed } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
 import type { FailedPricePlan } from './PriceRequestPreview.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
+}
+
+type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; failedHash?: string | undefined; submissionOutstanding?: boolean; steps?: NonNullable<typeof transactionSteps.value>['steps'] | undefined; plan?: FailedPricePlan }
+
+function getRunSubmission(run: PriceRequestRun | undefined) {
+	const workflow = transactionSteps.peek()
+	const steps = run?.steps ?? (run !== undefined && workflow?.reviewSignal === run.signal ? workflow.steps : undefined)
+	return {
+		submittedHash: steps?.findLast(step => step.hash !== undefined)?.hash ?? run?.submittedHash,
+		finalSubmittedHash: steps?.at(-1)?.hash ?? run?.finalSubmittedHash,
+		inFlight: steps?.some(isTransactionStepInFlight) ?? false,
+	}
 }
 
 export function RequestPriceModal({ review, onConfirm, onClose, canRequest, confirmationGuardMessage, confirmationWalletBlocker, closeOnSuccessKey, getReturnFocusTarget, fetchPrice = fetchUniswapPrice }: RequestPriceModalProps & { fetchPrice?: typeof fetchUniswapPrice }) {
@@ -29,18 +40,42 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const quoteAttempt = useRef(0)
 	const [price, setPrice] = useState('')
 	const [retry, setRetry] = useState(0)
-	const [manualRequestRequired, setManualRequestRequired] = useState(false)
+	const [preparationPaused, setPreparationPaused] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
-	const run = useRef<{ key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; submissionOutstanding?: boolean; plan?: FailedPricePlan }>()
+	const run = useRef<PriceRequestRun>()
 	const previousReviewKey = useRef<string>()
 	const priceControlsRef = useRef<HTMLDivElement>(null)
 	const mounted = useRef(true)
 	const confirm = useRef(onConfirm)
 	confirm.current = onConfirm
 	const presentation = useGlobalTransactionPresentation()
+	const failureDismissed = presentation?.tone === 'error' && isGlobalTransactionDismissed(presentation)
+	const previousFailureDismissed = useRef(failureDismissed)
+	const retryPreparation = () => {
+		if (!running) {
+			run.current?.cancel()
+			const tracked = run.current
+			const { finalSubmittedHash: finalHash, inFlight } = getRunSubmission(tracked)
+			const failedSubmission = finalHash !== undefined && (tracked?.failedHash === finalHash || (presentation?.tone === 'error' && presentation.hash === finalHash))
+			const completedSubmission = finalHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalHash
+			if (inFlight || (finalHash !== undefined && !failedSubmission && !completedSubmission)) {
+				setPreparationPaused(true)
+				return
+			}
+			run.current = undefined
+		}
+		setPreparationPaused(false)
+		setFailureLatched(false)
+		setFailedPlan(undefined)
+		setRetry(value => value + 1)
+	}
+	useEffect(() => {
+		if (!previousFailureDismissed.current && failureDismissed && failureLatched) retryPreparation()
+		previousFailureDismissed.current = failureDismissed
+	}, [failureDismissed, failureLatched])
 	const workflow = transactionSteps.value
 	const parsed = tryParseDecimalInput(price)
 	const validPrice = parsed !== undefined && parsed > 0n && parsed < 2n ** 256n
@@ -51,30 +86,34 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
 	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const finalSubmittedHash = run.current?.finalSubmittedHash ?? (ownsWorkflow ? workflow?.steps.at(-1)?.hash : undefined)
+	const { finalSubmittedHash, submittedHash } = getRunSubmission(run.current)
 	const completedRequest = finalSubmittedHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalSubmittedHash && (closeOnSuccessKey === undefined || closeOnSuccessKey === finalSubmittedHash)
 	const awaitingResult = (finalReceiptConfirmed || finalSubmittedHash !== undefined) && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
-	const submittedHash = run.current?.submittedHash ?? (ownsWorkflow ? workflow?.steps.findLast(step => step.hash !== undefined)?.hash : undefined)
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const failedCurrentAttempt =
 		(!running && presentation?.tone === 'error' && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
+	useEffect(() => {
+		const tracked = run.current
+		if (preparationPaused && !running && !failureLatched && !failedCurrentAttempt && tracked?.steps !== undefined && finalSubmittedHash === undefined && !getRunSubmission(tracked).inFlight) retryPreparation()
+	}, [preparationPaused, running, failureLatched, failedCurrentAttempt, finalSubmittedHash])
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
-	if (manualRequestRequired) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
+	if (preparationPaused) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
 
 	useLayoutEffect(() => {
 		if (review === undefined) return
 		const reviewKey = `${review.managerAddress}:${review.securityPoolAddress}:${review.universeId}`
 		if (previousReviewKey.current === reviewKey) return
 		previousReviewKey.current = reviewKey
+		if (run.current !== undefined) run.current.failedHash = undefined
 		quoteAttempt.current += 1
 		setFetching(false)
 		setQuoteError(undefined)
 		setPrice('')
 		setAttempted(undefined)
-		setManualRequestRequired(false)
+		setPreparationPaused(false)
 		setFailureLatched(false)
 		setFailedPlan(undefined)
 	}, [review])
@@ -86,8 +125,10 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	}, [review])
 	useLayoutEffect(() => {
 		if (!failedCurrentAttempt) return
+		const failedHash = presentation?.tone === 'error' ? presentation.hash : undefined
+		if (run.current !== undefined && failedHash !== undefined && (failedHash === finalSubmittedHash || failedHash === submittedHash)) run.current.failedHash = failedHash
 		setFailureLatched(true)
-		setManualRequestRequired(true)
+		setPreparationPaused(true)
 		if (workflow !== undefined) {
 			const plan = {
 				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
@@ -97,7 +138,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			setFailedPlan(plan)
 		} else if (run.current?.plan !== undefined) setFailedPlan(run.current.plan)
 		if (!running) run.current?.cancel()
-	}, [failedCurrentAttempt, running])
+	}, [failedCurrentAttempt, running, presentation?.tone, presentation?.hash, finalSubmittedHash, submittedHash])
 	useLayoutEffect(() => {
 		if (finalSubmittedHash !== undefined && run.current !== undefined) run.current.finalSubmittedHash = finalSubmittedHash
 	}, [finalSubmittedHash])
@@ -116,8 +157,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (!current && !sending && !(running && ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined))) run.current?.cancel()
 	}, [current, sending, running, ownsWorkflow, workflow])
 	useLayoutEffect(() => {
-		if (manualRequestRequired && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
-	}, [manualRequestRequired, showSteps])
+		if (preparationPaused && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
+	}, [preparationPaused, showSteps])
 	useEffect(
 		() => () => {
 			mounted.current = false
@@ -127,18 +168,20 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		[],
 	)
 	useEffect(() => {
-		if (!valid || review === undefined || key === undefined || running || attempted === key || manualRequestRequired || failureLatched) return
+		if (!valid || review === undefined || key === undefined || running || attempted === key || preparationPaused || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
 			embeddedTransactionSteps.value = cancellation.signal
 			const cancel = () => {
 				const firstDetach = run.current?.signal === cancellation.signal && run.current.submissionOutstanding !== true
-				const { trackingSubmitted, steps } = cancelTransactionReview(cancellation.signal)
+				const { steps: currentSteps } = cancelTransactionReview(cancellation.signal)
+				const steps = currentSteps ?? (run.current?.signal === cancellation.signal ? run.current.steps : undefined)
 				const submittedHash = steps?.findLast(step => step.hash !== undefined)?.hash
 				const finalSubmittedHash = steps?.at(-1)?.hash
-				const submissionOutstanding = trackingSubmitted || (run.current?.signal === cancellation.signal && run.current.submissionOutstanding === true)
-				if (submissionOutstanding && run.current?.signal === cancellation.signal) {
-					run.current.submissionOutstanding = true
+				const submissionOutstanding = (steps?.some(isTransactionStepInFlight) ?? false) || finalSubmittedHash !== undefined
+				if (run.current?.signal === cancellation.signal) {
+					run.current.steps = steps
+					run.current.submissionOutstanding = submissionOutstanding
 					if (submittedHash !== undefined) run.current.submittedHash = submittedHash
 					if (finalSubmittedHash !== undefined) run.current.finalSubmittedHash = finalSubmittedHash
 					if (steps !== undefined)
@@ -147,7 +190,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							totalAttoEth: steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
 							outcome: steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
 						}
-					if (firstDetach && mounted.current) setManualRequestRequired(true)
+					if (submissionOutstanding && firstDetach && mounted.current) setPreparationPaused(true)
 				}
 				if (!submissionOutstanding) cancellation.abort()
 				if (mounted.current && run.current?.signal === cancellation.signal) setAttempted(undefined)
@@ -166,7 +209,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			})
 		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice, manualRequestRequired, failureLatched])
+	}, [valid, review, key, running, attempted, proposedPrice, preparationPaused, failureLatched])
 	const close = () => {
 		if (completedRequest) dismissGlobalTransaction(presentation)
 		quoteAttempt.current += 1
@@ -179,11 +222,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
 		setQuoteError(undefined)
-		if (failureLatched) setManualRequestRequired(true)
 		run.current?.cancel()
 		try {
 			const value = await fetchPrice(review)
 			if (attempt !== quoteAttempt.current || !mounted.current) return
+			if (failureLatched || preparationPaused) retryPreparation()
 			setPrice(formatUnits(value, 18))
 		} catch (error) {
 			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, priceRequestCopy.uniswapPriceFailed))
@@ -198,26 +241,20 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{quoteError}
 				</span>
 			)}
-			<LookupFieldRow
-				label={poolCopy.manualRepPerEth}
+			<OpenOraclePriceInput
 				value={price}
-				inputMode='decimal'
 				disabled={completedRequest}
 				onInput={value => {
-					if (submittedHash !== undefined || failureLatched) setManualRequestRequired(true)
+					if (submittedHash !== undefined || failureLatched || preparationPaused) retryPreparation()
 					run.current?.cancel()
 					quoteAttempt.current += 1
 					setFetching(false)
 					setQuoteError(undefined)
-					if (failureLatched) setManualRequestRequired(true)
 					setPrice(value)
 				}}
 				error={priceError ?? quoteError}
-				action={
-					<button className='secondary request-price-fetch' type='button' disabled={completedRequest || fetching} onClick={() => void fetchQuote()}>
-						{fetching ? <LoadingText>{priceRequestCopy.fetchingUniswapPrice}</LoadingText> : priceRequestCopy.fetchUniswapPrice}
-					</button>
-				}
+				fetching={fetching}
+				onFetch={() => void fetchQuote()}
 			/>
 		</div>
 	)
@@ -238,19 +275,9 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
 							error={confirmationGuardMessage}
 							errorWalletBlocker={confirmationWalletBlocker}
-							preparing={valid && !manualRequestRequired && (running || attempted !== key)}
+							preparing={valid && !preparationPaused && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
-							onReview={
-								manualRequestRequired && valid && !running
-									? () => {
-											setManualRequestRequired(false)
-											setFailureLatched(false)
-											setFailedPlan(undefined)
-											setRetry(value => value + 1)
-										}
-									: undefined
-							}
 						/>
 					)}
 				</OperationModal>

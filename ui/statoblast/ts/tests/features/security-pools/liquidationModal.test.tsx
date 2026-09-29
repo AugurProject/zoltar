@@ -237,12 +237,11 @@ describe('LiquidationModal', () => {
 			})
 		).cleanup
 		const page = within(document.body)
-		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
 		expect(loadFunding).not.toHaveBeenCalled()
 		fireEvent.input(page.getByLabelText('Open Oracle REP / ETH starting price'), { target: { value: '3' } })
 		expect(loadFunding).toHaveBeenCalledWith(zeroAddress, 3n * ATTO_ETH_PER_ETH)
-		fireEvent.click(page.getByRole('button', { name: 'Uniswap quote' }))
-		expect(loadFunding).toHaveBeenLastCalledWith(zeroAddress, undefined)
+		fireEvent.input(page.getByLabelText('Open Oracle REP / ETH starting price'), { target: { value: '' } })
+		expect(loadFunding).toHaveBeenCalledTimes(1)
 	})
 
 	test('submits the chosen manual liquidation price', async () => {
@@ -256,7 +255,6 @@ describe('LiquidationModal', () => {
 			})
 		).cleanup
 		const page = within(document.body)
-		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation')
 		fireEvent.input(page.getByLabelText('Open Oracle REP / ETH starting price'), { target: { value: '3' } })
 		fireEvent.click(page.getByRole('button', { name: 'Queue liquidation' }))
@@ -278,6 +276,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		const review = within(document.body).getByRole('heading', { name: 'Transaction review' }).closest('section')
 		if (review === null) throw new Error('Expected transaction review')
@@ -318,6 +317,7 @@ describe('LiquidationModal', () => {
 			liquidationTimeoutMinutes: '0',
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Enter a liquidation timeout of at least 1 minute.')
 	})
@@ -363,7 +363,6 @@ describe('LiquidationModal', () => {
 				</WalletActionsProvider>,
 			)
 			cleanupRenderedComponent = renderedComponent.cleanup
-			fireEvent.click(within(document.body).getByRole('button', { name: 'Manual price' }))
 			expectWalletFixDescribesAction(document.body, 'Queue liquidation', fixLabel)
 		})
 
@@ -843,6 +842,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		expectTransactionButtonDisabled(document.body, 'Queue liquidation', 'Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')
 		expect(within(document.body).getByText('Need 7\u00a0more\u00a0ETH in this wallet to queue liquidation.')).not.toBeNull()
@@ -880,6 +880,7 @@ describe('LiquidationModal', () => {
 			walletBalanceAttoEth: 100n * ATTO_ETH_PER_ETH,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		const queueButton = within(document.body).getByRole('button', { name: 'Queue liquidation' }) as HTMLButtonElement
 		expect(queueButton.disabled).toBe(false)
@@ -2120,6 +2121,7 @@ describe('LiquidationModal', () => {
 			loadingLiquidationReceiverVaultSummary: true,
 		})
 		cleanupRenderedComponent = renderedComponent.cleanup
+		fireEvent.input(within(document.body).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
 
 		const status = within(document.body).getByRole('status')
 		expect(status.textContent).toBe('Loading receiver vault…')

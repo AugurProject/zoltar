@@ -60,6 +60,15 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		questionId = fixture.questionId
 	})
 
+	test('cannot deploy an origin pool at or after the question end time', async () => {
+		for (const offset of [0n, 1n]) {
+			const endedQuestion = { ...questionData, title: `ended question ${offset}`, endTime: (await mockWindow.getTime()) + DAY }
+			await createQuestion(client, endedQuestion, outcomes)
+			await mockWindow.setTime(endedQuestion.endTime + offset)
+			await assert.rejects(deployOriginSecurityPool(client, genesisUniverse, getQuestionId(endedQuestion, outcomes), statoblastSecurityMultiplierBps), /Question has already ended/)
+		}
+	})
+
 	test('cannot deploy security pool with non-binary question', async () => {
 		// Create a question with 3 outcomes (not yes/no binary)
 		const multiOutcomeQuestionData = {
