@@ -5,6 +5,7 @@ import {
 	formatAdditionalCurrencyBalance,
 	formatAmount,
 	formatAmountDisplay,
+	formatCeilingAmount,
 	formatCurrencyBalanceWithUnit,
 	formatCurrencyInputBalance,
 	formatDuration,
@@ -20,6 +21,32 @@ import {
 } from '../lib/formatters.js'
 
 void describe('formatting helpers', () => {
+	test.each([
+		[0n, 18, '0', false],
+		[999991n, 3, '1k', true],
+		[1000n, 0, '1k', false],
+		[1230000000n, 6, '1.23k', false],
+		[999999999n, 0, '1G', true],
+		[99999n * 10n ** 22n, 0, '999.99Y', false],
+	])('formats upward compact approval boundary %s with %s units', (amount, units, text, approximate) => {
+		expect(formatCeilingAmount(amount, units)).toMatchObject({ text, approximate })
+	})
+
+	test.each([
+		[99999n * 10n ** 22n + 1n, 0],
+		[10n ** 27n, 0],
+		[2n ** 256n - 1n, 18],
+		[2n ** 256n - 1n, 0],
+	])('omits approval amounts beyond compact suffixes instead of using scientific notation: %s', (amount, units) => {
+		expect(formatCeilingAmount(amount, units)).toBeUndefined()
+	})
+
+	test('rejects invalid approval formatting inputs', () => {
+		expect(() => formatCeilingAmount(-1n)).toThrow('non-negative')
+		expect(() => formatCeilingAmount(1n, -1)).toThrow('non-negative')
+		expect(() => formatCeilingAmount(1n, 1.5)).toThrow('integer')
+	})
+
 	void test('formatRoundedCurrencyBalance rounds positive balances without a decimal part when decimals are zero', () => {
 		expect(formatRoundedCurrencyBalance(125n, 2, 0)).toBe('1')
 	})
