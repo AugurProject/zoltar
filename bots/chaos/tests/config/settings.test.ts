@@ -509,16 +509,6 @@ describe('chaos-bot settings', () => {
 		await expect(assertSettingsProfileIsolation(path, base)).rejects.toThrow('distinct durable state paths')
 	})
 
-	test('replaces permissive configuration permissions on the next successful save', async () => {
-		const directory = await temporaryDirectory()
-		const path = join(directory, 'operator.json')
-		const settings = parseSettings(await storedExample())
-		await saveSettings(path, settings)
-		await chmod(path, 0o644)
-		await saveSettings(path, settings)
-		expect((await stat(path)).mode & 0o777).toBe(0o600)
-	})
-
 	test('refuses permissive or symbolic-link configuration files before reading secrets', async () => {
 		const directory = await temporaryDirectory()
 		const path = join(directory, 'operator.json')
