@@ -54,6 +54,20 @@ function callData(params: unknown) {
 	return transaction.data as Hex
 }
 
+/** A wallet client at block 2 that answers every other RPC through `handle`. */
+function blockTwoWalletClient(handle: (method: string, params: unknown) => Promise<unknown>) {
+	return createWalletClient({
+		account,
+		transport: custom({
+			async request({ method, params }) {
+				if (method === 'eth_blockNumber') return '0x2'
+				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+				return await handle(method, params)
+			},
+		}),
+	})
+}
+
 test('creates live read clients from the configured active backend', () => {
 	const configuredClient = createPublicClient({ transport: custom({ request: async () => '0x1' }) })
 	const backend = { ...createFakeBackend(), createReadClient: () => configuredClient }
@@ -69,26 +83,19 @@ describe('live guarded transaction writes', () => {
 	test('caps the receive-based exit transfer at the wallet balance and preserves its approved payload', async () => {
 		const shareCalls: Hex[] = []
 		let longBalance = 12n
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method, params }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if ((method === 'eth_call' || method === 'eth_sendTransaction') && Array.isArray(params)) {
-						const transaction = params[0]
-						if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
-						if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
-						if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
-						const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
-						if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
-						if (decoded.functionName === 'safeBatchTransferFrom' && decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
-						shareCalls.push(transaction.data as Hex)
-						return method === 'eth_sendTransaction' ? transactionHash : '0x'
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = blockTwoWalletClient(async (method, params) => {
+			if ((method === 'eth_call' || method === 'eth_sendTransaction') && Array.isArray(params)) {
+				const transaction = params[0]
+				if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
+				if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
+				if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
+				const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
+				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
+				if (decoded.functionName === 'safeBatchTransferFrom' && decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
+				shareCalls.push(transaction.data as Hex)
+				return method === 'eth_sendTransaction' ? transactionHash : '0x'
+			}
+			throw new Error(`Unexpected RPC method ${method}`)
 		})
 		const quote = await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 500n)
 		expect(quote.maximumLongShares).toBe(12n)
@@ -115,29 +122,22 @@ describe('live guarded transaction writes', () => {
 			let longBalance = 13n
 			const simulatedTransfers: Hex[] = []
 			const submittedTransfers: Hex[] = []
-			const client = createWalletClient({
-				account,
-				transport: custom({
-					async request({ method, params }) {
-						if (method === 'eth_blockNumber') return '0x2'
-						if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-						if (method !== 'eth_call' && method !== 'eth_sendTransaction') throw new Error(`Unexpected RPC method ${method}`)
-						const transaction = Array.isArray(params) ? params[0] : undefined
-						if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
-						if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [longSharesSwapped, 1n])
-						if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
-						const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
-						if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
-						if (decoded.functionName !== 'safeBatchTransferFrom') throw new Error('Unexpected share transfer')
-						if (decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
-						if (method === 'eth_sendTransaction') {
-							submittedTransfers.push(transaction.data as Hex)
-							return transactionHash
-						}
-						simulatedTransfers.push(transaction.data as Hex)
-						return '0x'
-					},
-				}),
+			const client = blockTwoWalletClient(async (method, params) => {
+				if (method !== 'eth_call' && method !== 'eth_sendTransaction') throw new Error(`Unexpected RPC method ${method}`)
+				const transaction = Array.isArray(params) ? params[0] : undefined
+				if (typeof transaction !== 'object' || transaction === null || !('to' in transaction) || !('data' in transaction) || typeof transaction.to !== 'string' || typeof transaction.data !== 'string') throw new Error('Malformed transaction')
+				if (transaction.to.toLowerCase() === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [longSharesSwapped, 1n])
+				if (transaction.to.toLowerCase() !== shareToken.toLowerCase()) throw new Error('Unexpected transaction target')
+				const decoded = decodeFunctionData({ abi: shareTransferAbi, data: transaction.data as Hex })
+				if (decoded.functionName === 'balanceOf') return encodeAbiParameters([uint256], [longBalance])
+				if (decoded.functionName !== 'safeBatchTransferFrom') throw new Error('Unexpected share transfer')
+				if (decoded.args[3][1] > longBalance) throw new Error('ERC1155: insufficient balance for transfer')
+				if (method === 'eth_sendTransaction') {
+					submittedTransfers.push(transaction.data as Hex)
+					return transactionHash
+				}
+				simulatedTransfers.push(transaction.data as Hex)
+				return '0x'
 			})
 			const quote = await simulateExit(client, configuration, market, account, side, 10n, 7n, 500n)
 			expect(quote.maximumLongShares).toBe(13n)
@@ -155,22 +155,15 @@ describe('live guarded transaction writes', () => {
 
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {
 		const calls: ReturnType<typeof decodeFunctionData>[] = []
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method, params }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if (method === 'eth_call' || method === 'eth_sendTransaction') {
-						const decoded = decodeFunctionData({ abi: [...routerAbi, ...pairAbi], data: callData(params) })
-						calls.push(decoded)
-						if (method === 'eth_sendTransaction') return transactionHash
-						if (decoded.functionName === 'removeLiquidity') return encodeAbiParameters([uint256, uint256], [5n, 5n])
-						return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = blockTwoWalletClient(async (method, params) => {
+			if (method === 'eth_call' || method === 'eth_sendTransaction') {
+				const decoded = decodeFunctionData({ abi: [...routerAbi, ...pairAbi], data: callData(params) })
+				calls.push(decoded)
+				if (method === 'eth_sendTransaction') return transactionHash
+				if (decoded.functionName === 'removeLiquidity') return encodeAbiParameters([uint256, uint256], [5n, 5n])
+				return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+			}
+			throw new Error(`Unexpected RPC method ${method}`)
 		})
 		const validityMinutes = 7n
 		const deadline = 421n
@@ -217,22 +210,15 @@ describe('live guarded transaction writes', () => {
 
 	test('rejects a liquidity addition whose refreshed deposit mix exceeds the approved maximum', async () => {
 		const chain = { noUsed: 5n, sends: 0 }
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method, params }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if (method === 'eth_sendTransaction') {
-						chain.sends += 1
-						return transactionHash
-					}
-					if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
-					const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
-					if (decoded.functionName !== 'addLiquidityWithEth') throw new Error(`Unexpected simulation ${decoded.functionName}`)
-					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 20n, 10n]])
-				},
-			}),
+		const client = blockTwoWalletClient(async (method, params) => {
+			if (method === 'eth_sendTransaction') {
+				chain.sends += 1
+				return transactionHash
+			}
+			if (method !== 'eth_call') throw new Error(`Unexpected RPC method ${method}`)
+			const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
+			if (decoded.functionName !== 'addLiquidityWithEth') throw new Error(`Unexpected simulation ${decoded.functionName}`)
+			return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 20n, 20n, chain.noUsed, 0n, 20n - chain.noUsed, 20n, 10n]])
 		})
 		const quote = await simulateLiquidity(client, configuration, market, account, 'add', 20n, 5_000n, 7n, 50n)
 		chain.noUsed = 20n
@@ -242,32 +228,25 @@ describe('live guarded transaction writes', () => {
 
 	test('checks the wallet context after entry, exit, and liquidity revalidation and before every broadcast', async () => {
 		let sends = 0
-		const client = createWalletClient({
-			account,
-			transport: custom({
-				async request({ method, params }) {
-					if (method === 'eth_blockNumber') return '0x2'
-					if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
-					if (method === 'eth_call') {
-						const transaction = Array.isArray(params) ? params[0] : undefined
-						const target = typeof transaction === 'object' && transaction !== null && 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : ''
-						if (target === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
-						if (target === shareToken.toLowerCase()) {
-							const decoded = decodeFunctionData({ abi: shareTransferAbi, data: callData(params) })
-							return decoded.functionName === 'balanceOf' ? encodeAbiParameters([uint256], [13n]) : '0x'
-						}
-						const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
-						if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, 12n, 10n, 1n, 5_000n, 5_001n]])
-						if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
-						throw new Error(`Unexpected simulation ${decoded.functionName}`)
-					}
-					if (method === 'eth_sendTransaction') {
-						sends++
-						return transactionHash
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = blockTwoWalletClient(async (method, params) => {
+			if (method === 'eth_call') {
+				const transaction = Array.isArray(params) ? params[0] : undefined
+				const target = typeof transaction === 'object' && transaction !== null && 'to' in transaction && typeof transaction.to === 'string' ? transaction.to.toLowerCase() : ''
+				if (target === pair.toLowerCase()) return encodeAbiParameters([uint256, uint256], [2n, 1n])
+				if (target === shareToken.toLowerCase()) {
+					const decoded = decodeFunctionData({ abi: shareTransferAbi, data: callData(params) })
+					return decoded.functionName === 'balanceOf' ? encodeAbiParameters([uint256], [13n]) : '0x'
+				}
+				const decoded = decodeFunctionData({ abi: routerAbi, data: callData(params) })
+				if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, 12n, 10n, 1n, 5_000n, 5_001n]])
+				if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+				throw new Error(`Unexpected simulation ${decoded.functionName}`)
+			}
+			if (method === 'eth_sendTransaction') {
+				sends++
+				return transactionHash
+			}
+			throw new Error(`Unexpected RPC method ${method}`)
 		})
 		const validityMinutes = 7n
 		const slippageBps = 500n

@@ -5,11 +5,11 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { Help } from '../../features/Help.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { connectedWalletServices, discoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -34,23 +34,18 @@ describe('trading surface nesting', () => {
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
 
-	const page = (markets: LiveMarket[]) => ({ start: 0n, count: BigInt(markets.length), total: BigInt(markets.length), previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
 	const services = {
-		...liveTradingControllerServices,
-		createTradingPublicClient: () => ({}),
-		validateLiveDeployment: async () => undefined,
-		discoverAddressedMarket: async () => page([{ ...market }]),
-		discoverTradingMarketPage: async () => page([{ ...market }]),
-		discoverAllLiveMarketsInUniverse: async () => page([{ ...market }]),
-		walletChainId: async () => configuration.chainId,
-		connectWallet: async () => account,
+		...offlineControllerServices,
+		discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
+		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
+		discoverAllLiveMarketsInUniverse: async () => discoveryPage([{ ...market }]),
+		...connectedWalletServices(account, configuration.chainId),
 		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
-		loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
 		loadLiveBalances: async (_client: unknown, selected: LiveMarket) => ({ scope: shareBalanceScope(selected), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 10n ** 18n }),
 	}
 
 	test('keeps the market workspace, list, portfolio, and help routes free of cards inside cards', async () => {
-		Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
+		installSilentInjectedWallet()
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .tx-action-button') !== null, 'market workspace')

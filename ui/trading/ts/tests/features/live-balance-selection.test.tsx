@@ -12,6 +12,7 @@ import { shareBalanceScope, type LiveBalances, type LiveMarket } from '../../pro
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { connectedWalletServices, discoveryPage, offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -103,9 +104,7 @@ describe('live balance selection', () => {
 			removeListener: (eventName: string) => walletListeners.delete(eventName),
 		})
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverUniverses: async () => {
 				throw new Error('Addressed routes must not run universe-only discovery')
 			},
@@ -116,12 +115,10 @@ describe('live balance selection', () => {
 				const found = [market, secondMarket].find(candidate => candidate.pool.toLowerCase() === address.toLowerCase())
 				if (found === undefined) throw new Error(`Unknown pool ${address}`)
 				// Live discovery always builds fresh market objects; the balance read must key on the pool, not object identity.
-				return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...found }], universeIds: [1n], selectedUniverseId: 1n }
+				return discoveryPage([{ ...found }])
 			},
-			walletChainId: async () => configuration.chainId,
-			connectWallet: async () => account,
+			...connectedWalletServices(account, configuration.chainId),
 			createTradingWalletClient: () => ({}),
-			loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
 			loadLiveBalances: async (_client: unknown, selectedMarket: LiveMarket) => {
 				const load = createDeferred<LiveBalances>()
 				pendingBalanceLoads.push({ pool: selectedMarket.pool, resolve: load.resolve })

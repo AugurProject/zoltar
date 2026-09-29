@@ -5,7 +5,6 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
@@ -13,6 +12,7 @@ import { largestExitForLongShares } from '@zoltar/trading-shared/trading/positio
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { connectedWalletServices, discoveryPage, installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -71,12 +71,10 @@ describe('live market refresh', () => {
 		let yesBalance = 3n * 10n ** 18n
 		const exitRequests: bigint[] = []
 		let failExitSimulation = false
-		Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
+		installSilentInjectedWallet()
 		const walletClient = { waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverUniverses: async () => {
 				throw new Error('Addressed routes must not run universe-only discovery')
 			},
@@ -86,12 +84,10 @@ describe('live market refresh', () => {
 			discoverAddressedMarket: async () => {
 				discoveries += 1
 				// Live discovery always builds fresh market objects, which is what lets dependent balance reads revalidate.
-				return { start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...discoveredMarket }], universeIds: [1n], selectedUniverseId: 1n }
+				return discoveryPage([{ ...discoveredMarket }])
 			},
-			walletChainId: async () => configuration.chainId,
-			connectWallet: async () => account,
+			...connectedWalletServices(account, configuration.chainId),
 			createTradingWalletClient: () => walletClient,
-			loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
 				return { scope: shareBalanceScope(selected), invalid: 3n * 10n ** 18n, yes: yesBalance, no: 3n * 10n ** 18n, lp: 0n }
@@ -214,16 +210,12 @@ describe('live market refresh', () => {
 		const gate = new Promise<void>(resolve => {
 			releaseBalances = resolve
 		})
-		Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
+		installSilentInjectedWallet()
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
-			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market }], universeIds: [1n], selectedUniverseId: 1n }),
-			walletChainId: async () => configuration.chainId,
-			connectWallet: async () => account,
+			...offlineControllerServices,
+			discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
+			...connectedWalletServices(account, configuration.chainId),
 			createTradingWalletClient: () => ({}),
-			loadWalletHeaderBalances: async () => ({ ethAttoEth: 5n * 10n ** 18n, repAttoRep: 6n * 10n ** 18n, repToken: `0x${'47'.repeat(20)}` as Address }),
 			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
 				balanceLoads += 1
 				await gate
@@ -248,15 +240,12 @@ describe('live market refresh', () => {
 		let discoveries = 0
 		let releaseDiscovery: () => void = () => undefined
 		let gate: Promise<void> | undefined
-		const page = (markets: LiveMarket[]) => ({ start: 0n, count: BigInt(markets.length), total: BigInt(markets.length), previousStart: undefined, nextStart: undefined, markets, universeIds: [1n], selectedUniverseId: 1n })
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverAllLiveMarketsInUniverse: async () => {
 				discoveries += 1
 				if (gate !== undefined) await gate
-				return page([{ ...market, title: `Portfolio market ${discoveries.toString()}` }])
+				return discoveryPage([{ ...market, title: `Portfolio market ${discoveries.toString()}` }])
 			},
 		}
 		gate = new Promise<void>(resolve => {
@@ -290,11 +279,9 @@ describe('live market refresh', () => {
 	test('lookup routes list the same candidates as their browse alias above the address lookup', async () => {
 		let universeDiscoveries = 0
 		const pagedRoutes: string[] = []
-		const page = (markets: LiveMarket[]) => ({ start: 0n, count: BigInt(markets.length), total: BigInt(markets.length), previousStart: undefined, nextStart: undefined, markets, universeIds: [1n, 2n], selectedUniverseId: 1n })
+		const page = (markets: LiveMarket[]) => discoveryPage(markets, [1n, 2n])
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverUniverses: async () => {
 				universeDiscoveries += 1
 				return page([])
@@ -344,9 +331,7 @@ describe('live market refresh', () => {
 		const secondPageMarket = { ...market, pool: `0x${'a2'.repeat(20)}` as Address, title: 'Second page market' }
 		const requestedStarts: bigint[] = []
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverTradingMarketPage: async (_client: unknown, _configuration: unknown, _universeId: unknown, start = 0n) => {
 				requestedStarts.push(start)
 				const firstPage = start === 0n
@@ -375,10 +360,8 @@ describe('live market refresh', () => {
 	test('a market-card outcome link opens the ticket on that side and drops the one-shot side from the hash', async () => {
 		window.location.hash = `#/market/${pool}?simulate=1&side=no`
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
-			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }], universeIds: [1n], selectedUniverseId: 1n }),
+			...offlineControllerServices,
+			discoverAddressedMarket: async () => discoveryPage([{ ...market, description: 'Resolves YES when the bridge opens.\n<b>not markup</b>' }]),
 		}
 		// The desktop layout keeps the ticket beside the market, so the compact-ticket media query must not match.
 		const originalMatchMedia = window.matchMedia
@@ -409,10 +392,8 @@ describe('live market refresh', () => {
 			window.location.hash = `#/market/${unavailablePool}?side=yes`
 			const addressedMarket = (address: Address) => (address.toLowerCase() === unavailablePool ? { ...market, pool: unavailablePool, loadError: 'market RPC unavailable' } : { ...market })
 			const services = {
-				...liveTradingControllerServices,
-				createTradingPublicClient: () => ({}),
-				validateLiveDeployment: async () => undefined,
-				discoverAddressedMarket: async (_client: unknown, _configuration: unknown, address: Address) => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [addressedMarket(address)], universeIds: [1n], selectedUniverseId: 1n }),
+				...offlineControllerServices,
+				discoverAddressedMarket: async (_client: unknown, _configuration: unknown, address: Address) => discoveryPage([addressedMarket(address)]),
 			}
 			const rendered = await renderIntoDocument(<LiveTrading route={`market/${unavailablePool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 			cleanupRendered = rendered.cleanup

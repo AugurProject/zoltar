@@ -12,12 +12,12 @@ import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscov
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import type { LiveTradingControllerServices } from '../../features/live/liveTradingTypes.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { offlineControllerServices } from '../support/liveTradingServices.js'
 
 beforeEach(() => installTradingRouting())
 
@@ -29,6 +29,16 @@ function moreMenuButton(container: HTMLElement) {
 	const moreButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
 	if (moreButton === undefined) throw new Error('The More menu is missing')
 	return moreButton
+}
+
+/** Clicks the idle header wallet action; the tests run without an injected wallet, so the connection fails. */
+async function clickConnectWallet(container: HTMLElement) {
+	const walletButton = container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
+	expect(walletButton?.textContent).toBe('Connect wallet')
+	await act(async () => {
+		walletButton?.click()
+		await Bun.sleep(10)
+	})
 }
 
 describe('trading header', () => {
@@ -46,7 +56,7 @@ describe('trading header', () => {
 
 	// Renders the app against the configured deployment with offline controller services; each test overrides only the discovery it drives.
 	async function renderConfiguredApp(services: Partial<LiveTradingControllerServices>) {
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={{ ...liveTradingControllerServices, createTradingPublicClient: () => ({}), validateLiveDeployment: async () => undefined, ...services }} />)
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={{ ...offlineControllerServices, ...services }} />)
 		cleanupRendered = rendered.cleanup
 		return rendered
 	}
@@ -161,12 +171,7 @@ describe('trading header', () => {
 			discoverUniverses: async () => emptyDiscoveryPage([0n], 0n),
 		})
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
-		expect(walletButton?.textContent).toBe('Connect wallet')
-		await act(async () => {
-			walletButton?.click()
-			await Bun.sleep(10)
-		})
+		await clickConnectWallet(rendered.container)
 		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No injected wallet was found'))
 	})
 
@@ -219,14 +224,9 @@ describe('trading header', () => {
 		await act(async () => {
 			await Bun.sleep(10)
 		})
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
-		expect(walletButton?.textContent).toBe('Connect wallet')
-		expect(walletButton?.disabled).toBeFalse()
+		expect(rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')?.disabled).toBeFalse()
 		expect(rendered.container.querySelector('main .route-header .wallet-button')).toBeNull()
-		await act(async () => {
-			walletButton?.click()
-			await Bun.sleep(10)
-		})
+		await clickConnectWallet(rendered.container)
 		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
 	})
 
@@ -339,12 +339,7 @@ describe('trading header', () => {
 		await act(async () => {
 			await Bun.sleep(10)
 		})
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
-		expect(walletButton?.textContent).toBe('Connect wallet')
-		await act(async () => {
-			walletButton?.click()
-			await Bun.sleep(10)
-		})
+		await clickConnectWallet(rendered.container)
 		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
 		await act(async () => {
 			window.history.replaceState(undefined, '', '/#/market')

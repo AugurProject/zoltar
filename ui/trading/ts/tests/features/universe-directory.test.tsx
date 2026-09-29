@@ -4,12 +4,12 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { UniverseDirectory } from '../../features/UniverseDirectory.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { getTradingEnvironmentLocationKey, installTradingRouting } from '../../lib/routing.js'
 import { createForkedUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
+import { offlineControllerServices } from '../support/liveTradingServices.js'
 
 const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:8545', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
 
@@ -84,9 +84,7 @@ describe('universe directory', () => {
 		let discoveries = 0
 		const discoveryStates: string[] = []
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverUniverses: async () => {
 				discoveries += 1
 				if (discoveries === 1) throw new Error('registry RPC unavailable')
@@ -129,9 +127,7 @@ describe('universe directory', () => {
 
 	test('redacts an address-bearing discovery error to the universe lead without prefixing it twice', async () => {
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverUniverses: async () => {
 				throw new Error(`call to 0x${'ab'.repeat(20)} reverted`)
 			},
@@ -147,9 +143,7 @@ describe('universe directory', () => {
 
 	test('names a redacted portfolio discovery failure once as well', async () => {
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverAllLiveMarketsInUniverse: async () => {
 				throw new Error(`call to 0x${'ab'.repeat(20)} reverted`)
 			},

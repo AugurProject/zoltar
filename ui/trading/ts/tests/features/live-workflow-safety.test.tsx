@@ -7,7 +7,6 @@ import { LiveTrading as ProductionLiveTrading } from '../../features/LiveTrading
 import { liveLiquidityServices } from '../../features/LiveLiquidityControls.js'
 import { liveSettlementServices } from '../../features/LiveSettlementControls.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import * as actualLive from '../../protocol/live.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import type { TradingRoute } from '../../lib/routing.js'
@@ -20,6 +19,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { buttonByLabel, waitForDom } from '../support/dom.js'
 import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -151,9 +151,7 @@ describe('live workflow safety boundary', () => {
 			return { ...(await discoverMarkets()), universeIds: [1n, 2n], selectedUniverseId: 1n }
 		}
 		const controllerServices = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverLiveUniverseMarketPage: discoverSelectedUniverse,
 			discoverTradingMarketPage: discoverSelectedUniverse,
 			discoverUniverses: async (_client: unknown, _configuration: unknown, requestedUniverseId: bigint | undefined) => ({ ...(await discoverSelectedUniverse(undefined, undefined, requestedUniverseId)), markets: [] }),
