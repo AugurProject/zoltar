@@ -1,14 +1,9 @@
-import { expect, test } from 'bun:test'
+import { expect } from 'bun:test'
 import { withBrowserPage } from '../../../tooling/ui/browserSmoke.mts'
+import { browserTest, origin, qaViewports } from './browser-test.ts'
 
 // Run against `bun run qa:serve`; the demo emits a new block every 2.5 seconds.
-const origin = process.env['AUGURSCAN_BROWSER_URL']
-const browserTest = origin === undefined ? test.skip : test
-
-for (const viewport of [
-	{ width: 1440, height: 900 },
-	{ width: 390, height: 844 },
-]) {
+for (const viewport of qaViewports) {
 	browserTest(
 		`log toggles and live refresh preserve reading context at ${viewport.width}px`,
 		async () => {

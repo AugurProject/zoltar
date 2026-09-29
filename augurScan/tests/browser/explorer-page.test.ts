@@ -1,9 +1,8 @@
 import { expect, test } from 'bun:test'
 import { renderExplorerPage } from '../../browser/explorer-page.ts'
+import { overrideGlobals } from '../support/global-overrides.ts'
 
 test('an earlier failed explorer request cannot replace a newer route', async () => {
-	const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
-	const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
 	let children: unknown[] = []
 	const content = {
 		replaceChildren(...nodes: unknown[]) {
@@ -11,14 +10,13 @@ test('an earlier failed explorer request cannot replace a newer route', async ()
 		},
 	}
 	const currentLocation = { origin: 'https://scanner.test', href: 'https://scanner.test/tx/first?chainId=1' }
-	Object.defineProperty(globalThis, 'document', {
-		configurable: true,
-		value: {
+	const restoreGlobals = overrideGlobals({
+		document: {
 			querySelector: () => content,
 			createElement: () => ({ className: '', textContent: '' }),
 		},
+		location: currentLocation,
 	})
-	Object.defineProperty(globalThis, 'location', { configurable: true, value: currentLocation })
 	try {
 		let rejectRequest: ((reason: Error) => void) | undefined
 		const pending = new Promise<unknown>((_resolve, reject) => {
@@ -33,16 +31,11 @@ test('an earlier failed explorer request cannot replace a newer route', async ()
 		await earlier
 		expect(children).toEqual([newerEvidence])
 	} finally {
-		if (originalDocument === undefined) Reflect.deleteProperty(globalThis, 'document')
-		else Object.defineProperty(globalThis, 'document', originalDocument)
-		if (originalLocation === undefined) Reflect.deleteProperty(globalThis, 'location')
-		else Object.defineProperty(globalThis, 'location', originalLocation)
+		restoreGlobals()
 	}
 })
 
 test('a failed evidence request can retry on the same route', async () => {
-	const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
-	const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
 	let children: Array<{ className?: string; textContent?: string; listeners?: Map<string, () => void> }> = []
 	const createNode = () => {
 		const listeners = new Map<string, () => void>()
@@ -62,11 +55,10 @@ test('a failed evidence request can retry on the same route', async () => {
 		},
 		removeAttribute() {},
 	}
-	Object.defineProperty(globalThis, 'document', {
-		configurable: true,
-		value: { querySelector: () => content, createElement: createNode },
+	const restoreGlobals = overrideGlobals({
+		document: { querySelector: () => content, createElement: createNode },
+		location: { origin: 'https://scanner.test', href: 'https://scanner.test/tx/first?chainId=1' },
 	})
-	Object.defineProperty(globalThis, 'location', { configurable: true, value: { origin: 'https://scanner.test', href: 'https://scanner.test/tx/first?chainId=1' } })
 	try {
 		let attempts = 0
 		const load = () =>
@@ -83,9 +75,6 @@ test('a failed evidence request can retry on the same route', async () => {
 		expect(attempts).toBe(2)
 		expect(children[0]?.className).toBe('section-heading')
 	} finally {
-		if (originalDocument === undefined) Reflect.deleteProperty(globalThis, 'document')
-		else Object.defineProperty(globalThis, 'document', originalDocument)
-		if (originalLocation === undefined) Reflect.deleteProperty(globalThis, 'location')
-		else Object.defineProperty(globalThis, 'location', originalLocation)
+		restoreGlobals()
 	}
 })

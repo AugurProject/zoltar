@@ -1,13 +1,8 @@
-import { expect, test } from 'bun:test'
+import { expect } from 'bun:test'
 import { withBrowserPage } from '../../../tooling/ui/browserSmoke.mts'
+import { browserTest, origin, qaViewports, writeScreenshot } from './browser-test.ts'
 
-const origin = process.env['AUGURSCAN_BROWSER_URL']
-const browserTest = origin === undefined ? test.skip : test
-
-for (const viewport of [
-	{ width: 1440, height: 900 },
-	{ width: 390, height: 844 },
-]) {
+for (const viewport of qaViewports) {
 	for (const distant of [false, true]) {
 		browserTest(
 			`question dates remain readable at ${viewport.width}px (distant=${distant})`,
@@ -36,9 +31,7 @@ for (const viewport of [
 						expect(await evaluate('document.documentElement.scrollWidth <= window.innerWidth')).toBe(true)
 						expect(await evaluate(`[...document.querySelectorAll('.timeline-step')].every(step => step.scrollWidth <= step.clientWidth)`)).toBe(true)
 						await evaluate(`document.querySelector('#state-detail').scrollIntoView(); true`)
-						const screenshot = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-						if (typeof screenshot !== 'object' || screenshot === null || !('data' in screenshot) || typeof screenshot.data !== 'string') throw new Error('Missing screenshot')
-						await Bun.write(`/tmp/augurscan-question-${viewport.width}-${distant ? 'distant' : 'normal'}.png`, Buffer.from(screenshot.data, 'base64'))
+						await writeScreenshot(session, `/tmp/augurscan-question-${viewport.width}-${distant ? 'distant' : 'normal'}.png`, { captureBeyondViewport: false })
 						expect(session.issues).toEqual([])
 					},
 					{ awaitPromise: false },

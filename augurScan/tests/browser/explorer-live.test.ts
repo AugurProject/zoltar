@@ -1,15 +1,13 @@
-import { expect, test } from 'bun:test'
+import { expect } from 'bun:test'
 import { withBrowserPage } from '../../../tooling/ui/browserSmoke.mts'
-
-const origin = process.env['AUGURSCAN_BROWSER_URL']
-const browserTest = origin === undefined ? test.skip : test
+import { browserTest, desktopViewport, origin } from './browser-test.ts'
 
 browserTest(
 	'a reorg refreshes visible transaction evidence',
 	async () => {
 		await withBrowserPage(
 			`${origin}/?demo=1`,
-			{ width: 1440, height: 900 },
+			desktopViewport,
 			async session => {
 				const { evaluate, waitFor } = session
 				await waitFor(`document.querySelector('.log-row .cell-tx') !== null`)

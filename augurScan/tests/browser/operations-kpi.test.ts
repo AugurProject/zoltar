@@ -1,13 +1,8 @@
-import { expect, test } from 'bun:test'
+import { expect } from 'bun:test'
 import { withBrowserPage } from '../../../tooling/ui/browserSmoke.mts'
+import { browserTest, origin, qaViewports } from './browser-test.ts'
 
-const origin = process.env['AUGURSCAN_BROWSER_URL']
-const browserTest = origin === undefined ? test.skip : test
-
-for (const viewport of [
-	{ width: 1440, height: 900 },
-	{ width: 390, height: 844 },
-]) {
+for (const viewport of qaViewports) {
 	browserTest(
 		`Operations KPI subtitles and empty states identify the bounded catalog sample at ${viewport.width}px`,
 		async () => {
