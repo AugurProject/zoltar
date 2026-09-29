@@ -1,3 +1,4 @@
+import { ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../../security-pools/lib/retentionRate.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -96,6 +97,55 @@ export function estimateMintCheckpoint({
 		estimatedRetentionFeeAttoEth,
 		settlementCollateralAfterFeesAttoEth: settlementCollateralAttoEth - estimatedRetentionFeeAttoEth,
 	}
+}
+
+/** Forecast at fixed post-mint utilization and fee eligibility; not a resolution-time quote. */
+export function estimateMintHoldingFees({
+	mintAmountAttoEth,
+	settlementCollateralAfterFeesAttoEth,
+	mintingCapacityAttoEth,
+	feeEligibleUnderwritingLimitAttoEth,
+	totalUnderwritingLimitAttoEth,
+	currentTimestamp,
+	marketEndTimestamp,
+	feeEndTimestamp,
+}: {
+	mintAmountAttoEth: bigint | undefined
+	settlementCollateralAfterFeesAttoEth: bigint | undefined
+	mintingCapacityAttoEth: bigint | undefined
+	feeEligibleUnderwritingLimitAttoEth: bigint | undefined
+	totalUnderwritingLimitAttoEth: bigint | undefined
+	currentTimestamp: bigint | undefined
+	marketEndTimestamp: bigint | undefined
+	feeEndTimestamp: bigint | undefined
+}) {
+	if (
+		mintAmountAttoEth === undefined ||
+		mintAmountAttoEth <= 0n ||
+		settlementCollateralAfterFeesAttoEth === undefined ||
+		mintingCapacityAttoEth === undefined ||
+		mintingCapacityAttoEth <= 0n ||
+		feeEligibleUnderwritingLimitAttoEth === undefined ||
+		totalUnderwritingLimitAttoEth === undefined ||
+		totalUnderwritingLimitAttoEth <= 0n ||
+		feeEligibleUnderwritingLimitAttoEth > totalUnderwritingLimitAttoEth ||
+		feeEndTimestamp === undefined
+	)
+		return undefined
+	const collateralAfterMint = settlementCollateralAfterFeesAttoEth + mintAmountAttoEth
+	if (collateralAfterMint > mintingCapacityAttoEth) return undefined
+	// SecurityPoolUtils.calculateRetentionRate: linear to 80% utilization, then capped.
+	const minimumRetentionRate = 999_999_977_880_000_000n
+	const utilizationDip = 800_000_000_000_000_000n
+	const utilization = (collateralAfterMint * PRICE_PRECISION) / mintingCapacityAttoEth
+	const retentionRateAfterMint = utilization >= utilizationDip ? minimumRetentionRate : ORIGIN_POOL_INITIAL_RETENTION_RATE - ((ORIGIN_POOL_INITIAL_RETENTION_RATE - minimumRetentionRate) * ((utilization * PRICE_PRECISION) / utilizationDip)) / PRICE_PRECISION
+	if (currentTimestamp === undefined || marketEndTimestamp === undefined || marketEndTimestamp <= currentTimestamp) return { retentionRateAfterMint, holdingFeeAttoEth: undefined }
+	const endTimestamp = marketEndTimestamp < feeEndTimestamp ? marketEndTimestamp : feeEndTimestamp
+	const duration = endTimestamp > currentTimestamp ? endTimestamp - currentTimestamp : 0n
+	// Model the depositor's proportional share of a fee checkpoint at the forecast horizon.
+	const feeBearingDeposit = (mintAmountAttoEth * feeEligibleUnderwritingLimitAttoEth) / totalUnderwritingLimitAttoEth
+	const holdingFeeAttoEth = feeBearingDeposit - (feeBearingDeposit * rpow(retentionRateAfterMint, duration, PRICE_PRECISION)) / PRICE_PRECISION
+	return { retentionRateAfterMint, holdingFeeAttoEth }
 }
 
 export function formatStatoblastSecurityMultiplier(statoblastSecurityMultiplierBps: bigint) {
