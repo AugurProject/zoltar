@@ -135,7 +135,7 @@ export function buildVaultReadinessActions({
 	visibleRepExitLauncherBlocker,
 	walletBlocker,
 }: VaultReadinessActionInput): Omit<ReadinessAction, 'title'>[] {
-	// Every launcher checks the wallet before anything else, so a wallet prerequisite is the reason behind each shown blocker.
+	// Attach wallet recovery only to blockers produced by the wallet-first launcher checks.
 	const withBlocker = (blocker: string | undefined) => (blocker === undefined ? {} : { blocker, ...(walletBlocker === undefined ? {} : { walletBlocker }) })
 	const depositReady = depositRepToVaultEnabled && canUseLoadedVaultActions
 	const repExitReady = repExitEnabled && vaultExistsOnchain && canUseLoadedVaultActions
@@ -158,7 +158,8 @@ export function buildVaultReadinessActions({
 			...(repExitReady ? { onAction: () => onOpenModal('withdraw-rep') } : {}),
 			readiness: repExitReady ? 'ready' : 'blocked',
 			...(repExitDisabledReasonId === undefined ? {} : { disabledReasonId: repExitDisabledReasonId }),
-			...withBlocker(visibleRepExitLauncherBlocker ?? (!repExitEnabled && repExitDisabledReasonId === undefined ? securityPoolCopy.withdrawalUnavailableReason : undefined)),
+			...(repExitEnabled ? withBlocker(visibleRepExitLauncherBlocker) : {}),
+			...(!repExitEnabled && repExitDisabledReasonId === undefined ? { blocker: securityPoolCopy.withdrawalUnavailableReason } : {}),
 		},
 		{
 			actionLabel: securityPoolCopy.claimFees,
