@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection } from '../../security-pools/lib/securityPoolWorkflow.js'
@@ -18,7 +19,7 @@ export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 		forkAuctionDetails,
 		forkAuctionActiveAction,
 		forkAuctionError,
-		forkAuctionForm,
+		forkAuctionForm: submittedForkAuctionForm,
 		forkAuctionResult,
 		forkMigrationReadClient,
 		lifecycleStateOverride,
@@ -53,6 +54,18 @@ export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 		showSecurityPoolAddressInput = true,
 		truthAuctionReadClient,
 	} = props
+	// A child pool that is not forking itself and has no children runs its own truth auction, so its outcome is fixed rather than chosen.
+	const ownAuctionOutcome =
+		previewPool !== undefined &&
+		sameAddress(previewPool.securityPoolAddress, forkAuctionDetails?.securityPoolAddress ?? previewPool.securityPoolAddress) &&
+		previewPool.parent !== zeroAddress &&
+		previewPool.questionOutcome !== 'none' &&
+		previewPool.systemState !== 'poolForked' &&
+		previewPool.systemState !== 'forkMigration' &&
+		!securityPools.some(pool => sameAddress(pool.parent, previewPool.securityPoolAddress))
+			? previewPool.questionOutcome
+			: undefined
+	const forkAuctionForm = ownAuctionOutcome === undefined ? submittedForkAuctionForm : { ...submittedForkAuctionForm, selectedOutcome: ownAuctionOutcome }
 	const isOnActiveAppChain = isActiveAppChain(accountState.chainId)
 	const effectiveCurrentTimestamp = currentTimestamp ?? forkAuctionDetails?.currentTime
 	const securityPoolAddress = forkAuctionDetails?.securityPoolAddress ?? previewPool?.securityPoolAddress
@@ -167,6 +180,7 @@ export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 		securityPoolAddress,
 		selectedAuctionPoolAddress,
 		forkAuctionForm,
+		isViewingOwnAuction: ownAuctionOutcome !== undefined,
 		reportingForm,
 		selectedAuctionChildPool,
 		onForkAuctionFormChange,

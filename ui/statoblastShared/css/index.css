@@ -374,6 +374,11 @@
 	overflow-wrap: anywhere;
 }
 
+/* Neighbouring timestamps share a row, so a long relative time wraps inside its own column instead of running into the next one. */
+.fork-workflow-summary-metrics .timestamp-value-relative {
+	white-space: normal;
+}
+
 .fork-workflow-summary-metrics strong.metric-field-value {
 	display: block;
 	font-family: var(--font-family-mono);
@@ -465,7 +470,6 @@
 }
 
 .truth-auction-wallet-summary,
-.truth-auction-bid-coverage-summary,
 .truth-auction-selected-bid-summary {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
@@ -473,14 +477,12 @@
 }
 
 .truth-auction-wallet-summary > div,
-.truth-auction-bid-coverage-summary > div,
 .truth-auction-selected-bid-summary > div {
 	padding-top: var(--space-3);
 	border-top: 1px solid var(--divider-subtle);
 }
 
 .truth-auction-wallet-summary .metric-label,
-.truth-auction-bid-coverage-summary .metric-label,
 .truth-auction-selected-bid-summary .metric-label {
 	display: block;
 	margin-bottom: var(--space-1);
@@ -603,7 +605,7 @@
 
 .truth-auction-depth-frame {
 	display: grid;
-	grid-template-columns: minmax(4.4rem, auto) minmax(0, 1fr);
+	grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
 	gap: var(--space-3);
 	align-items: stretch;
 }
@@ -659,7 +661,7 @@
 
 .truth-auction-depth-y-ticks {
 	position: absolute;
-	inset: 0;
+	inset: 0 0 0 1.75rem;
 	pointer-events: none;
 }
 
@@ -722,7 +724,6 @@
 	font-size: var(--font-body);
 }
 
-.truth-auction-price-row-price,
 .truth-auction-bid-row-address,
 .truth-auction-bid-row-label small {
 	color: var(--muted);
@@ -857,7 +858,7 @@
 }
 
 .truth-auction-bid-row.is-wallet {
-	grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.4fr);
+	grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1fr);
 }
 
 .truth-auction-bid-row.is-wide {
@@ -865,11 +866,46 @@
 }
 
 .truth-auction-bid-row.is-wide.is-no-actions {
-	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.75fr);
+	grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 0.75fr);
 }
 
 .truth-auction-bid-row.is-wallet.is-no-actions {
-	grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.4fr);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.truth-auction-bid-row.is-wallet.is-no-estimate {
+	grid-template-columns: minmax(0, 0.6fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1fr);
+}
+
+.truth-auction-bid-row.is-wallet.is-no-actions.is-no-estimate {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1fr);
+}
+
+.truth-auction-bid-estimate {
+	display: grid;
+	gap: var(--space-1);
+}
+
+.truth-auction-bid-guidance {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2) var(--space-3);
+}
+
+.truth-auction-bid-guidance > .detail {
+	margin: 0;
+}
+
+/* The bid-price warning grows only its own column, so both inputs stay on the same line. */
+.truth-auction-bid-fields {
+	align-items: start;
+}
+
+.amount-field .field-hint .truth-auction-bid-price-warning {
+	color: var(--warning);
+	font-weight: 600;
 }
 
 .truth-auction-bid-row.is-header {
@@ -1488,25 +1524,12 @@
 	}
 
 	.truth-auction-depth-frame {
-		grid-template-columns: 1fr;
+		grid-template-columns: minmax(5.25rem, auto) minmax(0, 1fr);
+		gap: var(--space-2);
 	}
 
 	.truth-auction-depth-y-axis {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		grid-template-rows: auto auto;
-		justify-items: stretch;
-	}
-
-	.truth-auction-depth-axis-title-y {
-		grid-column: 1 / -1;
-		writing-mode: initial;
-		transform: none;
-		justify-self: start;
-		text-align: left;
-	}
-
-	.truth-auction-depth-y-axis .truth-auction-depth-axis-tick {
-		text-align: left;
+		min-height: 11rem;
 	}
 
 	.truth-auction-depth-x-axis {
@@ -1602,6 +1625,44 @@
 		flex-wrap: wrap;
 		justify-content: space-between;
 		gap: var(--space-2);
+	}
+}
+
+/* Narrow screens stack each bid into a labelled card instead of a sideways-scrolling table. */
+@media (max-width: 40rem) {
+	.truth-auction-bid-table-scroll .truth-auction-bid-table,
+	.truth-auction-bid-table-scroll.is-wallet .truth-auction-bid-table {
+		min-width: 0;
+	}
+
+	.truth-auction-bid-row.is-header {
+		display: none;
+	}
+
+	.truth-auction-bid-row,
+	.truth-auction-bid-row.is-wallet,
+	.truth-auction-bid-row.is-wide,
+	.truth-auction-bid-row.is-wide.is-no-actions,
+	.truth-auction-bid-row.is-wallet.is-no-actions,
+	.truth-auction-bid-row.is-wallet.is-no-estimate,
+	.truth-auction-bid-row.is-wallet.is-no-actions.is-no-estimate {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
+		gap: var(--space-2) var(--space-3);
+	}
+
+	.truth-auction-bid-row-status {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.truth-auction-bid-row > [data-label]::before {
+		content: attr(data-label);
+		display: block;
+		margin-bottom: var(--space-1);
+		color: var(--muted);
+		font-size: var(--font-label);
+		font-weight: 600;
 	}
 }
 
@@ -2264,7 +2325,7 @@
 }
 
 .fork-workflow-stage.is-selected .fork-workflow-stage-copy strong {
-	color: var(--color-white);
+	color: var(--text);
 }
 
 .fork-workflow-stage.is-complete:not(.is-current) {

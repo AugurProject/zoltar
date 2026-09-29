@@ -5,7 +5,6 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -34,6 +33,7 @@ type ViewerTruthAuctionBidsSectionProps = {
 	onLoadNextViewerBidPage: () => void
 	onRetry?: (() => void) | undefined
 	onSettlementBidSelectionChange: (bidKey: string, checked: boolean) => void
+	onSettlementBidSelectionReplace: (bidKeys: string[]) => void
 	renderPriceValue: (value: bigint | undefined) => ComponentChildren
 	retrying?: boolean
 	rows: ViewerTruthAuctionBidRowViewModel[]
@@ -95,16 +95,24 @@ function BidTable<TRow extends BidTableRow>({ columns, regionClassName, regionLa
 	)
 }
 
+function hasVisibleEstimate(estimate: ViewerTruthAuctionBidRowViewModel['estimate']) {
+	return estimate !== undefined && (estimate.repAttoRep > 0n || estimate.refundAttoEth > 0n)
+}
+
+function ViewerBidEstimate({ estimate }: { estimate: ViewerTruthAuctionBidRowViewModel['estimate'] }) {
+	if (estimate === undefined || !hasVisibleEstimate(estimate)) return <>{commonCopy.metricUnavailablePlaceholder}</>
+	return (
+		<span className='truth-auction-bid-estimate'>
+			{estimate.repAttoRep === 0n ? undefined : <CurrencyValue value={estimate.repAttoRep} suffix={commonCopy.rep} />}
+			{estimate.refundAttoEth === 0n ? undefined : <CurrencyValue value={estimate.refundAttoEth} suffix={forkAuctionCopy.ethRefundSuffix} />}
+		</span>
+	)
+}
+
 export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTicks, error, hasLoadedData = true, hasMoreAggregatedAuctionBids, loadedTickCount, loadingAggregatedAuctionBids, onLoadNextAuctionBidPage, onRetry, renderPriceValue, retrying = false, rows }: TruthAuctionBidsSectionProps) {
 	return (
 		<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
-			{hasLoadedData ? (
-				<div className='truth-auction-bid-coverage-summary'>
-					<MetricField label={forkAuctionCopy.loadedLevels}>{loadedTickCount.toString()}</MetricField>
-					<MetricField label={forkAuctionCopy.loadedBids}>{rows.length.toString()}</MetricField>
-					<MetricField label={forkAuctionCopy.coverage}>{forkAuctionCopy.formatLoadedBidCoverageSummary(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</MetricField>
-				</div>
-			) : undefined}
+			{hasLoadedData && hasMoreAggregatedAuctionBids ? <p className='detail'>{forkAuctionCopy.formatShownBidCount(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</p> : undefined}
 			{loadingAggregatedAuctionBids ? (
 				<p className='detail'>
 					<LoadingText>{forkAuctionCopy.loadingAuctionBids}</LoadingText>
@@ -114,13 +122,7 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			<BidTable
-				columns={[
-					priceColumn(renderPriceValue),
-					{ blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> },
-					bidAmountColumn(),
-					{ label: forkAuctionCopy.loadedDepthEth, render: row => <CurrencyValue value={row.cumulativeBidAttoEth} suffix={commonCopy.eth} /> },
-					statusColumn(),
-				]}
+				columns={[priceColumn(renderPriceValue), { blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> }, bidAmountColumn(), statusColumn()]}
 				regionClassName='truth-auction-bid-table-scroll'
 				regionLabel={forkAuctionCopy.scrollableAuctionBidHistory}
 				rowClassName='truth-auction-bid-row is-wide is-no-actions'
@@ -132,7 +134,25 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 	)
 }
 
-export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoadedData = true, hasMoreViewerBids, loadingTruthAuctionBook, onLoadNextViewerBidPage, onRetry, onSettlementBidSelectionChange, renderPriceValue, retrying = false, rows, showSettlementActionColumn }: ViewerTruthAuctionBidsSectionProps) {
+export function ViewerTruthAuctionBidsSection({
+	accountAddress,
+	error,
+	hasLoadedData = true,
+	hasMoreViewerBids,
+	loadingTruthAuctionBook,
+	onLoadNextViewerBidPage,
+	onRetry,
+	onSettlementBidSelectionChange,
+	onSettlementBidSelectionReplace,
+	renderPriceValue,
+	retrying = false,
+	rows,
+	showSettlementActionColumn,
+}: ViewerTruthAuctionBidsSectionProps) {
+	const selectableBidKeys = rows.flatMap(row => (row.settlementControl === undefined || row.settlementControl.disabled ? [] : [row.settlementControl.bidKey]))
+	// Settled bids have no pending outcome, so the estimate column only appears while some bid still has one.
+	const showEstimate = rows.some(row => hasVisibleEstimate(row.estimate))
+	const checkedBidKeys = rows.flatMap(row => (row.settlementControl?.checked === true ? [row.settlementControl.bidKey] : []))
 	return (
 		<SectionBlock title={forkAuctionCopy.myBids} variant='embedded'>
 			{accountAddress === undefined ? <p className='detail'>{forkAuctionCopy.walletBidsConnectionRequired}</p> : undefined}
@@ -143,6 +163,16 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 			) : undefined}
 			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryMyBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
 			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
+			{!showSettlementActionColumn || selectableBidKeys.length === 0 ? undefined : (
+				<div className='actions'>
+					<button className='secondary' disabled={selectableBidKeys.every(bidKey => checkedBidKeys.includes(bidKey))} onClick={() => onSettlementBidSelectionReplace(selectableBidKeys)} type='button'>
+						{forkAuctionCopy.selectAllBids}
+					</button>
+					<button className='secondary' disabled={checkedBidKeys.length === 0} onClick={() => onSettlementBidSelectionReplace([])} type='button'>
+						{forkAuctionCopy.clearBidSelection}
+					</button>
+				</div>
+			)}
 			<BidTable
 				columns={[
 					...(showSettlementActionColumn
@@ -160,11 +190,12 @@ export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoaded
 						: []),
 					priceColumn(renderPriceValue),
 					bidAmountColumn(),
+					...(showEstimate ? [{ label: forkAuctionCopy.estimatedResult, render: (row: ViewerTruthAuctionBidRowViewModel) => <ViewerBidEstimate estimate={row.estimate} /> }] : []),
 					statusColumn(),
 				]}
 				regionClassName='truth-auction-bid-table-scroll is-wallet'
 				regionLabel={forkAuctionCopy.scrollableMyBids}
-				rowClassName={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'}`}
+				rowClassName={`truth-auction-bid-row is-wallet ${showSettlementActionColumn ? '' : 'is-no-actions'} ${showEstimate ? '' : 'is-no-estimate'}`}
 				rows={rows}
 				tableLabel={forkAuctionCopy.myBids}
 			/>

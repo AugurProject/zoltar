@@ -37,6 +37,7 @@ export const actionLabels = {
 	connectWallet: 'Connect a wallet to see actions for your positions',
 	depositRep: 'Deposit REP to back this pool',
 	escalationStake: 'Your escalation stake is locked',
+	finalizeTruthAuction: 'Finalize the truth auction',
 	manageVault: 'Manage your vault',
 	migrateVault: 'Migrate your vault',
 	mintShares: 'Mint complete sets',

@@ -90,9 +90,9 @@ function getTruthAuctionTickDisposition(tickSummary: TruthAuctionTickSummary, tr
 	if (winningThresholdPrice !== undefined) return isUnderfundedWinningTick(tickSummary.tick, truthAuction) ? { label: 'Winning', tone: 'success' } : { label: 'Out', tone: 'danger' }
 	if (isFinalizedUnderfundedWithoutWinningPrefix(truthAuction)) return { label: 'Out', tone: 'danger' }
 	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? { label: 'Winning', tone: 'success' } : { label: 'In book', tone: 'default' }
-	if (tickSummary.tick > truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Winning' : 'Above clearing', tone: 'success' }
-	if (tickSummary.tick < truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Out' : 'Below clearing', tone: 'danger' }
-	return { label: truthAuction.finalized ? 'Clearing' : 'At clearing', tone: 'warning' }
+	if (tickSummary.tick > truthAuction.clearingTick) return { label: 'Winning', tone: 'success' }
+	if (tickSummary.tick < truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Out' : 'Losing', tone: 'danger' }
+	return { label: 'Clearing price', tone: 'warning' }
 }
 
 function refundedBidDisposition(): TruthAuctionBidDisposition {
@@ -104,7 +104,7 @@ function claimedBidDisposition(settlementKind: TruthAuctionFinalizedSettlementKi
 }
 
 /** A finalized bid that bought REP: claimable until claimed. */
-function finalizedRepClaimDisposition(bid: TruthAuctionBidView, label: 'Partial' | 'Winning' = 'Winning'): TruthAuctionBidDisposition {
+function finalizedRepClaimDisposition(bid: TruthAuctionBidView, label: 'Partly filled' | 'Winning' = 'Winning'): TruthAuctionBidDisposition {
 	if (bid.claimed) return claimedBidDisposition('repClaim')
 	return label === 'Winning' ? { label, tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' } : { label, tone: 'warning', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'partial' }
 }
@@ -137,11 +137,11 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 
 	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('In book', 'default')
 
-	if (bid.tick > truthAuction.clearingTick) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Above clearing', 'warning')
+	if (bid.tick > truthAuction.clearingTick) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Winning', 'success')
 	if (bid.tick < truthAuction.clearingTick) {
 		if (truthAuction.finalized) return finalizedRefundDisposition(bid)
 		return {
-			label: 'Below clearing',
+			label: 'Losing',
 			tone: 'danger',
 			canPrefillRefund: !truthAuction.finalized,
 			canPrefillSettle: false,
@@ -155,7 +155,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 	if (truthAuction.bidAtClearingTickAttoEth <= previousCumulativeBidAttoEth) {
 		if (truthAuction.finalized) return finalizedRefundDisposition(bid)
 		return {
-			label: 'Below clearing',
+			label: 'Losing',
 			tone: 'danger',
 			canPrefillRefund: false,
 			canPrefillSettle: false,
@@ -163,8 +163,8 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			summaryKind: 'losing',
 		}
 	}
-	if (truthAuction.bidAtClearingTickAttoEth >= activeCumulativeAttoEth) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('At clearing', 'warning')
-	return truthAuction.finalized ? finalizedRepClaimDisposition(bid, 'Partial') : openBidDisposition('At clearing', 'warning')
+	if (truthAuction.bidAtClearingTickAttoEth >= activeCumulativeAttoEth) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Winning', 'success')
+	return truthAuction.finalized ? finalizedRepClaimDisposition(bid, 'Partly filled') : openBidDisposition('Partly filled', 'warning')
 }
 
 export function getTruthAuctionBidSettlementEstimate(bid: TruthAuctionBidView, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionBidSettlementEstimate {
@@ -441,8 +441,7 @@ export function getTruthAuctionBidGuardMessage({
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (truthAuction === undefined) return 'Loading truth auction.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'
-	const auctionHasEndedByTimestamp = currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt
-	if (auctionHasEndedByTimestamp || truthAuction.timeRemaining === 0n) return 'Truth auction has ended.'
+	if (isTruthAuctionBiddingClosed(truthAuction, currentTimestamp)) return 'Truth auction has ended.'
 
 	const trimmedAmount = submitBidAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'
@@ -454,4 +453,49 @@ export function getTruthAuctionBidGuardMessage({
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
 	if (bidAmount > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(bidAmount - walletBalanceAttoEth, 'ETH')} in this wallet to bid the selected amount.`
 	return undefined
+}
+
+export type TruthAuctionBidPricePosition = 'above' | 'at' | 'below'
+
+/** Places a bid tick against the live clearing tick; `undefined` until the ETH target is met, because every bid fills before that. */
+function getTruthAuctionBidPricePosition(truthAuction: TruthAuctionMetrics | undefined, bidTick: bigint | undefined): TruthAuctionBidPricePosition | undefined {
+	if (truthAuction === undefined || truthAuction.finalized || !truthAuction.hitCap || truthAuction.clearingTick === undefined || bidTick === undefined) return undefined
+	if (bidTick > truthAuction.clearingTick) return 'above'
+	if (bidTick < truthAuction.clearingTick) return 'below'
+	return 'at'
+}
+
+/** Converts a REP price quoted in ETH per REP into REP per ETH at the same 18-decimal precision. */
+export function getRepPerEthPrice(repPrice: bigint) {
+	if (repPrice <= 0n) return undefined
+	return (TRUTH_AUCTION_PRICE_PRECISION * TRUTH_AUCTION_PRICE_PRECISION) / repPrice
+}
+
+const MIN_TICK_PRICE_INPUT_DECIMALS = 6
+
+/** The shortest bid-price input, with at least six decimals, that maps back to `tick`; it rounds up so it never falls to the tick below. */
+export function formatTruthAuctionTickPriceInput(tick: bigint) {
+	const price = getTruthAuctionPriceAtTick(tick)
+	for (let decimals = MIN_TICK_PRICE_INPUT_DECIMALS; decimals < 18; decimals += 1) {
+		const step = 10n ** BigInt(18 - decimals)
+		const roundedUpPrice = ((price + step - 1n) / step) * step
+		if (getTruthAuctionTickAtPrice(roundedUpPrice) === tick) return formatTruthAuctionValidationPrice(roundedUpPrice)
+	}
+	return formatTruthAuctionValidationPrice(price)
+}
+
+/** Bidding stops once the auction is finalized or its end time has passed on-chain. */
+export function isTruthAuctionBiddingClosed(truthAuction: TruthAuctionMetrics, currentTimestamp: bigint | undefined) {
+	if (truthAuction.finalized || truthAuction.timeRemaining === 0n) return true
+	return currentTimestamp !== undefined && truthAuction.auctionEndsAt !== undefined && currentTimestamp >= truthAuction.auctionEndsAt
+}
+
+/** The live clearing price, the lowest price that wins in full, and where the entered bid sits; `undefined` before the ETH target is met. */
+export function getTruthAuctionLiveBidGuidance(truthAuction: TruthAuctionMetrics | undefined, bidTick: bigint | undefined) {
+	if (truthAuction === undefined || truthAuction.finalized || !truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return undefined
+	return {
+		bidPricePosition: getTruthAuctionBidPricePosition(truthAuction, bidTick),
+		clearingPrice: truthAuction.clearingPrice,
+		minimumWinningPriceInput: truthAuction.clearingTick < TRUTH_AUCTION_MAX_TICK ? formatTruthAuctionTickPriceInput(truthAuction.clearingTick + 1n) : undefined,
+	}
 }
