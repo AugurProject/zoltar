@@ -398,5 +398,15 @@ export function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolW
 	}
 }
 
+// Workflow props with the default zero-address pool loaded and selected.
+export function createLoadedPoolProps(overrides: Partial<SecurityPoolWorkflowRouteContentProps> = {}): SecurityPoolWorkflowRouteContentProps {
+	return createSecurityPoolWorkflowProps({
+		checkedSecurityPoolAddress: zeroAddress,
+		securityPoolAddress: zeroAddress,
+		securityPools: [createSelectedPool()],
+		...overrides,
+	})
+}
+
 export { createAccountState }
 export { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
