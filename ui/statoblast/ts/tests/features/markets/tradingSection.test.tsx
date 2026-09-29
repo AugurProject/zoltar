@@ -739,7 +739,7 @@ void describe('TradingSection', () => {
 		expect(dialog.queryByText('Estimated retention fee')).toBeNull()
 		expect(dialog.getByText('Current annual holding fee')).not.toBeNull()
 		expect(dialog.getByText('Holding-cost estimate unavailable: market end has passed.')).not.toBeNull()
-		expect(dialog.getByText('Resulting ETH balance')).not.toBeNull()
+		expect(dialog.queryByText('Resulting ETH balance') === null).toBe(true)
 		expect(getExactValueTitles(dialogElement, '1.111111111111111111')).toHaveLength(1)
 		expect(dialog.queryByText('Technical Details')).toBeNull()
 	})

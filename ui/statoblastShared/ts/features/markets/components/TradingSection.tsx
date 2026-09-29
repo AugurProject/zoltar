@@ -139,7 +139,6 @@ export function TradingSection({
 		marketEndTimestamp: hasMarketEnd ? marketEndTimestamp : undefined,
 		feeEndTimestamp: selectedPool?.feeAccrualState?.feeEndTimestamp,
 	})
-	const resultingEthBalance = mintAmount === undefined || accountState.ethBalanceAttoEth === undefined || mintAmount > accountState.ethBalanceAttoEth ? undefined : accountState.ethBalanceAttoEth - mintAmount
 	const redeemAmount = tryParseTradingAmountInput(tradingForm.redeemAmount)
 	const redeemAmountAttoShares = redeemAmount === undefined ? undefined : convertSettlementCollateralAttoEthToAttoShares(redeemAmount, selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const resultingRedeemEthBalance = redeemAmount === undefined || accountState.ethBalanceAttoEth === undefined ? undefined : accountState.ethBalanceAttoEth + redeemAmount
@@ -443,7 +442,6 @@ export function TradingSection({
 						{ label: tradingCopy.estimatedAnnualFeeAfterMint, value: <CurrencyValue value={openInterestFeePerYearBigint(holdingFees?.retentionRateAfterMint)} suffix={commonCopy.percent} /> },
 						{ label: tradingCopy.marketEnd, value: hasMarketEnd ? formatTimestamp(marketEndTimestamp) : transactionReviewCopy.amountUnavailable },
 						{ label: tradingCopy.estimatedHoldingFeeUntilMarketEnd, value: <CurrencyValue exactWhenRoundedToZero value={holdingFees?.holdingFeeAttoEth} suffix={commonCopy.eth} /> },
-						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue exactWhenRoundedToZero value={resultingEthBalance} suffix={commonCopy.eth} /> },
 					]}
 					risks={[tradingCopy.mintBalanceRisk]}
 				/>
