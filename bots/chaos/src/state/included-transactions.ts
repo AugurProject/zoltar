@@ -85,3 +85,9 @@ export async function parseIncludedTransactions(value: unknown, signer: Address 
 	if (new Set(records.map(record => record.intent.nonce.toString())).size !== records.length) throw new Error('Included transaction journal contains duplicate nonces')
 	return records
 }
+
+export function assertIncludedTransactionWorkflows(records: readonly IncludedTransaction[], workflows: ReadonlyMap<string, DurableWorkflow>) {
+	for (const record of records) {
+		if (!workflows.has(record.workflow.id)) throw new Error(`Included transaction journal references missing workflow ${record.workflow.id} (transaction ${record.intent.hash}, nonce ${record.intent.nonce.toString()}). Execution is blocked to preserve rollback evidence.`)
+	}
+}

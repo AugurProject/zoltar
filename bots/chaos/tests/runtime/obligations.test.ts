@@ -25,6 +25,8 @@ function obligationState() {
 		obligationTombstones: [] as DurableObligationTombstone[],
 		obligations: [] as DurableObligation[],
 		pendingTransactions: [],
+		includedTransactions: [],
+		rollbackQueue: [],
 		workflows: [] as DurableWorkflow[],
 	}
 }
