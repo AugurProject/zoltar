@@ -10,7 +10,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createLoadedPoolProps } from './builders.js'
 
-type RenderWorkflowOptions = { chainTimestamp?: bigint; showHeader?: boolean }
+type RenderWorkflowOptions = { chainTimestamp?: bigint | undefined; showHeader?: boolean }
 
 function renderWorkflowNode(props: SecurityPoolWorkflowRouteContentProps, { chainTimestamp, showHeader = false }: RenderWorkflowOptions) {
 	const section = <SecurityPoolWorkflowSection {...props} showHeader={showHeader} />
