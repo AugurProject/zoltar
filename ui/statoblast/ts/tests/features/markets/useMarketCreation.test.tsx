@@ -50,14 +50,7 @@ describe('useMarketCreation', () => {
 
 	const { replaceEnvironment, trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
 
-	async function renderMarketCreationHook(
-		options: {
-			createMarket?: CreateMarket
-			initialProps?: HarnessProps
-			onRender?: (state: UseMarketCreationState) => void
-			parameters?: Partial<UseQuestionCreationParameters>
-		} = {},
-	) {
+	async function renderMarketCreationHook(options: { createMarket?: CreateMarket; initialProps?: HarnessProps; onRender?: (state: UseMarketCreationState) => void; parameters?: Partial<UseQuestionCreationParameters> } = {}) {
 		const loadCreatedZoltarQuestion = mock(async (_questionId: string) => undefined)
 		const setZoltarForkQuestionId = mock((_questionId: string) => undefined)
 		await moduleMocks.mockModule('@zoltar/ui-zoltar-shared/features/universes/hooks/useZoltarOperations.js', () => ({

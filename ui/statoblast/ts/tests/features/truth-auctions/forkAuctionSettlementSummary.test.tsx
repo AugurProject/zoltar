@@ -223,18 +223,20 @@ describe('ForkAuctionSection settlement summary', () => {
 
 	test('shows selected-bid settlement estimates for REP, assigned underwriting commitments, and refunds', async () => {
 		const truthAuction = createTruthAuction()
-		cleanupRenderedComponent = (await renderSettlementSummary(truthAuction, [
-			createSettlementRow(createBid({ bidIndex: 1n, tick: 9n }), truthAuction),
-			createSettlementRow(createBid({ bidIndex: 2n, tick: 11n }), truthAuction),
-			createSettlementRow(
-				createBid({
-					activeCumulativeBidBeforeAttoEth: ONE_UNIT,
-					bidIndex: 3n,
-					tick: 10n,
-				}),
-				truthAuction,
-			),
-		])).cleanup
+		cleanupRenderedComponent = (
+			await renderSettlementSummary(truthAuction, [
+				createSettlementRow(createBid({ bidIndex: 1n, tick: 9n }), truthAuction),
+				createSettlementRow(createBid({ bidIndex: 2n, tick: 11n }), truthAuction),
+				createSettlementRow(
+					createBid({
+						activeCumulativeBidBeforeAttoEth: ONE_UNIT,
+						bidIndex: 3n,
+						tick: 10n,
+					}),
+					truthAuction,
+				),
+			])
+		).cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Selected-bid settlement preview.')).not.toBeNull()
