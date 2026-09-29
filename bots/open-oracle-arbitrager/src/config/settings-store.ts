@@ -335,8 +335,6 @@ export function serializeOperatorSettings(settings: PersistedOperatorSettings, r
 	}
 }
 
-/** Preset chain profiles live beside the active configuration file. */
-
 const operatorNetwork = (settings: PersistedOperatorSettings) => settings.network
 
 async function assertOperatorProfileCandidates(path: string, candidates: readonly ProfileCandidate<PersistedOperatorSettings>[]) {

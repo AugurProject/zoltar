@@ -4,10 +4,9 @@ import { mergeLcovRecords, parseLcov, renderLcovRecords } from './coverage-repor
 import { runBunTestProcess } from './run-bun-test-process.mts'
 import { getWeightedTestFiles } from './run-balanced-test-shard.mts'
 import { createBalancedTestShards, discoverTestFiles, toBunTestPath, type WeightedTestFile } from './test-discovery.mts'
+import { isMissingPathError } from '../repo/fs.mts'
 
 export const TYPESCRIPT_COVERAGE_SHARD_COUNT = 4
-
-const isMissingPathError = (error: unknown) => error instanceof Error && 'code' in error && error.code === 'ENOENT'
 
 export function createTypeScriptCoverageShards(testFiles: readonly WeightedTestFile[], shardCount = TYPESCRIPT_COVERAGE_SHARD_COUNT) {
 	return createBalancedTestShards(testFiles, shardCount).map(shard => shard.files)

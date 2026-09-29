@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { assertDurableDeploymentFactory, assertSepoliaDurableFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
@@ -80,7 +81,7 @@ async function verifyStateParent(stateFile: string) {
 		if (currentUid !== undefined && stateMetadata.uid !== currentUid) throw new Error(`Runtime state ${stateFile} must be owned by the bot process user`)
 		if ((stateMetadata.mode & 0o7777) !== 0o600) throw new Error(`Runtime state ${stateFile} must have owner-only mode 0600`)
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return
+		if (isErrorCode(error, 'ENOENT')) return
 		throw error
 	}
 }

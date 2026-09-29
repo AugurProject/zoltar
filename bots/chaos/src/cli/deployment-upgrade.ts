@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createHash, randomUUID } from 'node:crypto'
@@ -54,7 +55,7 @@ async function fileExists(path: string) {
 		await lstat(path)
 		return true
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return false
+		if (isErrorCode(error, 'ENOENT')) return false
 		throw error
 	}
 }

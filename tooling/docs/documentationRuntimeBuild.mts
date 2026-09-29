@@ -6,12 +6,15 @@ export type DocumentationRuntimeName = (typeof documentationRuntimeNames)[number
 
 const generatedBanner = '// Generated from docs/runtime TypeScript by bun run docs:build-runtime. Do not edit.\n'
 
+// Runtimes whose top-level bindings no tooling reads stay wrapped so their helpers do not leak into page globals.
+const isolatedRuntimeNames: ReadonlySet<DocumentationRuntimeName> = new Set(['auctionClearing'])
+
 // Each runtime is bundled on its own so runtimes can share helpers through imports. The ESM format emits
 // no wrapper, so top-level bindings stay reachable for tooling that evaluates the output as a script.
 export async function buildDocumentationRuntime(name: DocumentationRuntimeName, sourceRoot: string): Promise<string> {
 	const result = await Bun.build({
 		entrypoints: [path.join(sourceRoot, `${name}.ts`)],
-		format: 'esm',
+		format: isolatedRuntimeNames.has(name) ? 'iife' : 'esm',
 		minify: false,
 		target: 'browser',
 	})
