@@ -174,7 +174,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 		return {
 			label: 'Below clearing',
 			tone: 'danger',
-			canPrefillRefund: false,
+			canPrefillRefund: !truthAuction.finalized,
 			canPrefillSettle: false,
 			settlementKind: 'none',
 			summaryKind: 'losing',

@@ -275,7 +275,7 @@ describe('transaction presentations', () => {
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
 			expect(presentation?.universeId).toBe(7n)
 			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
-			expect(presentation?.rows?.find(row => row.label === 'Attempted REP/ETH price')?.value).toBe('3')
+			expect(presentation?.rows?.find(row => row.label === 'Attempted REP / ETH price')?.value).toBe('3')
 		}
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')

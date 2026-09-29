@@ -264,7 +264,7 @@ export function universeVaultCount(count: bigint) {
 export const initialPriceSource = 'Initial price source'
 export const automaticUniswapPrice = 'Uniswap quote'
 export const manualInitialPrice = 'Manual price'
-export const manualRepPerEth = 'Open Oracle REP/ETH starting price'
+export const manualRepPerEth = 'Open Oracle REP / ETH starting price'
 export const manualStartingPrice = 'Open Oracle starting price'
 export const manualInitialPriceHint = 'Initial report price; subject to Open Oracle disputes and settlement.'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'

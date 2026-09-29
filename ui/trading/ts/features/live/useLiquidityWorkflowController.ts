@@ -1,6 +1,6 @@
 import * as workflowCopy from '../../copy/workflows.js'
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
@@ -88,6 +88,17 @@ export function useLiquidityWorkflowController({
 		quoteFailureFallback: liquidityCopy.quoteFailed,
 	})
 	const { quote } = transaction
+	const initialized = market.pair !== undefined && market.lpTotalSupply > 0n
+	useEffect(() => {
+		if (transaction.workflowLocked) return
+		if (initialized && operation === 'initialize') {
+			setOperation('add')
+			setAmount('')
+		} else if (!initialized && operation !== 'initialize') {
+			setOperation('initialize')
+			setAmount('')
+		}
+	}, [initialized, operation, transaction.workflowLocked])
 
 	async function submit() {
 		if (walletClient === undefined || account === undefined || quote === undefined || transaction.workflowLocked) return

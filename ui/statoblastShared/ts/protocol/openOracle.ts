@@ -106,7 +106,6 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		currentBlockNumber: block.number,
 		exactToken1Report: storedState.initialAmount1,
 		escalationHalt: game.escalationHalt,
-
 		settlerRewardAttoEth: game.settlerRewardAttoEth,
 		token1: game.token1,
 		settlementTime: game.settlementTime,

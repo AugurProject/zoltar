@@ -142,7 +142,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			<TruthAuctionSummaryCard
 				auctionedUnderwritingLimitAttoEthDisplay={model.selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} />}
 				badge={truthAuctionStateBadgeElement}
-				clearingPriceDisplay={renderTruthAuctionPriceValue(model.truthAuctionStatus.clearingPrice)}
+				clearingPriceDisplay={model.truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(model.truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared}
 				displayedEthRaisedAttoEth={model.displayedEthRaisedAttoEth}
 				displayedRepSoldAttoRep={model.displayedRepSoldAttoRep}
 				endsDisplay={model.endsDisplay}

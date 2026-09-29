@@ -6,7 +6,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import type { LiveLiquidityServices } from '../../features/LiveLiquidityControls.js'
+import { LiveLiquidityControls, type LiveLiquidityServices } from '../../features/LiveLiquidityControls.js'
 import { useLiquidityWorkflowController } from '../../features/live/useLiquidityWorkflowController.js'
 // Longer than the automatic quote debounce in useQuotedTransaction.
 const QUOTE_SETTLE_MILLISECONDS = 400
@@ -130,6 +130,66 @@ async function settleQuote() {
 
 describe('liquidity workflow controller state', () => {
 	installDomTestLifecycle()
+
+	test('associates amount errors with the liquidity field and offers a decimal price keypad', async () => {
+		const rendered = await renderIntoDocument(
+			<LiveLiquidityControls
+				configuration={configuration}
+				market={{ ...market, lpTotalSupply: 0n }}
+				balances={undefined}
+				balanceState='ready'
+				balanceError={undefined}
+				account={account}
+				walletClient={undefined}
+				networkMismatchReason={undefined}
+				walletEthAttoEth={10n ** 18n}
+				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
+				settings={DEFAULT_TRADE_SETTINGS}
+				externallyLocked={false}
+				nowSeconds={1n}
+				refresh={async () => undefined}
+				onKnownReceipt={() => undefined}
+				executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
+				createGuardedWalletWrite={() => async write => await write()}
+				retryBalances={async () => undefined}
+				onWorkflowLockChange={() => undefined}
+			/>,
+		)
+		try {
+			const amount = rendered.container.querySelector('input[name="amount"]')
+			if (!(amount instanceof HTMLInputElement)) throw new Error('Missing amount')
+			await act(() => {
+				amount.value = '0'
+				amount.dispatchEvent(new Event('input', { bubbles: true }))
+			})
+			expect(amount.getAttribute('aria-invalid')).toBe('true')
+			expect(amount.getAttribute('aria-describedby')).toBeTruthy()
+			expect(rendered.container.querySelector('input[name="probability"]')?.getAttribute('inputmode')).toBe('decimal')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
+	test('selects Add when initialization refreshes the pool state', async () => {
+		const services: LiveLiquidityServices = { publicErrorMessage: String, simulateLiquidity: async (_client, _configuration, selected, _account, operation, amount) => ({ ...liquidityQuote(amount), operation, market: selected }), submitFreshLiquidity: async () => transactionHash }
+		const walletClient = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		let controller: Controller | undefined
+		const onController = (next: Controller) => {
+			controller = next
+		}
+		const onLockChange = () => undefined
+		const rendered = await renderIntoDocument(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={{ ...market, lpTotalSupply: 0n }} />)
+		try {
+			expect(controller?.operation).toBe('initialize')
+			await act(() => render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={market} />, rendered.container))
+			expect(controller?.operation).toBe('add')
+			await act(() => controller?.selectOperation('remove'))
+			await act(() => render(<Probe walletClient={walletClient} services={services} onController={onController} onLockChange={onLockChange} market={{ ...market }} />, rendered.container))
+			expect(controller?.operation).toBe('remove')
+		} finally {
+			await rendered.cleanup()
+		}
+	})
 
 	test('quotes automatically after typing settles and never lets an older quote replace a newer one', async () => {
 		const firstQuote = deferred<ReturnType<typeof liquidityQuote>>()

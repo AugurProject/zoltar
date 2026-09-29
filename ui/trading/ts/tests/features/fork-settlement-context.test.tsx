@@ -131,6 +131,12 @@ describe('live fork settlement context', () => {
 		const input = document.querySelector('input[inputmode="decimal"]')
 		if (!(input instanceof HTMLInputElement)) throw new Error('Redemption amount input missing')
 		await act(() => {
+			input.value = '0'
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(input.getAttribute('aria-describedby')).toBeTruthy()
+		await act(() => {
 			input.value = '0.1'
 			input.dispatchEvent(new Event('input', { bubbles: true }))
 		})

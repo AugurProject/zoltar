@@ -65,7 +65,9 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 	const lookup = useRef(operations.loadZoltarQuestion)
 	lookup.current = operations.loadZoltarQuestion
 	useEffect(() => {
-		if (forkQuestionId !== '') void lookup.current(forkQuestionId)
+		if (!/^0x[0-9a-f]{64}$/i.test(forkQuestionId)) return
+		const timeout = setTimeout(() => void lookup.current(forkQuestionId), 300)
+		return () => clearTimeout(timeout)
 	}, [forkQuestionId, environmentRefreshKey, universe.universeId])
 	return (
 		<>
@@ -82,6 +84,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 						loadingZoltarQuestions={operations.loadingZoltarQuestions}
 						onApproveZoltarForkRep={amount => void operations.approveZoltarForkRep(amount)}
 						onForkZoltar={() => void operations.forkZoltar()}
+						onRetryZoltarForkAccess={() => void operations.loadZoltarForkAccess()}
 						onRetryZoltarQuestion={forkQuestionId === '' ? undefined : () => void operations.loadZoltarQuestion(forkQuestionId)}
 						onZoltarForkQuestionIdChange={operations.setZoltarForkQuestionId}
 						zoltarForkActiveAction={operations.zoltarForkActiveAction}

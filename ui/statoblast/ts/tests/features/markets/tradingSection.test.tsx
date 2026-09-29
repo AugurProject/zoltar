@@ -1,3 +1,4 @@
+import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
 
@@ -298,6 +299,17 @@ void describe('TradingSection', () => {
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])
 		})
 
+	test('explains a mint action that becomes unavailable while its dialog is open', async () => {
+		const props = createTradingSectionProps({ tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
+		const rendered = await renderIntoDocument(<TradingSection {...props} />)
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
+		await act(() => render(<TradingSection {...props} poolState={evaluateSecurityPoolState({ lifecycleState: 'ended' })} />, rendered.container))
+		const state = getTransactionButtonState(within(document.body).getByRole('dialog'), 'Mint complete sets')
+		expect(state.disabled).toBe(true)
+		expect(state.reason).toBe('This action is unavailable in the current pool state.')
+	})
+
 	test('keeps the stale-price reason as text in the mint dialog while the wallet is disconnected', async () => {
 		const { walletActions } = createWalletActions()
 		const renderSection = (accountState: AccountState, oraclePriceUsable: boolean) => (
@@ -592,6 +604,7 @@ void describe('TradingSection', () => {
 		})
 
 		expect(mintedAmount).toBe(expected)
+		expect(document.body.textContent?.includes('Max uses your entire ETH balance. Leave ETH for gas.')).toBe(expected === '1.25')
 	})
 
 	void test('uses standing commitments when the optional UI price is unavailable', async () => {

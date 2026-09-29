@@ -74,7 +74,8 @@ const signedEth = (value: unknown): string => {
 export const tradingPnlSummary = (item: JsonRecord): string => {
 	const valuation = isRecord(item['valuation']) ? item['valuation'] : {}
 	const exitValue = `${exactUnit(text(item['holdings_value_atto_eth']) ?? '0', 18, 'ETH')} exit value${valuation['partial'] === true ? ' (partial, some shares unvalued)' : ''}`
-	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${String(valuation['reason'] ?? 'no valuation')})`
+	const reason = String(valuation['reason'] ?? 'no valuation')
+	const holdings = valuation['status'] === 'available' ? exitValue : `holdings value unavailable (${reason.charAt(0).toLowerCase()}${reason.slice(1)})`
 	return [
 		`${exactUnit(text(item['cost_basis_atto_eth']) ?? '0', 18, 'ETH')} paid in`,
 		`${exactUnit(text(item['proceeds_atto_eth']) ?? '0', 18, 'ETH')} received`,

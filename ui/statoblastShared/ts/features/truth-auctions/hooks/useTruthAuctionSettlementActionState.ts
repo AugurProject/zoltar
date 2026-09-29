@@ -12,6 +12,7 @@ type SettlementBidKeyUpdater = string[] | ((currentKeys: string[]) => string[])
 type UseTruthAuctionSettlementActionStateParams = {
 	accountAddress: Address | undefined
 	forkAuctionError: string | undefined
+	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined
 	forkAuctionResult: ForkAuctionActionResult | undefined
 	onClaimAuctionProceeds: (securityPoolAddressOverride?: Address, selectedClaimBids?: readonly SettlementSelectedBid[], selectedRefundBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
 	onRefundLosingBids: (securityPoolAddressOverride?: Address, selectedBids?: readonly SettlementSelectedBid[], universeIdOverride?: bigint) => void
@@ -32,7 +33,19 @@ function resolveSettlementBidKeyUpdate(currentKeys: string[], update: Settlement
 	return update
 }
 
-export function useTruthAuctionSettlementActionState({ accountAddress, forkAuctionError, forkAuctionResult, onClaimAuctionProceeds, onRefundLosingBids, selectedAuctionPoolAddress, selectedAuctionUniverseId, selectedStage, settlementBidRows, truthAuctionFinalized }: UseTruthAuctionSettlementActionStateParams) {
+export function useTruthAuctionSettlementActionState({
+	accountAddress,
+	forkAuctionActiveAction,
+	forkAuctionError,
+	forkAuctionResult,
+	onClaimAuctionProceeds,
+	onRefundLosingBids,
+	selectedAuctionPoolAddress,
+	selectedAuctionUniverseId,
+	selectedStage,
+	settlementBidRows,
+	truthAuctionFinalized,
+}: UseTruthAuctionSettlementActionStateParams) {
 	const [settlementActionState, setSettlementActionState] = useState(createTruthAuctionSettlementActionState)
 	const settlementSelectionState = getTruthAuctionSettlementSelectionState({
 		selectedBidKeys: settlementActionState.selectedBidKeys,
@@ -122,14 +135,10 @@ export function useTruthAuctionSettlementActionState({ accountAddress, forkAucti
 			dispatchSettlementActionState({ type: 'transactionFailed' })
 			return
 		}
-		if (forkAuctionResult === undefined || selectedAuctionPoolAddress === undefined || !sameAddress(forkAuctionResult.securityPoolAddress, selectedAuctionPoolAddress)) return
-		if (pendingAction.ignoredResultHash !== undefined && forkAuctionResult.hash === pendingAction.ignoredResultHash) return
-		if (forkAuctionResult.action !== pendingAction.action) return
-		dispatchSettlementActionState({
-			action: pendingAction.action,
-			type: 'transactionSucceeded',
-		})
-	}, [forkAuctionError, forkAuctionResult, settlementActionState.pendingAction, selectedAuctionPoolAddress])
+		const matchingResult = forkAuctionResult !== undefined && selectedAuctionPoolAddress !== undefined && sameAddress(forkAuctionResult.securityPoolAddress, selectedAuctionPoolAddress) && forkAuctionResult.hash !== pendingAction.ignoredResultHash && forkAuctionResult.action === pendingAction.action
+		if (matchingResult) dispatchSettlementActionState({ action: pendingAction.action, type: 'transactionSucceeded' })
+		else if (forkAuctionActiveAction === undefined) dispatchSettlementActionState({ type: 'transactionFailed' })
+	}, [forkAuctionActiveAction, forkAuctionError, forkAuctionResult, settlementActionState.pendingAction, selectedAuctionPoolAddress])
 
 	useEffect(() => {
 		if (selectedStage !== 'settlement') {

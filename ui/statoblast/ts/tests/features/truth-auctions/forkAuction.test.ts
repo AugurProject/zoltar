@@ -498,9 +498,10 @@ void describe('fork auction helpers', () => {
 		})
 	})
 
-	void test('does not offer refunds before finalization', () => {
+	void test('offers early refunds only below the clearing tick', () => {
 		const auction = createTruthAuction({ finalized: false, hitCap: true, clearingTick: 10n, clearingPrice: TRUTH_AUCTION_PRICE_PRECISION, bidAtClearingTickAttoEth: 0n })
-		for (const tick of [9n, 10n]) expect(getTruthAuctionBidDisposition(createBid({ tick }), auction).canPrefillRefund).toBe(false)
+		expect(getTruthAuctionBidDisposition(createBid({ tick: 9n }), auction).canPrefillRefund).toBe(true)
+		expect(getTruthAuctionBidDisposition(createBid({ tick: 10n }), auction).canPrefillRefund).toBe(false)
 	})
 
 	void test('sorts auction bids by price priority and bid index', () => {

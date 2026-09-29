@@ -34,6 +34,7 @@ type ForkZoltarSectionProps = {
 	loadingZoltarQuestions: boolean
 	onApproveZoltarForkRep: (amount?: bigint) => void
 	onForkZoltar: () => void
+	onRetryZoltarForkAccess?: (() => void) | undefined
 	onRetryZoltarQuestion?: (() => void) | undefined
 	onZoltarForkQuestionIdChange: (questionId: string) => void
 	zoltarForkActiveAction: 'approve' | 'fork' | undefined
@@ -59,6 +60,7 @@ export function ForkZoltarSection({
 	onApproveZoltarForkRep,
 	onForkZoltar,
 	onRetryZoltarQuestion,
+	onRetryZoltarForkAccess,
 	onZoltarForkQuestionIdChange,
 	zoltarForkActiveAction,
 	zoltarForkApproval,
@@ -99,10 +101,10 @@ export function ForkZoltarSection({
 	else if (isSelectedQuestionLookup) selectedQuestionError = zoltarQuestionLookupError
 	const selectedQuestionLookupState = resolveLoadableValueState({
 		isLoading: hasValidSelectedQuestionId && (loadingZoltarQuestions || loadingZoltarQuestion || (hasSelectedQuestionId && selectedQuestion === undefined && !hasLoadedZoltarQuestions && !isSelectedQuestionLookup)),
-		isMissing: hasSelectedQuestionId && (hasLoadedZoltarQuestions || isSelectedQuestionLookup) && selectedQuestion === undefined && selectedQuestionError === undefined,
+		isMissing: hasSelectedQuestionId && isSelectedQuestionLookup && !loadingZoltarQuestion && selectedQuestion === undefined && selectedQuestionError === undefined,
 		value: selectedQuestion,
 	})
-	const selectedQuestionPresentation = hasSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
+	const selectedQuestionPresentation = (/^0x[0-9a-f]{64}$/i.test(selectedQuestionId) || isSelectedQuestionLookup) && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	let selectedQuestionDescriptionId: string | undefined
 	if (selectedQuestionError !== undefined) selectedQuestionDescriptionId = FORK_QUESTION_ERROR_ID
 	else if (selectedQuestionLookupState === 'missing') selectedQuestionDescriptionId = FORK_QUESTION_STATE_ID
@@ -126,6 +128,7 @@ export function ForkZoltarSection({
 		if (!selectedQuestionHasEnded) return zoltarCopy.formatForkQuestionActiveReason(formatTimestamp(selectedQuestion.endTime), formatRelativeTimestamp(selectedQuestion.endTime, effectiveCurrentTimestamp))
 		if (!hasForkEconomics) return zoltarCopy.forkEconomicsUnavailableReason
 
+		if (zoltarForkRepBalanceAttoRep === undefined) return loadingZoltarForkAccess ? zoltarCopy.forkRepBalanceLoadingReason : zoltarCopy.forkRepBalanceUnavailableReason
 		if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
 		if (!hasEnoughApproval) return zoltarCopy.forkRepApprovalRequiredReason
 
@@ -164,12 +167,25 @@ export function ForkZoltarSection({
 					<MetricField label={commonCopy.forkThresholdAttoRep}>
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={rootUniverse?.forkThresholdAttoRep} suffix={commonCopy.rep} />
 					</MetricField>
+					<MetricField label={zoltarCopy.forkWalletRep}>
+						<CurrencyValue loading={loadingZoltarForkAccess} value={zoltarForkRepBalanceAttoRep} suffix={commonCopy.rep} />
+					</MetricField>
 					<MetricField label={zoltarCopy.permanentRepBurn}>
 						<CurrencyValue loading={loadingZoltarForkAccess || rootUniverse === undefined} value={permanentRepBurn} suffix={commonCopy.rep} />
 					</MetricField>
 				</DataGrid>
 			)}
 
+			{accountAddress !== undefined && isOnActiveAppChain && !loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined ? (
+				<>
+					<ErrorNotice message={zoltarCopy.forkRepBalanceUnavailableReason} />
+					{onRetryZoltarForkAccess === undefined ? undefined : (
+						<button className='secondary' type='button' onClick={onRetryZoltarForkAccess}>
+							{commonCopy.retry}
+						</button>
+					)}
+				</>
+			) : undefined}
 			<div className='form-grid'>
 				<label className='field'>
 					<span>{zoltarCopy.forkQuestionId}</span>

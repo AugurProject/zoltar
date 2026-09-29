@@ -1,3 +1,5 @@
+import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
+import * as availabilityCopy from '../copy/availability.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { OutcomeHolding } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
@@ -127,11 +129,7 @@ export function LivePortfolio({
 				<EmptyState
 					title={portfolioCopy.disconnectedGuidance}
 					actions={
-						walletAction === undefined ? undefined : (
-							<button className='primary' type='button' disabled={walletAction.disabled} onClick={walletAction.onClick}>
-								{walletAction.label}
-							</button>
-						)
+						walletAction === undefined ? undefined : <ActionLauncherButton idleLabel={walletAction.label} pendingLabel={walletAction.label} availability={{ disabled: walletAction.disabled, reason: walletAction.disabled ? availabilityCopy.transactionInProgressReason : undefined }} onClick={walletAction.onClick} />
 					}
 				/>
 			) : null}

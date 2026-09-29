@@ -33,7 +33,7 @@ export function WalletNetworkControl({ label, badge, disabled = false, onClick, 
 	return (
 		<>
 			{badge === undefined ? undefined : <Badge tone='danger'>{badge}</Badge>}
-			<WalletConnectionControl label={label} disabled={disabled} onClick={onClick} {...(className === undefined ? {} : { className })} />
+			<WalletConnectionControl label={label} disabled={disabled} onClick={onClick} className={`${className ?? 'secondary wallet-button'} wallet-network-switch`} />
 		</>
 	)
 }

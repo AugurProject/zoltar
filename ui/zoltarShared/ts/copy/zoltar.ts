@@ -109,3 +109,7 @@ export const migrateUnavailableTitle = 'No fork yet'
 export const migrateUnavailableDetail = 'REP migrates only after this universe forks.'
 
 export const migrationWalletBalancesReason = 'Connect a wallet to read migration balances.'
+
+export const forkRepBalanceLoadingReason = 'Loading REP balance…'
+export const forkRepBalanceUnavailableReason = 'Could not read your REP balance. Retry to check whether you can fork.'
+export const forkWalletRep = 'Wallet REP'

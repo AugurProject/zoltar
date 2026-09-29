@@ -276,7 +276,6 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 	currentTime: bigint
 	currentBlockNumber: bigint
 	escalationHalt: bigint
-
 	settlerRewardAttoEth: bigint
 	settlementTime: bigint
 	feePercentage: bigint

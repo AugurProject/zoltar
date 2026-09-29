@@ -114,7 +114,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		for (const [label, value] of poolSummaryMetrics(state)) summary.append(operationCard(label, value))
 	}
 
-	const panels: HTMLElement[] = []
+	type DetailTab = 'overview' | 'history' | 'evidence'
+	const panels: { tab: DetailTab; node: HTMLElement }[] = []
+	const addPanel = (tab: DetailTab, node: HTMLElement) => panels.push({ tab, node })
 	let loadedRiskHistoryOffset = 0
 	const decisionPage = route.kind === 'report' ? detailPageRecord(data, 'coordinatorDecisions') : {}
 	const decisionItems = operationRecords(decisionPage['items'])
@@ -122,7 +124,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const activityItems = operationRecords(activityPage['items'])
 	const approvalEvents = operationRecords(data['approvalEvents']).sort(compareCanonicalEventPosition)
 	if (approvalEvents.length > 0)
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Liquidation approval lifecycle',
 				approvalEvents.map(item => operationRow(String(item['event_name'] ?? 'Liquidation approval'), approvalTransitionSummary(item), String(item['approval_identity'] ?? ''), item['block_number'])),
@@ -130,7 +133,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			),
 		)
 	if (snapshot !== undefined)
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Current-state snapshot',
 				[
@@ -149,20 +153,22 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			row.append(claimProofDisclosure(position, snapshot['block_number'], snapshot['block_hash']))
 			return row
 		})
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel('Escalation payouts', rows, claims['status'] === 'available' ? 'No unconsumed deposits at this tagged block.' : `Payout evidence unavailable: ${String(claims['reason'] ?? 'Awaiting claim sampling')}`, {
 				label: `Tagged claim-bundle payouts; proofs must be refreshed after settlement.${claims['truncated'] === true ? ' First 250 positions shown.' : ''}`,
 			}),
 		)
 	}
-	if (current !== undefined) panels.push(operationsPanel('Current report', [operationRow(String(lifecycle?.['state'] ?? current['event_name'] ?? 'Report'), 'Latest canonical report evidence', route.identity.join(':'), current['block_number']), rawEvidence(current)], 'Current report unavailable'))
+	if (current !== undefined) addPanel('overview', operationsPanel('Current report', [operationRow(String(lifecycle?.['state'] ?? current['event_name'] ?? 'Report'), 'Latest canonical report evidence', route.identity.join(':'), current['block_number']), rawEvidence(current)], 'Current report unavailable'))
 	if (route.kind === 'pool' || route.kind === 'vault') {
 		const riskPresentation = operationsRiskPresentation(route.kind, data['protocol_state'], data['scanner_severity'])
 		const protocolStateRow = operationRow('Protocol state', riskPresentation.protocolState, route.identity.join(':'), data['block_number'])
 		protocolStateRow.classList.add('operations-risk-protocol')
 		const scannerAssessmentRow = operationRow('Scanner assessment', `${riskPresentation.scannerAssessment} · ${String(data['scanner_reason'] ?? 'Current-state evidence unavailable')}`, undefined, data['block_number'])
 		scannerAssessmentRow.classList.add('operations-risk-assessment', `operations-risk-${riskPresentation.scannerTone}`)
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				headerPresentation.riskPanelTitle,
 				[protocolStateRow, scannerAssessmentRow, ...semanticFields({ ...(isRecord(data['read_result']) ? data['read_result'] : {}), ...(isRecord(data['risk']) ? data['risk'] : {}) }).map(([label, value]) => operationRow(label, value, undefined, data['block_number'])), rawEvidence(data)],
@@ -170,12 +176,13 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			),
 		)
 	}
-	if (route.kind === 'vault') panels.push(operationsPanel('Accounting', [operationRow('Vault accounting history', 'REP backing, ETH commitments, and accrued fees', undefined, undefined, operationsHref(`/system?tab=vaults&entity=${requiredChainId()}:${route.identity[0]}:${route.identity[1]}`))], ''))
+	if (route.kind === 'vault') addPanel('overview', operationsPanel('Accounting', [operationRow('Vault accounting history', 'REP backing, ETH commitments, and accrued fees', undefined, undefined, operationsHref(`/system?tab=vaults&entity=${requiredChainId()}:${route.identity[0]}:${route.identity[1]}`))], ''))
 	if (route.kind === 'trading') {
 		const tradingSummary = isRecord(data['summary']) ? data['summary'] : {}
 		const twap24h = isRecord(data['twap24h']) ? data['twap24h'] : {}
 		const twap7d = isRecord(data['twap7d']) ? data['twap7d'] : {}
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Trading summary',
 				[
@@ -187,7 +194,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No trading observations are available.',
 			),
 		)
-		panels.push(operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits' }))
+		addPanel('overview', operationsPanel('ETH volume', tradingVolumeRows(tradingSummary, { operationRow, operationCounted }), '', { label: 'Router enters and exits' }))
 		const activityPanel = tradingActivityPanel(data['activity'], { operationRow, operationsPanel, operationsHref })
 		if (activityPage['hasMore'] === true && typeof activityPage['nextCursor'] === 'string') {
 			const more = element('button', 'secondary compact', 'Show older market activity')
@@ -207,9 +214,10 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			})
 			activityPanel.append(more, status)
 		}
-		panels.push(activityPanel)
+		addPanel('overview', activityPanel)
 		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Market share holders',
 				operationRecords(shares['items']).map(position =>
@@ -226,7 +234,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			),
 		)
 		const lpPositions = operationRecords(data['lpPositions'])
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Current LP-share ownership',
 				lpPositions.map(position =>
@@ -235,7 +244,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 				'No LP-share ownership records match this view. Transfer history begins when this scanner started indexing the pair.',
 			),
 		)
-		panels.push(operationsPanel('Hourly NO-per-YES candles', renderCandleContent(operationRecords(data['candles']), operationRow, operationRatio), 'No reserve observations are available for candles.'))
+		addPanel('history', operationsPanel('Hourly NO-per-YES candles', renderCandleContent(operationRecords(data['candles']), operationRow, operationRatio), 'No reserve observations are available for candles.'))
 	}
 	if (route.kind === 'report') {
 		const decisionPanel = operationsPanel(
@@ -284,7 +293,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			completeStatus.tabIndex = -1
 			decisionPanel.append(completeStatus)
 		}
-		panels.push(decisionPanel)
+		addPanel('evidence', decisionPanel)
 	}
 	if (route.kind === 'pool' || route.kind === 'vault') {
 		const history = isRecord(data['history']) ? data['history'] : {}
@@ -297,7 +306,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			['liquidations', 'Liquidation history'],
 		] as const) {
 			const records = historyCollections[key] ?? []
-			panels.push(operationsPanel(label, detailEvidenceRows(records), `No ${label.toLowerCase()} available in this view.`))
+			addPanel('history', operationsPanel(label, detailEvidenceRows(records), `No ${label.toLowerCase()} available in this view.`))
 		}
 		const historySummary = summarizeHistoryCollections(historyCollections, operationsRiskHistoryKeys)
 		const historyBlockRange = historyBlockRangeLabel(historySummary.oldestBlock, historySummary.newestBlock)
@@ -349,7 +358,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			pagination.append(loadMore, loadMoreStatus)
 			coveragePanel.append(pagination)
 			recordPaginationLayout()
-			panels.push(coveragePanel)
+			addPanel('history', coveragePanel)
 			if (isDemo && pageUrl.searchParams.get('riskHistoryAutoLoad') === '1' && !demoRiskHistoryAutoLoadConsumed) {
 				deps.consumeDemoRiskHistoryAutoLoad()
 				window.setTimeout(() => {
@@ -366,24 +375,25 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			complete.tabIndex = -1
 			complete.setAttribute('role', 'status')
 			complete.setAttribute('aria-live', 'polite')
-			panels.push(complete)
+			addPanel('history', complete)
 		}
 	}
 
-	if (isRecord(data['finalization'])) panels.push(operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
+	if (isRecord(data['finalization'])) addPanel('overview', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
 	if (route.kind === 'escalation') {
-		for (const key of ['deposits', 'claims']) panels.push(operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
+		for (const key of ['deposits', 'claims']) addPanel('overview', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
 	}
-	if (data['demandCurveTruncated'] === true) panels.push(operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
+	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
 	if (demand.length > 0) {
 		const demandRows = demand.map(point => operationRow(`Tick ${String(point['tick'])}`, `${exactUnit(String(point['amountAttoEth'] ?? '0'), 18, 'ETH')} · cumulative ${exactUnit(String(point['cumulativeDemandAttoEth'] ?? '0'), 18, 'ETH')}`, String(point['tick']), undefined))
-		panels.push(operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
+		addPanel('history', operationsPanel('Demand curve data', demandRows, 'No bids match this view.'))
 	}
 	const branches = operationRecords(data['branches'])
 	if (route.kind === 'fork') {
 		const forkSummary = isRecord(data['summary']) ? data['summary'] : {}
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Fork migration totals',
 				[
@@ -405,7 +415,8 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		)
 	}
 	if (branches.length > 0)
-		panels.push(
+		addPanel(
+			'overview',
 			operationsPanel(
 				'Child universe branches',
 				branches.map(branch =>
@@ -464,7 +475,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			completeStatus.tabIndex = -1
 			evidencePanel.append(completeStatus)
 		}
-		panels.push(evidencePanel)
+		addPanel('history', evidencePanel)
 	}
 	const grid = element('div', 'operations-grid operations-grid-single')
 	const canonicalDetail = !location.pathname.startsWith('/operations/')
@@ -486,18 +497,11 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			if (key === activeTab) anchor.setAttribute('aria-current', 'page')
 			tabs.append(anchor)
 		}
-		const grouped = panels.filter(panel => {
-			const heading = panel.querySelector('h3')?.textContent ?? ''
-			const historyPanel = /history|timeline|rounds|candles|curve/i.test(heading)
-			const evidencePanel = /evidence|decision|receipt|event/i.test(heading)
-			if (activeTab === 'overview') return !historyPanel && !evidencePanel
-			if (activeTab === 'history') return historyPanel
-			return evidencePanel
-		})
+		const grouped = panels.filter(panel => panel.tab === activeTab).map(panel => panel.node)
 		grid.append(...(grouped.length > 0 ? grouped : [element('p', 'state-placeholder', `No ${activeTab} records are available.`)]))
 		content.replaceChildren(header, tabs, ...(summary.childElementCount === 0 ? [] : [summary]), grid)
 	} else {
-		grid.append(...panels)
+		grid.append(...panels.map(panel => panel.node))
 		content.replaceChildren(header, ...(summary.childElementCount === 0 ? [] : [summary]), grid)
 	}
 	content.setAttribute('aria-busy', 'false')

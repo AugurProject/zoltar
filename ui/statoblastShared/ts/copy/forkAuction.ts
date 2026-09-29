@@ -129,7 +129,7 @@ export const vaultMigrationCompleteReason = 'Vault migration is already complete
 export const combinedUnresolvedMigrationDetail = 'Optionally clear unresolved parent escalation-deposit accounting while migrating remaining REP backing units and underwriting commitments.'
 export const selectedLadderPriceLead = 'Selected ladder price: '
 export const bidPrice = 'Bid price'
-export const bidPriceUnit = 'ETH/REP'
+export const bidPriceUnit = 'ETH / REP'
 export const submittingBidTruncated = 'Submitting bid…'
 export const truthAuctionAddress = 'Truth auction address'
 export const started = 'Started'
@@ -240,3 +240,5 @@ export const formatSubmissionsLabel = (count: string) => `${count} submissions`
 export const visibleDepth = 'Visible depth'
 
 export const auctionDetails = 'Auction details'
+
+export const notYetCleared = 'Not yet cleared'

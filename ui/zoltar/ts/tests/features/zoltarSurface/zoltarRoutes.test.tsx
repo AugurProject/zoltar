@@ -1,3 +1,5 @@
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 /// <reference types="bun-types" />
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -96,11 +98,11 @@ describe('ZoltarRoutes', () => {
 		},
 	})
 
-	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined, overrides: Partial<ReturnType<typeof createOperations>> = {}) {
+	async function renderRoute(view: ZoltarView, universe: ZoltarUniverseSummary | undefined, universeState: LoadableValueState = 'ready', universeError: string | undefined = undefined, overrides: Partial<ReturnType<typeof createOperations>> = {}, chainId = '0xaa36a7') {
 		const viewChanges: ZoltarView[] = []
 		const retries: string[] = []
 		const workspace = {
-			accountState: { address: zeroAddress, chainId: '0xaa36a7', ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
+			accountState: { address: zeroAddress, chainId, ethBalanceAttoEth: 0n, wethBalanceAttoEth: 0n },
 			activeUniverseId: universe?.universeId ?? 9n,
 			currentTimestamp: 10n,
 			environmentRefreshKey: 0,
@@ -114,20 +116,52 @@ describe('ZoltarRoutes', () => {
 			universeError,
 			universeState,
 		}
-		cleanupRenderedComponent = (
-			await renderIntoDocument(
-				<ZoltarWorkspaceProvider workspace={workspace}>
-					<ZoltarRoutes view={view} />
-				</ZoltarWorkspaceProvider>,
-			)
-		).cleanup
-		return { queries: within(document.body), retries, viewChanges }
+		const tree = () => (
+			<ZoltarWorkspaceProvider workspace={workspace}>
+				<ZoltarRoutes view={view} />
+			</ZoltarWorkspaceProvider>
+		)
+		const rendered = await renderIntoDocument(tree())
+		cleanupRenderedComponent = rendered.cleanup
+		return {
+			queries: within(document.body),
+			retries,
+			viewChanges,
+			update: async (next: Partial<ReturnType<typeof createOperations>>) => {
+				workspace.operations = { ...workspace.operations, ...next }
+				await act(() => render(tree(), rendered.container))
+			},
+		}
 	}
 
-	test('automatically looks up a pasted fork question on the fork route', async () => {
+	test('looks up only a complete fork question after typing pauses', async () => {
 		const loadZoltarQuestion = mock(async () => undefined)
-		await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: '0x01', loadZoltarQuestion })
-		await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledWith('0x01'))
+		const id = `0x${'12'.repeat(32)}`
+		const screen = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: '0x1', loadZoltarQuestion })
+		await act(async () => {
+			await Bun.sleep(350)
+		})
+		expect(loadZoltarQuestion).not.toHaveBeenCalled()
+		expect(screen.queries.queryByText('Question not found')).toBeNull()
+		expect(document.body.textContent).not.toContain('retrieving…')
+		await screen.update({ zoltarForkQuestionId: id })
+		await act(async () => {
+			await Bun.sleep(100)
+		})
+		expect(loadZoltarQuestion).not.toHaveBeenCalled()
+		await screen.update({ zoltarForkQuestionId: `0x${'13'.repeat(32)}` })
+		await act(async () => {
+			await Bun.sleep(200)
+		})
+		expect(loadZoltarQuestion).not.toHaveBeenCalled()
+		await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledTimes(1))
+		expect(loadZoltarQuestion).toHaveBeenCalledWith(`0x${'13'.repeat(32)}`)
+	})
+
+	test('shows the switch-network state in the REP tile for a connected wrong-network wallet', async () => {
+		const { queries } = await renderRoute('overview', createUniverse({ hasForked: false }), 'ready', undefined, {}, '0x1')
+		expect(queries.queryByText('Connect a wallet') === null).toBe(true)
+		expect(document.body.textContent).toContain('Switch network')
 	})
 
 	test('shows Fork, not Migrate, in the Universes browser of an unforked universe', async () => {

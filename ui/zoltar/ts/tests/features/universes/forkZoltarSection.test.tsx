@@ -59,6 +59,42 @@ describe('ForkZoltarSection', () => {
 		},
 	})
 
+	for (const loading of [true, false])
+		test(`distinguishes an unknown REP balance from insufficient REP (loading=${loading})`, async () => {
+			const retry = mock(() => undefined)
+			const props = {
+				accountAddress: zeroAddress,
+				currentTimestamp: 3n,
+				hasLoadedZoltarQuestions: true,
+				isOnActiveAppChain: true,
+				loadingZoltarForkAccess: loading,
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar: () => undefined,
+				onRetryZoltarForkAccess: retry,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x01',
+				zoltarForkRepBalanceAttoRep: undefined,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverseState: 'ready' as const,
+			}
+			const rendered = await renderIntoDocument(<ForkZoltarSection {...props} />)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.body.textContent).not.toContain('Insufficient REP')
+			expect(document.body.textContent).toContain('Wallet REP')
+			if (loading) expect(document.body.textContent).toContain('Loading REP balance')
+			else {
+				expect(document.querySelector('[role="alert"]')?.textContent).toContain('REP balance')
+				fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' }))
+				expect(retry).toHaveBeenCalledTimes(1)
+			}
+		})
+
 	test('keeps REP approval disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
@@ -319,6 +355,7 @@ describe('ForkZoltarSection', () => {
 				zoltarForkError: undefined,
 				zoltarForkPending: false,
 				zoltarForkQuestionId: '0x02',
+				zoltarQuestionLookupId: '0x2',
 				zoltarForkRepBalanceAttoRep: 1000n,
 				zoltarQuestions: [createQuestion()],
 				zoltarUniverse: createUniverse(),

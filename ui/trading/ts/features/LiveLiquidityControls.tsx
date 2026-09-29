@@ -1,3 +1,4 @@
+import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -107,6 +108,13 @@ export function LiveLiquidityControls({
 	let actionLabel = liquidityCopy.addLiquidityAction
 	if (operation === 'initialize') actionLabel = liquidityCopy.initializeLiquidityAction
 	else if (operation === 'remove') actionLabel = liquidityCopy.removeLiquidityAction
+	const availableAmount = operation === 'remove' ? balances?.lp : walletEthAttoEth
+	const amountError = (() => {
+		if (amount.trim() === '') return undefined
+		if (parsed === undefined || parsed <= 0n) return availabilityCopy.amountRequiredReason
+		if (availableAmount !== undefined && parsed > availableAmount) return operation === 'remove' ? availabilityCopy.insufficientLpReason : availabilityCopy.insufficientEthReason
+		return undefined
+	})()
 	let amountHint: string | undefined
 	if (operation === 'remove' && balances !== undefined) amountHint = liquidityCopy.lpHeld(formatLpQuantity(balances.lp, 4, 'down'))
 	else if (operation !== 'remove' && walletEthAttoEth !== undefined) amountHint = liquidityCopy.walletEth(formatTrimmedUnits(walletEthAttoEth))
@@ -137,12 +145,13 @@ export function LiveLiquidityControls({
 					inputMode='decimal'
 					adornment={operation === 'remove' ? liquidityCopy.lp : liquidityCopy.eth}
 					hint={amountHint}
+					error={amountError}
 					onInput={event => updateAmount(event.currentTarget.value)}
 				/>
 			</FormField>
 			{operation === 'initialize' ? (
 				<FormField id={probabilityId} label={liquidityCopy.conditionalYesPrice}>
-					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='numeric' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
+					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
 				</FormField>
 			) : null}
 			<p className='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>

@@ -1485,3 +1485,38 @@ button.tx-action-wallet-fix {
 	justify-self: start;
 	font-size: var(--font-caption);
 }
+
+/* Network recovery adds a control: wrap whole groups instead of squeezing adjacent navigation. */
+.header-toolbar:has(.wallet-network-switch) {
+	flex-wrap: wrap;
+}
+
+.header-toolbar:has(.wallet-network-switch) .header-toolbar-navigation,
+.header-toolbar-controls:has(.wallet-network-switch) {
+	flex-shrink: 0;
+}
+
+@media (max-width: 40rem) {
+	.header-toolbar:has(.wallet-network-switch) {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+	}
+
+	.header-toolbar-controls:has(.wallet-network-switch) {
+		flex-wrap: wrap;
+	}
+
+	.header-toolbar-controls:has(.wallet-network-switch) .toolbar-field {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+
+	.header-toolbar-controls:has(.wallet-network-switch) .toolbar-field-value {
+		min-width: 0;
+	}
+
+	.header-toolbar-controls .wallet-network-switch {
+		order: 1;
+		flex-basis: 100%;
+	}
+}

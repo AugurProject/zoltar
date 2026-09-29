@@ -17,7 +17,7 @@ type TradingOverviewPanelProps = {
 
 /** The wallet's ETH balance for the account popover. Trading settles in ETH, so REP stays out of its header. */
 export function TradingBalanceGroup({ walletSummary }: { walletSummary: WalletSummaryState }) {
-	return <WalletBalanceGroup balances={[{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading: walletSummary.status === 'loading', value: walletSummary.status === 'ready' ? walletSummary.ethAttoEth : undefined }]} />
+	return <WalletBalanceGroup balances={[{ asset: commonCopy.eth, exactWhenRoundedToZero: true, loading: walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined, value: walletSummary.ethAttoEth }]} />
 }
 
 /** Trading's top bar on the shared header panel; wallet balance read failures sit under the bar. */
@@ -44,7 +44,7 @@ export function TradingOverviewPanel({ badges, controls, navigation, onRetryWall
 								)}
 							</div>
 						) : undefined}
-						{walletSummary.status === 'loading' ? (
+						{walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined ? (
 							<span className='visually-hidden' role='status'>
 								{copy.loadingWalletBalances}
 							</span>

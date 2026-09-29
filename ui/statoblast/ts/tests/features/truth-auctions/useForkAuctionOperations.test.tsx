@@ -1,3 +1,9 @@
+import { useForkAuctionInteractionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionInteractionState.js'
+import { useTruthAuctionSettlementActionState } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useTruthAuctionSettlementActionState.js'
+import { ForkAuctionWorkflowShell } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionWorkflowShell.js'
+import { getTruthAuctionSettlementBidRows } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
+import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/TransactionStatusCard.js'
+import { transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
@@ -191,30 +197,95 @@ describe('useForkAuctionOperations', () => {
 		},
 	})
 
-	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const) {
-		test(`${action} exposes failures so pending controls recover`, async () => {
-			const fail = async () => {
-				throw new Error('Wallet rejected transaction')
-			}
-			const dependencies = createForkAuctionOperationsDependencies({ startTruthAuctionForSecurityPool: fail, settleTruthAuctionBids: fail })
-			let hookState: UseForkAuctionOperationsState | undefined
-			const Harness = createHarness(
-				dependencies,
-				state => {
+	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const)
+		for (const outcome of ['failure', 'cancel'] as const) {
+			test(`${action} returns to idle after ${outcome} without duplicate errors`, async () => {
+				const completion = createDeferred<void>()
+				const fail = async () => {
+					await completion.promise
+					throw new Error(outcome === 'cancel' ? transactionErrorMessages.reviewCanceled : 'Wallet rejected transaction')
+				}
+				const dependencies = createForkAuctionOperationsDependencies({ startTruthAuctionForSecurityPool: fail, settleTruthAuctionBids: fail })
+				let hookState: UseForkAuctionOperationsState | undefined
+				function Harness() {
+					const state = useForkAuctionOperations(
+						{
+							accountAddress: WALLET_ADDRESS,
+							onTransactionFailed: () => undefined,
+							onTransactionFinished: () => undefined,
+							onTransactionPresented: () => undefined,
+							onTransactionPrepared: () => undefined,
+							onTransactionRequested: () => undefined,
+							onTransactionSubmitted: () => undefined,
+							refreshState: async () => undefined,
+							selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+						},
+						dependencies,
+					)
 					hookState = state
-				},
-				() => undefined,
-			)
-			const rendered = await renderIntoDocument(h(Harness, {}))
-			cleanupRenderedComponent = rendered.cleanup
-			await act(async () => {
-				if (action === 'startTruthAuction') await requireHookState(hookState).startTruthAuction()
-				else await requireHookState(hookState).claimAuctionProceeds(SECURITY_POOL_ADDRESS, [{ tick: 0n, bidIndex: 0n }], [], 1n)
+					const interaction = useForkAuctionInteractionState({ ...state, accountAddress: WALLET_ADDRESS, connectedWalletDisputeStakedAttoRep: undefined, hasStartedTruthAuction: false, reportingDetails: undefined, securityPoolAddress: SECURITY_POOL_ADDRESS, startTruthAuctionSecurityPoolAddress: SECURITY_POOL_ADDRESS })
+					const rows = getTruthAuctionSettlementBidRows({
+						accountAddress: WALLET_ADDRESS,
+						truthAuction: createTruthAuctionMetrics({ finalized: true, hitCap: true, clearingTick: 0n, clearingPrice: 10n ** 18n }),
+						viewerBids: [{ activeCumulativeBidBeforeAttoEth: 0n, bidIndex: 0n, bidder: WALLET_ADDRESS, claimed: false, cumulativeBidAttoEth: 1n, bidAmountAttoEth: 1n, refunded: false, tick: 1n }],
+					})
+					const settlement = useTruthAuctionSettlementActionState({
+						...state,
+						accountAddress: WALLET_ADDRESS,
+						onClaimAuctionProceeds: (...args) => void state.claimAuctionProceeds(...args),
+						onRefundLosingBids: (...args) => void state.refundLosingBids(...args),
+						selectedAuctionPoolAddress: SECURITY_POOL_ADDRESS,
+						selectedAuctionUniverseId: 1n,
+						selectedStage: 'settlement',
+						settlementBidRows: rows,
+						truthAuctionFinalized: true,
+					})
+					const pending = action === 'startTruthAuction' ? interaction.isStartTruthAuctionInProgressState : settlement.isSettleSelectedBidsInProgress
+					return (
+						<ForkAuctionWorkflowShell
+							embedInCard
+							forkAuctionDetailsAvailable
+							forkAuctionError={state.forkAuctionError}
+							loadingForkAuctionDetails={false}
+							loadingReportingDetails={false}
+							onLoadForkAuction={() => undefined}
+							onLoadReporting={undefined}
+							reportingError={undefined}
+							securityPoolAddress={SECURITY_POOL_ADDRESS}
+							showHeader={false}
+						>
+							<button
+								disabled={pending}
+								onClick={() => {
+									if (action === 'startTruthAuction') {
+										interaction.beginStartTruthAuctionProgress()
+										void state.startTruthAuction()
+									} else settlement.submitClaimBidsByKeys(['1:0'])
+								}}
+							>
+								{pending ? 'Pending' : 'Submit'}
+							</button>
+							{state.forkAuctionFeedback?.status.tone === 'error' ? <TransactionStatusCard {...state.forkAuctionFeedback.status} /> : undefined}
+						</ForkAuctionWorkflowShell>
+					)
+				}
+				const rendered = await renderIntoDocument(<Harness />)
+				cleanupRenderedComponent = rendered.cleanup
+				const button = document.querySelector('button')
+				if (!(button instanceof HTMLButtonElement)) throw new Error('Missing submit button')
+				await act(() => button.click())
+				await waitFor(() => expect(button.disabled).toBe(true))
+				await act(async () => {
+					completion.resolve()
+					await Bun.sleep(10)
+				})
+				await waitFor(() => expect(button.disabled).toBe(false))
+				expect(requireHookState(hookState).forkAuctionActiveAction).toBeUndefined()
+				expect(requireHookState(hookState).forkAuctionError).toBeUndefined()
+				expect(document.querySelectorAll('[role="alert"]')).toHaveLength(0)
+				expect(document.querySelectorAll('.transaction-status-card')).toHaveLength(outcome === 'failure' ? 1 : 0)
 			})
-			expect(requireHookState(hookState).forkAuctionActiveAction).toBeUndefined()
-			expect(requireHookState(hookState).forkAuctionError).toContain('Wallet rejected transaction')
-		})
-	}
+		}
 
 	test('refundLosingBids preserves negative settlement ticks from the selection list', async () => {
 		const selectedBids: readonly SettlementSelectedBid[] = [{ bidIndex: 4n, tick: -3n }]

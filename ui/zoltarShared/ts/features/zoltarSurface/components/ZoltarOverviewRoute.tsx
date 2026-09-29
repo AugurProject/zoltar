@@ -69,6 +69,7 @@ function NextStepAction({ isConnectingWallet, needsAttention, nextStep, onConnec
 }
 
 function renderRepBalance(model: ZoltarOverviewModel, loadingRepBalance: boolean) {
+	if (model.wallet === 'wrong-network') return zoltarCopy.switchNetworkAction
 	if (model.wallet !== 'connected') return zoltarCopy.connectToSeeRep
 	// A balance that is absent after its read finished could not be read; it must not look like it is still loading.
 	if (model.repBalanceAttoRep === undefined && !loadingRepBalance) return commonCopy.unavailable

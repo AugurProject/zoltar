@@ -26,7 +26,7 @@ test('summarizes profit and loss with signed results and unavailable valuations'
 		}),
 	).toBe('10 ETH paid in · 4 ETH received · 2 ETH exit value · realized 0 ETH · unrealized -4 ETH · net -4 ETH')
 	expect(tradingPnlSummary({ cost_basis_atto_eth: '1', proceeds_atto_eth: '3', realized_pnl_atto_eth: '2', valuation: { status: 'unavailable', reason: 'No indexed complete-set exchange rate for this pool' } })).toContain(
-		'holdings value unavailable (No indexed complete-set exchange rate for this pool) · realized +0.000000000000000002 ETH · unrealized unavailable',
+		'holdings value unavailable (no indexed complete-set exchange rate for this pool) · realized +0.000000000000000002 ETH · unrealized unavailable',
 	)
 	expect(tradingPnlSummary({ cost_basis_atto_eth: '0', proceeds_atto_eth: '0', holdings_value_atto_eth: '0', realized_pnl_atto_eth: '0', unrealized_pnl_atto_eth: '0', net_pnl_atto_eth: '0', valuation: { status: 'available', partial: true } })).toContain('0 ETH exit value (partial, some shares unvalued)')
 	expect(tradingPnlHoldings({ open: false })).toBe('Closed position')

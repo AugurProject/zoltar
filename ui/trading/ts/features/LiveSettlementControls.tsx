@@ -221,6 +221,7 @@ export function LiveSettlementControls({
 									disabled={workflowLocked}
 									inputMode='decimal'
 									adornment={settlementCopy.eth}
+									error={amount.trim() !== '' && operationAvailable ? inputBlocker : undefined}
 									onInput={event => {
 										invalidateSettlementInputs()
 										setAmount(event.currentTarget.value)
