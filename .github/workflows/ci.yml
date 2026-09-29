@@ -123,18 +123,9 @@ jobs:
         with:
           foundry: "false"
           build-inputs: ci-build-inputs
-      - name: Format
-        run: bun run format
-      - name: Cache TypeScript incremental state
-        uses: actions/cache@v5
-        with:
-          path: .tsbuildinfo
-          key: ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-${{ hashFiles('shared/*/ts/**', 'ui/*/ts/**') }}
-          restore-keys: |
-            ${{ runner.os }}-tsbuildinfo-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock', 'package.json', 'tsconfig.json') }}-
       - name: Verify pre-task worktree cleanliness
         run: bash tooling/repo/check-worktree-clean.sh pre-task
-      - name: TypeScript checks and production UI build
+      - name: Build production UI
         shell: bash
         run: |
           started_at="${SECONDS}"
@@ -144,11 +135,11 @@ jobs:
           if [[ "${build_status}" -ne 0 ]]; then
             exit "${build_status}"
           fi
-          bun run ci:preflight:current
+          bun run ui:build:prod:current
           status="$?"
           set -e
           duration="$((SECONDS - started_at))"
-          echo "| Preflight and production build | ${duration}s |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Production build | ${duration}s |" >> "${GITHUB_STEP_SUMMARY}"
           exit "${status}"
       - name: Read canonical artifact metadata
         id: projects
@@ -228,6 +219,8 @@ jobs:
         with:
           foundry: "false"
           build-inputs: ci-build-inputs
+      - run: bun run format:check
+      - run: bun run ci:typecheck:current
       - run: bun run check:static && bun run check:repository:current
 
   knip:
