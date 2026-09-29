@@ -122,12 +122,7 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
 			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
 			<BidTable
-				columns={[
-					priceColumn(renderPriceValue),
-					{ blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> },
-					bidAmountColumn(),
-					statusColumn(),
-				]}
+				columns={[priceColumn(renderPriceValue), { blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> }, bidAmountColumn(), statusColumn()]}
 				regionClassName='truth-auction-bid-table-scroll'
 				regionLabel={forkAuctionCopy.scrollableAuctionBidHistory}
 				rowClassName='truth-auction-bid-row is-wide is-no-actions'
@@ -139,7 +134,21 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 	)
 }
 
-export function ViewerTruthAuctionBidsSection({ accountAddress, error, hasLoadedData = true, hasMoreViewerBids, loadingTruthAuctionBook, onLoadNextViewerBidPage, onRetry, onSettlementBidSelectionChange, onSettlementBidSelectionReplace, renderPriceValue, retrying = false, rows, showSettlementActionColumn }: ViewerTruthAuctionBidsSectionProps) {
+export function ViewerTruthAuctionBidsSection({
+	accountAddress,
+	error,
+	hasLoadedData = true,
+	hasMoreViewerBids,
+	loadingTruthAuctionBook,
+	onLoadNextViewerBidPage,
+	onRetry,
+	onSettlementBidSelectionChange,
+	onSettlementBidSelectionReplace,
+	renderPriceValue,
+	retrying = false,
+	rows,
+	showSettlementActionColumn,
+}: ViewerTruthAuctionBidsSectionProps) {
 	const selectableBidKeys = rows.flatMap(row => (row.settlementControl === undefined || row.settlementControl.disabled ? [] : [row.settlementControl.bidKey]))
 	// Settled bids have no pending outcome, so the estimate column only appears while some bid still has one.
 	const showEstimate = rows.some(row => hasVisibleEstimate(row.estimate))
