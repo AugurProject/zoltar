@@ -4,10 +4,10 @@ import { parseRollbackQueue, serializedRollbackQueue, type RollbackQueuedTransac
 import { storedInputSources, storedInputValues } from '../operations/input-values.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
-import { randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
 import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
+import { parseJsonDocument, serializeWritesToPath, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { ChaosEcosystem, OperationContinuationDisposition, OperationEvidence, OperationPreflightCall, OperationRisk, OperationTerminalSubmission, OperationWalletAssetDebit } from '#operations/types'
@@ -16,7 +16,8 @@ import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementS
 import { parsePendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import { assertExactKeys, dataHex, hash, identifier, nonemptyString, optionalString, optionalTimestamp, positiveIntegerString, requiredRecord, timestamp, uint256String, unsignedIntegerString } from './validators.ts'
-import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFileHandle, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
+import { readOwnerFile } from './owner-files.ts'
+import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
 
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000
 const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
@@ -214,8 +215,6 @@ const stateFilesystem: StateFilesystem = {
 	rename,
 	rm,
 }
-
-const stateWriteQueues = new Map<string, Promise<void>>()
 
 export function setRuntimeExecutionAddress(state: RuntimeState, address: Address | undefined) {
 	if (state.wallet?.toLowerCase() !== address?.toLowerCase() || (state.inventoryAddress !== undefined && state.inventoryAddress.toLowerCase() !== address?.toLowerCase())) {
@@ -918,40 +917,13 @@ async function durableProtocolIndex(value: unknown, statePath: string, expectedC
 async function loadDurableStateFile(path: string, expectedChainId: number, filesystem: StateFilesystem, protocolIndexStatePath: string, prevalidatedProtocolIndex: PrevalidatedProtocolIndex | undefined): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
 	let contents: string
-	let handle: ProtocolIndexFileHandle | undefined
 	try {
-		handle = await filesystem.open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
-		const metadata = await handle.stat()
-		if (!metadata.isFile()) {
-			throw new Error(`Chaos-bot state ${path} must be a regular file`)
-		}
-		if ((metadata.mode & 0o777) !== 0o600) {
-			throw new Error(`Chaos-bot state ${path} must have owner-only mode 0600`)
-		}
-		if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
-			throw new Error(`Chaos-bot state ${path} must be owned by the bot process user`)
-		}
-		if (!Number.isSafeInteger(metadata.size) || metadata.size < 0 || metadata.size > MAXIMUM_STATE_BYTES) {
-			throw new Error(`Chaos-bot state exceeds the ${MAXIMUM_STATE_BYTES.toString()}-byte safety limit`)
-		}
-		contents = await handle.readFile({ encoding: 'utf8' })
+		contents = await readOwnerFile(path, filesystem, 'Chaos-bot state', MAXIMUM_STATE_BYTES)
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return initialDurableState(expectedChainId)
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ELOOP') {
-			throw new Error(`Chaos-bot state ${path} must not be a symbolic link`)
-		}
-		throw error
-	} finally {
-		await handle?.close()
-	}
-	if (Buffer.byteLength(contents, 'utf8') > MAXIMUM_STATE_BYTES) throw new Error(`Chaos-bot state exceeds the ${MAXIMUM_STATE_BYTES.toString()}-byte safety limit`)
-	let value: unknown
-	try {
-		value = JSON.parse(contents)
-	} catch (error) {
-		if (error instanceof SyntaxError) throw new Error(`Chaos-bot state is not valid JSON: ${error.message}`)
+		if (isErrorCode(error, 'ENOENT')) return initialDurableState(expectedChainId)
 		throw error
 	}
+	const value = parseJsonDocument(contents, 'Chaos-bot state')
 	const state = requiredRecord(value, 'chaos-bot state')
 	const storedVersion = state['version']
 	if (storedVersion !== 3 && storedVersion !== DURABLE_STATE_VERSION) throw new Error('Chaos-bot state version is unsupported')
@@ -1118,47 +1090,19 @@ function snapshotDurableState(state: PersistableDurableState) {
 
 async function persistDurableStateSnapshot(path: string, chainId: number, contents: string, filesystem: StateFilesystem, protocolIndex: PrevalidatedProtocolIndex) {
 	if (Buffer.byteLength(contents, 'utf8') > MAXIMUM_STATE_BYTES) throw new Error(`Chaos-bot state exceeds the ${MAXIMUM_STATE_BYTES.toString()}-byte safety limit`)
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const temporaryPath = `${path}.${process.pid.toString()}.${randomUUID()}.tmp`
-	try {
-		const handle = await filesystem.open(temporaryPath, 'wx', 0o600)
-		try {
-			await handle.writeFile(contents, { encoding: 'utf8' })
-			await handle.chmod(0o600)
-			await handle.sync()
-		} finally {
-			await handle.close()
-		}
-		await loadDurableStateFile(temporaryPath, chainId, filesystem, path, protocolIndex)
-		await filesystem.rename(temporaryPath, path)
-		const directoryHandle = await filesystem.open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
-	} catch (error) {
-		await filesystem.rm(temporaryPath, { force: true })
-		throw error
-	}
+	await writeFileAtomically(path, contents, { beforeCommit: temporaryPath => loadDurableStateFile(temporaryPath, chainId, filesystem, path, protocolIndex), filesystem })
 }
 
 export async function saveDurableState(path: string, state: PersistableDurableState, filesystem: StateFilesystem = stateFilesystem) {
 	const resolvedPath = resolve(path)
 	const chainId = state.chainId
 	const snapshot = snapshotDurableState(state)
-	const previous = stateWriteQueues.get(resolvedPath)
-	const write = (previous === undefined ? Promise.resolve() : previous.catch(() => undefined)).then(async () => {
+	await serializeWritesToPath(resolvedPath, async () => {
 		const reference = snapshot.protocolIndex === undefined ? undefined : await persistProtocolIndexGeneration(resolvedPath, snapshot.protocolIndex, filesystem)
 		const contents = `${JSON.stringify({ ...snapshot.serializedState, protocolIndex: reference ?? null }, undefined, 2)}\n`
 		await persistDurableStateSnapshot(resolvedPath, chainId, contents, filesystem, { index: snapshot.protocolIndex, reference })
 		await pruneProtocolIndexGenerations(resolvedPath, reference, filesystem).catch(() => undefined)
 	})
-	const tracked = write.finally(() => {
-		if (stateWriteQueues.get(resolvedPath) === tracked) stateWriteQueues.delete(resolvedPath)
-	})
-	stateWriteQueues.set(resolvedPath, tracked)
-	await tracked
 }
 
 export function recordActivity(state: Pick<RuntimeState, 'activities'>, activity: Omit<Activity, 'at'> & { at?: string | undefined }) {

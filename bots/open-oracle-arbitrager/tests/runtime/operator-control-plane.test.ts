@@ -1,4 +1,3 @@
-import { emptySettlementSnapshot } from '#state/settlement-store'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,6 +17,7 @@ import { executorDeploymentIntentPath, saveExecutorDeploymentIntent } from '#exe
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
 import { keccak256 } from '@zoltar/bot-shared/ethereum'
 import { applyQueuedExecutionSettings, applyQueuedSigner } from '../../src/runtime/operator-execution-state.ts'
+import { operatorStateFixture } from '../support/operator-state.ts'
 
 const temporaryDirectories: string[] = []
 const dashboards: { stop: (closeActiveConnections?: boolean) => void }[] = []
@@ -53,28 +53,7 @@ async function unusedPort() {
 }
 
 function operatorState(): OperatorState {
-	return {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		endpointChecks: [],
-		executionHistory: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		operationLog: [],
-		opportunities: [],
-		paused: true,
-		positions: [],
-		priceHistory: [],
-		reportPaths: [],
-		status: 'paused',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
-	}
+	return operatorStateFixture({ paused: true, status: 'paused' })
 }
 
 /** Records every signer lock the control plane reserves or releases so execution activation can be asserted without files. */

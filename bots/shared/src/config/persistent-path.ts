@@ -1,13 +1,10 @@
 import { lstat, readlink, stat } from 'node:fs/promises'
 import { dirname, parse, relative, resolve, sep } from 'node:path'
+import { isErrorCode } from '../infrastructure/error-code.ts'
 
 type PersistentPathIdentity = {
 	canonicalPath: string
 	fileIdentity: string | undefined
-}
-
-function isMissingPath(error: unknown) {
-	return typeof error === 'object' && error !== null && 'code' in error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')
 }
 
 async function canonicalPath(path: string, followedLinks = new Set<string>()): Promise<string> {
@@ -21,7 +18,7 @@ async function canonicalPath(path: string, followedLinks = new Set<string>()): P
 		try {
 			metadata = await lstat(candidate)
 		} catch (error) {
-			if (!isMissingPath(error)) throw error
+			if (!isErrorCode(error, 'ENOENT', 'ENOTDIR')) throw error
 			return resolve(current, ...segments.slice(index))
 		}
 		if (!metadata.isSymbolicLink()) {
@@ -43,7 +40,7 @@ export async function persistentPathIdentity(path: string): Promise<PersistentPa
 		const metadata = await stat(resolved)
 		fileIdentity = `${metadata.dev.toString()}:${metadata.ino.toString()}`
 	} catch (error) {
-		if (!isMissingPath(error)) throw error
+		if (!isErrorCode(error, 'ENOENT', 'ENOTDIR')) throw error
 	}
 	return { canonicalPath: await canonicalPath(resolved), fileIdentity }
 }

@@ -1,4 +1,4 @@
-import { emptySettlementSnapshot, parseSettlementSettings, settlementSettings, settlementSnapshot } from '#state/settlement-store'
+import { parseSettlementSettings, settlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { afterEach, expect, test } from 'bun:test'
 import { Browser, type BrowserWindow, type Element } from 'happy-dom'
@@ -11,6 +11,7 @@ import { parseOperatorSettings, parseRuntimeLimitsRequest, parseStoredCentralize
 import { mergeStoredDeploymentUpdate } from '#config/deployment-settings'
 import { requiredDeploymentRoles } from '#config/deployment-roles'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
+import { operatorStateFixture } from '../support/operator-state.ts'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const browsers: Browser[] = []
@@ -39,28 +40,7 @@ afterEach(async () => {
 })
 
 function operatorState(): OperatorState {
-	return {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: '100',
-		blockTimestamp: '1000',
-		executionHistory: [],
-		endpointChecks: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		opportunities: [],
-		operationLog: [],
-		paused: true,
-		positions: [],
-		priceHistory: [],
-		reportPaths: [],
-		status: 'paused',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
-	}
+	return operatorStateFixture({ blockNumber: '100', blockTimestamp: '1000', paused: true, status: 'paused' })
 }
 
 function strategy(minimumProfitBps: bigint): MutableStrategy {

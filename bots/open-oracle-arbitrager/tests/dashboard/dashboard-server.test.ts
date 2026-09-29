@@ -1,12 +1,12 @@
-import { emptySettlementSnapshot } from '#state/settlement-store'
 import { afterEach, expect, test } from 'bun:test'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, type MutableStrategy, type OperatorState } from '#state/operator-state'
+import { operatorSnapshot, type MutableStrategy } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 import type { PositionRecord } from '#state/position-store'
 import { EndpointCheckFailure } from '#monitoring/connectivity'
+import { operatorStateFixture } from '../support/operator-state.ts'
 
 const servers: ReturnType<typeof startDashboardServer>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -25,28 +25,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		pollMilliseconds: 12_000,
 		twapSeconds: 1_800,
 	}
-	const state: OperatorState = {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: '100',
-		blockTimestamp: '1000',
-		executionHistory: [],
-		endpointChecks: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		opportunities: [],
-		operationLog: [],
-		paused: false,
-		positions: [],
-		status: 'running',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		priceHistory: [],
-		reportPaths: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
-	}
+	const state = operatorStateFixture({ blockNumber: '100', blockTimestamp: '1000', status: 'running' })
 	let submission = validateSubmissionSettings({ mode: 'public', relayUrls: ['https://relay.flashbots.net'] })
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	let connectivityFailure: Error | undefined

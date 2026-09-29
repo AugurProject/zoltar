@@ -1,9 +1,7 @@
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
-import { randomBytes } from 'node:crypto'
-import { dirname } from 'node:path'
-import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
+import { readFileIfPresent, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
 import { getAddress, isHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/bot-shared/infrastructure/compare'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -518,10 +516,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
-	const contents = await readFile(path, 'utf8').catch(error => {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
-		throw error
-	})
+	const contents = await readFileIfPresent(path)
 	if (contents === undefined) return { activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
@@ -613,56 +608,38 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 }
 
 export async function saveDurableState(path: string, state: RuntimeState) {
-	await mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const temporaryPath = `${path}.${randomBytes(8).toString('hex')}.tmp`
-	const handle = await open(temporaryPath, 'wx', 0o600)
-	try {
-		await handle.writeFile(
-			`${JSON.stringify({
-				activities: state.activities,
-				chainId: state.chainId,
-				lastScannedBlock: state.lastScannedBlock?.toString(),
-				pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
-					...operation,
-					candidateOutcome:
-						operation.candidateOutcome === undefined
-							? undefined
-							: {
-									...operation.candidateOutcome,
-									blockNumber: operation.candidateOutcome.blockNumber.toString(),
-									operation: operation.candidateOutcome.operation.toString(),
-									operationId: operation.candidateOutcome.operationId.toString(),
-								},
-					latestRecoveryBlock: operation.latestRecoveryBlock?.toString(),
-					nextHistoricalBlock: operation.nextHistoricalBlock?.toString(),
-					operationId: operation.operationId.toString(),
-					queuedBlock: operation.queuedBlock.toString(),
-					recoveryAnchorBlock: operation.recoveryAnchorBlock?.toString(),
-				})),
-				pendingTransactions: state.pendingTransactions.map(intent => ({
-					...intent,
-					maxBlockNumber: intent.maxBlockNumber.toString(),
-					lastValidBlockNumber: intent.lastValidBlockNumber?.toString(),
-					nonce: intent.nonce.toString(),
-					receiptExpectation: intent.receiptExpectation.type === 'pending-liquidation' ? { ...intent.receiptExpectation, amount: intent.receiptExpectation.amount.toString() } : intent.receiptExpectation,
-					submissionBlock: intent.submissionBlock.toString(),
-				})),
-				version: 2,
-			})}\n`,
-			{ encoding: 'utf8' },
-		)
-		await handle.sync()
-		await handle.close()
-		await rename(temporaryPath, path)
-		const directoryHandle = await open(dirname(path), 'r')
-		try {
-			await directoryHandle.sync()
-		} finally {
-			await directoryHandle.close()
-		}
-	} catch (error) {
-		await handle.close().catch(() => undefined)
-		await rm(temporaryPath, { force: true })
-		throw error
-	}
+	await writeFileAtomically(
+		path,
+		`${JSON.stringify({
+			activities: state.activities,
+			chainId: state.chainId,
+			lastScannedBlock: state.lastScannedBlock?.toString(),
+			pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
+				...operation,
+				candidateOutcome:
+					operation.candidateOutcome === undefined
+						? undefined
+						: {
+								...operation.candidateOutcome,
+								blockNumber: operation.candidateOutcome.blockNumber.toString(),
+								operation: operation.candidateOutcome.operation.toString(),
+								operationId: operation.candidateOutcome.operationId.toString(),
+							},
+				latestRecoveryBlock: operation.latestRecoveryBlock?.toString(),
+				nextHistoricalBlock: operation.nextHistoricalBlock?.toString(),
+				operationId: operation.operationId.toString(),
+				queuedBlock: operation.queuedBlock.toString(),
+				recoveryAnchorBlock: operation.recoveryAnchorBlock?.toString(),
+			})),
+			pendingTransactions: state.pendingTransactions.map(intent => ({
+				...intent,
+				maxBlockNumber: intent.maxBlockNumber.toString(),
+				lastValidBlockNumber: intent.lastValidBlockNumber?.toString(),
+				nonce: intent.nonce.toString(),
+				receiptExpectation: intent.receiptExpectation.type === 'pending-liquidation' ? { ...intent.receiptExpectation, amount: intent.receiptExpectation.amount.toString() } : intent.receiptExpectation,
+				submissionBlock: intent.submissionBlock.toString(),
+			})),
+			version: 2,
+		})}\n`,
+	)
 }
