@@ -803,7 +803,7 @@ button.tx-action-wallet-fix {
 }
 
 .header-toolbar-navigation {
-	flex: 1 1 auto;
+	flex: 1 0 auto;
 	min-width: 0;
 }
 
@@ -962,6 +962,7 @@ button.tx-action-wallet-fix {
 }
 
 .header-toolbar-controls .toolbar-field {
+	flex-shrink: 0;
 	min-height: 2.5rem;
 }
 
@@ -1002,6 +1003,8 @@ button.tx-action-wallet-fix {
 
 /* Account popover: the full address, network facts, balances, prices, and wallet actions. */
 .account-menu-trigger {
+	max-width: 100%;
+	min-width: 0;
 	display: inline-flex;
 	align-items: center;
 	gap: 0.4rem;

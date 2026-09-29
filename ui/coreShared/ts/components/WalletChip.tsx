@@ -7,7 +7,7 @@ function chipClassName(tone: WalletChipTone, extra = '') {
 	return ['wallet-chip', tone === 'danger' ? 'is-danger' : '', extra].filter(Boolean).join(' ')
 }
 
-/** Abbreviated account identity for the toolbar; copies the full address on click. */
+/** Responsive account identity for the toolbar; copies the full address on click. */
 export function WalletChip({ address, tone = 'ok' }: { address: string; tone?: WalletChipTone }) {
 	return (
 		<span className={chipClassName(tone)}>

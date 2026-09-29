@@ -587,10 +587,6 @@ strong.metric-value-danger {
 	align-items: start;
 }
 
-.address-value-abbreviated {
-	display: none;
-}
-
 /* The context title can take programmatic focus after a route change; it shows the shared focus ring so keyboard and screen-reader users see where focus landed. */
 .sticky-object-context h3:focus-visible {
 	outline: 2px solid var(--accent);
@@ -682,14 +678,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 .global-transaction-hash > span:first-child {
 	color: var(--muted);
-}
-
-.global-transaction-notice .address-value-full {
-	display: none;
-}
-
-.global-transaction-notice .address-value-abbreviated {
-	display: inline;
 }
 
 .global-transaction-dialog {
@@ -1320,20 +1308,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		overflow-wrap: anywhere;
 		text-overflow: clip;
 		white-space: normal;
-	}
-
-	/* Narrow context strips show the abbreviated address when the value carries one instead of wrapping the full hash.
-	 * Only :has() can see the trailing abbreviated sibling from the full value, so the swap is gated on selector support.
-	 * Browsers without :has() keep the default state: the abbreviated copy stays hidden and the full value wraps
-	 * through the rule above, so the address is still complete and never rendered twice. */
-	@supports selector(:has(a)) {
-		.sticky-object-context-item .address-value-full:has(+ .address-value-abbreviated) {
-			display: none;
-		}
-
-		.sticky-object-context-item .address-value-abbreviated {
-			display: inline;
-		}
 	}
 
 	.action-readiness-panel-header {

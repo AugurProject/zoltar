@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { OutcomeHolding } from './OutcomeHolding.js'
 import { settlementAvailability } from '../protocol/settlement.js'
@@ -100,7 +101,7 @@ function hasPortfolioBalance(balances: LiveBalances) {
 	return balances.yes > 0n || balances.no > 0n || balances.invalid > 0n || balances.lp > 0n
 }
 
-type PortfolioWalletAction = Readonly<{ label: string; disabled: boolean; onClick(): void }>
+type PortfolioWalletAction = Readonly<{ label: ComponentChildren; disabled: boolean; onClick(): void }>
 
 export function LivePortfolio({
 	entries,

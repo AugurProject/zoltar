@@ -44,7 +44,7 @@ describe('AddressValue', () => {
 
 		const documentQueries = within(document.body)
 		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
-		expect(copyButton.childNodes[0]?.textContent).toBe(address)
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
 		expect(copyButton.getAttribute('aria-label')).toBe(`Copy address ${address}`)
 
 		await act(() => {
@@ -56,19 +56,33 @@ describe('AddressValue', () => {
 		expect(documentQueries.getByRole('status').textContent).toBe('Copied address')
 	})
 
-	test('keeps the complete address visible in constrained layouts', async () => {
-		const address = '0x1234567890abcdef1234567890abcdef12345678'
-		const renderedComponent = await renderIntoDocument(
-			<div style={{ width: '4rem' }}>
-				<AddressValue address={address} />
-			</div>,
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const documentQueries = within(document.body)
-
-		const copyButton = documentQueries.getByRole('button', { name: `Copy address ${address}` }) as HTMLButtonElement
-		expect(copyButton.textContent).toBe(address)
-		expect(copyButton.querySelector('.address-value-measure')).toBeNull()
+	test.each([true, false])('measures available space and responds to resizing with copyable=%s', async copyable => {
+		let resize = () => {}
+		const disconnect = mock(() => {})
+		const previousObserver = globalThis.ResizeObserver
+		Reflect.set(globalThis, 'ResizeObserver', function (callback: () => void) {
+			resize = callback
+			return { observe: () => {}, disconnect }
+		})
+		try {
+			const address = '0x1234567890abcdef1234567890abcdef12345678'
+			const rendered = await renderIntoDocument(<AddressValue address={address} copyable={copyable} />)
+			cleanupRenderedComponent = rendered.cleanup
+			const text = document.querySelector('.address-value-text')
+			const full = document.querySelector('.address-value-full')
+			if (!(text instanceof HTMLElement) || !(full instanceof HTMLElement)) throw new Error('Address measurement elements are missing')
+			Reflect.defineProperty(full, 'scrollWidth', { configurable: true, value: 420 })
+			for (const width of [420, 180, 500]) {
+				Reflect.defineProperty(text, 'clientWidth', { configurable: true, value: width })
+				await act(() => resize())
+				expect(text.getAttribute('data-abbreviated')).toBe(String(width < 420))
+			}
+			await rendered.cleanup()
+			cleanupRenderedComponent = undefined
+			expect(disconnect).toHaveBeenCalled()
+		} finally {
+			Reflect.set(globalThis, 'ResizeObserver', previousObserver)
+		}
 	})
 
 	test('provides a start-and-end abbreviation without changing the accessible name or copied value', async () => {
@@ -119,7 +133,7 @@ describe('AddressValue', () => {
 			fireEvent.click(copyButton)
 		})
 		const error = await waitFor(() => documentQueries.getByRole('alert'))
-		expect(copyButton.textContent).toBe(address)
+		expect(copyButton.querySelector('.address-value-full')?.textContent).toBe(address)
 		expect(error.textContent).toBe('Copy failed — select the value and copy it manually.')
 		expect(copyButton.getAttribute('aria-describedby')).toBe(error.id)
 		expect((documentQueries.getByLabelText('Exact value for manual copy') as HTMLInputElement).value).toBe(address)

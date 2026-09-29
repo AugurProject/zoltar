@@ -28,7 +28,7 @@ describe('header toolbar primitives', () => {
 		expect(toolbar?.querySelector('.toolbar-field .toolbar-field-value')?.textContent).toBe('Genesis')
 	})
 
-	test('abbreviates the account in the wallet chip while copying the full address', async () => {
+	test('provides responsive account text in the wallet chip while copying the full address', async () => {
 		const rendered = await renderIntoDocument(
 			<div>
 				<WalletChip address={address} />

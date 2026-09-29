@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
@@ -164,7 +164,7 @@ export function LiveTrading({
 		)
 	}
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
-	let walletActionLabel = account === undefined ? appCopy.connectWallet : abbreviateAddress(account, 6, 4)
+	let walletActionLabel = account === undefined ? appCopy.connectWallet : <ReadOnlyAddressValue address={account} />
 	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
 	// The workflow panels' first step: connect, or switch a connected wallet back to the deployment chain.
 	const ticketWallet = {
