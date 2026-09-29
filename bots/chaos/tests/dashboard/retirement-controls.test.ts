@@ -7,21 +7,31 @@ const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('google-chrome') ?? B
 const browserTest = existsSync(chromium) ? test : test.skip
 const wallet = `0x${'ab'.repeat(20)}`
 const profileId = `profile:v1:${'12'.repeat(32)}`
+const idleState = { activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused: true, pendingTransactions: [], profileId }
+const inertControls = {
+	hostname: '127.0.0.1' as const,
+	setCancellation: () => {},
+	setCandidate: () => {},
+	setObligation: () => {},
+	setPaused: () => {},
+	setReplacement: () => {},
+	setSettings: () => {},
+	setSigner: () => {},
+	setWorkflow: () => {},
+}
+
+function pausedSepoliaConfiguration(revision: string) {
+	return { hasSigner: true, revision, settings: { network: { chainId: 11_155_111, name: 'sepolia' }, paused: true, runtime: { execute: false }, strategy: {} }, signerAddress: wallet }
+}
 
 browserTest(
 	'shows signer destination and residual evidence across states and widths',
 	async () => {
 		let status = 'inactive'
 		const dashboard = startDashboardServer(0, {
-			getConfiguration: () => ({ hasSigner: true, revision: 'retirement-controls', settings: { network: { chainId: 11_155_111, name: 'sepolia' }, paused: true, runtime: { execute: false }, strategy: {} }, signerAddress: wallet }),
+			getConfiguration: () => pausedSepoliaConfiguration('retirement-controls'),
 			getState: () => ({
-				activities: [],
-				evaluations: [],
-				inventory: { rep: [] },
-				obligations: [],
-				paused: true,
-				pendingTransactions: [],
-				profileId,
+				...idleState,
 				retirement: {
 					blockers: [],
 					positions: [],
@@ -42,15 +52,7 @@ browserTest(
 				wallet,
 				workflows: [],
 			}),
-			hostname: '127.0.0.1',
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
-			setSettings: () => {},
-			setSigner: () => {},
-			setWorkflow: () => {},
+			...inertControls,
 		})
 		const browser = await startChromiumSession(chromium, { evaluationDefaults: { exceptions: 'ignore' } })
 		const { evaluate } = browser
@@ -138,15 +140,9 @@ browserTest(
 		const token1 = `0x${'44'.repeat(20)}`
 		const blockHash = `0x${'55'.repeat(32)}`
 		const dashboard = startDashboardServer(0, {
-			getConfiguration: () => ({ hasSigner: true, revision: 'retirement-review', settings: { network: { chainId: 11_155_111, name: 'sepolia' }, paused: true, runtime: { execute: false }, strategy: {} }, signerAddress: wallet }),
+			getConfiguration: () => pausedSepoliaConfiguration('retirement-review'),
 			getState: () => ({
-				activities: [],
-				evaluations: [],
-				inventory: { rep: [] },
-				obligations: [],
-				paused: true,
-				pendingTransactions: [],
-				profileId,
+				...idleState,
 				wallet,
 				workflows: [],
 				retirement: {
@@ -157,16 +153,8 @@ browserTest(
 					completionEvidence: status === 'drained-with-residuals' ? { blockHash, blockNumber: '123456', residuals: [{ amount: '20000000000000000', asset: 'REP', category: 'operator-accepted', reason: 'Old claim is no longer redeemable' }] } : undefined,
 				},
 			}),
-			hostname: '127.0.0.1',
-			setCancellation: () => {},
-			setCandidate: () => {},
-			setObligation: () => {},
-			setPaused: () => {},
-			setReplacement: () => {},
+			...inertControls,
 			setRetirement: value => requests.push(value),
-			setSettings: () => {},
-			setSigner: () => {},
-			setWorkflow: () => {},
 		})
 		const browser = await startChromiumSession(chromium, { evaluationDefaults: { attempts: 120, exceptions: 'ignore', intervalMilliseconds: 25 } })
 		const { evaluate } = browser
