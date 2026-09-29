@@ -115,6 +115,8 @@ describe('usePriceOracleManager', () => {
 			expect(requestOraclePrice).not.toHaveBeenCalled()
 			return
 		}
+		expect(onTransactionFailed.mock.calls).toEqual([])
+		expect(requireHookState(hookState).poolOracleManagerError).toBeUndefined()
 		expect(requestOraclePrice).toHaveBeenCalledTimes(1)
 		expect(requestOraclePrice).toHaveBeenCalledWith(expect.anything(), MANAGER_ADDRESS, proposedPrice ?? 1n, 0n, 1n)
 		expect(loadOracleManagerDetails).toHaveBeenCalledTimes(3)
