@@ -137,7 +137,7 @@ jobs:
           retention-days: 1
 
   solidity-tests:
-    name: Solidity tests (${{ matrix.shard }}/4)
+    name: Solidity tests (${{ matrix.shard }}/8)
     needs: timing-history-input
     if: inputs.solidity && needs.timing-history-input.result == 'success'
     runs-on: ubuntu-latest
@@ -145,7 +145,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
@@ -160,7 +160,7 @@ jobs:
         env:
           ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-solidity.json
           ZOLTAR_TEST_TIMING_OUTPUT: test-results/solidity-${{ matrix.shard }}.timing.json
-        run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=solidity --shard="${{ matrix.shard }}/4"
+        run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=solidity --shard="${{ matrix.shard }}/8"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

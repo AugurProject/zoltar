@@ -87,6 +87,8 @@ runs:
       with:
         path: ${{ steps.projects.outputs.component_artifact_outputs }}
         key: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}
+        # A fallback is only a compilation seed: cache-hit stays false, forcing regeneration below.
+        restore-keys: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-
 
     - name: Cache generated project outputs
       if: inputs.profile != 'root' && inputs.build-inputs == ''
