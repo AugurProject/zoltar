@@ -1,5 +1,14 @@
 import type { KnipConfig } from 'knip'
 
+// Workspaces two levels below the repository root resolve shared packages from their sources.
+const sharedPackagePaths = {
+	'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
+	'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
+	'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
+	'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
+	'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+}
+
 const config = (options => {
 	// Package scripts discover these in normal mode; production needs explicit roots.
 	const productionOnly = (patterns: string[]) => (options.production || options.strict ? patterns : [])
@@ -55,11 +64,7 @@ const config = (options => {
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!', '!ts/tests/**!'],
 				paths: {
 					'@zoltar/ui-core-shared/*': ['./ts/*'],
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+					...sharedPackagePaths,
 				},
 			},
 			'ui/zoltarShared': {
@@ -69,11 +74,7 @@ const config = (options => {
 				paths: {
 					'@zoltar/ui-core-shared/*': ['../coreShared/ts/*'],
 					'@zoltar/ui-zoltar-shared/*': ['./ts/*'],
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+					...sharedPackagePaths,
 				},
 			},
 			'ui/statoblastShared': {
@@ -84,11 +85,7 @@ const config = (options => {
 					'@zoltar/ui-core-shared/*': ['../coreShared/ts/*'],
 					'@zoltar/ui-zoltar-shared/*': ['../zoltarShared/ts/*'],
 					'@zoltar/ui-statoblast-shared/*': ['./ts/*'],
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+					...sharedPackagePaths,
 				},
 			},
 			'ui/zoltar': {
@@ -98,11 +95,7 @@ const config = (options => {
 					'@zoltar/ui-core-shared/*': ['../coreShared/ts/*'],
 					'@zoltar/ui-zoltar-shared/*': ['../zoltarShared/ts/*'],
 					'@zoltar/ui-zoltar/*': ['./ts/*'],
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+					...sharedPackagePaths,
 				},
 			},
 			'ui/statoblast': {
@@ -113,11 +106,7 @@ const config = (options => {
 					'@zoltar/ui-zoltar-shared/*': ['../zoltarShared/ts/*'],
 					'@zoltar/ui-statoblast-shared/*': ['../statoblastShared/ts/*'],
 					'@zoltar/ui-statoblast/*': ['./ts/*'],
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+					...sharedPackagePaths,
 				},
 			},
 			'ui/trading': {
@@ -128,11 +117,7 @@ const config = (options => {
 					'@zoltar/ui-zoltar-shared/*': ['../zoltarShared/ts/*'],
 					'@zoltar/ui-statoblast-shared/*': ['../statoblastShared/ts/*'],
 					'@zoltar/ui-trading/*': ['./ts/*'],
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
+					...sharedPackagePaths,
 				},
 			},
 			solidity: {
@@ -167,47 +152,23 @@ const config = (options => {
 				entry: ['src/dashboard/header-notices.ts!', 'tests/**/*.ts'],
 				includeEntryExports: true,
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
-				paths: {
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
-				},
+				paths: { ...sharedPackagePaths },
 			},
 			'bots/chaos': {
 				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/{dashboard,formatting,retirement-dashboard}.ts!'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
-				paths: {
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
-				},
+				paths: { ...sharedPackagePaths },
 			},
 			'bots/liquidator': {
 				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/dashboard.ts!'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
-				paths: {
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
-				},
+				paths: { ...sharedPackagePaths },
 			},
 			'bots/open-oracle-arbitrager': {
 				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/dashboard.ts!', 'docs/chart-runtime.ts!'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!', '!docs/chart-runtime.js'],
 				ignoreDependencies: ['prettier-plugin-solidity'],
-				paths: {
-					'@zoltar/core-shared/*': ['../../shared/core/ts/*'],
-					'@zoltar/zoltar-shared/*': ['../../shared/zoltar/ts/*'],
-					'@zoltar/open-oracle-shared/*': ['../../shared/openOracle/ts/*'],
-					'@zoltar/statoblast-shared/*': ['../../shared/statoblast/ts/*'],
-					'@zoltar/trading-shared/*': ['../../shared/trading/ts/*'],
-				},
+				paths: { ...sharedPackagePaths },
 			},
 			'shared/core': {
 				entry: ['ts/**/*.test.ts'],

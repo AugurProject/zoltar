@@ -57,10 +57,26 @@ let liveReloadQueued = false
 let liveReloadTimeout: NodeJS.Timeout | undefined
 
 const unwatchCallbacks: Array<() => void> = []
-let sharedSourceUnwatchCallbacks: Array<() => void> = []
-let typeScriptOutputUnwatchCallbacks: Array<() => void> = []
-let typeScriptSourceUnwatchCallbacks: Array<() => void> = []
-let contractSourceUnwatchCallbacks: Array<() => void> = []
+
+const createUnwatchGroup = () => {
+	let callbacks: Array<() => void> = []
+	return {
+		clear: () => {
+			for (const unwatch of callbacks) {
+				unwatch()
+			}
+			callbacks = []
+		},
+		register: (callback: () => void) => {
+			callbacks.push(callback)
+		},
+	}
+}
+
+const sharedSourceWatchers = createUnwatchGroup()
+const typeScriptOutputWatchers = createUnwatchGroup()
+const typeScriptSourceWatchers = createUnwatchGroup()
+const contractSourceWatchers = createUnwatchGroup()
 
 const waitForProcessExit = async (childProcess: ManagedProcess) => {
 	return await new Promise<{ exitCode: number | null; signalCode: NodeJS.Signals | null }>((resolve, reject) => {
@@ -186,6 +202,8 @@ const onTypeScriptWatchStderr = (chunk: Buffer) => {
 	process.stderr.write(chunk)
 }
 
+const toUiRelativePath = (filePath: string) => path.relative(UI_ROOT_PATH, filePath).replaceAll('\\', '/')
+
 const watchFileWithCleanup = (filePath: string, onChange: (relativePath: string) => void, registerUnwatch: (callback: () => void) => void) => {
 	let debounceTimeout: NodeJS.Timeout | undefined
 	const listener = (currentStat: fs.Stats, previousStat: fs.Stats) => {
@@ -193,8 +211,7 @@ const watchFileWithCleanup = (filePath: string, onChange: (relativePath: string)
 		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
 		debounceTimeout = setTimeout(() => {
 			debounceTimeout = undefined
-			const relativePath = path.relative(UI_ROOT_PATH, filePath).replaceAll('\\', '/')
-			onChange(relativePath)
+			onChange(toUiRelativePath(filePath))
 		}, 120)
 	}
 	fs.watchFile(filePath, { interval: 250 }, listener)
@@ -204,110 +221,36 @@ const watchFileWithCleanup = (filePath: string, onChange: (relativePath: string)
 	})
 }
 
-const clearTypeScriptOutputWatchers = () => {
-	for (const unwatch of typeScriptOutputUnwatchCallbacks) {
-		unwatch()
-	}
-	typeScriptOutputUnwatchCallbacks = []
-}
-
-const clearSharedSourceWatchers = () => {
-	for (const unwatch of sharedSourceUnwatchCallbacks) {
-		unwatch()
-	}
-	sharedSourceUnwatchCallbacks = []
-}
-
-const clearTypeScriptSourceWatchers = () => {
-	for (const unwatch of typeScriptSourceUnwatchCallbacks) {
-		unwatch()
-	}
-	typeScriptSourceUnwatchCallbacks = []
-}
-
-const clearContractSourceWatchers = () => {
-	for (const unwatch of contractSourceUnwatchCallbacks) {
-		unwatch()
-	}
-	contractSourceUnwatchCallbacks = []
-}
-
-const watchDirectoryForTypeScriptOutputs = (directoryPath: string, refreshWatchers: () => void) => {
-	let debounceTimeout: NodeJS.Timeout | undefined
-	const watcher = fs.watch(directoryPath, (_eventType, filename) => {
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		debounceTimeout = setTimeout(() => {
-			debounceTimeout = undefined
-			refreshWatchers()
-			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
-			queueLiveReload(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
-		}, 120)
-	})
-	typeScriptOutputUnwatchCallbacks.push(() => {
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		watcher.close()
-	})
-}
-
-const watchDirectoryForTypeScriptSources = (directoryPath: string, refreshWatchers: () => void) => {
-	let debounceTimeout: NodeJS.Timeout | undefined
-	const watcher = fs.watch(directoryPath, (_eventType, _filename) => {
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		debounceTimeout = setTimeout(() => {
-			debounceTimeout = undefined
-			refreshWatchers()
-		}, 120)
-	})
-	typeScriptSourceUnwatchCallbacks.push(() => {
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		watcher.close()
-	})
-}
-
-const watchDirectoryForSharedSources = (directoryPath: string, refreshWatchers: () => void) => {
+const watchDirectoryWithCleanup = (directoryPath: string, renameOnly: boolean, onChange: (changedPath: string) => void, registerUnwatch: (callback: () => void) => void) => {
 	let debounceTimeout: NodeJS.Timeout | undefined
 	const watcher = fs.watch(directoryPath, (eventType, filename) => {
-		if (eventType !== 'rename') return
+		if (renameOnly && eventType !== 'rename') return
 		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
 		debounceTimeout = setTimeout(() => {
 			debounceTimeout = undefined
-			refreshWatchers()
-			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
-			void runSharedBuild(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
+			onChange(typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath)
 		}, 120)
 	})
-	sharedSourceUnwatchCallbacks.push(() => {
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		watcher.close()
-	})
-}
-
-const watchDirectoryForContractSources = (directoryPath: string, refreshWatchers: () => void) => {
-	let debounceTimeout: NodeJS.Timeout | undefined
-	const watcher = fs.watch(directoryPath, (eventType, filename) => {
-		if (eventType !== 'rename') return
-		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
-		debounceTimeout = setTimeout(() => {
-			debounceTimeout = undefined
-			refreshWatchers()
-			const changedPath = typeof filename === 'string' && filename.length > 0 ? path.join(directoryPath, filename) : directoryPath
-			if (isWatchedContractSource(changedPath, REPOSITORY_ROOT_PATH, appId)) void runContractBuild(path.relative(UI_ROOT_PATH, changedPath).replaceAll('\\', '/'))
-		}, 120)
-	})
-	contractSourceUnwatchCallbacks.push(() => {
+	registerUnwatch(() => {
 		if (debounceTimeout !== undefined) clearTimeout(debounceTimeout)
 		watcher.close()
 	})
 }
 
 const refreshTypeScriptOutputWatchers = async () => {
-	clearTypeScriptOutputWatchers()
+	typeScriptOutputWatchers.clear()
 	for (const outputPath of TYPE_SCRIPT_OUTPUT_PATHS) {
 		const directories = await getAllDirectories(outputPath)
 		for (const directoryPath of directories) {
-			watchDirectoryForTypeScriptOutputs(directoryPath, () => {
-				void refreshTypeScriptOutputWatchers()
-			})
+			watchDirectoryWithCleanup(
+				directoryPath,
+				false,
+				changedPath => {
+					void refreshTypeScriptOutputWatchers()
+					queueLiveReload(toUiRelativePath(changedPath))
+				},
+				typeScriptOutputWatchers.register,
+			)
 		}
 		const files = await getAllFiles(outputPath)
 		for (const filePath of files) {
@@ -316,21 +259,25 @@ const refreshTypeScriptOutputWatchers = async () => {
 				relativePath => {
 					queueLiveReload(relativePath)
 				},
-				callback => {
-					typeScriptOutputUnwatchCallbacks.push(callback)
-				},
+				typeScriptOutputWatchers.register,
 			)
 		}
 	}
 }
 
 const refreshSharedSourceWatchers = async () => {
-	clearSharedSourceWatchers()
+	sharedSourceWatchers.clear()
 	const directories = (await Promise.all(SHARED_SOURCE_ROOT_PATHS.map(sourceRoot => getAllDirectories(sourceRoot)))).flat()
 	for (const directoryPath of directories) {
-		watchDirectoryForSharedSources(directoryPath, () => {
-			void refreshSharedSourceWatchers()
-		})
+		watchDirectoryWithCleanup(
+			directoryPath,
+			true,
+			changedPath => {
+				void refreshSharedSourceWatchers()
+				void runSharedBuild(toUiRelativePath(changedPath))
+			},
+			sharedSourceWatchers.register,
+		)
 	}
 	const files = (await Promise.all(SHARED_SOURCE_ROOT_PATHS.map(sourceRoot => getAllFiles(sourceRoot)))).flat()
 	for (const filePath of files) {
@@ -339,21 +286,24 @@ const refreshSharedSourceWatchers = async () => {
 			relativePath => {
 				void runSharedBuild(relativePath)
 			},
-			callback => {
-				sharedSourceUnwatchCallbacks.push(callback)
-			},
+			sharedSourceWatchers.register,
 		)
 	}
 }
 
 const refreshTypeScriptSourceWatchers = async () => {
-	clearTypeScriptSourceWatchers()
+	typeScriptSourceWatchers.clear()
 	for (const sourcePath of TYPE_SCRIPT_SOURCE_PATHS) {
 		const directories = await getAllDirectories(sourcePath)
 		for (const directoryPath of directories) {
-			watchDirectoryForTypeScriptSources(directoryPath, () => {
-				void refreshTypeScriptSourceWatchers()
-			})
+			watchDirectoryWithCleanup(
+				directoryPath,
+				false,
+				() => {
+					void refreshTypeScriptSourceWatchers()
+				},
+				typeScriptSourceWatchers.register,
+			)
 		}
 		const files = await getAllFiles(sourcePath)
 		for (const filePath of files) {
@@ -362,21 +312,25 @@ const refreshTypeScriptSourceWatchers = async () => {
 				relativePath => {
 					void runWorkerBuild(relativePath)
 				},
-				callback => {
-					typeScriptSourceUnwatchCallbacks.push(callback)
-				},
+				typeScriptSourceWatchers.register,
 			)
 		}
 	}
 }
 
 const refreshContractSourceWatchers = async () => {
-	clearContractSourceWatchers()
+	contractSourceWatchers.clear()
 	const directories = await getAllDirectories(SOLIDITY_CONTRACTS_ROOT_PATH)
 	for (const directoryPath of directories) {
-		watchDirectoryForContractSources(directoryPath, () => {
-			void refreshContractSourceWatchers()
-		})
+		watchDirectoryWithCleanup(
+			directoryPath,
+			true,
+			changedPath => {
+				void refreshContractSourceWatchers()
+				if (isWatchedContractSource(changedPath, REPOSITORY_ROOT_PATH, appId)) void runContractBuild(toUiRelativePath(changedPath))
+			},
+			contractSourceWatchers.register,
+		)
 	}
 	const files = (await getAllFiles(SOLIDITY_CONTRACTS_ROOT_PATH)).filter(filePath => isWatchedContractSource(filePath, REPOSITORY_ROOT_PATH, appId))
 	for (const filePath of files) {
@@ -385,9 +339,7 @@ const refreshContractSourceWatchers = async () => {
 			relativePath => {
 				void runContractBuild(relativePath)
 			},
-			callback => {
-				contractSourceUnwatchCallbacks.push(callback)
-			},
+			contractSourceWatchers.register,
 		)
 	}
 }
@@ -697,10 +649,10 @@ const shutdown = async (exitCode: number) => {
 	for (const unwatch of unwatchCallbacks) {
 		unwatch()
 	}
-	clearSharedSourceWatchers()
-	clearTypeScriptOutputWatchers()
-	clearTypeScriptSourceWatchers()
-	clearContractSourceWatchers()
+	sharedSourceWatchers.clear()
+	typeScriptOutputWatchers.clear()
+	typeScriptSourceWatchers.clear()
+	contractSourceWatchers.clear()
 	await stopProcess(sharedBuildProcess)
 	await stopProcess(vendorBuildProcess)
 	await stopProcess(workerBuildProcess)
