@@ -46,7 +46,8 @@ import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/
 import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients.js'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast.js'
 import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar.js'
-import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.js'
+import { createQuestion } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData.js'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { getOpenOracleExtraData, getOpenOracleReportMeta, getRequestPriceCostAttoEth, requestPriceWithValue } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblast.js'
 
 function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {

@@ -16,7 +16,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
 		['bots/chaos/src/dashboard/dashboard.ts', 1692],
 		['bots/chaos/src/monitoring/discovery.ts', 1019],
-		['bots/chaos/src/operations/trading.ts', 1726],
+		['bots/chaos/src/operations/trading.ts', 1720],
 		['bots/chaos/src/state/operator-state.ts', 1170],
 		['bots/chaos/src/runtime/operator.ts', 870],
 		['bots/chaos/src/monitoring/topology-cache.ts', 1036],
@@ -25,7 +25,6 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['bots/chaos/src/operations/open-oracle.ts', 1024],
 		['bots/chaos/src/execution/recovery.ts', 643],
 		['bots/chaos/src/monitoring/protocol-index.ts', 699],
-		['bots/chaos/src/operations/zoltar.ts', 618],
 	]),
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [
 		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1173],
@@ -65,7 +64,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['docs/charts/chartRuntime.ts', 1111],
 		['docs/runtime/interactiveTools.ts', 616],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
-		['solidity/ts/gas-costs.ts', 724],
+		['solidity/ts/gas-costs.ts', 714],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 623],
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 771]]),

@@ -1,5 +1,5 @@
 import type { CentralizedMarketEstimate, CentralizedMarketObservation, CentralizedMarketSettings } from './centralized-markets.ts'
-import { compareBigint } from '../infrastructure/compare.ts'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 
 const BPS = 10_000n
 

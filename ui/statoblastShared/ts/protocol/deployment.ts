@@ -167,21 +167,7 @@ export function getDeploymentSteps(profile: NetworkProfile = getRuntimeNetworkPr
 			label: 'Security Pool Factory',
 			address: addresses.securityPoolFactory,
 			dependencies: ['proxyDeployer', 'securityPoolForker', 'securityPoolOperationsDelegate', 'zoltarQuestionData', 'escalationGameFactory', 'openOracle', 'zoltar', 'shareTokenFactory', 'uniformPriceDualCapBatchAuctionFactory', 'priceOracleManagerAndOperatorQueuerFactory', 'securityPoolUtils'],
-			deploy: async client =>
-				await deployViaProxy(
-					client,
-					getSecurityPoolFactoryByteCode({
-						escalationGameFactory: addresses.escalationGameFactory,
-						openOracle: addresses.openOracle,
-						priceOracleManagerAndOperatorQueuerFactory: addresses.priceOracleManagerAndOperatorQueuerFactory,
-						securityPoolForker: addresses.securityPoolForker,
-						securityPoolOperationsDelegate: addresses.securityPoolOperationsDelegate,
-						shareTokenFactory: addresses.shareTokenFactory,
-						uniformPriceDualCapBatchAuctionFactory: addresses.uniformPriceDualCapBatchAuctionFactory,
-						zoltar: addresses.zoltar,
-						zoltarQuestionData: addresses.zoltarQuestionData,
-					}),
-				),
+			deploy: async client => await deployViaProxy(client, getSecurityPoolFactoryByteCode(addresses)),
 		},
 	]
 	return withExpectedDeploymentRuntimeCodeHashes(steps, profile).map(step => ({

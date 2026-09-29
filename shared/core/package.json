@@ -62,6 +62,21 @@
 			"types": "./ts/monitoring/scanStatus.ts",
 			"bun": "./ts/monitoring/scanStatus.ts",
 			"default": "./js/monitoring/scanStatus.js"
+		},
+		"./evm/availability": {
+			"types": "./ts/evm/availability.ts",
+			"bun": "./ts/evm/availability.ts",
+			"default": "./js/evm/availability.js"
+		},
+		"./evm/uniswapAbis": {
+			"types": "./ts/evm/uniswapAbis.ts",
+			"bun": "./ts/evm/uniswapAbis.ts",
+			"default": "./js/evm/uniswapAbis.js"
+		},
+		"./validation/guards": {
+			"types": "./ts/validation/guards.ts",
+			"bun": "./ts/validation/guards.ts",
+			"default": "./js/validation/guards.js"
 		}
 	},
 	"files": [

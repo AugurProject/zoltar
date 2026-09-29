@@ -5,6 +5,7 @@ import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBa
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidity, submitFreshEntry, submitFreshExit, submitFreshLiquidity, type LiveMarket } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
+import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const pool = `0x${'22'.repeat(20)}` as Address
@@ -14,28 +15,6 @@ const blockHash = `0x${'55'.repeat(32)}` as Hex
 const transactionHash = `0x${'66'.repeat(32)}` as Hex
 const routerAbi = tradingContracts['contracts/trading/TwoWayConstantProductRouter.sol'].TwoWayConstantProductRouter.abi
 const pairAbi = tradingContracts['contracts/trading/TwoWayConstantProductPair.sol'].TwoWayConstantProductPair.abi
-const receiveRequestParameter = {
-	type: 'tuple',
-	components: [
-		{ name: 'version', type: 'uint8' },
-		{ name: 'operation', type: 'uint8' },
-		{ name: 'shareToken', type: 'address' },
-		{ name: 'securityPool', type: 'address' },
-		{ name: 'pair', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'questionId', type: 'uint256' },
-		{ name: 'invalidTokenId', type: 'uint256' },
-		{ name: 'yesTokenId', type: 'uint256' },
-		{ name: 'noTokenId', type: 'uint256' },
-		{ name: 'longOutcome', type: 'uint8' },
-		{ name: 'completeSetShares', type: 'uint256' },
-		{ name: 'maxLongSharesIn', type: 'uint256' },
-		{ name: 'minEthOut', type: 'uint256' },
-		{ name: 'payoutRecipient', type: 'address' },
-		{ name: 'refundRecipient', type: 'address' },
-		{ name: 'deadline', type: 'uint256' },
-	],
-} as const
 const shareTransferAbi = [
 	{
 		type: 'function',

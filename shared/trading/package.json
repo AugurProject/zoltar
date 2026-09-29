@@ -12,6 +12,11 @@
 			"types": "./ts/trading/positions.ts",
 			"bun": "./ts/trading/positions.ts",
 			"default": "./js/trading/positions.js"
+		},
+		"./trading/receiveRequest": {
+			"types": "./ts/trading/receiveRequest.ts",
+			"bun": "./ts/trading/receiveRequest.ts",
+			"default": "./js/trading/receiveRequest.js"
 		}
 	},
 	"files": [

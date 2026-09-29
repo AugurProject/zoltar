@@ -1,5 +1,6 @@
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
-import { getQuestionId, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useSignal } from '@preact/signals'
 import { useEffect } from 'preact/hooks'

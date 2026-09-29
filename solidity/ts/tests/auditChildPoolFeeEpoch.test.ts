@@ -5,7 +5,8 @@ import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
 import { getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { forkUniverse, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import {
 	createCompleteSet,
 	getAwaitingForkContinuation,
