@@ -12,7 +12,7 @@ import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, type NetworkProfile }
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { createBootstrappedSimulationBackendWithRetry, resetSelectedAccountAndTransactionDelay, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { parseSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/tests/testUtils/savedSimulationStates.js'
+import { parseSavedSimulationStateEnvelope } from '@zoltar/ui-core-shared/tests/simulation/savedStateStorage.js'
 
 const DEFAULT_SIMULATION_REP_PER_ETH_PRICE = 3n * 10n ** 18n
 // The simulation clock starts at 2025-01-01T00:00:00Z and advances one second per block.

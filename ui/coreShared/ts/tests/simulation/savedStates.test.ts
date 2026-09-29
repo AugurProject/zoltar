@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
-import { parseSavedSimulationStateEnvelope } from '../testUtils/savedSimulationStates.js'
+import { parseSavedSimulationStateEnvelope } from './savedStateStorage.js'
 
 function createSerializedSavedState({ name, savedAt }: { name: string; savedAt: string }) {
 	return serializeSavedSimulationStateEnvelope({
