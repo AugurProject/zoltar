@@ -23,6 +23,7 @@ export function PriceRequestPreview({
 	hideReason,
 	onClose,
 	failedPlan,
+	onRetry,
 }: {
 	requestValue: bigint | undefined
 	reason: string
@@ -33,16 +34,17 @@ export function PriceRequestPreview({
 	hideReason: boolean
 	onClose: () => void
 	failedPlan?: FailedPricePlan | undefined
+	onRetry?: (() => void) | undefined
 }) {
 	const reasonId = useId()
 	const errorRef = useRef<HTMLDivElement>(null)
 	const actionButtonRef = useRef<HTMLButtonElement>(null)
-	const availability = { disabled: true, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
+	const availability = { disabled: onRetry === undefined, reason, walletBlocker: error === undefined ? undefined : errorWalletBlocker }
 	useEffect(() => {
 		if (error !== undefined) errorRef.current?.scrollIntoView?.({ block: 'nearest' })
 	}, [error])
 	// While preparing, the primary action carries the busy state so the feedback slot stays empty and the actions do not move.
-	const reasonHidden = hideReason || preparing
+	const reasonHidden = hideReason || preparing || onRetry !== undefined
 	let visibleFeedback = undefined
 	if (error !== undefined) {
 		visibleFeedback = <InlineHint id={reasonId} message={error} role='alert' />
@@ -53,9 +55,8 @@ export function PriceRequestPreview({
 	if (preparing) estimatePrompt = priceRequestCopy.preparingPriceRequest
 	return (
 		<>
-			{failedPlan === undefined ? (
-				<p className='detail price-request-estimate-prompt'>{estimatePrompt}</p>
-			) : (
+			{failedPlan === undefined && onRetry === undefined ? <p className='detail price-request-estimate-prompt'>{estimatePrompt}</p> : undefined}
+			{failedPlan === undefined ? undefined : (
 				<div className='transaction-step-content'>
 					<TransactionFundingSummary funding={failedPlan.funding} totalAttoEth={failedPlan.totalAttoEth} outcome={failedPlan.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
 					<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
@@ -64,7 +65,7 @@ export function PriceRequestPreview({
 			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>
 				<div className='tx-action-group'>
 					{/* A hidden reason lives outside the feedback container so the empty container collapses instead of reserving space. */}
-					{error === undefined && reasonHidden ? (
+					{error === undefined && reasonHidden && onRetry === undefined ? (
 						<div className='visually-hidden'>
 							<InlineHint id={reasonId} message={reason} />
 						</div>
@@ -84,7 +85,7 @@ export function PriceRequestPreview({
 								}
 								pending={preparing}
 								pendingLabel={priceRequestCopy.preparingPriceRequest}
-								onClick={() => undefined}
+								onClick={() => onRetry?.()}
 								actionButtonRef={actionButtonRef}
 								availability={availability}
 								disabledReasonElementId={reasonId}
