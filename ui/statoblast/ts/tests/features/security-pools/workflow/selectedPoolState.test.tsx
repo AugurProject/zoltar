@@ -423,7 +423,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await renderLoadedPool({
 			securityPools: [createSelectedPool({ vaultCount: 1n, vaults: [createSecurityPoolVaultSummary({ vaultAddress })] })],
 			securityVault: createSecurityVaultProps({
-				onRedeemFees: () => { claims += 1 },
+				onRedeemFees: () => {
+					claims += 1
+				},
 				accountState: createAccountState({ address: vaultAddress }),
 				selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
 				securityVaultDetails: createSecurityVaultDetails({ vaultAddress }),
