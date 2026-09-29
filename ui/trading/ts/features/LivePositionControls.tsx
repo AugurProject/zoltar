@@ -77,8 +77,8 @@ function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO'
 	const holding = side === 'YES' ? holdings?.yes : holdings?.no
 	if (holding === undefined || model.sellable === undefined) return undefined
 	// The sellable amount only needs saying when INVALID coverage or pool depth holds it below the holding.
-	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeQuantity(holding, side))
-	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
+	if (model.sellable >= holding) return ticketCopy.holdingHint(formatOutcomeQuantity(holding, side, 4, 'down'))
+	return ticketCopy.sellableHint(formatOutcomeQuantity(holding, side, 4, 'down'), formatOutcomeQuantity(model.sellable, side, 4, 'down'))
 }
 
 function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { model: TradeTicketModel; side: 'YES' | 'NO'; disabled: boolean; onUseSellable(value: string): void }) {
@@ -135,15 +135,15 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 			<ul className='portfolio-holdings trade-holdings' aria-busy={holdings.balanceState === 'loading'}>
 				<li className={`portfolio-holding-yes ${side === 'YES' ? 'selected-holding' : ''}`} data-outcome='yes'>
 					<span className='holding-quantity'>{walletBalanceLabel(holdings.balances?.yes, workflowCopy.yes, holdings.balanceState)}</span>
-					{holdings.balances === undefined ? <small className='payout-caption'>{workflowCopy.walletYes}</small> : undefined}
+					<small className='payout-caption'>{workflowCopy.walletYes}</small>
 				</li>
 				<li className={`portfolio-holding-no ${side === 'NO' ? 'selected-holding' : ''}`} data-outcome='no'>
 					<span className='holding-quantity'>{walletBalanceLabel(holdings.balances?.no, workflowCopy.no, holdings.balanceState)}</span>
-					{holdings.balances === undefined ? <small className='payout-caption'>{workflowCopy.walletNo}</small> : undefined}
+					<small className='payout-caption'>{workflowCopy.walletNo}</small>
 				</li>
 				<li data-outcome='invalid'>
 					<span className='holding-quantity'>{walletBalanceLabel(holdings.balances?.invalid, 'INVALID', holdings.balanceState)}</span>
-					{holdings.balances === undefined ? <small className='payout-caption'>{workflowCopy.walletInvalid}</small> : undefined}
+					<small className='payout-caption'>{workflowCopy.walletInvalid}</small>
 				</li>
 			</ul>
 			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}

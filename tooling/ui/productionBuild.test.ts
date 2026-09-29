@@ -3,6 +3,7 @@ import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
 import { createDeferred } from '../../ui/coreShared/ts/tests/testUtils/deferred.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { waitForChromiumDevToolsPort } from './chromiumDevTools.mts'
@@ -1056,12 +1057,12 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		{ width: 390, height: 844 },
 	]) {
 		await driver.resize(viewport)
-		await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
 		await driver.waitForBodyText('Enter a starting price')
 		expect(await driver.evaluate("document.querySelector('.transaction-funding') === null")).toBe(true)
 		const emptyGeometry = await priceDialogGeometry()
 		const emptyInputWidth = await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")
-		await driver.setInputByLabel('Open Oracle REP/ETH starting price', 'a')
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, 'a')
 		await driver.waitForBodyText('Enter a positive REP per ETH price')
 		if (viewport.width > 600) expect(await driver.evaluate("Math.round(document.querySelector('.request-price-fields input')?.getBoundingClientRect().width ?? 0)")).toBe(emptyInputWidth)
 		else {
@@ -1070,7 +1071,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 			).toBe(true)
 			expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
 		}
-		await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
 		await driver.clickButton('Fetch from Uniswap')
 		expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 		await driver.waitForButtonEnabled('Fetch from Uniswap')
@@ -1079,17 +1080,17 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
 		expect(await driver.evaluate("document.querySelectorAll('.approval-amount-field input:disabled').length")).toBe(2)
 		expect(await driver.evaluate("document.querySelector('[role=dialog]')?.scrollWidth <= document.querySelector('[role=dialog]')?.clientWidth")).toBe(true)
-		await driver.setInputByLabel('Open Oracle REP/ETH starting price', '2')
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '2')
 		await driver.waitForBodyText('Preparing funding and approvals…')
 		await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 		expect(await driver.evaluate("[...document.querySelectorAll('.transaction-plan-action .tx-action-completed button:disabled')].map(button => button.textContent?.trim())")).toEqual(['WETH approved ✓', 'REP approved ✓'])
-		await driver.setInputByLabel('Open Oracle REP/ETH starting price', '')
+		await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '')
 		await driver.waitForBodyText('Enter a starting price')
 		expect(await priceDialogGeometry()).toEqual(emptyGeometry)
 	}
 	await driver.resize({ width: 1440, height: 900 })
 	expect(await driver.evaluate('document.querySelectorAll(\'[role="dialog"]\').length')).toBe(1)
-	await driver.setInputByLabel('Open Oracle REP/ETH starting price', '3')
+	await driver.setInputByLabel(securityPoolCopy.manualRepPerEth, '3')
 	await driver.waitForBodyText('Preparing funding and approvals…')
 	await driver.waitForBodyWithoutText('Preparing funding and approvals…')
 	await completeTransactionReview('Requested new price')

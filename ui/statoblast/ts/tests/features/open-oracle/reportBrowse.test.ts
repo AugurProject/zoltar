@@ -56,7 +56,7 @@ void describe('Open Oracle report browse cache', () => {
 			currentTime: 200n,
 			disputeDelay: 60n,
 			escalationHalt: 1n,
-			fee: 1n,
+
 			feePercentage: 1n,
 			initialReporter: undefined,
 			lastReportOppoTime: 0n,

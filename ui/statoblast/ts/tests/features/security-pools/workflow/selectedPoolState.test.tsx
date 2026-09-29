@@ -688,7 +688,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect((documentQueries.getByRole('button', { name: 'Withdraw REP' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBeNull()
 		expect(getTransactionButtonState(document.body, 'Claim fees').reason).toBeUndefined()
 		expect((documentQueries.getByRole('button', { name: 'Claim fees' }) as HTMLButtonElement).getAttribute('aria-describedby')).toBeNull()
-		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBeUndefined()
+		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBe('Loading vault details…')
 	})
 
 	test('shows an Ended badge, allows REP redemption, and blocks ended-pool settlement-collateral actions in the vault workflow', async () => {
@@ -733,7 +733,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
 		expectTransactionButtonDisabled(document.body, 'Review liquidation')
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.')
-		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBeUndefined()
+		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBe('Liquidation is unavailable in this pool state.')
 	})
 
 	test('shows a vault-missing notice and hides the embedded summary for an empty selected vault', async () => {
@@ -784,7 +784,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
-	test('keeps Review liquidation silently disabled when the wallet is disconnected', async () => {
+	test('explains why liquidation requires a connected wallet', async () => {
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b6')
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
@@ -820,7 +820,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'By address' })))
 		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement
 		expect(reviewLiquidationButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBeUndefined()
+		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBe('Connect a wallet to review liquidation.')
 
 		await act(() => {
 			fireEvent.click(reviewLiquidationButton)
@@ -829,13 +829,17 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
-	test('keeps Review liquidation silently disabled for a vault owned by another account', async () => {
+	test('enables liquidation of another account’s vault', async () => {
+		let openedTarget: string | undefined
 		const selectedPoolAddress = getAddress('0x00000000000000000000000000000000000000b7')
 		const otherVaultAddress = getAddress('0x00000000000000000000000000000000000000b8')
 		const renderedComponent = await renderIntoDocument(
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
 					accountState: createAccountState({ address: zeroAddress }),
+					onOpenLiquidationModal: (_manager, _pool, target) => {
+						openedTarget = target
+					},
 					checkedSecurityPoolAddress: selectedPoolAddress,
 					poolOracleManagerDetails: createOracleManagerDetails({
 						isPriceValid: true,
@@ -865,14 +869,14 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: /^(My vault|Vault details)$/ })))
 		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Review liquidation' }) as HTMLButtonElement
-		expect(reviewLiquidationButton.disabled).toBe(true)
+		expect(reviewLiquidationButton.disabled).toBe(false)
 		expect(getTransactionButtonState(document.body, 'Review liquidation').reason).toBeUndefined()
 
 		await act(() => {
 			fireEvent.click(reviewLiquidationButton)
 		})
 
-		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
+		expect(openedTarget).toBe(otherVaultAddress)
 	})
 
 	test('treats an escrowed-only vault as existing', async () => {
@@ -909,7 +913,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'My vault' })).not.toBeNull()
-		expectTransactionButtonEnabled(document.body, 'Review liquidation')
+		expectTransactionButtonDisabled(document.body, 'Review liquidation', 'Choose another vault to liquidate.')
 	})
 
 	test('keeps the duplicate summary absent after fork migration starts', async () => {

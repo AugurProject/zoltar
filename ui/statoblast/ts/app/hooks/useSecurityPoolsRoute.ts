@@ -191,7 +191,7 @@ export function useSecurityPoolsRoute({
 		securityPoolsFreshness,
 	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
-	useBlockRefresh(() => void refreshSecurityPools(), route === 'security-pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
+	useBlockRefresh(() => void refreshSecurityPools(), route === 'pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const openedPoolSummary = useMemo(() => (selectedPool === undefined ? undefined : toCachedSecurityPool(selectedPool)), [selectedPool])
 	useRememberOpenedEntity('statoblast', 'pool', securityPoolDownloadStore, selectedPool?.securityPoolAddress, openedPoolSummary)

@@ -133,7 +133,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		disputeOccurred: false,
 		escalationHalt: 5n * 10n ** 17n,
 		exactToken1Report: 10n ** 18n,
-		fee: 10n ** 15n,
+
 		feePercentage: 1000000000000000n,
 		initialReporter: zeroAddress,
 		isDistributed: false,
@@ -411,6 +411,15 @@ function renderSettleActionSection({
 }
 
 void describe('OpenOracleSection', () => {
+	test('announces a create failure exactly once', async () => {
+		const rendered = await renderBrowseSection({ activeView: 'create', openOracleError: 'Create request failed' })
+		try {
+			expect([...rendered.container.querySelectorAll('[role="alert"]')].filter(node => node.textContent?.includes('Create request failed'))).toHaveLength(1)
+		} finally {
+			await rendered.cleanup()
+		}
+	})
+
 	void test('renders block-based report clocks as blocks instead of timestamps', async () => {
 		const domEnvironment = installDomEnvironment()
 		const rendered = await renderIntoDocument(

@@ -46,6 +46,6 @@ export const marketsCopy = {
 	contracts: 'Contracts',
 	shareToken: 'Share token',
 	ticket: 'Trade ticket',
-	openTicket: (label: string) => `Open ${label}`,
+	openTicket: (label: string) => `Open ${label.toLowerCase()}`,
 	closeTicket: 'Close ticket',
 } as const

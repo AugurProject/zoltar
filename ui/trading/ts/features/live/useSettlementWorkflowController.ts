@@ -32,6 +32,7 @@ export function useSettlementWorkflowController({
 	createGuardedWalletWrite,
 	onWorkflowLockChange,
 	onMigrationConfirmed,
+	onRedemptionConfirmed,
 	services,
 }: {
 	configuration: DeploymentConfiguration
@@ -54,6 +55,7 @@ export function useSettlementWorkflowController({
 	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	onWorkflowLockChange(locked: boolean): void
 	onMigrationConfirmed(): void
+	onRedemptionConfirmed?(): void
 	services: LiveSettlementServices
 }) {
 	const simulationParameters = (): Readonly<{ amount?: bigint; validityMinutes?: bigint; slippageBps?: bigint; sourceOutcome?: ShareOutcome; targetOutcomeIndexes?: readonly bigint[] }> => {
@@ -100,6 +102,7 @@ export function useSettlementWorkflowController({
 				return await services.submit(walletClient, configuration, account, prepared, async write => await guarded(async () => await requestSignature(write)))
 			},
 			afterConfirmed: async prepared => {
+				if (prepared.operation !== 'migrate-shares') onRedemptionConfirmed?.()
 				await refresh()
 				if (prepared.operation === 'migrate-shares') onMigrationConfirmed()
 			},

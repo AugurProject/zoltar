@@ -18,6 +18,7 @@ interface DetailState {
 	readonly routeKey: string
 	readonly items: readonly JsonRecord[]
 	readonly decisionItems: readonly JsonRecord[]
+	readonly activityItems: readonly JsonRecord[]
 	readonly riskHistoryOffset: number
 }
 

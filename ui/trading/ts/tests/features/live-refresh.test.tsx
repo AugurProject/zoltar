@@ -9,6 +9,7 @@ import { LiveTrading } from '../../features/LiveTrading.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import { largestExitForLongShares } from '@zoltar/trading-shared/trading/positions'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -105,6 +106,8 @@ describe('live market refresh', () => {
 		let discoveredMarket = market
 		let discoveries = 0
 		let balanceLoads = 0
+		const walletSummaries: WalletSummaryState[] = []
+		const observeWallet = (summary: WalletSummaryState) => walletSummaries.push(summary)
 		let yesBalance = 3n * 10n ** 18n
 		const exitRequests: bigint[] = []
 		let failExitSimulation = false
@@ -163,7 +166,7 @@ describe('live market refresh', () => {
 		}
 		stopBlocks?.()
 		stopBlocks = produceBlocks(40)
-		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
+		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} onWalletSummaryChange={observeWallet} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => button('Connect wallet').click())
 		await waitForDom(() => walletHolding('Wallet YES') === '3 YES', 'wallet balances shown as collateral value')
@@ -176,6 +179,8 @@ describe('live market refresh', () => {
 		expect(document.body.textContent).not.toContain('Loading balances')
 
 		// Background refreshes keep the loaded balances on screen and pick up market changes.
+		await waitForDom(() => walletSummaries.at(-1)?.ethAttoEth === 5n * 10n ** 18n, 'wallet ETH balance')
+		walletSummaries.length = 0
 		const discoveriesBeforeBackgroundRefresh = discoveries
 		const balanceLoadsBeforeBackgroundRefresh = balanceLoads
 		discoveredMarket = { ...market, yesReserve: 25n * 10n ** 18n, noReserve: 75n * 10n ** 18n }
@@ -186,6 +191,8 @@ describe('live market refresh', () => {
 		}, 'background market refresh')
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeBackgroundRefresh)
 		expect([...observedBalanceLabels]).toEqual(['3 YES'])
+		expect(walletSummaries.length).toBeGreaterThan(0)
+		expect(walletSummaries.every(summary => summary.ethAttoEth === 5n * 10n ** 18n)).toBeTrue()
 		expect(document.querySelector('[aria-busy="true"]')).toBeNull()
 
 		// The estimate needs no preview step: it follows the typed amount and re-prices when the reserves move.

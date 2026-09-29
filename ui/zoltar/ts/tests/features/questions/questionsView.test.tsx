@@ -109,7 +109,7 @@ describe('QuestionsView', () => {
 		expect(document.body.textContent).not.toContain('Security Pool')
 
 		await act(() => {
-			fireEvent.click(documentQueries.getByRole('button', { name: 'Use for fork' }))
+			fireEvent.click(documentQueries.getByRole('button', { name: `Use for fork: ${question.title} (${question.questionId})` }))
 		})
 		expect(selectedQuestionIds).toEqual([question.questionId])
 		expect(activeViews).toEqual(['fork'])

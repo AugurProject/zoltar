@@ -6,7 +6,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { LiveSettlementControls } from '../../features/LiveSettlementControls.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { ForkMigrationContext } from '../../protocol/forks.js'
-import type { LiveMarket } from '../../protocol/live.js'
+import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 // Longer than the automatic quote debounce in useQuotedTransaction.
 const QUOTE_SETTLE_MILLISECONDS = 400
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
@@ -89,6 +89,63 @@ describe('live fork settlement context', () => {
 			cleanupRendered = undefined
 		},
 		url: 'http://localhost/?demo=0#/market',
+	})
+
+	test('clears a confirmed complete-set redemption before refreshed balances can re-enable it', async () => {
+		const liveMarket = { ...market, systemState: 0, universeForkTime: 0n, tradingStatus: 0 }
+		const publicClient = createPublicClient({ transport: custom({ request: async () => undefined }) })
+		const baseWallet = createWalletClient({ account, transport: custom({ request: async () => undefined }) })
+		const walletClient = { ...baseWallet, waitForTransactionReceipt: async () => ({ status: 'success' as const }) }
+		let submissions = 0
+		const rendered = await renderIntoDocument(
+			<LiveSettlementControls
+				configuration={configuration}
+				market={liveMarket}
+				balances={{ scope: shareBalanceScope(liveMarket), invalid: 10n ** 18n, yes: 10n ** 18n, no: 10n ** 18n, lp: 0n }}
+				balanceState='ready'
+				balanceError={undefined}
+				account={account}
+				walletClient={walletClient}
+				networkMismatchReason={undefined}
+				wallet={{ actionLabel: 'Connect wallet', connect: async () => undefined }}
+				settings={DEFAULT_TRADE_SETTINGS}
+				externallyLocked={false}
+				refresh={async () => undefined}
+				onKnownReceipt={() => undefined}
+				executeWithCurrentWalletContext={async (_account, _network, _wallet, action) => await action()}
+				createGuardedWalletWrite={() => async write => await write()}
+				retryBalances={async () => undefined}
+				onWorkflowLockChange={() => undefined}
+				services={{
+					createPublicClient: () => publicClient,
+					loadForkContext: async () => forkContext,
+					simulate: async (_client, _configuration, quoteMarket, _account, _operation, parameters) => ({ blockNumber: 12n, blockHash, operation: 'redeem-complete-set', market: quoteMarket, amount: parameters.amount ?? 0n, deadline: 1000n, slippageBps: 50n, expectedAttoEth: 1n, minimumAttoEth: 1n }),
+					submit: async () => {
+						submissions++
+						return transactionHash
+					},
+				}}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		const input = document.querySelector('input[inputmode="decimal"]')
+		if (!(input instanceof HTMLInputElement)) throw new Error('Redemption amount input missing')
+		await act(() => {
+			input.value = '0'
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		expect(input.getAttribute('aria-describedby')).toBeTruthy()
+		await act(() => {
+			input.value = '0.1'
+			input.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		await act(async () => await Bun.sleep(QUOTE_SETTLE_MILLISECONDS))
+		await act(() => button('Redeem complete sets').click())
+		await act(async () => await Bun.sleep(50))
+		expect(submissions).toBe(1)
+		expect(input.value).toBe('')
+		expect(button('Redeem complete sets').disabled).toBe(true)
 	})
 
 	test('retries failed fork metadata and refreshes branches after confirmed migration', async () => {

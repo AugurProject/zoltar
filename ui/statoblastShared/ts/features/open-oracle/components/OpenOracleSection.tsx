@@ -403,7 +403,6 @@ export function OpenOracleSection({
 							</div>
 						</SectionBlock>
 					)}
-					<ErrorNotice message={openOracleError} />
 				</div>
 			) : undefined}
 

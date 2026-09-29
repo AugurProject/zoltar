@@ -62,7 +62,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}
-									className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${clearingTick === point.tick ? ' is-clearing' : ''}`}
+									className={`truth-auction-price-row truth-auction-ladder-row ${getTruthAuctionDispositionClassName(point.disposition.tone)}${point.isSelected ? ' is-selected' : ''}${point.isPreviewTick ? ' is-preview' : ''}${showDepthClearingTick && clearingTick === point.tick ? ' is-clearing' : ''}`}
 									key={point.tick.toString()}
 									onClick={() => onSelectTick(point.tick)}
 									type='button'
@@ -75,7 +75,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 												<span className='truth-auction-price-row-price'>{forkAuctionCopy.priceLevel}</span>
 											</div>
 											<div className='truth-auction-price-row-badges'>
-												{clearingTick === point.tick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.clearingLevel}</span> : undefined}
+												{showDepthClearingTick && clearingTick === point.tick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.clearingLevel}</span> : undefined}
 												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.currentFormPrice}</span> : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
 											</div>

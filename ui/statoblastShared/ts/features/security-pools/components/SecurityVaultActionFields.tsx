@@ -73,6 +73,14 @@ export function VaultRepExitActionButton({
 }) {
 	// A blocking wallet is the reason shown, so its fix takes the reason slot instead of the price field's error.
 	const describedByElementId = walletGuard.walletBlocker === undefined ? disabledReasonElementId : undefined
+	const unavailableReason = (() => {
+		if (!canUseLoadedVaultActions) return securityPoolCopy.selectOwnVaultToWithdrawRep
+		if (repExitGuardMessage !== undefined) return repExitGuardMessage
+		if (!repExitEnabled) return securityPoolCopy.withdrawalUnavailableReason
+		if (repExitMode === 'withdraw' && !hasWithdrawableRep) return securityPoolCopy.noWithdrawableRepReason
+		if (repExitMode === 'withdraw' && !hasPositiveWithdrawAmount) return commonCopy.positiveAmountRequired
+		return undefined
+	})()
 	return (
 		<TransactionActionButton
 			disabledReasonElementId={describedByElementId}
@@ -84,7 +92,7 @@ export function VaultRepExitActionButton({
 			availability={withWalletGuardFirst(
 				{
 					disabled: !repExitEnabled || !canUseLoadedVaultActions || (repExitMode === 'withdraw' && (!hasPositiveWithdrawAmount || !hasWithdrawableRep)) || repExitGuardMessage !== undefined,
-					reason: canUseLoadedVaultActions ? repExitGuardMessage : undefined,
+					reason: unavailableReason,
 				},
 				walletGuard,
 			)}

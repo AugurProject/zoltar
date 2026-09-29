@@ -1,3 +1,5 @@
+import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
@@ -59,8 +61,15 @@ export function ZoltarUniversesRoute({ universe }: UniverseRouteProps) {
 
 /** Mounts the existing fork workflow for an unforked universe. */
 export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
-	const { accountState, operations, universeState } = useZoltarWorkspace()
+	const { accountState, environmentRefreshKey, operations, universeState } = useZoltarWorkspace()
 	const forkQuestionId = operations.zoltarForkQuestionId.trim()
+	const lookup = useRef(operations.loadZoltarQuestion)
+	lookup.current = operations.loadZoltarQuestion
+	useEffect(() => {
+		if (normalizeQuestionId(forkQuestionId) === undefined) return
+		const timeout = setTimeout(() => void lookup.current(forkQuestionId), 300)
+		return () => clearTimeout(timeout)
+	}, [forkQuestionId, environmentRefreshKey, universe.universeId])
 	return (
 		<>
 			<RouteHeader description={zoltarCopy.forkRouteDescription} title={zoltarCopy.forkZoltar} />
@@ -69,6 +78,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 				<SectionBlock variant='plain'>
 					<ForkZoltarSection
 						accountAddress={accountState.address}
+						hasLoadedZoltarForkAccess={operations.hasLoadedZoltarForkAccess}
 						hasLoadedZoltarQuestions={operations.hasLoadedZoltarQuestions}
 						isOnActiveAppChain={isActiveAppChain(accountState.chainId)}
 						loadingZoltarForkAccess={operations.loadingZoltarForkAccess}
@@ -76,6 +86,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 						loadingZoltarQuestions={operations.loadingZoltarQuestions}
 						onApproveZoltarForkRep={amount => void operations.approveZoltarForkRep(amount)}
 						onForkZoltar={() => void operations.forkZoltar()}
+						onRetryZoltarForkAccess={() => void operations.loadZoltarForkAccess()}
 						onRetryZoltarQuestion={forkQuestionId === '' ? undefined : () => void operations.loadZoltarQuestion(forkQuestionId)}
 						onZoltarForkQuestionIdChange={operations.setZoltarForkQuestionId}
 						zoltarForkActiveAction={operations.zoltarForkActiveAction}

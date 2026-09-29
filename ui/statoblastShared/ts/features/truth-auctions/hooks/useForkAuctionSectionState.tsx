@@ -234,7 +234,10 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 				<CurrencyValue value={displayedEthRaisedAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={truthAuctionStatus.attoEthRaiseCap} suffix={commonCopy.eth} />
 			</Fragment>
 		)
-	const clearingPriceDisplay = truthAuctionStatus === undefined ? truthAuctionFallback : renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice)
+	const clearingPriceDisplay = (() => {
+		if (truthAuctionStatus === undefined) return truthAuctionFallback
+		return truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared
+	})()
 	const settlementAvailableDisplay = (() => {
 		if (!context.hasSelectedAuctionChildPool) return forkAuctionCopy.forkUnavailablePlaceholder
 		if (context.selectedAuctionContext?.claimingAvailable) return commonCopy.yes
@@ -249,6 +252,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const { isSettleSelectedBidsInProgress, selectedSettlementBidKeys, setSelectedSettlementBidKeys, settlementBidResultByKey, settlementSelectionState, submitSelectedSettlementBids } = useTruthAuctionSettlementActionState({
 		accountAddress: context.accountState.address,
 		forkAuctionError: context.forkAuctionError,
+		forkAuctionActiveAction: context.forkAuctionActiveAction,
 		forkAuctionResult: context.forkAuctionResult,
 		onClaimAuctionProceeds: context.onClaimAuctionProceeds,
 		onRefundLosingBids: context.onRefundLosingBids,

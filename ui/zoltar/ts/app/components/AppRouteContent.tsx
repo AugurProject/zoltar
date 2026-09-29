@@ -1,3 +1,4 @@
+import { getZoltarViewHref } from '../lib/zoltarNavigation.js'
 import type { ComponentProps } from 'preact'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deployment/components/DeploymentRouteContent.js'
@@ -7,13 +8,6 @@ import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appR
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
-
-/** Recovery links lead back into the application; deployment is a setup flow, not a recovery destination. */
-const ZOLTAR_NOT_FOUND_LINKS = [
-	{ href: '#/zoltar', label: zoltarCopy.overview },
-	{ href: '#/zoltar?zoltarView=questions', label: marketCopy.browseQuestions },
-	{ href: '#/zoltar?zoltarView=universes', label: zoltarCopy.universesTitle },
-] as const
 
 type AppRoute = 'deploy' | 'not-found' | 'zoltar'
 
@@ -33,7 +27,15 @@ export function AppRouteContent({ deploy, readBackendMessage, route, zoltarView 
 		case 'zoltar':
 			return <ZoltarRoutes view={zoltarView} />
 		case 'not-found':
-			return <NotFoundSection links={ZOLTAR_NOT_FOUND_LINKS} />
+			return (
+				<NotFoundSection
+					links={[
+						{ href: getZoltarViewHref('overview'), label: zoltarCopy.overview },
+						{ href: getZoltarViewHref('questions'), label: marketCopy.browseQuestions },
+						{ href: getZoltarViewHref('universes'), label: zoltarCopy.universesTitle },
+					]}
+				/>
+			)
 		default:
 			return assertNever(route)
 	}

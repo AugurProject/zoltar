@@ -17,13 +17,30 @@ export const richList = async (sql: SQL, url: URL): Promise<Response> => {
 	const requestedSort = url.searchParams.get('sort') ?? 'transactions'
 	if (requestedSort !== 'eth' && requestedSort !== 'weth' && requestedSort !== 'rep' && requestedSort !== 'transactions') throw new ApiRequestError('sort must be eth, weth, rep, or transactions')
 	const sort: RichListSort = requestedSort
-	const rows = await richListRows(sql, { chainId, address, limit, offset, sort })
+	const snapshotInput = url.searchParams.get('snapshot')
+	const snapshot =
+		snapshotInput === null
+			? undefined
+			: parseCursor(
+					snapshotInput,
+					parts => {
+						if (parts.length !== 9 || parts[0] !== chainId || parts[1] !== sort || parts[2] !== (address ?? '') || !parts.slice(3).every(part => typeof part === 'string') || !isPostgresBigint(parts[3])) throw new Error('snapshot scope')
+						return parts
+					},
+					() => new ApiRequestError('Invalid rich list snapshot'),
+				)
+	const asOf = chainId === undefined ? undefined : await operationsAsOfForContinuations(sql, chainId, snapshot === undefined ? [] : [{ parts: snapshot, offset: 3 }])
+	const snapshotBlock = asOf === undefined ? undefined : String(asOf['blockNumber'])
+	const snapshotCursor = asOf === undefined || chainId === undefined ? undefined : encodeOpaqueCursor([chainId, sort, address ?? '', ...snapshotBoundary(asOf)])
+	const rows = await richListRows(sql, { chainId, address, snapshotBlock, limit, offset, sort })
 	return json({
 		items: rows.filter((row: Record<string, unknown>) => row['address'] !== null),
 		total: Number(rows[0]?.['total'] ?? 0),
 		limit,
 		offset,
 		sort,
+		snapshotBlock,
+		snapshotCursor,
 		positionLimit: 100,
 		assetLimit: 100,
 	})

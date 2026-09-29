@@ -374,7 +374,7 @@ describe('SecurityVaultSection', () => {
 		const queries = within(dialog)
 		fireEvent.click(queries.getByRole('button', { name: 'Manual price' }))
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
-		const input = queries.getByLabelText('Open Oracle REP/ETH starting price')
+		const input = queries.getByLabelText('Open Oracle REP / ETH starting price')
 		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
 			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
@@ -1228,7 +1228,7 @@ describe('SecurityVaultSection', () => {
 		const page = within(withdrawal)
 		fireEvent.click(page.getByRole('button', { name: 'Manual price' }))
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP')
-		fireEvent.input(page.getByLabelText('Open Oracle REP/ETH starting price'), { target: { value: '3' } })
+		fireEvent.input(page.getByLabelText('Open Oracle REP / ETH starting price'), { target: { value: '3' } })
 		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
 		fireEvent.click(page.getByRole('button', { name: 'Withdraw REP' }))
 		expect(submitted).toBe(3n * 10n ** 18n)

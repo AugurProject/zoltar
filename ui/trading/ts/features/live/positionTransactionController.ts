@@ -45,7 +45,6 @@ export function createPositionTransactionController({
 	createGuardedWalletWrite,
 	executeWithCurrentWalletContext,
 	refresh,
-	marketPageStart,
 }: {
 	configuration: DeploymentConfiguration | undefined
 	selected: LiveMarket | undefined
@@ -57,7 +56,6 @@ export function createPositionTransactionController({
 	createGuardedWalletWrite(expectedAccount: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
 	executeWithCurrentWalletContext<T>(expectedAccount: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
 	refresh: Refresh
-	marketPageStart: bigint
 }) {
 	const { mode, side, transaction, isPositionLocked, liquidityWorkflowLockedRef, setMode, setSide, setAmount, setAcknowledgedImpactBps } = workflow
 	// Only this market's own trade holds its inputs; a trade running on another market leaves them free.
@@ -79,7 +77,7 @@ export function createPositionTransactionController({
 						: { ...quoteContext, kind: 'exit', value: await withReadTimeout(services.simulateExit(walletClient, configuration, market, account, side, estimate.quote.completeSetShares, validityMinutes, slippageBps)) }
 				if (authoritativeQuoteMoved(estimate, quote.value.result.totalLongShares, quote.kind === 'exit' ? quote.value.result.ethOut : undefined)) {
 					// Reload the reserves so the estimate on screen shows the price the chain now quotes.
-					void refresh(configuration, marketPageStart, 'position', ownerRefresh)
+					void refresh(undefined, undefined, 'position', ownerRefresh)
 					throw new Error(ticketCopy.priceMoved(priceMovedDetail(estimate, quote.value.result.totalLongShares)))
 				}
 				return withApprovedBounds(quote, estimate)
@@ -91,7 +89,7 @@ export function createPositionTransactionController({
 			},
 			afterConfirmed: async () => {
 				workflow.clearConfirmedAmount(market.pool)
-				await refresh(configuration, marketPageStart, 'position', ownerRefresh)
+				await refresh(undefined, undefined, 'position', ownerRefresh)
 			},
 		})
 	}

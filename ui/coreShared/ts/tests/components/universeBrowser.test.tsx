@@ -107,6 +107,11 @@ describe('UniverseSwitcher', () => {
 		details.setAttribute('open', '')
 		fireEvent.click(queries.getByRole('link', { name: 'Alpha' }))
 		expect(details.hasAttribute('open')).toBe(false)
+		for (const navigationEvent of ['hashchange', 'popstate']) {
+			details.setAttribute('open', '')
+			window.dispatchEvent(new Event(navigationEvent))
+			expect(details.hasAttribute('open')).toBe(false)
+		}
 	})
 
 	test('omits the child section for a universe that has not forked', async () => {

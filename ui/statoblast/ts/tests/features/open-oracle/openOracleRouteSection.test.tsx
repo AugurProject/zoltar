@@ -132,7 +132,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		disputeOccurred: false,
 		escalationHalt: 5n * 10n ** 17n,
 		exactToken1Report: 10n ** 18n,
-		fee: 10n ** 15n,
+
 		feePercentage: 1000000000000000n,
 		initialReporter: zeroAddress,
 		isDistributed: false,
@@ -1010,7 +1010,7 @@ describe('OpenOracleSection route create view', () => {
 		expectTransactionButtonDisabled(document.body, 'Settle report')
 	})
 
-	test('throttles refreshes while an overdue report remains pending', async () => {
+	test('refreshes an overdue report once without polling away action errors', async () => {
 		const reloads: string[] = []
 		function ReportHarness() {
 			const [report, setReport] = useState(createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 160n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 60n, timeType: true }))
@@ -1031,7 +1031,7 @@ describe('OpenOracleSection route create view', () => {
 		cleanupRenderedComponent = (await renderIntoDocument(<ReportHarness />)).cleanup
 		await act(async () => await new Promise(resolve => setTimeout(resolve, 400)))
 		expect(reloads).toEqual(['report'])
-		await act(async () => await new Promise(resolve => setTimeout(resolve, 750)))
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 5500)))
 		expect(reloads).toEqual(['report'])
 	})
 

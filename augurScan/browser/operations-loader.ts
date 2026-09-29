@@ -30,6 +30,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 		riskVaultTargetCount,
 		detailTargetCount,
 		decisionTargetCount,
+		activityTargetCount,
 		historyTargetOffset,
 		preservedContext,
 	}: {
@@ -39,6 +40,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 		riskVaultTargetCount?: number
 		detailTargetCount?: number
 		decisionTargetCount?: number
+		activityTargetCount?: number
 		historyTargetOffset?: number
 		preservedContext?: OperationsRenderContext
 	} = {}): Promise<boolean> => {
@@ -47,7 +49,7 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 			operationsState.loadState,
 			requestedContext,
 			live,
-			catalogTargetCount !== undefined || riskPoolTargetCount !== undefined || riskVaultTargetCount !== undefined || detailTargetCount !== undefined || decisionTargetCount !== undefined || historyTargetOffset !== undefined,
+			catalogTargetCount !== undefined || riskPoolTargetCount !== undefined || riskVaultTargetCount !== undefined || detailTargetCount !== undefined || decisionTargetCount !== undefined || activityTargetCount !== undefined || historyTargetOffset !== undefined,
 			() => `${requiredChainId()}:${location.pathname}`,
 			() => operationsState.requestVersion++,
 			async () => {
@@ -69,8 +71,9 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					const retainedRiskHistoryOffset =
 						detailRoute !== undefined && (detailRoute.kind === 'pool' || detailRoute.kind === 'vault') && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.riskHistoryOffset : 0
 					const retainedDecisionCount = detailRoute?.kind === 'report' && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.decisionItems.length : 0
+					const retainedActivityCount = detailRoute?.kind === 'trading' && operationsState.detailState?.chainId === requiredChainId() && operationsState.detailState.routeKey === operationsDetailRouteKey(detailRoute) ? operationsState.detailState.activityItems.length : 0
 					const loadResponse = async () => {
-						if (detailRoute !== undefined) return await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount, historyTargetOffset ?? retainedRiskHistoryOffset, decisionTargetCount ?? retainedDecisionCount)
+						if (detailRoute !== undefined) return await loadOperationsDetail(detailRoute, detailTargetCount ?? retainedDetailCount, historyTargetOffset ?? retainedRiskHistoryOffset, decisionTargetCount ?? retainedDecisionCount, activityTargetCount ?? retainedActivityCount)
 						if (catalogSection === undefined) return decodeOperationsResponse(await api(`/api/v1/operations?chainId=${encodeURIComponent(requiredChainId())}`))
 						if (catalogSection === 'risk') return await loadOperationsRiskCatalog(riskPoolTargetCount ?? retainedRiskPoolCount, riskVaultTargetCount ?? retainedRiskVaultCount)
 						return await loadOperationsCatalog(catalogSection, catalogTargetCount ?? retainedCatalogCount)

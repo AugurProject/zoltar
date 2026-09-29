@@ -186,7 +186,7 @@ export function ZoltarMigrationSection({
 	const navigationHint = (() => {
 		if (currentStepId === 'review') return migrateWalletBlocked ? undefined : migrateHint
 		if (currentStepSatisfied || (currentStepId === 'approve' && currentStep?.status === 'incomplete')) return undefined
-		return currentStep?.reason
+		return accountAddress === undefined && currentStep?.reason === zoltarCopy.migrationBalancesReadFailed ? zoltarCopy.migrationWalletBalancesReason : currentStep?.reason
 	})()
 	const heldOutcomes = wizard.outcomes.filter(outcome => outcome.exists && (outcome.heldAttoRep ?? 0n) > 0n)
 	const deploymentDisabledReason = (outcome: MigrationWizardOutcome) => getChildDeploymentAvailabilityReason({ accountAddress, exists: outcome.exists, hasForked, isOnActiveAppChain })

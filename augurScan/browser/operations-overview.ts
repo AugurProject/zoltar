@@ -26,7 +26,17 @@ export interface OperationsOverviewDeps {
 	readonly connection: HTMLElement
 	readonly setRiskCatalogState: (state: { readonly chainId: string; readonly pools: readonly JsonRecord[]; readonly vaults: readonly JsonRecord[] }) => void
 	readonly setCatalogState: (state: { readonly chainId: string; readonly section: PagedOperationsCatalogSection; readonly items: readonly JsonRecord[] }) => void
-	readonly loadOperations: (options?: { live?: boolean; catalogTargetCount?: number; riskPoolTargetCount?: number; riskVaultTargetCount?: number; detailTargetCount?: number; decisionTargetCount?: number; historyTargetOffset?: number; preservedContext?: OperationsRenderContext }) => Promise<boolean>
+	readonly loadOperations: (options?: {
+		live?: boolean
+		catalogTargetCount?: number
+		riskPoolTargetCount?: number
+		riskVaultTargetCount?: number
+		detailTargetCount?: number
+		decisionTargetCount?: number
+		activityTargetCount?: number
+		historyTargetOffset?: number
+		preservedContext?: OperationsRenderContext
+	}) => Promise<boolean>
 	readonly components: Components
 }
 
@@ -229,7 +239,7 @@ export const renderOperationsOverview = (deps: OperationsOverviewDeps, response:
 		),
 	)
 	const changeRows = changes.map(item => operationRow(String(item['semantic_event_kind'] ?? 'Protocol transition'), 'Canonical semantic evidence', String(item['entity_identity'] ?? ''), item['block_number']))
-	const priceRows = prices.map(item => operationRow('Coordinator REP / ETH', `${exactUnit(operationNumber(item['value']), 18, 'REP/ETH')} · ${String(item['source_event'] ?? 'Unavailable')}`, String(item['source_contract'] ?? ''), item['block_number']))
+	const priceRows = prices.map(item => operationRow('Coordinator REP / ETH', `${exactUnit(String(item['value'] ?? '0'), 18, 'REP/ETH')} · ${String(item['source_event'] ?? 'Unavailable')}`, String(item['source_contract'] ?? ''), item['block_number']))
 	const attentionReportRows: HTMLElement[] = []
 	for (const [index, item] of reports.entries()) {
 		const lifecycle = isRecord(item['lifecycle']) ? item['lifecycle'] : {}

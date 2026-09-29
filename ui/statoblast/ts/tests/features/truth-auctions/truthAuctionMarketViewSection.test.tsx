@@ -19,7 +19,7 @@ describe('TruthAuctionMarketViewSection', () => {
 	test('keeps ladder rows free of nested buttons and disables pagination while loading', async () => {
 		const rendered = await renderIntoDocument(
 			<TruthAuctionMarketViewSection
-				clearingTick={undefined}
+				clearingTick={1n}
 				hasMoreTickSummaries={true}
 				loadingTruthAuctionBook={true}
 				maxTickAttoEth={5n}
@@ -47,6 +47,8 @@ describe('TruthAuctionMarketViewSection', () => {
 		const ladderRow = document.querySelector('.truth-auction-ladder-row')
 		if (!(ladderRow instanceof HTMLButtonElement)) throw new Error('Expected a selectable ladder row')
 		expect(ladderRow.querySelector('button')).toBeNull()
+		expect(ladderRow.classList.contains('is-clearing')).toBe(false)
+		expect(ladderRow.textContent).not.toContain('Clearing level')
 		const loadMoreButton = within(document.body).getByRole('button', { name: 'Show more price levels' }) as HTMLButtonElement
 		expect(loadMoreButton.disabled).toBe(true)
 	})

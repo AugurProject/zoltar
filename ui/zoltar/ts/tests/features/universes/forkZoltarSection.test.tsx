@@ -59,6 +59,61 @@ describe('ForkZoltarSection', () => {
 		},
 	})
 
+	for (const phase of ['idle', 'loading', 'failed'] as const)
+		test(`distinguishes an unknown REP balance from insufficient REP (${phase})`, async () => {
+			const retry = mock(() => undefined)
+			const props = {
+				accountAddress: zeroAddress,
+				currentTimestamp: 3n,
+				hasLoadedZoltarQuestions: true,
+				isOnActiveAppChain: true,
+				loadingZoltarForkAccess: phase === 'loading',
+				hasLoadedZoltarForkAccess: phase === 'failed',
+				loadingZoltarQuestions: false,
+				onApproveZoltarForkRep: () => undefined,
+				onForkZoltar: () => undefined,
+				onRetryZoltarForkAccess: retry,
+				onZoltarForkQuestionIdChange: () => undefined,
+				zoltarForkActiveAction: undefined,
+				zoltarForkApproval: { error: undefined, loading: false, value: 100n },
+				zoltarForkError: undefined,
+				zoltarForkPending: false,
+				zoltarForkQuestionId: '0x01',
+				zoltarForkRepBalanceAttoRep: undefined,
+				zoltarQuestions: [createQuestion()],
+				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, zoltarAddress: ZOLTAR_ADDRESS }),
+				zoltarUniverseState: 'ready' as const,
+			}
+			const rendered = await renderIntoDocument(<ForkZoltarSection {...props} />)
+			cleanupRenderedComponent = rendered.cleanup
+			expect(document.body.textContent).not.toContain('Insufficient REP')
+			expect(document.body.textContent).toContain('Wallet REP')
+			if (phase !== 'failed') {
+				expect(document.body.textContent).toContain('Loading REP balance')
+				expect(document.querySelector('[role="alert"]')).toBeNull()
+				expect(within(document.body).queryByRole('button', { name: 'Retry' })).toBeNull()
+			} else {
+				expect(document.querySelector('[role="alert"]')?.textContent).toContain('REP balance')
+				fireEvent.click(within(document.body).getByRole('button', { name: 'Retry' }))
+				expect(retry).toHaveBeenCalledTimes(1)
+				expect(document.body.textContent?.split('Could not read your REP balance.').length).toBe(2)
+				render(<ForkZoltarSection {...props} loadingZoltarForkAccess={true} />, rendered.container)
+				expect(document.querySelector('[role="alert"]')).toBeNull()
+				render(<ForkZoltarSection {...props} zoltarForkRepBalanceAttoRep={0n} />, rendered.container)
+				expect(document.querySelector('[role="alert"]')).toBeNull()
+				expect(document.body.textContent).toContain('Insufficient REP')
+				render(<ForkZoltarSection {...props} zoltarForkRepBalanceAttoRep={100n} zoltarForkApproval={{ error: undefined, loading: false, value: 0n }} />, rendered.container)
+				expect(
+					within(document.body)
+						.getByRole('button', { name: /Approve/ })
+						.hasAttribute('disabled'),
+				).toBe(false)
+				expect(within(document.body).getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(true)
+				render(<ForkZoltarSection {...props} zoltarForkRepBalanceAttoRep={100n} />, rendered.container)
+				expect(within(document.body).getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(false)
+			}
+		})
+
 	test('keeps REP approval disabled off Sepolia and explains recovery', async () => {
 		const renderedComponent = await renderIntoDocument(
 			h(ForkZoltarSection, {
@@ -202,10 +257,10 @@ describe('ForkZoltarSection', () => {
 		expect(document.body.textContent).not.toContain('Protocol feeNone')
 	})
 
-	test('allows direct fork submission once the selected question has ended', async () => {
-		const onForkZoltar = mock(() => undefined)
-		const renderedComponent = await renderIntoDocument(
-			h(ForkZoltarSection, {
+	for (const questionId of ['0x01', `0x${'a'.repeat(63)}`, '0x1a'])
+		test(`allows direct fork submission after resolving ${questionId}`, async () => {
+			const onForkZoltar = mock(() => undefined)
+			const props = {
 				accountAddress: zeroAddress,
 				currentTimestamp: 2n,
 				hasLoadedZoltarQuestions: true,
@@ -219,21 +274,30 @@ describe('ForkZoltarSection', () => {
 				zoltarForkApproval: { error: undefined, loading: false, value: 100n * ATTO_REP },
 				zoltarForkError: undefined,
 				zoltarForkPending: false,
-				zoltarForkQuestionId: '0x01',
+				zoltarForkQuestionId: questionId,
 				zoltarForkRepBalanceAttoRep: 1000n * ATTO_REP,
-				zoltarQuestions: [createQuestion()],
+				zoltarQuestions: [{ ...createQuestion(), questionId }],
 				zoltarUniverse: createUniverse({ forkBurnDivisor: 5n, forkThresholdAttoRep: 100n * ATTO_REP, zoltarAddress: ZOLTAR_ADDRESS }),
-				zoltarUniverseState: 'ready',
-			}),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+				zoltarUniverseState: 'ready' as const,
+			}
+			const renderedComponent = await renderIntoDocument(<ForkZoltarSection {...props} hasLoadedZoltarQuestions={false} loadingZoltarQuestion={true} zoltarQuestions={[]} />)
+			cleanupRenderedComponent = renderedComponent.cleanup
 
-		const documentQueries = within(document.body)
-		const forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
-		expect(forkButton.hasAttribute('disabled')).toBe(false)
-		fireEvent.click(forkButton)
-		expect(onForkZoltar).toHaveBeenCalledTimes(1)
-	})
+			expect(document.body.textContent).toContain('retrieving…')
+			expect(within(document.body).getByRole('button', { name: 'Fork universe' }).hasAttribute('disabled')).toBe(true)
+			render(<ForkZoltarSection {...props} />, renderedComponent.container)
+			expect(document.body.textContent).not.toContain('retrieving…')
+			expect(document.body.textContent).toContain('Fork question title')
+			const questionInput = within(document.body).getByRole('textbox', { name: 'Fork question ID' })
+			if (!(questionInput instanceof HTMLInputElement)) throw new Error('Expected the question ID field')
+			expect(questionInput.value).toBe(questionId)
+			expect(document.querySelector('.question-summary .identifier-value')).toBeNull()
+			const documentQueries = within(document.body)
+			const forkButton = documentQueries.getByRole('button', { name: 'Fork universe' })
+			expect(forkButton.hasAttribute('disabled')).toBe(false)
+			fireEvent.click(forkButton)
+			expect(onForkZoltar).toHaveBeenCalledTimes(1)
+		})
 
 	test('child REP forks without requesting token approval', async () => {
 		const renderedComponent = await renderIntoDocument(
@@ -319,6 +383,7 @@ describe('ForkZoltarSection', () => {
 				zoltarForkError: undefined,
 				zoltarForkPending: false,
 				zoltarForkQuestionId: '0x02',
+				zoltarQuestionLookupId: '0x2',
 				zoltarForkRepBalanceAttoRep: 1000n,
 				zoltarQuestions: [createQuestion()],
 				zoltarUniverse: createUniverse(),

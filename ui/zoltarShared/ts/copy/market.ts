@@ -74,3 +74,6 @@ export const draftPreviewLabel = 'Question preview'
 export const untitledQuestion = 'Untitled question'
 
 export const questionDetails = 'Question details'
+
+export const universeAlreadyForked = 'Universe already forked'
+export const formatUniverseAlreadyForkedLabel = (questionTitle: string, questionId: string) => `Universe already forked: ${questionTitle} (${questionId})`

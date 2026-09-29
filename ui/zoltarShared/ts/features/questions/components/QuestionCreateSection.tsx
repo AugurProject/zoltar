@@ -180,6 +180,7 @@ export function QuestionCreateSection({
 		})
 	}
 	const removeCategoricalOutcome = (outcomeIndex: number) => {
+		if (questionForm.categoricalOutcomes.length <= 2) return
 		onQuestionFormChange({
 			categoricalOutcomes: questionForm.categoricalOutcomes.filter((_, index) => index !== outcomeIndex),
 		})
@@ -324,12 +325,24 @@ export function QuestionCreateSection({
 														placeholder={`${commonCopy.outcome} ${outcomeIndex + 1}`}
 													/>
 												</label>
-												<button aria-label={marketCopy.formatRemoveOutcomeLabel(outcomeIndex + 1)} className='secondary categorical-outcome-remove' type='button' onClick={() => removeCategoricalOutcome(outcomeIndex)}>
+												<button
+													disabled={questionForm.categoricalOutcomes.length <= 2}
+													aria-describedby={questionForm.categoricalOutcomes.length <= 2 ? 'minimum-outcomes-reason' : undefined}
+													aria-label={marketCopy.formatRemoveOutcomeLabel(outcomeIndex + 1)}
+													className='secondary categorical-outcome-remove'
+													type='button'
+													onClick={() => removeCategoricalOutcome(outcomeIndex)}
+												>
 													{marketCopy.remove}
 												</button>
 											</div>
 										))}
 									</div>
+									{questionForm.categoricalOutcomes.length <= 2 ? (
+										<p className='detail' id='minimum-outcomes-reason'>
+											{marketCopy.minimumOutcomeCountReason}
+										</p>
+									) : undefined}
 									{getVisibleFieldError('categoricalOutcomes') === undefined ? undefined : (
 										<p className='field-error' id='market-create-outcomes-error'>
 											{getVisibleFieldError('categoricalOutcomes')}

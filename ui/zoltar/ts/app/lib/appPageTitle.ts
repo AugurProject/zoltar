@@ -17,7 +17,7 @@ function getZoltarViewTitle(view: ZoltarView) {
 		case 'overview':
 			return zoltarCopy.overview
 		case 'questions':
-			return marketCopy.questions
+			return marketCopy.browseQuestions
 		case 'create':
 			return commonCopy.createQuestion
 		case 'universes':
