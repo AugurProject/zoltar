@@ -54,44 +54,31 @@ test('verification jobs carry the deployed constructor arguments and compiler pr
 	expect(multicall3?.constructorArguments).toBe('')
 })
 
-test('a manifest address that does not match the computed init code fails the plan', async () => {
+test.each([
+	{
+		name: 'a manifest address that does not match the computed init code fails the plan',
+		error: 'instead of the manifest address',
+		tamper: (manifest: DeploymentManifest) => manifest.deploymentSteps.map(step => (step.id === 'zoltar' ? { ...step, address: manifest.network.wethAddress } : step)),
+	},
+	{
+		name: 'tampered manifest constructor arguments fail the CREATE2 validation',
+		error: 'instead of the manifest address',
+		tamper: (manifest: DeploymentManifest) => manifest.deploymentSteps.map(step => (step.id === 'shareTokenFactory' ? { ...step, constructorArguments: `${'00'.repeat(12)}${manifest.network.wethAddress.slice(2).toLowerCase()}` } : step)),
+	},
+	{
+		name: 'a verifiable step without recorded constructor arguments demands manifest regeneration',
+		error: 'has no constructorArguments',
+		tamper: (manifest: DeploymentManifest) => manifest.deploymentSteps.map(step => (step.id === 'zoltar' ? { address: step.address, id: step.id, label: step.label } : step)),
+	},
+	{
+		name: 'an unknown deployment step demands a verification definition',
+		error: 'has no contract-verification definition',
+		tamper: (manifest: DeploymentManifest) => manifest.deploymentSteps.map(step => (step.id === 'multicall3' ? { ...step, id: 'newProtocolModule' } : step)),
+	},
+])('$name', async ({ error, tamper }) => {
 	const artifactLookup = await loadRealArtifactLookup()
 	const manifest = await loadRealManifest('sepolia')
-	const tamperedManifest = {
-		...manifest,
-		deploymentSteps: manifest.deploymentSteps.map(step => (step.id === 'zoltar' ? { ...step, address: manifest.network.wethAddress } : step)),
-	}
-	expect(() => buildVerificationPlan(tamperedManifest, artifactLookup)).toThrow('instead of the manifest address')
-})
-
-test('tampered manifest constructor arguments fail the CREATE2 validation', async () => {
-	const artifactLookup = await loadRealArtifactLookup()
-	const manifest = await loadRealManifest('sepolia')
-	const tamperedManifest = {
-		...manifest,
-		deploymentSteps: manifest.deploymentSteps.map(step => (step.id === 'shareTokenFactory' ? { ...step, constructorArguments: `${'00'.repeat(12)}${manifest.network.wethAddress.slice(2).toLowerCase()}` } : step)),
-	}
-	expect(() => buildVerificationPlan(tamperedManifest, artifactLookup)).toThrow('instead of the manifest address')
-})
-
-test('a verifiable step without recorded constructor arguments demands manifest regeneration', async () => {
-	const artifactLookup = await loadRealArtifactLookup()
-	const manifest = await loadRealManifest('sepolia')
-	const strippedManifest = {
-		...manifest,
-		deploymentSteps: manifest.deploymentSteps.map(step => (step.id === 'zoltar' ? { address: step.address, id: step.id, label: step.label } : step)),
-	}
-	expect(() => buildVerificationPlan(strippedManifest, artifactLookup)).toThrow('has no constructorArguments')
-})
-
-test('an unknown deployment step demands a verification definition', async () => {
-	const artifactLookup = await loadRealArtifactLookup()
-	const manifest = await loadRealManifest('sepolia')
-	const renamedManifest = {
-		...manifest,
-		deploymentSteps: manifest.deploymentSteps.map(step => (step.id === 'multicall3' ? { ...step, id: 'newProtocolModule' } : step)),
-	}
-	expect(() => buildVerificationPlan(renamedManifest, artifactLookup)).toThrow('has no contract-verification definition')
+	expect(() => buildVerificationPlan({ ...manifest, deploymentSteps: tamper(manifest) }, artifactLookup)).toThrow(error)
 })
 
 test('the compile module tolerates verification CLI arguments when imported instead of executed', async () => {
@@ -168,6 +155,28 @@ function createExplorerFetchStub(respond: (action: string, call: RecordedCall) =
 
 const immediateSleep = async () => {}
 
+const runExplorer = async (fetchFn: ExplorerFetch, options: { jobs?: readonly VerificationJob[]; onSleep?: (delay: number) => void; target?: ExplorerTarget } = {}) => {
+	const delays: number[] = []
+	const outcomes = await verifyContractsWithExplorer({
+		fetchFn,
+		inputs: testInputs,
+		jobs: options.jobs ?? [testJob],
+		log: () => {},
+		sleep: async delay => {
+			delays.push(delay)
+			options.onSleep?.(delay)
+		},
+		target: options.target ?? testTarget,
+	})
+	return { delays, outcomes }
+}
+
+const alreadyVerifiedResponse = () => ({ ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) })
+
+const rateLimitedResponse = (headers?: Headers) => (headers === undefined ? { ok: false, status: 429, json: async () => ({}) } : { ok: false, status: 429, headers, json: async () => ({}) })
+
+const runSourcify = (fetchFn: ExplorerFetch) => verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+
 test('verification submits standard JSON and polls until the explorer reports a pass', async () => {
 	let pollCount = 0
 	const { calls, fetchFn } = createExplorerFetchStub(action => {
@@ -176,7 +185,7 @@ test('verification submits standard JSON and polls until the explorer reports a 
 		pollCount += 1
 		return pollCount === 1 ? { result: 'Pending in queue', status: '0' } : { result: 'Pass - Verified', status: '1' }
 	})
-	const outcomes = await verifyContractsWithExplorer({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
+	const outcomes = (await runExplorer(fetchFn)).outcomes
 	expect(outcomes).toEqual([{ detail: 'Pass - Verified', id: 'zoltar', status: 'verified' }])
 	const submission = calls.find(call => call.parameters.get('action') === 'verifysourcecode')
 	expect(submission?.type).toBe('POST')
@@ -194,7 +203,7 @@ test('verification submits standard JSON and polls until the explorer reports a 
 
 test('already verified contracts are detected before submission', async () => {
 	const { calls, fetchFn } = createExplorerFetchStub(() => ({ result: [{ SourceCode: '{"language":"Solidity"}' }], status: '1' }))
-	const outcomes = await verifyContractsWithExplorer({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
+	const outcomes = (await runExplorer(fetchFn)).outcomes
 	expect(outcomes).toEqual([{ id: 'zoltar', status: 'already-verified' }])
 	expect(calls.every(call => call.parameters.get('action') === 'getsourcecode')).toBe(true)
 })
@@ -204,7 +213,7 @@ test('an undeployed contract is reported without failing verification', async ()
 		if (action === 'getsourcecode') return { result: [{ SourceCode: '' }], status: '1' }
 		return { result: `Unable to locate ContractCode at ${testJob.address}`, status: '0' }
 	})
-	const outcomes = await verifyContractsWithExplorer({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
+	const outcomes = (await runExplorer(fetchFn)).outcomes
 	expect(outcomes[0]?.status).toBe('not-deployed')
 })
 
@@ -213,7 +222,7 @@ test('a submission the explorer already accepted counts as verified', async () =
 		if (action === 'getsourcecode') return { result: [{ SourceCode: '' }], status: '1' }
 		return { result: 'Contract source code already verified', status: '0' }
 	})
-	const outcomes = await verifyContractsWithExplorer({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
+	const outcomes = (await runExplorer(fetchFn)).outcomes
 	expect(outcomes[0]?.status).toBe('already-verified')
 })
 
@@ -223,13 +232,13 @@ test('an explorer verification failure is reported per contract', async () => {
 		if (action === 'verifysourcecode') return { result: 'test-guid', status: '1' }
 		return { result: 'Fail - Unable to verify', status: '0' }
 	})
-	const outcomes = await verifyContractsWithExplorer({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
+	const outcomes = (await runExplorer(fetchFn)).outcomes
 	expect(outcomes).toEqual([{ detail: 'Fail - Unable to verify', id: 'zoltar', status: 'failed' }])
 })
 
 test('explorer transport errors mark the contract as failed instead of aborting the run', async () => {
 	const failingFetch: ExplorerFetch = async () => ({ json: async () => ({}), ok: false, status: 502 })
-	const outcomes = await verifyContractsWithExplorer({ fetchFn: failingFetch, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: testTarget })
+	const outcomes = (await runExplorer(failingFetch)).outcomes
 	expect(outcomes[0]?.status).toBe('failed')
 	expect(outcomes[0]?.detail).toContain('HTTP 502')
 })
@@ -237,7 +246,6 @@ test('explorer transport errors mark the contract as failed instead of aborting 
 for (const limitedAction of ['getsourcecode', 'verifysourcecode', 'checkverifystatus']) {
 	test(`explorer retries HTTP 429 during ${limitedAction} without losing the submission`, async () => {
 		const attempts = new Map<string, number>()
-		const delays: number[] = []
 		const { calls, fetchFn: successfulFetch } = createExplorerFetchStub(action => {
 			if (action === 'getsourcecode') return { result: [{ SourceCode: '' }], status: '1' }
 			if (action === 'verifysourcecode') return { result: 'preserved-guid', status: '1' }
@@ -257,16 +265,7 @@ for (const limitedAction of ['getsourcecode', 'verifysourcecode', 'checkverifyst
 				}
 			return successfulFetch(requestUrl, init)
 		}
-		const outcomes = await verifyContractsWithExplorer({
-			fetchFn,
-			inputs: testInputs,
-			jobs: [testJob],
-			log: () => {},
-			sleep: async delay => {
-				delays.push(delay)
-			},
-			target: testTarget,
-		})
+		const { delays, outcomes } = await runExplorer(fetchFn)
 		expect(outcomes[0]?.status).toBe('verified')
 		expect(attempts.get(limitedAction)).toBe(2)
 		expect(delays.includes(1_652)).toBe(true)
@@ -286,15 +285,11 @@ test('explorer paces every request including already-verified lookups and status
 		requestTimes.push(elapsed)
 		return successfulFetch(requestUrl, init)
 	}
-	const outcomes = await verifyContractsWithExplorer({
-		fetchFn,
-		inputs: testInputs,
+	const { outcomes } = await runExplorer(fetchFn, {
 		jobs: [testJob, { ...testJob, id: 'second', address: '0x0000000000000000000000000000000000000001' }],
-		log: () => {},
-		sleep: async delay => {
+		onSleep: delay => {
 			elapsed += delay
 		},
-		target: testTarget,
 	})
 	expect(outcomes.map(outcome => outcome.status)).toEqual(['already-verified', 'verified'])
 	expect(requestTimes).toHaveLength(4)
@@ -303,21 +298,11 @@ test('explorer paces every request including already-verified lookups and status
 
 test('explorer retries each request ten times over five minutes and later contracts still run', async () => {
 	let attempts = 0
-	const delays: number[] = []
 	const fetchFn: ExplorerFetch = async () => {
 		attempts += 1
-		return { ok: false, status: 429, json: async () => ({}) }
+		return rateLimitedResponse()
 	}
-	const outcomes = await verifyContractsWithExplorer({
-		fetchFn,
-		inputs: testInputs,
-		jobs: [testJob, { ...testJob, id: 'second' }],
-		log: () => {},
-		sleep: async delay => {
-			delays.push(delay)
-		},
-		target: testTarget,
-	})
+	const { delays, outcomes } = await runExplorer(fetchFn, { jobs: [testJob, { ...testJob, id: 'second' }] })
 	expect(attempts).toBe(22)
 	expect(outcomes.map(outcome => outcome.status)).toEqual(['failed', 'failed'])
 	expect(outcomes.every(outcome => outcome.detail?.includes('HTTP 429') === true)).toBe(true)
@@ -330,41 +315,21 @@ test('explorer retries each request ten times over five minutes and later contra
 
 test('explorer can recover on the tenth retry', async () => {
 	let attempts = 0
-	let waited = 0
-	const outcomes = await verifyContractsWithExplorer({
-		fetchFn: async () => {
-			attempts += 1
-			return attempts <= 10 ? { ok: false, status: 429, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
-		},
-		inputs: testInputs,
-		jobs: [testJob],
-		log: () => {},
-		sleep: async delay => {
-			waited += delay
-		},
-		target: testTarget,
+	const { delays, outcomes } = await runExplorer(async () => {
+		attempts += 1
+		return attempts <= 10 ? rateLimitedResponse() : alreadyVerifiedResponse()
 	})
 	expect(outcomes[0]?.status).toBe('already-verified')
 	expect(attempts).toBe(11)
-	expect(waited).toBe(300_000)
+	expect(delays.reduce((sum, delay) => sum + delay, 0)).toBe(300_000)
 })
 
 for (const cooldownSeconds of [100, 120, 300]) {
 	test(`explorer waits beyond the fallback budget with ${cooldownSeconds}s server cooldowns`, async () => {
 		let attempts = 0
-		const delays: number[] = []
-		const outcomes = await verifyContractsWithExplorer({
-			fetchFn: async () => {
-				attempts += 1
-				return { ok: false, status: 429, headers: new Headers({ 'Retry-After': cooldownSeconds.toString() }), json: async () => ({}) }
-			},
-			inputs: testInputs,
-			jobs: [testJob],
-			log: () => {},
-			sleep: async delay => {
-				delays.push(delay)
-			},
-			target: testTarget,
+		const { delays, outcomes } = await runExplorer(async () => {
+			attempts += 1
+			return rateLimitedResponse(new Headers({ 'Retry-After': cooldownSeconds.toString() }))
 		})
 		const expectedRetries = 10
 		expect(attempts).toBe(expectedRetries + 1)
@@ -386,33 +351,20 @@ for (const [label, header, minimumDelay, maximumDelay] of [
 	test(`explorer handles Retry-After ${label}`, async () => {
 		let attempts = 0
 		let cancelled = false
-		const delays: number[] = []
 		const fetchFn: ExplorerFetch = async () => {
 			attempts += 1
 			if (attempts === 1)
 				return {
-					ok: false,
-					status: 429,
-					headers: new Headers({ 'Retry-After': header === 'future-date' ? new Date(Date.now() + 30_000).toUTCString() : header }),
+					...rateLimitedResponse(new Headers({ 'Retry-After': header === 'future-date' ? new Date(Date.now() + 30_000).toUTCString() : header })),
 					body: {
 						cancel: async () => {
 							cancelled = true
 						},
 					},
-					json: async () => ({}),
 				}
-			return { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+			return alreadyVerifiedResponse()
 		}
-		const outcomes = await verifyContractsWithExplorer({
-			fetchFn,
-			inputs: testInputs,
-			jobs: [testJob],
-			log: () => {},
-			sleep: async delay => {
-				delays.push(delay)
-			},
-			target: testTarget,
-		})
+		const { delays, outcomes } = await runExplorer(fetchFn)
 		expect(outcomes[0]?.status).toBe('already-verified')
 		expect(attempts).toBe(2)
 		expect(cancelled).toBe(true)
@@ -425,25 +377,29 @@ for (const [label, header, minimumDelay, maximumDelay] of [
 test('explorer uses each Retry-After value instead of the growing fallback backoff', async () => {
 	const headers = ['10', '1', undefined, '2']
 	let attempts = 0
-	const delays: number[] = []
-	const outcomes = await verifyContractsWithExplorer({
-		fetchFn: async () => {
-			const header = headers[attempts]
-			attempts += 1
-			return attempts <= headers.length ? { ok: false, status: 429, headers: new Headers(header === undefined ? {} : { 'Retry-After': header }), json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
-		},
-		inputs: testInputs,
-		jobs: [testJob],
-		log: () => {},
-		sleep: async delay => {
-			delays.push(delay)
-		},
-		target: testTarget,
+	const { delays, outcomes } = await runExplorer(async () => {
+		const header = headers[attempts]
+		attempts += 1
+		return attempts <= headers.length ? rateLimitedResponse(new Headers(header === undefined ? {} : { 'Retry-After': header })) : alreadyVerifiedResponse()
 	})
 	expect(outcomes[0]?.status).toBe('already-verified')
 	expect(attempts).toBe(5)
 	expect(delays).toEqual([10_000, 1_000, 4_229, 2_000])
 })
+
+const expectSingleCooldownThenVerified = async (headers: Headers, explorer: string, expectedDelays: readonly number[]) => {
+	let attempts = 0
+	const { delays, outcomes } = await runExplorer(
+		async () => {
+			attempts += 1
+			return attempts === 1 ? rateLimitedResponse(headers) : alreadyVerifiedResponse()
+		},
+		{ target: { ...testTarget, name: explorer } },
+	)
+	expect(outcomes[0]?.status).toBe('already-verified')
+	expect(attempts).toBe(2)
+	expect(delays).toEqual([...expectedDelays])
+}
 
 for (const [label, reset, retryAfter, explorer, expectedDelay] of [
 	['milliseconds', '10000', undefined, 'Blockscout', 10_000],
@@ -459,26 +415,9 @@ for (const [label, reset, retryAfter, explorer, expectedDelay] of [
 	['other explorer', '10000', undefined, 'Etherscan', 1_652],
 ] as const) {
 	test(`Blockscout reset header handles ${label}`, async () => {
-		let attempts = 0
-		const delays: number[] = []
 		const headers = new Headers({ 'x-ratelimit-reset': reset })
 		if (retryAfter !== undefined) headers.set('Retry-After', retryAfter)
-		const outcomes = await verifyContractsWithExplorer({
-			fetchFn: async () => {
-				attempts += 1
-				return attempts === 1 ? { ok: false, status: 429, headers, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
-			},
-			inputs: testInputs,
-			jobs: [testJob],
-			log: () => {},
-			sleep: async delay => {
-				delays.push(delay)
-			},
-			target: { ...testTarget, name: explorer },
-		})
-		expect(outcomes[0]?.status).toBe('already-verified')
-		expect(attempts).toBe(2)
-		expect(delays).toEqual([expectedDelay])
+		await expectSingleCooldownThenVerified(headers, explorer, [expectedDelay])
 	})
 }
 
@@ -488,24 +427,7 @@ for (const [header, value, expectedDelays] of [
 	['x-ratelimit-reset', '2147483648', [2_147_483_647, 1]],
 ] as const) {
 	test(`explorer waits the full ${header} cooldown of ${value} beyond the fallback budget`, async () => {
-		let attempts = 0
-		const delays: number[] = []
-		const outcomes = await verifyContractsWithExplorer({
-			fetchFn: async () => {
-				attempts += 1
-				return attempts === 1 ? { ok: false, status: 429, headers: new Headers({ [header]: value }), json: async () => ({}) } : { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
-			},
-			inputs: testInputs,
-			jobs: [testJob],
-			log: () => {},
-			sleep: async delay => {
-				delays.push(delay)
-			},
-			target: { ...testTarget, name: 'Blockscout' },
-		})
-		expect(attempts).toBe(2)
-		expect(delays).toEqual([...expectedDelays])
-		expect(outcomes[0]?.status).toBe('already-verified')
+		await expectSingleCooldownThenVerified(new Headers({ [header]: value }), 'Blockscout', expectedDelays)
 	})
 }
 
@@ -516,18 +438,14 @@ test('explorer preserves the final retry cooldown before contacting the provider
 	const fetchFn: ExplorerFetch = async () => {
 		attempts += 1
 		requestTimes.push(elapsed)
-		if (attempts <= 11) return { ok: false, status: 429, headers: new Headers({ 'Retry-After': attempts === 11 ? '250' : '1' }), json: async () => ({}) }
-		return { ok: true, status: 200, json: async () => ({ result: [{ SourceCode: 'verified source' }], status: '1' }) }
+		if (attempts <= 11) return rateLimitedResponse(new Headers({ 'Retry-After': attempts === 11 ? '250' : '1' }))
+		return alreadyVerifiedResponse()
 	}
-	const outcomes = await verifyContractsWithExplorer({
-		fetchFn,
-		inputs: testInputs,
+	const { outcomes } = await runExplorer(fetchFn, {
 		jobs: [testJob, { ...testJob, id: 'second' }],
-		log: () => {},
-		sleep: async delay => {
+		onSleep: delay => {
 			elapsed += delay
 		},
-		target: testTarget,
 	})
 	expect(outcomes.map(outcome => outcome.status)).toEqual(['failed', 'already-verified'])
 	expect(attempts).toBe(12)
@@ -562,7 +480,7 @@ test('sourcify verification submits the standard JSON object and polls the job u
 		pollCount += 1
 		return pollCount === 1 ? { payload: { isJobCompleted: false, verificationId: 'sourcify-job-1' }, status: 200 } : { payload: { contract: { match: 'exact_match' }, isJobCompleted: true }, status: 200 }
 	})
-	const outcomes = await verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	const outcomes = await runSourcify(fetchFn)
 	expect(outcomes).toEqual([{ detail: 'exact_match', id: 'zoltar', status: 'verified' }])
 	const submission = calls.find(call => call.body !== undefined)
 	expect(submission?.url).toBe(`https://sourcify.example.invalid/server/v2/verify/11155111/${testJob.address}`)
@@ -571,7 +489,7 @@ test('sourcify verification submits the standard JSON object and polls the job u
 
 test('sourcify verification skips contracts it already lists as matched', async () => {
 	const { calls, fetchFn } = createSourcifyFetchStub(() => ({ payload: { address: testJob.address, match: 'match' }, status: 200 }))
-	const outcomes = await verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	const outcomes = await runSourcify(fetchFn)
 	expect(outcomes).toEqual([{ id: 'zoltar', status: 'already-verified' }])
 	expect(calls).toHaveLength(1)
 })
@@ -581,7 +499,7 @@ test('sourcify verification treats a conflict response as already verified', asy
 		if (url.includes('/v2/contract/')) return { payload: { customCode: 'not_verified', errorId: '1', message: 'Contract is not verified' }, status: 404 }
 		return { payload: { customCode: 'already_verified', errorId: '2', message: 'Contract is already verified' }, status: 409 }
 	})
-	const outcomes = await verifyContractsWithSourcify({ fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	const outcomes = await runSourcify(fetchFn)
 	expect(outcomes[0]?.status).toBe('already-verified')
 })
 
@@ -590,14 +508,14 @@ test('sourcify verification classifies undeployed contracts and bytecode mismatc
 		if (url.includes('/v2/contract/')) return { payload: {}, status: 404 }
 		return { payload: { customCode: 'contract_not_deployed', errorId: '3', message: `Contract ${testJob.address} is not deployed` }, status: 400 }
 	})
-	const notDeployedOutcomes = await verifyContractsWithSourcify({ fetchFn: notDeployed.fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	const notDeployedOutcomes = await runSourcify(notDeployed.fetchFn)
 	expect(notDeployedOutcomes[0]?.status).toBe('not-deployed')
 	const noMatch = createSourcifyFetchStub(url => {
 		if (url.includes('/v2/contract/')) return { payload: {}, status: 404 }
 		if (url.includes('/v2/verify/11155111/')) return { payload: { verificationId: 'sourcify-job-2' }, status: 202 }
 		return { payload: { error: { customCode: 'no_match', errorId: '4', message: "The onchain and recompiled bytecodes don't match." }, isJobCompleted: true }, status: 200 }
 	})
-	const noMatchOutcomes = await verifyContractsWithSourcify({ fetchFn: noMatch.fetchFn, inputs: testInputs, jobs: [testJob], log: () => {}, sleep: immediateSleep, target: sourcifySepolia })
+	const noMatchOutcomes = await runSourcify(noMatch.fetchFn)
 	expect(noMatchOutcomes[0]?.status).toBe('failed')
 	expect(noMatchOutcomes[0]?.detail).toContain('no_match')
 })
