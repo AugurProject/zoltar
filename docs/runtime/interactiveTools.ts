@@ -1,3 +1,5 @@
+import { copyText } from './domHelpers'
+
 type ToolInput = HTMLInputElement | HTMLSelectElement
 type ToolState = Record<string, string>
 interface ToolPreset {
@@ -199,25 +201,6 @@ function scenarioUrl(tool: HTMLDetailsElement): string {
 
 function toolIsUnavailable(tool: HTMLDetailsElement): boolean {
 	return tool.dataset['toolUnavailable'] === 'true'
-}
-
-async function copyText(value: string): Promise<boolean> {
-	try {
-		await navigator.clipboard.writeText(value)
-		return true
-	} catch (error) {
-		if (!(error instanceof DOMException) && !(error instanceof TypeError)) throw error
-		const input = document.createElement('textarea')
-		input.value = value
-		input.setAttribute('readonly', '')
-		input.style.position = 'fixed'
-		input.style.opacity = '0'
-		document.body.append(input)
-		input.select()
-		const copied = document.execCommand('copy')
-		input.remove()
-		return copied
-	}
 }
 
 function createToolbar(tool: HTMLDetailsElement): HTMLElement {
