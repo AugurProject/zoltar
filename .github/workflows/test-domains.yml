@@ -3,6 +3,10 @@ name: Test Domains
 on:
   workflow_call:
     inputs:
+      build-inputs:
+        description: Same-run shared build input artifact, when called by CI Gate.
+        type: string
+        default: ""
       solidity:
         description: Run Solidity tests.
         type: boolean
@@ -77,12 +81,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          build-inputs: ${{ inputs.build-inputs }}
       - name: Verify complete test ownership
         run: bun run test:preflight
       - name: TypeScript checks and production UI build
         run: |
           bun run ui:build:apps
-          bun ./tooling/repo/install-frozen.mts ui/statoblast
           bun run ci:preflight:current
       - name: Read canonical UI artifact metadata
         id: projects
@@ -107,12 +112,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-ci
+        with:
+          build-inputs: ${{ inputs.build-inputs }}
       - uses: actions/download-artifact@v5
         with:
           name: domain-production-ui
           path: ui
-      - name: Refresh split UI package installs
-        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - uses: actions/download-artifact@v5
         with:
           name: application-test-timing-history-input
@@ -146,6 +151,7 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           profile: contracts
+          build-inputs: ${{ inputs.build-inputs }}
       - uses: actions/download-artifact@v5
         with:
           name: solidity-test-timing-history-input

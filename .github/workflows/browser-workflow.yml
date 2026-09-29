@@ -4,6 +4,9 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
+      build-inputs:
+        type: string
+        default: ""
       prepared:
         type: boolean
         default: false
@@ -53,14 +56,13 @@ jobs:
           fi
       - uses: ./.github/actions/setup-ci
         if: steps.scope.outputs.core == 'true'
+        with:
+          build-inputs: ${{ inputs.build-inputs }}
       - uses: actions/download-artifact@v5
         if: inputs.prepared
         with:
           name: domain-production-ui
           path: ui
-      - name: Refresh split UI package installs
-        if: inputs.prepared
-        run: bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/
       - name: Run production browser workflow tier
         if: steps.scope.outputs.core == 'true'
         run: bun run test:browser:workflow
