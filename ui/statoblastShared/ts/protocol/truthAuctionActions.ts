@@ -4,6 +4,7 @@ import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { executeForkAuctionAction } from './securityPoolActions.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 
 export async function startTruthAuctionForSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
@@ -91,6 +92,7 @@ export async function finalizeSecurityPoolTruthAuction(client: WriteClient, secu
 				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'finalizeTruthAuction',
 				args: [securityPoolAddress],
+				reviewDescription: forkAuctionCopy.finalizeTruthAuctionReviewDescription,
 			})),
 	)
 }

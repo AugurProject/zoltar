@@ -4,6 +4,7 @@ import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
 
@@ -13,12 +14,15 @@ type TruthAuctionSummaryCardProps = {
 	clearingPriceDisplay: ComponentChildren
 	displayedEthRaisedAttoEth: bigint
 	displayedRepSoldAttoRep: bigint
+	/** Bidding has closed, so the end time reads in the past tense. */
+	ended: boolean
 	endsDisplay: ComponentChildren
 	attoEthRaiseCap: bigint
 	ethRaisedProgress: number
 	maxAttoRepBeingSold: bigint
 	minBidSizeAttoEth: bigint
-	pendingRefundDisplay: ComponentChildren
+	pendingRefundDisplay: ComponentChildren | undefined
+	progressDetail: string | undefined
 	repSoldProgress: number
 	startedDisplay: ComponentChildren
 	winningThresholdPriceDisplay?: ComponentChildren | undefined
@@ -30,12 +34,14 @@ export function TruthAuctionSummaryCard({
 	clearingPriceDisplay,
 	displayedEthRaisedAttoEth,
 	displayedRepSoldAttoRep,
+	ended,
 	endsDisplay,
 	attoEthRaiseCap,
 	ethRaisedProgress,
 	maxAttoRepBeingSold,
 	minBidSizeAttoEth,
 	pendingRefundDisplay,
+	progressDetail,
 	repSoldProgress,
 	startedDisplay,
 	winningThresholdPriceDisplay,
@@ -66,19 +72,22 @@ export function TruthAuctionSummaryCard({
 							<div className='truth-auction-progress-fill is-rep' style={{ width: `${repSoldProgress}%` }} />
 						</div>
 					</div>
+					{progressDetail === undefined ? undefined : <p className='detail'>{progressDetail}</p>}
 				</div>
 				<div className='fork-workflow-summary-metrics'>
-					<MetricField label={commonCopy.starts}>{startedDisplay}</MetricField>
+					<MetricField label={forkAuctionCopy.started}>{startedDisplay}</MetricField>
+					<MetricField label={ended ? forkAuctionCopy.ended : commonCopy.ends}>{endsDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.clearingPrice}>{clearingPriceDisplay}</MetricField>
-					<MetricField label={forkAuctionCopy.pendingRefund}>{pendingRefundDisplay}</MetricField>
 					<MetricField label={forkAuctionCopy.minBid}>{<CurrencyValue value={minBidSizeAttoEth} suffix={commonCopy.eth} />}</MetricField>
-					<MetricField label={commonCopy.ends}>{endsDisplay}</MetricField>
+					{pendingRefundDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.pendingRefund}>{pendingRefundDisplay}</MetricField>}
 					{winningThresholdPriceDisplay === undefined ? undefined : <MetricField label={forkAuctionCopy.winningThreshold}>{winningThresholdPriceDisplay}</MetricField>}
 				</div>
 			</div>
 			{auctionedUnderwritingLimitAttoEthDisplay === undefined ? undefined : (
 				<ReadOnlyDetailAccordion title={forkAuctionCopy.auctionDetails}>
-					<MetricField label={AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL}>{auctionedUnderwritingLimitAttoEthDisplay}</MetricField>
+					<MetricGrid>
+						<MetricField label={AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL}>{auctionedUnderwritingLimitAttoEthDisplay}</MetricField>
+					</MetricGrid>
 				</ReadOnlyDetailAccordion>
 			)}
 		</SectionBlock>

@@ -50,6 +50,7 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 						<div className='truth-auction-panel-header'>
 							<div>
 								<h4>{forkAuctionCopy.priceLadder}</h4>
+								{truthAuctionDepthPoints.length === 0 ? undefined : <p className='detail'>{forkAuctionCopy.priceLadderHint}</p>}
 							</div>
 						</div>
 						<div className='truth-auction-ladder'>
@@ -70,12 +71,8 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 									<div className='truth-auction-price-row-bar' style={{ width: `${clampPercentage(point.currentTotalBidAttoEth, maxTickAttoEth)}%` }} />
 									<div className='truth-auction-price-row-copy'>
 										<div className='truth-auction-price-row-main'>
-											<div>
-												<strong>{renderPriceValue(point.price)}</strong>
-												<span className='truth-auction-price-row-price'>{forkAuctionCopy.priceLevel}</span>
-											</div>
+											<strong>{renderPriceValue(point.price)}</strong>
 											<div className='truth-auction-price-row-badges'>
-												{showDepthClearingTick && clearingTick === point.tick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.clearingLevel}</span> : undefined}
 												{point.isPreviewTick ? <span className='truth-auction-ladder-helper'>{forkAuctionCopy.currentFormPrice}</span> : undefined}
 												<span className={`truth-auction-status-pill ${getTruthAuctionDispositionClassName(point.disposition.tone)}`}>{point.disposition.label}</span>
 											</div>

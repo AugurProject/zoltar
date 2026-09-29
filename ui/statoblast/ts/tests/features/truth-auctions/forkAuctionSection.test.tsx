@@ -10,7 +10,9 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReadClient, ReportingDetails, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { AccountState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -811,7 +813,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByText('No child security pools are available yet.')).toBeNull()
 	})
 
-	test('uses the current child pool as the selected outcome pool during truth auction', async () => {
+	test('shows the current child pool auction outcome as fixed text instead of a selector or a link to itself', async () => {
 		const currentChildPool = createChildPool()
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -836,8 +838,10 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('link', { name: 'Child pool' })).not.toBeNull()
-		expect(documentQueries.queryByText('Security Pool for Yes universe does not exist.')).toBeNull()
+		expect(documentQueries.queryByRole('link', { name: 'Child pool' })).toBeNull()
+		expect(document.body.querySelector('.fork-workflow-outcome-selector-row')).toBeNull()
+		expect(document.body.querySelector('.fork-workflow-outcome-selector')?.textContent).toBe('Outcome: Yes')
+		expect(documentQueries.queryByText('Security pool for Yes universe does not exist.')).toBeNull()
 	})
 
 	test('replaces the start action with auction status after the truth auction has started', async () => {
@@ -929,7 +933,8 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Time Left')).toBeNull()
-		expect(documentQueries.getByText('Starts')).not.toBeNull()
+		expect(documentQueries.getByText('Started')).not.toBeNull()
+		expect(documentQueries.queryByText('Starts')).toBeNull()
 		expect(documentQueries.getByText('1970-01-01 00:00:01 UTC')).not.toBeNull()
 		expect(documentQueries.getByText('Ends')).not.toBeNull()
 		expect(documentQueries.getByText('1970-01-08 00:00:01 UTC')).not.toBeNull()
@@ -939,7 +944,8 @@ describe('ForkAuctionSection', () => {
 		if (!(truthAuctionCard instanceof HTMLElement)) throw new Error('Expected truth auction summary card')
 		expect(truthAuctionCard.querySelector('.section-block-badge .badge')?.textContent?.trim()).toBe('Open')
 		expect(truthAuctionCard.querySelector('.fork-workflow-summary')).not.toBeNull()
-		expect(within(truthAuctionCard).getByText('Pending refund')).not.toBeNull()
+		expect(within(truthAuctionCard).queryByText('Pending refund')).toBeNull()
+		expect(within(truthAuctionCard).getByText('The ETH target has not been reached, so there is no clearing price yet. Once it is reached, a single clearing price decides which bids win.')).not.toBeNull()
 	})
 
 	test('keeps refund withdrawal disabled while loading, then shows the credited amount beside an enabled action', async () => {
@@ -1680,5 +1686,241 @@ describe('ForkAuctionSection', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Not started')).not.toBeNull()
+	})
+
+	function createLiveClearingAuctionProps({
+		currentTimestamp = 5n,
+		finalized = false,
+		formOverrides = {},
+		hitCap = true,
+		onForkAuctionFormChange = () => undefined,
+		onSelectedStageViewChange = () => undefined,
+		selectedStageView = 'auction',
+	}: {
+		currentTimestamp?: bigint
+		finalized?: boolean
+		formOverrides?: Partial<ForkAuctionFormState>
+		hitCap?: boolean
+		onForkAuctionFormChange?: ForkAuctionSectionProps['onForkAuctionFormChange']
+		onSelectedStageViewChange?: (stage: 'fork-triggered' | 'migration' | 'auction' | 'settlement') => void
+		selectedStageView?: 'auction' | 'settlement'
+	}) {
+		const currentChildPool = createChildPool({
+			securityPoolAddress: '0x00000000000000000000000000000000000000f7',
+			systemState: finalized ? 'operational' : 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000f8'),
+			truthAuctionStartedAt: 1n,
+		})
+		const clearingTick = 10n
+		const truthAuction: TruthAuctionMetrics = {
+			accumulatedBidAttoEth: 5n * 10n ** 18n,
+			auctionEndsAt: 604_801n,
+			clearingPrice: getTruthAuctionPriceAtTick(clearingTick),
+			clearingTick,
+			bidAtClearingTickAttoEth: 5n * 10n ** 18n,
+			attoEthRaiseCap: 5n * 10n ** 18n,
+			attoEthRaised: 5n * 10n ** 18n,
+			finalized,
+			hitCap,
+			maxAttoRepBeingSold: 100n * 10n ** 18n,
+			minBidSizeAttoEth: 1n,
+			attoRepPurchasableAtBid: undefined,
+			timeRemaining: currentTimestamp >= 604_801n ? 0n : 604_801n - currentTimestamp,
+			totalAttoRepPurchased: 4n * 10n ** 18n,
+			underfunded: false,
+			underfundedThreshold: undefined,
+			underfundedWinningAttoEth: 0n,
+		}
+		const truthAuctionReadClient: Pick<ReadClient, 'readContract'> = {
+			readContract: mock(async request => {
+				switch (request.functionName) {
+					case 'activeTickCount':
+						return 1n
+					case 'getActiveTickPage':
+						return [{ active: true, currentTotalBidAttoEth: 5n * 10n ** 18n, price: getTruthAuctionPriceAtTick(clearingTick), submissionCount: 1n, tick: clearingTick }]
+					case 'getBidderBidCount':
+					case 'getBidCountAtTick':
+						return 0n
+					case 'getBidderBidPage':
+					case 'getBidPageAtTick':
+						return []
+					default:
+						throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+				}
+			}) as ReadClient['readContract'],
+		}
+		return createProps({
+			accountState: createAccountState({ address: getAddress('0x00000000000000000000000000000000000000aa'), ethBalanceAttoEth: 10n ** 18n }),
+			currentStageView: finalized ? 'settlement' : 'auction',
+			currentTimestamp,
+			forkAuctionDetails: createForkAuctionDetails({
+				currentTime: currentTimestamp,
+				parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+				questionOutcome: 'yes',
+				securityPoolAddress: currentChildPool.securityPoolAddress,
+				systemState: finalized ? 'operational' : 'forkTruthAuction',
+				truthAuction,
+				truthAuctionAddress: currentChildPool.truthAuctionAddress,
+				truthAuctionStartedAt: 1n,
+				universeId: currentChildPool.universeId,
+			}),
+			forkAuctionForm: createForkAuctionForm({ securityPoolAddress: currentChildPool.securityPoolAddress, ...formOverrides }),
+			onForkAuctionFormChange,
+			onSelectedStageViewChange,
+			previewPool: currentChildPool,
+			securityPools: [currentChildPool],
+			selectedStageView,
+			truthAuctionReadClient,
+		})
+	}
+
+	test('warns that a bid below the live clearing price loses and offers the lowest winning price', async () => {
+		const formChanges: Array<Partial<ForkAuctionFormState>> = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createLiveClearingAuctionProps({
+					formOverrides: { submitBidAmount: '0.1', submitBidPrice: '0.5' },
+					onForkAuctionFormChange: update => {
+						formChanges.push(update)
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText(/^Current clearing price:/)).not.toBeNull()
+		expect(documentQueries.getByText(/This price is below the current clearing price, so the bid would lose and only be refunded\./)).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: /^Use lowest winning price/ }))
+		expect(formChanges).toContainEqual({ submitBidPrice: formatTruthAuctionTickPriceInput(11n) })
+	})
+
+	test('does not warn when the bid price is above the live clearing price', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveClearingAuctionProps({ formOverrides: { submitBidAmount: '0.1', submitBidPrice: formatCurrencyInputBalance(getTruthAuctionPriceAtTick(11n)) } })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.queryByText(/below the current clearing price/)).toBeNull()
+		expect(documentQueries.queryByText(/This price equals the clearing price/)).toBeNull()
+	})
+
+	test('fills the bid price when a price ladder row is selected', async () => {
+		const formChanges: Array<Partial<ForkAuctionFormState>> = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createLiveClearingAuctionProps({
+					onForkAuctionFormChange: update => {
+						formChanges.push(update)
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Market depth').closest('details')?.open).toBe(true)
+		await waitFor(() => {
+			expect(document.body.querySelector('.truth-auction-ladder-row')).not.toBeNull()
+		})
+		const ladderRow = document.body.querySelector('.truth-auction-ladder-row')
+		if (!(ladderRow instanceof HTMLElement)) throw new Error('Expected a price ladder row')
+		fireEvent.click(ladderRow)
+		expect(formChanges).toContainEqual({ submitBidPrice: formatTruthAuctionTickPriceInput(10n) })
+	})
+
+	test('replaces the bid form with the finalize step once bidding has ended', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveClearingAuctionProps({ currentTimestamp: 604_900n })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		expect(documentQueries.getByText('Truth auction has ended.')).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: 'Finalize truth auction' })).not.toBeNull()
+		expect(documentQueries.getByText('Ended')).not.toBeNull()
+		expect(documentQueries.queryByText('Higher bids now raise the clearing price, so less REP is sold.')).toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Submit bid' })).toBeNull()
+		expect(documentQueries.queryByText('Market depth')).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'My bids' })).not.toBeNull()
+	})
+
+	test('points a finalized auction to the settlement stage', async () => {
+		const stageChanges: string[] = []
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createLiveClearingAuctionProps({
+					currentTimestamp: 604_900n,
+					finalized: true,
+					onSelectedStageViewChange: stage => {
+						stageChanges.push(stage)
+					},
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Open settlement' }))
+		expect(stageChanges).toEqual(['settlement'])
+	})
+
+	test('drops the settle-bids prompt when the wallet has nothing left to settle', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveClearingAuctionProps({ currentTimestamp: 604_900n, finalized: true, selectedStageView: 'settlement' })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			expect(documentQueries.getByText('No bids from this wallet are indexed for the current auction.')).not.toBeNull()
+		})
+		expect(documentQueries.queryByRole('heading', { name: 'Settle selected bids' })).toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Refund withdrawal' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Open settlement' })).toBeNull()
+	})
+
+	test('shows the submitted bid price as REP per ETH before the ETH target is reached', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveClearingAuctionProps({ formOverrides: { submitBidAmount: '0.1', submitBidPrice: '2' }, hitCap: false })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent).not.toContain('Current clearing price:')
+		expect(document.body.textContent).toContain('(\u2248\u00a00.5000\u00a0REP per ETH)')
+	})
+
+	test('fixes the outcome to a No child pool own auction even when the form still holds Yes', async () => {
+		const noChildPool = createChildPool({
+			forkOutcome: 'no',
+			questionOutcome: 'no',
+			securityPoolAddress: '0x00000000000000000000000000000000000000f9',
+			systemState: 'forkTruthAuction',
+			truthAuctionAddress: getAddress('0x00000000000000000000000000000000000000fa'),
+			truthAuctionStartedAt: 1n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'auction',
+					forkAuctionDetails: createForkAuctionDetails({
+						forkOutcome: 'no',
+						parentSecurityPoolAddress: PARENT_POOL_ADDRESS,
+						questionOutcome: 'no',
+						securityPoolAddress: noChildPool.securityPoolAddress,
+						systemState: 'forkTruthAuction',
+						truthAuctionAddress: noChildPool.truthAuctionAddress,
+						truthAuctionStartedAt: 1n,
+						universeId: noChildPool.universeId,
+					}),
+					forkAuctionForm: createForkAuctionForm({ securityPoolAddress: noChildPool.securityPoolAddress, selectedOutcome: 'yes' }),
+					previewPool: noChildPool,
+					securityPools: [noChildPool],
+					selectedStageView: 'auction',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.querySelector('.fork-workflow-outcome-selector')?.textContent).toBe('Outcome: No')
+		expect(document.body.querySelector('.fork-workflow-outcome-selector-row')).toBeNull()
+		expect(document.body.textContent).not.toContain('universe does not exist')
 	})
 })

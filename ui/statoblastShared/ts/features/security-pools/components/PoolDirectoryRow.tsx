@@ -62,7 +62,7 @@ export function PoolDirectoryRow({
 				</div>
 				<div className='pool-directory-meta'>
 					<span>
-						{currentTimestamp !== undefined && currentTimestamp >= pool.marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends} <TimestampValue timestamp={pool.marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
+						{currentTimestamp !== undefined && currentTimestamp >= pool.marketDetails.endTime ? securityPoolCopy.questionEnded : securityPoolCopy.questionEnds} <TimestampValue timestamp={pool.marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 					</span>
 					<span>{copy.vaults(pool.vaultCount)}</span>
 					<span>{securityPoolCopy.formatPoolUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</span>
