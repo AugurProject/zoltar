@@ -124,6 +124,14 @@ export function isOracleManagerPriceUsable(oracleManagerDetails: Pick<OracleMana
 	return validUntilTimestamp !== undefined && currentTimestamp < validUntilTimestamp
 }
 
+/** Inverts both rounded collateral requirements used by liquidation. */
+export function getMaximumHealthyCommitment(details: Pick<SecurityVaultDetails, 'vaultAttoRepBacking' | 'disputeStakedAttoRep'> | undefined, repPerEthPrice: bigint | undefined, multiplierBps: bigint | undefined) {
+	if (details === undefined || repPerEthPrice === undefined || repPerEthPrice <= 0n || multiplierBps === undefined || multiplierBps < BPS_DENOMINATOR) return undefined
+	const associatedBase = ((details.vaultAttoRepBacking + details.disputeStakedAttoRep) * BPS_DENOMINATOR) / multiplierBps
+	const freeBase = (details.vaultAttoRepBacking * BPS_DENOMINATOR) / getMigrationSecurityMultiplierBps(multiplierBps)
+	return ((associatedBase < freeBase ? associatedBase : freeBase) * PRICE_PRECISION) / repPerEthPrice
+}
+
 export function getVaultBackingFactorAdjustmentGuard(details: SecurityVaultDetails | undefined, limitAttoEth?: bigint, repPerEthPrice?: bigint, poolSecurityMultiplierBps?: bigint) {
 	if (details === undefined || details.settlementCollateralAttoEth === undefined) return 'Refresh vault details before changing the commitment limit.'
 	if (limitAttoEth === undefined) return undefined

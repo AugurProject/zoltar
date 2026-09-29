@@ -1,3 +1,4 @@
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -29,6 +30,7 @@ export function getInitialReportPriorityFeeValidationMessage(initialReportPriori
 
 export function getSecurityPoolCreateDisabledReason({
 	accountAddress,
+	currentTimestamp,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
 	initialReportPriorityFeeEth,
@@ -39,6 +41,7 @@ export function getSecurityPoolCreateDisabledReason({
 	zoltarUniverseHasForked,
 }: {
 	accountAddress: Address | undefined
+	currentTimestamp?: bigint | undefined
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
 	initialReportPriorityFeeEth: string
@@ -57,6 +60,7 @@ export function getSecurityPoolCreateDisabledReason({
 	if (duplicateOriginPoolExists) return 'A pool for this question, Statoblast security multiplier, and priority fee already exists.'
 	if (marketDetails === undefined) return 'Enter an exact binary Yes / No question before creating a pool.'
 	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
+	if (currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp) return securityPoolCopy.questionEndedReason
 	if (zoltarUniverseHasForked) return 'Security pools cannot be created after this universe has forked.'
 	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeEth)
 }

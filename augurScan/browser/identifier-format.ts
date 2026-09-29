@@ -4,3 +4,8 @@ export const shortIdentifier = (value: string, front = 6, back = 4) => {
 	const text = String(value ?? '')
 	return text.length > front + back + 1 ? short(text, front, back) : text || '—'
 }
+
+export function questionIdHex(value: string | null | undefined) {
+	if (value === undefined || value === null || !/^(?:0x[0-9a-f]+|[0-9]+)$/i.test(value)) return '—'
+	return `0x${BigInt(value).toString(16)}`
+}

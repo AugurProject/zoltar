@@ -152,6 +152,15 @@ export function buildVaultReadinessActions({
 			...(depositRepToVaultEnabled ? withBlocker(visibleDepositLauncherBlocker) : {}),
 		},
 		{
+			actionLabel: securityPoolCopy.setVaultUnderwritingLimit,
+			description: securityPoolCopy.setVaultUnderwritingLimitDescription,
+			key: 'adjust-backing',
+			...(adjustmentReady ? { onAction: () => onOpenModal('adjust-backing') } : {}),
+			readiness: adjustmentReady ? 'ready' : 'blocked',
+			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
+			...(showSharedRefreshVaultBlocker ? {} : withBlocker(adjustmentBlocker)),
+		},
+		{
 			actionLabel: repExitActionLabel,
 			description: repExitMode === 'redeem' ? securityPoolCopy.repRedemptionDescription : securityPoolCopy.repWithdrawalDescription,
 			key: 'rep-exit',
@@ -169,15 +178,6 @@ export function buildVaultReadinessActions({
 			readiness: claimFeesReady ? 'ready' : 'blocked',
 			...(claimFeesDisabledReasonId === undefined ? {} : { disabledReasonId: claimFeesDisabledReasonId }),
 			...withBlocker(claimFeesAvailabilityBlocker),
-		},
-		{
-			actionLabel: securityPoolCopy.setVaultUnderwritingLimit,
-			description: securityPoolCopy.setVaultUnderwritingLimitDescription,
-			key: 'adjust-backing',
-			...(adjustmentReady ? { onAction: () => onOpenModal('adjust-backing') } : {}),
-			readiness: adjustmentReady ? 'ready' : 'blocked',
-			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
-			...(showSharedRefreshVaultBlocker ? {} : withBlocker(adjustmentBlocker)),
 		},
 	]
 }

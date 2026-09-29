@@ -60,11 +60,15 @@ test('preserves a user-selected directory and another vault across form rerender
 })
 
 for (const connected of [true, false]) {
-	test(`defaults to the directory without ${connected ? 'an existing vault' : 'a connected wallet'}`, async () => {
+	test(`defaults to ${connected ? 'My vault without an existing vault' : 'the directory without a wallet'}`, async () => {
 		const dom = installDomEnvironment()
 		const rendered = await renderIntoDocument(<VaultSelectionHarness exists={false} connected={connected} />)
 		try {
-			expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
+			expect(
+				within(document.body)
+					.getByRole('button', { name: connected ? 'My vault' : 'All vaults' })
+					.getAttribute('aria-pressed'),
+			).toBe('true')
 		} finally {
 			await rendered.cleanup()
 			dom.cleanup()

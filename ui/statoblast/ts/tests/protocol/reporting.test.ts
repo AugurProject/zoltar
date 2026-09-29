@@ -128,6 +128,8 @@ describe('reporting protocol client', () => {
 				previews.push(preview)
 			},
 			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'forkResumedAt') return 100n
+				if (request.functionName === 'forkElapsedAtStart') return 0n
 				if (request.functionName === 'forkContinuation') return true
 				if (request.functionName === 'previewDepositOnOutcome') return [funded && failure === 'quote' ? 6n : 7n, 10n]
 				if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
@@ -217,6 +219,8 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return escalationGameAddress
+					if (request.functionName === 'forkResumedAt') return 100n
+					if (request.functionName === 'forkElapsedAtStart') return 0n
 					if (request.functionName === 'forkContinuation') return true
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
@@ -270,6 +274,8 @@ describe('reporting protocol client', () => {
 			async request => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'forkResumedAt') return 100n
+				if (request.functionName === 'forkElapsedAtStart') return 0n
 				if (request.functionName === 'forkContinuation') return true
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},

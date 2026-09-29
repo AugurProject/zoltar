@@ -2,7 +2,6 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
-import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { formatAmountForDisplay } from '@zoltar/ui-core-shared/forms/amountInput.js'
@@ -211,7 +210,6 @@ export function VaultActionLaunchers({
 			</div>
 		)
 	}
-	const isAdvanced = (action: Omit<ReadinessAction, 'title'>) => action.key === 'adjust-backing' || action.key === 'liquidate-vault'
 	return (
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
@@ -226,11 +224,7 @@ export function VaultActionLaunchers({
 						{vaultActionsLoadBlocker}
 					</p>
 				) : undefined}
-				<div className='vault-primary-actions'>{vaultReadinessActions.filter(action => !isAdvanced(action)).map(renderAction)}</div>
-				<details className='vault-more-actions'>
-					<summary>{workspaceCopy.moreActions}</summary>
-					<div className='vault-primary-actions'>{vaultReadinessActions.filter(isAdvanced).map(renderAction)}</div>
-				</details>
+				<div className='vault-primary-actions'>{vaultReadinessActions.map(renderAction)}</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />
 			<ErrorNotice message={walletRepBalanceError} />

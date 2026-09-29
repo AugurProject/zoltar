@@ -4,8 +4,7 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getCoordinatorInitialReportPrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
-import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { OpenOraclePriceInput } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOraclePriceInput.js'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionActionButtonLockProvider, unlockedTransactionActions } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
@@ -16,7 +15,7 @@ import { embeddedTransactionSteps } from '@zoltar/ui-core-shared/components/Tran
 import { PriceRequestPreview } from './PriceRequestPreview.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { cancelTransactionReview, isTransactionStepInFlight, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
-import { dismissGlobalTransaction } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
+import { dismissGlobalTransaction, isGlobalTransactionDismissed } from '@zoltar/ui-core-shared/transactions/globalTransactionDismissal.js'
 import type { FailedPricePlan } from './PriceRequestPreview.js'
 
 async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['review']>) {
@@ -29,7 +28,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const quoteAttempt = useRef(0)
 	const [price, setPrice] = useState('')
 	const [retry, setRetry] = useState(0)
-	const [manualRequestRequired, setManualRequestRequired] = useState(false)
+	const [preparationPaused, setPreparationPaused] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
 	const [running, setRunning] = useState(false)
@@ -41,6 +40,22 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const confirm = useRef(onConfirm)
 	confirm.current = onConfirm
 	const presentation = useGlobalTransactionPresentation()
+	const failureDismissed = presentation?.tone === 'error' && isGlobalTransactionDismissed(presentation)
+	const previousFailureDismissed = useRef(failureDismissed)
+	const retryPreparation = () => {
+		if (!running) {
+			run.current?.cancel()
+			run.current = undefined
+		}
+		setPreparationPaused(false)
+		setFailureLatched(false)
+		setFailedPlan(undefined)
+		setRetry(value => value + 1)
+	}
+	useEffect(() => {
+		if (!previousFailureDismissed.current && failureDismissed && failureLatched) retryPreparation()
+		previousFailureDismissed.current = failureDismissed
+	}, [failureDismissed, failureLatched])
 	const workflow = transactionSteps.value
 	const parsed = tryParseDecimalInput(price)
 	const validPrice = parsed !== undefined && parsed > 0n && parsed < 2n ** 256n
@@ -62,7 +77,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
-	if (manualRequestRequired) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
+	if (preparationPaused) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
 
 	useLayoutEffect(() => {
 		if (review === undefined) return
@@ -74,7 +89,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setQuoteError(undefined)
 		setPrice('')
 		setAttempted(undefined)
-		setManualRequestRequired(false)
+		setPreparationPaused(false)
 		setFailureLatched(false)
 		setFailedPlan(undefined)
 	}, [review])
@@ -87,7 +102,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	useLayoutEffect(() => {
 		if (!failedCurrentAttempt) return
 		setFailureLatched(true)
-		setManualRequestRequired(true)
+		setPreparationPaused(true)
 		if (workflow !== undefined) {
 			const plan = {
 				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
@@ -116,8 +131,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (!current && !sending && !(running && ownsWorkflow && workflow?.steps.some(step => step.hash !== undefined))) run.current?.cancel()
 	}, [current, sending, running, ownsWorkflow, workflow])
 	useLayoutEffect(() => {
-		if (manualRequestRequired && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
-	}, [manualRequestRequired, showSteps])
+		if (preparationPaused && !showSteps) priceControlsRef.current?.querySelector<HTMLInputElement>('input:not(:disabled)')?.focus()
+	}, [preparationPaused, showSteps])
 	useEffect(
 		() => () => {
 			mounted.current = false
@@ -127,7 +142,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		[],
 	)
 	useEffect(() => {
-		if (!valid || review === undefined || key === undefined || running || attempted === key || manualRequestRequired || failureLatched) return
+		if (!valid || review === undefined || key === undefined || running || attempted === key || preparationPaused || failureLatched) return
 		const timer = setTimeout(() => {
 			const cancellation = new AbortController()
 			embeddedTransactionSteps.value = cancellation.signal
@@ -147,7 +162,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							totalAttoEth: steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
 							outcome: steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
 						}
-					if (firstDetach && mounted.current) setManualRequestRequired(true)
+					if (firstDetach && mounted.current) setPreparationPaused(true)
 				}
 				if (!submissionOutstanding) cancellation.abort()
 				if (mounted.current && run.current?.signal === cancellation.signal) setAttempted(undefined)
@@ -166,7 +181,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			})
 		}, 300)
 		return () => clearTimeout(timer)
-	}, [valid, review, key, running, attempted, proposedPrice, manualRequestRequired, failureLatched])
+	}, [valid, review, key, running, attempted, proposedPrice, preparationPaused, failureLatched])
 	const close = () => {
 		if (completedRequest) dismissGlobalTransaction(presentation)
 		quoteAttempt.current += 1
@@ -179,7 +194,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
 		setQuoteError(undefined)
-		if (failureLatched) setManualRequestRequired(true)
+		if (failureLatched || preparationPaused) retryPreparation()
 		run.current?.cancel()
 		try {
 			const value = await fetchPrice(review)
@@ -198,26 +213,20 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					{quoteError}
 				</span>
 			)}
-			<LookupFieldRow
-				label={poolCopy.manualRepPerEth}
+			<OpenOraclePriceInput
 				value={price}
-				inputMode='decimal'
 				disabled={completedRequest}
 				onInput={value => {
-					if (submittedHash !== undefined || failureLatched) setManualRequestRequired(true)
+					if (submittedHash !== undefined || failureLatched || preparationPaused) retryPreparation()
 					run.current?.cancel()
 					quoteAttempt.current += 1
 					setFetching(false)
 					setQuoteError(undefined)
-					if (failureLatched) setManualRequestRequired(true)
 					setPrice(value)
 				}}
 				error={priceError ?? quoteError}
-				action={
-					<button className='secondary request-price-fetch' type='button' disabled={completedRequest || fetching} onClick={() => void fetchQuote()}>
-						{fetching ? <LoadingText>{priceRequestCopy.fetchingUniswapPrice}</LoadingText> : priceRequestCopy.fetchUniswapPrice}
-					</button>
-				}
+				fetching={fetching}
+				onFetch={() => void fetchQuote()}
 			/>
 		</div>
 	)
@@ -238,19 +247,9 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
 							error={confirmationGuardMessage}
 							errorWalletBlocker={confirmationWalletBlocker}
-							preparing={valid && !manualRequestRequired && (running || attempted !== key)}
+							preparing={valid && !preparationPaused && (running || attempted !== key)}
 							hideReason={!validPrice || priceError !== undefined || confirmationGuardMessage !== undefined}
 							onClose={close}
-							onReview={
-								manualRequestRequired && valid && !running
-									? () => {
-											setManualRequestRequired(false)
-											setFailureLatched(false)
-											setFailedPlan(undefined)
-											setRetry(value => value + 1)
-										}
-									: undefined
-							}
 						/>
 					)}
 				</OperationModal>

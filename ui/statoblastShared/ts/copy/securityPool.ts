@@ -261,12 +261,7 @@ export function universeVaultCount(count: bigint) {
 	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
 }
 
-export const initialPriceSource = 'Initial price source'
-export const automaticUniswapPrice = 'Uniswap quote'
-export const manualInitialPrice = 'Manual price'
 export const manualRepPerEth = 'Open Oracle REP / ETH starting price'
-export const manualStartingPrice = 'Open Oracle starting price'
-export const manualInitialPriceHint = 'Initial report price; subject to Open Oracle disputes and settlement.'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
@@ -281,3 +276,11 @@ export const liquidationUnavailableReason = 'Liquidation is unavailable in this 
 export const liquidationOwnVaultReason = 'Choose another vault to liquidate.'
 export const withdrawalUnavailableReason = 'REP withdrawal is unavailable in this pool state.'
 export const noWithdrawableRepReason = 'No REP is available to withdraw.'
+
+export const maximumHealthyCommitment = 'Maximum before liquidation'
+export const commitmentPriceUnavailable = 'The selected UI price is unavailable. A liquidation-safe maximum cannot be estimated.'
+export const commitmentRiskWarning = 'This limit would make your vault liquidatable at the selected UI price. The execution price may differ.'
+export const commitmentRiskAcknowledgement = 'I understand that my vault could be liquidated immediately.'
+export const commitmentRiskRequired = 'Confirm the immediate liquidation risk to continue.'
+
+export const questionEndedReason = 'This question has already ended.'

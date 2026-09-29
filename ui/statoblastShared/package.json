@@ -575,6 +575,14 @@
 		"./features/security-pools/lib/poolViewModel.js": {
 			"bun": "./ts/features/security-pools/lib/poolViewModel.ts",
 			"default": "./js/features/security-pools/lib/poolViewModel.js"
+		},
+		"./features/open-oracle/components/OpenOraclePriceInput.js": {
+			"bun": "./ts/features/open-oracle/components/OpenOraclePriceInput.tsx",
+			"default": "./js/features/open-oracle/components/OpenOraclePriceInput.js"
+		},
+		"./features/security-pools/components/OracleInitialPriceFields.js": {
+			"bun": "./ts/features/security-pools/components/OracleInitialPriceFields.tsx",
+			"default": "./js/features/security-pools/components/OracleInitialPriceFields.js"
 		}
 	},
 	"version": "1.0.0"

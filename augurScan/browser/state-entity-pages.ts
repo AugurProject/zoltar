@@ -1,3 +1,4 @@
+import { questionIdHex } from './identifier-format.ts'
 import { isRecord } from './api-validation.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
@@ -51,7 +52,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	if (history.pools.length === 0) resolutionPanel.append(element('p', 'data-note', 'No linked pool resolution evidence is available.'))
 	const kind = question.outcome_options.length === 0 ? 'Scalar' : 'Categorical'
 	const fragment = document.createDocumentFragment()
-	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(question.question_id, 10, 8)}`, `${kind} · Time window ${questionStatus(question)}`))
+	fragment.append(stateHeader('Immutable question', question.title, `ID ${short(questionIdHex(question.question_id), 10, 8)}`, `${kind} · Time window ${questionStatus(question)}`))
 	const canonicalQuestionRoute = location.pathname.startsWith('/question/')
 	const questionTab = pageUrl.searchParams.get('tab') === 'usage' ? 'usage' : 'overview'
 	if (canonicalQuestionRoute) {
@@ -98,7 +99,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	const usage = element('section', 'static-card')
 	usage.append(element('h4', '', 'Protocol usage'))
 	const grid = element('div', 'static-grid')
-	grid.append(staticField('Pool deployments', number(question.pool_count)), staticField('Universe forks using this question', number(question.fork_count)), staticField('Question ID', question.question_id), staticField('Created block evidence', `#${number(question.block_number)}`))
+	grid.append(staticField('Pool deployments', number(question.pool_count)), staticField('Universe forks using this question', number(question.fork_count)), staticField('Question ID', questionIdHex(question.question_id)), staticField('Created block evidence', `#${number(question.block_number)}`))
 	usage.append(grid)
 	if (!canonicalQuestionRoute || questionTab === 'usage') fragment.append(usage)
 	$('#state-detail').replaceChildren(fragment)
@@ -219,7 +220,7 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 		staticField('Parent universe', universe.parent_universe_id),
 		staticField('Forking outcome', universe.forking_outcome_index),
 		staticAddressField('REP token', universe.reputation_token_address, universe.chain_id),
-		staticField('Fork question', universe.active_fork_question_id),
+		staticField('Fork question', questionIdHex(universe.active_fork_question_id)),
 		staticField('Fork time', universe.active_fork_time ? new Date(universe.active_fork_time).toISOString() : 'Not forked'),
 		staticAddressField('Fork initiator', universe.forker_address, universe.chain_id),
 		staticField('Fork threshold', exactUnit(universe.fork_threshold_atto_rep, 18, 'REP')),

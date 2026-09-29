@@ -57,13 +57,14 @@ describe('LookupFieldRow', () => {
 	})
 
 	test('passes validation errors and hints through to the shared input', async () => {
-		const renderedComponent = await renderIntoDocument(<LookupFieldRow error='Enter a valid address.' hint='Paste a pool address.' label='Pool Address' onInput={() => undefined} value='0x' />)
+		const renderedComponent = await renderIntoDocument(<LookupFieldRow errorId='address-error' error='Enter a valid address.' hint='Paste a pool address.' label='Pool Address' onInput={() => undefined} value='0x' />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
 		const input = documentQueries.getByLabelText('Pool Address')
 		const error = documentQueries.getByText('Enter a valid address.', { selector: 'p.field-error' })
 		const hint = documentQueries.getByText('Paste a pool address.', { selector: 'p.field-hint' })
+		expect(error.id).toBe('address-error')
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		expect(input.getAttribute('aria-describedby')?.split(' ')).toEqual([error.id, hint.id])
 	})
