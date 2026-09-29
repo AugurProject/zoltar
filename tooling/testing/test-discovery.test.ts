@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getTimingContextPaths, getWeightedTestFiles, KNOWN_FILE_WEIGHTS, parseShardOption } from './run-balanced-test-shard.mts'
 import { createSolidityBytecodeTestShards, discoverSolidityBytecodeTestFiles } from './run-solidity-bytecode-coverage.mts'
-import { discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
+import { createBalancedTestShards, discoverTestFiles, discoverTestFilesForDomain, EXPLICIT_TEST_TIER_FILES, getDefaultTestParallelism, hasExplicitTestPath, isExplicitTestPath, MAXIMUM_TEST_PARALLELISM, toBunTestPath } from './test-discovery.mts'
 import {
 	createTestFingerprints,
 	createTestTimingObservation,
@@ -90,6 +90,19 @@ describe('canonical test discovery', () => {
 		expect(applicationFiles.every(filePath => !filePath.startsWith('solidity/ts/'))).toBe(true)
 		expect(solidityFiles.every(filePath => filePath.startsWith('solidity/ts/'))).toBe(true)
 		expect([...applicationFiles, ...solidityFiles].sort((left, right) => left.localeCompare(right))).toEqual(canonicalFiles)
+	})
+
+	test('eight Solidity shards own every test exactly once, including all fork migration slices', async () => {
+		const weightedFiles = await getWeightedTestFiles(undefined, 'solidity')
+		const shards = createBalancedTestShards(weightedFiles, 8)
+		const files = shards.flatMap(shard => shard.files)
+		expect([...files].sort()).toEqual([...(await discoverTestFilesForDomain('solidity'))].sort())
+		expect(new Set(files).size).toBe(files.length)
+		expect(shards.every(shard => shard.files.length > 0)).toBe(true)
+		for (const slice of ['Entry', 'Liquidation', 'Shares', 'MultiPool', 'Recovery', 'Vault', 'Claims']) {
+			expect(files).toContain(`solidity/ts/tests/statoblast/forkMigration${slice}.test.ts`)
+		}
+		expect(files).not.toContain('solidity/ts/tests/statoblast/forkMigration.test.ts')
 	})
 
 	test('domain timing fingerprints cover the workspace lockfile and preload', () => {
