@@ -16,10 +16,10 @@ const workflowDefinitionPath = (name: string) => {
 const ciWorkflowPath = workflowDefinitionPath('ci.yml')
 const browserWorkflowPath = workflowDefinitionPath('browser-workflow.yml')
 const coverageWorkflowPath = workflowDefinitionPath('coverage.yml')
-const testDomainsWorkflowPath = join(repositoryRoot, '.github', 'workflows/test-domains.yml')
+const testDomainsWorkflowPath = workflowDefinitionPath('test-domains.yml')
 const testStabilityWorkflowPath = workflowDefinitionPath('test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows/deploy-testnet.yml')
-const setupActionPath = join(repositoryRoot, '.github', 'actions/setup-ci/action.yml')
+const setupActionPath = existsSync(join(repositoryRoot, 'workflow/actions/setup-ci/action.yml')) ? join(repositoryRoot, 'workflow/actions/setup-ci/action.yml') : join(repositoryRoot, '.github/actions/setup-ci/action.yml')
 const setupComponentActionPath = join(repositoryRoot, '.github', 'actions/setup-component/action.yml')
 const ipfsDeployWorkflowPath = workflowDefinitionPath('ipfs-deploy.yml')
 const versionDeployWorkflowPath = workflowDefinitionPath('version-deploy.yml')
@@ -202,7 +202,7 @@ ${command}`,
 		expect(downloadOptions).toMatchObject({ name: uploadOptions['name'], path: 'ui' })
 
 		const refreshStep = applicationSteps.slice(downloadIndex + 1).find(step => step['name'] === 'Refresh split UI package installs')
-		expect(refreshStep?.['run']).toBe('bun ./tooling/repo/run-project-tasks.mts setup --path-prefix ui/')
+		expect(refreshStep).toBeUndefined()
 		expect((await projectQuery()).setupProjectPaths.filter(projectPath => projectPath.startsWith('ui/'))).toEqual(uiPackageIds.map(packageId => `ui/${packageId}`))
 	})
 
@@ -289,7 +289,7 @@ ${command}`,
 		expect(ciJobs).not.toHaveProperty('test-timings')
 		const domainSteps = Object.values(workflowJobs(testDomainsWorkflow)).flatMap(workflowSteps)
 		const domainCommands = domainSteps.flatMap(step => (typeof step['run'] === 'string' ? [step['run']] : []))
-		expect(domainCommands.some(command => command.includes('bun run ui:build:apps\nbun ./tooling/repo/install-frozen.mts ui/statoblast\nbun run ci:preflight:current'))).toBe(true)
+		expect(domainCommands.some(command => command.includes('bun run ui:build:apps\nbun run ci:preflight:current'))).toBe(true)
 		expect(domainCommands).not.toContain('bun run tsc')
 		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=application'))).toBe(true)
 		expect(domainSteps.some(step => typeof step['run'] === 'string' && step['run'].includes('--domain=solidity'))).toBe(true)
@@ -350,10 +350,18 @@ ${command}`,
 		for (const core of [false, true])
 			for (const infrastructure of [false, true]) {
 				const env = Object.fromEntries(Object.keys(gateEnv).map(key => [key, key.endsWith('_RESULT') ? 'skipped' : 'false']))
-				Object.assign(env, { CHANGES_RESULT: 'success', CORE_SELECTED: String(core), DOCS_SELECTED: String(core), INFRA_SELECTED: String(infrastructure), DOMAIN_TESTS_SELECTED: String(core || infrastructure), INFRA_CHECKS_SELECTED: String(infrastructure && !core) })
+				Object.assign(env, {
+					CHANGES_RESULT: 'success',
+					CORE_SELECTED: String(core),
+					DOCS_SELECTED: String(core),
+					INFRA_SELECTED: String(infrastructure),
+					BUILD_INPUTS_SELECTED: String(core || infrastructure),
+					DOMAIN_TESTS_SELECTED: String(core || infrastructure),
+					INFRA_CHECKS_SELECTED: String(infrastructure && !core),
+				})
 				const selected = ['CHANGES_RESULT']
 				if (core) selected.push('PREPARE_RESULT', 'APPLICATION_TESTS_RESULT', 'DOCS_RESULT', 'BROWSER_SMOKE_RESULT', 'BROWSER_WORKFLOW_RESULT', 'CHECKS_RESULT', 'KNIP_RESULT', 'AUDIT_RESULT')
-				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT')
+				if (core || infrastructure) selected.push('DOMAIN_TESTS_RESULT', 'BUILD_INPUTS_RESULT')
 				if (infrastructure && !core) selected.push('INFRA_RESULT')
 				for (const key of selected) env[key] = 'success'
 				expect(spawnSync('bash', ['-e', '-c', command], { env }).status).toBe(0)
@@ -403,7 +411,7 @@ ${command}`,
 		expect(application['needs']).toEqual(['changes', 'prepare'])
 		expect(requireRecord(application['with'], 'application options')).toMatchObject({ prepared: true, solidity: false, invocation: 'ci-application' })
 		const solidity = requireRecord(jobs['domain-tests'], 'Solidity call')
-		expect(solidity['needs']).toBe('changes')
+		expect(solidity['needs']).toEqual(['changes', 'build-inputs'])
 		expect(requireRecord(solidity['with'], 'Solidity options')).toMatchObject({ application: false, invocation: 'ci-solidity' })
 		expect(workflowSteps(jobs['prepare']).some(step => step['name'] === 'Upload production UI inputs')).toBe(true)
 		const buildJobs = Object.entries(jobs)
@@ -419,7 +427,7 @@ ${command}`,
 		const smokeTest = smokeSteps.find(step => step['run'] === 'bun run test:browser:smoke')
 		expect(requireRecord(smokeTest?.['env'], 'smoke environment')).toMatchObject({ ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1', ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS: '1' })
 		expect(smokeSteps.indexOf(download ?? {})).toBeLessThan(smokeSteps.indexOf(smokeTest ?? {}))
-		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run check:static && bun run check:repository')).toBe(true)
+		expect(workflowSteps(jobs['checks']).some(step => step['run'] === 'bun run check:static && bun run check:repository:current')).toBe(true)
 		expect(requireRecord(jobs['docs-checks'], 'documentation checks')['if']).toBe("needs.changes.outputs.docs == 'true' || needs.changes.outputs.core == 'true'")
 		const browser = await readWorkflow(browserWorkflowPath)
 		expect(requireRecord(browser['on'], 'browser triggers')).toHaveProperty('workflow_call')
@@ -436,15 +444,19 @@ ${command}`,
 		if (typeof validation !== 'string') throw new Error('Missing profile validation')
 		for (const profile of ['full', 'contracts', 'root']) expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'false' } }).status).toBe(0)
 		for (const profile of ['contracts', 'root', 'unknown']) expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'true' } }).status).not.toBe(0)
+		for (const profile of ['full', 'contracts', 'root']) {
+			expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'false', BUILD_INPUTS: 'ci-build-inputs' } }).status).toBe(profile === 'root' ? 1 : 0)
+			expect(spawnSync('bash', ['-e', '-c', validation], { env: { PROFILE: profile, VERIFY_GENERATED: 'true', BUILD_INPUTS: 'ci-build-inputs' } }).status).not.toBe(0)
+		}
 		expect(steps.find(step => step['name'] === 'Setup Foundry / Anvil')?.['if']).toBe("inputs.foundry == 'true' && inputs.profile != 'root'")
-		expect(steps.find(step => step['name'] === 'Cache generated project outputs')?.['if']).toBe("inputs.profile != 'root'")
+		expect(steps.find(step => step['name'] === 'Cache generated project outputs')?.['if']).toBe("inputs.profile != 'root' && inputs.build-inputs == ''")
 		const cache = requireRecord(steps.find(step => step['name'] === 'Cache generated project outputs')?.['with'], 'cache inputs')
 		expect(cache['key']).toContain('${{ inputs.profile }}')
 		const install = steps.find(step => step['name'] === 'Install dependencies')?.['run']
 		if (typeof install !== 'string') throw new Error('Missing dependency installation')
 		const rootInstall = spawnSync('bash', ['-e', '-c', `bun() { printf '%s\\n' "$*"; }\n${install}`], { env: { PROFILE: 'root' }, encoding: 'utf8' })
 		expect(rootInstall.status).toBe(0)
-		expect(rootInstall.stdout.trim().split('\n')).toEqual(['./tooling/repo/run-project-tasks.mts setup repository', './tooling/repo/run-project-tasks.mts setup --path-prefix shared/'])
+		expect(rootInstall.stdout.trim().split('\n')).toEqual(['run projects:setup'])
 		const jobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
 		for (const [job, profile] of [
 			['solidity-tests', 'contracts'],
@@ -456,12 +468,72 @@ ${command}`,
 		}
 	})
 
+	test('CI publishes generated inputs once and releases contract consumers before the UI build', async () => {
+		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
+		const producer = requireRecord(jobs['build-inputs'], 'build input producer')
+		expect(producer['needs']).toBe('changes')
+		const steps = workflowSteps(producer)
+		const upload = requireRecord(steps.find(step => step['name'] === 'Upload full build inputs')?.['with'], 'build inputs upload')
+		expect(upload).toMatchObject({ name: 'ci-build-inputs', 'include-hidden-files': true, 'if-no-files-found': 'error' })
+		expect(upload['path']).toContain('steps.projects.outputs.generated_cache_paths')
+		const contractUpload = requireRecord(steps.find(step => step['name'] === 'Upload contract and shared inputs')?.['with'], 'contract inputs upload')
+		expect(contractUpload).toMatchObject({ name: 'ci-contract-inputs', path: '${{ steps.projects.outputs.component_artifact_outputs }}', 'include-hidden-files': true, 'if-no-files-found': 'error' })
+		const gate = workflowSteps(jobs['required'])[0]
+		expect(requireRecord(gate?.['env'], 'gate environment')['BUILD_INPUTS_SELECTED']).toBe(`\${{ ${String(producer['if'])} }}`)
+		for (const name of ['prepare', 'docs-checks', 'checks', 'knip', 'domain-tests', 'infrastructure-checks', 'packages', 'augur-scan-integration']) {
+			const consumer = requireRecord(jobs[name], name)
+			expect(consumer['needs']).toEqual(['changes', 'build-inputs'])
+			const artifactName = ['domain-tests', 'infrastructure-checks', 'packages', 'augur-scan-integration'].includes(name) ? contractUpload['name'] : upload['name']
+			if (name === 'domain-tests') expect(requireRecord(consumer['with'], 'domain inputs')['build-inputs']).toBe(artifactName)
+			else {
+				const consumerSteps = workflowSteps(consumer)
+				expect(consumerSteps.some(step => isRecord(step['with']) && (step['with']['build-inputs'] === artifactName || step['with']['name'] === artifactName))).toBe(true)
+			}
+		}
+		for (const name of ['application-tests', 'browser-workflow']) expect(requireRecord(requireRecord(jobs[name], name)['with'], 'reusable inputs')['build-inputs']).toBe(upload['name'])
+		const setup = workflowSteps(requireRecord((await readWorkflow(setupActionPath))['runs'], 'setup action'))
+		expect(setup.find(step => step['name'] === 'Generate and verify generated artifacts')?.['if']).toContain("inputs.build-inputs == ''")
+		const cache = requireRecord(setup.find(step => step['name'] === 'Cache generated project outputs')?.['with'], 'cache inputs')
+		expect(cache['key']).toContain("inputs.profile == 'contracts' && steps.projects.outputs.contract_cache_key")
+		expect(cache['path']).toContain('steps.projects.outputs.full_only_cache_paths')
+		const contractCache = setup.find(step => step['name'] === 'Cache contract build inputs')
+		expect(contractCache?.['if']).toBe("inputs.profile == 'full' && inputs.build-inputs == ''")
+		expect(requireRecord(contractCache?.['with'], 'contract cache')['key']).toBe('${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}')
+		expect(setup.find(step => step['name'] === 'Generate and verify generated artifacts')?.['if']).toContain("inputs.profile == 'full' && steps.contract-cache.outputs.cache-hit != 'true'")
+		const verification = String(setup.find(step => step['name'] === 'Verify transferred build inputs')?.['run'])
+		expect(verification).toContain('ensure-contract-artifacts.mts --headless')
+		expect(verification).toContain('check-generated-artifacts.mts')
+		expect(verification).not.toContain('check:generated-clean')
+	})
+
+	test('reusable workflows accept shared inputs while manual runs keep self-contained setup', async () => {
+		for (const [definition, consumers] of [
+			[testDomainsWorkflowPath, ['prepare', 'application-tests', 'solidity-tests']],
+			[browserWorkflowPath, ['browser-workflow']],
+		] as const) {
+			const workflow = await readWorkflow(definition)
+			const trigger = requireRecord(requireRecord(workflow['on'], 'triggers')['workflow_call'], 'reusable trigger')
+			const inputs = requireRecord(trigger['inputs'], 'reusable inputs')
+			expect(requireRecord(inputs['build-inputs'], 'build artifact input')).toMatchObject({ type: 'string', default: '' })
+			for (const consumer of consumers) {
+				const steps = workflowSteps(workflowJobs(workflow)[consumer])
+				const setup = steps.find(step => step['uses'] === './.github/actions/setup-ci')
+				expect(requireRecord(setup?.['with'], 'setup inputs')['build-inputs']).toBe('${{ inputs.build-inputs }}')
+				expect(steps.some(step => String(step['run']).includes('setup --path-prefix ui/'))).toBe(false)
+			}
+		}
+		const scripts = requireRecord(requireRecord(JSON.parse(await readFile(rootPackagePath, 'utf8')), 'root package')['scripts'], 'root scripts')
+		expect(scripts['check:repository']).toBe('bun run check:source-size && bun run test:preflight && bun run check:repository:current')
+		expect(scripts['check:repository:current']).not.toContain('test:preflight')
+		expect(scripts['check:repository:current']).not.toContain('check:source-size')
+	})
+
 	test('contract caches and transferred inputs include the generated Trading artifact', async () => {
 		const query = await projectQuery()
 		expect(query.componentArtifactOutputs).toContain('ui/trading/ts/generated/contractArtifact.ts')
 		expect(query.generatedCachePaths).toContain('ui/trading/ts/generated/contractArtifact.ts')
 		const workflow = await readFile(ciWorkflowPath, 'utf8')
-		expect(workflow.match(/steps\.projects\.outputs\.component_artifact_outputs/gu)).toHaveLength(2)
+		expect(workflow.match(/steps\.projects\.outputs\.component_artifact_outputs/gu)).toHaveLength(1)
 	})
 
 	test('Trading-owned compile and test commands explicitly generate Trading artifacts', async () => {
@@ -515,7 +587,7 @@ ${command}`,
 		expect(deployWorkflow).not.toContain('bun ./tooling/contracts/deploy-testnet.mts --help')
 	})
 
-	test('CI refreshes deployment runtime dependencies before the parallel preflight', async () => {
+	test('CI builds deployment runtime dependencies before preflight without reinstalling the workspace', async () => {
 		const workflow = await readWorkflow(ciWorkflowPath)
 		const prepareSteps = workflowSteps(workflowJobs(workflow)['prepare'])
 		const command = String(prepareSteps.find(step => step['name'] === 'TypeScript checks and production UI build')?.['run'])
@@ -524,8 +596,8 @@ ${command}`,
 		const refreshIndex = lines.indexOf('bun ./tooling/repo/run-project-tasks.mts setup --project-path ui/statoblast')
 		const preflightIndex = lines.indexOf('bun run ci:preflight:current')
 		expect(buildIndex).toBeGreaterThanOrEqual(0)
-		expect(refreshIndex).toBeGreaterThan(buildIndex)
-		expect(preflightIndex).toBeGreaterThan(refreshIndex)
+		expect(refreshIndex).toBe(-1)
+		expect(preflightIndex).toBeGreaterThan(buildIndex)
 	})
 
 	test('CI and Docker install every UI package from the workspace lockfile', async () => {
