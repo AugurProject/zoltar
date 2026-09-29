@@ -1,266 +1,223 @@
-import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 /// <reference types='bun-types' />
 
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { LiquidationApprovalDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
-import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h, render, type ComponentChildren } from 'preact'
 import { act } from 'preact/test-utils'
-import { createSecurityPoolsOverviewDependencies, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
-
-type UseSecurityPoolsOverviewState = ReturnType<typeof useSecurityPoolsOverview>
-type HarnessOptions = {
-	onTransactionPresented?: (presentation: GlobalTransactionPresentation) => void
-}
+import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
+import { installFakeEnvironmentLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
+import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
+import type { LiquidationApprovalDetails, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
+import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
+import { type CoordinatorFundingRequirement, createCoordinatorFundingRequirement, createSecurityPoolsOverviewDependencies, renderSecurityPoolsOverviewHook, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 
 const WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_WALLET_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
+const REP_TOKEN_ADDRESS = getAddress('0x0000000000000000000000000000000000000006')
 
-function createHarness(dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, onRender: (state: UseSecurityPoolsOverviewState) => void, options: HarnessOptions = {}) {
-	return function SecurityPoolsOverviewHarness({ accountAddress = WALLET_ADDRESS, environmentRefreshKey = 0 }: { accountAddress?: Address; children?: ComponentChildren; environmentRefreshKey?: number }) {
-		const state = useSecurityPoolsOverview(
-			{
-				accountAddress,
-				environmentRefreshKey,
-				onTransactionFinished: () => undefined,
-				onTransactionPresented: options.onTransactionPresented ?? (() => undefined),
-				onTransactionRequested: () => undefined,
-				onTransactionSubmitted: () => undefined,
-				refreshState: async () => undefined,
-			},
-			dependencies,
-		)
+// Funding for a 2 REP/ETH initial report that needs 10 REP and 5 WETH.
+const createPricedFunding = (overrides: Partial<CoordinatorFundingRequirement> = {}) =>
+	createCoordinatorFundingRequirement({
+		currentRepBalanceAttoRep: 25n,
+		currentWethBalanceAttoEth: 2n,
+		requiredRepAttoRep: 10n,
+		initialReportAmount2: 10n,
+		maximumInitialAttoWeth: 5n,
+		minimumToken1ReportAttoEth: 5n,
+		proposedRepPerEthPrice: 2n * 10n ** 18n,
+		reputationTokenAddress: REP_TOKEN_ADDRESS,
+		wethShortfallAttoEth: 3n,
+		...overrides,
+	})
 
-		onRender(state)
-
-		return h('div', {})
-	}
+const invalidPriceManagerDetails: OracleManagerDetails = {
+	callbackStateHash: undefined,
+	exactToken1Report: undefined,
+	isPriceValid: false,
+	lastPrice: 0n,
+	lastSettlementTimestamp: 0n,
+	managerAddress: zeroAddress,
+	openOracleAddress: zeroAddress,
+	pendingOperation: undefined,
+	pendingOperationSlotId: 0n,
+	pendingSettlementOperationIds: [],
+	pendingSettlementQueueCapacity: 4n,
+	pendingReportId: 0n,
+	priceValidUntilTimestamp: undefined,
+	queuedOperationCostAttoEth: 0n,
+	requestPriceCostAttoEth: 1n,
+	token1: undefined,
+	token2: undefined,
 }
+
+const mockQueuedLiquidation = (hash: `0x${string}`) => mock(async () => ({ action: 'queueLiquidation' as const, hash, securityPoolAddress: zeroAddress }))
+const unexpectedPageLoad = () =>
+	mock(async () => {
+		throw new Error('loadSecurityPoolPage should not be called in this test')
+	})
 
 describe('useSecurityPoolsOverview queueLiquidation', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS })
+
+	const renderHook = async (dependencies: UseSecurityPoolsOverviewDependencies<TestSecurityPoolsOverviewWriteClient>, options: Parameters<typeof renderSecurityPoolsOverviewHook>[1] = {}) => {
+		const hook = await renderSecurityPoolsOverviewHook(dependencies, { accountAddress: WALLET_ADDRESS, ...options })
+		trackCleanup(hook.cleanup)
+		return hook
+	}
+
+	// Opens the modal for the connected wallet and fills a one-ETH, five-minute liquidation of vault 0x…01.
+	const fillLiquidationForm = async (state: Awaited<ReturnType<typeof renderHook>>['state']) => {
+		await act(() => {
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
+			state().setLiquidationAmount('1')
+			state().setLiquidationTimeoutMinutes('5')
+		})
+	}
 
 	test('uses the supplied initial price for liquidation funding and submission', async () => {
 		const price = 3n * 10n ** 18n
 		const queueSecurityPoolLiquidation = mock(async () => ({ hash: '0x01' as const }))
 		const dependencies = createSecurityPoolsOverviewDependencies({ loadOracleManagerQueueOperationEthValue: mock(async () => 1n), queueSecurityPoolLiquidation, createConnectedReadClient: () => ({ getBalance: async () => 10n ** 18n }) })
-		const funding = await dependencies.loadCoordinatorInitialReportFundingRequirement({ kind: 'write-client' }, zeroAddress, WALLET_ADDRESS)
+		const funding = createCoordinatorFundingRequirement()
 		const loadFunding = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _manager: Address, _wallet: Address, proposedPrice?: bigint) => {
 			if (proposedPrice === undefined) throw new Error('Automatic pricing unavailable')
 			return { ...funding, proposedRepPerEthPrice: proposedPrice }
 		})
 		dependencies.loadCoordinatorInitialReportFundingRequirement = loadFunding
-		let state: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, next => {
-			state = next
-		})
-		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		const { state } = await renderHook(dependencies)
 		await act(async () => {
-			requireHookState(state).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n)
-			requireHookState(state).setLiquidationAmount('1')
-			await requireHookState(state).loadLiquidationFundingPreview(zeroAddress, price)
+			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n)
+			state().setLiquidationAmount('1')
+			await state().loadLiquidationFundingPreview(zeroAddress, price)
 		})
-		expect(requireHookState(state).liquidationFundingPreviewError).toBeUndefined()
-		await act(async () => await requireHookState(state).queueLiquidation(zeroAddress, zeroAddress, price))
-		expect(requireHookState(state).securityPoolLiquidationError).toBeUndefined()
+		expect(state().liquidationFundingPreviewError).toBeUndefined()
+		await act(async () => await state().queueLiquidation(zeroAddress, zeroAddress, price))
+		expect(state().securityPoolLiquidationError).toBeUndefined()
 		expect(loadFunding).toHaveBeenCalledWith(expect.anything(), zeroAddress, WALLET_ADDRESS, price)
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n, 300n, 0n, WALLET_ADDRESS, `0x${'00'.repeat(32)}`, price)
 	})
 
 	test('ignores a late automatic funding result after switching to a manual price', async () => {
 		const dependencies = createSecurityPoolsOverviewDependencies({ loadOracleManagerQueueOperationEthValue: mock(async () => 1n) })
-		const funding = await dependencies.loadCoordinatorInitialReportFundingRequirement({ kind: 'write-client' }, zeroAddress, WALLET_ADDRESS)
+		const funding = createCoordinatorFundingRequirement()
 		const automaticFunding = createDeferred<typeof funding>()
 		const loadFunding = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _manager: Address, _wallet: Address, price?: bigint) => (price === undefined ? await automaticFunding.promise : { ...funding, requiredRepAttoRep: price }))
 		dependencies.loadCoordinatorInitialReportFundingRequirement = loadFunding
-		let state: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, next => {
-			state = next
-		})
-		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		const { state } = await renderHook(dependencies)
 		await act(() => {
-			requireHookState(state).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
 		})
-		const automaticLoad = requireHookState(state).loadLiquidationFundingPreview(zeroAddress)
+		const automaticLoad = state().loadLiquidationFundingPreview(zeroAddress)
 		await waitFor(() => {
 			expect(loadFunding).toHaveBeenCalledTimes(1)
 		})
 		await act(async () => {
-			await requireHookState(state).loadLiquidationFundingPreview(zeroAddress, 3n)
+			await state().loadLiquidationFundingPreview(zeroAddress, 3n)
 		})
-		expect(requireHookState(state).liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(3n)
+		expect(state().liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(3n)
 		automaticFunding.resolve(funding)
 		await act(async () => {
 			await automaticLoad
 		})
-		expect(requireHookState(state).liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(3n)
+		expect(state().liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(3n)
 	})
 
 	test('snapshots submitted modal inputs before async preflight completes', async () => {
-		const loadOracleManagerQueueOperationEthValueDeferred = createDeferred<bigint>()
-		const queueSecurityPoolLiquidation = mock(async () => ({
-			action: 'queueLiquidation' as const,
-			hash: '0x01' as const,
-			securityPoolAddress: zeroAddress,
-		}))
-
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadOracleManagerQueueOperationEthValue: mock(async () => await loadOracleManagerQueueOperationEthValueDeferred.promise),
-			loadSecurityPoolPage: mock(async () => {
-				throw new Error('loadSecurityPoolPage should not be called in this test')
+		const queueOperationValue = createDeferred<bigint>()
+		const queueSecurityPoolLiquidation = mockQueuedLiquidation('0x01')
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
+				loadSecurityPoolPage: unexpectedPageLoad(),
+				queueSecurityPoolLiquidation,
 			}),
-			queueSecurityPoolLiquidation,
-		})
-
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
-		})
+		)
+		await fillLiquidationForm(state)
 
 		const queuePromise = act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+			await state().queueLiquidation(zeroAddress, zeroAddress)
 		})
 
 		await act(() => {
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000002')
-			requireHookState(hookState).setLiquidationAmount('2')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('1')
+			state().setLiquidationTargetVault('0x0000000000000000000000000000000000000002')
+			state().setLiquidationAmount('2')
+			state().setLiquidationTimeoutMinutes('1')
 		})
 
-		loadOracleManagerQueueOperationEthValueDeferred.resolve(0n)
+		queueOperationValue.resolve(0n)
 		await queuePromise
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, '0x0000000000000000000000000000000000000001', 10n ** 18n, 5n * 60n, 0n, '0x0000000000000000000000000000000000000001', `0x${'00'.repeat(32)}`, undefined)
 	})
 
 	test('ignores stale modal errors after the user edits the form', async () => {
-		const loadOracleManagerQueueOperationEthValueDeferred = createDeferred<bigint>()
-
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadOracleManagerQueueOperationEthValue: mock(async () => await loadOracleManagerQueueOperationEthValueDeferred.promise),
-			loadSecurityPoolPage: mock(async () => {
-				throw new Error('loadSecurityPoolPage should not be called in this test')
+		const queueOperationValue = createDeferred<bigint>()
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
+				loadSecurityPoolPage: unexpectedPageLoad(),
+				queueSecurityPoolLiquidation: mock(async () => {
+					throw new Error('stale queued liquidation failure')
+				}),
 			}),
-			queueSecurityPoolLiquidation: mock(async () => {
-				throw new Error('stale queued liquidation failure')
-			}),
-		})
-
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
-		})
+		)
+		await fillLiquidationForm(state)
 
 		const queuePromise = act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+			await state().queueLiquidation(zeroAddress, zeroAddress)
 		})
 
 		await act(() => {
-			requireHookState(hookState).setLiquidationAmount('2')
+			state().setLiquidationAmount('2')
 		})
-		loadOracleManagerQueueOperationEthValueDeferred.resolve(0n)
+		queueOperationValue.resolve(0n)
 		await queuePromise
 
 		await waitFor(() => {
-			expect(requireHookState(hookState).securityPoolLiquidationError).toBeUndefined()
+			expect(state().securityPoolLiquidationError).toBeUndefined()
 		})
 	})
 
 	test('skips wallet ETH balance reads for zero-cost liquidations', async () => {
-		const queueSecurityPoolLiquidation = mock(async () => ({
-			action: 'queueLiquidation' as const,
-			hash: '0x02' as const,
-			securityPoolAddress: zeroAddress,
-		}))
-
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => {
-					throw new Error('wallet ETH balance should not be loaded')
-				},
-			})),
-			loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
-			loadSecurityPoolPage: mock(async () => {
-				throw new Error('loadSecurityPoolPage should not be called in this test')
+		const queueSecurityPoolLiquidation = mockQueuedLiquidation('0x02')
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				createConnectedReadClient: mock(() => ({
+					getBalance: async () => {
+						throw new Error('wallet ETH balance should not be loaded')
+					},
+				})),
+				loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
+				loadSecurityPoolPage: unexpectedPageLoad(),
+				queueSecurityPoolLiquidation,
 			}),
-			queueSecurityPoolLiquidation,
-		})
-
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
-		})
+		)
+		await fillLiquidationForm(state)
 
 		await act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+			await state().queueLiquidation(zeroAddress, zeroAddress)
 		})
 
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
 	})
 
 	test('loads the exact buffered queue cost and WETH wrap into one funding preview', async () => {
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalanceAttoRep: 25n,
-				currentWethBalanceAttoEth: 2n,
-				requiredRepAttoRep: 10n,
-				initialReportAmount2: 10n,
-				maximumInitialAttoWeth: 5n,
-				minimumToken1ReportAttoEth: 5n,
-				proposedRepPerEthPrice: 2n * 10n ** 18n,
-				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
-				requestedInitialAttoWeth: 0n,
-				wethShortfallAttoEth: 3n,
-			})),
-			loadOracleManagerQueueOperationEthValue: mock(async () => 12n),
-		})
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadCoordinatorInitialReportFundingRequirement: mock(async () => createPricedFunding()),
+				loadOracleManagerQueueOperationEthValue: mock(async () => 12n),
+			}),
+		)
 
 		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
 		})
 		await act(async () => {
-			await requireHookState(hookState).loadLiquidationFundingPreview(zeroAddress)
+			await state().loadLiquidationFundingPreview(zeroAddress)
 		})
 
-		expect(requireHookState(hookState).liquidationFundingPreview).toEqual({
+		expect(state().liquidationFundingPreview).toEqual({
 			currentRepBalanceAttoRep: 25n,
 			currentWethBalanceAttoEth: 2n,
 			initialReportRepRequiredAttoRep: 10n,
@@ -271,369 +228,168 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		})
 	})
 
-	test('invalidates a resolved liquidation funding preview when the wallet changes', async () => {
-		const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => ({
-			currentRepBalanceAttoRep: walletAddress === WALLET_ADDRESS ? 25n : 50n,
-			currentWethBalanceAttoEth: walletAddress === WALLET_ADDRESS ? 2n : 4n,
-			requiredRepAttoRep: 10n,
-			initialReportAmount2: 10n,
-			maximumInitialAttoWeth: 5n,
-			minimumToken1ReportAttoEth: 5n,
-			proposedRepPerEthPrice: 2n * 10n ** 18n,
-			reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
-			requestedInitialAttoWeth: 0n,
-			wethShortfallAttoEth: walletAddress === WALLET_ADDRESS ? 3n : 1n,
-		}))
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadCoordinatorInitialReportFundingRequirement,
-			loadOracleManagerQueueOperationEthValue: mock(async () => 12n),
-		})
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
-		trackCleanup(renderedComponent.cleanup)
+	describe('wallet switches', () => {
+		const firstWalletFunding = () => createPricedFunding()
+		const secondWalletFunding = () => createPricedFunding({ currentRepBalanceAttoRep: 50n, currentWethBalanceAttoEth: 4n, wethShortfallAttoEth: 1n })
 
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-		})
-		await act(async () => {
-			await requireHookState(hookState).loadLiquidationFundingPreview(zeroAddress)
-		})
-		expect(requireHookState(hookState).liquidationFundingPreview?.currentRepBalanceAttoRep).toBe(25n)
+		test('invalidates a resolved liquidation funding preview when the wallet changes', async () => {
+			const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => (walletAddress === WALLET_ADDRESS ? firstWalletFunding() : secondWalletFunding()))
+			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue: mock(async () => 12n) }))
 
-		await act(() => {
-			render(h(Harness, { accountAddress: SECOND_WALLET_ADDRESS }), renderedComponent.container)
-		})
-		expect(requireHookState(hookState).liquidationFundingPreview).toBeUndefined()
+			await act(() => {
+				state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			})
+			await act(async () => {
+				await state().loadLiquidationFundingPreview(zeroAddress)
+			})
+			expect(state().liquidationFundingPreview?.currentRepBalanceAttoRep).toBe(25n)
 
-		await act(async () => {
-			await requireHookState(hookState).loadLiquidationFundingPreview(zeroAddress)
-		})
-		expect(requireHookState(hookState).liquidationFundingPreview?.currentRepBalanceAttoRep).toBe(50n)
-		expect(loadCoordinatorInitialReportFundingRequirement.mock.calls.map(call => call[2])).toEqual([WALLET_ADDRESS, SECOND_WALLET_ADDRESS])
-	})
+			await rerender({ accountAddress: SECOND_WALLET_ADDRESS })
+			expect(state().liquidationFundingPreview).toBeUndefined()
 
-	test('does not commit an in-flight liquidation funding preview after the wallet changes', async () => {
-		const firstWalletFunding = createDeferred<{
-			currentRepBalanceAttoRep: bigint
-			currentWethBalanceAttoEth: bigint
-			requiredRepAttoRep: bigint
-			initialReportAmount2: bigint
-			maximumInitialAttoWeth: bigint
-			minimumToken1ReportAttoEth: bigint
-			proposedRepPerEthPrice: bigint
-			reputationTokenAddress: Address
-			requestedInitialAttoWeth: bigint
-			wethShortfallAttoEth: bigint
-		}>()
-		const secondWalletFunding = createDeferred<{
-			currentRepBalanceAttoRep: bigint
-			currentWethBalanceAttoEth: bigint
-			requiredRepAttoRep: bigint
-			initialReportAmount2: bigint
-			maximumInitialAttoWeth: bigint
-			minimumToken1ReportAttoEth: bigint
-			proposedRepPerEthPrice: bigint
-			reputationTokenAddress: Address
-			requestedInitialAttoWeth: bigint
-			wethShortfallAttoEth: bigint
-		}>()
-		const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => await (walletAddress === WALLET_ADDRESS ? firstWalletFunding.promise : secondWalletFunding.promise))
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadCoordinatorInitialReportFundingRequirement,
-			loadOracleManagerQueueOperationEthValue: mock(async () => 12n),
-		})
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, { accountAddress: WALLET_ADDRESS }))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-		})
-		const firstWalletLoad = requireHookState(hookState).loadLiquidationFundingPreview(zeroAddress)
-		await waitFor(() => {
-			expect(loadCoordinatorInitialReportFundingRequirement).toHaveBeenCalledTimes(1)
+			await act(async () => {
+				await state().loadLiquidationFundingPreview(zeroAddress)
+			})
+			expect(state().liquidationFundingPreview?.currentRepBalanceAttoRep).toBe(50n)
+			expect(loadCoordinatorInitialReportFundingRequirement.mock.calls.map(call => call[2])).toEqual([WALLET_ADDRESS, SECOND_WALLET_ADDRESS])
 		})
 
-		await act(() => {
-			render(h(Harness, { accountAddress: SECOND_WALLET_ADDRESS }), renderedComponent.container)
-		})
-		firstWalletFunding.resolve({
-			currentRepBalanceAttoRep: 25n,
-			currentWethBalanceAttoEth: 2n,
-			requiredRepAttoRep: 10n,
-			initialReportAmount2: 10n,
-			maximumInitialAttoWeth: 5n,
-			minimumToken1ReportAttoEth: 5n,
-			proposedRepPerEthPrice: 2n * 10n ** 18n,
-			reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
-			requestedInitialAttoWeth: 0n,
-			wethShortfallAttoEth: 3n,
-		})
-		await act(async () => {
-			await firstWalletLoad
-		})
-		expect(requireHookState(hookState).liquidationFundingPreview).toBeUndefined()
+		test('does not commit an in-flight liquidation funding preview after the wallet changes', async () => {
+			const firstWalletLoadResult = createDeferred<CoordinatorFundingRequirement>()
+			const secondWalletLoadResult = createDeferred<CoordinatorFundingRequirement>()
+			const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => await (walletAddress === WALLET_ADDRESS ? firstWalletLoadResult.promise : secondWalletLoadResult.promise))
+			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue: mock(async () => 12n) }))
 
-		const secondWalletLoad = requireHookState(hookState).loadLiquidationFundingPreview(zeroAddress)
-		secondWalletFunding.resolve({
-			currentRepBalanceAttoRep: 50n,
-			currentWethBalanceAttoEth: 4n,
-			requiredRepAttoRep: 10n,
-			initialReportAmount2: 10n,
-			maximumInitialAttoWeth: 5n,
-			minimumToken1ReportAttoEth: 5n,
-			proposedRepPerEthPrice: 2n * 10n ** 18n,
-			reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
-			requestedInitialAttoWeth: 0n,
-			wethShortfallAttoEth: 1n,
+			await act(() => {
+				state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			})
+			const firstWalletLoad = state().loadLiquidationFundingPreview(zeroAddress)
+			await waitFor(() => {
+				expect(loadCoordinatorInitialReportFundingRequirement).toHaveBeenCalledTimes(1)
+			})
+
+			await rerender({ accountAddress: SECOND_WALLET_ADDRESS })
+			firstWalletLoadResult.resolve(firstWalletFunding())
+			await act(async () => {
+				await firstWalletLoad
+			})
+			expect(state().liquidationFundingPreview).toBeUndefined()
+
+			const secondWalletLoad = state().loadLiquidationFundingPreview(zeroAddress)
+			secondWalletLoadResult.resolve(secondWalletFunding())
+			await act(async () => {
+				await secondWalletLoad
+			})
+			expect(state().liquidationFundingPreview?.currentRepBalanceAttoRep).toBe(50n)
 		})
-		await act(async () => {
-			await secondWalletLoad
-		})
-		expect(requireHookState(hookState).liquidationFundingPreview?.currentRepBalanceAttoRep).toBe(50n)
 	})
 
 	test('aborts submission preflight when the environment changes before funding resolves', async () => {
 		const queueOperationValueAttoEth = createDeferred<bigint>()
-		const queueSecurityPoolLiquidation = mock(async () => ({
-			action: 'queueLiquidation' as const,
-			hash: '0x04' as const,
-			securityPoolAddress: zeroAddress,
-		}))
+		const queueSecurityPoolLiquidation = mockQueuedLiquidation('0x04')
 		const loadOracleManagerQueueOperationEthValue = mock(async () => await queueOperationValueAttoEth.promise)
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadOracleManagerQueueOperationEthValue,
-			queueSecurityPoolLiquidation,
-		})
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, { environmentRefreshKey: 0 }))
-		trackCleanup(renderedComponent.cleanup)
+		const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadOracleManagerQueueOperationEthValue, queueSecurityPoolLiquidation }), { environmentRefreshKey: 0 })
 
 		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault(SECOND_WALLET_ADDRESS)
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
+			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
+			state().setLiquidationTargetVault(SECOND_WALLET_ADDRESS)
+			state().setLiquidationAmount('1')
+			state().setLiquidationTimeoutMinutes('5')
 		})
-		const staleEnvironmentSubmission = requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+		const staleEnvironmentSubmission = state().queueLiquidation(zeroAddress, zeroAddress)
 		await waitFor(() => {
 			expect(loadOracleManagerQueueOperationEthValue).toHaveBeenCalledTimes(1)
 		})
 
-		await act(() => {
-			render(h(Harness, { environmentRefreshKey: 1 }), renderedComponent.container)
-		})
+		await rerender({ environmentRefreshKey: 1 })
 		queueOperationValueAttoEth.resolve(0n)
 		await act(async () => {
 			await staleEnvironmentSubmission
 		})
 
 		expect(queueSecurityPoolLiquidation).not.toHaveBeenCalled()
-		expect(requireHookState(hookState).liquidationFundingPreview).toBeUndefined()
-		expect(requireHookState(hookState).securityPoolLiquidationError).toContain('network changed')
+		expect(state().liquidationFundingPreview).toBeUndefined()
+		expect(state().securityPoolLiquidationError).toContain('network changed')
 
 		await act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+			await state().queueLiquidation(zeroAddress, zeroAddress)
 		})
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(1)
 	})
 
-	test('blocks queued liquidations when the wallet cannot fund the initial report WETH wrap', async () => {
-		const queueSecurityPoolLiquidation = mock(async () => ({
-			action: 'queueLiquidation' as const,
-			hash: '0x03' as const,
-			securityPoolAddress: zeroAddress,
-		}))
+	describe('initial report funding preflight', () => {
+		// Invalid oracle price, so queueing must first fund a 5 REP initial report with a 5 WETH shortfall.
+		const renderUnderfundedHook = async (walletEthBalance: bigint, funding: Partial<CoordinatorFundingRequirement>) => {
+			const queueSecurityPoolLiquidation = mockQueuedLiquidation('0x03')
+			const hook = await renderHook(
+				createSecurityPoolsOverviewDependencies({
+					createConnectedReadClient: mock(() => ({ getBalance: async () => walletEthBalance })),
+					loadCoordinatorInitialReportFundingRequirement: mock(async () =>
+						createCoordinatorFundingRequirement({
+							currentWethBalanceAttoEth: 0n,
+							requiredRepAttoRep: 5n,
+							maximumInitialAttoWeth: 10n,
+							minimumToken1ReportAttoEth: 10n,
+							reputationTokenAddress: REP_TOKEN_ADDRESS,
+							wethShortfallAttoEth: 5n,
+							...funding,
+						}),
+					),
+					loadOracleManagerDetails: mock(async () => invalidPriceManagerDetails),
+					loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
+					queueSecurityPoolLiquidation,
+				}),
+			)
+			await fillLiquidationForm(hook.state)
+			await act(async () => {
+				await hook.state().queueLiquidation(zeroAddress, zeroAddress)
+			})
+			return { ...hook, queueSecurityPoolLiquidation }
+		}
 
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 1n,
-			})),
-			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalanceAttoRep: 10n,
-				currentWethBalanceAttoEth: 0n,
-				requiredRepAttoRep: 5n,
-				initialReportAmount2: 5n,
-				maximumInitialAttoWeth: 10n,
-				minimumToken1ReportAttoEth: 10n,
-				proposedRepPerEthPrice: 1n,
-				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
-				requestedInitialAttoWeth: 0n,
-				wethShortfallAttoEth: 5n,
-			})),
-			loadOracleManagerDetails: mock(async () => ({
-				callbackStateHash: undefined,
-				exactToken1Report: undefined,
-				isPriceValid: false,
-				lastPrice: 0n,
-				lastSettlementTimestamp: 0n,
-				managerAddress: zeroAddress,
-				openOracleAddress: zeroAddress,
-				pendingOperation: undefined,
-				pendingOperationSlotId: 0n,
-				pendingSettlementOperationIds: [],
-				pendingSettlementQueueCapacity: 4n,
-				pendingReportId: 0n,
-				priceValidUntilTimestamp: undefined,
-				queuedOperationCostAttoEth: 0n,
-				requestPriceCostAttoEth: 1n,
-				token1: undefined,
-				token2: undefined,
-			})),
-			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
-			queueSecurityPoolLiquidation,
+		test('blocks queued liquidations when the wallet cannot fund the initial report WETH wrap', async () => {
+			const { queueSecurityPoolLiquidation, state } = await renderUnderfundedHook(1n, { currentRepBalanceAttoRep: 10n, initialReportAmount2: 5n })
+
+			expect(queueSecurityPoolLiquidation).not.toHaveBeenCalled()
+			await waitFor(() => {
+				expect(state().securityPoolOverviewFeedback?.status.detail).toContain('fund the initial report and queue this liquidation')
+			})
 		})
 
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
+		test.each([4n, 5n])('checks the actual REP deposit before queueing a liquidation with balance %s', async balance => {
+			const { queueSecurityPoolLiquidation, state } = await renderUnderfundedHook(100n, { currentRepBalanceAttoRep: balance, initialReportAmount2: 10n })
+
+			expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(balance === 5n ? 1 : 0)
+			expect(state().liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(5n)
 		})
-
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
-		})
-
-		await act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
-		})
-
-		expect(queueSecurityPoolLiquidation).not.toHaveBeenCalled()
-		await waitFor(() => {
-			expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toContain('fund the initial report and queue this liquidation')
-		})
-	})
-
-	test.each([4n, 5n])('checks the actual REP deposit before queueing a liquidation with balance %s', async balance => {
-		const queueSecurityPoolLiquidation = mock(async () => ({
-			action: 'queueLiquidation' as const,
-			hash: '0x03' as const,
-			securityPoolAddress: zeroAddress,
-		}))
-
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			createConnectedReadClient: mock(() => ({
-				getBalance: async () => 100n,
-			})),
-			loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
-				currentRepBalanceAttoRep: balance,
-				currentWethBalanceAttoEth: 0n,
-				requiredRepAttoRep: 5n,
-				initialReportAmount2: 10n,
-				maximumInitialAttoWeth: 10n,
-				minimumToken1ReportAttoEth: 10n,
-				proposedRepPerEthPrice: 1n,
-				reputationTokenAddress: getAddress('0x0000000000000000000000000000000000000006'),
-				requestedInitialAttoWeth: 0n,
-				wethShortfallAttoEth: 5n,
-			})),
-			loadOracleManagerDetails: mock(async () => ({
-				callbackStateHash: undefined,
-				exactToken1Report: undefined,
-				isPriceValid: false,
-				lastPrice: 0n,
-				lastSettlementTimestamp: 0n,
-				managerAddress: zeroAddress,
-				openOracleAddress: zeroAddress,
-				pendingOperation: undefined,
-				pendingOperationSlotId: 0n,
-				pendingSettlementOperationIds: [],
-				pendingSettlementQueueCapacity: 4n,
-				pendingReportId: 0n,
-				priceValidUntilTimestamp: undefined,
-				queuedOperationCostAttoEth: 0n,
-				requestPriceCostAttoEth: 1n,
-				token1: undefined,
-				token2: undefined,
-			})),
-			loadOracleManagerQueueOperationEthValue: mock(async () => 1n),
-			queueSecurityPoolLiquidation,
-		})
-
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
-		})
-
-		await act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
-		})
-
-		expect(queueSecurityPoolLiquidation).toHaveBeenCalledTimes(balance === 5n ? 1 : 0)
-		expect(requireHookState(hookState).liquidationFundingPreview?.initialReportRepRequiredAttoRep).toBe(5n)
 	})
 
 	test('expands compact staged liquidation failure reasons in overview feedback', async () => {
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
-			loadSecurityPoolPage: mock(async () => {
-				throw new Error('loadSecurityPoolPage should not be called in this test')
-			}),
-			queueSecurityPoolLiquidation: mock(async () => ({
-				action: 'queueLiquidation' as const,
-				hash: '0x03' as const,
-				securityPoolAddress: zeroAddress,
-				stagedExecution: {
-					errorMessage: 'Target commitment',
-					operation: 'liquidation' as const,
-					operationId: 3n,
-					success: false,
-				},
-			})),
-		})
-
 		const presentedTransactions: GlobalTransactionPresentation[] = []
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(
-			dependencies,
-			state => {
-				hookState = state
-			},
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadOracleManagerQueueOperationEthValue: mock(async () => 0n),
+				loadSecurityPoolPage: unexpectedPageLoad(),
+				queueSecurityPoolLiquidation: mock(async () => ({
+					action: 'queueLiquidation' as const,
+					hash: '0x03' as const,
+					securityPoolAddress: zeroAddress,
+					stagedExecution: { errorMessage: 'Target commitment', operation: 'liquidation' as const, operationId: 3n, success: false },
+				})),
+			}),
 			{
 				onTransactionPresented: presentation => {
 					presentedTransactions.push(presentation)
 				},
 			},
 		)
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
-			requireHookState(hookState).setLiquidationAmount('1')
-			requireHookState(hookState).setLiquidationTimeoutMinutes('5')
-		})
+		await fillLiquidationForm(state)
 
 		await act(async () => {
-			await requireHookState(hookState).queueLiquidation(zeroAddress, zeroAddress)
+			await state().queueLiquidation(zeroAddress, zeroAddress)
 		})
-		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.tone).toBe('error')
-		expect(requireHookState(hookState).securityPoolOverviewFeedback?.status.detail).toBe('The target vault would fall below the minimum commitment after liquidation.')
+		expect(state().securityPoolOverviewFeedback?.status.tone).toBe('error')
+		expect(state().securityPoolOverviewFeedback?.status.detail).toBe('The target vault would fall below the minimum commitment after liquidation.')
 		expect(presentedTransactions).toHaveLength(1)
 		expect(presentedTransactions[0]?.tone).toBe('error')
 		expect(presentedTransactions[0]?.title).toBe('Liquidation failed')
@@ -665,25 +421,21 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			minimumValidNonce: 0n,
 			revoked: false,
 		})
-		const dependencies = createSecurityPoolsOverviewDependencies({
-			loadLiquidationApproval: mock(async (_managerAddress, approvalId) => await (approvalId === firstApprovalId ? firstApproval.promise : secondApproval.promise)),
-		})
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadLiquidationApproval: mock(async (_managerAddress, approvalId) => await (approvalId === firstApprovalId ? firstApproval.promise : secondApproval.promise)),
+			}),
+		)
 
 		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationApprovalId(firstApprovalId)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().setLiquidationApprovalId(firstApprovalId)
 		})
-		const firstLoad = requireHookState(hookState).loadLiquidationApproval()
+		const firstLoad = state().loadLiquidationApproval()
 		await act(() => {
-			requireHookState(hookState).setLiquidationApprovalId(secondApprovalId)
+			state().setLiquidationApprovalId(secondApprovalId)
 		})
-		const secondLoad = requireHookState(hookState).loadLiquidationApproval()
+		const secondLoad = state().loadLiquidationApproval()
 		secondApproval.resolve(createApproval(2n))
 		await act(async () => {
 			await secondLoad
@@ -693,7 +445,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			await firstLoad
 		})
 
-		expect(requireHookState(hookState).liquidationApprovalDetails?.params.nonce).toBe(2n)
+		expect(state().liquidationApprovalDetails?.params.nonce).toBe(2n)
 	})
 
 	test('loads delegated receiver vault state independently from the operator vault', async () => {
@@ -705,25 +457,19 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			claimableFeesAttoEth: 7n,
 			vaultAddress,
 		}))
-		const dependencies = createSecurityPoolsOverviewDependencies({ loadSecurityPoolVaultSummary })
-		let hookState: UseSecurityPoolsOverviewState | undefined
-		const Harness = createHarness(dependencies, state => {
-			hookState = state
-		})
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
+		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolVaultSummary }))
 
 		await act(() => {
-			requireHookState(hookState).openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
-			requireHookState(hookState).setLiquidationReceiverVault(SECOND_WALLET_ADDRESS)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().setLiquidationReceiverVault(SECOND_WALLET_ADDRESS)
 		})
 		await act(async () => {
-			await requireHookState(hookState).loadLiquidationReceiverVaultSummary()
+			await state().loadLiquidationReceiverVaultSummary()
 		})
 
 		expect(loadSecurityPoolVaultSummary).toHaveBeenCalledWith(zeroAddress, SECOND_WALLET_ADDRESS)
-		expect(requireHookState(hookState).liquidationReceiverVaultSummaryResolved).toBe(true)
-		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.vaultAddress).toBe(SECOND_WALLET_ADDRESS)
-		expect(requireHookState(hookState).liquidationReceiverVaultSummary?.underwritingLimitAttoEth).toBe(6n)
+		expect(state().liquidationReceiverVaultSummaryResolved).toBe(true)
+		expect(state().liquidationReceiverVaultSummary?.vaultAddress).toBe(SECOND_WALLET_ADDRESS)
+		expect(state().liquidationReceiverVaultSummary?.underwritingLimitAttoEth).toBe(6n)
 	})
 })
