@@ -1,34 +1,19 @@
-import { type Address, type Hex, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
+import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
+import { readReceiptOrMissing, receiptEvidence } from '@zoltar/bot-shared/execution/receipt-quorum'
 import { availableSettledValues, quorumValue, settledQuorumValue, sharedQuorumBlockNumber } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import { type ExecutionEnvironment, assertRequestedTransactionHash } from './execution-context.ts'
 import { requiredConnectivity, agreedLatestBlock, canonicalAttestingReaders } from './execution-quorum.ts'
 
-function missingReceipt(error: unknown) {
-	return error instanceof Error && (error.name === 'TransactionReceiptNotFoundError' || error.message.toLowerCase().includes('could not be found'))
-}
-
 export async function includedReceiptWithQuorum(environment: ExecutionEnvironment, hash: Hex) {
 	const connectivity = requiredConnectivity(environment.settings)
 	const inclusionAnchor = await agreedLatestBlock(environment, `receipt ${hash} inclusion anchor`)
 	const readers = canonicalAttestingReaders(environment, `receipt ${hash} inclusion`, inclusionAnchor.attestingRpcUrls)
-	type ReceiptEvidence = {
-		blockHash: Hex
-		blockNumber: bigint
-		hash: Hex
-		logs: { address: Address; data: Hex; topics: readonly Hex[] }[]
-		status: 'reverted' | 'success'
-	}
 	const settledObservations = await Promise.allSettled(
 		readers.map(async reader => {
-			let receipt: TransactionReceipt | undefined
-			try {
-				receipt = await reader.client.getTransactionReceipt({ hash })
-				assertRequestedTransactionHash(receipt.transactionHash, hash, `RPC ${reader.endpoint} receipt lookup`)
-			} catch (error) {
-				if (!missingReceipt(error)) throw error
-			}
+			const receipt = await readReceiptOrMissing(reader.client, hash)
+			if (receipt !== undefined) assertRequestedTransactionHash(receipt.transactionHash, hash, `RPC ${reader.endpoint} receipt lookup`)
 			return {
 				head: await reader.client.getBlockNumber(),
 				reader,
@@ -47,18 +32,7 @@ export async function includedReceiptWithQuorum(environment: ExecutionEnvironmen
 	)
 	const receiptObservations = observations.flatMap(({ reader, receipt }) => {
 		if (receipt === undefined) return []
-		const value: ReceiptEvidence = {
-			blockHash: receipt.blockHash,
-			blockNumber: receipt.blockNumber,
-			hash: receipt.transactionHash,
-			logs: receipt.logs.map(log => ({
-				address: log.address,
-				data: log.data,
-				topics: log.topics,
-			})),
-			status: receipt.status,
-		}
-		return [{ endpoint: reader.endpoint, receipt, value }]
+		return [{ endpoint: reader.endpoint, receipt, value: receiptEvidence(receipt) }]
 	})
 	if (receiptObservations.length === 0) {
 		return { head, includedBlock: undefined, observed: false as const, receipt: undefined }

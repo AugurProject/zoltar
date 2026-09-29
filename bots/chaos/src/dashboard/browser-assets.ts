@@ -4,7 +4,6 @@ import { join } from 'node:path'
 const sourceByPath = new Map([
 	['/workflow-progress.js', 'workflow-progress.ts'],
 	['/workflow-history.js', 'workflow-history.ts'],
-	['/dashboard.js', 'dashboard.ts'],
 	['/selection-controls.js', 'selection-controls.ts'],
 	['/operation-dialog.js', 'operation-dialog.ts'],
 	['/operation-input-format.js', 'operation-input-format.ts'],

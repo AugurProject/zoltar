@@ -11,7 +11,7 @@ import { privateKeyToAccount, zeroAddress, type Address } from '@zoltar/bot-shar
 import { findEarliestAvailableLogBlock, permanentHistoricalLogError } from '@zoltar/bot-shared/monitoring/log-availability'
 import { fetchLogsWithAdaptiveRanges, LogScanError } from '@zoltar/bot-shared/monitoring/block-sync'
 import { assertSettingsProfileIsolation, CHAOS_ECOSYSTEMS, loadSettings, type OperatorSettings } from '../config/settings.ts'
-import { acquireBotProcessLocks, BotProcessLockAcquisitionError, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { acquireBotProcessLocks, runBotMain, throwLockAcquisitionCause, type BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import type { CanonicalUintString } from '../core/units.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
@@ -326,24 +326,16 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 }
 
 async function acquireDoctorLocks(settings: OperatorSettings) {
-	try {
-		return await acquireBotProcessLocks(
-			{
-				chainId: settings.network.chainId,
-				execute: settings.runtime.execute,
-				privateKey: settings.privateKey,
-				signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
-				stateFile: settings.runtime.stateFile,
-			},
-			CHAOS_PROCESS_LOCK_OPTIONS,
-		)
-	} catch (error) {
-		if (error instanceof BotProcessLockAcquisitionError) {
-			await error.releaseProcessLocks()
-			throw error.acquisitionCause
-		}
-		throw error
-	}
+	return await acquireBotProcessLocks(
+		{
+			chainId: settings.network.chainId,
+			execute: settings.runtime.execute,
+			privateKey: settings.privateKey,
+			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
+			stateFile: settings.runtime.stateFile,
+		},
+		CHAOS_PROCESS_LOCK_OPTIONS,
+	).catch(throwLockAcquisitionCause)
 }
 
 export async function validateDoctorCompanionState(settings: OperatorSettings) {
@@ -553,11 +545,4 @@ async function doctorCli() {
 	return JSON.stringify(await runChaosDoctor(), undefined, 2)
 }
 
-if (import.meta.main) {
-	doctorCli()
-		.then(output => console.log(output))
-		.catch(error => {
-			console.error(error instanceof Error ? error.message : String(error))
-			process.exitCode = 1
-		})
-}
+if (import.meta.main) runBotMain(async () => console.log(await doctorCli()))

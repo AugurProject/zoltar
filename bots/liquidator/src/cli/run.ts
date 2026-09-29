@@ -32,12 +32,13 @@ import { scanPools } from '#monitoring/pool-monitor'
 import { createPoolMonitorIndex } from '#monitoring/vault-positions'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, saveDurableState } from '#state/operator-state'
 import { createPublicClient, createRpcEndpointPool, createWalletClient, getAddress, privateKeyToAccount, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
-import { acquireBotProcessLocks, acquireBotProcessLocksForShutdown, botDashboardLifecycle, BotProcessLockAcquisitionError, createBotShutdownController, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
+import { acquireBotProcessLocks, botDashboardLifecycle, createBotShutdownController, runBotMain, withBotProcessLocks, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { centralizedMarketConsensusObservations, marketConsensusSettings, observeCentralizedMarkets, parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { observeConstantProductMarkets, readConstantProductPairWithQuorum, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 import { clearOrphanedDexEvidenceForHeadReplacement, discardDexMarketObservations, estimateMarketConsensus, marketObservationsForAsset, requireCanonicalBlock } from '@zoltar/bot-shared/monitoring/market-consensus'
 import { availableSettledValues, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import { isReceiptNotFound } from '@zoltar/bot-shared/execution/receipt-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
 
 const centralizedExchangeFactory = createCentralizedExchangeFactory(exchanges)
@@ -221,7 +222,7 @@ async function runOperator(loaded: Awaited<ReturnType<typeof loadSettings>>, pro
 										},
 									}
 								} catch (error) {
-									if (error instanceof Error && error.message.includes('could not be found')) return { endpoint, value: undefined }
+									if (isReceiptNotFound(error)) return { endpoint, value: undefined }
 									throw error
 								}
 							}),
@@ -677,38 +678,19 @@ async function main() {
 	for (;;) {
 		const loaded = await loadSettings()
 		await assertSettingsProfileIsolation(loaded.path, loaded.settings)
-		let locks: BotProcessLocks
-		try {
-			const acquired = await acquireBotProcessLocksForShutdown(
-				{
-					chainId: loaded.settings.network.chainId,
-					execute: loaded.settings.runtime.execute,
-					privateKey: loaded.settings.privateKey,
-					stateFile: loaded.settings.runtime.stateFile,
-				},
-				LIQUIDATOR_PROCESS_LOCK_OPTIONS,
-				shutdown,
-			)
-			if (acquired === undefined) return
-			locks = acquired
-		} catch (error) {
-			if (error instanceof BotProcessLockAcquisitionError) {
-				await error.releaseProcessLocks()
-				throw error.acquisitionCause
-			}
-			throw error
-		}
-		try {
-			if (!(await runOperator(loaded, locks, shutdown))) return
-		} finally {
-			await locks.release()
-		}
+		const switchedProfile = await withBotProcessLocks(
+			{
+				chainId: loaded.settings.network.chainId,
+				execute: loaded.settings.runtime.execute,
+				privateKey: loaded.settings.privateKey,
+				stateFile: loaded.settings.runtime.stateFile,
+			},
+			LIQUIDATOR_PROCESS_LOCK_OPTIONS,
+			shutdown,
+			locks => runOperator(loaded, locks, shutdown),
+		)
+		if (switchedProfile !== true) return
 	}
 }
 
-if (import.meta.main) {
-	main().catch(error => {
-		console.error(errorMessage(error))
-		process.exitCode = 1
-	})
-}
+if (import.meta.main) runBotMain(main)
