@@ -57,14 +57,16 @@ function resolveApprovalButtonLabel({
 	if (guardMessage !== undefined || nextApprovalAmount === undefined) return commonCopy.formatApproveValue(tokenSymbol)
 	if (requirementSatisfied && !isCustomAmount) return commonCopy.approvalSatisfied
 	const amount = formatCeilingAmount(nextApprovalAmount, tokenUnits)
-	const amountLabel = withApproximateMarker(amount)
+	const amountLabel = amount === undefined ? undefined : withApproximateMarker(amount)
 	return (
-		<span className='approval-button-label' title={commonCopy.formatApproveTokenAmount(amount.exact, tokenSymbol)}>
+		<span className='approval-button-label' title={commonCopy.formatApproveTokenAmount(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)}>
 			{commonCopy.approve}{' '}
-			<span className={amount.text.length > 3 ? 'approval-button-amount approval-button-amount-long' : 'approval-button-amount'}>
-				{amountLabel}
-				{'\u00a0'}
-			</span>
+			{amount === undefined ? undefined : (
+				<span className={amount.text.length > 3 ? 'approval-button-amount approval-button-amount-long' : 'approval-button-amount'}>
+					{amountLabel}
+					{'\u00a0'}
+				</span>
+			)}
 			{tokenSymbol}
 		</span>
 	)

@@ -27,11 +27,18 @@ void describe('formatting helpers', () => {
 		[1000n, 0, '1k', false],
 		[1230000000n, 6, '1.23k', false],
 		[999999999n, 0, '1G', true],
-		[10n ** 27n, 0, '1E27', false],
-		[2n ** 256n - 1n, 18, '1.16E59', true],
-		[2n ** 256n - 1n, 0, '1.16E77', true],
+		[99999n * 10n ** 22n, 0, '999.99Y', false],
 	])('formats upward compact approval boundary %s with %s units', (amount, units, text, approximate) => {
 		expect(formatCeilingAmount(amount, units)).toMatchObject({ text, approximate })
+	})
+
+	test.each([
+		[99999n * 10n ** 22n + 1n, 0],
+		[10n ** 27n, 0],
+		[2n ** 256n - 1n, 18],
+		[2n ** 256n - 1n, 0],
+	])('omits approval amounts beyond compact suffixes instead of using scientific notation: %s', (amount, units) => {
+		expect(formatCeilingAmount(amount, units)).toBeUndefined()
 	})
 
 	test('rejects invalid approval formatting inputs', () => {

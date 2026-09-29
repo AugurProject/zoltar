@@ -224,14 +224,16 @@ export function formatAmount(value: bigint, { decimals = 2, notation = 'standard
 	return { approximate: (absoluteValue * scale) % base !== 0n, exact, text: formatRoundedCurrencyBalance(value, units, decimals) }
 }
 
-/** Upward-rounded nonnegative amounts for approval labels: two decimals, SI suffixes, then scientific notation. */
-export function formatCeilingAmount(value: bigint, units = 18): FormattedAmount {
+/** Upward-rounded approval labels with SI suffixes. Omit amounts beyond the suffix range instead of using scientific notation. */
+export function formatCeilingAmount(value: bigint, units = 18): FormattedAmount | undefined {
 	assertNonNegativeInteger(units, 'Units')
 	if (value < 0n) throw new RangeError('Approval amount must be non-negative')
 	const exact = formatCurrencyBalance(value, units)
 	const base = 10n ** BigInt(units)
 	const rounded = formatRoundedScaledValue(value, base, 2, 'up')
 	if (rounded.integerPart < COMPACT_NOTATION_THRESHOLD_UNITS) return { approximate: rounded.approximate, exact, text: rounded.text }
+	const largestDivisor = 1000n ** BigInt(SI_SUFFIXES.length) * base
+	if (formatRoundedScaledValue(value, largestDivisor, 2, 'up').integerPart >= 1000n) return undefined
 	const compact = formatCompactScaledValue(value, units, 2, 'up')
 	return { approximate: compact.approximate, exact, text: compact.text }
 }
