@@ -284,6 +284,7 @@ export function SecurityVaultSection({
 	const adjustmentBlocker = repExitLauncherBlocker ?? (poolState !== undefined && poolState.lifecycleState !== 'operational' && poolState.lifecycleState !== 'ended' ? vaultLifecycleBlocker : undefined)
 	const adjustmentForm = (
 		<VaultBackingFactorForm
+			repPerEthPrice={repPerEthPrice}
 			oracleManagerDetails={oracleManagerDetails}
 			increaseBlocker={!depositRepToVaultEnabled ? (vaultLifecycleBlocker ?? securityPoolCopy.vaultDepositAdmissionClosedDetail) : undefined}
 			executionRepPerEthPrice={hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined}
@@ -350,16 +351,16 @@ export function SecurityVaultSection({
 		securityVaultRepApproval,
 		walletGuard: { reason: depositLauncherBlocker, walletBlocker },
 	}
-	const [withdrawInitialPrice, setWithdrawInitialPrice] = useState<OracleInitialPriceInput>({ source: 'automatic', price: '' })
+	const [withdrawInitialPrice, setWithdrawInitialPrice] = useState<OracleInitialPriceInput>({ price: '' })
 	const withdrawPriceFieldId = useId()
-	useEffect(() => setWithdrawInitialPrice({ source: 'automatic', price: '' }), [autoLoadKey])
+	useEffect(() => setWithdrawInitialPrice({ price: '' }), [autoLoadKey])
 	const needsWithdrawPrice = effectiveRepExitMode === 'withdraw' && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice)
-	const withdrawPrice = parseOracleInitialPrice(needsWithdrawPrice ? withdrawInitialPrice : { source: 'automatic', price: '' })
+	const withdrawPrice = parseOracleInitialPrice(needsWithdrawPrice ? withdrawInitialPrice : undefined)
 	const withdrawPriceFields =
 		effectiveRepExitMode === 'redeem' ? undefined : (
 			<>
 				<InlineHint message={getOracleOperationExecutionMessage(oracleManagerDetails, hasValidOraclePrice)} />
-				{needsWithdrawPrice ? <OracleInitialPriceFields value={withdrawInitialPrice} onChange={setWithdrawInitialPrice} disabled={securityVaultActiveAction !== undefined} fieldId={withdrawPriceFieldId} /> : undefined}
+				{needsWithdrawPrice ? <OracleInitialPriceFields managerAddress={currentSelectedVaultDetails?.managerAddress} value={withdrawInitialPrice} onChange={setWithdrawInitialPrice} disabled={securityVaultActiveAction !== undefined} fieldId={withdrawPriceFieldId} /> : undefined}
 			</>
 		)
 	const repWithdrawAmountField =
@@ -376,7 +377,7 @@ export function SecurityVaultSection({
 			repExitActionLabel={repExitActionLabel}
 			repExitEnabled={repExitEnabled}
 			repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
-			disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined ? withdrawPriceFieldId : undefined}
+			disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined && withdrawInitialPrice.price !== '' ? `${withdrawPriceFieldId}-error` : undefined}
 			repExitMode={effectiveRepExitMode}
 			securityVaultActiveAction={securityVaultActiveAction}
 			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}

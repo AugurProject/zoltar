@@ -67,7 +67,7 @@ describe('live portfolio scope', () => {
 	test('describes why pair initialization is unavailable', async () => {
 		const rendered = await renderIntoDocument(<PairInitializationAction market={{ ...market, endTime: 1n }} nowSeconds={2n} />)
 		cleanupRendered = rendered.cleanup
-		const button = rendered.container.querySelector('button')
+		const button = rendered.container.querySelector('button:not([aria-label^="Copy"])')
 		expect(button?.getAttribute('aria-describedby')).toBeTruthy()
 	})
 
@@ -217,7 +217,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.textContent).not.toContain('Registered vaults')
 		expect(rendered.container.textContent).not.toContain('Minting capacity')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
-		const retry = rendered.container.querySelector('button')
+		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"])')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry security pool button is unavailable')
 		retry.click()
 		expect(retries).toBe(1)
@@ -228,14 +228,14 @@ describe('live portfolio scope', () => {
 		const refreshing = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshing retry={() => undefined} workflowLocked={false} />)
 		expect(refreshing.container.querySelector('[role="status"]')?.textContent).toContain('Retrying security pool details')
 		expect(refreshing.container.textContent).not.toContain('last successful result')
-		expect(refreshing.container.querySelectorAll('button')).toHaveLength(0)
+		expect(refreshing.container.querySelectorAll('button:not([aria-label^="Copy"])')).toHaveLength(0)
 		await refreshing.cleanup()
 
 		const failedRetry = await renderIntoDocument(<LiveSecurityPoolDetails market={failedMarket} refreshError='factory RPC failed' retry={() => undefined} workflowLocked={false} />)
 		cleanupRendered = failedRetry.cleanup
 		expect(failedRetry.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool details could not be loaded: pool RPC failed. Latest retry failed: factory RPC failed')
 		expect(failedRetry.container.textContent).not.toContain('last successful result')
-		expect(failedRetry.container.querySelectorAll('button')).toHaveLength(1)
+		expect(failedRetry.container.querySelectorAll('button:not([aria-label^="Copy"])')).toHaveLength(1)
 	})
 
 	test('identifies stale pool details and offers recovery after refresh fails', async () => {
@@ -244,7 +244,7 @@ describe('live portfolio scope', () => {
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool refresh failed; showing the last successful result: factory RPC failed')
 		expect(rendered.container.textContent).toContain('System stateOperational')
-		const retry = rendered.container.querySelector('button')
+		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"])')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry refresh button is unavailable')
 		retry.click()
 		expect(retries).toBe(1)
@@ -256,7 +256,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Refreshing security pool; showing the last successful result.')
 		expect(rendered.container.querySelector('[aria-busy="true"]')).not.toBeNull()
 		expect(rendered.container.textContent).toContain('System stateOperational')
-		expect(rendered.container.querySelector('button')).toBeNull()
+		expect(rendered.container.querySelector('button:not([aria-label^="Copy"])') === null).toBe(true)
 	})
 
 	test('shows a recoverable error when security pool discovery fails', async () => {
@@ -264,7 +264,7 @@ describe('live portfolio scope', () => {
 		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='error' discoveryError='RPC unavailable' workflowLocked={false} retry={() => retries++} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.querySelector('[role="alert"]')?.textContent).toContain('Security pool discovery failed: RPC unavailable')
-		const retry = rendered.container.querySelector('button')
+		const retry = rendered.container.querySelector('button:not([aria-label^="Copy"])')
 		if (!(retry instanceof HTMLButtonElement)) throw new Error('Retry discovery button is unavailable')
 		retry.click()
 		expect(retries).toBe(1)

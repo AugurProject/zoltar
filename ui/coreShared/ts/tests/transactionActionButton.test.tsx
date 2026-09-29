@@ -184,7 +184,7 @@ describe('TransactionActionButton', () => {
 		const locked = queries.getByRole('button', { name: 'Deposit REP' })
 		expect(locked.hasAttribute('disabled')).toBe(true)
 		expect(locked.getAttribute('aria-describedby')).not.toBeNull()
-		expect(document.getElementById(locked.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Wait for the pending transaction to confirm.')
+		expect(document.getElementById(locked.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Transaction pending.')
 		expect(queries.getByRole('button', { name: 'Explicit scope' }).hasAttribute('disabled')).toBe(true)
 		// The initiating action keeps its own pending state instead of the lock reason.
 		expect(queries.getByRole('button', { name: 'Depositing' }).getAttribute('aria-busy')).toBe('true')

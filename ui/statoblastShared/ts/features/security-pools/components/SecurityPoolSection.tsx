@@ -1,3 +1,7 @@
+import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
+import { hasMarketEndTimePassed } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
@@ -119,7 +123,9 @@ export function SecurityPoolSection({
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(securityPoolForm.statoblastSecurityMultiplierBps)
 	const initialReportPriorityFeeValidationMessage = getInitialReportPriorityFeeValidationMessage(securityPoolForm.initialReportPriorityFeeEth)
 	const questionFormValidation = validateMarketForm(marketForm)
+	const currentTimestamp = useChainTimestamp()
 	const createGuardInputs = {
+		currentTimestamp,
 		accountAddress: accountState.address,
 		duplicateOriginPoolExists,
 		initialReportPriorityFeeEth: securityPoolForm.initialReportPriorityFeeEth,
@@ -129,7 +135,8 @@ export function SecurityPoolSection({
 		statoblastSecurityMultiplier: securityPoolForm.statoblastSecurityMultiplierBps,
 		zoltarUniverseHasForked,
 	}
-	const createDisabledReason = getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool })
+	const questionIdError = securityPoolForm.marketId.trim() !== '' && normalizeQuestionId(securityPoolForm.marketId) === undefined ? 'Enter a valid hexadecimal question ID.' : undefined
+	const createDisabledReason = questionIdError ?? getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool })
 	// The reason is the in-progress duplicate check exactly when clearing that flag would change it.
 	const createDisabledReasonLoading = checkingDuplicateOriginPool && createDisabledReason !== getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool: false })
 	const isCreateDisabled = !isOnActiveAppChain || createDisabledReason !== undefined
@@ -140,6 +147,7 @@ export function SecurityPoolSection({
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (zoltarUniverseHasForked) return securityPoolCopy.poolCreationAfterForkReason
 		if (marketForm.marketType !== 'binary') return securityPoolCopy.ineligibleQuestionDetail
+		if (hasMarketEndTimePassed(marketForm, currentTimestamp)) return securityPoolCopy.questionEndedReason
 		if (!questionFormValidation.isValid) return questionFormValidation.notice
 		if (existingQuestionCheck?.status === 'checking') return securityPoolCopy.checkingQuestionExists
 		if (existingQuestionCheck?.status === 'error') return securityPoolCopy.questionExistenceUnavailable
@@ -388,8 +396,8 @@ export function SecurityPoolSection({
 														<div>
 															<dt>{commonCopy.questionId}</dt>
 															<dd>
-																<span className='identifier-value' title={existingQuestionCheck.questionId}>
-																	{abbreviateAddress(`0x${BigInt(existingQuestionCheck.questionId).toString(16)}`)}
+																<span className='identifier-value' title={getQuestionIdHex(BigInt(existingQuestionCheck.questionId))}>
+																	{abbreviateAddress(getQuestionIdHex(BigInt(existingQuestionCheck.questionId)))}
 																</span>
 															</dd>
 														</div>
@@ -407,7 +415,7 @@ export function SecurityPoolSection({
 															className='secondary'
 															type='button'
 															onClick={() => {
-																onSecurityPoolFormChange({ marketId: existingQuestionCheck.questionId })
+																onSecurityPoolFormChange({ marketId: getQuestionIdHex(BigInt(existingQuestionCheck.questionId)) })
 																setQuestionSource('existing')
 															}}
 														>

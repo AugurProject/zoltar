@@ -127,7 +127,6 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		{ label: workspaceCopy.byAddress, value: 'vault-by-address' },
 	]
 	const { setVaultView, vaultView } = useSelectedVaultWorkflowState({
-		selectedVaultExistsOnchain: model.selectedVaultExistsOnchain,
 		accountAddress: accountState.address,
 		hasLoadedCurrentVault: model.hasLoadedCurrentVault,
 		initialVaultView,

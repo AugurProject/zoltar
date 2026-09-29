@@ -1,5 +1,11 @@
 import * as reportingCopy from '../../../copy/reporting.js'
-import { getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount, getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount, projectEscalationDeposit, type EscalationBalanceTuple } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
+import {
+	getWinningEscalationDepositClaimAmount as computeWinningEscalationDepositClaimAmount,
+	getWinningImportedEscalationDepositClaimAmount as computeWinningImportedEscalationDepositClaimAmount,
+	computeEscalationTimeSinceStartFromAttritionCostAttoRep,
+	projectEscalationDeposit,
+	type EscalationBalanceTuple,
+} from '@zoltar/statoblast-shared/escalationGame/escalationMath'
 import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 type ReportingAmountSuggestion = {
@@ -260,4 +266,25 @@ export function previewReportingContribution(details: ReportingDetails, outcome:
 		}
 	}
 	return previewEscalationContribution(details, outcome, amount)
+}
+
+export function previewReportingDeadline(details: ReportingDetails, outcome: ReportingOutcomeKey, amount: bigint) {
+	if (amount <= 0n || previewReportingContribution(details, outcome, amount).reason !== undefined) return undefined
+	if (details.status === 'not-started') return { deadline: details.currentTime + ESCALATION_GAME_ACTIVATION_DELAY, extension: ESCALATION_GAME_ACTIVATION_DELAY, reachesNonDecision: false }
+	if (details.systemState !== 'operational' || details.hasReachedNonDecision || isPoolQuestionFinalized(details) || details.currentTime > details.escalationEndTime) return undefined
+	const projected = projectEscalationDeposit({ amountAttoRep: amount, balancesAttoRep: getEscalationBalanceTuple(details.sides), nonDecisionThresholdAttoRep: details.nonDecisionThresholdAttoRep, outcome, startBondAttoRep: details.startBondAttoRep })
+	if (projected === undefined) return undefined
+	if (projected.reachesNonDecision) return { deadline: details.currentTime, extension: 0n, reachesNonDecision: true }
+	const balances = [...projected.projectedBalancesAttoRep].sort((a, b) => {
+		if (a < b) return -1
+		return a > b ? 1 : 0
+	})
+	const elapsed = computeEscalationTimeSinceStartFromAttritionCostAttoRep(details.startBondAttoRep, details.nonDecisionThresholdAttoRep, balances[1] ?? 0n)
+	let deadline = details.activationTime + elapsed
+	if (details.forkContinuation) {
+		if (details.forkResumedAt === undefined || details.forkElapsedAtStart === undefined || details.forkResumedAt === 0n) return undefined
+		const remaining = elapsed > details.forkElapsedAtStart ? elapsed - details.forkElapsedAtStart : 0n
+		deadline = details.forkResumedAt + (remaining > ESCALATION_GAME_ACTIVATION_DELAY ? remaining : ESCALATION_GAME_ACTIVATION_DELAY)
+	}
+	return { deadline, extension: deadline > details.escalationEndTime ? deadline - details.escalationEndTime : 0n, reachesNonDecision: false }
 }

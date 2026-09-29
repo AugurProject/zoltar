@@ -117,6 +117,7 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 		// Validate that the question exists
 		require(questionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
+		require(block.timestamp < questionData.getQuestionEndDate(questionId), 'Question has already ended');
 
 		// Validate that it's a yes-no question (exactly 2 outcomes: Yes and No)
 		string[] memory outcomes = questionData.getOutcomeLabels(questionId, 0, 3);

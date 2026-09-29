@@ -1,3 +1,4 @@
+import { isVaultHealthyAtFactor } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
@@ -5,6 +6,7 @@ import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { parseOptionalRepAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import {
+	getMaximumHealthyCommitment,
 	doesLoadedSecurityVaultMatchSelection,
 	doesSecurityVaultExistOnchain,
 	getSecurityVaultWithdrawableRepAmount,
@@ -314,4 +316,20 @@ void describe('security vault helpers', () => {
 test('withdrawal estimate preserves nested full-limit rounding and the liquidation reserve', () => {
 	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 10n, underwritingLimitAttoEth: 1n, repPerEthPrice: 1n, statoblastSecurityMultiplierBps: 20_000n })).toBe(8n)
 	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 200n, underwritingLimitAttoEth: 100n, repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 10_000n })).toBe(95n)
+})
+
+void test('commitment maximum is healthy and one attoETH more is liquidatable across both collateral floors', () => {
+	for (const multiplier of [10002n, 20000n, 70000n]) {
+		for (const staked of [0n, 3n * 10n ** 18n, 100n * 10n ** 18n]) {
+			const details = { vaultAttoRepBacking: 12n * 10n ** 18n + 1n, disputeStakedAttoRep: staked }
+			const price = 3n * 10n ** 18n + 7n
+			const maximum = getMaximumHealthyCommitment(details, price, multiplier)
+			if (maximum === undefined) throw new Error('Expected maximum')
+			const healthy = (limit: bigint) => isVaultHealthyAtFactor({ healthFactorBps: 10000n, openInterestAttoEth: limit, disputeStakedAttoRep: staked, poolHeldVaultRepBackingAttoRep: details.vaultAttoRepBacking, repPerEthPrice: price, poolSecurityMultiplierBps: multiplier })
+			expect(healthy(maximum)).toBe(true)
+			expect(healthy(maximum + 1n)).toBe(false)
+		}
+	}
+	expect(getMaximumHealthyCommitment(undefined, 1n, 20000n)).toBeUndefined()
+	expect(getMaximumHealthyCommitment({ vaultAttoRepBacking: 1n, disputeStakedAttoRep: 0n }, 0n, 20000n)).toBeUndefined()
 })

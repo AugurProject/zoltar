@@ -1,3 +1,4 @@
+import { questionIdHex } from './identifier-format.ts'
 import { annualFeeMillionths, annualFeeText } from './pool-metrics.ts'
 import type { EntityHistory, PoolRecord, StateEntity, StateTab, VaultRecord } from './browser-types.ts'
 import { uniswapLiquidityChartModel, uniswapPriceChartModel, uniswapPriceProvenance } from './chart-values.ts'
@@ -166,7 +167,7 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	staticCard.append(element('h4', '', 'Immutable deployment configuration'))
 	const grid = element('div', 'static-grid')
 	grid.append(
-		staticField('Question ID', poolItem.question_id),
+		staticField('Question ID', questionIdHex(poolItem.question_id)),
 		staticAddressField('Parent pool', poolItem.parent_address, poolItem.chain_id),
 		staticAddressField('Share token', poolItem.share_token_address, poolItem.chain_id),
 		staticAddressField('Price coordinator', poolItem.coordinator_address, poolItem.chain_id),

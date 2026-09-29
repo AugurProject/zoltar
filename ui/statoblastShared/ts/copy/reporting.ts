@@ -123,7 +123,6 @@ export const clearingDeposits = (outcome: string) => `Clearing ${outcome} deposi
 
 export const progressToForkUnavailable = 'Progress to fork: —'
 
-export const yourStatus = 'Your status'
 export const winningStatusLead = (side: string) => `You're winning on ${side}.`
 export const winningStatusDetail = (stake: string, worth: string) => `Your ${stake} REP would be worth about ${worth} REP if it ended now.`
 export const losingStatusLead = (side: string) => `You're losing on ${side}.`
@@ -167,3 +166,8 @@ export const noVaultRepSelectWallet = 'No REP is available in your pool vault. S
 export const insufficientVaultRepSelectWallet = (balance: string) => `Only ${balance} is available in your pool vault. Reduce the amount or select Wallet REP.`
 
 export const loadingVaultFunding = 'Loading vault funding requirements.'
+
+export const depositTriggersFork = 'This deposit reaches the non-decision threshold: the game ends and a universe fork can be triggered.'
+export const depositDeadlinePreview = (deadline: string, extension: string, unchanged: boolean) => `After this deposit, check back before ${deadline}. ${unchanged ? 'This deposit does not extend the timer.' : `Timer extended by ${extension}.`} Other reports can change this deadline.`
+
+export const dismissReminderUpdate = 'Dismiss'

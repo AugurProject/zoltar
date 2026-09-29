@@ -7,6 +7,24 @@ import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisa
 import { describe, expect, test } from 'bun:test'
 
 describe('security pool creation guards', () => {
+	test('blocks ended questions including the exact end timestamp', () => {
+		for (const currentTimestamp of [100n, 101n]) {
+			const input = {
+				accountAddress: zeroAddress,
+				checkingDuplicateOriginPool: false,
+				duplicateOriginPoolExists: false,
+				initialReportPriorityFeeEth: '0.00000001',
+				isOnActiveAppChain: true,
+				marketDetails: createMarketDetails({ endTime: 100n }),
+				securityPoolCreating: false,
+				statoblastSecurityMultiplier: '2',
+				zoltarUniverseHasForked: false,
+				currentTimestamp,
+			}
+			expect(getSecurityPoolCreateDisabledReason(input)).toBe('This question has already ended.')
+		}
+	})
+
 	test('blocks creation for wallet, network, duplicate, and market-type prerequisites', () => {
 		expect(
 			getSecurityPoolCreateDisabledReason({

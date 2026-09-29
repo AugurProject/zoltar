@@ -1,3 +1,4 @@
+import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { bigintToSafeNumber, getAddress, zeroAddress, type Address, type Hash, type PublicClient, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { tradingContracts } from '../generated/contractArtifact.js'
@@ -139,7 +140,7 @@ export function unavailableMarket(deployment: SecurityPoolDeployment, error: unk
 		shareToken: getAddress(deployment.shareToken),
 		universeId: deployment.universeId,
 		questionId: deployment.questionId,
-		title: `SecurityPool ${deployment.questionId.toString()}`,
+		title: `SecurityPool ${getQuestionIdHex(deployment.questionId)}`,
 		description: 'Live market data is temporarily unavailable.',
 		endTime: 0n,
 		statoblastSecurityMultiplierBps: deployment.statoblastSecurityMultiplierBps,

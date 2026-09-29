@@ -141,6 +141,7 @@ function ReportingSettlementSide({
 }
 
 export function ReportingSettlementSection({
+	showPositions = true,
 	activeReportingDetails,
 	displayedWithdrawGuardMessage,
 	effectiveReportingDetails,
@@ -161,6 +162,7 @@ export function ReportingSettlementSection({
 	withdrawEscalationEnabled,
 	withdrawGuardMessage,
 }: {
+	showPositions?: boolean
 	activeReportingDetails: ActiveReportingDetails | undefined
 	displayedWithdrawGuardMessage: string | undefined
 	effectiveReportingDetails: ReportingDetails | undefined
@@ -187,6 +189,13 @@ export function ReportingSettlementSection({
 	const firstSettleActionButtonRef = useRef<HTMLButtonElement>(null)
 	const withdrawableSides = (activeReportingDetails?.sides.filter(side => side.userDeposits.length > 0) ?? []).sort((left, right) => Number(right.key === effectiveReportingDetails?.questionOutcome) - Number(left.key === effectiveReportingDetails?.questionOutcome))
 	if (!isPoolQuestionFinalized(effectiveReportingDetails) && !activeReportingDetails?.sides.some(side => side.userDeposits.length > 0 || side.importedUserDeposits.length > 0)) return undefined
+	if (!isPoolQuestionFinalized(effectiveReportingDetails) && !showPositions)
+		return (
+			<>
+				{settlementContextMessage === undefined ? undefined : <p className='detail'>{settlementContextMessage}</p>}
+				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
+			</>
+		)
 	if (!isPoolQuestionFinalized(effectiveReportingDetails))
 		return (
 			<SectionBlock className='reporting-settlement-section' title={reportingCopy.yourPositions} variant='embedded'>

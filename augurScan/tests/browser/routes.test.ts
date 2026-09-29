@@ -4,6 +4,7 @@ import { canonicalOperationsPath, classifyRoute, parseOperationsDetailRoute, rou
 test('classifies canonical entities and rejects unknown routes', () => {
 	expect(classifyRoute('/pool/0x1111111111111111111111111111111111111111')).toBe('operations')
 	expect(classifyRoute('/question/501')).toBe('system')
+	expect(routeTitle('/question/501')).toBe('Question 0x1f5 · augurScan')
 	expect(classifyRoute('/tx/0x' + 'a'.repeat(64))).toBe('explorer')
 	expect(classifyRoute('/operations/unknown')).toBe('not-found')
 	expect(routeTitle('/missing')).toBe('Page not found · augurScan')

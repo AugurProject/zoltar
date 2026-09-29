@@ -49,7 +49,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'f59fe8d895f71895cf78e078a28ca285e2a70365d4f96c500749f35955d53502'
+export const expectedProductionSoliditySourceFingerprint = '42e62d4960479d70c782b6c0bf88769940d1439cf9020314b2980294ab4c066b'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -680,7 +680,7 @@ export const contractReferences: ContractReference[] = [
 				effect: 'Creates the canonical origin pool, its lineage-wide share token, and its price coordinator with the configured initial-report priority fee, then wires and registers them atomically.',
 				declarations: [{ name: 'deployOriginSecurityPool' }],
 				preconditions:
-					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists and has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the non-decision threshold exceeds the construction-time effective escalation deposit `max(1 REP, theoretical REP supply / 10,000,000)`; the origin/universe/priority-fee slot has not already been claimed.',
+					'`statoblastSecurityMultiplierBps > 10_001`, which makes the halfway migration component strictly greater than one; the effective pool-held vault REP backing multiplier separately floors that component at the 10,500-BPS liquidation-award reserve described by the [liquidation design](../explanation/liquidations.html#rule). `initialReportPriorityFeeAttoEthPerGas > 0` and remains within the coordinator-computed OpenOracle `uint128` report/escalation-halt capacity bound; question exists, the transaction timestamp is strictly before its end time, and it has exactly the categorical labels `Yes`, then `No`; universe is unforked and has a REP token; the non-decision threshold exceeds the construction-time effective escalation deposit `max(1 REP, theoretical REP supply / 10,000,000)`; the origin/universe/priority-fee slot has not already been claimed.',
 				signals: '`SecurityPoolRegistered`, then `DeploySecurityPool`',
 			},
 			{
