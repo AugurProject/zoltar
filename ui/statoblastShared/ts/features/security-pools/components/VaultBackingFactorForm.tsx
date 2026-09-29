@@ -70,7 +70,7 @@ export function VaultBackingFactorForm({
 	const maximum = getMaximumHealthyCommitment(details, repPerEthPrice, minimumBps)
 	const riskKey = `${details?.securityPoolAddress}:${details?.vaultAddress}:${limitAttoEth}:${repPerEthPrice}:${maximum}`
 	const [acknowledgedRisk, setAcknowledgedRisk] = useState<string | undefined>(undefined)
-	const unsafe = maximum !== undefined && limitAttoEth !== undefined && limitAttoEth > maximum
+	const unsafe = maximum !== undefined && limitAttoEth !== undefined && limitAttoEth > maximum && (currentLimit === undefined || limitAttoEth > currentLimit)
 	const riskReason = unsafe && acknowledgedRisk !== riskKey ? securityPoolCopy.commitmentRiskRequired : undefined
 	const reason = prerequisite ?? error ?? priceError ?? riskReason
 	const fieldErrorShown = prerequisite === undefined && errorRevealed && error !== undefined

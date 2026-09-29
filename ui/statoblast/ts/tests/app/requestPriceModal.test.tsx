@@ -1149,3 +1149,101 @@ test('prepares retries inline without a review action and requests the wallet on
 		dom.cleanup()
 	}
 })
+
+test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm resolves and the submitted price is edited', async outcome => {
+	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	const activeReview = signal<typeof review | undefined>(review)
+	const hash = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+	let controller: ReturnType<typeof createTransactionStepController> | undefined
+	let attempts = 0
+	let confirmReturned = false
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal
+					{...props}
+					review={activeReview.value}
+					onClose={() => {
+						activeReview.value = undefined
+					}}
+					onConfirm={async (_request, signal) => {
+						attempts += 1
+						if (attempts > 1) return
+						controller = createTransactionStepController(signal)
+						controller.setPlan([{ ...step, title: 'Request new price', tokenFunding: [{ amount: '2 REP', limit: undefined }] }])
+						await controller.review()
+						controller.submitted(hash)
+						presentation.value = { tone: 'pending', title: 'Requesting new price…', hash }
+						confirmReturned = true
+					}}
+				/>
+				<GlobalTransactionDialog transaction={presentation.value} />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: /^Request new price/ })))
+		await settle()
+		expect(confirmReturned).toBe(true)
+		expect(transactionSteps.value?.steps[0]?.phase).toBe('pending')
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '4' } }))
+		await settle()
+		expect(attempts).toBe(1)
+		await act(() => {
+			controller?.receipt(hash, outcome)
+			presentation.value = outcome === 'success' ? { tone: 'success', title: 'Price requested', hash } : { tone: 'error', title: 'Price request failed', detail: 'Transaction reverted.', hash }
+		})
+		await settle()
+		if (outcome === 'success') {
+			expect(queries.queryByRole('dialog', { name: 'Request new price' })).toBeNull()
+			await act(() => fireEvent.click(queries.getByRole('button', { name: 'Dismiss' })))
+			expect(queries.queryByRole('dialog', { name: 'Transaction status' })).toBeNull()
+		} else {
+			expect(queries.getByRole('dialog', { name: 'Transaction status' }).textContent).toContain('Transaction reverted.')
+			const form = queries.getByRole('dialog', { name: 'Request new price' })
+			expect(form.textContent).toContain('Edit the price or fetch a quote to retry.')
+			expect(form.textContent).toContain('2 REP')
+		}
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('keeps preparation paused when a retry quote fails', async () => {
+	const dom = installDomEnvironment()
+	let attempts = 0
+	const rendered = await renderIntoDocument(
+		<GlobalTransactionPresentationProvider transaction={{ tone: 'error', title: 'Price request failed', detail: 'Preparation failed.' }}>
+			<RequestPriceModal
+				{...props}
+				fetchPrice={async () => {
+					throw new Error('Quote unavailable')
+				}}
+				onConfirm={async () => {
+					attempts += 1
+				}}
+			/>
+		</GlobalTransactionPresentationProvider>,
+	)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '2' } }))
+		await settle()
+		expect(attempts).toBe(1)
+		expect(queries.getByText('Edit the price or fetch a quote to retry.')).not.toBeNull()
+		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
+		await settle()
+		expect(attempts).toBe(1)
+		expect(queries.getByText('Edit the price or fetch a quote to retry.')).not.toBeNull()
+		expect(queries.getByRole('alert').textContent).toContain('Quote unavailable')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})

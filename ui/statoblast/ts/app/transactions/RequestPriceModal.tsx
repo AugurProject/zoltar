@@ -45,6 +45,12 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const retryPreparation = () => {
 		if (!running) {
 			run.current?.cancel()
+			const tracked = run.current
+			const failedSubmission = presentation?.tone === 'error' && failureLatched && (tracked?.submittedHash === undefined || presentation.hash === tracked.submittedHash)
+			if (!failedSubmission && (tracked?.submissionOutstanding === true || tracked?.submittedHash !== undefined || tracked?.finalSubmittedHash !== undefined)) {
+				setPreparationPaused(true)
+				return
+			}
 			run.current = undefined
 		}
 		setPreparationPaused(false)
@@ -194,11 +200,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const attempt = ++quoteAttempt.current
 		setFetching(true)
 		setQuoteError(undefined)
-		if (failureLatched || preparationPaused) retryPreparation()
 		run.current?.cancel()
 		try {
 			const value = await fetchPrice(review)
 			if (attempt !== quoteAttempt.current || !mounted.current) return
+			if (failureLatched || preparationPaused) retryPreparation()
 			setPrice(formatUnits(value, 18))
 		} catch (error) {
 			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, priceRequestCopy.uniswapPriceFailed))

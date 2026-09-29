@@ -385,6 +385,34 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 	})
 
+	test.each(['3', '5'])('requires commitment risk acknowledgement only when increasing an already unhealthy limit to %s', async limit => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						repPerEthPrice: 3n * 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ underwritingLimitAttoEth: 4n * 10n ** 18n, settlementCollateralAttoEth: 0n }),
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
+		const queries = within(dialog)
+		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: limit } })
+		if (limit === '3') {
+			expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+			expect(queries.queryByRole('checkbox', { name: /I understand/ })).toBeNull()
+			expect(dialog.textContent).not.toContain('This limit would make your vault liquidatable')
+		} else {
+			expectTransactionButtonDisabled(dialog, 'Set commitment limit')
+			fireEvent.click(queries.getByRole('checkbox', { name: /I understand/ }))
+			expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+		}
+	})
+
 	test('accepts a manual initial price for a queued commitment change', async () => {
 		let submitted: { limit: string; price: bigint | undefined } | undefined
 		cleanupRenderedComponent = (
