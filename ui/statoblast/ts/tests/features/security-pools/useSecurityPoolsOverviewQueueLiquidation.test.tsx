@@ -319,11 +319,11 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 
 	describe('initial report funding preflight', () => {
 		// Invalid oracle price, so queueing must first fund a 5 REP initial report with a 5 WETH shortfall.
-		const renderUnderfundedHook = async (walletEthBalance: bigint, funding: Partial<CoordinatorFundingRequirement>) => {
+		const renderUnderfundedHook = async (walletBalanceAttoEth: bigint, funding: Partial<CoordinatorFundingRequirement>) => {
 			const queueSecurityPoolLiquidation = mockQueuedLiquidation('0x03')
 			const hook = await renderHook(
 				createSecurityPoolsOverviewDependencies({
-					createConnectedReadClient: mock(() => ({ getBalance: async () => walletEthBalance })),
+					createConnectedReadClient: mock(() => ({ getBalance: async () => walletBalanceAttoEth })),
 					loadCoordinatorInitialReportFundingRequirement: mock(async () =>
 						createCoordinatorFundingRequirement({
 							currentWethBalanceAttoEth: 0n,

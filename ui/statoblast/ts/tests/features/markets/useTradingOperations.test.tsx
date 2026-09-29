@@ -17,7 +17,7 @@ type UseTradingOperationsParameters = Parameters<typeof useTradingOperations>[0]
 type MintCapacity = Awaited<ReturnType<UseTradingOperationsDependencies['loadSecurityPoolMintCapacity']>>
 type HarnessProps = { enabled?: boolean; selectedSecurityPoolAddress?: Address }
 
-const ETH = 10n ** 18n
+const ATTO_ETH_PER_ETH = 10n ** 18n
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const NEXT_WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const SECURITY_POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000b2')
@@ -66,12 +66,12 @@ function createChildUniverse(parentUniverseId: bigint, outcomeIndex: bigint, out
 
 function createMintCapacity(overrides: Partial<MintCapacity> = {}): MintCapacity {
 	return {
-		settlementCollateralAttoEth: ETH,
-		feeEligibleUnderwritingLimitAttoEth: 2n * ETH,
-		mintingCapacityAttoEth: 2n * ETH,
-		shareTokenSupplyAttoShares: ETH,
-		totalPoolHeldAttoRep: 20n * ETH,
-		totalUnderwritingLimitAttoEth: 2n * ETH,
+		settlementCollateralAttoEth: ATTO_ETH_PER_ETH,
+		feeEligibleUnderwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH,
+		mintingCapacityAttoEth: 2n * ATTO_ETH_PER_ETH,
+		shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH,
+		totalPoolHeldAttoRep: 20n * ATTO_ETH_PER_ETH,
+		totalUnderwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH,
 		isPriceValid: true,
 		...overrides,
 	}
@@ -97,7 +97,7 @@ function createTradingOperationsDependencies(overrides: Partial<UseTradingOperat
 /** Mint-ready dependencies: a funded wallet, default pool capacity, and single-universe pool reads. */
 function createMintDependencies(overrides: Partial<UseTradingOperationsDependencies>): UseTradingOperationsDependencies {
 	return createTradingOperationsDependencies({
-		getWalletEthBalance: mock(async () => 2n * ETH),
+		getWalletEthBalance: mock(async () => 2n * ATTO_ETH_PER_ETH),
 		loadSecurityPoolMintCapacity: mock(async () => createMintCapacity()),
 		loadTradingDetails: mock(async () => createTradingDetails()),
 		loadZoltarUniverseSummary: mock(async () => createUniverseSummary()),
@@ -184,7 +184,7 @@ describe('useTradingOperations', () => {
 
 	test.each([
 		{
-			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 10n * ETH }),
+			capacity: createMintCapacity({ settlementCollateralAttoEth: 0n, shareTokenSupplyAttoShares: 10n * ATTO_ETH_PER_ETH }),
 			expectedMessage: 'Minting is unavailable because this pool has complete-set shares but no collateral',
 			name: 'latest pool capacity has no collateral exchange rate',
 		},
@@ -221,16 +221,16 @@ describe('useTradingOperations', () => {
 				createCompleteSetInSecurityPool,
 				loadSecurityPoolMintCapacity: mock(async () =>
 					createMintCapacity({
-						currentRetentionRate: ETH / 2n,
+						currentRetentionRate: ATTO_ETH_PER_ETH / 2n,
 						currentTimestamp: 2n,
-						feeEligibleUnderwritingLimitAttoEth: 3n * ETH,
+						feeEligibleUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
 						feeEndTimestamp: 100n,
 						feeIndexRemainder: 0n,
 						lastUpdatedFeeAccumulator: 1n,
-						mintingCapacityAttoEth: 3n * ETH,
-						settlementCollateralAttoEth: 2n * ETH,
-						shareTokenSupplyAttoShares: 2n * ETH,
-						totalUnderwritingLimitAttoEth: 3n * ETH,
+						mintingCapacityAttoEth: 3n * ATTO_ETH_PER_ETH,
+						settlementCollateralAttoEth: 2n * ATTO_ETH_PER_ETH,
+						shareTokenSupplyAttoShares: 2n * ATTO_ETH_PER_ETH,
+						totalUnderwritingLimitAttoEth: 3n * ATTO_ETH_PER_ETH,
 						totalFeesOwedRemainder: 0n,
 					}),
 				),
@@ -244,11 +244,11 @@ describe('useTradingOperations', () => {
 
 		expect(hook.onTransactionFailed.mock.calls).toEqual([])
 		expect(createCompleteSetInSecurityPool).toHaveBeenCalledTimes(1)
-		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * ETH - 1n)
+		expect(createCompleteSetInSecurityPool.mock.calls[0]?.[3]).toBe(2n * ATTO_ETH_PER_ETH - 1n)
 	})
 
 	test('converts redeem complete-set input to share units before submitting', async () => {
-		const firstMintShareAmount = ETH
+		const firstMintShareAmount = ATTO_ETH_PER_ETH
 		let submittedRedeemAmount: bigint | undefined
 		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {
 			submittedRedeemAmount = amount
@@ -412,7 +412,7 @@ describe('useTradingOperations', () => {
 		const createCompleteSetInSecurityPool = mock(async () => {
 			throw new Error('createCompleteSetInSecurityPool should not be called when the active wallet account changed')
 		})
-		const getWalletEthBalance = mock(async () => 2n * ETH)
+		const getWalletEthBalance = mock(async () => 2n * ATTO_ETH_PER_ETH)
 		const onTransactionRequested = mock(() => undefined)
 		const loadSecurityPoolMintCapacity = mock(async () => createMintCapacity())
 		const loadTradingDetails = mock(async () => createTradingDetails())
@@ -439,9 +439,9 @@ describe('useTradingOperations', () => {
 		const migrateSharesFromUniverse = mock(async () => {
 			throw new Error('migrateSharesFromUniverse should not be called when the active wallet account changed')
 		})
-		const getWalletEthBalance = mock(async () => 2n * ETH)
+		const getWalletEthBalance = mock(async () => 2n * ATTO_ETH_PER_ETH)
 		const onTransactionRequested = mock(() => undefined)
-		const loadTradingDetails = mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: 0n, noAttoShares: ETH, yesAttoShares: ETH } }))
+		const loadTradingDetails = mock(async () => createTradingDetails({ shareBalances: { invalidAttoShares: 0n, noAttoShares: ATTO_ETH_PER_ETH, yesAttoShares: ATTO_ETH_PER_ETH } }))
 		const loadZoltarUniverseSummary = mock(async () => createUniverseSummary({ childUniverses: [createChildUniverse(1n, 0n, 'Invalid', 2n)], hasForked: true }))
 		const hook = await renderTradingHook(createTradingOperationsDependencies({ getWalletEthBalance, loadTradingDetails, loadZoltarUniverseSummary, migrateSharesFromUniverse }), { onTransactionRequested })
 		const reads = [getWalletEthBalance, loadTradingDetails, loadZoltarUniverseSummary]

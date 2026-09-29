@@ -7,7 +7,7 @@ import { getReportingReportGuardMessage, getReportingWithdrawGuardMessage } from
 type ReportGuardInput = Parameters<typeof getReportingReportGuardMessage>[0]
 type WithdrawGuardInput = Parameters<typeof getReportingWithdrawGuardMessage>[0]
 
-const REP = 10n ** 18n
+const ATTO_REP_PER_REP = 10n ** 18n
 
 /** A connected, on-chain, 1-atto-REP report on Yes into an active game, backed by the viewer's vault. */
 function createReportGuardInput(overrides: Partial<ReportGuardInput> = {}): ReportGuardInput {
@@ -36,12 +36,12 @@ describe('reporting guards', () => {
 		{
 			expected: "Deposit 3 more REP into your vault's pool-held backing before reporting.",
 			name: 'when the vault lacks pool-held REP backing',
-			overrides: { actualDepositAmount: 5n * REP, reportAmount: '5', selectedAmount: 5n * REP, viewerPoolHeldVaultRepBackingAttoRep: 2n * REP },
+			overrides: { actualDepositAmount: 5n * ATTO_REP_PER_REP, reportAmount: '5', selectedAmount: 5n * ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 2n * ATTO_REP_PER_REP },
 		},
 		{
 			expected: 'Increase the report amount slightly to avoid a tie at the minimum bond.',
 			name: 'when the contribution preview is invalid',
-			overrides: { actualDepositAmount: undefined, contributionPreviewReason: 'Increase the report amount slightly to avoid a tie at the minimum bond.', selectedAmount: REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * REP },
+			overrides: { actualDepositAmount: undefined, contributionPreviewReason: 'Increase the report amount slightly to avoid a tie at the minimum bond.', selectedAmount: ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP },
 		},
 		{
 			expected: 'This contribution uses pool-held REP backing. Deposit REP into your vault before reporting.',
@@ -51,7 +51,7 @@ describe('reporting guards', () => {
 		{
 			expected: 'Only 2 REP remains before the selected side reaches the threshold.',
 			name: 'when the contribution would exceed the remaining selected-side threshold capacity',
-			overrides: { actualDepositAmount: 5n * REP, remainingSelectedOutcomeCapacity: 2n * REP, reportAmount: '5', selectedAmount: 5n * REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * REP },
+			overrides: { actualDepositAmount: 5n * ATTO_REP_PER_REP, remainingSelectedOutcomeCapacity: 2n * ATTO_REP_PER_REP, reportAmount: '5', selectedAmount: 5n * ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP },
 		},
 		{ expected: 'No remaining contribution capacity is available on the selected side.', name: 'when the selected side has no remaining capacity', overrides: { remainingSelectedOutcomeCapacity: 0n } },
 	])('blocks report submission $name', ({ expected, overrides }) => {

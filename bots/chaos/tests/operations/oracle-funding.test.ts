@@ -22,7 +22,7 @@ const simpleCoordinatorFunding = {
 } as const
 
 /** A snapshot whose first pool needs a fresh oracle price funded through the simple coordinator. */
-function requestPriceSnapshot(projectedSettlementCollateralAttoEth?: string) {
+function requestPriceSnapshot(projectedSettlementCollateralAttoEth?: bigint) {
 	const snapshot = snapshotFixture()
 	const pool = snapshot.pools[0]
 	if (pool === undefined) throw new Error('Pool fixture missing')
@@ -31,7 +31,7 @@ function requestPriceSnapshot(projectedSettlementCollateralAttoEth?: string) {
 	pool.oracleRequestFunding = { ...simpleCoordinatorFunding }
 	pool.minimumToken1ReportAttoEth = '4'
 	pool.requestPriceCostAttoEth = '121'
-	if (projectedSettlementCollateralAttoEth !== undefined) pool.projectedSettlementCollateralAttoEth = projectedSettlementCollateralAttoEth
+	if (projectedSettlementCollateralAttoEth !== undefined) pool.projectedSettlementCollateralAttoEth = projectedSettlementCollateralAttoEth.toString()
 	pool.settlementCollateralAttoEth = '100'
 	return { pool, snapshot }
 }
@@ -141,7 +141,7 @@ describe('oracle request funding bounds', () => {
 	})
 
 	test('reuses oversized allowances while preserving the full inclusion debit bound', () => {
-		const { pool, snapshot } = requestPriceSnapshot('100')
+		const { pool, snapshot } = requestPriceSnapshot(100n)
 		for (const token of snapshot.wallet.tokens) token.allowances[pool.coordinator] = (10n ** 30n).toString()
 
 		const plan = requestPricePlan(snapshot)
@@ -181,7 +181,7 @@ describe('oracle request funding bounds', () => {
 	})
 
 	test('makes an invalid funding candidate ineligible without aborting catalog evaluation', () => {
-		const { pool, snapshot } = requestPriceSnapshot('100')
+		const { pool, snapshot } = requestPriceSnapshot(100n)
 
 		pool.oracleRequestFunding.gasUnitsForOneDispute = '0'
 		const blocked = requestPricePlan(snapshot)
