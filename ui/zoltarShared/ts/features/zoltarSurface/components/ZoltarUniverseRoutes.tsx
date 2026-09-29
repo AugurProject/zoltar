@@ -1,3 +1,4 @@
+import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useEffect, useRef } from 'preact/hooks'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -65,7 +66,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 	const lookup = useRef(operations.loadZoltarQuestion)
 	lookup.current = operations.loadZoltarQuestion
 	useEffect(() => {
-		if (!/^0x[0-9a-f]{64}$/i.test(forkQuestionId)) return
+		if (normalizeQuestionId(forkQuestionId) === undefined) return
 		const timeout = setTimeout(() => void lookup.current(forkQuestionId), 300)
 		return () => clearTimeout(timeout)
 	}, [forkQuestionId, environmentRefreshKey, universe.universeId])
@@ -77,6 +78,7 @@ export function ZoltarForkRoute({ universe }: UniverseRouteProps) {
 				<SectionBlock variant='plain'>
 					<ForkZoltarSection
 						accountAddress={accountState.address}
+						hasLoadedZoltarForkAccess={operations.hasLoadedZoltarForkAccess}
 						hasLoadedZoltarQuestions={operations.hasLoadedZoltarQuestions}
 						isOnActiveAppChain={isActiveAppChain(accountState.chainId)}
 						loadingZoltarForkAccess={operations.loadingZoltarForkAccess}

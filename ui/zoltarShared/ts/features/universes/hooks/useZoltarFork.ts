@@ -154,6 +154,7 @@ export function useZoltarFork(
 	const currentUniverseRef = useRef(zoltarUniverse)
 	currentUniverseRef.current = zoltarUniverse
 	const forkAccessLoad = useLoadController()
+	const completedForkAccessScopeGeneration = useSignal<number | undefined>(undefined)
 	const zoltarForkError = useSignal<string | undefined>(undefined)
 	const zoltarForkPending = useSignal(false)
 	const forkQuestionScopeKey = `${environmentRefreshKey}:${activeUniverseId.toString()}`
@@ -219,6 +220,7 @@ export function useZoltarFork(
 			})
 			const [repBalanceResult, approvalResult, preparedRepBalanceResult, ...childBalanceResults] = accessResults
 			if (!isCurrentScope()) return
+			completedForkAccessScopeGeneration.value = forkAccessScopeGeneration
 			loadedForkAccessScopeGeneration.current = forkAccessScopeGeneration
 			zoltarForkRepBalanceAttoRep.value = repBalanceResult?.status === 'success' ? repBalanceResult.result : undefined
 			if (approvalResult?.status === 'success') {
@@ -375,6 +377,7 @@ export function useZoltarFork(
 		approveZoltarForkRep,
 		forkZoltar,
 		loadZoltarForkAccess,
+		hasLoadedZoltarForkAccess: completedForkAccessScopeGeneration.value === forkAccessScopeGeneration,
 		loadingZoltarForkAccess: forkAccessLoad.isLoading.value,
 		zoltarForkActiveAction: zoltarForkActiveAction.value,
 		zoltarForkApproval: hasCurrentForkAccess

@@ -114,6 +114,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		for (const [label, value] of poolSummaryMetrics(state)) summary.append(operationCard(label, value))
 	}
 
+	// Overview holds current state, History keeps timelines with their pagers, and Evidence holds canonical records and proofs.
 	type DetailTab = 'overview' | 'history' | 'evidence'
 	const panels: { tab: DetailTab; node: HTMLElement }[] = []
 	const addPanel = (tab: DetailTab, node: HTMLElement) => panels.push({ tab, node })
@@ -125,7 +126,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const approvalEvents = operationRecords(data['approvalEvents']).sort(compareCanonicalEventPosition)
 	if (approvalEvents.length > 0)
 		addPanel(
-			'overview',
+			'evidence',
 			operationsPanel(
 				'Liquidation approval lifecycle',
 				approvalEvents.map(item => operationRow(String(item['event_name'] ?? 'Liquidation approval'), approvalTransitionSummary(item), String(item['approval_identity'] ?? ''), item['block_number'])),
@@ -154,7 +155,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			return row
 		})
 		addPanel(
-			'overview',
+			'evidence',
 			operationsPanel('Escalation payouts', rows, claims['status'] === 'available' ? 'No unconsumed deposits at this tagged block.' : `Payout evidence unavailable: ${String(claims['reason'] ?? 'Awaiting claim sampling')}`, {
 				label: `Tagged claim-bundle payouts; proofs must be refreshed after settlement.${claims['truncated'] === true ? ' First 250 positions shown.' : ''}`,
 			}),
@@ -214,7 +215,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			})
 			activityPanel.append(more, status)
 		}
-		addPanel('overview', activityPanel)
+		addPanel('evidence', activityPanel)
 		const shares = isRecord(data['sharePositions']) ? data['sharePositions'] : {}
 		addPanel(
 			'overview',
@@ -379,9 +380,9 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 		}
 	}
 
-	if (isRecord(data['finalization'])) addPanel('overview', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
+	if (isRecord(data['finalization'])) addPanel('evidence', operationsPanel('Auction finalization', detailEvidenceRows([data['finalization']]), 'Not finalized'))
 	if (route.kind === 'escalation') {
-		for (const key of ['deposits', 'claims']) addPanel('overview', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
+		for (const key of ['deposits', 'claims']) addPanel('history', operationsPanel(`Loaded ${key}`, detailEvidenceRows(operationRecords(data[key])), `No ${key} in the loaded event page.`))
 	}
 	if (data['demandCurveTruncated'] === true) addPanel('history', operationsPanel('Demand curve coverage', [element('p', 'data-note', 'Only the highest 1,000 ticks are shown. Cumulative demand covers these ticks only.')], ''))
 	const demand = operationRecords(data['demandCurve'])
@@ -481,7 +482,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 	const canonicalDetail = !location.pathname.startsWith('/operations/')
 	if (canonicalDetail) {
 		const selectedTab = pageUrl.searchParams.get('tab')
-		const activeTab = selectedTab === 'history' || selectedTab === 'evidence' ? selectedTab : 'overview'
+		const activeTab = (selectedTab === 'history' || selectedTab === 'evidence') && panels.some(panel => panel.tab === selectedTab) ? selectedTab : 'overview'
 		const tabs = element('nav', 'entity-detail-tabs')
 		tabs.setAttribute('aria-label', 'Entity sections')
 		for (const [key, label] of [
@@ -489,6 +490,7 @@ export const renderOperationsDetail = (deps: OperationsDetailDeps, response: Ope
 			['history', 'History'],
 			['evidence', 'Evidence'],
 		] as const) {
+			if (key !== 'overview' && !panels.some(panel => panel.tab === key)) continue
 			const target = new URL(location.href)
 			if (key === 'overview') target.searchParams.delete('tab')
 			else target.searchParams.set('tab', key)

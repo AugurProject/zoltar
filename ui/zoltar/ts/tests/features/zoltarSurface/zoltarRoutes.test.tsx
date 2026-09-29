@@ -44,6 +44,7 @@ function createOperations(universe: ZoltarUniverseSummary | undefined) {
 		createChildUniverse: async () => undefined,
 		createQuestion: async () => undefined,
 		forkZoltar: async () => undefined,
+		hasLoadedZoltarForkAccess: false,
 		hasLoadedZoltarQuestions: false,
 		loadZoltarForkAccess: async () => undefined,
 		loadZoltarQuestion: async () => undefined,
@@ -134,10 +135,10 @@ describe('ZoltarRoutes', () => {
 		}
 	}
 
-	test('looks up only a complete fork question after typing pauses', async () => {
+	test('debounces valid fork questions while typing and ignores invalid input', async () => {
 		const loadZoltarQuestion = mock(async () => undefined)
 		const id = `0x${'12'.repeat(32)}`
-		const screen = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: '0x1', loadZoltarQuestion })
+		const screen = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: '0xinvalid', loadZoltarQuestion })
 		await act(async () => {
 			await Bun.sleep(350)
 		})
@@ -157,6 +158,20 @@ describe('ZoltarRoutes', () => {
 		await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledTimes(1))
 		expect(loadZoltarQuestion).toHaveBeenCalledWith(`0x${'13'.repeat(32)}`)
 	})
+
+	for (const id of [`0x${'a'.repeat(63)}`, '0x1a', `0x${'b'.repeat(64)}`])
+		test(`looks up valid unpadded question ${id} after the delay`, async () => {
+			const loadZoltarQuestion = mock(async () => undefined)
+			const screen = await renderRoute('fork', createUniverse({ childUniverses: [], hasForked: false }), 'ready', undefined, { zoltarForkQuestionId: id, loadZoltarQuestion })
+			expect(loadZoltarQuestion).not.toHaveBeenCalled()
+			expect(screen.queries.queryByText('Question not found')).toBeNull()
+			await waitFor(() => expect(loadZoltarQuestion).toHaveBeenCalledTimes(1))
+			expect(loadZoltarQuestion).toHaveBeenCalledWith(id)
+			await act(async () => {
+				await Bun.sleep(350)
+			})
+			expect(loadZoltarQuestion).toHaveBeenCalledTimes(1)
+		})
 
 	test('shows the switch-network state in the REP tile for a connected wrong-network wallet', async () => {
 		const { queries } = await renderRoute('overview', createUniverse({ hasForked: false }), 'ready', undefined, {}, '0x1')

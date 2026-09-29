@@ -27,6 +27,7 @@ const FORK_QUESTION_STATE_ID = 'fork-zoltar-question-state'
 type ForkZoltarSectionProps = {
 	accountAddress: Address | undefined
 	currentTimestamp?: bigint | undefined
+	hasLoadedZoltarForkAccess?: boolean
 	hasLoadedZoltarQuestions: boolean
 	isOnActiveAppChain: boolean
 	loadingZoltarForkAccess: boolean
@@ -52,6 +53,7 @@ type ForkZoltarSectionProps = {
 export function ForkZoltarSection({
 	accountAddress,
 	currentTimestamp,
+	hasLoadedZoltarForkAccess = false,
 	hasLoadedZoltarQuestions,
 	isOnActiveAppChain,
 	loadingZoltarForkAccess,
@@ -79,6 +81,7 @@ export function ForkZoltarSection({
 	const rootUniverse = zoltarUniverse
 	const universeMissing = zoltarUniverseState === 'missing'
 	const hasForked = rootUniverse?.hasForked === true
+	const forkRepBalanceFailed = hasLoadedZoltarForkAccess && !loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined
 	const hasEnoughRep = rootUniverse !== undefined && zoltarForkRepBalanceAttoRep !== undefined && zoltarForkRepBalanceAttoRep >= rootUniverse.forkThresholdAttoRep
 	const approvalRequirement = deriveTokenApprovalRequirement(rootUniverse?.forkThresholdAttoRep, zoltarForkApproval.value)
 	const requiresApproval = rootUniverse?.reputationTokenKind !== 'child'
@@ -104,7 +107,7 @@ export function ForkZoltarSection({
 		isMissing: hasSelectedQuestionId && isSelectedQuestionLookup && !loadingZoltarQuestion && selectedQuestion === undefined && selectedQuestionError === undefined,
 		value: selectedQuestion,
 	})
-	const selectedQuestionPresentation = (/^0x[0-9a-f]{64}$/i.test(selectedQuestionId) || isSelectedQuestionLookup) && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
+	const selectedQuestionPresentation = hasValidSelectedQuestionId && selectedQuestionLookupState !== 'ready' ? getReportPresentation({ kind: 'question', state: selectedQuestionLookupState }) : undefined
 	let selectedQuestionDescriptionId: string | undefined
 	if (selectedQuestionError !== undefined) selectedQuestionDescriptionId = FORK_QUESTION_ERROR_ID
 	else if (selectedQuestionLookupState === 'missing') selectedQuestionDescriptionId = FORK_QUESTION_STATE_ID
@@ -128,7 +131,7 @@ export function ForkZoltarSection({
 		if (!selectedQuestionHasEnded) return zoltarCopy.formatForkQuestionActiveReason(formatTimestamp(selectedQuestion.endTime), formatRelativeTimestamp(selectedQuestion.endTime, effectiveCurrentTimestamp))
 		if (!hasForkEconomics) return zoltarCopy.forkEconomicsUnavailableReason
 
-		if (zoltarForkRepBalanceAttoRep === undefined) return loadingZoltarForkAccess ? zoltarCopy.forkRepBalanceLoadingReason : zoltarCopy.forkRepBalanceUnavailableReason
+		if (zoltarForkRepBalanceAttoRep === undefined) return forkRepBalanceFailed ? zoltarCopy.forkRepBalanceUnavailableShortReason : zoltarCopy.forkRepBalanceLoadingReason
 		if (!hasEnoughRep) return zoltarCopy.forkRepInsufficientReason
 		if (!hasEnoughApproval) return zoltarCopy.forkRepApprovalRequiredReason
 
@@ -176,7 +179,7 @@ export function ForkZoltarSection({
 				</DataGrid>
 			)}
 
-			{accountAddress !== undefined && isOnActiveAppChain && !loadingZoltarForkAccess && zoltarForkRepBalanceAttoRep === undefined ? (
+			{accountAddress !== undefined && isOnActiveAppChain && forkRepBalanceFailed ? (
 				<>
 					<ErrorNotice message={zoltarCopy.forkRepBalanceUnavailableReason} />
 					{onRetryZoltarForkAccess === undefined ? undefined : (

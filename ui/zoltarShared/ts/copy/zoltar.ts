@@ -113,3 +113,5 @@ export const migrationWalletBalancesReason = 'Connect a wallet to read migration
 export const forkRepBalanceLoadingReason = 'Loading REP balance…'
 export const forkRepBalanceUnavailableReason = 'Could not read your REP balance. Retry to check whether you can fork.'
 export const forkWalletRep = 'Wallet REP'
+
+export const forkRepBalanceUnavailableShortReason = 'REP balance unavailable.'
