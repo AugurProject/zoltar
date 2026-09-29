@@ -19,6 +19,40 @@ describe('TokenApprovalControl', () => {
 		},
 	})
 
+	test.each([
+		[1791988085676923080n, 18, '≈ 1.8', '1.79198808567692308'],
+		[1000000000000000001n, 18, '≈ 1.01', '1.000000000000000001'],
+		[1n, 18, '≈ 0.01', '0.000000000000000001'],
+		[180n, 2, '1.8', '1.8'],
+		[1234567n, 0, '≈ 1.24M', '1 234 567'],
+		[999999n, 0, '≈ 1M', '999 999'],
+		[1000001n * 10n ** 18n, 18, '≈ 1.01M', '1 000 001'],
+		[10n ** 30n + 1n, 0, undefined, '1 000 000 000 000 000 000 000 000 000 001'],
+	])('rounds button amounts upward while approving the exact value %s', async (amount, units, label, exact) => {
+		const approvals: (bigint | undefined)[] = []
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='queueing a commitment'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={value => approvals.push(value)}
+				pending={false}
+				pendingLabel='Approving WETH…'
+				requiredAmount={amount}
+				resetKey='rounded'
+				tokenSymbol='WETH'
+				tokenUnits={units}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const button = within(rendered.container).getByRole('button', { name: label === undefined ? 'Approve WETH' : `Approve ${label} WETH` })
+		expect(button.querySelector('[title]')?.getAttribute('title')).toBe(`Approve ${exact}\u00a0WETH`)
+		await act(() => fireEvent.click(button))
+		expect(approvals).toEqual([amount])
+	})
+
 	test.each([true, false])('preserves partial and invalid notices with showRequirementNotice=%s', async showRequirementNotice => {
 		const rendered = await renderIntoDocument(
 			<TokenApprovalControl
@@ -199,7 +233,7 @@ describe('TokenApprovalControl', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByRole('button', { name: /max/i })).toBeNull()
-		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 1 200 REP' })))
+		await act(() => fireEvent.click(documentQueries.getByRole('button', { name: 'Approve 1.2k REP' })))
 		expect(approvals).toEqual([1200n * 10n ** 18n])
 
 		await act(() => fireEvent.input(documentQueries.getByPlaceholderText('Leave blank for required total'), { target: { value: 'max' } }))
