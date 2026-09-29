@@ -1,7 +1,7 @@
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
-import type { ForkAuctionDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide, ForkAuctionDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolVaultSummary, SecurityVaultDetails, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingRouteContentProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { ForkAuctionRouteContentProps, SecurityPoolWorkflowRouteContentProps, SecurityVaultRouteContentProps, TradingRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
@@ -48,17 +48,100 @@ export function createReportingProps(overrides: Partial<ReportingRouteContentPro
 		reportingActiveAction: undefined,
 		reportingDetails: undefined,
 		reportingError: undefined,
-		reportingForm: {
-			reportAmount: '',
-			securityPoolAddress: '',
-			selectedOutcome: undefined,
-			selectedWithdrawDepositIndexesByOutcome: {
-				invalid: [],
-				yes: [],
-				no: [],
-			},
-		},
+		reportingForm: createReportingForm(),
 		reportingResult: undefined,
+		...overrides,
+	}
+}
+
+type ReportingForm = ReportingRouteContentProps['reportingForm']
+
+export function createReportingForm(overrides: Partial<ReportingForm> = {}): ReportingForm {
+	return {
+		reportAmount: '',
+		securityPoolAddress: '',
+		selectedOutcome: undefined,
+		selectedWithdrawDepositIndexesByOutcome: {
+			invalid: [],
+			yes: [],
+			no: [],
+		},
+		...overrides,
+	}
+}
+
+export function createEscalationSides([invalidBalance, yesBalance, noBalance]: readonly [bigint, bigint, bigint], overrides: Partial<Record<EscalationSide['key'], Partial<EscalationSide>>> = {}): EscalationSide[] {
+	return [
+		{ balance: invalidBalance, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [], ...overrides.invalid },
+		{ balance: yesBalance, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [], ...overrides.yes },
+		{ balance: noBalance, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [], ...overrides.no },
+	]
+}
+
+export function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
+	return {
+		activationTime: 120n,
+		bindingCapital: 10n,
+		settlementCollateralAttoEth: 1n,
+		currentRequiredBond: 2n,
+		currentTime: 150n,
+		escalationEndTime: 300n,
+		escalationGameAddress: zeroAddress,
+		forkThresholdAttoRep: 40n,
+		hasReachedNonDecision: false,
+		marketDetails: createMarketDetails({ endTime: 2n }),
+		nonDecisionThresholdAttoRep: 20n,
+		questionOutcome: 'none',
+		securityPoolAddress: zeroAddress,
+		sides: createEscalationSides([7n, 20n, 20n]),
+		startBondAttoRep: 1n,
+		status: 'active',
+		systemState: 'operational',
+		totalCostAttoRep: 40n,
+		universeId: 1n,
+		viewerPoolHeldVaultRepBackingAttoRep: 12_000n,
+		viewerVaultExists: true,
+		viewerVaultDisputeStakedAttoRep: 2n,
+		viewerVaultRepBackingAttoRep: 12_000n,
+		settlementState: 'locked',
+		parentWithdrawalEnabled: false,
+		...overrides,
+	}
+}
+
+export function createFinalizedTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
+	return {
+		accumulatedBidAttoEth: 0n,
+		auctionEndsAt: 10n,
+		clearingPrice: 1n,
+		clearingTick: 0n,
+		bidAtClearingTickAttoEth: 0n,
+		attoEthRaiseCap: 1n,
+		attoEthRaised: 0n,
+		finalized: true,
+		hitCap: true,
+		maxAttoRepBeingSold: 1n,
+		minBidSizeAttoEth: 1n,
+		attoRepPurchasableAtBid: undefined,
+		timeRemaining: 0n,
+		totalAttoRepPurchased: 0n,
+		underfunded: false,
+		underfundedThreshold: undefined,
+		underfundedWinningAttoEth: 0n,
+		...overrides,
+	}
+}
+
+type SecurityVaultForm = SecurityVaultRouteContentProps['securityVaultForm']
+
+// Form for the connected account's own vault in the zero-address pool.
+export function createSecurityVaultForm(overrides: Partial<SecurityVaultForm> = {}): SecurityVaultForm {
+	return {
+		depositAmount: '',
+		repWithdrawAmount: '',
+		targetHealthFactor: '',
+		securityPoolAddress: zeroAddress,
+		selectedVaultOwner: zeroAddress,
 		...overrides,
 	}
 }
@@ -82,13 +165,7 @@ export function createSecurityVaultProps(overrides: Partial<SecurityVaultRouteCo
 		securityVaultActiveAction: undefined,
 		securityVaultDetails: undefined,
 		securityVaultError: undefined,
-		securityVaultForm: {
-			depositAmount: '',
-			repWithdrawAmount: '',
-			targetHealthFactor: '',
-			securityPoolAddress: '',
-			selectedVaultOwner: '',
-		},
+		securityVaultForm: createSecurityVaultForm({ securityPoolAddress: '', selectedVaultOwner: '' }),
 		securityVaultMissing: false,
 		securityVaultRepApproval: {
 			error: undefined,
