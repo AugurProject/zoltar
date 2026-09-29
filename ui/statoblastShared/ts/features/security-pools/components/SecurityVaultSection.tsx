@@ -402,6 +402,7 @@ export function SecurityVaultSection({
 			) : undefined}
 			<VaultActionLaunchers
 				claimingFees={securityVaultActiveAction === 'redeemFees'}
+				redeemRepAction={effectiveRepExitMode === 'redeem' ? repExitActionButton : undefined}
 				refreshVaultActionsDescriptionId={refreshVaultActionsDescriptionId}
 				securityVaultError={securityVaultError}
 				showMissingVaultNotice={showMissingVaultNotice}
@@ -431,7 +432,7 @@ export function SecurityVaultSection({
 				confirmSingleStepFromForm
 				closeOnSuccessKey={(securityVaultResult?.action === 'queueWithdrawRep' || securityVaultResult?.action === 'redeemRepFromVault') && securityVaultResult.stagedExecution?.success !== false ? securityVaultResult.hash : undefined}
 				context={vaultTransactionContext}
-				isOpen={vaultActionModal === 'withdraw-rep'}
+				isOpen={vaultActionModal === 'withdraw-rep' && effectiveRepExitMode === 'withdraw'}
 				onClose={closeVaultActionModal}
 				title={repExitActionLabel}
 			>

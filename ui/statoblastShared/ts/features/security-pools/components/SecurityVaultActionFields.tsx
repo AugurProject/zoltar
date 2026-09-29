@@ -175,6 +175,7 @@ export function VaultDepositApprovalControl({
 
 export function VaultActionLaunchers({
 	claimingFees = false,
+	redeemRepAction,
 	refreshVaultActionsDescriptionId,
 	securityVaultError,
 	showMissingVaultNotice,
@@ -186,6 +187,7 @@ export function VaultActionLaunchers({
 	walletRepBalanceError,
 }: {
 	claimingFees?: boolean
+	redeemRepAction?: ComponentChildren
 	refreshVaultActionsDescriptionId: string
 	securityVaultError: string | undefined
 	showMissingVaultNotice: boolean
@@ -200,15 +202,19 @@ export function VaultActionLaunchers({
 		if (action.onAction === undefined && action.blocker === undefined && action.readiness !== 'blocked') return undefined
 		return (
 			<div key={action.key} className='vault-action-launcher'>
-				<ActionLauncherButton
-					describedBy={action.disabledReasonId}
-					idleLabel={action.actionLabel}
-					pending={action.key === 'claim-fees' && claimingFees}
-					pendingLabel={action.key === 'claim-fees' ? securityPoolCopy.claimingFees : commonCopy.opening}
-					onClick={() => action.onAction?.()}
-					tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
-					availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
-				/>
+				{action.key === 'rep-exit' && redeemRepAction !== undefined ? (
+					redeemRepAction
+				) : (
+					<ActionLauncherButton
+						describedBy={action.disabledReasonId}
+						idleLabel={action.actionLabel}
+						pending={action.key === 'claim-fees' && claimingFees}
+						pendingLabel={action.key === 'claim-fees' ? securityPoolCopy.claimingFees : commonCopy.opening}
+						onClick={() => action.onAction?.()}
+						tone={action.key === 'deposit-rep' ? 'primary' : 'secondary'}
+						availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
+					/>
+				)}
 				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
 			</div>
 		)

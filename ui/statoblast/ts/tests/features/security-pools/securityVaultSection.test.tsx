@@ -1653,7 +1653,7 @@ describe('SecurityVaultSection', () => {
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('Switch to Sepolia.')
 	})
 
-	for (const action of ['queueWithdrawRep', 'redeemRepFromVault'] as const) {
+	for (const action of ['queueWithdrawRep'] as const) {
 		test(`closes the vault dialog for a matching ${action} success`, async () => {
 			const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
 			const result = signal<SecurityVaultSectionProps['securityVaultResult']>(undefined)
@@ -1665,7 +1665,6 @@ describe('SecurityVaultSection', () => {
 								modalFirst: true,
 								securityVaultResult: result.value,
 								securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
-								...(action === 'redeemRepFromVault' ? { poolState: evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false }) } : {}),
 							})}
 						/>
 					</GlobalTransactionPresentationProvider>
@@ -1722,7 +1721,7 @@ test('deposit submits from the approval form without replacing it with another r
 	}
 })
 
-for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVault'] as const) {
+for (const action of ['depositRepToVault', 'queueWithdrawRep'] as const) {
 	test(`${action} keeps its form and review scope open when Cancel is pressed while pending`, async () => {
 		const dom = installDomEnvironment()
 		const active = signal<SecurityVaultSectionProps['securityVaultActiveAction']>(undefined)
@@ -1742,7 +1741,6 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 				securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
 				oracleManagerDetails: createOracleManagerDetails(),
 				accountState: createAccountState({ ethBalanceAttoEth: 10n ** 18n }),
-				...(action === 'redeemRepFromVault' ? { poolState: createEndedPoolState() } : {}),
 			})
 			return <SecurityVaultSection {...props} securityVaultForm={{ ...props.securityVaultForm, depositAmount: '1', repWithdrawAmount: '1' }} onDepositRepToVault={submit} onWithdrawRep={submit} onRedeemRepFromVault={submit} onRedeemFees={submit} />
 		}
@@ -1776,3 +1774,40 @@ for (const action of ['depositRepToVault', 'queueWithdrawRep', 'redeemRepFromVau
 		}
 	})
 }
+
+test('ended vault REP redemption submits once without a confirmation and stays disabled while pending', async () => {
+	const dom = installDomEnvironment()
+	const active = signal<SecurityVaultSectionProps['securityVaultActiveAction']>(undefined)
+	let calls = 0
+	function Harness() {
+		return (
+			<SecurityVaultSection
+				{...createSecurityVaultSectionProps({
+					modalFirst: true,
+					poolState: createEndedPoolState(),
+					securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+					securityVaultActiveAction: active.value,
+					onRedeemRepFromVault: () => {
+						calls += 1
+						active.value = 'redeemRepFromVault'
+					},
+				})}
+			/>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const page = within(document.body)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Redeem REP' })))
+		expect(calls).toBe(1)
+		expect(page.queryByRole('dialog')).toBeNull()
+		const pending = page.getByRole('button', { name: 'Redeeming REP…' })
+		expect(pending.hasAttribute('disabled')).toBe(true)
+		if (!(pending instanceof HTMLButtonElement)) throw new Error('Expected redemption button')
+		await act(() => pending.click())
+		expect(calls).toBe(1)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
