@@ -515,7 +515,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' })))
 		const dialog = within(within(document.body).getByRole('dialog', { name: 'Mint complete sets' }))
-		expect(dialog.queryByText('Estimated shares received')).toBeNull()
+		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
 		expect(dialog.getByRole('button', { name: 'Mint complete sets' })).not.toBeNull()
 	})
 
@@ -707,8 +707,8 @@ void describe('TradingSection', () => {
 		expect(dialog.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 		expect(document.body.querySelector('.transaction-review')).toBeNull()
 		expect(dialog.queryByText('You pay')).toBeNull()
-		expect(dialog.queryByText('Estimated shares received')).toBeNull()
-		expect(dialog.queryByText('Estimated retention fee')).toBeNull()
+		expect(dialog.queryByText('Estimated complete sets received')).toBeNull()
+		expect(dialog.queryByText('Estimated holding fee until market end')).toBeNull()
 		expect(dialog.getByRole('button', { name: 'Mint complete sets' }).hasAttribute('disabled')).toBe(false)
 	})
 
