@@ -427,7 +427,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 			selectedPoolView: 'price-oracle',
 		})
 
-		expectTransactionButtonDisabled(document.body, 'Request new price…', 'Need 7 more ETH in this wallet to request a new price.')
+		expectTransactionButtonDisabled(document.body, 'Request new price…', 'Need 7\u00a0more\u00a0ETH in this wallet to request a new price.')
 	})
 
 	test('disables Request New Price while the current oracle price remains valid', async () => {

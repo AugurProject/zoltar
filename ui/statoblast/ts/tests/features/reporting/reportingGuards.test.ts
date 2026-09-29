@@ -34,7 +34,7 @@ describe('reporting guards', () => {
 		{ expected: 'Enter a valid report amount greater than zero.', name: 'for a zero amount', overrides: { reportAmount: '0', selectedAmount: 0n } },
 		{ expected: 'Loading reporting details.', name: 'while reporting details are missing', overrides: { reportingStatus: 'missing' } },
 		{
-			expected: "Deposit 3 more REP into your vault's pool-held backing before reporting.",
+			expected: "Deposit 3\u00a0more\u00a0REP into your vault's pool-held backing before reporting.",
 			name: 'when the vault lacks pool-held REP backing',
 			overrides: { actualDepositAmount: 5n * ATTO_REP_PER_REP, reportAmount: '5', selectedAmount: 5n * ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 2n * ATTO_REP_PER_REP },
 		},
@@ -49,7 +49,7 @@ describe('reporting guards', () => {
 			overrides: { viewerPoolHeldVaultRepBackingAttoRep: 0n, viewerVaultExists: false },
 		},
 		{
-			expected: 'Only 2 REP remains before the selected side reaches the threshold.',
+			expected: 'Only 2\u00a0REP remains before the selected side reaches the threshold.',
 			name: 'when the contribution would exceed the remaining selected-side threshold capacity',
 			overrides: { actualDepositAmount: 5n * ATTO_REP_PER_REP, remainingSelectedOutcomeCapacity: 2n * ATTO_REP_PER_REP, reportAmount: '5', selectedAmount: 5n * ATTO_REP_PER_REP, viewerPoolHeldVaultRepBackingAttoRep: 10n * ATTO_REP_PER_REP },
 		},
