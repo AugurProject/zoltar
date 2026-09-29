@@ -20,59 +20,70 @@ describe('useTransactionTrayController', () => {
 	afterEach(async () => {
 		await cleanupRendered?.()
 		cleanupRendered = undefined
+		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 		cleanupDom?.()
 		cleanupDom = undefined
 	})
 
-	test('owns the standard transaction lifecycle and delegates completion', async () => {
-		let finishedCount = 0
+	async function mountController(options?: Parameters<typeof useTransactionTrayController>[0]) {
 		let controller: ReturnType<typeof useTransactionTrayController> | undefined
 		function Harness() {
-			controller = useTransactionTrayController({
-				onFinished: () => {
-					finishedCount += 1
-				},
-			})
+			controller = useTransactionTrayController(options)
 			return null
 		}
 		const rendered = await renderIntoDocument(<Harness />)
 		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+		const current = () => {
+			if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+			return controller
+		}
+		return { current, rerender: async () => await act(() => render(<Harness />, rendered.container)) }
+	}
+
+	/** Mounts a controller that records its broadcasts in an empty activity list on chain 1. */
+	async function mountRecordingController() {
+		const mounted = await mountController()
+		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		return mounted.current()
+	}
+
+	test('owns the standard transaction lifecycle and delegates completion', async () => {
+		let finishedCount = 0
+		const controller = (
+			await mountController({
+				onFinished: () => {
+					finishedCount += 1
+				},
+			})
+		).current()
 
 		await act(() => {
-			controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
+			controller.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
 		})
 		expect(getInFlightTransactionCount(controller.transactionState.value)).toBe(1)
 		expect(controller.transactionState.value.active?.tone).toBe('awaiting-wallet')
 
 		await act(() => {
-			controller?.onTransactionSubmitted('0x1234000000000000000000000000000000000000000000000000000000000000')
-			controller?.onTransactionFinished()
+			controller.onTransactionSubmitted('0x1234000000000000000000000000000000000000000000000000000000000000')
+			controller.onTransactionFinished()
 		})
 		expect(getInFlightTransactionCount(controller.transactionState.value)).toBe(0)
 		expect(finishedCount).toBe(1)
 	})
 
 	test('admits a new transaction after a failed attempt finishes', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController()
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+		const controller = (await mountController()).current()
 		const intent = { action: 'createMarket' as const, source: 'zoltar' as const, submittedTitle: 'Creating question' }
 		await act(() => {
-			expect(controller?.onTransactionRequested(intent)).toBe('transaction-request-1')
-			controller?.onTransactionFailed('nonce too low')
-			controller?.onTransactionFinished()
+			expect(controller.onTransactionRequested(intent)).toBe('transaction-request-1')
+			controller.onTransactionFailed('nonce too low')
+			controller.onTransactionFinished()
 		})
 		expect(getInFlightTransactionCount(controller.transactionState.value)).toBe(0)
 		expect(controller.transactionState.value.active?.tone).toBe('error')
 		let admitted: string | false | undefined
 		await act(() => {
-			admitted = controller?.onTransactionRequested(intent)
+			admitted = controller.onTransactionRequested(intent)
 		})
 		expect(admitted).toBe('transaction-request-2')
 		expect(controller.transactionState.value.active?.tone).toBe('awaiting-wallet')
@@ -80,15 +91,8 @@ describe('useTransactionTrayController', () => {
 	})
 
 	test('resets for a replacement environment and ignores callbacks from the previous generation', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController()
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-		const previousGeneration = controller
+		const mounted = await mountController()
+		const previousGeneration = mounted.current()
 
 		await act(() => {
 			previousGeneration.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
@@ -105,31 +109,22 @@ describe('useTransactionTrayController', () => {
 		expect(previousGeneration.transactionState.value.active).toBeUndefined()
 		expect(getInFlightTransactionCount(previousGeneration.transactionState.value)).toBe(0)
 
+		await mounted.rerender()
+		const controller = mounted.current()
 		await act(() => {
-			render(<Harness />, rendered.container)
-		})
-		if (controller === undefined) throw new Error('Transaction tray controller did not rerender')
-		await act(() => {
-			controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating in new environment' })
+			controller.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating in new environment' })
 		})
 		expect(getInFlightTransactionCount(controller.transactionState.value)).toBe(1)
 	})
 
 	test('rejects a second transaction without replacing the admitted intent', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController({ onFinished: () => undefined })
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
+		const controller = (await mountController({ onFinished: () => undefined })).current()
 
 		let firstAccepted: string | false | undefined
 		let secondAccepted: string | false | undefined
 		await act(() => {
-			firstAccepted = controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
-			secondAccepted = controller?.onTransactionRequested({ action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
+			firstAccepted = controller.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating question' })
+			secondAccepted = controller.onTransactionRequested({ action: 'deploy', source: 'zoltar', submittedTitle: 'Deploying contracts' })
 		})
 
 		expect(firstAccepted).toBe('transaction-request-1')
@@ -139,15 +134,7 @@ describe('useTransactionTrayController', () => {
 	})
 
 	test('admits a transaction on another object once the first is broadcast and records both in the activity list', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController()
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		const controller = await mountRecordingController()
 		const firstHash = '0x1111000000000000000000000000000000000000000000000000000000000000'
 		const secondHash = '0x2222000000000000000000000000000000000000000000000000000000000000'
 		const poolA = { action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' }
@@ -156,14 +143,14 @@ describe('useTransactionTrayController', () => {
 		let sameObject: string | false | undefined
 		let otherObject: string | false | undefined
 		await act(() => {
-			first = controller?.onTransactionRequested(poolA)
-			controller?.onTransactionSubmitted(firstHash)
-			sameObject = controller?.onTransactionRequested(poolA)
-			otherObject = controller?.onTransactionRequested(poolB)
-			controller?.onTransactionSubmitted(secondHash)
-			controller?.onTransactionFailed('Transaction reverted', { kind: 'reverted', requestKey: typeof otherObject === 'string' ? otherObject : undefined })
-			controller?.onTransactionPresented({ hash: firstHash, title: 'REP deposited', tone: 'success' })
-			controller?.onTransactionFinished(typeof first === 'string' ? first : undefined)
+			first = controller.onTransactionRequested(poolA)
+			controller.onTransactionSubmitted(firstHash)
+			sameObject = controller.onTransactionRequested(poolA)
+			otherObject = controller.onTransactionRequested(poolB)
+			controller.onTransactionSubmitted(secondHash)
+			controller.onTransactionFailed('Transaction reverted', { kind: 'reverted', requestKey: typeof otherObject === 'string' ? otherObject : undefined })
+			controller.onTransactionPresented({ hash: firstHash, title: 'REP deposited', tone: 'success' })
+			controller.onTransactionFinished(typeof first === 'string' ? first : undefined)
 		})
 
 		expect(first).toBe('transaction-request-1')
@@ -174,34 +161,25 @@ describe('useTransactionTrayController', () => {
 			[secondHash, 'failed', 'reverted'],
 			[firstHash, 'confirmed', undefined],
 		])
-		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 	})
 
 	for (const outcome of ['confirmed', 'rejected'] as const) {
 		test(`settles every step of a multi-write action when the last step is ${outcome}`, async () => {
-			let controller: ReturnType<typeof useTransactionTrayController> | undefined
-			function Harness() {
-				controller = useTransactionTrayController()
-				return null
-			}
-			const rendered = await renderIntoDocument(<Harness />)
-			cleanupRendered = rendered.cleanup
-			if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-			transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+			const controller = await mountRecordingController()
 			const approvalHash = '0x1111000000000000000000000000000000000000000000000000000000000000'
 			const depositHash = '0x2222000000000000000000000000000000000000000000000000000000000000'
 			const preview = { account: '0x00000000000000000000000000000000000000a1', args: undefined, chainName: 'Ethereum', contractAddress: '0x00000000000000000000000000000000000000b2', functionName: 'approve', value: 0n }
 			await act(() => {
-				const key = controller?.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
+				const key = controller.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
 				const requestKey = typeof key === 'string' ? key : undefined
-				controller?.onTransactionPrepared(preview)
-				controller?.onTransactionSubmitted(approvalHash)
-				controller?.onTransactionPrepared({ ...preview, functionName: 'depositRepToVault' })
+				controller.onTransactionPrepared(preview)
+				controller.onTransactionSubmitted(approvalHash)
+				controller.onTransactionPrepared({ ...preview, functionName: 'depositRepToVault' })
 				if (outcome === 'confirmed') {
-					controller?.onTransactionSubmitted(depositHash)
-					controller?.onTransactionPresented({ hash: depositHash, title: 'REP deposited', tone: 'success' })
-				} else controller?.onTransactionFailed('Action canceled in wallet.', { kind: 'rejected', requestKey })
-				controller?.onTransactionFinished(requestKey)
+					controller.onTransactionSubmitted(depositHash)
+					controller.onTransactionPresented({ hash: depositHash, title: 'REP deposited', tone: 'success' })
+				} else controller.onTransactionFailed('Action canceled in wallet.', { kind: 'rejected', requestKey })
+				controller.onTransactionFinished(requestKey)
 			})
 
 			expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual(
@@ -213,79 +191,52 @@ describe('useTransactionTrayController', () => {
 					: [[approvalHash, 'confirmed']],
 			)
 			expect(hasPendingTransactionActivity(['security-pool:0xa'])).toBeFalse()
-			transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 		})
 	}
 
 	test('leaves a broadcast to the receipt watcher when a later check fails without a known on-chain failure', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController()
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		const controller = await mountRecordingController()
 		const approvalHash = '0x5555000000000000000000000000000000000000000000000000000000000000'
 		await act(() => {
-			const key = controller?.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
+			const key = controller.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
 			const requestKey = typeof key === 'string' ? key : undefined
-			controller?.onTransactionSubmitted(approvalHash)
-			controller?.onTransactionFailed('Approval confirmed, but it is below the report requirement.', { kind: 'error', requestKey })
-			controller?.onTransactionFinished(requestKey)
+			controller.onTransactionSubmitted(approvalHash)
+			controller.onTransactionFailed('Approval confirmed, but it is below the report requirement.', { kind: 'error', requestKey })
+			controller.onTransactionFinished(requestKey)
 		})
 
 		expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual([[approvalHash, 'pending']])
-		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 	})
 
 	test('leaves a broadcast whose outcome was never reported to the receipt watcher instead of confirming it', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController()
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		const controller = await mountRecordingController()
 		const hash = '0x4444000000000000000000000000000000000000000000000000000000000000'
 		await act(() => {
 			// A question creation whose scope changed drops its failure callback, but the action still finishes.
-			const key = controller?.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
-			controller?.onTransactionSubmitted(hash)
-			controller?.onTransactionFinished(typeof key === 'string' ? key : undefined)
+			const key = controller.onTransactionRequested({ action: 'createMarket', source: 'zoltar', submittedTitle: 'Creating Question' })
+			controller.onTransactionSubmitted(hash)
+			controller.onTransactionFinished(typeof key === 'string' ? key : undefined)
 		})
 
 		expect(transactionActivity.value.entries.map(entry => [entry.hash, entry.status])).toEqual([[hash, 'pending']])
-		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 	})
 
 	test('does not attribute a later step of one action to another running action', async () => {
-		let controller: ReturnType<typeof useTransactionTrayController> | undefined
-		function Harness() {
-			controller = useTransactionTrayController()
-			return null
-		}
-		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRendered = rendered.cleanup
-		if (controller === undefined) throw new Error('Transaction tray controller did not initialize')
-		transactionActivity.value = { chainId: 1, entries: [], ownerKey: undefined, storageKey: undefined }
+		const controller = await mountRecordingController()
 		const firstHash = '0x1111000000000000000000000000000000000000000000000000000000000000'
 		const secondHash = '0x2222000000000000000000000000000000000000000000000000000000000000'
 		const strayHash = '0x3333000000000000000000000000000000000000000000000000000000000000'
 		let firstKey: string | false | undefined
 		let secondKey: string | false | undefined
 		await act(() => {
-			firstKey = controller?.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
-			controller?.onTransactionSubmitted(firstHash)
-			secondKey = controller?.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xb'], source: 'security-vault', submittedTitle: 'Depositing REP' })
-			controller?.onTransactionSubmitted(secondHash)
+			firstKey = controller.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xa'], source: 'security-vault', submittedTitle: 'Depositing REP' })
+			controller.onTransactionSubmitted(firstHash)
+			secondKey = controller.onTransactionRequested({ action: 'depositRepToVault', scope: ['security-pool:0xb'], source: 'security-vault', submittedTitle: 'Depositing REP' })
+			controller.onTransactionSubmitted(secondHash)
 			// The first action prepares and sends its next transaction while both are running.
-			controller?.onTransactionPrepared({ account: '0x00000000000000000000000000000000000000a1', args: undefined, chainName: 'Ethereum', contractAddress: '0x00000000000000000000000000000000000000b2', functionName: 'approve', value: 0n })
-			controller?.onTransactionSubmitted(strayHash)
-			controller?.onTransactionFinished(typeof secondKey === 'string' ? secondKey : undefined)
+			controller.onTransactionPrepared({ account: '0x00000000000000000000000000000000000000a1', args: undefined, chainName: 'Ethereum', contractAddress: '0x00000000000000000000000000000000000000b2', functionName: 'approve', value: 0n })
+			controller.onTransactionSubmitted(strayHash)
+			controller.onTransactionFinished(typeof secondKey === 'string' ? secondKey : undefined)
 		})
 
 		const state = controller.transactionState.value
@@ -294,6 +245,5 @@ describe('useTransactionTrayController', () => {
 			[secondHash, 'pending'],
 			[firstHash, 'pending'],
 		])
-		transactionActivity.value = { chainId: undefined, entries: [], ownerKey: undefined, storageKey: undefined }
 	})
 })

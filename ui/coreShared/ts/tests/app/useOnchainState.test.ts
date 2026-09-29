@@ -23,39 +23,57 @@ const fakeOnchainStateDependencies: UseOnchainStateDependencies = {
 	loadErc20Balance: async () => 0n,
 }
 
+const connectedAccountState = (overrides: Partial<AccountState> = {}): AccountState => ({
+	address: zeroAddress,
+	chainId: undefined,
+	ethBalanceAttoEth: undefined,
+	wethBalanceAttoEth: undefined,
+	...overrides,
+})
+
+type WalletLoadOptions = {
+	fallbackChainId?: string
+	isCurrent?: () => boolean
+	track?: <TResult>(work: () => Promise<TResult>) => Promise<TResult>
+}
+
+/** Starts a connected-wallet load whose chain ID and balance reads resolve only when the test settles them. */
+function startWalletLoad(initialAccountState: AccountState, { fallbackChainId, isCurrent = () => true, track = async work => await work() }: WalletLoadOptions = {}) {
+	const chainId = createDeferred<string>()
+	const ethBalance = createDeferred<bigint>()
+	const wethBalance = createDeferred<bigint>()
+	const trackedLoads: Promise<unknown>[] = []
+	const observed: { accountState: AccountState; errorMessage: string | undefined; setAccountStateCalls: number } = { accountState: initialAccountState, errorMessage: undefined, setAccountStateCalls: 0 }
+	const loadPromise = loadWalletState({
+		chainIdPromise: chainId.promise,
+		connectedAddress: zeroAddress,
+		ethBalanceAttoEthPromise: ethBalance.promise,
+		...(fallbackChainId === undefined ? {} : { fallbackChainId }),
+		getAccountState: () => observed.accountState,
+		isCurrent,
+		setAccountState: state => {
+			observed.setAccountStateCalls += 1
+			observed.accountState = state
+		},
+		setErrorMessage: message => {
+			observed.errorMessage = message
+		},
+		trackLoad: async work => {
+			const trackedLoad = track(work)
+			trackedLoads.push(trackedLoad)
+			return await trackedLoad
+		},
+		wethBalanceAttoEthPromise: wethBalance.promise,
+	})
+	const trackedLoad = async (index: number) => await (trackedLoads[index] ?? Promise.reject(new Error(`Expected tracked wallet load ${index.toString()}`)))
+	return { chainId, ethBalance, wethBalance, trackedLoads, trackedLoad, observed, loadPromise }
+}
+
 void describe('loadWalletState', () => {
 	void test('resolves after scheduling wallet loads and applies updates as each load completes', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const scheduledLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: undefined,
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		}
-		let errorMessage: string | undefined = undefined
 		let resolved = false
-		const loadPromise = loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent: () => true,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: message => {
-				errorMessage = message
-			},
-			trackLoad: async work => {
-				const scheduledLoad = work()
-				scheduledLoads.push(scheduledLoad)
-				return await scheduledLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
-		}).then(() => {
+		const load = startWalletLoad(connectedAccountState())
+		const loadPromise = load.loadPromise.then(() => {
 			resolved = true
 		})
 
@@ -63,70 +81,44 @@ void describe('loadWalletState', () => {
 		await loadPromise
 		expect(resolved).toBe(true)
 
-		chainIdDeferred.resolve('0x1')
-		await (scheduledLoads[0] ?? Promise.reject(new Error('Expected chain ID load promise')))
-		expect(accountState.chainId).toBe('0x1')
+		load.chainId.resolve('0x1')
+		await load.trackedLoad(0)
+		expect(load.observed.accountState.chainId).toBe('0x1')
 
-		ethBalanceAttoEthDeferred.resolve(123n)
-		await (scheduledLoads[1] ?? Promise.reject(new Error('Expected ETH balance load promise')))
-		expect(accountState.ethBalanceAttoEth).toBe(123n)
+		load.ethBalance.resolve(123n)
+		await load.trackedLoad(1)
+		expect(load.observed.accountState.ethBalanceAttoEth).toBe(123n)
 
-		wethBalanceAttoEthDeferred.resolve(456n)
-		await (scheduledLoads[2] ?? Promise.reject(new Error('Expected WETH balance load promise')))
-		expect(errorMessage).toBe(undefined)
-		expect(accountState.address).toBe(zeroAddress)
-		expect(accountState.chainId).toBe('0x1')
-		expect(accountState.ethBalanceAttoEth).toBe(123n)
-		expect(accountState.wethBalanceAttoEth).toBe(456n)
+		load.wethBalance.resolve(456n)
+		await load.trackedLoad(2)
+		expect(load.observed.errorMessage).toBe(undefined)
+		expect(load.observed.accountState.address).toBe(zeroAddress)
+		expect(load.observed.accountState.chainId).toBe('0x1')
+		expect(load.observed.accountState.ethBalanceAttoEth).toBe(123n)
+		expect(load.observed.accountState.wethBalanceAttoEth).toBe(456n)
 	})
 
 	void test('keeps tracked loading active until each scheduled wallet load settles', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
 		const controller = createLoadController()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: undefined,
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		}
-
-		await loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent: () => true,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: () => undefined,
-			trackLoad: async work => {
-				const trackedLoad = controller.track(work)
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
-		})
+		const load = startWalletLoad(connectedAccountState(), { track: async work => await controller.track(work) })
+		await load.loadPromise
 
 		expect(controller.isLoading.value).toBe(true)
 
-		chainIdDeferred.resolve('0x1')
-		await (trackedLoads[0] ?? Promise.reject(new Error('Expected tracked chain ID load promise')))
+		load.chainId.resolve('0x1')
+		await load.trackedLoad(0)
 		expect(controller.isLoading.value).toBe(true)
 
-		ethBalanceAttoEthDeferred.resolve(123n)
-		await (trackedLoads[1] ?? Promise.reject(new Error('Expected tracked ETH balance load promise')))
+		load.ethBalance.resolve(123n)
+		await load.trackedLoad(1)
 		expect(controller.isLoading.value).toBe(true)
 
-		wethBalanceAttoEthDeferred.resolve(456n)
-		await (trackedLoads[2] ?? Promise.reject(new Error('Expected tracked WETH balance load promise')))
+		load.wethBalance.resolve(456n)
+		await load.trackedLoad(2)
 		expect(controller.isLoading.value).toBe(false)
-		expect(accountState.chainId).toBe('0x1')
-		expect(accountState.ethBalanceAttoEth).toBe(123n)
-		expect(accountState.wethBalanceAttoEth).toBe(456n)
+		expect(load.observed.accountState.chainId).toBe('0x1')
+		expect(load.observed.accountState.ethBalanceAttoEth).toBe(123n)
+		expect(load.observed.accountState.wethBalanceAttoEth).toBe(456n)
 	})
 
 	void test('does not mutate balances when no wallet is connected', async () => {
@@ -155,111 +147,29 @@ void describe('loadWalletState', () => {
 		expect(accountState.wethBalanceAttoEth).toBe(456n)
 	})
 
-	void test('skips state updates when refresh callbacks are stale', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: '0xfeed',
-			ethBalanceAttoEth: 123n,
-			wethBalanceAttoEth: 456n,
-		}
-		let errorMessage: string | undefined = undefined
-		let setAccountStateCalls = 0
+	void test.each([
+		{ name: 'refresh callbacks are stale', settleEthBalance: (ethBalance: ReturnType<typeof createDeferred<bigint>>) => ethBalance.resolve(111n) },
+		{ name: 'wallet state callbacks are stale and a balance read fails', settleEthBalance: (ethBalance: ReturnType<typeof createDeferred<bigint>>) => ethBalance.reject(new Error('eth rpc failed')) },
+	])('skips state and error updates when $name', async ({ settleEthBalance }) => {
 		let isCurrentCalls = 0
-		const isCurrent = () => {
-			isCurrentCalls += 1
-			return false
-		}
-
-		const loadPromise = loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent,
-			setAccountState: state => {
-				setAccountStateCalls += 1
-				accountState = state
+		const staleAccountState = connectedAccountState({ chainId: '0xfeed', ethBalanceAttoEth: 123n, wethBalanceAttoEth: 456n })
+		const load = startWalletLoad(staleAccountState, {
+			isCurrent: () => {
+				isCurrentCalls += 1
+				return false
 			},
-			setErrorMessage: message => {
-				errorMessage = message
-			},
-			trackLoad: async work => {
-				const trackedLoad = work()
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
 		})
 
-		chainIdDeferred.resolve('0x123')
-		ethBalanceAttoEthDeferred.resolve(111n)
-		wethBalanceAttoEthDeferred.resolve(222n)
-		await Promise.all(trackedLoads)
-		await loadPromise
+		load.chainId.resolve('0x123')
+		settleEthBalance(load.ethBalance)
+		load.wethBalance.resolve(222n)
+		await Promise.all(load.trackedLoads)
+		await load.loadPromise
 
 		expect(isCurrentCalls).toBe(3)
-		expect(setAccountStateCalls).toBe(0)
-		expect(errorMessage).toBeUndefined()
-		expect(accountState).toMatchObject({
-			address: zeroAddress,
-			chainId: '0xfeed',
-			ethBalanceAttoEth: 123n,
-			wethBalanceAttoEth: 456n,
-		})
-	})
-
-	void test('skips error updates when wallet state callbacks are stale', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: '0xfeed',
-			ethBalanceAttoEth: 123n,
-			wethBalanceAttoEth: 456n,
-		}
-		let errorMessage: string | undefined = undefined
-		let isCurrentCalls = 0
-		const isCurrent = () => {
-			isCurrentCalls += 1
-			return false
-		}
-
-		const loadPromise = loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: message => {
-				errorMessage = message
-			},
-			trackLoad: async work => {
-				const trackedLoad = work()
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
-		})
-
-		chainIdDeferred.resolve('0x123')
-		ethBalanceAttoEthDeferred.reject(new Error('eth rpc failed'))
-		wethBalanceAttoEthDeferred.resolve(222n)
-
-		await Promise.all(trackedLoads)
-		await loadPromise
-
-		expect(isCurrentCalls).toBe(3)
-		expect(errorMessage).toBeUndefined()
-		expect(accountState).toMatchObject({
+		expect(load.observed.setAccountStateCalls).toBe(0)
+		expect(load.observed.errorMessage).toBeUndefined()
+		expect(load.observed.accountState).toMatchObject({
 			address: zeroAddress,
 			chainId: '0xfeed',
 			ethBalanceAttoEth: 123n,
@@ -268,187 +178,61 @@ void describe('loadWalletState', () => {
 	})
 
 	void test('uses fallback chain ID if chain-id refresh fails', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: '0xfeed',
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		}
-		let errorMessage: string | undefined = undefined
-		const loadPromise = loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			fallbackChainId: '0x123',
-			getAccountState: () => accountState,
-			isCurrent: () => true,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: message => {
-				errorMessage = message
-			},
-			trackLoad: async work => {
-				const trackedLoad = work()
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
-		})
+		const load = startWalletLoad(connectedAccountState({ chainId: '0xfeed' }), { fallbackChainId: '0x123' })
 
-		chainIdDeferred.reject(new Error('chain id RPC failed'))
-		await trackedLoads[0]
-		ethBalanceAttoEthDeferred.resolve(500n)
-		wethBalanceAttoEthDeferred.resolve(600n)
-		await Promise.all(trackedLoads.slice(1))
+		load.chainId.reject(new Error('chain id RPC failed'))
+		await load.trackedLoads[0]
+		load.ethBalance.resolve(500n)
+		load.wethBalance.resolve(600n)
+		await Promise.all(load.trackedLoads.slice(1))
 
-		await loadPromise
+		await load.loadPromise
 
-		expect(errorMessage).toBeUndefined()
-		expect(accountState.chainId).toBe('0x123')
-		expect(accountState.ethBalanceAttoEth).toBe(500n)
-		expect(accountState.wethBalanceAttoEth).toBe(600n)
+		expect(load.observed.errorMessage).toBeUndefined()
+		expect(load.observed.accountState.chainId).toBe('0x123')
+		expect(load.observed.accountState.ethBalanceAttoEth).toBe(500n)
+		expect(load.observed.accountState.wethBalanceAttoEth).toBe(600n)
 	})
 
 	void test('rethrows unsupported chain-id refresh failures', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: undefined,
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		}
-
-		await loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent: () => true,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: () => undefined,
-			trackLoad: async work => {
-				const trackedLoad = work().catch(error => error as never)
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
+		const load = startWalletLoad(connectedAccountState(), {
+			track: async work => await work().catch(error => error as never),
 		})
+		await load.loadPromise
 
-		chainIdDeferred.reject(7)
-		expect(await (trackedLoads[0] ?? Promise.reject(new Error('Expected tracked chain ID load promise')))).toBe(7)
+		load.chainId.reject(7)
+		expect(await load.trackedLoad(0)).toBe(7)
 
-		ethBalanceAttoEthDeferred.resolve(500n)
-		wethBalanceAttoEthDeferred.resolve(600n)
-		await (trackedLoads[1] ?? Promise.reject(new Error('Expected tracked ETH balance load promise')))
-		await (trackedLoads[2] ?? Promise.reject(new Error('Expected tracked WETH balance load promise')))
+		load.ethBalance.resolve(500n)
+		load.wethBalance.resolve(600n)
+		await load.trackedLoad(1)
+		await load.trackedLoad(2)
 
-		expect(accountState.chainId).toBeUndefined()
-		expect(accountState.ethBalanceAttoEth).toBe(500n)
-		expect(accountState.wethBalanceAttoEth).toBe(600n)
+		expect(load.observed.accountState.chainId).toBeUndefined()
+		expect(load.observed.accountState.ethBalanceAttoEth).toBe(500n)
+		expect(load.observed.accountState.wethBalanceAttoEth).toBe(600n)
 	})
 
-	void test('maps WETH balance load failures into refresh errors', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: undefined,
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		}
-		let errorMessage: string | undefined = undefined
-		const loadPromise = loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent: () => true,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: message => {
-				errorMessage = message
-			},
-			trackLoad: async work => {
-				const trackedLoad = work()
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
-		})
+	void test.each([
+		{ failingBalance: 'WETH', ethBalanceAttoEth: 500n, wethBalanceAttoEth: undefined },
+		{ failingBalance: 'ETH', ethBalanceAttoEth: undefined, wethBalanceAttoEth: 777n },
+	] as const)('maps $failingBalance balance load failures into refresh errors', async ({ failingBalance, ethBalanceAttoEth, wethBalanceAttoEth }) => {
+		const load = startWalletLoad(connectedAccountState())
+		const settle = (deferred: ReturnType<typeof createDeferred<bigint>>, value: bigint | undefined, reason: string) => (value === undefined ? deferred.reject(new Error(reason)) : deferred.resolve(value))
 
-		chainIdDeferred.resolve('0x123')
-		await (trackedLoads[0] ?? Promise.reject(new Error('Expected tracked chain ID load promise')))
-		ethBalanceAttoEthDeferred.resolve(500n)
-		await (trackedLoads[1] ?? Promise.reject(new Error('Expected tracked ETH balance load promise')))
-		wethBalanceAttoEthDeferred.reject(new Error('weth rpc failed'))
-		await (trackedLoads[2] ?? Promise.reject(new Error('Expected tracked WETH balance load promise')))
+		load.chainId.resolve('0x123')
+		await load.trackedLoad(0)
+		settle(load.ethBalance, ethBalanceAttoEth, 'eth rpc failed')
+		await load.trackedLoad(1)
+		settle(load.wethBalance, wethBalanceAttoEth, 'weth rpc failed')
+		await load.trackedLoad(2)
 
-		await loadPromise
+		await load.loadPromise
 
-		expect(errorMessage ?? '').toBe('Failed to refresh wallet balances. Reason: weth rpc failed')
-		expect(accountState.chainId).toBe('0x123')
-		expect(accountState.ethBalanceAttoEth).toBe(500n)
-		expect(accountState.wethBalanceAttoEth).toBeUndefined()
-	})
-
-	void test('maps ETH balance load failures into refresh errors', async () => {
-		const chainIdDeferred = createDeferred<string>()
-		const ethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const wethBalanceAttoEthDeferred = createDeferred<bigint>()
-		const trackedLoads: Promise<unknown>[] = []
-		let accountState: AccountState = {
-			address: zeroAddress,
-			chainId: undefined,
-			ethBalanceAttoEth: undefined,
-			wethBalanceAttoEth: undefined,
-		}
-		let errorMessage: string | undefined = undefined
-		const loadPromise = loadWalletState({
-			chainIdPromise: chainIdDeferred.promise,
-			connectedAddress: zeroAddress,
-			ethBalanceAttoEthPromise: ethBalanceAttoEthDeferred.promise,
-			getAccountState: () => accountState,
-			isCurrent: () => true,
-			setAccountState: state => {
-				accountState = state
-			},
-			setErrorMessage: message => {
-				errorMessage = message
-			},
-			trackLoad: async work => {
-				const trackedLoad = work()
-				trackedLoads.push(trackedLoad)
-				return await trackedLoad
-			},
-			wethBalanceAttoEthPromise: wethBalanceAttoEthDeferred.promise,
-		})
-
-		chainIdDeferred.resolve('0x123')
-		await trackedLoads[0]
-		ethBalanceAttoEthDeferred.reject(new Error('eth rpc failed'))
-		await trackedLoads[1]
-		wethBalanceAttoEthDeferred.resolve(777n)
-		await trackedLoads[2]
-
-		await loadPromise
-
-		expect(errorMessage ?? '').toBe('Failed to refresh wallet balances. Reason: eth rpc failed')
-		expect(accountState.chainId).toBe('0x123')
-		expect(accountState.ethBalanceAttoEth).toBeUndefined()
-		expect(accountState.wethBalanceAttoEth).toBe(777n)
+		expect(load.observed.errorMessage ?? '').toBe(`Failed to refresh wallet balances. Reason: ${failingBalance.toLowerCase()} rpc failed`)
+		expect(load.observed.accountState.chainId).toBe('0x123')
+		expect(load.observed.accountState.ethBalanceAttoEth).toBe(ethBalanceAttoEth)
+		expect(load.observed.accountState.wethBalanceAttoEth).toBe(wethBalanceAttoEth)
 	})
 })
 

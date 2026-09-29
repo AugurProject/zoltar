@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { deleteSavedSimulationState, getSavedSimulationStateEnvelope, getSavedSimulationStateStorageSummary, persistSavedSimulationState, removeCorruptedSavedSimulationStates, serializeSavedSimulationStateEnvelope } from '../../simulation/savedStates.js'
 import { installDomEnvironment } from '../testUtils/domEnvironment.js'
 import { parseSavedSimulationStateEnvelope } from './savedStateStorage.js'
@@ -131,22 +131,36 @@ describe('saved simulation states', () => {
 		expect(() => parseSavedSimulationStateEnvelope(malformedSerialized)).toThrow('Saved simulation state is missing a valid TEVM snapshot')
 	})
 
-	test('persists, lists, and deletes saved states from local storage', () => {
-		const domEnvironment = installDomEnvironment()
+	describe('in browser storage', () => {
+		let cleanupDom: (() => void) | undefined
+		beforeEach(() => {
+			cleanupDom = installDomEnvironment().cleanup
+		})
+		afterEach(() => {
+			cleanupDom?.()
+			cleanupDom = undefined
+		})
 
-		try {
-			const first = persistSavedSimulationState(
-				createSerializedSavedState({
-					name: 'Saved baseline',
-					savedAt: '2026-06-02T12:34:56.000Z',
-				}),
-			)
-			const second = persistSavedSimulationState(
-				createSerializedSavedState({
-					name: 'Saved baseline',
-					savedAt: '2026-06-02T12:35:56.000Z',
-				}),
-			)
+		const SAVED_STATES_KEY = 'zoltar.simulation.savedStates'
+		const BACKUP_KEY = 'zoltar.simulation.savedStates.corruptedBackup'
+		const storedRecord = (id: string, name: string, savedAt: string, persistedAt?: string) => ({
+			baseScenario: 'baseline',
+			id,
+			name,
+			...(persistedAt === undefined ? {} : { persistedAt }),
+			savedAt,
+			serialized: createSerializedSavedState({ name, savedAt }),
+		})
+		const readBackups = () => {
+			const backupValue = window.localStorage.getItem(BACKUP_KEY)
+			expect(backupValue).not.toBeNull()
+			if (backupValue === null) throw new Error('Expected corrupted saved-state backup to be written')
+			return JSON.parse(backupValue)
+		}
+
+		test('persists, lists, and deletes saved states from local storage', () => {
+			const first = persistSavedSimulationState(createSerializedSavedState({ name: 'Saved baseline', savedAt: '2026-06-02T12:34:56.000Z' }))
+			const second = persistSavedSimulationState(createSerializedSavedState({ name: 'Saved baseline', savedAt: '2026-06-02T12:35:56.000Z' }))
 
 			const records = getSavedSimulationStateStorageSummary().records
 			expect(records).toHaveLength(2)
@@ -157,66 +171,19 @@ describe('saved simulation states', () => {
 			expect(deleteSavedSimulationState(first.id)).toBe(true)
 			expect(deleteSavedSimulationState('missing-state')).toBe(false)
 			expect(listSavedSimulationStateRecordIds()).toEqual([second.id])
-		} finally {
-			domEnvironment.cleanup()
-		}
-	})
+		})
 
-	test('sorts imported saves by local persistence time instead of export time', () => {
-		const domEnvironment = installDomEnvironment()
-
-		try {
-			window.localStorage.setItem(
-				'zoltar.simulation.savedStates',
-				JSON.stringify([
-					{
-						baseScenario: 'baseline',
-						id: 'older-export-20260601123456',
-						name: 'Older export',
-						persistedAt: '2026-06-03T00:10:00.000Z',
-						savedAt: '2026-06-01T12:34:56.000Z',
-						serialized: createSerializedSavedState({
-							name: 'Older export',
-							savedAt: '2026-06-01T12:34:56.000Z',
-						}),
-					},
-					{
-						baseScenario: 'baseline',
-						id: 'newer-export-20260602123456',
-						name: 'Newer export',
-						persistedAt: '2026-06-03T00:00:00.000Z',
-						savedAt: '2026-06-02T12:34:56.000Z',
-						serialized: createSerializedSavedState({
-							name: 'Newer export',
-							savedAt: '2026-06-02T12:34:56.000Z',
-						}),
-					},
-				]),
-			)
+		test('sorts imported saves by local persistence time instead of export time', () => {
+			window.localStorage.setItem(SAVED_STATES_KEY, JSON.stringify([storedRecord('older-export-20260601123456', 'Older export', '2026-06-01T12:34:56.000Z', '2026-06-03T00:10:00.000Z'), storedRecord('newer-export-20260602123456', 'Newer export', '2026-06-02T12:34:56.000Z', '2026-06-03T00:00:00.000Z')]))
 
 			expect(listSavedSimulationStateRecordIds()).toEqual(['older-export-20260601123456', 'newer-export-20260602123456'])
-		} finally {
-			domEnvironment.cleanup()
-		}
-	})
+		})
 
-	test('ignores corrupted or invalid saved-state storage records', () => {
-		const domEnvironment = installDomEnvironment()
-
-		try {
+		test('ignores corrupted saved-state storage records, then removes them while preserving valid saves', () => {
 			window.localStorage.setItem(
-				'zoltar.simulation.savedStates',
+				SAVED_STATES_KEY,
 				JSON.stringify([
-					{
-						baseScenario: 'baseline',
-						id: 'saved-baseline-20260602123456',
-						name: 'Saved baseline',
-						savedAt: '2026-06-02T12:34:56.000Z',
-						serialized: createSerializedSavedState({
-							name: 'Saved baseline',
-							savedAt: '2026-06-02T12:34:56.000Z',
-						}),
-					},
+					storedRecord('saved-baseline-20260602123456', 'Saved baseline', '2026-06-02T12:34:56.000Z'),
 					{
 						baseScenario: 'baseline',
 						id: 'broken-state',
@@ -229,76 +196,29 @@ describe('saved simulation states', () => {
 
 			expect(listSavedSimulationStateRecordIds()).toEqual(['saved-baseline-20260602123456'])
 			expect(getSavedSimulationStateStorageSummary().warning).toBe('Ignored 1 corrupted saved simulation state in browser storage.')
-		} finally {
-			domEnvironment.cleanup()
-		}
-	})
-
-	test('removes corrupted saved-state storage records while preserving valid saves', () => {
-		const domEnvironment = installDomEnvironment()
-
-		try {
-			window.localStorage.setItem(
-				'zoltar.simulation.savedStates',
-				JSON.stringify([
-					{
-						baseScenario: 'baseline',
-						id: 'saved-baseline-20260602123456',
-						name: 'Saved baseline',
-						savedAt: '2026-06-02T12:34:56.000Z',
-						serialized: createSerializedSavedState({
-							name: 'Saved baseline',
-							savedAt: '2026-06-02T12:34:56.000Z',
-						}),
-					},
-					{
-						baseScenario: 'baseline',
-						id: 'broken-state',
-						name: 'Broken state',
-						savedAt: '2026-06-02T12:35:56.000Z',
-						serialized: '{bad json',
-					},
-				]),
-			)
-
 			expect(removeCorruptedSavedSimulationStates()).toBe(1)
 			expect(getSavedSimulationStateStorageSummary().warning).toBeUndefined()
 			expect(listSavedSimulationStateRecordIds()).toEqual(['saved-baseline-20260602123456'])
 			expect(removeCorruptedSavedSimulationStates()).toBe(0)
-		} finally {
-			domEnvironment.cleanup()
-		}
-	})
+		})
 
-	test('reports malformed saved-state storage with a generic warning', () => {
-		const domEnvironment = installDomEnvironment()
-
-		try {
-			window.localStorage.setItem('zoltar.simulation.savedStates', '{bad json')
+		test('reports malformed saved-state storage with a generic warning', () => {
+			window.localStorage.setItem(SAVED_STATES_KEY, '{bad json')
 
 			expect(getSavedSimulationStateStorageSummary().warning).toBe('Saved simulation state storage is corrupted in browser storage.')
 			expect(removeCorruptedSavedSimulationStates()).toBe(1)
 			expect(getSavedSimulationStateStorageSummary().warning).toBeUndefined()
 			expect(getSavedSimulationStateStorageSummary().records).toEqual([])
-			const backupValue = window.localStorage.getItem('zoltar.simulation.savedStates.corruptedBackup')
-			expect(backupValue).not.toBeNull()
-			if (backupValue === null) throw new Error('Expected corrupted saved-state backup to be written')
-			expect(JSON.parse(backupValue)).toEqual([
+			expect(readBackups()).toEqual([
 				expect.objectContaining({
 					rawValue: '{bad json',
 				}),
 			])
-		} finally {
-			domEnvironment.cleanup()
-		}
-	})
+		})
 
-	test('keeps a bounded history of malformed saved-state storage backups', () => {
-		const domEnvironment = installDomEnvironment()
-
-		try {
+		test('keeps a bounded history of malformed saved-state storage backups', () => {
 			window.localStorage.setItem(
-				'zoltar.simulation.savedStates.corruptedBackup',
+				BACKUP_KEY,
 				JSON.stringify([
 					{ backedUpAt: '2026-06-03T00:00:05.000Z', rawValue: 'older-1' },
 					{ backedUpAt: '2026-06-03T00:00:04.000Z', rawValue: 'older-2' },
@@ -307,16 +227,11 @@ describe('saved simulation states', () => {
 					{ backedUpAt: '2026-06-03T00:00:01.000Z', rawValue: 'older-5' },
 				]),
 			)
-			window.localStorage.setItem('zoltar.simulation.savedStates', '{new-bad-json')
+			window.localStorage.setItem(SAVED_STATES_KEY, '{new-bad-json')
 
 			expect(removeCorruptedSavedSimulationStates()).toBe(1)
 
-			const backupValue = window.localStorage.getItem('zoltar.simulation.savedStates.corruptedBackup')
-			expect(backupValue).not.toBeNull()
-			if (backupValue === null) throw new Error('Expected corrupted saved-state backup history to be written')
-			expect(JSON.parse(backupValue)).toEqual([expect.objectContaining({ rawValue: '{new-bad-json' }), expect.objectContaining({ rawValue: 'older-1' }), expect.objectContaining({ rawValue: 'older-2' }), expect.objectContaining({ rawValue: 'older-3' }), expect.objectContaining({ rawValue: 'older-4' })])
-		} finally {
-			domEnvironment.cleanup()
-		}
+			expect(readBackups()).toEqual([expect.objectContaining({ rawValue: '{new-bad-json' }), expect.objectContaining({ rawValue: 'older-1' }), expect.objectContaining({ rawValue: 'older-2' }), expect.objectContaining({ rawValue: 'older-3' }), expect.objectContaining({ rawValue: 'older-4' })])
+		})
 	})
 })

@@ -48,11 +48,29 @@ describe('useCopyToClipboard', () => {
 		hasClipboardOverride = true
 	}
 
-	test('sets copied state to true during the success path and clears timeout on unmount', async () => {
+	async function mountCopyHook() {
+		let hook: CopyHook | undefined
+		function Probe() {
+			hook = useCopyToClipboard()
+			return (
+				<output data-testid='copied'>
+					{hook.copied.value ? 'copied' : 'not-copied'}
+					{hook.copyError.value}
+				</output>
+			)
+		}
+		const renderedComponent = await renderIntoDocument(<Probe />)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const activeHook = hook
+		if (activeHook === undefined) throw new Error('hook did not mount')
+		return { activeHook, renderedComponent }
+	}
+
+	/** Replaces the window timers with recorders; scheduled callbacks run only when a test invokes them. */
+	function recordTimers() {
 		const timeoutCallbacks: Array<() => void> = []
 		const clearTimeoutIds: number[] = []
 		let nextTimerId = 1
-		setClipboardWriteText(async () => undefined)
 		window.setTimeout = ((callback: TimerHandler) => {
 			timeoutCallbacks.push(() => {
 				if (typeof callback === 'function') callback()
@@ -62,103 +80,51 @@ describe('useCopyToClipboard', () => {
 		window.clearTimeout = ((id: number) => {
 			clearTimeoutIds.push(id)
 		}) as typeof window.clearTimeout
+		return { clearTimeoutIds, timeoutCallbacks }
+	}
 
-		let hook: CopyHook | undefined
-		function Probe() {
-			hook = useCopyToClipboard()
-			return <output data-testid='copied'>{hook?.copied.value ? 'copied' : 'not-copied'}</output>
-		}
-
-		const renderedComponent = await renderIntoDocument(<Probe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+	test('sets copied state to true during the success path and clears timeout on unmount', async () => {
+		setClipboardWriteText(async () => undefined)
+		const { clearTimeoutIds, timeoutCallbacks } = recordTimers()
+		const { activeHook, renderedComponent } = await mountCopyHook()
 		expect(timeoutCallbacks).toHaveLength(0)
-		const activeHook = hook
-		if (activeHook === undefined) {
-			throw new Error('hook did not mount')
-		}
 
 		await act(async () => {
 			await activeHook.copyText('copiable')
 		})
-		expect(activeHook?.copied.value).toBe(true)
+		expect(activeHook.copied.value).toBe(true)
 		expect(timeoutCallbacks).toHaveLength(1)
-		expect(activeHook?.copied.value).toBe(true)
 		await renderedComponent.cleanup()
-		expect(clearTimeoutIds.length).toBeGreaterThanOrEqual(1)
-		hook = undefined
 		cleanupRenderedComponent = undefined
+		expect(clearTimeoutIds.length).toBeGreaterThanOrEqual(1)
 	})
 
 	test('fires the reset timeout callback and sets copied state to false after success', async () => {
-		const timeoutCallbacks: Array<() => void> = []
-		let nextTimerId = 1
-		const copyText = async () => undefined
-		setClipboardWriteText(copyText)
-		window.setTimeout = ((callback: TimerHandler) => {
-			timeoutCallbacks.push(() => {
-				if (typeof callback === 'function') callback()
-			})
-			return nextTimerId++ as unknown as number
-		}) as typeof window.setTimeout
-
-		let hook: CopyHook | undefined
-		function Probe() {
-			hook = useCopyToClipboard()
-			return <output data-testid='copied'>{hook?.copied.value ? 'copied' : 'not-copied'}</output>
-		}
-
-		const renderedComponent = await renderIntoDocument(<Probe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		setClipboardWriteText(async () => undefined)
+		const { timeoutCallbacks } = recordTimers()
+		const { activeHook } = await mountCopyHook()
 		expect(timeoutCallbacks).toHaveLength(0)
-		const activeHook = hook
-		if (activeHook === undefined) {
-			throw new Error('hook did not mount')
-		}
 
 		await act(async () => {
 			await activeHook.copyText('copiable')
 		})
-		expect(activeHook?.copied.value).toBe(true)
+		expect(activeHook.copied.value).toBe(true)
 		expect(timeoutCallbacks).toHaveLength(1)
 		await act(() => {
 			timeoutCallbacks[0]?.()
 		})
-		expect(activeHook?.copied.value).toBe(false)
-		await renderedComponent.cleanup()
-		hook = undefined
-		cleanupRenderedComponent = undefined
+		expect(activeHook.copied.value).toBe(false)
 	})
 
 	test('clears an existing reset timeout on clipboard errors', async () => {
-		const clearTimeoutIds: number[] = []
-		let nextTimerId = 1
 		setClipboardWriteText(async () => undefined)
-		window.setTimeout = ((_callback: TimerHandler) => {
-			nextTimerId += 1
-			return nextTimerId as unknown as number
-		}) as typeof window.setTimeout
-		window.clearTimeout = ((id: number) => {
-			clearTimeoutIds.push(id)
-		}) as typeof window.clearTimeout
-
-		let hook: CopyHook | undefined
-		function Probe() {
-			hook = useCopyToClipboard()
-			return <output data-testid='copied'>{hook?.copied.value ? 'copied' : 'not-copied'}</output>
-		}
-
-		const renderedComponent = await renderIntoDocument(<Probe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-
-		const activeHook = hook
-		if (activeHook === undefined) {
-			throw new Error('hook did not mount')
-		}
+		const { clearTimeoutIds } = recordTimers()
+		const { activeHook } = await mountCopyHook()
 
 		await act(async () => {
 			await activeHook.copyText('good')
 		})
-		expect(activeHook?.copied.value).toBe(true)
+		expect(activeHook.copied.value).toBe(true)
 
 		setClipboardWriteText(async () => {
 			throw new DOMException('copy blocked', 'NotAllowedError')
@@ -167,45 +133,29 @@ describe('useCopyToClipboard', () => {
 		await act(async () => {
 			await activeHook.copyText('blocked')
 		})
-		expect(activeHook?.copied.value).toBe(false)
-		expect(activeHook?.copyError.value).toBe('Copy failed — select the value and copy it manually.')
-		expect(clearTimeoutIds.length).toBeGreaterThanOrEqual(1)
-		await renderedComponent.cleanup()
-	})
-
-	test('reports an unavailable clipboard API without rejecting', async () => {
-		Reflect.defineProperty(navigator, 'clipboard', {
-			configurable: true,
-			value: undefined,
-		})
-		hasClipboardOverride = true
-		let hook: CopyHook | undefined
-		function Probe() {
-			hook = useCopyToClipboard()
-			return <output>{hook.copyError.value}</output>
-		}
-		const renderedComponent = await renderIntoDocument(<Probe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const activeHook = hook
-		if (activeHook === undefined) throw new Error('hook did not mount')
-
-		await expect(activeHook.copyText('copy me')).resolves.toBeUndefined()
+		expect(activeHook.copied.value).toBe(false)
 		expect(activeHook.copyError.value).toBe('Copy failed — select the value and copy it manually.')
+		expect(clearTimeoutIds.length).toBeGreaterThanOrEqual(1)
 	})
 
-	test('reports ordinary clipboard implementation failures without rejecting', async () => {
-		setClipboardWriteText(async () => {
-			throw new Error('unexpected clipboard implementation failure')
-		})
-		let hook: CopyHook | undefined
-		function Probe() {
-			hook = useCopyToClipboard()
-			return <output>{hook.copyError.value}</output>
-		}
-		const renderedComponent = await renderIntoDocument(<Probe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const activeHook = hook
-		if (activeHook === undefined) throw new Error('hook did not mount')
+	test.each([
+		{
+			name: 'an unavailable clipboard API',
+			installClipboard: () => {
+				Reflect.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+				hasClipboardOverride = true
+			},
+		},
+		{
+			name: 'ordinary clipboard implementation failures',
+			installClipboard: () =>
+				setClipboardWriteText(async () => {
+					throw new Error('unexpected clipboard implementation failure')
+				}),
+		},
+	])('reports $name without rejecting', async ({ installClipboard }) => {
+		installClipboard()
+		const { activeHook } = await mountCopyHook()
 
 		await expect(activeHook.copyText('copy me')).resolves.toBeUndefined()
 		expect(activeHook.copyError.value).toBe('Copy failed — select the value and copy it manually.')
@@ -213,15 +163,7 @@ describe('useCopyToClipboard', () => {
 
 	test('does not hide timer failures after a successful clipboard write', async () => {
 		setClipboardWriteText(async () => undefined)
-		let hook: CopyHook | undefined
-		function Probe() {
-			hook = useCopyToClipboard()
-			return <output>{hook.copyError.value}</output>
-		}
-		const renderedComponent = await renderIntoDocument(<Probe />)
-		cleanupRenderedComponent = renderedComponent.cleanup
-		const activeHook = hook
-		if (activeHook === undefined) throw new Error('hook did not mount')
+		const { activeHook } = await mountCopyHook()
 		const timerError = new Error('timer failed')
 		window.setTimeout = ((_handler: TimerHandler, _timeout?: number): number => {
 			throw timerError
