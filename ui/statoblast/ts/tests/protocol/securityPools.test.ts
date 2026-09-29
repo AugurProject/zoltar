@@ -84,6 +84,8 @@ function createPagedGetVaults(knownVaultAddresses: readonly Address[], calls: [b
 }
 
 const zeroPerContract = (contracts: MulticallRequest['contracts']) => contracts.map(() => 0n)
+// Vault-summary multicalls with zero open interest and bad debt around the given securityVaults tuples.
+const createVaultSummaryMulticall = (securityVaults: (contracts: MulticallRequest['contracts']) => unknown) => ({ getVaultOpenInterestAttoEth: zeroPerContract, vaultBadDebtAttoEth: zeroPerContract, securityVaults })
 
 function createPoolLoaderClient({
 	deployments,
@@ -352,14 +354,10 @@ describe('securityPools protocol client', () => {
 		let securityVaultSummaryMulticallCount = 0
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
-			multicall: {
-				getVaultOpenInterestAttoEth: zeroPerContract,
-				vaultBadDebtAttoEth: zeroPerContract,
-				securityVaults: contracts => {
-					securityVaultSummaryMulticallCount += 1
-					return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
-				},
-			},
+			multicall: createVaultSummaryMulticall(contracts => {
+				securityVaultSummaryMulticallCount += 1
+				return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
+			}),
 			read: {
 				getVaultCount: () => 5n,
 				getVaults: request => {
@@ -391,11 +389,7 @@ describe('securityPools protocol client', () => {
 		const getVaults = createPagedGetVaults(knownVaultAddresses, getVaultsCalls)
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
-			multicall: {
-				getVaultOpenInterestAttoEth: zeroPerContract,
-				vaultBadDebtAttoEth: zeroPerContract,
-				securityVaults: contracts => contracts.map(contract => (getFirstArgAddress(contract) === currentVaultAddress ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n])),
-			},
+			multicall: createVaultSummaryMulticall(contracts => contracts.map(contract => (getFirstArgAddress(contract) === currentVaultAddress ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]))),
 			read: {
 				getVaultCount: request => {
 					expect(request.blockNumber).toBe(0n)
@@ -428,11 +422,7 @@ describe('securityPools protocol client', () => {
 		const getVaultsCalls: [bigint, bigint][] = []
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
-			multicall: {
-				getVaultOpenInterestAttoEth: zeroPerContract,
-				vaultBadDebtAttoEth: zeroPerContract,
-				securityVaults: contracts => contracts.map(() => [0n, 0n, 0n, 0n, 0n]),
-			},
+			multicall: createVaultSummaryMulticall(contracts => contracts.map(() => [0n, 0n, 0n, 0n, 0n])),
 			read: {
 				getVaultCount: () => BigInt(knownVaultAddresses.length),
 				getVaults: createPagedGetVaults(knownVaultAddresses, getVaultsCalls),
@@ -468,11 +458,7 @@ describe('securityPools protocol client', () => {
 		const getVaultsCalls: [bigint, bigint][] = []
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
-			multicall: {
-				getVaultOpenInterestAttoEth: zeroPerContract,
-				vaultBadDebtAttoEth: zeroPerContract,
-				securityVaults: contracts => contracts.map(contract => (currentVaultAddresses.has(getFirstArgAddress(contract)) ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n])),
-			},
+			multicall: createVaultSummaryMulticall(contracts => contracts.map(contract => (currentVaultAddresses.has(getFirstArgAddress(contract)) ? [2n, 0n, 0n, 0n, 0n] : [0n, 0n, 0n, 0n, 0n]))),
 			read: {
 				getVaultCount: () => BigInt(knownVaultAddresses.length),
 				getVaults: createPagedGetVaults(knownVaultAddresses, getVaultsCalls),
@@ -492,14 +478,10 @@ describe('securityPools protocol client', () => {
 		let securityVaultSummaryMulticallCount = 0
 		const client = createPoolLoaderClient({
 			deployments: [createDeployment(securityPoolAddress)],
-			multicall: {
-				getVaultOpenInterestAttoEth: zeroPerContract,
-				vaultBadDebtAttoEth: zeroPerContract,
-				securityVaults: contracts => {
-					securityVaultSummaryMulticallCount += 1
-					return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
-				},
-			},
+			multicall: createVaultSummaryMulticall(contracts => {
+				securityVaultSummaryMulticallCount += 1
+				return contracts.map(() => [2n, 0n, 0n, 0n, 0n])
+			}),
 			read: {
 				getVaults: () => {
 					getVaultsCallCount += 1
