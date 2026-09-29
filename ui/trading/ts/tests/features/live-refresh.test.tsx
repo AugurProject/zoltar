@@ -78,7 +78,7 @@ describe('live market refresh', () => {
 			await pending
 			return page([first, second])
 		}
-		const services = { ...liveTradingControllerServices, createTradingPublicClient: () => ({}), validateLiveDeployment: async () => undefined, discoverTradingMarketPage: discover }
+		const services = { ...offlineControllerServices, discoverTradingMarketPage: discover }
 		const rendered = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		try {
@@ -104,7 +104,7 @@ describe('live market refresh', () => {
 			await timeout.promise
 			throw new Error('RPC read timed out.')
 		}
-		const services = { ...liveTradingControllerServices, createTradingPublicClient: () => ({}), validateLiveDeployment: async () => undefined, discoverTradingMarketPage: discover }
+		const services = { ...offlineControllerServices, discoverTradingMarketPage: discover }
 		let controller: ReturnType<typeof useLiveTradingController> | undefined
 		function Harness() {
 			controller = useLiveTradingController({

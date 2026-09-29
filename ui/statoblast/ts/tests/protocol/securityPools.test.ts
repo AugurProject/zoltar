@@ -167,7 +167,7 @@ describe('securityPools protocol client', () => {
 				if (request.functionName === 'securityPoolDeploymentCount') return 1n
 				if (request.functionName === 'securityPoolDeploymentsRange') {
 					ranges.push(request.args)
-					return [{ securityPool: alternateSecurityPoolAddress, parent: zeroAddress, priceOracleManagerAndOperatorQueuer: zeroAddress, truthAuction: zeroAddress, shareToken: shareTokenAddress, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 10000n, initialReportPriorityFeeAttoEthPerGas: 0n }]
+					return [createDeployment(alternateSecurityPoolAddress, { universeId: 0n })]
 				}
 				throw new Error(`Unexpected read: ${request.functionName}`)
 			},
