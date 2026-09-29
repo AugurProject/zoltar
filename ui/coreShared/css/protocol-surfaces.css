@@ -2265,13 +2265,18 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 
 	.transaction-plan-action:has(.approval-amount-field) .tx-action-button {
 		min-height: 3rem;
-		font-size: 0.75rem;
 		padding-inline: 0;
 	}
 }
 
-@container (max-width: 10rem) {
+@container (max-width: 11rem) {
 	.approval-button-amount-long {
+		display: none;
+	}
+}
+
+@container (max-width: 10rem) {
+	.approval-button-amount {
 		display: none;
 	}
 }
