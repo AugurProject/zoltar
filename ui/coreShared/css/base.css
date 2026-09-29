@@ -582,9 +582,14 @@ button.quiet:disabled {
 
 .account-menu {
 	position: relative;
+	flex: 1;
+	display: flex;
+	justify-content: flex-end;
+	min-width: 0;
+	max-width: 100%;
 }
 
-/* The popover is the only place the full account is shown; it wraps at a deterministic point instead of overflowing. */
+/* Account details share the same responsive address presentation as the toolbar. */
 .account-menu-popover .address-value,
 .account-menu-popover .address-value.copyable {
 	font-family: var(--font-family-mono);
@@ -594,7 +599,7 @@ button.quiet:disabled {
 	text-align: left;
 }
 
-/* Toolbar wallet identity: abbreviated account with a copy affordance and a live-connection dot. */
+/* Toolbar wallet identity with a copy affordance and a live-connection dot. */
 .wallet-chip {
 	display: inline-flex;
 	align-items: center;
@@ -637,14 +642,6 @@ button.quiet:disabled {
 .wallet-chip .address-value.copyable {
 	min-height: 2rem;
 	margin: 0;
-}
-
-.wallet-chip .address-value-full {
-	display: none;
-}
-
-.wallet-chip .address-value-abbreviated {
-	display: inline;
 }
 
 /* Toolbar caption-plus-value pair, such as the selected universe. */
@@ -1329,10 +1326,52 @@ button.wallet-asset-action-pending:disabled {
 	display: inline-block;
 	max-width: 100%;
 	min-width: 0;
-	overflow-wrap: anywhere;
-	word-break: break-word;
-	white-space: normal;
 	vertical-align: bottom;
+}
+
+/* The full text retains intrinsic width even while abbreviated, so growing the
+ * container can restore it without a measurement/render feedback loop. */
+.address-value-text {
+	display: inline-grid;
+	grid-template-columns: minmax(0, 1fr);
+	max-width: 100%;
+	min-width: 0;
+	overflow: hidden;
+	vertical-align: bottom;
+	white-space: nowrap;
+}
+
+.address-value-full,
+.address-value-abbreviated {
+	grid-area: 1 / 1;
+	width: max-content;
+	white-space: nowrap;
+}
+
+.address-value-abbreviated {
+	visibility: hidden;
+}
+
+.address-value-text[data-abbreviated="true"] .address-value-full {
+	opacity: 0;
+}
+
+.address-value-text[data-abbreviated="true"] .address-value-abbreviated {
+	visibility: visible;
+}
+
+/* A stable external slot lets a control fit its visible label without losing
+ * the width needed to restore the full address when more space is available. */
+.address-value-fit-content {
+	position: relative;
+}
+
+.address-value-fit-content[data-abbreviated="true"] .address-value-full {
+	position: absolute;
+}
+
+.address-value-fit-content[data-abbreviated="false"] .address-value-abbreviated {
+	position: absolute;
 }
 
 .identifier-value.copyable {

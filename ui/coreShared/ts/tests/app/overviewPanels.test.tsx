@@ -240,7 +240,7 @@ describe('OverviewPanels', () => {
 		openAccountMenu()
 		const addressButton = documentQueries.getByRole('button', { name: `Copy address ${address}` })
 		expect(addressButton.closest('.account-menu-popover')).not.toBeNull()
-		expect(addressButton.textContent).toBe(address)
+		expect(addressButton.querySelector('.address-value-full')?.textContent).toBe(address)
 	})
 
 	test('identifies recognized and unknown wrong networks in the environment badge', async () => {
