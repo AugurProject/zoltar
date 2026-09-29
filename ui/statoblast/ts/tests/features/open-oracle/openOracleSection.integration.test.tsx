@@ -329,14 +329,11 @@ describe.serial('OpenOracleSection integration', () => {
 			expect(getOpenOracleSelectedReportActionMode(refreshedReport)).toBe('settle')
 		})
 
-		await clickElement(within(document.body).getByRole('button', { name: 'Settle report…' }))
-		await waitFor(() => {
-			const dialog = within(document.body).getByRole('dialog', { name: `Settle report #${reportId}` })
-			const settleButton = within(dialog).getByRole('button', { name: `Settle report #${reportId}` })
-			expect(within(dialog).queryByText('Transaction review')).toBeNull()
-			expect(within(document.body).queryByRole('button', { name: 'Dispute & swap' })).toBeNull()
-			expect(settleButton.hasAttribute('disabled')).toBe(false)
-			expect(within(document.body).queryByText('Dispute window closed. Settle report instead.')).toBeNull()
+		await clickElement(within(document.body).getByRole('button', { name: 'Settle report' }))
+		await waitFor(async () => {
+			const settled = await loadOpenOracleReportDetails(uiReadClient, openOracleAddress, reportId)
+			expect(settled.isDistributed).toBe(true)
 		})
+		expect(within(document.body).queryByRole('dialog')).toBeNull()
 	})
 })

@@ -1,22 +1,17 @@
 import type { ComponentChildren } from 'preact'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { SecurityPoolStateModel } from '../../security-pools/lib/securityPoolState.js'
 import { withWalletGuardFirst, type WalletGuard } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { getRepPerEthPrice, type TruthAuctionBidPricePosition } from '../lib/truthAuctionBook.js'
+import { getTruthAuctionBidPreview, getRepPerEthPrice, type TruthAuctionBidPricePosition } from '../lib/truthAuctionBook.js'
 
 export type ForkAuctionActionOptions = {
 	action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -146,76 +141,46 @@ function getBidPriceWarning(bidPricePosition: TruthAuctionBidPricePosition | und
 }
 
 export function ForkAuctionSubmitBidSection({
-	auctionSecurityPoolAddress,
 	bidPricePosition,
 	clearingPrice,
-	enteredBidAmount,
-	enteredBidPrice,
-	estimatedAttoRep,
 	minimumWinningPriceInput,
 	onBidAmountChange,
 	onBidPriceChange,
-	questionTitle,
-	resultingBidBalanceAttoEth,
-	selectedAuctionLabel,
 	submitBidAction,
 	submitBidAmount,
 	submitBidPrice,
-	submittedBidPrice,
 }: {
-	auctionSecurityPoolAddress: Address | undefined
 	bidPricePosition: TruthAuctionBidPricePosition | undefined
 	clearingPrice: bigint | undefined
-	enteredBidAmount: bigint | undefined
-	enteredBidPrice: bigint | undefined
-	estimatedAttoRep: bigint | undefined
 	minimumWinningPriceInput: string | undefined
 	onBidAmountChange: (value: string) => void
 	onBidPriceChange: (value: string) => void
-	questionTitle: string | undefined
-	resultingBidBalanceAttoEth: bigint | undefined
-	selectedAuctionLabel: string
 	submitBidAction: ComponentChildren
 	submitBidAmount: string
 	submitBidPrice: string
-	submittedBidPrice: bigint | undefined
 }) {
 	const bidPriceWarning = getBidPriceWarning(bidPricePosition, clearingPrice)
+	const submittedBidPrice = getTruthAuctionBidPreview(submitBidPrice)?.submittedPrice
+	const repPerEthDetail = submittedBidPrice === undefined ? undefined : formatRepPerEthDetail(submittedBidPrice)
 	return (
 		<SectionBlock title={forkAuctionCopy.submitBidTitle} variant='embedded'>
 			<div className='form-grid'>
 				<BidPriceGuidance clearingPrice={clearingPrice} minimumWinningPriceInput={minimumWinningPriceInput} onBidPriceChange={onBidPriceChange} />
 				<div className='field-row truth-auction-bid-fields'>
-					<AmountField hint={bidPriceWarning === undefined ? undefined : <span className='truth-auction-bid-price-warning'>{bidPriceWarning}</span>} label={forkAuctionCopy.bidPrice} onChange={onBidPriceChange} unit={forkAuctionCopy.bidPriceUnit} value={submitBidPrice} />
+					<AmountField
+						hint={
+							<>
+								{repPerEthDetail}
+								{bidPriceWarning === undefined ? undefined : <span className='truth-auction-bid-price-warning'> {bidPriceWarning}</span>}
+							</>
+						}
+						label={forkAuctionCopy.bidPrice}
+						onChange={onBidPriceChange}
+						unit={forkAuctionCopy.bidPriceUnit}
+						value={submitBidPrice}
+					/>
 					<AmountField label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
 				</div>
-				<TransactionReview
-					context={[
-						{ label: commonCopy.question, value: questionTitle ?? commonCopy.unavailable },
-						{ label: commonCopy.securityPoolAddress, value: auctionSecurityPoolAddress === undefined ? commonCopy.unavailable : <AddressValue address={auctionSecurityPoolAddress} /> },
-						{ label: commonCopy.outcome, value: selectedAuctionLabel },
-					]}
-					primary={[
-						{ label: transactionReviewCopy.youPay, value: <CurrencyValue value={enteredBidAmount} suffix={commonCopy.eth} /> },
-						{ label: forkAuctionCopy.potentialRepIfFilled, value: <CurrencyValue value={estimatedAttoRep} suffix={commonCopy.rep} /> },
-					]}
-					details={[
-						{ label: forkAuctionCopy.enteredBidPrice, value: enteredBidPrice === undefined ? commonCopy.metricUnavailablePlaceholder : renderTruthAuctionPriceValue(enteredBidPrice) },
-						{
-							label: forkAuctionCopy.submittedTickPrice,
-							value:
-								submittedBidPrice === undefined ? (
-									commonCopy.metricUnavailablePlaceholder
-								) : (
-									<>
-										{renderTruthAuctionPriceValue(submittedBidPrice)} {formatRepPerEthDetail(submittedBidPrice)}
-									</>
-								),
-						},
-						{ label: transactionReviewCopy.resultingEthBalance, value: <CurrencyValue value={resultingBidBalanceAttoEth} suffix={commonCopy.eth} /> },
-					]}
-					risks={[forkAuctionCopy.bidEscrowRisk, forkAuctionCopy.bidFillRisk, forkAuctionCopy.winningBidCapacityOwnershipRisk]}
-				/>
 				<div className='actions'>{submitBidAction}</div>
 			</div>
 		</SectionBlock>

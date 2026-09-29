@@ -1317,7 +1317,7 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.getByText('Auctioned underwriting commitments')).not.toBeNull()
 		expect(documentQueries.getByText('Auctioned underwriting commitments').parentElement?.querySelector('.metric-field-value')?.textContent).toMatch(/ETH/)
 		expect(documentQueries.queryByText('Winning bids buy more than REP.')).toBeNull()
-		expect(documentQueries.getByText('Winning settlement can also assign a pro-rata share of the pool underwriting commitments.')).not.toBeNull()
+		expect(documentQueries.queryByRole('heading', { name: 'Transaction review' })).toBeNull()
 	})
 
 	test('disables bid submission when the entered bid price is an oversized out-of-range value', async () => {
@@ -1381,13 +1381,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
-		const youPayRow = documentQueries.getByText('You pay').closest('.transaction-review-row')
-		const resultingEthBalanceRow = documentQueries.getByText('Resulting ETH balance').closest('.transaction-review-detail-row')
-		if (!(youPayRow instanceof HTMLElement) || !(resultingEthBalanceRow instanceof HTMLElement)) throw new Error('Expected ETH bid review rows')
-		expect(youPayRow.textContent).toContain('ETH')
-		expect(youPayRow.textContent).not.toContain('REP')
-		expect(resultingEthBalanceRow.textContent).toContain('ETH')
-		expect(resultingEthBalanceRow.textContent).not.toContain('REP')
+		expect(documentQueries.queryByText('You pay')).toBeNull()
 		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Bid price is outside the supported auction range.')
 		expect(submitBidButton.disabled).toBe(true)
 	})

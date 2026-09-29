@@ -39,22 +39,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	})
 	const submitBidSection = (
 		<ForkAuctionSubmitBidSection
-			auctionSecurityPoolAddress={model.auctionSecurityPoolAddress}
 			bidPricePosition={model.liveBidGuidance?.bidPricePosition}
 			clearingPrice={model.liveBidGuidance?.clearingPrice}
-			enteredBidAmount={model.enteredBidAmount}
-			enteredBidPrice={model.enteredBidPrice}
-			estimatedAttoRep={model.estimatedAttoRep}
 			minimumWinningPriceInput={model.liveBidGuidance?.minimumWinningPriceInput}
 			onBidAmountChange={submitBidAmount => model.onForkAuctionFormChange({ submitBidAmount })}
 			onBidPriceChange={submitBidPrice => model.onForkAuctionFormChange({ submitBidPrice })}
-			questionTitle={model.selectedAuctionChildPool?.marketDetails.title ?? model.previewPool?.marketDetails.title}
-			resultingBidBalanceAttoEth={model.resultingBidBalanceAttoEth}
-			selectedAuctionLabel={model.selectedAuctionLabel}
 			submitBidAction={submitBidAction}
 			submitBidAmount={model.forkAuctionForm.submitBidAmount}
 			submitBidPrice={model.forkAuctionForm.submitBidPrice}
-			submittedBidPrice={model.submittedBidPrice}
 		/>
 	)
 	useEffect(() => {

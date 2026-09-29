@@ -298,7 +298,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		expect(sectionQueries.getByRole('button', { name: /Report #\s*12/ })).not.toBeNull()
 	})
 
-	test('reviews the buffered ETH cost before requesting a new price', async () => {
+	test('submits the buffered ETH cost directly from the price input form', async () => {
 		const requests: Array<{ managerAddress: string; reviewedRequestValueAttoEth: bigint; securityPoolAddress: string; universeId: bigint }> = []
 		const pool = createSelectedPool()
 		const baseProps = createLoadedPoolProps({
@@ -311,15 +311,10 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const { rerender } = await renderWorkflow(baseProps)
 
 		const dialog = openPriceRequestDialog()
-		expect(within(dialog).getByText('You pay')).not.toBeNull()
-		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
 		expect(within(dialog).queryByText(/≈/)).toBeNull()
-		expect(dialog.querySelector('[title="2.4 ETH"]')).not.toBeNull()
-		expect(within(dialog).getByText(/20% request buffer/)).not.toBeNull()
 		expect(requests).toEqual([])
 
 		await rerender({ ...baseProps, poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n }) })
-		expect(within(dialog).getByText('2.4 ETH')).not.toBeNull()
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
 		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })

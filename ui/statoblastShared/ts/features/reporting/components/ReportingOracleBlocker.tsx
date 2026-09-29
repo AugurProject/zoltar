@@ -4,14 +4,14 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { formatDuration, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { getOpenOracleSettleAvailability } from '../../open-oracle/lib/openOracle.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
-import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
+import { getWalletActiveAppChainGuardState, withWalletGuardFirst, withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 
 export function ReportingOracleBlocker({
 	blocked,
@@ -32,13 +32,13 @@ export function ReportingOracleBlocker({
 	/** The wallet prerequisite, when it is the request's disabled reason. */
 	requestWalletBlocker?: WalletActionBlocker | undefined
 	onRefresh: () => void
-	oracle: OpenOracleSectionProps | undefined
+	oracle: Pick<OpenOracleSectionProps, 'accountState' | 'openOracleForm' | 'openOracleReportDetails' | 'openOracleActiveAction' | 'onOpenOracleFormChange' | 'onLoadOracleReport' | 'onSettleReport' | 'openOracleError'> | undefined
 	onViewReport: (id: bigint) => void
 }) {
-	const [reportId, setReportId] = useState<bigint>()
 	const [updated, setUpdated] = useState(false)
 	const wasBlocked = useRef(blocked)
 	const refreshedBoundary = useRef<string>()
+	const preparedReport = useRef<bigint>()
 	const pendingId = manager?.pendingReportId ?? 0n
 	const readyAt = manager?.pendingReportReadyAtTimestamp
 	const remaining = readyAt === undefined || now === undefined ? undefined : readyAt - now
@@ -59,8 +59,19 @@ export function ReportingOracleBlocker({
 		refreshedBoundary.current = key
 		onRefresh()
 	}, [blocked, pendingId, readyAt, ready, onRefresh])
-	const report = oracle !== undefined && oracle.openOracleReportDetails?.reportId === reportId ? oracle.openOracleReportDetails : undefined
+	useEffect(() => {
+		if (!blocked || pendingId === 0n || !ready || oracle === undefined) {
+			preparedReport.current = undefined
+			return
+		}
+		if (preparedReport.current === pendingId) return
+		preparedReport.current = pendingId
+		oracle.onOpenOracleFormChange({ reportId: pendingId.toString() })
+		oracle.onLoadOracleReport(pendingId.toString())
+	}, [blocked, pendingId, ready, oracle?.onOpenOracleFormChange, oracle?.onLoadOracleReport])
+	const report = oracle !== undefined && oracle.openOracleReportDetails?.reportId === pendingId && oracle.openOracleForm.reportId === pendingId.toString() ? oracle.openOracleReportDetails : undefined
 	const availability = report === undefined ? undefined : getOpenOracleSettleAvailability({ ...report, currentTime: now ?? report.currentTime })
+	const wallet = oracle === undefined ? undefined : getWalletActiveAppChainGuardState({ accountAddress: oracle.accountState.address, isOnActiveAppChain: isActiveAppChain(oracle.accountState.chainId) })
 	const pending = oracle?.openOracleActiveAction === 'settle'
 	let status = copy.priceRequested(remaining === undefined ? commonCopy.metricUnavailablePlaceholder : formatDuration(remaining))
 	if (ready) status = copy.priceReportReady(pendingId)
@@ -75,21 +86,16 @@ export function ReportingOracleBlocker({
 						<TransactionActionButton idleLabel={commonCopy.launchAction(securityPoolCopy.requestNewPrice)} pendingLabel={securityPoolCopy.requestingNewPrice} onClick={onRequest} availability={withWalletBlocker({ disabled: requestReason !== undefined, reason: requestReason }, requestWalletBlocker)} />
 					) : undefined}
 					{pendingId > 0n && ready ? (
-						<button
-							className='primary'
-							type='button'
-							onClick={() => {
-								if (oracle === undefined) {
-									onViewReport(pendingId)
-									return
-								}
-								setReportId(pendingId)
-								oracle.onOpenOracleFormChange({ reportId: pendingId.toString() })
-								oracle.onLoadOracleReport(pendingId.toString())
-							}}
-						>
-							{commonCopy.launchAction(copy.settlePriceReport(pendingId))}
-						</button>
+						<TransactionActionButton
+							idleLabel={copy.settlePriceReport(pendingId)}
+							pendingLabel={copy.settlingPriceReport(pendingId)}
+							pending={pending}
+							onClick={() => (oracle === undefined ? onViewReport(pendingId) : oracle.onSettleReport())}
+							availability={withWalletGuardFirst(
+								{ disabled: oracle !== undefined && availability?.canAct !== true, reason: oracle === undefined ? undefined : (availability?.message ?? (report === undefined ? copy.loadingEscalation : undefined)) },
+								wallet ?? { blocked: false, reason: undefined, walletBlocker: undefined },
+							)}
+						/>
 					) : undefined}
 				</WarningSurface>
 			) : undefined}
@@ -98,21 +104,12 @@ export function ReportingOracleBlocker({
 					{copy.priceUpdated(formatTimestamp(manager.priceValidUntilTimestamp))}
 				</p>
 			) : undefined}
-			<OperationModal confirmSingleStepFromForm isOpen={reportId !== undefined} title={copy.settlePriceReport(reportId ?? 0n)} onClose={() => setReportId(undefined)} closeOnSuccessKey={oracle?.openOracleResult?.action === 'settle' ? oracle.openOracleResult.hash : undefined}>
-				<ErrorNotice message={oracle?.openOracleError} />
-				<div className='actions'>
-					<TransactionActionButton
-						idleLabel={copy.settlePriceReport(reportId ?? 0n)}
-						pendingLabel={copy.settlingPriceReport(reportId ?? 0n)}
-						pending={pending}
-						onClick={() => oracle?.onSettleReport()}
-						availability={{ disabled: availability?.canAct !== true, reason: availability?.message ?? (report === undefined ? copy.loadingEscalation : undefined) }}
-					/>
-					<button type='button' className='secondary' disabled={pending} onClick={() => setReportId(undefined)}>
-						{commonCopy.cancel}
-					</button>
-				</div>
-			</OperationModal>
+			<ErrorNotice message={oracle?.openOracleError} />
+			{blocked && ready && report === undefined && oracle?.openOracleError !== undefined ? (
+				<button type='button' className='secondary' onClick={() => oracle.onLoadOracleReport(pendingId.toString())}>
+					{commonCopy.retry}
+				</button>
+			) : undefined}
 		</>
 	)
 }

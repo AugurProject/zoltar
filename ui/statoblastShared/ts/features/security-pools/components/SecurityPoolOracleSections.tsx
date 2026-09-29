@@ -14,10 +14,8 @@ import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
-import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import type { ListedSecurityPool, OracleManagerDetails, StagedOracleOperation } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { withWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -68,7 +66,6 @@ export function SecurityPoolRequestPriceModal({ canRequest, closeOnSuccessKey, c
 	return (
 		<OperationModal closeOnSuccessKey={closeOnSuccessKey} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} onClose={onClose} title={securityPoolCopy.requestNewPriceTitle}>
 			<OracleInitialPriceFields managerAddress={review?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={pending} fieldId={manualPriceErrorId} />
-			<TransactionReview variant='inline' primary={[{ label: transactionReviewCopy.youPay, value: <CurrencyValue precision='exact' value={review?.requestValueAttoEth} suffix={commonCopy.eth} /> }]} risks={[securityPoolCopy.requestPricePendingReportRisk, securityPoolCopy.requestPriceFundingRisk]} />
 			<div className='actions oracle-actions'>
 				<TransactionActionButton
 					disabledReasonElementId={confirmationGuardMessage === undefined && manualPriceErrorShown ? `${manualPriceErrorId}-error` : undefined}

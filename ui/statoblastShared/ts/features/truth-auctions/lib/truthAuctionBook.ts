@@ -41,7 +41,7 @@ type TruthAuctionBidSettlementEstimate = {
 	usedBidAmountAttoEth: bigint
 }
 
-export function estimateRepPurchased(bidAmountAttoEth: bigint, price: bigint) {
+function estimateRepPurchased(bidAmountAttoEth: bigint, price: bigint) {
 	if (bidAmountAttoEth <= 0n || price <= 0n) return 0n
 	return (bidAmountAttoEth * TRUTH_AUCTION_PRICE_PRECISION) / price
 }

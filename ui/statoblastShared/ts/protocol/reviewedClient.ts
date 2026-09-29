@@ -1,6 +1,6 @@
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import { getTransactionReviewSignal } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { getTransactionReviewSignal, isTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -73,8 +73,9 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	return details
 }
 
-export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal(), skipAppReview = false): WriteClient {
-	const controller = createTransactionStepController(signal, !skipAppReview)
+export function createReviewedClient(client: WriteClient, validate: () => Promise<void> = async () => undefined, signal = getTransactionReviewSignal()): WriteClient {
+	const controller = createTransactionStepController(signal, false)
+	const prepareInForm = isTransactionPreparationScope(signal)
 	const environment = createActiveEnvironmentGuard()
 	let preview: TransactionRequestPreview | undefined
 	let plan: readonly TransactionPlanStep[] | undefined
@@ -109,11 +110,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			plan ??= [transaction]
-			if (skipAppReview) {
-				if (prepared?.data === undefined || fallback.data === undefined) throw new Error('Wallet-only transactions must be prepared.')
-				if (prepared.data !== fallback.data || (prepared.contractAddress ?? prepared.to)?.toLowerCase() !== (fallback.contractAddress ?? fallback.to)?.toLowerCase() || (prepared.value ?? 0n) !== (fallback.value ?? 0n)) throw new Error('The prepared transaction changed.')
-				if (transaction.functionName === 'approve' || transaction.data?.slice(0, 10).toLowerCase() === '0x095ea7b3') throw new Error('Token approvals require app review.')
-			}
+			if (prepared !== undefined && (prepared.data !== fallback.data || (prepared.contractAddress ?? prepared.to)?.toLowerCase() !== (fallback.contractAddress ?? fallback.to)?.toLowerCase() || (prepared.value ?? 0n) !== (fallback.value ?? 0n))) throw new Error('The prepared transaction changed.')
 			await initialize()
 			const expected = plan?.[stepIndex]
 			if (expected === undefined || expected.functionName !== transaction.functionName || (expected.value ?? 0n) !== (transaction.value ?? 0n) || (expected.contractAddress ?? expected.to) !== (transaction.contractAddress ?? transaction.to))
@@ -121,8 +118,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (transaction.functionName === 'approve' && (expected.args?.[0] !== transaction.args?.[0] || expected.args?.[1] !== transaction.args?.[1])) throw new Error('The approval amount changed. Review the action again.')
 			let selectedAmount = selectedFunding?.amount
 			if (selectedFunding === undefined) {
-				if (skipAppReview) controller.startWithoutReview(stepIndex)
-				else selectedAmount = await controller.review(stepIndex)
+				selectedAmount = prepareInForm ? await controller.review(stepIndex) : controller.startWithoutReview(stepIndex)
 			}
 			selectedFunding = undefined
 			let approvalArgs: readonly [ReturnType<typeof getAddress>, bigint] | undefined
@@ -180,7 +176,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				controller.assertActive()
 				await validate()
 				await initialize()
-				selectedFunding = await controller.chooseFunding(requiredIndices)
+				selectedFunding = await controller.chooseFunding(requiredIndices, !prepareInForm)
 				stepIndex = selectedFunding?.index ?? (plan?.length ?? 1) - 1
 				if (selectedFunding === undefined) return false
 				await execute(selectedFunding.index)
@@ -202,7 +198,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				{ account: client.account, args: undefined, chainName: client.chain.name, data: parameters.data, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
 				async approvalArgs => await client.sendTransaction(approvalArgs === undefined ? parameters : { ...parameters, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }),
 			),
-		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', value: undefined }, async () => await client.sendRawTransaction(parameters)),
+		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters)),
 		writeContract: async parameters =>
 			await send(
 				{

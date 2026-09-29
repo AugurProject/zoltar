@@ -574,7 +574,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const poolCardQueries = within(poolCard)
 		expect(poolCardQueries.queryByRole('link', { name: '0x1' })).toBeNull()
 		expect(poolCardQueries.queryByRole('button', { name: 'Copy address 0x0000000000000000000000000000000000000501' })).toBeNull()
-		expect(poolCardQueries.queryByRole('button', { name: 'Review liquidation' })).toBeNull()
+		expect(poolCardQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 		expect(poolCard.querySelector('.security-pool-browse-vault-row')).toBeNull()
 		const browseSection = poolCard.closest('.section-block')
 		if (!(browseSection instanceof HTMLElement)) throw new Error('Expected browse section')
