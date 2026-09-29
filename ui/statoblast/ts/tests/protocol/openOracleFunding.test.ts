@@ -1,9 +1,9 @@
-import { createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
+import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 
@@ -56,3 +56,63 @@ test('includes the current block base fee in new oracle request funding', async 
 	const client = { readContract, getBlock: async () => ({ timestamp: 0n, transactions: [], number: 123n, baseFeePerGas: 10n }) }
 	expect(await loadOracleManagerQueueOperationEthValue(client, MANAGER_ADDRESS)).toBe(1_200_122n)
 })
+
+for (const baseFeePerGas of [1_040_635_026n, 0n]) {
+	test(`initial report funding includes the block base fee (${baseFeePerGas}) without funding a read caller`, async () => {
+		const readContract = createReadContractStub(async request => {
+			if (request.functionName === 'reputationToken') return MANAGER_ADDRESS
+			if (request.functionName === 'balanceOf') return 2n * 10n ** 18n
+			expect(request.blockNumber).toBe(11_806_221n)
+			expect(request.gasPrice).toBeUndefined()
+			switch (request.functionName) {
+				case 'gasUnitsForOneDispute':
+					return 300_000n
+				case 'initialReportPriorityFeeAttoEthPerGas':
+					return 10_000_000_000n
+				case 'targetPriceErrorForDispute':
+					return 500_000n
+				case 'openOracleSecurityMultiplierBps':
+					return 100_000n
+				case 'protocolFee':
+					return 100_000
+				case 'feePercentage':
+					return 10_000
+				case 'securityPool':
+					return MANAGER_ADDRESS
+				case 'settlementCollateralAttoEth':
+					return 0n
+				default:
+					throw new Error(`Unexpected read: ${request.functionName}`)
+			}
+		})
+		const client = createMockLoaderClient({
+			readContract,
+			getBlock: async () => ({ number: 11_806_221n, timestamp: 0n, baseFeePerGas }),
+			multicall: async () => {
+				throw new Error('Unexpected multicall')
+			},
+		})
+		const funding = await loadCoordinatorInitialReportFundingRequirement(client, MANAGER_ADDRESS, MANAGER_ADDRESS, 10n ** 18n)
+		const expectedMinimum = baseFeePerGas > 0n ? 891_743_598_253_846_155n : 807_692_307_692_307_693n
+		expect(funding.minimumToken1ReportAttoEth).toBe(expectedMinimum)
+		expect(funding.requiredRepAttoRep).toBe(expectedMinimum)
+		expect(funding.maximumInitialAttoWeth).toBe(2n * expectedMinimum)
+	})
+}
+
+for (const missing of ['base fee', 'block number']) {
+	test(`initial report funding stops when the ${missing} is unavailable`, async () => {
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ timestamp: 0n, number: missing === 'block number' ? undefined : 1n, baseFeePerGas: missing === 'base fee' ? undefined : 1n }),
+			multicall: async () => {
+				throw new Error('Unexpected multicall')
+			},
+			readContract: async request => {
+				if (request.functionName === 'reputationToken') return MANAGER_ADDRESS
+				if (request.functionName === 'balanceOf') return 2n * 10n ** 18n
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			},
+		})
+		await expect(loadCoordinatorInitialReportFundingRequirement(client, MANAGER_ADDRESS, MANAGER_ADDRESS, 10n ** 18n)).rejects.toThrow('current block fee is unavailable')
+	})
+}

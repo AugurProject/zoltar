@@ -451,6 +451,7 @@ test.each(['dismiss', 'fetch', 'close'] as const)('reports a reverted price requ
 			{
 				...client,
 				estimateGas: async () => 21_000n,
+				getGasPrice: async () => 1n,
 				getTransaction: async () => {
 					await diagnostic.promise
 					return { hash, from: review.managerAddress, to: review.managerAddress, gas: 22_000n, input: '0x1234', nonce: 0n, value: 0n }
@@ -581,6 +582,7 @@ test.each(['close', 'fetch', 'edit'] as const)('tracks a reverted price request 
 			{
 				...client,
 				estimateGas: async () => 21_000n,
+				getGasPrice: async () => 1n,
 				getTransaction: async () => ({ hash, from: review.managerAddress, to: review.managerAddress, gas: 22_000n, input: '0x1234', nonce: 0n, value: 0n }),
 				sendTransaction: async () => await walletResponse.promise,
 				waitForTransactionReceipt: async () => receipt,

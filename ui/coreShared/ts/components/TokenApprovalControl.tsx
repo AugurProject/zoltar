@@ -1,3 +1,4 @@
+import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
@@ -28,6 +29,7 @@ type TokenApprovalControlProps = {
 	pending: boolean
 	pendingLabel: string
 	requiredAmount: bigint | undefined
+	recommendedAmount?: bigint | undefined
 	resetKey: string
 	tokenSymbol: string
 	tokenUnits: number
@@ -72,6 +74,7 @@ export function TokenApprovalControl({
 	pending,
 	pendingLabel,
 	requiredAmount,
+	recommendedAmount,
 	resetKey,
 	tokenSymbol,
 	tokenUnits,
@@ -94,7 +97,10 @@ export function TokenApprovalControl({
 		}
 	}, [draftAmount, tokenUnits])
 	const nextApprovalAmount = (() => {
-		if (parsedAmount.kind === 'default') return requirement.targetAmount
+		if (parsedAmount.kind === 'default') {
+			const target = requirement.targetAmount
+			return target !== undefined && recommendedAmount !== undefined && recommendedAmount > target ? recommendedAmount : target
+		}
 		if (parsedAmount.kind === 'invalid') return undefined
 
 		return parsedAmount.amount
@@ -148,7 +154,8 @@ export function TokenApprovalControl({
 	if (completedLabel !== undefined) {
 		amountPlaceholder = undefined
 		if (approvedAmount !== undefined) amountValue = shouldDisplayMaxTokenApprovalAmount(approvedAmount) ? commonCopy.max : formatCurrencyBalance(approvedAmount, tokenUnits)
-	} else if (compact) amountPlaceholder = commonCopy.requiredTotalPlaceholder
+	} else if (recommendedAmount !== undefined && nextApprovalAmount !== undefined) amountPlaceholder = formatUnits(nextApprovalAmount, tokenUnits)
+	else if (compact) amountPlaceholder = commonCopy.requiredTotalPlaceholder
 	const approvalButton = (
 		<TransactionActionButton
 			className={completedLabel === undefined ? '' : 'tx-action-completed'}
@@ -183,7 +190,7 @@ export function TokenApprovalControl({
 						value={amountValue}
 						onInput={event => setDraftAmount(event.currentTarget.value)}
 						placeholder={amountPlaceholder}
-						title={completedLabel === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}
+						title={completedLabel === undefined && recommendedAmount === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}
 						invalid={amountValidationMessage !== undefined}
 						disabled={controlsDisabled}
 					/>

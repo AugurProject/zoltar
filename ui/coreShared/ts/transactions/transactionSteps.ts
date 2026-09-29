@@ -9,7 +9,7 @@ import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-s
 
 export type TransactionStepDetails = {
 	proposedRepPerEthPrice?: bigint | undefined
-	approval?: { requiredAmount: bigint; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
+	approval?: { requiredAmount: bigint; recommendedAmount?: bigint | undefined; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
 	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
 	optional?: boolean
