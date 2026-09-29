@@ -64,7 +64,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		details.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, Number(decimals))} ${symbol}`
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
-			details.approval = { requiredAmount: requiredApprovalAmount, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
+			details.approval = { requiredAmount: requiredApprovalAmount, recommendedAmount: amount > requiredApprovalAmount ? amount : undefined, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
 			details.amount = `${requiredApprovalAmount === maxUint256 ? commonCopy.max : formatUnits(requiredApprovalAmount, Number(decimals))} ${symbol}`
 		}
 	} catch (error) {
@@ -151,8 +151,9 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
-			if (transaction.functionName === 'requestPrice') {
-				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value })
+			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
+				const gasPrice = await client.getGasPrice()
+				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
 				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
 				await validate()
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')

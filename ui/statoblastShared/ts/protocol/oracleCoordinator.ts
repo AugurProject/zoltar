@@ -1,3 +1,4 @@
+import { readCoordinatorMinimumReport } from './oracleInitialReportFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
@@ -330,12 +331,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 
 export async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address, requestedInitialAttoWeth = 0n) {
 	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
-		client.readContract({
-			address: managerAddress,
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'minimumToken1ReportAttoEth',
-			args: [],
-		}),
+		readCoordinatorMinimumReport(client, managerAddress),
 		client.readContract({
 			address: managerAddress,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -365,12 +361,7 @@ export async function loadCoordinatorInitialReportFundingRequirement(client: Coo
 			args: [walletAddress],
 		}),
 		proposedRepPerEthPrice ?? getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth),
-		client.readContract({
-			address: managerAddress,
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			functionName: 'minimumToken1ReportAttoEth',
-			args: [],
-		}),
+		readCoordinatorMinimumReport(client, managerAddress),
 	])
 	const reputationTokenAddress = getAddress(rawReputationTokenAddress)
 	const currentRepBalanceAttoRep = await client.readContract({

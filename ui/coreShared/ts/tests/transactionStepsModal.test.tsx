@@ -274,12 +274,21 @@ test('omits the explanation paragraph for a self-describing step and keeps the o
 	}
 })
 
-for (const choice of ['default', 'custom'] as const) {
+for (const choice of ['default', 'buffered', 'custom'] as const) {
 	test(`reuses the approval amount control for ${choice} without sending the next step`, async () => {
 		const dom = installDomEnvironment()
 		const controller = createTransactionStepController()
 		controller.setPlan([
-			{ title: 'Approve REP spending', description: 'Allow REP spending.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: '3 REP', ethValueAttoEth: 0n, approval: { requiredAmount: 3n, approvedAmount: 1n, tokenSymbol: 'REP', tokenUnits: 0 } },
+			{
+				title: 'Approve REP spending',
+				description: 'Allow REP spending.',
+				contractAddress: undefined,
+				contractLabel: undefined,
+				spender: undefined,
+				amount: '3 REP',
+				ethValueAttoEth: 0n,
+				approval: { requiredAmount: 3n, recommendedAmount: choice === 'default' ? undefined : 6n, approvedAmount: 1n, tokenSymbol: 'REP', tokenUnits: 0 },
+			},
 			{
 				title: 'Request price',
 				description: 'Fund the report.',
@@ -312,10 +321,11 @@ for (const choice of ['default', 'custom'] as const) {
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
 			expect(queries.queryByRole('button', { name: /Max/ })).toBeNull()
 			expect(transactionSteps.value?.steps[0]?.phase).toBe('review')
-			const approveLabel = choice === 'custom' ? /Approve 9 REP/ : /Approve 3 REP/
+			const expectedAmount = { default: 3n, buffered: 6n, custom: 9n }[choice]
+			const approveLabel = new RegExp(`Approve ${expectedAmount} REP`)
 			expect(queries.getByRole('button', { name: approveLabel }).hasAttribute('disabled')).toBe(false)
 			await act(() => fireEvent.click(queries.getByRole('button', { name: approveLabel })))
-			expect(await review).toBe(choice === 'custom' ? 9n : 3n)
+			expect(await review).toBe(expectedAmount)
 			expect(transactionSteps.value?.steps[1]?.phase).toBe('upcoming')
 			expect(rendered.container.querySelector('.transaction-funding')).toBe(funding)
 			expect(funding.textContent).toContain('Settler bounty')

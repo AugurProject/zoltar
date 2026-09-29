@@ -380,6 +380,7 @@ for (const method of ['sendTransaction', 'writeContract'] as const)
 			await waitForReview()
 			expect(sentData).toBeUndefined()
 			expect(transactionSteps.value?.steps[0]?.approval?.requiredAmount).toBe(3n)
+			expect(transactionSteps.value?.steps[0]?.approval?.recommendedAmount).toBe(6n)
 			transactionSteps.value?.confirm(chosen)
 			await sending
 			if (sentData === undefined) throw new Error('Expected approval calldata')
@@ -473,8 +474,22 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 						return 0n
 					case 'reputationToken':
 						return account
-					case 'minimumToken1ReportAttoEth':
-						return minimum
+					case 'gasUnitsForOneDispute':
+						return 1n
+					case 'initialReportPriorityFeeAttoEthPerGas':
+						return 1n
+					case 'targetPriceErrorForDispute':
+						return 10_000_000n
+					case 'openOracleSecurityMultiplierBps':
+						return 10_000n
+					case 'protocolFee':
+						return 0
+					case 'feePercentage':
+						return 0
+					case 'securityPool':
+						return account
+					case 'settlementCollateralAttoEth':
+						return (minimum - 2n) * 100n
 					case 'balanceOf':
 						return 1000n
 					case 'allowance':
@@ -492,7 +507,7 @@ for (const change of ['minimum', 'fee', 'lower-minimum', 'sufficient-allowance']
 				}
 			},
 		})
-		const reviewed = createReviewedClient({ ...client, ...reads, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
+		const reviewed = createReviewedClient({ ...client, ...reads, getGasPrice: async () => 1n, estimateGas: async () => 100000n, getBalance: async () => 1000n, sendTransaction, waitForTransactionReceipt: async () => receipt })
 		const action = requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n).catch(error => error)
 		await waitForReview()
 		expect(transactionSteps.value?.steps).toHaveLength(3)
@@ -586,32 +601,33 @@ test('the reviewed backend forwards review cancellation to its client', async ()
 	expect(transactionSteps.value).toBeUndefined()
 })
 
-for (const outcome of ['success', 'reverted'] as const) {
-	test(`simulates the final price request from the connected wallet before submission: ${outcome}`, async () => {
-		const { client, sendTransaction } = setup()
-		const estimateGas = mock(async () => {
-			if (outcome === 'reverted') throw new Error('Oracle price request is already pending')
-			return 100001n
+for (const functionName of ['requestPrice', 'requestPriceIfNeededAndStageOperation', 'requestPriceIfNeededAndStageLiquidation'])
+	for (const outcome of ['success', 'reverted'] as const) {
+		test(`simulates ${functionName} with fees from the connected wallet before submission: ${outcome}`, async () => {
+			const { client, sendTransaction } = setup()
+			const estimateGas = mock(async () => {
+				if (outcome === 'reverted') throw new Error('Oracle price request is already pending')
+				return 100001n
+			})
+			const reviewed = createReviewedClient({ ...client, sendTransaction, estimateGas, getGasPrice: async () => 2_540_635_026n })
+			reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName, contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
+			const result = reviewed.sendTransaction({ to: account, data: '0x1234', value: 2n }).catch(error => error)
+			await waitForReview()
+			expect(estimateGas).not.toHaveBeenCalled()
+			confirm()
+			const value = await result
+			expect(estimateGas).toHaveBeenCalledWith({ account: client.account, to: account, data: '0x1234', value: 2n, gasPrice: 2_540_635_026n })
+			if (outcome === 'reverted') {
+				expect(value).toBeInstanceOf(Error)
+				expect(sendTransaction).not.toHaveBeenCalled()
+				expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('already pending')
+			} else {
+				expect(value).toBe(hash)
+				expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n })
+				expect(sendTransaction).toHaveBeenCalledTimes(1)
+			}
 		})
-		const reviewed = createReviewedClient({ ...client, sendTransaction, estimateGas })
-		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'requestPrice', contractAddress: account, args: [1n, 0n], data: '0x1234', value: 2n })
-		const result = reviewed.sendTransaction({ to: account, data: '0x1234', value: 2n }).catch(error => error)
-		await waitForReview()
-		expect(estimateGas).not.toHaveBeenCalled()
-		confirm()
-		const value = await result
-		expect(estimateGas).toHaveBeenCalledWith({ account: client.account, to: account, data: '0x1234', value: 2n })
-		if (outcome === 'reverted') {
-			expect(value).toBeInstanceOf(Error)
-			expect(sendTransaction).not.toHaveBeenCalled()
-			expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('already pending')
-		} else {
-			expect(value).toBe(hash)
-			expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n })
-			expect(sendTransaction).toHaveBeenCalledTimes(1)
-		}
-	})
-}
+	}
 
 test('a reverted final transaction does not claim there are remaining steps', async () => {
 	const controller = createTransactionStepController()
@@ -656,6 +672,7 @@ test('canceling while the price request gas estimate is pending prevents submiss
 		{
 			...client,
 			sendTransaction,
+			getGasPrice: async () => 1n,
 			estimateGas: async () => {
 				estimating.resolve()
 				return await estimated.promise
