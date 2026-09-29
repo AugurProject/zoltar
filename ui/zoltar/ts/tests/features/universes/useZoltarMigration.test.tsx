@@ -143,7 +143,9 @@ describe('useZoltarMigration', () => {
 		const { state } = await renderMigrationHook({
 			ensureZoltarUniverse: async () => universe,
 			onTransactionPresented: (presentation: unknown) => presented.push(presentation),
-			onTransactionRequested: (intent: unknown) => requested.push(intent),
+			onTransactionRequested: (intent: unknown) => {
+				requested.push(intent)
+			},
 			refreshZoltarUniverse: async () => universe,
 			zoltarUniverse: universe,
 		})
