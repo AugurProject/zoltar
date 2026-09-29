@@ -86,7 +86,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const ownsWorkflow = run.current !== undefined && workflow?.reviewSignal === run.current.signal
 	const sending = ownsWorkflow && (workflow?.steps.some(isTransactionStepInFlight) ?? false)
 	const finalReceiptConfirmed = ownsWorkflow && workflow?.steps.at(-1)?.hash !== undefined && workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
-	const { finalSubmittedHash, submittedHash } = getRunSubmission(run.current)
+	const { finalSubmittedHash, submittedHash, inFlight } = getRunSubmission(run.current)
+	const canRetry = failureLatched && valid && !running && !inFlight
 	const completedRequest = finalSubmittedHash !== undefined && (presentation?.tone === 'success' || presentation?.tone === 'warning') && presentation.hash === finalSubmittedHash && (closeOnSuccessKey === undefined || closeOnSuccessKey === finalSubmittedHash)
 	const awaitingResult = (finalReceiptConfirmed || finalSubmittedHash !== undefined) && !completedRequest && presentation?.tone !== 'error' && run.current?.key === key && run.current?.signal.aborted === false
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
@@ -100,7 +101,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	let previewPrompt = estimatePrompt
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
-	if (preparationPaused) previewPrompt = priceRequestCopy.checkPriceBeforeRequest
+	if (preparationPaused) previewPrompt = priceRequestCopy.waitingForPriceRequest
 
 	useLayoutEffect(() => {
 		if (review === undefined) return
@@ -272,6 +273,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
 							failedPlan={failedPlan}
+							onRetry={canRetry ? retryPreparation : undefined}
 							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}
 							error={confirmationGuardMessage}
 							errorWalletBlocker={confirmationWalletBlocker}
