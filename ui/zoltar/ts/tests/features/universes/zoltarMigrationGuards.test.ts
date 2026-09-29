@@ -4,21 +4,13 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getMigrationGuardMessage } from '@zoltar/ui-zoltar-shared/features/universes/lib/zoltarMigrationGuards.js'
 import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
-		childUniverses: [],
-		forkThresholdAttoRep: 1n,
-		forkQuestionDetails: undefined,
-		forkTime: 0n,
-		forkingOutcomeIndex: 0n,
+	return createUniverseSummary({
 		hasForked: true,
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
-		totalTheoreticalSupplyAttoRep: 1n,
-		universeId: 1n,
 		...overrides,
-	}
+	})
 }
 
 describe('zoltar migration guards', () => {

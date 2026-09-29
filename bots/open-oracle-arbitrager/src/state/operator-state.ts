@@ -1,7 +1,7 @@
 import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-policy'
 import type { MissingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
-import { mkdir, open, readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { appendFileDurably, durableFilesystem, type DurableAppendFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
@@ -20,23 +20,8 @@ import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 
-type ExecutionHistoryFileHandle = {
-	appendFile: (data: string, options: { encoding: 'utf8' }) => Promise<unknown>
-	chmod: (mode: number) => Promise<unknown>
-	close: () => Promise<unknown>
-	sync: () => Promise<unknown>
-}
-
-export type ExecutionHistoryFilesystem = {
-	mkdir: (path: string, options: { mode: number; recursive: true }) => Promise<unknown>
-	open: (path: string, flags: 'a' | 'r', mode?: number) => Promise<ExecutionHistoryFileHandle>
+export type ExecutionHistoryFilesystem = DurableAppendFilesystem & {
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
-}
-
-const executionHistoryFilesystem: ExecutionHistoryFilesystem = {
-	mkdir,
-	open,
-	readFile,
 }
 
 export type StrategySettings = {
@@ -359,7 +344,7 @@ export function gameCapitalSnapshot(games: readonly Pick<OpenOracleGame, 'curren
 	}
 }
 
-export async function loadExecutionHistory(path: string, expectedChainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+export async function loadExecutionHistory(path: string, expectedChainId: number, filesystem: ExecutionHistoryFilesystem = durableFilesystem) {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected execution history chain ID must be a positive integer')
 	try {
 		const contents = await filesystem.readFile(path, 'utf8')
@@ -382,51 +367,25 @@ export async function loadExecutionHistory(path: string, expectedChainId: number
 		for (const record of records) unique.set(record.transactionHash.toLowerCase(), record)
 		return [...unique.values()].reverse()
 	} catch (error) {
-		if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT') return []
+		if (isErrorCode(error, 'ENOENT')) return []
 		throw error
 	}
 }
 
-async function syncExecutionHistoryDirectory(path: string, filesystem: ExecutionHistoryFilesystem) {
-	const directoryHandle = await filesystem.open(dirname(path), 'r')
-	try {
-		await directoryHandle.sync()
-	} finally {
-		await directoryHandle.close()
-	}
-}
-
-async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+async function appendExecutionHistory(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem) {
 	if (!Number.isSafeInteger(chainId) || chainId < 1) throw new Error('Execution history chain ID must be a positive integer')
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const handle = await filesystem.open(path, 'a', 0o600)
-	try {
-		await handle.chmod(0o600)
-		await handle.appendFile(`${JSON.stringify({ chainId, record })}\n`, { encoding: 'utf8' })
-		await handle.sync()
-	} finally {
-		await handle.close()
-	}
-	await syncExecutionHistoryDirectory(path, filesystem)
+	await appendFileDurably(path, `${JSON.stringify({ chainId, record })}\n`, filesystem)
 }
 
-export async function appendExecutionHistoryIfMissing(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
+export async function appendExecutionHistoryIfMissing(path: string, record: ExecutionRecord, chainId: number, filesystem: ExecutionHistoryFilesystem = durableFilesystem) {
 	const history = await loadExecutionHistory(path, chainId, filesystem)
 	if (history.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) return false
 	await appendExecutionHistory(path, record, chainId, filesystem)
 	return true
 }
 
-export async function ensureExecutionHistoryWritable(path: string, filesystem: ExecutionHistoryFilesystem = executionHistoryFilesystem) {
-	await filesystem.mkdir(dirname(path), { mode: 0o700, recursive: true })
-	const handle = await filesystem.open(path, 'a', 0o600)
-	try {
-		await handle.chmod(0o600)
-		await handle.sync()
-	} finally {
-		await handle.close()
-	}
-	await syncExecutionHistoryDirectory(path, filesystem)
+export async function ensureExecutionHistoryWritable(path: string, filesystem: ExecutionHistoryFilesystem = durableFilesystem) {
+	await appendFileDurably(path, undefined, filesystem)
 }
 
 function sumDecimalWeth(records: readonly ExecutionRecord[], field: 'actualGasCostEth' | 'estimatedNetProfitWeth' | 'estimatedProfitBeforeGasEth') {

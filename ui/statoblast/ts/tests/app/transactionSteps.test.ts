@@ -137,41 +137,42 @@ test('a wallet-only pool action reports a wallet rejection without waiting for a
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('failed')
 })
 
-test('wallet-only mode refuses token approvals before opening the wallet', async () => {
+test.each([
+	{ error: 'Token approvals require app review.', name: 'token approvals before opening the wallet', prepared: { functionName: 'approve', args: [account, 1n], data: '0x095ea7b3' } },
+	{ error: 'Wallet-only transactions must be prepared.', name: 'unprepared contract calldata', prepared: undefined },
+	{ error: 'The prepared transaction changed.', name: 'calldata that differs from its prepared transaction', prepared: { functionName: 'aggregate3', args: [[]], data: '0x1234' } },
+] as const)('wallet-only mode refuses $name', async ({ error, prepared }) => {
 	const { client, sendTransaction } = setup()
 	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, true)
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'approve', contractAddress: account, args: [account, 1n], data: '0x095ea7b3', value: undefined })
-	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow('Token approvals require app review.')
+	if (prepared !== undefined) reviewed.onTransactionPrepared?.({ ...prepared, account, chainName: client.chain.name, contractAddress: account, value: undefined })
+	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow(error)
 	expect(sendTransaction).not.toHaveBeenCalled()
 })
 
-test('wallet-only mode refuses unprepared contract calldata', async () => {
-	const { client, sendTransaction } = setup()
-	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, true)
-	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow('Wallet-only transactions must be prepared.')
-	expect(sendTransaction).not.toHaveBeenCalled()
-})
-
-test('wallet-only mode refuses calldata that differs from its prepared transaction', async () => {
-	const { client, sendTransaction } = setup()
-	const reviewed = createReviewedClient({ ...client, sendTransaction }, undefined, undefined, true)
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x1234', value: undefined })
-	await expect(reviewed.sendTransaction({ to: account, data: '0x095ea7b3' })).rejects.toThrow('The prepared transaction changed.')
-	expect(sendTransaction).not.toHaveBeenCalled()
-})
-
-test('titles the review from the prepared transaction labels instead of the contract function name', async () => {
+/** Prepares one transaction, opens its review, and returns the reviewed step; confirm the returned submission afterwards. */
+async function reviewPreparedTransaction(prepared: Omit<Parameters<NonNullable<ReturnType<typeof setup>['reviewed']['onTransactionPrepared']>>[0], 'account' | 'chainName' | 'data' | 'value'>) {
 	const { reviewed, client } = setup()
-	const reviewTitle = 'Create question and security pool'
-	const reviewDescription = 'Creates the binary question and deploys its security pool in one transaction.'
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x', value: undefined, reviewTitle, reviewDescription })
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, data: '0x', value: undefined, ...prepared })
 	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
 	await waitForReview()
-	expect(transactionSteps.value?.steps[0]?.title).toBe(reviewTitle)
-	expect(transactionSteps.value?.steps[0]?.description).toBe(reviewDescription)
-	expect(transactionSteps.value?.steps[0]?.contractAddress).toBe(account)
-	confirm()
-	await sending
+	const step = transactionSteps.value?.steps[0]
+	return {
+		step,
+		submit: async () => {
+			confirm()
+			await sending
+		},
+	}
+}
+
+test('titles the review from the prepared transaction labels instead of the contract function name', async () => {
+	const reviewTitle = 'Create question and security pool'
+	const reviewDescription = 'Creates the binary question and deploys its security pool in one transaction.'
+	const review = await reviewPreparedTransaction({ functionName: 'aggregate3', contractAddress: account, args: [[]], reviewTitle, reviewDescription })
+	expect(review.step?.title).toBe(reviewTitle)
+	expect(review.step?.description).toBe(reviewDescription)
+	expect(review.step?.contractAddress).toBe(account)
+	await review.submit()
 })
 
 for (const [functionName, title, args] of [
@@ -185,27 +186,19 @@ for (const [functionName, title, args] of [
 	['withdrawTo', 'Withdraw oracle balance', []],
 ] satisfies Array<[string, string, bigint[]]>) {
 	test(`uses explicit reporting copy for ${functionName}`, async () => {
-		const { reviewed, client } = setup()
-		reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName, contractAddress: account, args, data: '0x', value: undefined })
-		const sending = reviewed.sendTransaction({ to: account, data: '0x' })
-		await waitForReview()
-		expect(transactionSteps.value?.steps[0]?.title).toBe(title)
-		if (functionName === 'depositToEscalationGame') expect(transactionSteps.value?.steps[0]?.paidFrom).toBe('Pool vault REP')
-		if (functionName === 'depositWalletRepToEscalationGame') expect(transactionSteps.value?.steps[0]?.paidFrom).toBe('Wallet REP')
-		confirm()
-		await sending
+		const review = await reviewPreparedTransaction({ functionName, contractAddress: account, args })
+		expect(review.step?.title).toBe(title)
+		if (functionName === 'depositToEscalationGame') expect(review.step?.paidFrom).toBe('Pool vault REP')
+		if (functionName === 'depositWalletRepToEscalationGame') expect(review.step?.paidFrom).toBe('Wallet REP')
+		await review.submit()
 	})
 }
 
 test('leaves the description empty for an unlabeled contract function instead of narrating the submission', async () => {
-	const { reviewed, client } = setup()
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n], data: '0x', value: undefined })
-	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
-	await waitForReview()
-	expect(transactionSteps.value?.steps[0]?.title).toBe('Deposit REP to vault')
-	expect(transactionSteps.value?.steps[0]?.description).toBeUndefined()
-	confirm()
-	await sending
+	const review = await reviewPreparedTransaction({ functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n] })
+	expect(review.step?.title).toBe('Deposit REP to vault')
+	expect(review.step?.description).toBeUndefined()
+	await review.submit()
 })
 
 test('keeps already readable plan step names unchanged', async () => {
@@ -221,14 +214,10 @@ test('keeps already readable plan step names unchanged', async () => {
 })
 
 test('describes an unlabeled Multicall3 batch instead of exposing aggregate3', async () => {
-	const { reviewed, client } = setup()
-	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'aggregate3', contractAddress: account, args: [[]], data: '0x', value: undefined })
-	const sending = reviewed.sendTransaction({ to: account, data: '0x' })
-	await waitForReview()
-	expect(transactionSteps.value?.steps[0]?.title).toBe('Batched transaction')
-	expect(transactionSteps.value?.steps[0]?.description).toBe('Run several contract calls in one transaction.')
-	confirm()
-	await sending
+	const review = await reviewPreparedTransaction({ functionName: 'aggregate3', contractAddress: account, args: [[]] })
+	expect(review.step?.title).toBe('Batched transaction')
+	expect(review.step?.description).toBe('Run several contract calls in one transaction.')
+	await review.submit()
 })
 
 test('a chained action pauses again after each individual confirmation', async () => {

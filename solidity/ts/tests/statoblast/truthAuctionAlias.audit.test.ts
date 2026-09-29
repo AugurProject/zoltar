@@ -10,9 +10,9 @@ import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { claimAuctionProceeds, createChildUniverse, finalizeTruthAuction, getSecurityPoolForkerForkData, initiateSecurityPoolFork, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import assert from '../../testSupport/simulator/utils/assert'
-import { beforeEach, describe, test } from 'bun:test'
+import { describe, test } from 'bun:test'
 import { encodeDeployData } from '@zoltar/core-shared/evm/ethereum'
-import { useStatoblastTruthAuctionFixture, type StatoblastTruthAuctionFixture } from './fixture'
+import { useStatoblastTruthAuctionFixture } from './fixture'
 import {
 	statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction,
 	test_statoblast_TruthAuctionAliasAttackMocks_TruthAuctionAliasAttackChildMock,
@@ -26,17 +26,8 @@ describe('Audit PoC: truth-auction aliasing across unauthenticated lineages', ()
 
 	const { statoblastSecurityMultiplierBps, setupStartedTruthAuction, genesisUniverse } = fixture
 
-	let client: StatoblastTruthAuctionFixture['client']
-	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
-	let questionId: StatoblastTruthAuctionFixture['questionId']
-
-	beforeEach(() => {
-		client = fixture.client
-		mockWindow = fixture.mockWindow
-		questionId = fixture.questionId
-	})
-
 	test('a fake lineage cannot alias or finalize a canonical truth auction', async () => {
+		const { client, mockWindow, questionId } = fixture
 		const { expectedEthToBuy, repAtFork, yesSecurityPool } = await setupStartedTruthAuction('audit truth-auction alias fork source')
 		assert.ok(expectedEthToBuy > 0n, 'canonical child must need positive repair ETH')
 

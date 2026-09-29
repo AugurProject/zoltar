@@ -37,7 +37,14 @@ const FIRST_ADDRESS = getAddress('0x0000000000000000000000000000000000000001')
 const SECOND_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 const FIRST_HASH: Hex = '0x0101010101010101010101010101010101010101010101010101010101010101'
 const SECOND_HASH: Hex = '0x0202020202020202020202020202020202020202020202020202020202020202'
+const TEST_PRIVATE_KEY = '0x1212121212121212121212121212121212121212121212121212121212121212'
 const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
+
+type TestDeploymentStep = { address: Address; dependencies: readonly string[]; deploy: () => Promise<Hex>; expectedRuntimeCodeHash: Hex; id: string; label: string }
+
+const firstStep = (overrides: Partial<TestDeploymentStep> = {}): TestDeploymentStep => ({ address: FIRST_ADDRESS, dependencies: [], deploy: async () => FIRST_HASH, expectedRuntimeCodeHash: keccak256('0x01'), id: 'first', label: 'First', ...overrides })
+const secondStep = (overrides: Partial<TestDeploymentStep> = {}): TestDeploymentStep => ({ address: SECOND_ADDRESS, dependencies: ['first'], deploy: async () => SECOND_HASH, expectedRuntimeCodeHash: keccak256('0x02'), id: 'second', label: 'Second', ...overrides })
+const proxyDeployerStep = (overrides: Partial<TestDeploymentStep> = {}) => firstStep({ id: 'proxyDeployer', label: 'Proxy Deployer', ...overrides })
 
 describe('testnet deployment inputs', () => {
 	test('retries canonical proxy code after its signer nonce is confirmed', async () => {
@@ -97,14 +104,14 @@ describe('testnet deployment inputs', () => {
 	})
 
 	test('accepts only a complete 0x-prefixed private key', () => {
-		const privateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
+		const privateKey = TEST_PRIVATE_KEY
 		expect(parsePrivateKey(privateKey)).toBe(privateKey)
 		expect(() => parsePrivateKey('0x12')).toThrow('32-byte 0x-prefixed')
 		expect(() => parsePrivateKey(undefined)).toThrow('32-byte 0x-prefixed')
 	})
 
 	test('accepts a private key command-line option before the environment fallback', () => {
-		const commandLinePrivateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
+		const commandLinePrivateKey = TEST_PRIVATE_KEY
 		const environmentPrivateKey = '0x3434343434343434343434343434343434343434343434343434343434343434'
 		expect(
 			parseDeploymentCommandLine(['--rpc-url=https://rpc.example.test', `--private-key=${commandLinePrivateKey}`], {
@@ -125,7 +132,7 @@ describe('testnet deployment inputs', () => {
 	})
 
 	test('accepts RPC and cost limits as uppercase command-line assignments', () => {
-		const privateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
+		const privateKey = TEST_PRIVATE_KEY
 		expect(
 			parseDeploymentCommandLine(['RPC_URL=https://rpc.example.test', 'MAX_FEE_PER_GAS_NANO_ETH=42', '--MAX_TOTAL_COST_ETH=7.5'], {
 				PRIVATE_KEY: privateKey,
@@ -257,14 +264,14 @@ describe('testnet deployment inputs', () => {
 	})
 
 	test('enforces chain and RPC safety at the transaction-capable entry point', async () => {
-		const privateKey = '0x1212121212121212121212121212121212121212121212121212121212121212'
+		const privateKey = TEST_PRIVATE_KEY
 		await expect(deployTestnet({ chainId: 1, privateKey, rpcUrl: 'https://rpc.example.test' })).rejects.toThrow('refuses Ethereum mainnet')
 		await expect(deployTestnet({ chainId: 11_155_111, privateKey, rpcUrl: 'http://rpc.example.test' })).rejects.toThrow('HTTPS or loopback HTTP')
 	})
 })
 
 describe('testnet deployment transaction authorization', () => {
-	const account = privateKeyToAccount('0x1212121212121212121212121212121212121212121212121212121212121212')
+	const account = privateKeyToAccount(TEST_PRIVATE_KEY)
 
 	function wallet(overrides: Partial<Pick<WriteClient, 'call' | 'estimateGas' | 'getBlock' | 'getGasPrice' | 'getTransactionCount' | 'sendTransaction'>> = {}) {
 		return {
@@ -444,102 +451,38 @@ describe('testnet deployment plan', () => {
 	test('rejects an unaffordable retry before invoking any deployment', async () => {
 		let deployCalled = false
 		const steps = [
-			{
-				address: FIRST_ADDRESS,
-				dependencies: [],
+			firstStep({
 				deploy: async () => {
 					deployCalled = true
 					return FIRST_HASH
 				},
-				expectedRuntimeCodeHash: keccak256('0x01'),
-				id: 'first',
-				label: 'First',
-			},
-			{
-				address: SECOND_ADDRESS,
-				dependencies: ['first'],
+			}),
+			secondStep({
 				deploy: async () => {
 					deployCalled = true
 					return SECOND_HASH
 				},
-				expectedRuntimeCodeHash: keccak256('0x02'),
-				id: 'second',
-				label: 'Second',
-			},
-		] as const
+			}),
+		]
 
 		await expect(preflightDeploymentPlan(steps, { getCode: async ({ address }) => (address === FIRST_ADDRESS ? '0x01' : undefined) }, { first: 1_000n, second: 2_000n }, 10n, 19_999n)).rejects.toThrow('estimated upper-bound cost')
 		expect(deployCalled).toBe(false)
 	})
 
 	test('estimates only missing retry steps and returns a deliberately padded upper bound', async () => {
-		const estimate = await preflightDeploymentPlan(
-			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
-					deploy: async () => FIRST_HASH,
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'first',
-					label: 'First',
-				},
-				{
-					address: SECOND_ADDRESS,
-					dependencies: ['first'],
-					deploy: async () => SECOND_HASH,
-					expectedRuntimeCodeHash: keccak256('0x02'),
-					id: 'second',
-					label: 'Second',
-				},
-			],
-			{ getCode: async ({ address }) => (address === FIRST_ADDRESS ? '0x01' : undefined) },
-			{ first: 1_000n, second: 2_000n },
-			10n,
-			20_000n,
-		)
+		const estimate = await preflightDeploymentPlan([firstStep(), secondStep()], { getCode: async ({ address }) => (address === FIRST_ADDRESS ? '0x01' : undefined) }, { first: 1_000n, second: 2_000n }, 10n, 20_000n)
 
 		expect(estimate).toEqual({ estimatedCostAttoEth: 20_000n, estimatedGas: 2_000n, missingStepIds: ['second'] })
 	})
 
 	test('includes canonical raw-transaction value in the preflight upper bound', async () => {
-		const estimate = await preflightDeploymentPlan(
-			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
-					deploy: async () => FIRST_HASH,
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'proxyDeployer',
-					label: 'Proxy Deployer',
-				},
-			],
-			{ getCode: async () => undefined },
-			{ proxyDeployer: 500n },
-			10n,
-			10_000_000_000_005_000n,
-		)
+		const estimate = await preflightDeploymentPlan([proxyDeployerStep()], { getCode: async () => undefined }, { proxyDeployer: 500n }, 10n, 10_000_000_000_005_000n)
 
 		expect(estimate.estimatedCostAttoEth).toBe(10_000_000_000_005_000n)
 	})
 
 	test('does not charge restrictive resume budgets for canonical code already resolved through a lagging RPC', async () => {
-		const estimate = await preflightDeploymentPlan(
-			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
-					deploy: async () => FIRST_HASH,
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'proxyDeployer',
-					label: 'Proxy Deployer',
-				},
-			],
-			{ getCode: async () => undefined },
-			{ proxyDeployer: 500n },
-			1n,
-			1n,
-			new Set([FIRST_ADDRESS]),
-		)
+		const estimate = await preflightDeploymentPlan([proxyDeployerStep()], { getCode: async () => undefined }, { proxyDeployer: 500n }, 1n, 1n, new Set([FIRST_ADDRESS]))
 
 		expect(estimate).toEqual({ estimatedCostAttoEth: 0n, estimatedGas: 0n, missingStepIds: [] })
 	})
@@ -620,26 +563,14 @@ describe('testnet deployment plan', () => {
 		}
 		const results = await runDeploymentPlan(
 			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
-					deploy: async () => FIRST_HASH,
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'first',
-					label: 'First',
-				},
-				{
-					address: SECOND_ADDRESS,
-					dependencies: ['first'],
+				firstStep(),
+				secondStep({
 					deploy: async () => {
 						deployed.push('second')
 						code.set(SECOND_ADDRESS, '0x02')
 						return SECOND_HASH
 					},
-					expectedRuntimeCodeHash: keccak256('0x02'),
-					id: 'second',
-					label: 'Second',
-				},
+				}),
 			],
 			client,
 			message => logs.push(message),
@@ -658,17 +589,12 @@ describe('testnet deployment plan', () => {
 		const logs: string[] = []
 		const results = await runDeploymentPlan(
 			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
+				proxyDeployerStep({
 					deploy: async () => {
 						code = '0x01'
 						return ZERO_HASH
 					},
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'proxyDeployer',
-					label: 'Proxy Deployer',
-				},
+				}),
 			],
 			{ getCode: async () => code },
 			message => logs.push(message),
@@ -684,17 +610,12 @@ describe('testnet deployment plan', () => {
 		let codeReadCount = 0
 		const results = await runDeploymentPlan(
 			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
+				proxyDeployerStep({
 					deploy: async () => {
 						deployCalled = true
 						return FIRST_HASH
 					},
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'proxyDeployer',
-					label: 'Proxy Deployer',
-				},
+				}),
 			],
 			{
 				getCode: async () => {
@@ -717,35 +638,11 @@ describe('testnet deployment plan', () => {
 			getCode: async () => undefined,
 		}
 		const logs: string[] = []
-		await expect(
-			runDeploymentPlan(
-				[
-					{
-						address: SECOND_ADDRESS,
-						dependencies: ['first'],
-						deploy: async () => SECOND_HASH,
-						expectedRuntimeCodeHash: keccak256('0x02'),
-						id: 'second',
-						label: 'Second',
-					},
-				],
-				client,
-				() => undefined,
-			),
-		).rejects.toThrow('requires incomplete deployment step first')
+		await expect(runDeploymentPlan([secondStep()], client, () => undefined)).rejects.toThrow('requires incomplete deployment step first')
 
 		await expect(
 			runDeploymentPlan(
-				[
-					{
-						address: FIRST_ADDRESS,
-						dependencies: [],
-						deploy: async () => FIRST_HASH,
-						expectedRuntimeCodeHash: keccak256('0x01'),
-						id: 'first',
-						label: 'First',
-					},
-				],
+				[firstStep()],
 				client,
 				message => logs.push(message),
 				async () => undefined,
@@ -758,16 +655,7 @@ describe('testnet deployment plan', () => {
 		let codeReadCount = 0
 		const retryDelays: number[] = []
 		const results = await runDeploymentPlan(
-			[
-				{
-					address: FIRST_ADDRESS,
-					dependencies: [],
-					deploy: async () => FIRST_HASH,
-					expectedRuntimeCodeHash: keccak256('0x01'),
-					id: 'first',
-					label: 'First',
-				},
-			],
+			[firstStep()],
 			{
 				getCode: async () => {
 					codeReadCount += 1
@@ -789,16 +677,11 @@ describe('testnet deployment plan', () => {
 		await expect(
 			runDeploymentPlan(
 				[
-					{
-						address: FIRST_ADDRESS,
-						dependencies: [],
+					firstStep({
 						deploy: async () => {
 							throw new Error('RPC unavailable')
 						},
-						expectedRuntimeCodeHash: keccak256('0x01'),
-						id: 'first',
-						label: 'First',
-					},
+					}),
 				],
 				{ getCode: async () => undefined },
 				message => logs.push(message),
@@ -808,22 +691,7 @@ describe('testnet deployment plan', () => {
 	})
 
 	test('rejects incorrect code at direct deployment and descendant addresses', async () => {
-		await expect(
-			runDeploymentPlan(
-				[
-					{
-						address: FIRST_ADDRESS,
-						dependencies: [],
-						deploy: async () => FIRST_HASH,
-						expectedRuntimeCodeHash: keccak256('0x01'),
-						id: 'first',
-						label: 'First',
-					},
-				],
-				{ getCode: async () => '0x02' },
-				() => undefined,
-			),
-		).rejects.toThrow('Unexpected runtime code for first')
+		await expect(runDeploymentPlan([firstStep()], { getCode: async () => '0x02' }, () => undefined)).rejects.toThrow('Unexpected runtime code for first')
 
 		await expect(assertBootstrapDescendantCode({ getCode: async () => undefined }, SEPOLIA_NETWORK_PROFILE, async () => undefined)).rejects.toThrow('Bootstrap descendant liquidationApprovalRegistryDeployer is missing')
 		await expect(assertBootstrapDescendantCode({ getCode: async () => '0x1234' }, SEPOLIA_NETWORK_PROFILE)).rejects.toThrow('Unexpected runtime code for liquidationApprovalRegistryDeployer')

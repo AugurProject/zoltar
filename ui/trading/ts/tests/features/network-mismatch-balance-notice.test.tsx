@@ -5,42 +5,14 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LivePositionControls } from '../../features/LivePositionControls.js'
-import type { LiveMarket } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 import { positionTicket } from '../support/positionTicket.js'
 
 const pool = `0x${'11'.repeat(20)}` as Address
 const pair = `0x${'22'.repeat(20)}` as Address
 const shareToken = `0x${'33'.repeat(20)}` as Address
-const market: LiveMarket = {
-	pool,
-	pair,
-	shareToken,
-	universeId: 7n,
-	questionId: 9n,
-	title: 'Network mismatch',
-	description: 'Balance notice fixture',
-	endTime: 10_000n,
-	statoblastSecurityMultiplierBps: 20_000n,
-	initialReportPriorityFeeAttoEthPerGas: 1n,
-	systemState: 0,
-	awaitingForkContinuation: false,
-	universeForkTime: 0n,
-	vaultCount: 1n,
-	shareTokenSupplyAttoShares: 100n,
-	settlementCollateralAttoEth: 100n,
-	currentRetentionRate: 10n ** 18n,
-	totalUnderwritingLimitAttoEth: 1n,
-	feeEligibleUnderwritingLimitAttoEth: 1n,
-	mintingCapacityCeilingAttoEth: 100n,
-	availableMintingCapacityAttoEth: 100n,
-	feeBps: 30n,
-	tradingStatus: 0,
-	questionOutcome: 3,
-	yesReserve: 50n,
-	noReserve: 50n,
-	lpTotalSupply: 50n,
-}
+const market = smallReserveMarketFixture({ pool, pair, shareToken, universeId: 7n, questionId: 9n, title: 'Network mismatch', description: 'Balance notice fixture', endTime: 10_000n })
 
 function positionControls(networkMismatchReason: string | undefined) {
 	return (

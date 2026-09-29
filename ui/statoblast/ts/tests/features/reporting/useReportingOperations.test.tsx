@@ -1,10 +1,9 @@
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
-import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
@@ -102,12 +101,6 @@ function createHarness(
 	}
 }
 
-function requireHookState(state: UseReportingOperationsState | undefined) {
-	if (state === undefined) throw new Error('Hook state unavailable')
-
-	return state
-}
-
 function createReportingOperationsDependencies(overrides: Partial<UseReportingOperationsDependencies>): UseReportingOperationsDependencies {
 	return {
 		approveReportingRep: async () => {
@@ -127,21 +120,7 @@ function createReportingOperationsDependencies(overrides: Partial<UseReportingOp
 }
 
 describe('useReportingOperations', () => {
-	let restoreActiveEnvironment: (() => void) | undefined
-	let cleanupRenderedComponent: (() => Promise<void>) | undefined
-
-	installDomTestLifecycle({
-		beforeTest: () => {
-			restoreActiveEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ accountAddress: zeroAddress }))
-		},
-		afterTest: async () => {
-			await cleanupRenderedComponent?.()
-			cleanupRenderedComponent = undefined
-			restoreActiveEnvironment?.()
-			restoreActiveEnvironment = undefined
-			mock.restore()
-		},
-	})
+	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: zeroAddress, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test.each([false, true])('refreshes balances after an account change and ignores old-account loads (pending: %s)', async pending => {
 		const pool = getAddress('0x00000000000000000000000000000000000000c1')
@@ -163,7 +142,7 @@ describe('useReportingOperations', () => {
 			createReportingOperationsDependencies({ loadReportingDetails }),
 		)
 		const rendered = await renderIntoDocument(<Harness />)
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool }))
 		})
@@ -212,7 +191,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -321,7 +300,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -367,7 +346,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -419,7 +398,7 @@ describe('useReportingOperations', () => {
 			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -457,7 +436,7 @@ describe('useReportingOperations', () => {
 			createReportingOperationsDependencies({ loadReportingDetails, reportOutcomeInSecurityPool }),
 		)
 		const rendered = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress, selectedOutcome: 'yes', reportAmount: '5' }))
 		})
@@ -502,7 +481,7 @@ describe('useReportingOperations', () => {
 			}),
 		)
 		const rendered = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000005', contributionFunding: 'wallet' }))
 		})
@@ -548,7 +527,7 @@ describe('useReportingOperations', () => {
 			}),
 		)
 		const rendered = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = rendered.cleanup
+		trackCleanup(rendered.cleanup)
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '0.000000000000000005', contributionFunding: 'wallet' }))
 		})
@@ -602,7 +581,7 @@ describe('useReportingOperations', () => {
 			createReportingOperationsDependencies({ approveReportingRep, loadReportingDetails }),
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({ ...current, reportAmount: '5', securityPoolAddress, selectedOutcome: 'yes' }))
@@ -647,7 +626,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -696,7 +675,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -786,7 +765,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -882,7 +861,7 @@ describe('useReportingOperations', () => {
 			dependencies,
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({
@@ -983,7 +962,7 @@ describe('useReportingOperations', () => {
 			},
 		)
 		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		cleanupRenderedComponent = renderedComponent.cleanup
+		trackCleanup(renderedComponent.cleanup)
 
 		await act(async () => {
 			requireHookState(hookState).setReportingForm(current => ({

@@ -1,19 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import { STATOBLAST_OPERATIONS } from '../../src/operations/statoblast.ts'
-import type { EcosystemSnapshot, OperationEvidence, OperationPlanDraft, OperationStep, PlanningOptions } from '../../src/operations/types.ts'
-import { hash, snapshotFixture } from './fixture.ts'
+import type { EcosystemSnapshot, OperationEvidence, OperationPlanDraft, OperationStep } from '../../src/operations/types.ts'
+import { hash, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-const options: PlanningOptions = {
-	allowHighRisk: true,
-	allowIrreversibleOperations: true,
-	maximumBlockIntervalSeconds: 15,
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: (10n ** 16n).toString(),
-	minimumRepReserveAttoRep: (10n ** 18n).toString(),
-	seed: 1,
-}
+const options = planningOptionsFixture({ seed: 1 })
 
 const receipt = {
 	blockHash: hash(101),

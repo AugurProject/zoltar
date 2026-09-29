@@ -1,5 +1,6 @@
 import { traceParticipants } from './transaction-selection.ts'
 import { errorChain } from '../../../shared/core/ts/errors/errorChain.ts'
+import { findEarliestAvailableBlock } from '@zoltar/core-shared/evm/availability'
 import type { AddressActivity, StoredTransaction } from '../database.ts'
 import { type Address, createPublicClient, getAddress, type Hash, http, type Log, type PublicClient, type RpcFetchFn, zeroAddress } from '../ethereum.ts'
 import { parseLoggedRpcResponse, safePrunedStateProviderMessage } from '../logging.ts'
@@ -197,51 +198,11 @@ export const createLogClient = (rpcUrl: string, endpoint: string, queue: RpcRequ
 		),
 	})
 
-const findEarliestAvailableLogBlock = async (startBlock: bigint, observedHead: bigint, logsAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> => {
-	if (startBlock > observedHead) throw new Error('The log availability search start must not exceed the observed head')
-	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
-		try {
-			await logsAt(blockNumber)
-			return true
-		} catch (error) {
-			if (isPermanentHistoricalLogError(error)) return false
-			throw error
-		}
-	}
-	if (!startBlockKnownUnavailable && (await isAvailable(startBlock))) return startBlock
-	if (!(await isAvailable(observedHead))) throw new ChainConfigurationError(`RPC cannot serve logs at observed head #${observedHead}`)
-	let lower = startBlock
-	let upper = observedHead
-	while (lower + 1n < upper) {
-		const middle = lower + (upper - lower) / 2n
-		if (await isAvailable(middle)) upper = middle
-		else lower = middle
-	}
-	return upper
-}
-
-export const findEarliestAvailableStateBlock = async (startBlock: bigint, observedHead: bigint, stateAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> => {
-	if (startBlock > observedHead) throw new Error('The state availability search start must not exceed the observed head')
-	const isAvailable = async (blockNumber: bigint): Promise<boolean> => {
-		try {
-			await stateAt(blockNumber)
-			return true
-		} catch (error) {
-			if (isPrunedHistoricalStateError(error)) return false
-			throw error
-		}
-	}
-	if (!startBlockKnownUnavailable && (await isAvailable(startBlock))) return startBlock
-	if (!(await isAvailable(observedHead))) throw new ChainConfigurationError(`RPC cannot serve state at observed head #${observedHead}`)
-	let lower = startBlock
-	let upper = observedHead
-	while (lower + 1n < upper) {
-		const middle = lower + (upper - lower) / 2n
-		if (await isAvailable(middle)) upper = middle
-		else lower = middle
-	}
-	return upper
-}
+export const findEarliestAvailableStateBlock = async (startBlock: bigint, observedHead: bigint, stateAt: (blockNumber: bigint) => Promise<void>, startBlockKnownUnavailable = false): Promise<bigint> =>
+	await findEarliestAvailableBlock(startBlock, observedHead, stateAt, isPrunedHistoricalStateError, {
+		headUnavailableError: head => new ChainConfigurationError(`RPC cannot serve state at observed head #${head}`),
+		startKnownUnavailable: startBlockKnownUnavailable,
+	})
 
 export const findEarliestAvailableLogProvider = async <TProvider>(
 	providers: readonly TProvider[],
@@ -255,7 +216,9 @@ export const findEarliestAvailableLogProvider = async <TProvider>(
 		try {
 			const head = await observedHead(provider)
 			if (head < startBlock) continue
-			const availableStart = await findEarliestAvailableLogBlock(startBlock, head, blockNumber => logsAt(provider, blockNumber))
+			const availableStart = await findEarliestAvailableBlock(startBlock, head, blockNumber => logsAt(provider, blockNumber), isPermanentHistoricalLogError, {
+				headUnavailableError: observedHead => new ChainConfigurationError(`RPC cannot serve logs at observed head #${observedHead}`),
+			})
 			if (earliest === undefined || availableStart < earliest.startBlock) earliest = { provider, startBlock: availableStart }
 		} catch (error) {
 			if (!(error instanceof ChainConfigurationError) && !(error instanceof RpcRequestMethodError)) throw error

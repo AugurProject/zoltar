@@ -1,16 +1,12 @@
 import * as workflowCopy from '../../copy/workflows.js'
-import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { useEffect, useState } from 'preact/hooks'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { SHARE_QUANTITY_DECIMALS } from '../../lib/shareValue.js'
-import type { TradeSettings } from '../../lib/tradeSettings.js'
-import type { DeploymentConfiguration } from '../../protocol/config.js'
 import { marketAcceptsNewRisk, type LiquidityOperation, type LiveMarket } from '../../protocol/live.js'
 import * as liquidityCopy from '../../copy/liquidity.js'
 import type { LiveLiquidityServices } from '../LiveLiquidityControls.js'
-import type { GuardedWalletWrite } from '../liveTradingControllerHelpers.js'
-import type { BalanceState } from './liveTradingTypes.js'
+import type { LiveWorkflowContext } from './liveTradingTypes.js'
 import { useQuotedTransaction } from './useQuotedTransaction.js'
 
 type LiquidityQuote = Awaited<ReturnType<LiveLiquidityServices['simulateLiquidity']>>
@@ -39,22 +35,11 @@ export function useLiquidityWorkflowController({
 	createGuardedWalletWrite,
 	onWorkflowLockChange,
 	services,
-}: {
-	configuration: DeploymentConfiguration
-	market: LiveMarket
-	balanceState: BalanceState
-	account: Address | undefined
-	walletClient: WalletClient | undefined
-	externallyLocked: boolean
-	nowSeconds: bigint
-	settings: TradeSettings
-	refresh(): Promise<void>
-	onKnownReceipt(): void
-	executeWithCurrentWalletContext<T>(account: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T>
-	createGuardedWalletWrite(account: Address, networkFailure: string, accountFailure: string): GuardedWalletWrite
-	onWorkflowLockChange(locked: boolean): void
-	services: LiveLiquidityServices
-}) {
+}: LiveWorkflowContext &
+	Readonly<{
+		nowSeconds: bigint
+		services: LiveLiquidityServices
+	}>) {
 	const [operation, setOperation] = useState<LiquidityOperation>(market.pair === undefined || market.lpTotalSupply === 0n ? 'initialize' : 'add')
 	const [amount, setAmount] = useState('')
 	const [probability, setProbability] = useState('50')

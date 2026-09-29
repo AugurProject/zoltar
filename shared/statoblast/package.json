@@ -32,6 +32,11 @@
 			"types": "./ts/statoblast/truthAuctionTickMath.ts",
 			"bun": "./ts/statoblast/truthAuctionTickMath.ts",
 			"default": "./js/statoblast/truthAuctionTickMath.js"
+		},
+		"./deployment/initCodes": {
+			"types": "./ts/deployment/initCodes.ts",
+			"bun": "./ts/deployment/initCodes.ts",
+			"default": "./js/deployment/initCodes.js"
 		}
 	},
 	"files": [

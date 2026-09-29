@@ -1,52 +1,40 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
-import type { ActiveReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import { createActiveReportingDetails as createWorkflowActiveReportingDetails, createEscalationSides, createMarketDetails } from './workflow/builders.js'
 
 function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails> = {}): ActiveReportingDetails {
-	return {
-		activationTime: 120n,
-		bindingCapital: 10n,
-		settlementCollateralAttoEth: 1n,
-		currentRequiredBond: 2n,
-		currentTime: 150n,
-		escalationEndTime: 300n,
-		escalationGameAddress: '0x0000000000000000000000000000000000000000',
-		forkThresholdAttoRep: 40n,
-		hasReachedNonDecision: false,
-		marketDetails: {
-			answerUnit: '',
-			createdAt: 1n,
-			description: 'Question description',
-			displayValueMax: 100n,
-			displayValueMin: 0n,
-			endTime: 100n,
-			exists: true,
-			marketType: 'binary',
-			numTicks: 2n,
-			outcomeLabels: ['Yes', 'No'],
-			questionId: '0x01',
-			startTime: 1n,
-			title: 'Will this resolve?',
-		},
-		nonDecisionThresholdAttoRep: 20n,
-		questionOutcome: 'none',
-		securityPoolAddress: '0x0000000000000000000000000000000000000000',
-		sides: [
-			{ balance: 1n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
-			{ balance: 5n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
-			{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
-		],
-		startBondAttoRep: 1n,
-		status: 'active',
-		systemState: 'operational',
+	return createWorkflowActiveReportingDetails({
+		marketDetails: createMarketDetails({ endTime: 100n }),
+		sides: createEscalationSides([1n, 5n, 2n]),
 		totalCostAttoRep: 2n,
-		universeId: 1n,
 		viewerPoolHeldVaultRepBackingAttoRep: 10n,
-		viewerVaultExists: true,
 		viewerVaultDisputeStakedAttoRep: 0n,
 		viewerVaultRepBackingAttoRep: 10n,
+		...overrides,
+	})
+}
+
+function createNotStartedReportingDetails(overrides: Partial<Extract<ReportingDetails, { status: 'not-started' }>> = {}): ReportingDetails {
+	return {
+		settlementCollateralAttoEth: 1n,
+		currentTime: 100n,
+		forkThresholdAttoRep: 10n,
+		marketDetails: createMarketDetails({ endTime: 100n }),
+		nonDecisionThresholdAttoRep: 20n,
+		questionOutcome: 'none',
+		securityPoolAddress: zeroAddress,
+		startBondAttoRep: 1n,
+		status: 'not-started',
+		systemState: 'operational',
+		universeId: 1n,
+		viewerPoolHeldVaultRepBackingAttoRep: 0n,
+		viewerVaultExists: false,
+		viewerVaultDisputeStakedAttoRep: 0n,
+		viewerVaultRepBackingAttoRep: 0n,
 		settlementState: 'locked',
 		parentWithdrawalEnabled: false,
 		...overrides,
@@ -54,229 +42,39 @@ function createActiveReportingDetails(overrides: Partial<ActiveReportingDetails>
 }
 
 describe('security pool state axes', () => {
-	test('derives lifecycle states from the protocol state and outcome', () => {
-		expect(
-			deriveSecurityPoolLifecycleState({
-				questionOutcome: 'none',
-				systemState: 'operational',
-			}),
-		).toBe('operational')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				questionOutcome: 'yes',
-				systemState: 'operational',
-			}),
-		).toBe('ended')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				hasForkActivity: true,
-				isChildPool: true,
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				universeHasForked: true,
-			}),
-		).toBe('operational')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				hasForkActivity: false,
-				isChildPool: false,
-				questionOutcome: 'none',
-				systemState: 'operational',
-				universeHasForked: true,
-			}),
-		).toBe('poolForked')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				hasForkActivity: true,
-				isChildPool: false,
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				universeHasForked: true,
-			}),
-		).toBe('poolForked')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				questionOutcome: 'yes',
-				systemState: 'forkMigration',
-			}),
-		).toBe('forkMigration')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				questionOutcome: 'none',
-				systemState: undefined,
-			}),
-		).toBeUndefined()
-		expect(
-			deriveSecurityPoolLifecycleState({
-				questionOutcome: 'yes',
-				systemState: 'operational',
-			}),
-		).toBe('ended')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				hasForkActivity: true,
-				isChildPool: true,
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				universeHasForked: true,
-			}),
-		).toBe('operational')
-		expect(
-			deriveSecurityPoolLifecycleState({
-				hasForkActivity: false,
-				isChildPool: false,
-				questionOutcome: 'yes',
-				systemState: 'operational',
-				universeHasForked: true,
-			}),
-		).toBe('poolForked')
+	test.each<[Parameters<typeof deriveSecurityPoolLifecycleState>[0], ReturnType<typeof deriveSecurityPoolLifecycleState>]>([
+		[{ questionOutcome: 'none', systemState: 'operational' }, 'operational'],
+		[{ questionOutcome: 'yes', systemState: 'operational' }, 'ended'],
+		[{ hasForkActivity: true, isChildPool: true, questionOutcome: 'yes', systemState: 'operational', universeHasForked: true }, 'operational'],
+		[{ hasForkActivity: false, isChildPool: false, questionOutcome: 'none', systemState: 'operational', universeHasForked: true }, 'poolForked'],
+		[{ hasForkActivity: true, isChildPool: false, questionOutcome: 'yes', systemState: 'operational', universeHasForked: true }, 'poolForked'],
+		[{ hasForkActivity: false, isChildPool: false, questionOutcome: 'yes', systemState: 'operational', universeHasForked: true }, 'poolForked'],
+		[{ questionOutcome: 'yes', systemState: 'forkMigration' }, 'forkMigration'],
+		[{ questionOutcome: 'none', systemState: undefined }, undefined],
+	])('derives lifecycle state from %o', (input, expected) => {
+		expect(deriveSecurityPoolLifecycleState(input)).toBe(expected)
 	})
 
-	test('derives reporting stages from reporting details and readiness', () => {
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: undefined,
-				reportingReady: false,
-			}),
-		).toBe('preOpen')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: undefined,
-				reportingReady: true,
-			}),
-		).toBeUndefined()
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: {
-					settlementCollateralAttoEth: 1n,
-					currentTime: 100n,
-					forkThresholdAttoRep: 10n,
-					marketDetails: createActiveReportingDetails().marketDetails,
-					nonDecisionThresholdAttoRep: 20n,
-					questionOutcome: 'none',
-					securityPoolAddress: '0x0000000000000000000000000000000000000000',
-					startBondAttoRep: 1n,
-					status: 'not-started',
-					systemState: 'operational',
-					universeId: 1n,
-					viewerPoolHeldVaultRepBackingAttoRep: 0n,
-					viewerVaultExists: false,
-					viewerVaultDisputeStakedAttoRep: 0n,
-					viewerVaultRepBackingAttoRep: 0n,
-					settlementState: 'locked',
-					parentWithdrawalEnabled: false,
-				},
-				reportingReady: true,
-			}),
-		).toBe('notStarted')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: {
-					settlementCollateralAttoEth: 1n,
-					currentTime: 100n,
-					forkThresholdAttoRep: 10n,
-					marketDetails: createActiveReportingDetails().marketDetails,
-					nonDecisionThresholdAttoRep: 20n,
-					questionOutcome: 'yes',
-					securityPoolAddress: '0x0000000000000000000000000000000000000000',
-					startBondAttoRep: 1n,
-					status: 'not-started',
-					systemState: 'operational',
-					universeId: 1n,
-					viewerPoolHeldVaultRepBackingAttoRep: 0n,
-					viewerVaultExists: false,
-					viewerVaultDisputeStakedAttoRep: 0n,
-					viewerVaultRepBackingAttoRep: 0n,
-					settlementState: 'resolved',
-					parentWithdrawalEnabled: false,
-				},
-				reportingReady: true,
-			}),
-		).toBe('resolved')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: {
-					settlementCollateralAttoEth: 1n,
-					currentTime: 100n,
-					forkThresholdAttoRep: 10n,
-					marketDetails: createActiveReportingDetails().marketDetails,
-					nonDecisionThresholdAttoRep: 20n,
-					questionOutcome: 'yes',
-					securityPoolAddress: '0x0000000000000000000000000000000000000000',
-					startBondAttoRep: 1n,
-					status: 'not-started',
-					systemState: 'forkMigration',
-					universeId: 1n,
-					viewerPoolHeldVaultRepBackingAttoRep: 0n,
-					viewerVaultExists: false,
-					viewerVaultDisputeStakedAttoRep: 0n,
-					viewerVaultRepBackingAttoRep: 0n,
-					settlementState: 'locked',
-					parentWithdrawalEnabled: false,
-				},
-				reportingReady: true,
-			}),
-		).toBe('notStarted')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: createActiveReportingDetails(),
-				reportingReady: true,
-			}),
-		).toBe('activeLocked')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: createActiveReportingDetails({
-					parentWithdrawalEnabled: true,
-				}),
-				reportingReady: true,
-			}),
-		).toBe('activeWithdrawable')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: createActiveReportingDetails({
-					questionOutcome: 'yes',
-					settlementState: 'resolved',
-					parentWithdrawalEnabled: true,
-				}),
-				reportingReady: true,
-			}),
-		).toBe('resolved')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: createActiveReportingDetails({
-					hasReachedNonDecision: true,
-				}),
-				reportingReady: true,
-			}),
-		).toBe('forkTriggered')
-		expect(
-			deriveSecurityPoolReportingStage({
-				reportingDetails: createActiveReportingDetails({
-					currentTime: 350n,
-				}),
-				reportingReady: true,
-			}),
-		).toBe('timedOut')
+	test.each<[string, Parameters<typeof deriveSecurityPoolReportingStage>[0], ReturnType<typeof deriveSecurityPoolReportingStage>]>([
+		['unready missing details', { reportingDetails: undefined, reportingReady: false }, 'preOpen'],
+		['ready missing details', { reportingDetails: undefined, reportingReady: true }, undefined],
+		['not-started operational details', { reportingDetails: createNotStartedReportingDetails(), reportingReady: true }, 'notStarted'],
+		['not-started resolved details', { reportingDetails: createNotStartedReportingDetails({ questionOutcome: 'yes', settlementState: 'resolved' }), reportingReady: true }, 'resolved'],
+		['not-started fork-migration details', { reportingDetails: createNotStartedReportingDetails({ questionOutcome: 'yes', systemState: 'forkMigration' }), reportingReady: true }, 'notStarted'],
+		['active locked details', { reportingDetails: createActiveReportingDetails(), reportingReady: true }, 'activeLocked'],
+		['active withdrawable details', { reportingDetails: createActiveReportingDetails({ parentWithdrawalEnabled: true }), reportingReady: true }, 'activeWithdrawable'],
+		['active resolved details', { reportingDetails: createActiveReportingDetails({ questionOutcome: 'yes', settlementState: 'resolved', parentWithdrawalEnabled: true }), reportingReady: true }, 'resolved'],
+		['active non-decision details', { reportingDetails: createActiveReportingDetails({ hasReachedNonDecision: true }), reportingReady: true }, 'forkTriggered'],
+		['active details after escalation end', { reportingDetails: createActiveReportingDetails({ currentTime: 350n }), reportingReady: true }, 'timedOut'],
+	])('derives the reporting stage from %s', (_name, input, expected) => {
+		expect(deriveSecurityPoolReportingStage(input)).toBe(expected)
 	})
 
-	test('derives fork stages from the current stage and workflow lock', () => {
-		expect(
-			deriveSecurityPoolForkStage({
-				currentStage: 'migration',
-				workflowDisabled: false,
-			}),
-		).toBe('migration')
-		expect(
-			deriveSecurityPoolForkStage({
-				currentStage: 'auction',
-				workflowDisabled: true,
-			}),
-		).toBe('disabled')
-		expect(
-			deriveSecurityPoolForkStage({
-				currentStage: undefined,
-				workflowDisabled: false,
-			}),
-		).toBeUndefined()
+	test.each<[Parameters<typeof deriveSecurityPoolForkStage>[0], ReturnType<typeof deriveSecurityPoolForkStage>]>([
+		[{ currentStage: 'migration', workflowDisabled: false }, 'migration'],
+		[{ currentStage: 'auction', workflowDisabled: true }, 'disabled'],
+		[{ currentStage: undefined, workflowDisabled: false }, undefined],
+	])('derives fork stage from %o', (input, expected) => {
+		expect(deriveSecurityPoolForkStage(input)).toBe(expected)
 	})
 })

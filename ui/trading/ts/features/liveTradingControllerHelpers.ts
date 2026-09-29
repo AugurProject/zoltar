@@ -5,7 +5,6 @@ import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { readInjectedChainIdNumber, requestInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { createTradingPublicClient, createTradingWalletClient, discoverAllLiveMarketsInUniverse, discoverLiveUniverseMarketPage, loadLiveBalances, loadWalletHeaderBalances, simulateEntry, simulateExit, submitFreshEntry, submitFreshExit, validateLiveDeployment, type LiveMarket } from '../protocol/live.js'
 import type { LiveTradingControllerServices, TransactionState } from './live/liveTradingTypes.js'
-export type GuardedWalletWrite = <T>(write: () => Promise<T>) => Promise<T>
 export type WorkflowOwner = 'position' | 'liquidity'
 
 export const liveTradingControllerServices: LiveTradingControllerServices = {

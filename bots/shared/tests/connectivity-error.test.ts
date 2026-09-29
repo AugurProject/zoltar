@@ -25,6 +25,13 @@ test('explains private relay DNS failures without exposing RPC URL credentials',
 	expect(publicConnectivityError(error, { fallback })).toBe('RPC http://reth:8545 failed while calling eth_sendPrivateTransaction: getaddrinfo ENOTFOUND reth The hostname reth must resolve from the bot process; Docker service names like reth only work when the bot shares that container network.')
 })
 
+test('returns the container-network hint for anvil using Bun transport failure text', () => {
+	const failure = 'RPC http://anvil:8545 failed while calling eth_chainId: Unable to connect. Is the computer able to access the url?'
+	const error = new EndpointCheckFailure(failure, [failedCheck({ error: failure, kind: 'read-rpc', target: 'http://anvil:8545' })])
+
+	expect(publicConnectivityError(error, { fallback })).toBe(`${failure} The hostname anvil must resolve from the bot process; Docker service names like anvil only work when the bot shares that container network.`)
+})
+
 test('reports safe public submission HTTP status while redacting provider text', () => {
 	const secret = 'provider-secret'
 	const error = new EndpointCheckFailure('submission capability unavailable', [

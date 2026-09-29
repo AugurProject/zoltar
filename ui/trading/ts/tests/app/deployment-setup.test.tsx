@@ -29,24 +29,44 @@ const core = {
 	zoltar: getAddress(`0x${'56'.repeat(20)}`),
 }
 
-function deploymentClient(rpcAvailable: () => boolean = () => true) {
+const sameAddress = (left: string, right: string) => left.toLowerCase() === right.toLowerCase()
+
+type InspectionClientOptions = {
+	/** Contracts other than the proxy deployer that have runtime code. */
+	hasCode?: (address: string) => boolean
+	/** Answers each eth_call; the client rejects calls when omitted. */
+	readContract?: () => string
+	available?: () => boolean
+	chainId?: () => string
+	proxyDeployer?: string
+	retryCount?: number
+}
+
+/** An RPC for deployment inspection: the proxy deployer always has its runtime code and unlisted contracts are empty. */
+function inspectionClient({ hasCode = () => false, readContract, available = () => true, chainId = () => '0xaa36a7', proxyDeployer = core.proxyDeployer, retryCount }: InspectionClientOptions = {}) {
 	return createPublicClient({
 		transport: custom(
 			{
 				request: async ({ method, params }) => {
-					if (!rpcAvailable()) throw new Error('RPC unavailable')
-					if (method === 'eth_chainId') return '0xaa36a7'
+					if (!available()) throw new Error('RPC unavailable')
+					if (method === 'eth_chainId') return chainId()
 					if (method === 'eth_getCode' && Array.isArray(params)) {
 						const address = params[0]
-						if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
-						return typeof address === 'string' && address.toLowerCase() === core.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
+						if (typeof address !== 'string') throw new Error('Missing code address')
+						if (sameAddress(address, proxyDeployer)) return PROXY_DEPLOYER_RUNTIME_CODE
+						return hasCode(address) ? '0x01' : '0x'
 					}
+					if (method === 'eth_call' && readContract !== undefined) return readContract()
 					throw new Error(`Unexpected RPC method ${method}`)
 				},
 			},
-			{ retryCount: 0 },
+			retryCount === undefined ? {} : { retryCount },
 		),
 	})
+}
+
+function deploymentClient(rpcAvailable: () => boolean = () => true) {
+	return inspectionClient({ available: rpcAvailable, hasCode: address => sameAddress(address, core.securityPoolFactory), retryCount: 0 })
 }
 
 async function waitForText(text: string) {
@@ -146,26 +166,14 @@ describe('trading deployment setup', () => {
 	test('keeps the router step available when a remounted deployment is partial', async () => {
 		const plan = getTradingDeploymentPlan(core, 30)
 		let contractReadCount = 0
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method, params }) => {
-					if (method === 'eth_chainId') return '0xaa36a7'
-					if (method === 'eth_getCode' && Array.isArray(params)) {
-						const address = params[0]
-						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
-						if ([core.securityPoolFactory, plan.factory.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
-						return '0x'
-					}
-					if (method === 'eth_call') {
-						contractReadCount += 1
-						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
-						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
-						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = inspectionClient({
+			hasCode: address => [core.securityPoolFactory, plan.factory.address].some(expected => sameAddress(expected, address)),
+			readContract: () => {
+				contractReadCount += 1
+				if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+				if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+				return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+			},
 		})
 		let completionCount = 0
 		const rendered = await renderIntoDocument(
@@ -186,22 +194,7 @@ describe('trading deployment setup', () => {
 
 	test('presents an undeployed SecurityPoolFactory as an expected prerequisite and keeps trading addresses visible', async () => {
 		const plan = getTradingDeploymentPlan(core, 30)
-		const client = createPublicClient({
-			transport: custom(
-				{
-					request: async ({ method, params }) => {
-						if (method === 'eth_chainId') return '0xaa36a7'
-						if (method === 'eth_getCode' && Array.isArray(params)) {
-							const address = params[0]
-							if (typeof address === 'string' && address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
-							return '0x'
-						}
-						throw new Error(`Unexpected RPC method ${method}`)
-					},
-				},
-				{ retryCount: 0 },
-			),
-		})
+		const client = inspectionClient({ retryCount: 0 })
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => client, loadCoreDeployments: async () => [core] }} />)
 		cleanupRendered = rendered.cleanup
 		await waitForText('Security pool factory is not deployed')
@@ -320,24 +313,15 @@ describe('trading deployment setup', () => {
 		const mainnetCore = { ...core, chainId: 1, chainName: 'Ethereum mainnet', id: 'mainnet' }
 		let rpcChainId = '0x1'
 		let contractReadCount = 0
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method, params }) => {
-					if (method === 'eth_chainId') return rpcChainId
-					if (method === 'eth_getCode' && Array.isArray(params)) {
-						const address = params[0]
-						if (typeof address !== 'string') throw new Error('Missing code address')
-						return address.toLowerCase() === core.proxyDeployer.toLowerCase() ? PROXY_DEPLOYER_RUNTIME_CODE : '0x01'
-					}
-					if (method === 'eth_call') {
-						contractReadCount += 1
-						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
-						if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [30])
-						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = inspectionClient({
+			chainId: () => rpcChainId,
+			hasCode: () => true,
+			readContract: () => {
+				contractReadCount += 1
+				if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+				if (contractReadCount === 2) return encodeAbiParameters([{ type: 'uint16' }], [30])
+				return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+			},
 		})
 		const restoreEnvironment = installActiveEnvironmentForTesting({ ...createFakeBackend({ profile: SEPOLIA_NETWORK_PROFILE }), createReadClient: () => client })
 		const restoreFetch = installFetchStub(async () => new Response(JSON.stringify([mainnetCore, core]), { headers: { 'content-type': 'application/json' } }))
@@ -371,24 +355,15 @@ describe('trading deployment setup', () => {
 		const plan = getTradingDeploymentPlan(simulationCore, 30)
 		let readClients = 0
 		let contractReadCount = 0
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method, params }) => {
-					if (method === 'eth_chainId') return profile.chainIdHex
-					if (method === 'eth_getCode' && Array.isArray(params)) {
-						const address = params[0]
-						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === PROXY_DEPLOYER_ADDRESS.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
-						return address.toLowerCase() === simulationCore.securityPoolFactory.toLowerCase() ? '0x01' : '0x'
-					}
-					if (method === 'eth_call') {
-						contractReadCount += 1
-						if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [simulationCore.securityPoolFactory])
-						return encodeAbiParameters([{ type: 'uint16' }], [30])
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = inspectionClient({
+			chainId: () => profile.chainIdHex,
+			hasCode: address => sameAddress(address, simulationCore.securityPoolFactory),
+			proxyDeployer: PROXY_DEPLOYER_ADDRESS,
+			readContract: () => {
+				contractReadCount += 1
+				if (contractReadCount === 1) return encodeAbiParameters([{ type: 'address' }], [simulationCore.securityPoolFactory])
+				return encodeAbiParameters([{ type: 'uint16' }], [30])
+			},
 		})
 		const restoreEnvironment = installActiveEnvironmentForTesting({
 			...createFakeBackend({ profile }),
@@ -694,27 +669,15 @@ describe('trading deployment setup', () => {
 		const plan = getTradingDeploymentPlan(core, 30)
 		const configuration = deploymentConfigurationForPlan(plan, core.defaultRpcUrl)
 		let contractReadCount = 0
-		const client = createPublicClient({
-			transport: custom({
-				request: async ({ method, params }) => {
-					if (method === 'eth_chainId') return '0xaa36a7'
-					if (method === 'eth_getCode' && Array.isArray(params)) {
-						const address = params[0]
-						if (typeof address !== 'string') throw new Error('Missing code address')
-						if (address.toLowerCase() === core.proxyDeployer.toLowerCase()) return PROXY_DEPLOYER_RUNTIME_CODE
-						if ([core.securityPoolFactory, plan.factory.address, plan.router.address].some(expected => expected.toLowerCase() === address.toLowerCase())) return '0x01'
-						return '0x'
-					}
-					if (method === 'eth_call') {
-						contractReadCount += 1
-						const readInInspection = ((contractReadCount - 1) % 3) + 1
-						if (readInInspection === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
-						if (readInInspection === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
-						return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
-					}
-					throw new Error(`Unexpected RPC method ${method}`)
-				},
-			}),
+		const client = inspectionClient({
+			hasCode: address => [core.securityPoolFactory, plan.factory.address, plan.router.address].some(expected => sameAddress(expected, address)),
+			readContract: () => {
+				contractReadCount += 1
+				const readInInspection = ((contractReadCount - 1) % 3) + 1
+				if (readInInspection === 1) return encodeAbiParameters([{ type: 'address' }], [core.securityPoolFactory])
+				if (readInInspection === 2) return encodeAbiParameters([{ type: 'uint16' }], [plan.feeBps])
+				return encodeAbiParameters([{ type: 'address' }], [plan.factory.address])
+			},
 		})
 		let resolveConfiguration: ((value: typeof configuration) => void) | undefined
 		const configurationPending = new Promise<typeof configuration>(resolve => {

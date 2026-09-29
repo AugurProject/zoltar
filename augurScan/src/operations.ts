@@ -1,5 +1,5 @@
 import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
-import { compareBigint } from './compare.ts'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 type ReportClock = 'block' | 'timestamp'
 
 export const ETH_QUOTE_DECIMALS = 18

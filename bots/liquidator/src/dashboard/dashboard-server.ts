@@ -1,23 +1,12 @@
 import { LIVE_SIGNER_MISMATCH } from '../core/execution-mode.ts'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
-import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import {
-	boundedDashboardJson,
-	closingDashboardJson as closingJson,
-	dashboardAuthenticationChallenge,
-	dashboardAuthorities,
-	dashboardRequestAuthorityIsAccepted,
-	dashboardRequestIsAuthenticated,
-	dashboardRequestIsSameOrigin,
-	dashboardSecurityHeaders as headers,
-	dashboardJson as json,
-	validateDashboardAuthentication,
-} from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json } from '@zoltar/bot-shared/dashboard/security'
+import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
+import { publicOperatorFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { join } from 'node:path'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 import { PENDING_INTENT_MODE_CHANGE, PENDING_SIGNER_RECOVERY } from '#core/go-live-controls'
 import { operatorHeader } from './header.ts'
@@ -84,18 +73,6 @@ function publicExecutionUpdateError(error: unknown) {
 
 function publicSubmissionUpdateError(error: unknown) {
 	return publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the relay URLs and protected bot logs.', validationMessages: new Set([PENDING_INTENT_MODE_CHANGE]) })
-}
-
-function publicOperatorFailure(error: string, fallback = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.') {
-	const logRange = /Log scan failed for blocks (\d+) (?:through|to) (\d+)/i.exec(error)
-	if (logRange !== null) return `Log scan failed: fromBlock ${logRange[1]} · toBlock ${logRange[2]}. Automatic retry remains active.`
-	const normalized = error.toLowerCase()
-	if (normalized.includes('rpc') || normalized.includes('chain') || normalized.includes('block')) return 'RPC connectivity or canonical chain reads failed. Automatic retry remains active.'
-	if (normalized.includes('market') || normalized.includes('price') || normalized.includes('quote')) return 'Market evidence or price validation failed. Automatic retry remains active.'
-	if (normalized.includes('transaction') || normalized.includes('receipt') || normalized.includes('relay')) return 'Transaction confirmation or delivery tracking failed. Review transaction activity while automatic retry remains active.'
-	if (normalized.includes('persist') || normalized.includes('state') || normalized.includes('history')) return 'Durable operator state could not be verified. Review recovery state before resuming execution.'
-	if (normalized.includes('risk') || normalized.includes('limit') || normalized.includes('policy')) return 'A risk or execution policy prevented this operation. Review the active policy and protected bot logs.'
-	return fallback
 }
 
 function containsSensitiveOperatorDetail(value: string) {
@@ -240,47 +217,19 @@ function publicError(error: unknown, status: number, operation: string, fallback
 }
 
 export function startDashboardServer(port: number, controller: DashboardController) {
-	validateDashboardAuthentication(controller.hostname, controller.password, controller.loopbackPublished, controller.publicAuthority)
-	const directory = import.meta.dir
-	const browserEntrypoint = join(directory, 'dashboard.ts')
-	const dashboardPages = new Set(['overview', 'pools', 'markets', 'operations', 'settings'])
-	const dashboardPage = async (pathname: string) => {
-		const page = pathname === '/' ? 'overview' : pathname.slice(1)
-		if (!dashboardPages.has(page)) return undefined
-		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel()).replace('<!-- settings-page -->', settingsPageMarkup).replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
-	}
-	let acceptedAuthorities: ReadonlySet<string> = new Set()
-	const server = Bun.serve({
+	return startBotDashboardServer({
+		directory: import.meta.dir,
+		exposure: { password: controller.password, publicAuthority: controller.publicAuthority },
 		hostname: controller.hostname,
+		loopbackPublished: controller.loopbackPublished,
+		pages: ['overview', 'pools', 'markets', 'operations', 'settings'],
+		pageSlots: [
+			['<!-- rep-market-consensus -->', repMarketConsensusPanel],
+			['<!-- settings-page -->', settingsPageMarkup],
+			['<!-- operator-header -->', operatorHeader],
+		],
 		port,
-		async fetch(request) {
-			if (!dashboardRequestAuthorityIsAccepted(request, acceptedAuthorities)) {
-				return json({ error: 'Request authority is not accepted' }, 403)
-			}
-			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return dashboardHealthResponse()
-			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
-				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...headers('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
-			}
-			const url = new URL(request.url)
-			if (request.method === 'GET') {
-				const page = await dashboardPage(url.pathname)
-				if (page !== undefined) return new Response(page, { headers: headers('text/html; charset=utf-8') })
-			}
-			if (request.method === 'GET' && url.pathname === '/dashboard.css') {
-				return new Response(Bun.file(join(directory, 'styles.css')), {
-					headers: headers('text/css; charset=utf-8'),
-				})
-			}
-			if (request.method === 'GET') {
-				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
-				if (asset !== undefined) return asset
-			}
-			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
-				return new Response(await buildDashboardScript(browserEntrypoint), {
-					headers: headers('text/javascript; charset=utf-8'),
-				})
-			}
+		route: async (request, { acceptedAuthorities, url }) => {
 			if (request.method === 'GET' && url.pathname === '/api/state') {
 				try {
 					return json(publicOperatorSnapshot(await controller.getState()))
@@ -351,10 +300,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return publicError(error, 400, `mutation:${url.pathname}`, fallback)
 				}
 			}
-			return json({ error: 'Not found' }, 404)
+			return undefined
 		},
 	})
-	if (server.port === undefined) throw new Error('Dashboard server did not expose its listening port')
-	acceptedAuthorities = dashboardAuthorities(server.port, controller.publicAuthority)
-	return server
 }

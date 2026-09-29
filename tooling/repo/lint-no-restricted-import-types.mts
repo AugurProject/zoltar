@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import ts from 'typescript'
+import { listRepositoryFiles } from './git.mts'
 import { repositoryRoot } from './root.mts'
 
 /**
@@ -74,9 +74,7 @@ async function worktreeFiles(requestedPaths: readonly string[]): Promise<string[
 		if (!stat.isFile() && !stat.isDirectory()) throw new Error(`Cannot lint ${requestedPath}: the path is not a file or directory`)
 	}
 	const pathArguments = requestedPaths.map(requestedPath => path.resolve(requestedPath))
-	const listed = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', ...pathArguments], { cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-		.split('\0')
-		.filter(file => file !== '')
+	const listed = listRepositoryFiles({ cwd: repositoryRoot, untracked: true, pathspec: pathArguments })
 	const stats = await Promise.all(listed.map(file => fs.stat(path.join(repositoryRoot, file)).catch(() => undefined)))
 	return listed.filter((_, index) => stats[index]?.isFile() === true)
 }

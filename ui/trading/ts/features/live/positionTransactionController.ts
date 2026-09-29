@@ -7,7 +7,8 @@ import { formatOutcomeQuantity } from '../../lib/shareValue.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import type { LiveTradingControllerServices, Quote } from './liveTradingTypes.js'
 import type { TradeMode, useTransactionWorkflow } from './useTransactionWorkflow.js'
-import type { GuardedWalletWrite, WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import type { WorkflowOwner } from '../liveTradingControllerHelpers.js'
+import type { GuardedWalletWrite } from '../../protocol/tradeQuote.js'
 import { authoritativeQuoteMoved, type TradeEstimate } from './tradeTicketModel.js'
 
 type TransactionWorkflow = ReturnType<typeof useTransactionWorkflow>

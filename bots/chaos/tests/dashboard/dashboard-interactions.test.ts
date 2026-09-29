@@ -232,16 +232,11 @@ const degradedWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointH
 const staleSubmissionWorkflowRenderingState = { ...workflowRenderingState, rpcEndpointHealth: [...readRpcHealth, ...stalePrivateSubmissionHealth] }
 
 async function connectToChromium() {
-	const session = await startChromiumSession(chromium)
+	const session = await startChromiumSession(chromium, { evaluationDefaults: { exceptions: 'ignore', intervalMilliseconds: 25 } })
 	try {
 		await session.send('Runtime.enable')
 		await session.send('Page.enable')
-		const evaluate = async (expression: string) => {
-			const response = await session.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
-			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
-		}
-		return { command: session.send, evaluate, close: session.close, issues: session.issues }
+		return { command: session.send, evaluate: session.evaluate, waitFor: session.waitFor, close: session.close, issues: session.issues }
 	} catch (error) {
 		await session.close()
 		throw error
@@ -361,13 +356,7 @@ browserTest(
 			})
 			browserSession = cdp
 			await cdp.command('Network.enable')
-			const waitFor = async (expression: string, message: string) => {
-				for (let attempt = 0; attempt < 400; attempt += 1) {
-					if ((await cdp.evaluate(expression)) === true) return
-					await Bun.sleep(25)
-				}
-				throw new Error(message)
-			}
+			const waitFor = async (expression: string, message: string) => await cdp.waitFor(expression, { attempts: 400, message })
 			const accessibilityIdentity = async (selector: string) => {
 				const documentResult = await cdp.command('DOM.getDocument', { depth: 0 })
 				const rootNode = typeof documentResult === 'object' && documentResult !== null ? Reflect.get(documentResult, 'root') : undefined
@@ -545,9 +534,9 @@ browserTest(
 					status: expect.not.stringContaining('header'),
 					top: expect.any(Number),
 				})
-				expect(Reflect.get(failure, 'top')).toBeGreaterThanOrEqual(0)
-				expect(Reflect.get(failure, 'bottom')).toBeLessThanOrEqual(844)
-				expect(Reflect.get(failure, 'height')).toBeGreaterThanOrEqual(44)
+				expect(Reflect.get(Object(failure), 'top')).toBeGreaterThanOrEqual(0)
+				expect(Reflect.get(Object(failure), 'bottom')).toBeLessThanOrEqual(844)
+				expect(Reflect.get(Object(failure), 'height')).toBeGreaterThanOrEqual(44)
 				await cdp.evaluate(`document.querySelector('#${scenario.retryId}')?.click()`)
 				expect(
 					await cdp.evaluate(`({
@@ -680,7 +669,7 @@ browserTest(
 					secretVisible: false,
 					status: 'Quorum ready',
 				})
-				expect(Reflect.get(health, 'lastCheck')).not.toBe('No completed check')
+				expect(Reflect.get(Object(health), 'lastCheck')).not.toBe('No completed check')
 				expect(
 					await cdp.evaluate(`({
 						freshness: document.querySelector('#submission-freshness')?.textContent,
@@ -755,9 +744,9 @@ browserTest(
 							resolve({ bottom: buttonBounds?.bottom, height: buttonBounds?.height, top: buttonBounds?.top })
 						}))
 					})`)
-					expect(Reflect.get(bounds, 'top')).toBeGreaterThanOrEqual(0)
-					expect(Reflect.get(bounds, 'bottom')).toBeLessThanOrEqual(viewport.height)
-					expect(Reflect.get(bounds, 'height')).toBeGreaterThanOrEqual(44)
+					expect(Reflect.get(Object(bounds), 'top')).toBeGreaterThanOrEqual(0)
+					expect(Reflect.get(Object(bounds), 'bottom')).toBeLessThanOrEqual(viewport.height)
+					expect(Reflect.get(Object(bounds), 'height')).toBeGreaterThanOrEqual(44)
 				}
 				failSecondStateRead = false
 				await cdp.evaluate("document.querySelector('#rpc-health-retry-button')?.click()")
@@ -995,8 +984,8 @@ browserTest(
 					summaryHeights: [...document.querySelectorAll('.topology-grid summary')].map(summary => summary.getBoundingClientRect().height),
 					topbarBackground: getComputedStyle(document.querySelector('.operator-shell')).backgroundColor,
 				})`)
-				expect(Reflect.get(topologyPresentation, 'topbarBackground')).toBe('color(srgb 0.0627451 0.0823529 0.113725 / 0.82)')
-				const summaryHeights = Reflect.get(topologyPresentation, 'summaryHeights')
+				expect(Reflect.get(Object(topologyPresentation), 'topbarBackground')).toBe('color(srgb 0.0627451 0.0823529 0.113725 / 0.82)')
+				const summaryHeights = Reflect.get(Object(topologyPresentation), 'summaryHeights')
 				expect(summaryHeights).toHaveLength(5)
 				if (!Array.isArray(summaryHeights)) throw new Error('Missing topology summary bounds')
 				for (const height of summaryHeights) {
@@ -1251,8 +1240,8 @@ browserTest(
 						opacity: style.opacity,
 					}
 				})()`)
-				expect(Reflect.get(disabledButtonPresentation, 'opacity')).toBe('1')
-				expect(Reflect.get(disabledButtonPresentation, 'contrast')).toBeGreaterThanOrEqual(4.5)
+				expect(Reflect.get(Object(disabledButtonPresentation), 'opacity')).toBe('1')
+				expect(Reflect.get(Object(disabledButtonPresentation), 'contrast')).toBeGreaterThanOrEqual(4.5)
 				failNextStateRead = true
 				await cdp.command('Network.setBlockedURLs', { urls: [`*://127.0.0.1:${dashboardPort.toString()}/api/signer`] })
 				await cdp.evaluate(`(() => {
@@ -1643,10 +1632,10 @@ browserTest(
 				const buttonBounds = button.getBoundingClientRect()
 				return { buttonHeight: buttonBounds.height, formLeft: formBounds.left, formRight: formBounds.right, viewportWidth: document.documentElement.clientWidth }
 			})()`)
-			const formLeft = Reflect.get(connectivityLayout, 'formLeft')
-			const formRight = Reflect.get(connectivityLayout, 'formRight')
-			const viewportWidth = Reflect.get(connectivityLayout, 'viewportWidth')
-			const buttonHeight = Reflect.get(connectivityLayout, 'buttonHeight')
+			const formLeft = Reflect.get(Object(connectivityLayout), 'formLeft')
+			const formRight = Reflect.get(Object(connectivityLayout), 'formRight')
+			const viewportWidth = Reflect.get(Object(connectivityLayout), 'viewportWidth')
+			const buttonHeight = Reflect.get(Object(connectivityLayout), 'buttonHeight')
 			if (typeof formLeft !== 'number' || typeof formRight !== 'number' || typeof viewportWidth !== 'number' || typeof buttonHeight !== 'number') throw new Error('Mobile connectivity form bounds are unavailable')
 			expect(formLeft).toBeGreaterThanOrEqual(0)
 			expect(formRight).toBeLessThanOrEqual(viewportWidth)
@@ -1688,16 +1677,16 @@ browserTest(
 					}
 				})()`)
 				expect(navigationBeforeRefresh).toMatchObject({ currentPath: `/${route}`, currentVisible: true, scrollY: 0 })
-				expect(Reflect.get(navigationBeforeRefresh, 'bodyWidth')).toBe(Reflect.get(navigationBeforeRefresh, 'clientWidth'))
-				const navigationScrollLeft = Reflect.get(navigationBeforeRefresh, 'scrollLeft')
-				const maximumScrollLeft = Reflect.get(navigationBeforeRefresh, 'maximumScrollLeft')
+				expect(Reflect.get(Object(navigationBeforeRefresh), 'bodyWidth')).toBe(Reflect.get(Object(navigationBeforeRefresh), 'clientWidth'))
+				const navigationScrollLeft = Reflect.get(Object(navigationBeforeRefresh), 'scrollLeft')
+				const maximumScrollLeft = Reflect.get(Object(navigationBeforeRefresh), 'maximumScrollLeft')
 				if (typeof navigationScrollLeft !== 'number' || typeof maximumScrollLeft !== 'number') throw new Error(`/${route} navigation scroll metrics are unavailable`)
 				if (route === 'ecosystem') {
 					expect(navigationScrollLeft).toBeGreaterThan(0)
 					expect(navigationScrollLeft).toBeLessThan(maximumScrollLeft)
-					expect(Reflect.get(navigationBeforeRefresh, 'centerDelta')).toBeLessThanOrEqual(1)
+					expect(Reflect.get(Object(navigationBeforeRefresh), 'centerDelta')).toBeLessThanOrEqual(1)
 				} else expect(Math.abs(navigationScrollLeft - maximumScrollLeft)).toBeLessThanOrEqual(1)
-				const linkHeights = Reflect.get(navigationBeforeRefresh, 'linkHeights')
+				const linkHeights = Reflect.get(Object(navigationBeforeRefresh), 'linkHeights')
 				expect(linkHeights).toHaveLength(6)
 				for (const height of Array.isArray(linkHeights) ? linkHeights : []) expect(height).toBeGreaterThanOrEqual(44)
 				const requestsBeforeRefresh = stateRequests
@@ -1708,7 +1697,7 @@ browserTest(
 					scrollLeft: document.querySelector('.section-nav')?.scrollLeft,
 					scrollY: window.scrollY,
 				})`)
-				expect(navigationAfterRefresh).toEqual({ scrollLeft: Reflect.get(navigationBeforeRefresh, 'scrollLeft'), scrollY: Reflect.get(navigationBeforeRefresh, 'scrollY') })
+				expect(navigationAfterRefresh).toEqual({ scrollLeft: Reflect.get(Object(navigationBeforeRefresh), 'scrollLeft'), scrollY: Reflect.get(Object(navigationBeforeRefresh), 'scrollY') })
 			}
 			// In-page navigation must move the `aria-current="page"` marker the stylesheet and
 			// assistive technology key on, not just an empty `aria-current` attribute.
@@ -1874,13 +1863,7 @@ browserTest(
 			const cdp = await connectToChromium()
 			browserSession = cdp
 			await cdp.command('Network.enable')
-			const waitFor = async (expression: string, message: string) => {
-				for (let attempt = 0; attempt < 200; attempt += 1) {
-					if ((await cdp.evaluate(expression)) === true) return
-					await Bun.sleep(25)
-				}
-				throw new Error(message)
-			}
+			const waitFor = async (expression: string, message: string) => await cdp.waitFor(expression, { attempts: 200, message })
 			await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 			await waitFor("document.querySelector('#signer-summary .identifier-value') !== null && document.querySelector('#signer-fieldset')?.disabled === false", 'Signer controls did not load before the indeterminate mutation')
 			await cdp.evaluate(`(() => {
@@ -1980,13 +1963,7 @@ browserTest(
 		if (port === undefined) throw new Error('Dashboard port is unavailable')
 		const cdp = await connectToChromium()
 		try {
-			const waitFor = async (expression: string) => {
-				for (let attempt = 0; attempt < 400; attempt += 1) {
-					if ((await cdp.evaluate(expression)) === true) return
-					await Bun.sleep(25)
-				}
-				throw new Error(`Timed out: ${expression}`)
-			}
+			const waitFor = async (expression: string) => await cdp.waitFor(expression, { attempts: 400 })
 			const capture = async (name: string) => {
 				const result = await cdp.command('Page.captureScreenshot', { format: 'png' })
 				const data = typeof result === 'object' && result !== null ? Reflect.get(result, 'data') : undefined
@@ -2188,13 +2165,7 @@ browserTest(
 		})
 		const cdp = await connectToChromium()
 		try {
-			const waitFor = async (expression: string) => {
-				for (let attempt = 0; attempt < 400; attempt += 1) {
-					if ((await cdp.evaluate(expression)) === true) return
-					await Bun.sleep(25)
-				}
-				throw new Error(`Timed out: ${expression}`)
-			}
+			const waitFor = async (expression: string) => await cdp.waitFor(expression, { attempts: 400 })
 			await cdp.command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
 			await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
 			await waitFor("document.querySelectorAll('#activity-list .timeline-item').length === 10")

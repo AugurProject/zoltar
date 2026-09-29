@@ -3,42 +3,21 @@ import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../
 import { loadOracleManagerDetails, loadQueuedVaultOperationState, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { approveErc20 } from '@zoltar/ui-zoltar-shared/protocol/tokenActions.js'
 import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
 import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
 import { loadErc20Allowance, loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { createInjectedBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
-import { DAY, TEST_ADDRESSES } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
-import { addressString } from '../../../../../../solidity/ts/testSupport/simulator/utils/bigint'
-import { ensureProxyDeployerDeployed, setupTestAccounts } from '../../../../../../solidity/ts/testSupport/simulator/utils/utilities'
-import { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
-import { useIsolatedAnvilNode } from '../../../../../../solidity/ts/testSupport/simulator/useIsolatedAnvilNode'
-import { createWriteClient, type WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
-import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
-import { ensureZoltarDeployed } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { DAY } from '../../../../../../solidity/ts/testSupport/simulator/utils/constants'
+import type { AnvilWindowEthereum } from '../../../../../../solidity/ts/testSupport/simulator/AnvilWindowEthereum'
+import type { WriteClient } from '../../../../../../solidity/ts/testSupport/simulator/utils/clients'
+import { deployOriginSecurityPool, getSecurityPoolAddresses } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/deployStatoblast'
+import { createQuestion } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
+import { useSepoliaAnvilUiEnvironment } from './testSupport/sepoliaAnvilUi.js'
 import { getSecurityVault, getVaultCount, getVaults, backingUnitsToAttoRep } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/securityPool'
-
-function installInjectedEthereum(mockWindow: AnvilWindowEthereum, accountAddress: Address = addressString(TEST_ADDRESSES[0])) {
-	if (!Reflect.has(globalThis, 'window')) Reflect.set(globalThis, 'window', globalThis)
-	const windowObject = globalThis.window
-	const request: InjectedEthereum['request'] = async args => {
-		if (args.method === 'eth_accounts' || args.method === 'eth_requestAccounts') return [accountAddress] as never
-		return (await mockWindow.request(args)) as never
-	}
-	const injectedEthereum: InjectedEthereum = {
-		on: mockWindow.on,
-		removeListener: mockWindow.removeListener,
-		request,
-	}
-	Reflect.set(windowObject, 'ethereum', injectedEthereum)
-}
 
 const genesisUniverse = 0n
 const statoblastSecurityMultiplierBps = 20_000n
@@ -47,7 +26,7 @@ const depositAmount = 10_000n * 10n ** 18n
 const belowMinimumDepositAmount = 9n * 10n ** 18n
 
 describe('Security vault integration', () => {
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const anvil = useSepoliaAnvilUiEnvironment()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	let uiReadClient: ReturnType<typeof createConnectedReadClient>
@@ -56,19 +35,11 @@ describe('Security vault integration', () => {
 	let walletAddress: Address
 
 	beforeEach(async () => {
-		mockWindow = getAnvilWindowEthereum()
-		await mockWindow.request({ method: 'anvil_setChainId', params: [SEPOLIA_NETWORK_PROFILE.chain.id] })
-		client = createWriteClient(mockWindow, TEST_ADDRESSES[0], 0, SEPOLIA_NETWORK_PROFILE.chain)
-		installInjectedEthereum(mockWindow)
-		// Preserve the seeded token addresses while exercising UI writes on Sepolia.
-		installActiveEnvironmentForTesting(createInjectedBackend({ profile: { ...MAINNET_NETWORK_PROFILE, chain: SEPOLIA_NETWORK_PROFILE.chain, chainIdHex: SEPOLIA_NETWORK_PROFILE.chainIdHex, id: 'sepolia', displayName: 'Sepolia' } }))
+		mockWindow = anvil.getMockWindow()
+		client = anvil.getClient()
 		uiReadClient = createConnectedReadClient()
-		walletAddress = addressString(TEST_ADDRESSES[0])
+		walletAddress = anvil.walletAddress
 		uiWriteClient = createWalletWriteClient(walletAddress)
-		await setupTestAccounts(mockWindow)
-		await ensureProxyDeployerDeployed(client)
-		await ensureZoltarDeployed(client)
-		await ensureInfraDeployed(client)
 
 		const currentTimestamp = await mockWindow.getTime()
 		const questionData = {
@@ -86,8 +57,6 @@ describe('Security vault integration', () => {
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 	})
-
-	afterEach(() => resetActiveEnvironmentForTesting())
 
 	test('approves and deposits REP into the selected vault and reports REP units correctly', async () => {
 		const initialVaultDetails = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)

@@ -1,37 +1,17 @@
-import { expect, test } from 'bun:test'
+import { expect } from 'bun:test'
 import { createDevToolsSession } from '../../../tooling/ui/browserSmoke.mts'
+import { browserTest, origin, qaViewports, writeScreenshot } from './browser-test.ts'
 
-const origin = process.env['AUGURSCAN_BROWSER_URL']
-const browserTest = origin === undefined ? test.skip : test
-
-for (const viewport of [
-	{ width: 1440, height: 900 },
-	{ width: 390, height: 844 },
-]) {
+for (const viewport of qaViewports) {
 	browserTest(
 		`returning to the page refreshes status and retries automatically at ${viewport.width}px`,
 		async () => {
-			const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/?demo=1`, viewport)
-			const evaluate = async (expression: string): Promise<unknown> => {
-				const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-				if (typeof response !== 'object' || response === null) throw new Error('Missing browser response')
-				if ('exceptionDetails' in response) throw new Error(JSON.stringify(response.exceptionDetails))
-				if (!('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
-				return response.result.value
-			}
-			const waitFor = async (expression: string) => {
-				for (let attempt = 0; attempt < 100; attempt++) {
-					if (await evaluate(expression)) return
-					await Bun.sleep(50)
-				}
-				throw new Error(`Timed out: ${expression}`)
-			}
+			const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/?demo=1`, viewport, { evaluationDefaults: { intervalMilliseconds: 50 } })
+			const { evaluate, waitFor } = session
 			const capture = async (state: string) => {
 				const directory = process.env['AUGURSCAN_QA_SCREENSHOTS']
 				if (directory === undefined) return
-				const result = await session.send('Page.captureScreenshot', { format: 'png' })
-				if (typeof result !== 'object' || result === null || !('data' in result) || typeof result.data !== 'string') throw new Error('Missing screenshot')
-				await Bun.write(`${directory}/status-${viewport.width}-${state}.png`, Buffer.from(result.data, 'base64'))
+				await writeScreenshot(session, `${directory}/status-${viewport.width}-${state}.png`)
 			}
 			try {
 				await session.send('Page.enable')

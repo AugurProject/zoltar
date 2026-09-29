@@ -1,4 +1,3 @@
-import { emptySettlementSnapshot } from '#state/settlement-store'
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
@@ -15,6 +14,7 @@ import { loadConfiguration, runnableOperatorSettings } from '#config/configurati
 import type { OperatorState } from '#state/operator-state'
 import type { PendingOperatorUpdates } from '../../src/runtime/operator-control-plane.ts'
 import { applyQueuedExecutionSettings, recordScanDecision, resetReportScanState } from '../../src/runtime/operator-execution-state.ts'
+import { operatorStateFixture } from '../support/operator-state.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -31,28 +31,7 @@ async function exampleConfiguration() {
 }
 
 function operatorState(): OperatorState {
-	return {
-		activeReportCount: 0,
-		balances: undefined,
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		endpointChecks: [],
-		executionHistory: [],
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		operationLog: [],
-		opportunities: [],
-		paused: false,
-		positions: [],
-		priceHistory: [],
-		reportPaths: [],
-		status: 'running',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		settlements: emptySettlementSnapshot(),
-		transactionActivity: [],
-	}
+	return operatorStateFixture({ status: 'running' })
 }
 
 function noPendingUpdates(): PendingOperatorUpdates {

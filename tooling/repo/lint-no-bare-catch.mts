@@ -47,15 +47,7 @@ function shouldIgnore(relativePath: string): boolean {
 	return false
 }
 
-function shouldCheck(filePath: string): boolean {
-	if (!sourceFileExtensions.has(path.extname(filePath))) return false
-	const relativePath = path.relative(projectRoot, filePath).replaceAll('\\', '/')
-	return !shouldIgnore(relativePath)
-}
-
-async function collectFiles(directory: string): Promise<string[]> {
-	return await walkFiles(directory, { descend: directory => !shouldIgnore(path.relative(projectRoot, directory).replaceAll('\\', '/')), include: shouldCheck })
-}
+const isIgnoredPath = (filePath: string) => shouldIgnore(path.relative(projectRoot, filePath).replaceAll('\\', '/'))
 
 function catchBindingIsReferenced(block: ts.Block, bindingName: string) {
 	let referenced = false
@@ -143,7 +135,7 @@ function findCatchFindings(sourceFile: ts.SourceFile): CatchFinding[] {
 }
 
 async function main(): Promise<void> {
-	const files = await collectFiles(projectRoot)
+	const files = await walkFiles(projectRoot, { descend: directory => !isIgnoredPath(directory), include: filePath => sourceFileExtensions.has(path.extname(filePath)) && !isIgnoredPath(filePath) })
 	const catchFindings: CatchFinding[] = []
 
 	for (const filePath of files) {

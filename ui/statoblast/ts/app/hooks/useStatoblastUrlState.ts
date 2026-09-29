@@ -1,7 +1,7 @@
-import { useSignal } from '@preact/signals'
-import { useCallback, useEffect } from 'preact/hooks'
+import { useCallback } from 'preact/hooks'
+import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
-import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, updateSearchParams, setOrDeleteSearchParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { buildPoolsRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
@@ -16,12 +16,10 @@ type StatoblastUrlState = {
 	securityPoolQuestionId: string
 }
 
-type HistoryMode = 'push' | 'replace'
-
 const QUESTION_ID_QUERY_PARAM = 'questionId'
 
 /** Reads the pool location from the hash path and the remaining view state from its query. */
-function readStatoblastUrlState(routeHash: string, search: string): StatoblastUrlState {
+function readStatoblastUrlState(search: string, routeHash: string): StatoblastUrlState {
 	const poolsLocation = parsePoolsRouteHash(routeHash)
 	return {
 		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
@@ -34,56 +32,15 @@ function readStatoblastUrlState(routeHash: string, search: string): StatoblastUr
 	}
 }
 
-function readCurrentUrlState() {
-	const legacyHash = mapLegacyStatoblastHash(window.location.hash)
-	if (legacyHash === undefined) return readStatoblastUrlState(getCurrentRouteHash(), getRouteHashSearch())
-	const { routeHash, search } = parseRouteHash(legacyHash)
-	return readStatoblastUrlState(routeHash, search)
-}
-
 function withoutQuestionId(search: string) {
 	return updateSearchParams(search, params => params.delete(QUESTION_ID_QUERY_PARAM))
 }
 
-/** Rewrites a legacy `#/security-pools` link in place so every reader sees the path-based pool location. */
-function canonicalizeLegacyHash() {
-	const legacyHash = mapLegacyStatoblastHash(window.location.hash)
-	if (legacyHash !== undefined) window.history.replaceState(window.history.state, '', legacyHash)
-}
-
 export function useStatoblastUrlState() {
-	const urlState = useSignal<StatoblastUrlState>(readCurrentUrlState())
-
-	useEffect(() => {
-		const syncUrlState = () => {
-			canonicalizeLegacyHash()
-			urlState.value = readCurrentUrlState()
-		}
-		syncUrlState()
-		window.addEventListener('hashchange', syncUrlState)
-		window.addEventListener('popstate', syncUrlState)
-		return () => {
-			window.removeEventListener('hashchange', syncUrlState)
-			window.removeEventListener('popstate', syncUrlState)
-		}
-	}, [urlState])
-
-	const navigateUrl = useCallback(
-		(nextRouteHash: string, nextSearch: string, historyMode: HistoryMode = 'push') => {
-			const currentRouteHash = getCurrentRouteHash()
-			if (nextRouteHash !== currentRouteHash || nextSearch !== getRouteHashSearch()) {
-				const nextHref = buildRouteHref(nextRouteHash, nextSearch)
-				if (historyMode === 'replace') window.history.replaceState({}, '', nextHref)
-				else window.history.pushState({}, '', nextHref)
-				// History writes do not fire hashchange; the route signal still has to observe a path change.
-				if (nextRouteHash !== currentRouteHash) window.dispatchEvent(new Event('hashchange'))
-			}
-			urlState.value = readStatoblastUrlState(nextRouteHash, nextSearch)
-		},
-		[urlState],
-	)
-	const updateSearch = useCallback((update: (search: string) => string, historyMode: HistoryMode = 'push') => navigateUrl(getCurrentRouteHash(), update(getRouteHashSearch()), historyMode), [navigateUrl])
-	const navigatePools = useCallback((location: PoolsLocation, historyMode: HistoryMode = 'push') => navigateUrl(buildPoolsRouteHash(location), location.view === 'create' ? getRouteHashSearch() : withoutQuestionId(getRouteHashSearch()), historyMode), [navigateUrl])
+	// A legacy `#/security-pools` link is rewritten in place so every reader sees the path-based pool location.
+	const { navigate: navigateUrl, state } = useUrlSearchState(readStatoblastUrlState, { mapLegacyHash: mapLegacyStatoblastHash })
+	const updateSearch = useCallback((update: (search: string) => string, historyMode: UrlHistoryMode = 'push') => navigateUrl(getCurrentRouteHash(), update(getRouteHashSearch()), historyMode), [navigateUrl])
+	const navigatePools = useCallback((location: PoolsLocation, historyMode: UrlHistoryMode = 'push') => navigateUrl(buildPoolsRouteHash(location), location.view === 'create' ? getRouteHashSearch() : withoutQuestionId(getRouteHashSearch()), historyMode), [navigateUrl])
 
 	const setActiveUniverseId = useCallback((universeId: bigint | undefined) => updateSearch(search => writeUniverseQueryParam(search, universeId)), [updateSearch])
 	// Editing keeps one history entry per editing session: moving away from a complete address pushes, and replacing a partial address replaces that entry, so Back returns to the previous pool.
@@ -108,7 +65,7 @@ export function useStatoblastUrlState() {
 		},
 		[navigateUrl],
 	)
-	const setOpenOracleReport = useCallback((reportId: string | undefined, historyMode: HistoryMode = 'push') => updateSearch(search => writeOpenOracleReportIdQueryParam(search, reportId), historyMode), [updateSearch])
+	const setOpenOracleReport = useCallback((reportId: string | undefined, historyMode: UrlHistoryMode = 'push') => updateSearch(search => writeOpenOracleReportIdQueryParam(search, reportId), historyMode), [updateSearch])
 	const setOpenOracleView = useCallback((view: string | undefined) => updateSearch(search => writeOpenOracleViewQueryParam(search, view)), [updateSearch])
 	const setSecurityPoolsView = useCallback(
 		(view: string | undefined) => {
@@ -132,7 +89,7 @@ export function useStatoblastUrlState() {
 	)
 
 	return {
-		...urlState.value,
+		...state,
 		setActiveUniverseId,
 		setOpenOracleReport,
 		setOpenOracleView,

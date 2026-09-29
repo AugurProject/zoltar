@@ -1,4 +1,4 @@
-import { compareBigint } from '../infrastructure/compare.ts'
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
 const BPS = 10_000n
 
 export async function requireCanonicalBlock(blockNumber: bigint, expectedHash: `0x${string}`, readCanonicalHash: (blockNumber: bigint) => Promise<`0x${string}` | undefined>) {

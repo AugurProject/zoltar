@@ -28,6 +28,28 @@ function createForkMockWriteClient(onSendTransaction: (request: { data?: Hex | u
 	})
 }
 
+const questionId = 1n
+const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+
+function createForkDetailsClient({ poolRead, computeClearing, ownForkMigrationStatus = [false, 0n, 0n, 0n, 0n] }: { poolRead: readonly unknown[]; computeClearing?: readonly unknown[]; ownForkMigrationStatus?: readonly unknown[] }) {
+	return createMockLoaderClient({
+		getBlock: async () => createBlockWithTimestamp(5n),
+		multicall: async request => {
+			const functionName = getContractFunctionName(request.contracts[0])
+			if (functionName === 'questionId') return poolRead
+			if (functionName === 'getForkTime') return [0n]
+			if (functionName === 'questions') return [questionTuple, 1n]
+			if (functionName === 'computeClearing' && computeClearing !== undefined) return computeClearing
+			throw new Error(`Unexpected multicall contract: ${functionName}`)
+		},
+		readContract: async request => {
+			if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+			if (request.functionName === 'getOwnForkMigrationStatus') return ownForkMigrationStatus
+			throw new Error(`Unexpected readContract function: ${request.functionName}`)
+		},
+	})
+}
+
 describe('forks protocol client', () => {
 	test('finalizeSecurityPoolTruthAuction sends no repair contribution', async () => {
 		let capturedValue: bigint | undefined
@@ -78,28 +100,7 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails keeps the default root-pool fork outcome unset and inactive', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(5n),
-			multicall: async request => {
-				const contracts = request.contracts
-				const firstContract = contracts[0]
-				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, defaultForkData, 3n, [0n, 0n, 0n]]
-				}
-				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
-		})
-
-		const details = await loadForkAuctionDetails(client, securityPoolAddress)
+		const details = await loadForkAuctionDetails(createForkDetailsClient({ poolRead: [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, defaultForkData, 3n, [0n, 0n, 0n]] }), securityPoolAddress)
 
 		expect(details.parentSecurityPoolAddress).toBe(zeroAddress)
 		expect(details.forkOutcome).toBe('none')
@@ -108,51 +109,16 @@ describe('forks protocol client', () => {
 	})
 
 	test('loadForkAuctionDetails rejects malformed fork data instead of casting tuple reads', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(5n),
-			multicall: async request => {
-				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n], 3n, [0n, 0n, 0n]]
-				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
-		})
+		const client = createForkDetailsClient({ poolRead: [questionId, zeroAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 0n, 'bad-migrated-rep', 0n, 0n, 0n, 0n, false, false, 0n, 0n], 3n, [0n, 0n, 0n]] })
 
 		await expect(loadForkAuctionDetails(client, securityPoolAddress)).rejects.toThrow('Unexpected security pool fork data migrated REP response')
 	})
 
 	test('loadForkAuctionDetails preserves migration end time after truth auction has started', async () => {
-		const questionId = 1n
 		const forkActivationTime = 1_000n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(5n),
-			multicall: async request => {
-				const contracts = request.contracts
-				const firstContract = contracts[0]
-				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, forkActivationTime], 4n, [0n, 0n, 0n]]
-				}
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				if (getContractFunctionName(firstContract) === 'computeClearing') {
-					return [[false, 0n, 0n, 0n], 1n, 0n, false, 1n, 1n, 0n, false, 0n, 0n, 0n]
-				}
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
+		const client = createForkDetailsClient({
+			poolRead: [questionId, truthAuctionAddress, 1n, 0n, zeroAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, forkActivationTime], 4n, [0n, 0n, 0n]],
+			computeClearing: [[false, 0n, 0n, 0n], 1n, 0n, false, 1n, 1n, 0n, false, 0n, 0n, 0n],
 		})
 
 		const details = await loadForkAuctionDetails(client, securityPoolAddress)
@@ -161,99 +127,45 @@ describe('forks protocol client', () => {
 		expect(details.migrationEndsAt).toBe(forkActivationTime + 4_838_400n)
 	})
 
-	test('loadForkAuctionDetails preserves finalized underfunded auction fields from the multicall tuple', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const finalizedClearingTick = 12n
-		const syntheticThreshold = 7n * 10n ** 17n
-		const underfundedWinningAttoEth = 9n * 10n ** 18n
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(5n),
-			multicall: async request => {
-				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 0n]
-				}
-				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				if (getContractFunctionName(firstContract) === 'computeClearing') {
-					return [[false, 99n, underfundedWinningAttoEth, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 12n * 10n ** 18n, true, syntheticThreshold, underfundedWinningAttoEth, finalizedClearingTick]
-				}
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
+	describe('finalized underfunded truth auctions', () => {
+		const finalizedUnderfundedPoolRead = [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 0n]
+		const loadTruthAuction = async (computeClearing: readonly unknown[]) => {
+			const details = await loadForkAuctionDetails(createForkDetailsClient({ poolRead: finalizedUnderfundedPoolRead, computeClearing }), securityPoolAddress)
+			if (details.truthAuction === undefined) throw new Error('Expected truth auction details to load.')
+			return details.truthAuction
+		}
+
+		test('loadForkAuctionDetails preserves finalized underfunded auction fields from the multicall tuple', async () => {
+			const finalizedClearingTick = 12n
+			const syntheticThreshold = 7n * 10n ** 17n
+			const underfundedWinningAttoEth = 9n * 10n ** 18n
+			const truthAuction = await loadTruthAuction([[false, 99n, underfundedWinningAttoEth, 0n], 20n * 10n ** 18n, 13n * 10n ** 18n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 12n * 10n ** 18n, true, syntheticThreshold, underfundedWinningAttoEth, finalizedClearingTick])
+
+			expect(truthAuction.finalized).toBe(true)
+			expect(truthAuction.underfunded).toBe(true)
+			expect(truthAuction.clearingTick).toBe(finalizedClearingTick)
+			expect(truthAuction.clearingPrice).toBe(syntheticThreshold)
+			expect(truthAuction.underfundedThreshold).toBe(syntheticThreshold)
+			expect(truthAuction.underfundedWinningAttoEth).toBe(underfundedWinningAttoEth)
 		})
 
-		const details = await loadForkAuctionDetails(client, securityPoolAddress)
-		if (details.truthAuction === undefined) throw new Error('Expected truth auction details to load.')
+		test('loadForkAuctionDetails hides the synthetic clearing price when a finalized underfunded auction has no winning prefix', async () => {
+			const noWinningPrefixThreshold = 2n * 10n ** 18n
+			const truthAuction = await loadTruthAuction([[false, 0n, 0n, 0n], 20n * 10n ** 18n, 0n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 0n, true, noWinningPrefixThreshold, 0n, 0n])
 
-		expect(details.truthAuction.finalized).toBe(true)
-		expect(details.truthAuction.underfunded).toBe(true)
-		expect(details.truthAuction.clearingTick).toBe(finalizedClearingTick)
-		expect(details.truthAuction.clearingPrice).toBe(syntheticThreshold)
-		expect(details.truthAuction.underfundedThreshold).toBe(syntheticThreshold)
-		expect(details.truthAuction.underfundedWinningAttoEth).toBe(underfundedWinningAttoEth)
-	})
-
-	test('loadForkAuctionDetails hides the synthetic clearing price when a finalized underfunded auction has no winning prefix', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const noWinningPrefixThreshold = 2n * 10n ** 18n
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(5n),
-			multicall: async request => {
-				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, zeroAddress, 1n, 3n, truthAuctionAddress, 0n, [0n, zeroAddress, 1n, 0n, 0n, 0n, 0n, 0n, false, false, 1n, 1n], 0n]
-				}
-				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				if (getContractFunctionName(firstContract) === 'computeClearing') {
-					return [[false, 0n, 0n, 0n], 20n * 10n ** 18n, 0n, true, 12n * 10n ** 18n, 1n * 10n ** 18n, 0n, true, noWinningPrefixThreshold, 0n, 0n]
-				}
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getOwnForkMigrationStatus') return [false, 0n, 0n, 0n, 0n]
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
+			expect(truthAuction.finalized).toBe(true)
+			expect(truthAuction.underfunded).toBe(true)
+			expect(truthAuction.clearingTick).toBe(0n)
+			expect(truthAuction.clearingPrice).toBeUndefined()
+			expect(truthAuction.underfundedThreshold).toBe(noWinningPrefixThreshold)
+			expect(truthAuction.underfundedWinningAttoEth).toBe(0n)
 		})
-
-		const details = await loadForkAuctionDetails(client, securityPoolAddress)
-		if (details.truthAuction === undefined) throw new Error('Expected truth auction details to load.')
-
-		expect(details.truthAuction.finalized).toBe(true)
-		expect(details.truthAuction.underfunded).toBe(true)
-		expect(details.truthAuction.clearingTick).toBe(0n)
-		expect(details.truthAuction.clearingPrice).toBeUndefined()
-		expect(details.truthAuction.underfundedThreshold).toBe(noWinningPrefixThreshold)
-		expect(details.truthAuction.underfundedWinningAttoEth).toBe(0n)
 	})
 
 	test('loadForkAuctionDetails surfaces own-fork migration diagnostics only for own-fork pools', async () => {
-		const questionId = 1n
-		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
-		const client = createMockLoaderClient({
-			getBlock: async () => createBlockWithTimestamp(5n),
-			multicall: async request => {
-				const firstContract = request.contracts[0]
-				if (getContractFunctionName(firstContract) === 'questionId') {
-					return [questionId, securityPoolAddress, 1n, 0n, zeroAddress, 0n, [30n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, true, false, 1n, 1n], 4n]
-				}
-				if (getContractFunctionName(firstContract) === 'getForkTime') return [0n]
-				if (getContractFunctionName(firstContract) === 'questions') return [questionTuple, 1n]
-				throw new Error(`Unexpected multicall contract: ${getContractFunctionName(firstContract)}`)
-			},
-			readContract: async request => {
-				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
-				if (request.functionName === 'getOwnForkMigrationStatus') return [true, 30n, 12n, 9n, 18n]
-				throw new Error(`Unexpected readContract function: ${request.functionName}`)
-			},
+		const client = createForkDetailsClient({
+			poolRead: [questionId, securityPoolAddress, 1n, 0n, zeroAddress, 0n, [30n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, true, false, 1n, 1n], 4n],
+			ownForkMigrationStatus: [true, 30n, 12n, 9n, 18n],
 		})
 
 		const details = await loadForkAuctionDetails(client, securityPoolAddress)

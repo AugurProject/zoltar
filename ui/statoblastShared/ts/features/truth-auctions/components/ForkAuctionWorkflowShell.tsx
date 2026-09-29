@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -52,22 +52,8 @@ export function ForkAuctionWorkflowShell({
 	const content = (
 		<>
 			{children}
-			<ErrorNotice message={forkAuctionError} />
-			{forkAuctionError === undefined || forkAuctionDetailsAvailable || securityPoolAddress === undefined ? undefined : (
-				<div className='actions'>
-					<button className='secondary' disabled={loadingForkAuctionDetails} onClick={() => onLoadForkAuction(securityPoolAddress)} type='button'>
-						{forkAuctionCopy.retryForkWorkflow}
-					</button>
-				</div>
-			)}
-			<ErrorNotice message={reportingError} />
-			{reportingError === undefined || onLoadReporting === undefined ? undefined : (
-				<div className='actions'>
-					<button className='secondary' disabled={loadingReportingDetails} onClick={onLoadReporting} type='button'>
-						{loadingReportingDetails ? <LoadingText>{forkAuctionCopy.loadingReportingDetails}</LoadingText> : forkAuctionCopy.retryReporting}
-					</button>
-				</div>
-			)}
+			<RetryableNotice disabled={loadingForkAuctionDetails} message={forkAuctionError} onRetry={forkAuctionDetailsAvailable || securityPoolAddress === undefined ? undefined : () => onLoadForkAuction(securityPoolAddress)} retryLabel={forkAuctionCopy.retryForkWorkflow} />
+			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{forkAuctionCopy.loadingReportingDetails}</LoadingText> : forkAuctionCopy.retryReporting} />
 		</>
 	)
 	if (embedInCard) return content

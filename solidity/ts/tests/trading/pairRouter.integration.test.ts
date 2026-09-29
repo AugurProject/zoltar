@@ -1,11 +1,14 @@
 import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/protocol/authorization.js'
+import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
+import { deployContract } from '../../testSupport/deployContract'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeAbiParameters, encodeDeployData, encodeFunctionData, isHex, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { signTyped } from 'micro-eth-signer'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
+import { PERMIT_TYPES, splitSignature } from '../../testSupport/simulator/utils/typedDataSignatures'
 import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../testSupport/coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
@@ -13,44 +16,6 @@ const rate = 10n ** 18n
 const universe = 17n
 const question = 91n
 const unboundedShares = 2n ** 256n - 1n
-
-function splitSignature(signature: string) {
-	if (!isHex(signature) || signature.length !== 132) throw new Error('Expected a 65-byte signature')
-	return {
-		r: `0x${signature.slice(2, 66)}` as Hex,
-		s: `0x${signature.slice(66, 130)}` as Hex,
-		v: Number.parseInt(signature.slice(130, 132), 16),
-	}
-}
-
-const receiveRequestParameter = {
-	type: 'tuple',
-	components: [
-		{ name: 'version', type: 'uint8' },
-		{ name: 'operation', type: 'uint8' },
-		{ name: 'shareToken', type: 'address' },
-		{ name: 'securityPool', type: 'address' },
-		{ name: 'pair', type: 'address' },
-		{ name: 'universeId', type: 'uint248' },
-		{ name: 'questionId', type: 'uint256' },
-		{ name: 'invalidTokenId', type: 'uint256' },
-		{ name: 'yesTokenId', type: 'uint256' },
-		{ name: 'noTokenId', type: 'uint256' },
-		{ name: 'longOutcome', type: 'uint8' },
-		{ name: 'completeSetShares', type: 'uint256' },
-		{ name: 'maxLongSharesIn', type: 'uint256' },
-		{ name: 'minEthOut', type: 'uint256' },
-		{ name: 'payoutRecipient', type: 'address' },
-		{ name: 'refundRecipient', type: 'address' },
-		{ name: 'deadline', type: 'uint256' },
-	],
-} as const
-
-type ReceiveRequest = readonly [number, number, Address, Address, Address, bigint, bigint, bigint, bigint, bigint, number, bigint, bigint, bigint, Address, Address, bigint]
-
-function encodeReceiveRequest(request: ReceiveRequest) {
-	return encodeAbiParameters([receiveRequestParameter], [request])
-}
 
 describe('factory, pair, and router integration', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -70,12 +35,7 @@ describe('factory, pair, and router integration', () => {
 	let pairArtifact: TradingContracts['contracts/trading/TwoWayConstantProductPair.sol']['TwoWayConstantProductPair']
 	let routerArtifact: TradingContracts['contracts/trading/TwoWayConstantProductRouter.sol']['TwoWayConstantProductRouter']
 
-	async function deploy<TAbi extends Abi>(artifact: Readonly<{ abi: TAbi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) {
-		const hash = await client.sendTransaction({ data: encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}` as Hex, args }), value })
-		const receipt = await client.waitForTransactionReceipt({ hash })
-		if (receipt.status === 'reverted' || receipt.contractAddress === undefined) throw new Error('Contract deployment failed')
-		return receipt.contractAddress
-	}
+	const deploy = async (artifact: Readonly<{ abi: Abi; evm: Readonly<{ bytecode: Readonly<{ object: string }> }> }>, args: readonly unknown[] = [], value = 0n) => await deployContract(client, encodeDeployData({ abi: artifact.abi, bytecode: `0x${artifact.evm.bytecode.object}`, args }), value)
 
 	async function initialize(value = 10_000n, conditionalYesBps = 7_000n) {
 		await writeContractAndWait(client, () => client.writeContract({ abi: routerArtifact.abi, address: router, functionName: 'initializeWithEth', args: [pair, conditionalYesBps, 1n, account, 10n ** 12n], value }))
@@ -507,13 +467,7 @@ describe('factory, pair, and router integration', () => {
 							{ name: 'chainId', type: 'uint256' },
 							{ name: 'verifyingContract', type: 'address' },
 						],
-						Permit: [
-							{ name: 'owner', type: 'address' },
-							{ name: 'spender', type: 'address' },
-							{ name: 'value', type: 'uint256' },
-							{ name: 'nonce', type: 'uint256' },
-							{ name: 'deadline', type: 'uint256' },
-						],
+						...PERMIT_TYPES,
 					},
 					message: { owner, spender, value, nonce: signedNonce, deadline: permitDeadline },
 				},

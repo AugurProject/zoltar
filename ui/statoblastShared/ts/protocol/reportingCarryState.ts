@@ -165,32 +165,11 @@ async function loadRecursiveHistoricalCarryLeaves(client: Pick<ReadClient, 'read
 	const snapshotLeafCount = outcomeState.snapshotLeafCount
 	const localLeaves = await loadHistoricalLocalCarryLeaves(client, escalationGameAddress, outcome, outcomeState.localHeadNodeId)
 	let inheritedLeaves: HistoricalCarrySnapshotEntry[] = []
-	if (forkContinuation === true) {
-		const securityPoolAddress = await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: escalationGameAddress,
-			functionName: 'securityPool',
-			args: [],
-		})
-		const parentSecurityPoolAddress = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddress,
-			functionName: 'parent',
-			args: [],
-		})
-		if (parentSecurityPoolAddress !== zeroAddress) {
-			const parentEscalationGameAddress = await client.readContract({
-				abi: statoblast_SecurityPool_SecurityPool.abi,
-				address: parentSecurityPoolAddress,
-				functionName: 'escalationGame',
-				args: [],
-			})
-			if (parentEscalationGameAddress !== zeroAddress) {
-				const parentLeaves = await loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome)
-				if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('Inherited historical carry snapshot is incomplete.')
-				inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Snapshot leaf count'))
-			}
-		}
+	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
+	if (parentEscalationGameAddress !== undefined) {
+		const parentLeaves = await loadRecursiveHistoricalCarryLeaves(client, parentEscalationGameAddress, outcome)
+		if (BigInt(parentLeaves.length) < snapshotLeafCount) throw new Error('Inherited historical carry snapshot is incomplete.')
+		inheritedLeaves = parentLeaves.slice(0, bigintToSafeNumber(snapshotLeafCount, 'Snapshot leaf count'))
 	}
 	if (BigInt(inheritedLeaves.length) !== snapshotLeafCount) throw new Error('Inherited historical carry snapshot is not locally reconstructible.')
 	for (const [localIndex, leaf] of localLeaves.entries()) {
@@ -223,6 +202,14 @@ async function loadProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, '
 async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address, outcome: ReportingOutcomeKey): Promise<bigint[]> {
 	const [localConsumedIndexes, forkContinuation] = await Promise.all([loadProofConsumedCarriedDepositIndexes(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress)])
 	if (forkContinuation !== true) return localConsumedIndexes
+	const parentEscalationGameAddress = await readParentEscalationGameAddress(client, escalationGameAddress)
+	if (parentEscalationGameAddress === undefined) return localConsumedIndexes
+	const inheritedConsumedIndexes = await loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome)
+	return [...inheritedConsumedIndexes, ...localConsumedIndexes]
+}
+
+/** The escalation game of the parent pool a fork continuation inherits from, or `undefined` when there is none. */
+async function readParentEscalationGameAddress(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
 	const securityPoolAddress = await client.readContract({
 		abi: statoblast_EscalationGame_EscalationGame.abi,
 		address: escalationGameAddress,
@@ -235,16 +222,14 @@ async function loadRecursiveProofConsumedCarriedDepositIndexes(client: Pick<Read
 		functionName: 'parent',
 		args: [],
 	})
-	if (parentSecurityPoolAddress === zeroAddress) return localConsumedIndexes
+	if (parentSecurityPoolAddress === zeroAddress) return undefined
 	const parentEscalationGameAddress = await client.readContract({
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		address: parentSecurityPoolAddress,
 		functionName: 'escalationGame',
 		args: [],
 	})
-	if (parentEscalationGameAddress === zeroAddress) return localConsumedIndexes
-	const inheritedConsumedIndexes = await loadRecursiveProofConsumedCarriedDepositIndexes(client, parentEscalationGameAddress, outcome)
-	return [...inheritedConsumedIndexes, ...localConsumedIndexes]
+	return parentEscalationGameAddress === zeroAddress ? undefined : parentEscalationGameAddress
 }
 
 export async function readForkContinuation(client: Pick<ReadClient, 'readContract'>, escalationGameAddress: Address) {
@@ -278,41 +263,8 @@ async function loadRecursiveCarrySnapshot(
 	const [outcomeState, forkContinuation, localLeaves] = await Promise.all([readEscalationOutcomeState(client, escalationGameAddress, outcome), readForkContinuation(client, escalationGameAddress), loadCarryLeafPage(client, escalationGameAddress, outcome)])
 	const { currentCarryRoot: carryRoot, currentLeafCount: carryLeafCount, currentNullifierRoot: nullifierRoot } = outcomeState
 	const orderedLocalLeaves = [...localLeaves].sort((left, right) => compareBigintAscending(left.sourceNodeId, right.sourceNodeId))
-	if (forkContinuation !== true) {
-		return {
-			orderedLeaves: orderedLocalLeaves,
-			carryRoot,
-			carryLeafCount,
-			nullifierRoot,
-		}
-	}
-	const securityPoolAddress = await client.readContract({
-		abi: statoblast_EscalationGame_EscalationGame.abi,
-		address: escalationGameAddress,
-		functionName: 'securityPool',
-		args: [],
-	})
-	const parentSecurityPoolAddress = await client.readContract({
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		address: securityPoolAddress,
-		functionName: 'parent',
-		args: [],
-	})
-	if (parentSecurityPoolAddress === zeroAddress) {
-		return {
-			orderedLeaves: orderedLocalLeaves,
-			carryRoot,
-			carryLeafCount,
-			nullifierRoot,
-		}
-	}
-	const parentEscalationGameAddress = await client.readContract({
-		abi: statoblast_SecurityPool_SecurityPool.abi,
-		address: parentSecurityPoolAddress,
-		functionName: 'escalationGame',
-		args: [],
-	})
-	if (parentEscalationGameAddress === zeroAddress) {
+	const parentEscalationGameAddress = forkContinuation === true ? await readParentEscalationGameAddress(client, escalationGameAddress) : undefined
+	if (parentEscalationGameAddress === undefined) {
 		return {
 			orderedLeaves: orderedLocalLeaves,
 			carryRoot,

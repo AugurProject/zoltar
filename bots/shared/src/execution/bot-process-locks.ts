@@ -1,4 +1,5 @@
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '../ethereum.ts'
+import { errorMessage } from '../infrastructure/error-message.ts'
 import { acquireExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from './process-lock.ts'
 
 export type BotLockSettings = {
@@ -30,7 +31,7 @@ const defaultLockAcquirers = (label: string): BotProcessLockAcquirers => ({
 	acquireState: stateFile => acquireFileProcessLock(stateFile, `${label} state`),
 })
 
-export class BotProcessLockAcquisitionError extends Error {
+class BotProcessLockAcquisitionError extends Error {
 	readonly acquisitionCause: unknown
 	readonly releaseProcessLocks: () => Promise<void>
 
@@ -191,11 +192,38 @@ export type BotProcessLocks = Awaited<ReturnType<typeof acquireBotProcessLocks>>
 
 export type BotShutdownController = ReturnType<typeof createBotShutdownController>
 
-export async function acquireBotProcessLocksForShutdown(settings: BotLockSettings, options: BotProcessLockOptions, shutdown: Pick<BotShutdownController, 'isRequested'>, acquire: typeof acquireBotProcessLocks = acquireBotProcessLocks) {
-	const locks = await acquire(settings, options)
-	if (!shutdown.isRequested()) return locks
-	await locks.release()
-	return undefined
+/** Releases whatever a failed acquisition still holds, then rethrows the failure that stopped the acquisition. */
+export async function throwLockAcquisitionCause(error: unknown): Promise<never> {
+	if (error instanceof BotProcessLockAcquisitionError) {
+		await error.releaseProcessLocks()
+		throw error.acquisitionCause
+	}
+	throw error
+}
+
+/**
+ * Runs `run` while holding the bot's process locks and releases them afterwards. Returns `undefined` without running when
+ * shutdown was requested while the locks were being acquired. A partial acquisition failure releases what it took before its cause is rethrown.
+ */
+export async function withBotProcessLocks<T>(settings: BotLockSettings, options: BotProcessLockOptions, shutdown: Pick<BotShutdownController, 'isRequested'>, run: (locks: BotProcessLocks) => Promise<T>, acquire: typeof acquireBotProcessLocks = acquireBotProcessLocks) {
+	const locks = await acquire(settings, options).catch(throwLockAcquisitionCause)
+	if (shutdown.isRequested()) {
+		await locks.release()
+		return undefined
+	}
+	try {
+		return await run(locks)
+	} finally {
+		await locks.release()
+	}
+}
+
+/** Runs a bot entry point, printing only the failure message and setting a failing exit code. */
+export function runBotMain(main: () => Promise<unknown>) {
+	main().catch(error => {
+		console.error(errorMessage(error))
+		process.exitCode = 1
+	})
 }
 
 export function botDashboardLifecycle(dashboard: { stop: (closeActiveConnections?: boolean) => Promise<void> }) {

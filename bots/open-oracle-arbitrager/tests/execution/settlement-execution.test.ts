@@ -143,9 +143,41 @@ describe('third-party settlement execution against OpenOracle', () => {
 		await node.anvilWindowEthereum.request({ method: 'evm_mine', params: [] })
 	}
 
-	async function context(records: SettlementRecord[], activity: TransactionActivity[]): Promise<SettlementExecutionContext> {
+	async function headBlock() {
 		const block = await client.getBlock()
 		if (block.number === null || block.number === undefined) throw new Error('head block number missing')
+		return { ...block, number: block.number }
+	}
+
+	function settlementPlan(report: OpenOracleStatePreimage) {
+		return { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+	}
+
+	/** A live, public-mempool settlement stage whose risk limits never bind unless a test tightens them. */
+	function stageConfiguration(publicRpcUrl: string, positionFile: string, rewardWithdrawThresholdAttoEth: bigint): SettlementStageConfiguration & { positionFile: string } {
+		return {
+			connectivity: { publicRpcUrls: [publicRpcUrl], readRpcUrl: node.rpcUrl },
+			execute: true,
+			network,
+			openOracle,
+			pollMilliseconds: 1_000,
+			positionFile,
+			quorumRpcUrls: [],
+			riskLimits: { lifecycleGasReserveAttoWeth: 0n, maxConcurrentPositions: 1, maxDailyGasSpendAttoWeth: 10n ** 18n, maxPositionNotionalAttoWeth: 10n ** 18n, maxTotalLockedAttoWeth: 10n ** 18n },
+			settlement: { ...settlement, rewardWithdrawThresholdAttoEth },
+			submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }),
+		}
+	}
+
+	type StageInput = Parameters<typeof runSettlementStage>[0]
+
+	/** One settlement-stage scan with a free transaction slot, a ready execution budget, and no position gas spent today. */
+	function stageInput(fields: Pick<StageInput, 'block' | 'config' | 'coordinatorPolicies' | 'journal' | 'reports' | 'state'> & Partial<StageInput>): StageInput {
+		return { client, dailyPositionGasSpentAttoWeth: 0n, executionReady: true, gasPrice: 2n * NANO_ETH, isPaused: () => false, readClients: [client], tokenSymbol: () => 'TK2', track: () => {}, transactionSlotFree: true, wallet, ...fields }
+	}
+
+	async function context(records: SettlementRecord[], activity: TransactionActivity[]): Promise<SettlementExecutionContext> {
+		const block = await headBlock()
 		return {
 			baseFeePerGas: block.baseFeePerGas ?? 0n,
 			blockNumber: block.number,
@@ -172,7 +204,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const activity: TransactionActivity[] = []
 		const settlementContext = await context(records, activity)
 		// The settling wallet is also the reporter here; the queue excludes that case, so the executor is exercised directly.
-		const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+		const plan = settlementPlan(report)
 		const record = await executeSettlement(settlementContext, plan)
 		expect(record).toMatchObject({ account: account.address, coordinator: report.helper.creator, kind: 'settlement', reportId: report.helper.reportId.toString(), rewardEth: '0.017043310270400101', status: 'confirmed' })
 		expect(record.actualGasCostEth).toBeDefined()
@@ -219,7 +251,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 				throw new Error('receipt wait timed out')
 			},
 		}
-		const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+		const plan = settlementPlan(report)
 		await expect(executeSettlement({ ...base, client: impatientClient, wallet: deafWallet }, plan)).rejects.toThrow('was not confirmed in its parent-bound target block')
 		expect(records.map(record => record.status)).toEqual(['pending'])
 		// Anvil mined the attempt anyway, so the next scan's reconciliation resolves it from the receipt.
@@ -240,7 +272,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const base = await context(records, activity)
 			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
 			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
-			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+			const plan = settlementPlan(report)
 			const attempt = executeSettlement({ ...base, config }, plan)
 			// The attempt and this test both poll for the replacement receipt; keep the expected rejection handled so the
 			// attempt cannot reject unhandled if its poll observes the replacement first.
@@ -287,7 +319,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 	test('drops a journaled public attempt that no node accepted so it neither holds the report nor charges the budget', async () => {
 		const report = await submitReport(reporter, reporter.account.address)
 		await pastSettlementWindow()
-		const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+		const plan = settlementPlan(report)
 		// Every public RPC rejects the raw transaction, so the signed settle never reaches a mempool.
 		const rejectingRpc = Bun.serve({
 			port: 0,
@@ -327,42 +359,22 @@ describe('third-party settlement execution against OpenOracle', () => {
 			// Through the stage, a refusal that repeats leaves the report in flight instead of re-signing on the next scan.
 			const journalDirectory = await mkdtemp(join(tmpdir(), 'zoltar-settlement-refusal-'))
 			try {
-				const block = await client.getBlock()
-				if (block.number === null || block.number === undefined) throw new Error('head block number missing')
-				const stageConfig: SettlementStageConfiguration & { positionFile: string } = {
-					connectivity: { publicRpcUrls: [rejectingRpc.url.href], readRpcUrl: node.rpcUrl },
-					execute: true,
-					network,
-					openOracle,
-					pollMilliseconds: 1_000,
-					positionFile: join(journalDirectory, 'positions.json'),
-					quorumRpcUrls: [],
-					riskLimits: { lifecycleGasReserveAttoWeth: 0n, maxConcurrentPositions: 1, maxDailyGasSpendAttoWeth: 10n ** 18n, maxPositionNotionalAttoWeth: 10n ** 18n, maxTotalLockedAttoWeth: 10n ** 18n },
-					settlement: { ...settlement, rewardWithdrawThresholdAttoEth: 100n * 10n ** 18n },
-					submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }),
-				}
+				const block = await headBlock()
+				const stageConfig = stageConfiguration(rejectingRpc.url.href, join(journalDirectory, 'positions.json'), 100n * 10n ** 18n)
 				const state = { blockTimestamp: block.timestamp.toString(), operationLog: [] as OperationEntry[], paused: false, settlements: emptySettlementSnapshot() }
 				const journal = await createSettlementJournal(stageConfig, state)
 				const policy: CoordinatorGamePolicy = { ...report.game, coordinator: reporter.account.address, openOracle }
 				const stage = () =>
-					runSettlementStage({
-						block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: block.number ?? 0n, timestamp: block.timestamp },
-						client,
-						config: stageConfig,
-						coordinatorPolicies: [policy],
-						dailyPositionGasSpentAttoWeth: 0n,
-						executionReady: true,
-						gasPrice: 2n * NANO_ETH,
-						isPaused: () => false,
-						journal,
-						readClients: [client],
-						reports: [{ latest: report, settled: false, steps: [] }],
-						state,
-						tokenSymbol: () => 'TK2',
-						track: () => {},
-						transactionSlotFree: true,
-						wallet,
-					})
+					runSettlementStage(
+						stageInput({
+							block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: block.number ?? 0n, timestamp: block.timestamp },
+							config: stageConfig,
+							coordinatorPolicies: [policy],
+							journal,
+							reports: [{ latest: report, settled: false, steps: [] }],
+							state,
+						}),
+					)
 				await stage()
 				expect(state.settlements.queue[0]?.decision).toBe('execution-failed')
 				expect(journal.records.map(record => record.status)).toEqual(['dropped'])
@@ -402,7 +414,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		try {
 			const records: SettlementRecord[] = []
 			const base = await context(records, [])
-			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+			const plan = settlementPlan(report)
 			await expect(executeSettlement({ ...base, config: { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [lossyRpc.url.href] } } }, plan)).rejects.toThrow('Every public RPC rejected the transaction')
 			// Not a refusal everywhere, so the attempt stays live: it still holds the report and charges its exposure.
 			expect(records.map(record => record.status)).toEqual(['pending'])
@@ -427,7 +439,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			const base = await context(records, activity)
 			const config = { ...base.config, connectivity: { ...base.config.connectivity, publicRpcUrls: [rpc.url] }, pollMilliseconds: 5_000 }
 			const nonce = await client.getTransactionCount({ address: account.address, blockTag: 'pending' })
-			const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+			const plan = settlementPlan(report)
 			const attempt = executeSettlement({ ...base, config }, plan)
 			for (let waited = 0; records.length === 0 && waited < 200; waited++) await Bun.sleep(10)
 			const [original] = records
@@ -469,7 +481,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const records: SettlementRecord[] = []
 		const base = await context(records, [])
 		const config = base.config
-		const plan = { coordinator: report.helper.creator, gas: 250_000n, projectedGasCostAttoEth: 10n ** 15n, report, rewardAttoEth: REWARD, token: token2, tokenSymbol: 'TK2' }
+		const plan = settlementPlan(report)
 		const confirmed = await executeSettlement(base, plan)
 		if (confirmed.receiptBlock === undefined) throw new Error('confirmed record is missing its receipt block')
 		// Inside the finality window the outcome is still rechecked; an unchanged receipt changes nothing.
@@ -599,45 +611,27 @@ describe('third-party settlement execution against OpenOracle', () => {
 		try {
 			const report = await submitReport(reporter, reporter.account.address)
 			await pastSettlementWindow()
-			const block = await client.getBlock()
-			if (block.number === null || block.number === undefined) throw new Error('head block number missing')
+			const block = await headBlock()
 			// Earlier tests may have left rewards unclaimed; the threshold is set so only this test's settlement makes a withdrawal due.
 			const alreadyUnclaimed = await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, block.number)
-			const stageConfig: SettlementStageConfiguration & { positionFile: string } = {
-				connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl },
-				execute: true,
-				network,
-				openOracle,
-				pollMilliseconds: 1_000,
-				positionFile: join(journalDirectory, 'positions.json'),
-				quorumRpcUrls: [],
-				riskLimits: { lifecycleGasReserveAttoWeth: 0n, maxConcurrentPositions: 1, maxDailyGasSpendAttoWeth: 10n ** 18n, maxPositionNotionalAttoWeth: 10n ** 18n, maxTotalLockedAttoWeth: 10n ** 18n },
-				settlement: { ...settlement, rewardWithdrawThresholdAttoEth: alreadyUnclaimed + REWARD },
-				submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }),
-			}
+			const stageConfig = stageConfiguration(node.rpcUrl, join(journalDirectory, 'positions.json'), alreadyUnclaimed + REWARD)
 			const state = { blockTimestamp: block.timestamp.toString(), operationLog: [] as OperationEntry[], paused: false, settlements: emptySettlementSnapshot() }
 			const journal = await createSettlementJournal(stageConfig, state)
 			const policy: CoordinatorGamePolicy = { ...report.game, coordinator: reporter.account.address, openOracle }
 			const reports = (): ActiveReport[] => [{ latest: report, settled: false, steps: [] }]
 			const stage = (transactionSlotFree: boolean, options: { executionReady?: boolean; settlement?: Partial<MutableSettlement> } = {}) =>
-				runSettlementStage({
-					block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: block.number ?? 0n, timestamp: block.timestamp },
-					client,
-					config: { ...stageConfig, settlement: { ...stageConfig.settlement, ...options.settlement } },
-					coordinatorPolicies: [policy],
-					dailyPositionGasSpentAttoWeth: 0n,
-					executionReady: options.executionReady ?? true,
-					gasPrice: 2n * 10n ** 9n,
-					isPaused: () => false,
-					journal,
-					readClients: [client],
-					reports: reports(),
-					state,
-					tokenSymbol: () => 'TK2',
-					track: () => {},
-					transactionSlotFree,
-					wallet,
-				})
+				runSettlementStage(
+					stageInput({
+						block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: block.number ?? 0n, timestamp: block.timestamp },
+						config: { ...stageConfig, settlement: { ...stageConfig.settlement, ...options.settlement } },
+						coordinatorPolicies: [policy],
+						executionReady: options.executionReady ?? true,
+						journal,
+						reports: reports(),
+						state,
+						transactionSlotFree,
+					}),
+				)
 			// A dispute already used this scan's slot: the queue is published but nothing is signed.
 			await stage(false)
 			expect(state.settlements.queue.map(candidate => [candidate.reportId, candidate.decision])).toEqual([[report.helper.reportId.toString(), 'eligible']])
@@ -658,29 +652,20 @@ describe('third-party settlement execution against OpenOracle', () => {
 			expect(state.operationLog.map(entry => entry.message)).toEqual(['Third-party settlement confirmed'])
 			expect(await loadSettlementJournal(settlementJournalPath(stageConfig.positionFile), network.chain.id)).toHaveLength(1)
 			// The settled report leaves the queue and the accrued reward is withdrawn in its own scan.
-			const settledHead = await client.getBlock()
-			if (settledHead.number === null || settledHead.number === undefined) throw new Error('head block number missing')
+			const settledHead = await headBlock()
 			block.number = settledHead.number
 			block.timestamp = settledHead.timestamp
 			const settledReports = (): ActiveReport[] => [{ latest: { ...report, game: { ...report.game, settlementTimestamp: settledHead.timestamp } }, settled: true, steps: [] }]
-			await runSettlementStage({
-				block: { baseFeePerGas: 0n, number: settledHead.number, timestamp: settledHead.timestamp },
-				client,
-				config: stageConfig,
-				coordinatorPolicies: [policy],
-				dailyPositionGasSpentAttoWeth: 0n,
-				executionReady: true,
-				gasPrice: 2n * 10n ** 9n,
-				isPaused: () => false,
-				journal,
-				readClients: [client],
-				reports: settledReports(),
-				state,
-				tokenSymbol: () => 'TK2',
-				track: () => {},
-				transactionSlotFree: true,
-				wallet,
-			})
+			await runSettlementStage(
+				stageInput({
+					block: { baseFeePerGas: 0n, number: settledHead.number, timestamp: settledHead.timestamp },
+					config: stageConfig,
+					coordinatorPolicies: [policy],
+					journal,
+					reports: settledReports(),
+					state,
+				}),
+			)
 			expect(state.settlements.queue).toEqual([])
 			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])
 			expect(state.settlements.withdrawalDecision).toBe('below-threshold')
@@ -694,8 +679,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			await journal.persist({ ...withdrawal, actualGasCostEth: undefined, minedAt: undefined, receiptBlock: undefined, status: 'pending' })
 			expect(journal.records.some(record => record.kind === 'reward-withdrawal' && record.status === 'pending')).toBeTrue()
 			expect(parseDecimalWeth(state.settlements.utcDayGasSpentEth)).toBe(parseDecimalWeth(settled.actualGasCostEth) + parseDecimalWeth(withdrawal.projectedGasCostEth))
-			const withdrawnHead = await client.getBlock()
-			if (withdrawnHead.number === null || withdrawnHead.number === undefined) throw new Error('head block number missing')
+			const withdrawnHead = await headBlock()
 			const reconciled = await recoverPendingSettlements({ blockNumber: withdrawnHead.number, config: stageConfig, journal, readClients: [client], state })
 			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])
 			expect(state.operationLog.map(entry => entry.message)).toContain('Settlement attempt recovered')
@@ -704,24 +688,16 @@ describe('third-party settlement execution against OpenOracle', () => {
 			// The dispute path charges settlement gas only through the recovered view, so it sees the mined cost, not the stale projection.
 			expect(reconciled.gasSpentAttoEthOnUtcDay(dateFromBlockTimestamp(withdrawnHead.timestamp))).toBe(recoveredGasAttoEth)
 			// The recovered gas exhausts a budget set just below it, so the next candidate is refused instead of signed.
-			await runSettlementStage({
-				block: { baseFeePerGas: 0n, number: withdrawnHead.number, timestamp: withdrawnHead.timestamp },
-				client,
-				config: { ...stageConfig, riskLimits: { ...stageConfig.riskLimits, maxDailyGasSpendAttoWeth: recoveredGasAttoEth - 1n } },
-				coordinatorPolicies: [policy],
-				dailyPositionGasSpentAttoWeth: 0n,
-				executionReady: true,
-				gasPrice: 2n * 10n ** 9n,
-				isPaused: () => false,
-				journal,
-				readClients: [client],
-				reports: reports(),
-				state,
-				tokenSymbol: () => 'TK2',
-				track: () => {},
-				transactionSlotFree: true,
-				wallet,
-			})
+			await runSettlementStage(
+				stageInput({
+					block: { baseFeePerGas: 0n, number: withdrawnHead.number, timestamp: withdrawnHead.timestamp },
+					config: { ...stageConfig, riskLimits: { ...stageConfig.riskLimits, maxDailyGasSpendAttoWeth: recoveredGasAttoEth - 1n } },
+					coordinatorPolicies: [policy],
+					journal,
+					reports: reports(),
+					state,
+				}),
+			)
 			expect(state.settlements.queue.map(candidate => candidate.decision)).toEqual(['risk-limit'])
 			expect(state.settlements.withdrawalDecision).toBe('below-threshold')
 			expect(journal.records.map(record => `${record.kind}:${record.status}`)).toEqual(['reward-withdrawal:confirmed', 'settlement:confirmed'])

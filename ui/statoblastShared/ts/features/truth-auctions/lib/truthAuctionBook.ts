@@ -95,82 +95,51 @@ function getTruthAuctionTickDisposition(tickSummary: TruthAuctionTickSummary, tr
 	return { label: 'Clearing price', tone: 'warning' }
 }
 
+function refundedBidDisposition(): TruthAuctionBidDisposition {
+	return { label: 'Refunded', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refunded' }
+}
+
+function claimedBidDisposition(settlementKind: TruthAuctionFinalizedSettlementKind): TruthAuctionBidDisposition {
+	return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind, summaryKind: 'neutral' }
+}
+
+/** A finalized bid that bought REP: claimable until claimed. */
+function finalizedRepClaimDisposition(bid: TruthAuctionBidView, label: 'Partly filled' | 'Winning' = 'Winning'): TruthAuctionBidDisposition {
+	if (bid.claimed) return claimedBidDisposition('repClaim')
+	return label === 'Winning' ? { label, tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' } : { label, tone: 'warning', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'partial' }
+}
+
+/** A finalized bid that bought nothing: its ETH is refundable until refunded. */
+function finalizedRefundDisposition(bid: TruthAuctionBidView): TruthAuctionBidDisposition {
+	if (bid.claimed) return refundedBidDisposition()
+	return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
+}
+
+/** A bid in a live auction whose outcome is not yet settled. */
+function openBidDisposition(label: string, tone: TruthAuctionDisposition['tone']): TruthAuctionBidDisposition {
+	return { label, tone, canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'none', summaryKind: 'neutral' }
+}
+
 export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionBidDisposition {
-	if (bid.refunded) return { label: 'Refunded', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refunded' }
+	if (bid.refunded) return refundedBidDisposition()
 	if (truthAuction === undefined) {
-		if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'none', summaryKind: 'neutral' }
-		return { label: 'Pending', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'none', summaryKind: 'neutral' }
+		if (bid.claimed) return claimedBidDisposition('none')
+		return openBidDisposition('Pending', 'default')
 	}
 
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
 	if (winningThresholdPrice !== undefined) {
-		if (isUnderfundedWinningTick(bid.tick, truthAuction)) {
-			if (truthAuction.finalized) {
-				if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'repClaim', summaryKind: 'neutral' }
-				return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
-			}
-			return {
-				label: 'Provisional',
-				tone: 'warning',
-				canPrefillRefund: false,
-				canPrefillSettle: false,
-				settlementKind: 'none',
-				summaryKind: 'neutral',
-			}
-		}
-		if (truthAuction.finalized) {
-			if (bid.claimed) return { label: 'Refunded', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refunded' }
-			return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
-		}
-		return {
-			label: 'In book',
-			tone: 'default',
-			canPrefillRefund: false,
-			canPrefillSettle: false,
-			settlementKind: 'none',
-			summaryKind: 'neutral',
-		}
+		if (isUnderfundedWinningTick(bid.tick, truthAuction)) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Provisional', 'warning')
+		return truthAuction.finalized ? finalizedRefundDisposition(bid) : openBidDisposition('In book', 'default')
 	}
 
-	if (isFinalizedUnderfundedWithoutWinningPrefix(truthAuction)) {
-		if (bid.claimed) return { label: 'Refunded', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refunded' }
-		return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
-	}
+	if (isFinalizedUnderfundedWithoutWinningPrefix(truthAuction)) return finalizedRefundDisposition(bid)
 
-	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
-		if (truthAuction.finalized) {
-			if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'repClaim', summaryKind: 'neutral' }
-			return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
-		}
-		return {
-			label: 'In book',
-			tone: 'default',
-			canPrefillRefund: false,
-			canPrefillSettle: false,
-			settlementKind: 'none',
-			summaryKind: 'neutral',
-		}
-	}
+	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('In book', 'default')
 
-	if (bid.tick > truthAuction.clearingTick) {
-		if (truthAuction.finalized) {
-			if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'repClaim', summaryKind: 'neutral' }
-			return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
-		}
-		return {
-			label: 'Winning',
-			tone: 'success',
-			canPrefillRefund: false,
-			canPrefillSettle: false,
-			settlementKind: 'none',
-			summaryKind: 'neutral',
-		}
-	}
+	if (bid.tick > truthAuction.clearingTick) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Winning', 'success')
 	if (bid.tick < truthAuction.clearingTick) {
-		if (truthAuction.finalized) {
-			if (bid.claimed) return { label: 'Refunded', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refunded' }
-			return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
-		}
+		if (truthAuction.finalized) return finalizedRefundDisposition(bid)
 		return {
 			label: 'Losing',
 			tone: 'danger',
@@ -184,10 +153,7 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 	const previousCumulativeBidAttoEth = bid.activeCumulativeBidBeforeAttoEth
 	const activeCumulativeAttoEth = previousCumulativeBidAttoEth + bid.bidAmountAttoEth
 	if (truthAuction.bidAtClearingTickAttoEth <= previousCumulativeBidAttoEth) {
-		if (truthAuction.finalized) {
-			if (bid.claimed) return { label: 'Refunded', tone: 'default', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refunded' }
-			return { label: 'Refundable', tone: 'danger', canPrefillRefund: true, canPrefillSettle: false, settlementKind: 'ethRefund', summaryKind: 'refundable' }
-		}
+		if (truthAuction.finalized) return finalizedRefundDisposition(bid)
 		return {
 			label: 'Losing',
 			tone: 'danger',
@@ -197,32 +163,8 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 			summaryKind: 'losing',
 		}
 	}
-	if (truthAuction.bidAtClearingTickAttoEth >= activeCumulativeAttoEth) {
-		if (truthAuction.finalized) {
-			if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'repClaim', summaryKind: 'neutral' }
-			return { label: 'Winning', tone: 'success', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'winning' }
-		}
-		return {
-			label: 'Winning',
-			tone: 'success',
-			canPrefillRefund: false,
-			canPrefillSettle: false,
-			settlementKind: 'none',
-			summaryKind: 'neutral',
-		}
-	}
-	if (truthAuction.finalized) {
-		if (bid.claimed) return { label: 'Claimed', tone: 'success', canPrefillRefund: false, canPrefillSettle: false, settlementKind: 'repClaim', summaryKind: 'neutral' }
-		return { label: 'Partly filled', tone: 'warning', canPrefillRefund: false, canPrefillSettle: true, settlementKind: 'repClaim', summaryKind: 'partial' }
-	}
-	return {
-		label: 'Partly filled',
-		tone: 'warning',
-		canPrefillRefund: false,
-		canPrefillSettle: false,
-		settlementKind: 'none',
-		summaryKind: 'neutral',
-	}
+	if (truthAuction.bidAtClearingTickAttoEth >= activeCumulativeAttoEth) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Winning', 'success')
+	return truthAuction.finalized ? finalizedRepClaimDisposition(bid, 'Partly filled') : openBidDisposition('Partly filled', 'warning')
 }
 
 export function getTruthAuctionBidSettlementEstimate(bid: TruthAuctionBidView, truthAuction: TruthAuctionMetrics | undefined): TruthAuctionBidSettlementEstimate {

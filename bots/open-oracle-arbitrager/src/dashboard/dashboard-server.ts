@@ -6,21 +6,10 @@ import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { publicOperatorSnapshot } from '#state/public-snapshot'
 import type { SettlementSettings } from '#state/settlement-store'
-import { publicOperatorFailure, publicPollFailure } from '#state/public-failures'
-import { buildDashboardScript, dashboardHealthResponse, sharedDashboardAssetResponse } from '@zoltar/bot-shared/dashboard/assets'
+import { publicOperatorFailure, publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
-import {
-	boundedDashboardJson,
-	closingDashboardJson as closingJson,
-	dashboardAuthenticationChallenge,
-	dashboardAuthorities,
-	dashboardRequestAuthorityIsAccepted,
-	dashboardRequestIsAuthenticated,
-	dashboardRequestIsSameOrigin,
-	dashboardJson as json,
-	dashboardSecurityHeaders as securityHeaders,
-	validateDashboardAuthentication,
-} from '@zoltar/bot-shared/dashboard/security'
+import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
+import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { join } from 'node:path'
 import { operatorHeader } from './header.ts'
@@ -184,33 +173,22 @@ export function startDashboardServer(port: number, controller: DashboardControll
 	const directory = import.meta.dir
 	const projectDirectory = join(directory, '..', '..')
 	const documentationDirectory = join(projectDirectory, 'docs')
-	const browserEntrypoint = join(directory, 'dashboard.ts')
 	const browserFormatSource = Bun.file(join(directory, 'dashboard-format.ts'))
-	const dashboardPages = new Set(['overview', 'operations', 'games', 'markets', 'settings'])
-	const dashboardPage = async (pathname: string) => {
-		const page = pathname === '/' ? 'overview' : pathname.slice(1)
-		if (!dashboardPages.has(page)) return undefined
-		const source = await Bun.file(join(directory, 'index.html')).text()
-		return source.replace('<!-- rep-market-consensus -->', repMarketConsensusPanel()).replace('<!-- settings-page -->', settingsPageMarkup).replace('<!-- operator-header -->', operatorHeader).replace('<body>', `<body data-page="${page}">`)
-	}
 	const transpiler = new Bun.Transpiler({ loader: 'ts', target: 'browser' })
-	const hostname = controller.hostname ?? '127.0.0.1'
-	validateDashboardAuthentication(hostname, controller.password, controller.loopbackPublished, controller.publicAuthority)
-	let acceptedAuthorities: ReadonlySet<string> = new Set()
-	const server = Bun.serve({
-		hostname,
+	const server = startBotDashboardServer({
+		directory,
+		exposure: { password: controller.password, publicAuthority: controller.publicAuthority },
+		hostname: controller.hostname ?? '127.0.0.1',
+		loopbackPublished: controller.loopbackPublished,
+		notFound: () => new Response('Not found', { status: 404 }),
+		pages: ['overview', 'operations', 'games', 'markets', 'settings'],
+		pageSlots: [
+			['<!-- rep-market-consensus -->', repMarketConsensusPanel],
+			['<!-- settings-page -->', settingsPageMarkup],
+			['<!-- operator-header -->', operatorHeader],
+		],
 		port,
-		async fetch(request) {
-			if (!dashboardRequestAuthorityIsAccepted(request, acceptedAuthorities)) return json({ error: 'Request authority is not accepted' }, 403)
-			if (request.method === 'GET' && new URL(request.url).pathname === '/healthz') return dashboardHealthResponse()
-			if (!dashboardRequestIsAuthenticated(request, controller.password)) {
-				return Response.json({ error: 'Dashboard authentication is required' }, { headers: { ...securityHeaders('application/json; charset=utf-8'), ...dashboardAuthenticationChallenge() }, status: 401 })
-			}
-			const url = new URL(request.url)
-			if (request.method === 'GET') {
-				const page = await dashboardPage(url.pathname)
-				if (page !== undefined) return new Response(page, { headers: securityHeaders('text/html; charset=utf-8') })
-			}
+		route: async (request, { acceptedAuthorities, url }) => {
 			if (request.method === 'GET' && (url.pathname === '/documentation' || url.pathname === '/documentation/')) {
 				return new Response(Bun.file(join(documentationDirectory, 'operator-guide.html')), { headers: securityHeaders('text/html; charset=utf-8') })
 			}
@@ -229,11 +207,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				return new Response(Bun.file(join(projectDirectory, 'src', 'core', 'strategy.ts')), { headers: securityHeaders('text/plain; charset=utf-8') })
 			}
 			if (request.method === 'GET' && url.pathname === '/README.md') return new Response(Bun.file(join(projectDirectory, 'README.md')), { headers: securityHeaders('text/markdown; charset=utf-8') })
-			if (request.method === 'GET') {
-				const asset = await sharedDashboardAssetResponse(url.pathname, join(directory, 'favicon.svg'))
-				if (asset !== undefined) return asset
-			}
-			if (request.method === 'GET' && url.pathname === '/dashboard.css') return new Response(Bun.file(join(directory, 'styles.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/operator-guide.css') return new Response(Bun.file(join(documentationDirectory, 'operator-guide.css')), { headers: securityHeaders('text/css; charset=utf-8') })
 			if (request.method === 'GET' && url.pathname === '/shared.css') {
 				return new Response(Bun.file(join(documentationDirectory, 'shared.css')), { headers: securityHeaders('text/css; charset=utf-8') })
@@ -246,11 +219,6 @@ export function startDashboardServer(port: number, controller: DashboardControll
 			}
 			if (request.method === 'GET' && url.pathname === '/assets/dashboard-markets.png') {
 				return new Response(Bun.file(join(documentationDirectory, 'assets', 'dashboard-markets.png')), { headers: securityHeaders('image/png') })
-			}
-			if (request.method === 'GET' && url.pathname === '/dashboard.js') {
-				return new Response(await buildDashboardScript(browserEntrypoint), {
-					headers: securityHeaders('text/javascript; charset=utf-8'),
-				})
 			}
 			if (request.method === 'GET' && url.pathname === '/dashboard-format.js') {
 				const source = await browserFormatSource.text()
@@ -432,14 +400,9 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return publicError(error, 400, 'pause-update', publicPauseUpdateError(error))
 				}
 			}
-			return new Response('Not found', { status: 404 })
+			return undefined
 		},
 	})
-	if (server.port === undefined) {
-		server.stop()
-		throw new Error('Dashboard server did not expose a listening port')
-	}
-	acceptedAuthorities = dashboardAuthorities(server.port, controller.publicAuthority)
 	console.log(`dashboard=http://127.0.0.1:${server.port}`)
 	return server
 }

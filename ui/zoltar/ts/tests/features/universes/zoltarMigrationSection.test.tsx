@@ -14,6 +14,7 @@ import type { ZoltarMigrationFormState } from '@zoltar/ui-zoltar-shared/types/ap
 import { describe, expect, test } from 'bun:test'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
+import { createUniverseSummary } from '@zoltar/ui-core-shared/tests/testUtils/universeFixtures.js'
 
 type ZoltarMigrationSectionProps = Parameters<typeof ZoltarMigrationSection>[0]
 const ATTO_REP = 10n ** 18n
@@ -24,20 +25,15 @@ const yesChild: ZoltarChildUniverseSummary = { exists: true, forkTime: 1n, outco
 const noChild: ZoltarChildUniverseSummary = { exists: false, forkTime: 0n, outcomeIndex: 2n, outcomeLabel: 'No', parentUniverseId: 1n, reputationToken: zeroAddress, universeId: 3n }
 
 function createUniverse(overrides: Partial<ZoltarUniverseSummary> = {}): ZoltarUniverseSummary {
-	return {
+	return createUniverseSummary({
 		childUniverses: [yesChild, noChild],
 		forkThresholdAttoRep: 100n,
-		forkQuestionDetails: undefined,
 		forkTime: 1n,
-		forkingOutcomeIndex: 0n,
 		hasForked: true,
-		parentUniverseId: 0n,
-		reputationToken: zeroAddress,
 		totalTheoreticalSupplyAttoRep: 1000n,
-		universeId: 1n,
 		zoltarAddress: ZOLTAR_ADDRESS,
 		...overrides,
-	}
+	})
 }
 
 function createForm(overrides: Partial<ZoltarMigrationFormState> = {}): ZoltarMigrationFormState {

@@ -27,6 +27,11 @@
 			"types": "./ts/testing/scalarOutcomeParityFixtures.ts",
 			"bun": "./ts/testing/scalarOutcomeParityFixtures.ts",
 			"default": "./js/testing/scalarOutcomeParityFixtures.js"
+		},
+		"./questions/questionId": {
+			"types": "./ts/questions/questionId.ts",
+			"bun": "./ts/questions/questionId.ts",
+			"default": "./js/questions/questionId.js"
 		}
 	},
 	"files": [

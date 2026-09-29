@@ -2,12 +2,11 @@ import { getWalletVaultFundingQuote } from '@zoltar/statoblast-shared/escalation
 import { statoblast_EscalationGame_EscalationGame } from '../types/contractArtifact'
 import { SystemState } from '../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
-import { forkUniverse, getRepTokenAddress, getZoltarAddress, getZoltarForkThreshold } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createChildUniverse, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { getRepTokenAddress } from '../testSupport/simulator/utils/contracts/zoltar'
+import { initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { getQuestionEndDate } from '../testSupport/simulator/utils/contracts/statoblast'
 import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
-import { createQuestion, getQuestionId } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../testSupport/simulator/utils/bigint'
@@ -18,28 +17,38 @@ import { strictEqualTypeSafe } from '../testSupport/simulator/utils/testUtils'
 import assert from '../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
 import { encodeDeployData, parseAbi, type Address } from '@zoltar/core-shared/evm/ethereum'
-import { getTotalPoolHeldAttoRep, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
+import { getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../testSupport/simulator/utils/contracts/securityPool'
 import { splitMigrationRep } from '../testSupport/simulator/utils/contracts/zoltar'
 import { useStatoblastEscalationMigrationFixture, type StatoblastEscalationMigrationFixture } from './statoblast/fixture'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
+import {
+	activateContinuationWithoutAuction,
+	advancePastOrdinaryEscalationDeadline,
+	createYesContinuationChild,
+	depositOrdinaryEscalationPrincipals,
+	escrowParentVaultBelowNonDecisionThreshold,
+	forkGenesisUniverseExternally,
+	ordinaryEscalationPrincipals,
+	redeemOwnVaultPayout,
+	sweepResidualRep,
+	withdrawFirstDepositOfEachOutcome,
+} from './residualCaptureHelpers'
 
 describe('Ordinary escalation vault-deposit freeze', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
-	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes } = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps } = fixture
 
 	type TestClient = StatoblastEscalationMigrationFixture['client']
 
 	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
 	let client: TestClient
 	let securityPoolAddresses: StatoblastEscalationMigrationFixture['securityPoolAddresses']
-	let questionData: StatoblastEscalationMigrationFixture['questionData']
 	let questionId: StatoblastEscalationMigrationFixture['questionId']
 
 	beforeEach(() => {
 		mockWindow = fixture.mockWindow
 		client = fixture.client
 		securityPoolAddresses = fixture.securityPoolAddresses
-		questionData = fixture.questionData
 		questionId = fixture.questionId
 	})
 
@@ -98,19 +107,6 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		return await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
-	}
-
-	const forkGenesisUniverseExternally = async (forkInitiator: TestClient, title: string) => {
-		const externalForkQuestion = {
-			...questionData,
-			title,
-			endTime: (await mockWindow.getTime()) + DAY,
-		}
-		const externalForkQuestionId = getQuestionId(externalForkQuestion, outcomes)
-		await createQuestion(forkInitiator, externalForkQuestion, outcomes)
-		await mockWindow.setTime(externalForkQuestion.endTime + 1n)
-		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(forkInitiator, genesisUniverse, externalForkQuestionId)
 	}
 
 	test('a wallet without a vault can fund the first report after question end without acquiring pool backing', async () => {
@@ -193,12 +189,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await mockWindow.setTime(questionEnd + 1n)
 		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
 
-		const lowLosingPrincipal = 100n * 10n ** 18n
-		const bindingLosingPrincipal = 200n * 10n ** 18n
-		const winningPrincipal = 300n * 10n ** 18n
-		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, lowLosingPrincipal)
-		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.No, bindingLosingPrincipal)
-		await depositToEscalationGame(escalationDepositor, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningPrincipal)
+		await depositOrdinaryEscalationPrincipals(escalationDepositor, securityPoolAddresses.securityPool)
 		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
@@ -270,15 +261,11 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	test('rejects residual-capture deposits in unrelated-fork children while preserving genuine continuations', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const escalationDepositor = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-		const attoRep = 10n ** 18n
-		const lowLosingPrincipal = 100n * attoRep
-		const bindingLosingPrincipal = 200n * attoRep
-		const winningPrincipal = 300n * attoRep
-		const totalEscalationPrincipal = lowLosingPrincipal + bindingLosingPrincipal + winningPrincipal
-		await approveAndDepositRepToVault(escalationDepositor, totalEscalationPrincipal, questionId)
+		const { lowLosingPrincipal, totalPrincipal } = ordinaryEscalationPrincipals
+		await approveAndDepositRepToVault(escalationDepositor, totalPrincipal, questionId)
 		await mockWindow.setTime((await getQuestionEndDate(client, questionId)) + 1n)
 
-		await forkGenesisUniverseExternally(attacker, 'unrelated child residual capture guard')
+		await forkGenesisUniverseExternally(fixture, attacker, 'unrelated child residual capture guard')
 		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -299,33 +286,14 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		strictEqualTypeSafe((await getSecurityVault(client, childPool.securityPool, attacker.account.address)).repBackingUnits, 0n, 'the unrelated-fork child must not mint residual-eligible units after question end')
 
 		await manipulatePriceOracle(attacker, mockWindow, childPool.priceOracleManagerAndOperatorQueuer)
-		await depositToEscalationGame(escalationDepositor, childPool.securityPool, QuestionOutcome.Invalid, lowLosingPrincipal)
-		await depositToEscalationGame(escalationDepositor, childPool.securityPool, QuestionOutcome.No, bindingLosingPrincipal)
-		await depositToEscalationGame(escalationDepositor, childPool.securityPool, QuestionOutcome.Yes, winningPrincipal)
+		await depositOrdinaryEscalationPrincipals(escalationDepositor, childPool.securityPool)
 
-		const childGame = await getSecurityPoolsEscalationGame(client, childPool.securityPool)
-		const activationTime = await client.readContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: childGame,
-			functionName: 'activationTime',
-			args: [],
-		})
-		await mockWindow.setTime(activationTime + 49n * DAY + 1n)
-		await withdrawFromEscalationGame(attacker, childPool.securityPool, QuestionOutcome.Yes, [0n])
-		await withdrawFromEscalationGame(attacker, childPool.securityPool, QuestionOutcome.No, [0n])
-		await withdrawFromEscalationGame(attacker, childPool.securityPool, QuestionOutcome.Invalid, [0n])
+		const childGame = await advancePastOrdinaryEscalationDeadline(client, mockWindow, childPool.securityPool)
+		await withdrawFirstDepositOfEachOutcome(attacker, childPool.securityPool)
 		strictEqualTypeSafe(await getERC20Balance(client, childRepToken, childGame), lowLosingPrincipal, 'the ordinary child game should retain the low losing side as residual')
 
-		const sweepHash = await attacker.writeContract({
-			abi: statoblast_EscalationGame_EscalationGame.abi,
-			address: childGame,
-			functionName: 'sweepResidualRepToSecurityPool',
-			args: [],
-		})
-		await attacker.waitForTransactionReceipt({ hash: sweepHash })
-		const honestWalletBeforeRedeem = await getERC20Balance(client, childRepToken, client.account.address)
-		await redeemRepFromVault(client, childPool.securityPool, client.account.address)
-		const honestPayout = (await getERC20Balance(client, childRepToken, client.account.address)) - honestWalletBeforeRedeem
+		await sweepResidualRep(attacker, childGame)
+		const honestPayout = await redeemOwnVaultPayout(client, childPool.securityPool, childRepToken)
 		const honestResidual = honestPayout - repDeposit
 
 		strictEqualTypeSafe((await getERC20Balance(client, childRepToken, attacker.account.address)) - attackerWalletBefore, 0n, 'the rejected attacker must receive no child residual profit')
@@ -363,7 +331,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		const escalationGame = await startOrdinaryGame()
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		await approveToken(forkInitiator, repToken, escalationGame)
-		await forkGenesisUniverseExternally(forkInitiator, 'wallet deposit fork guard')
+		await forkGenesisUniverseExternally(fixture, forkInitiator, 'wallet deposit fork guard')
 
 		strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'the universe fork must precede the pool state transition')
 		await expectWalletDepositRejectionWithoutStateChange(forkInitiator, securityPoolAddresses.securityPool, escalationGame, repToken, /Forked/)
@@ -376,45 +344,15 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 
 	test.each([false, true])('rejects continuation wallet deposits and funds below-minimum reports through a vault (rounded backing: %s)', async roundedBacking => {
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		const forkThresholdAttoRep = await getZoltarForkThreshold(client, genesisUniverse)
-		const nonDecisionThresholdAttoRep = forkThresholdAttoRep / 2n + (forkThresholdAttoRep % 2n)
-		const invalidPrincipalAttoRep = nonDecisionThresholdAttoRep - 3n
-		const noPrincipalAttoRep = nonDecisionThresholdAttoRep - 2n
-		const yesPrincipalAttoRep = nonDecisionThresholdAttoRep - 1n
-		const totalPrincipalAttoRep = invalidPrincipalAttoRep + noPrincipalAttoRep + yesPrincipalAttoRep
-		const parentVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const parentVaultRepAttoRep = await backingUnitsToAttoRep(client, securityPoolAddresses.securityPool, parentVault.repBackingUnits)
-		assert.ok(parentVaultRepAttoRep < totalPrincipalAttoRep, 'fixture must require a pre-game top-up')
-		await approveAndDepositRepToVault(client, totalPrincipalAttoRep - parentVaultRepAttoRep, questionId)
-		const questionEnd = await getQuestionEndDate(client, questionId)
-		await mockWindow.setTime(questionEnd + 10_000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, invalidPrincipalAttoRep)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, noPrincipalAttoRep)
-		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, yesPrincipalAttoRep)
-		strictEqualTypeSafe(await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool), 0n, 'parent vault backing must be fully escrowed')
-		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'parent pool must have no auctionable REP')
+		await escrowParentVaultBelowNonDecisionThreshold(fixture)
 
-		await forkGenesisUniverseExternally(forkInitiator, 'wallet deposit continuation guard')
-		await initiateSecurityPoolFork(client, securityPoolAddresses.securityPool)
-		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const childUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const childPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, childUniverse, questionId, statoblastSecurityMultiplierBps)
-		const childRepToken = getRepTokenAddress(childUniverse)
-		const childEscalationGame = await getSecurityPoolsEscalationGame(client, childPool.securityPool)
-		const seedRepAttoRep = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: childPool.securityPool,
-			functionName: 'minimumVaultRepDepositAttoRep',
-			args: [],
-		})
+		await forkGenesisUniverseExternally(fixture, forkInitiator, 'wallet deposit continuation guard')
+		const { childPool, childRepToken, childGame: childEscalationGame, seedRep: seedRepAttoRep } = await createYesContinuationChild(fixture)
 		await splitMigrationRep(forkInitiator, genesisUniverse, seedRepAttoRep * 100n, [QuestionOutcome.Yes])
 		await approveToken(forkInitiator, childRepToken, childEscalationGame)
 		await approveToken(forkInitiator, childRepToken, childPool.securityPool)
 
-		await mockWindow.advanceTime(8n * 7n * DAY + DAY)
-		await startTruthAuction(client, childPool.securityPool)
-		strictEqualTypeSafe(await getSystemState(client, childPool.securityPool), SystemState.Operational, 'zero auctionable REP must activate the continuation directly')
+		await activateContinuationWithoutAuction(fixture, childPool.securityPool)
 		if (roundedBacking) {
 			const transferRep = async (recipient: Address, amount: bigint) => {
 				const hash = await forkInitiator.writeContract({ address: childRepToken, abi: parseAbi(['function transfer(address to, uint256 amount) returns (bool)']), functionName: 'transfer', args: [recipient, amount] })

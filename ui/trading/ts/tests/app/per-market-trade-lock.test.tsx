@@ -12,8 +12,8 @@ import { installTradingRouting } from '../../lib/routing.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import * as actualLive from '../../protocol/live.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
 import { liveMarketFixture } from '../support/liveMarketFixture.js'
+import { installSilentInjectedWallet, offlineControllerServices } from '../support/liveTradingServices.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const firstMarket = liveMarketFixture({ pool: `0x${'22'.repeat(20)}` as Address, title: 'First market' })
@@ -52,7 +52,7 @@ describe('per-market trade lock in the application shell', () => {
 	})
 
 	test('a trade pending on one market leaves the application free to start a trade on another market', async () => {
-		Reflect.set(window, 'ethereum', { request: async () => undefined, on: () => undefined, removeListener: () => undefined })
+		installSilentInjectedWallet()
 		// The first trade confirms when the test says so; the second trade's receipt never arrives.
 		const firstReceipt = createDeferred<{ status: 'success' }>()
 		const walletClient = { waitForTransactionReceipt: async ({ hash }: { hash: Hash }) => await (hash === firstHash ? firstReceipt.promise : new Promise<never>(() => undefined)) }
@@ -61,9 +61,7 @@ describe('per-market trade lock in the application shell', () => {
 		const discoveredPools: Address[] = []
 		const discovered = (pool: Address) => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: markets.filter(market => market.pool === pool), universeIds: [1n], selectedUniverseId: 1n })
 		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+			...offlineControllerServices,
 			discoverAddressedMarket: async (_client: unknown, _configuration: unknown, pool: Address) => {
 				discoveredPools.push(pool)
 				return discovered(pool)

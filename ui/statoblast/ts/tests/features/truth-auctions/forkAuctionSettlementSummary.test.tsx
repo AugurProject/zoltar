@@ -1,9 +1,9 @@
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types='bun-types' />
 
-import { getAddress, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
-import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
+import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/moduleMocks.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
@@ -11,11 +11,11 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ForkAuctionDetails, ListedSecurityPool, TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getTruthAuctionBidDisposition } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionSettlement.js'
-import type { ForkAuctionSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { AccountState, ForkAuctionFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
+import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
+import { createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
 const moduleMocks = installModuleMocks(specifier => import.meta.resolve(specifier))
 
@@ -24,7 +24,6 @@ type TruthAuctionSettlementHookState = ReturnType<typeof import('@zoltar/ui-stat
 
 const ONE_UNIT = 10n ** 18n
 const HALF_UNIT = 5n * 10n ** 17n
-const PARENT_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f0'
 const CHILD_POOL_ADDRESS: Address = '0x00000000000000000000000000000000000000f7'
 const TRUTH_AUCTION_ADDRESS: Address = '0x00000000000000000000000000000000000000f8'
 const CONNECTED_WALLET: Address = '0x00000000000000000000000000000000000000aa'
@@ -59,36 +58,6 @@ await moduleMocks.mockModule('@zoltar/ui-statoblast-shared/features/truth-auctio
 }))
 
 const { ForkAuctionSection } = await import('@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js')
-
-function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 0n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
-}
-
-function createForkAuctionForm(overrides: Partial<ForkAuctionFormState> = {}): ForkAuctionFormState {
-	return {
-		claimBidIndex: '',
-		claimBidTick: '',
-		depositIndexes: '',
-		directForkQuestionId: '',
-		directForkUniverseId: '',
-		refundBidIndex: '',
-		refundTick: '',
-		repMigrationOutcomes: '',
-		securityPoolAddress: PARENT_POOL_ADDRESS,
-		selectedOutcome: 'yes',
-		settlementAddress: '',
-		submitBidAmount: '',
-		submitBidPrice: '',
-		vaultAddress: '',
-		...overrides,
-	}
-}
 
 function createTruthAuction(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {
@@ -134,41 +103,6 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 		truthAuctionAddress: TRUTH_AUCTION_ADDRESS,
 		truthAuctionStartedAt: 1n,
 		universeId: 11n,
-		...overrides,
-	}
-}
-
-function createChildPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
-	return {
-		settlementCollateralAttoEth: 0n,
-		currentRetentionRate: 10n,
-		feeEligibleUnderwritingLimitAttoEth: 0n,
-		hasForkActivity: true,
-		forkOutcome: 'yes',
-		forkOwnSecurityPool: false,
-		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
-		lastOraclePrice: undefined,
-		lastOracleSettlementTimestamp: 0n,
-		managerAddress: zeroAddress,
-		marketDetails: createMarketDetails(),
-		migratedAttoRep: 1n,
-		hasForkContinuationEscalationGame: false,
-		ordinaryEscalationGameStarted: false,
-		parent: PARENT_POOL_ADDRESS,
-		questionOutcome: 'yes',
-		questionId: '0x01',
-		statoblastSecurityMultiplierBps: 20_000n,
-		securityPoolAddress: CHILD_POOL_ADDRESS,
-		shareTokenSupplyAttoShares: 0n,
-		systemState: 'operational',
-		totalPoolHeldAttoRep: 0n,
-		totalUnderwritingLimitAttoEth: 0n,
-		truthAuctionAddress: TRUTH_AUCTION_ADDRESS,
-		truthAuctionStartedAt: 1n,
-		universeHasForked: true,
-		universeId: 11n,
-		vaultCount: 0n,
-		vaults: [],
 		...overrides,
 	}
 }
@@ -246,102 +180,63 @@ function createTruthAuctionSettlementState(settlementBidRows: TruthAuctionSettle
 	}
 }
 
-function createProps(overrides: Partial<ForkAuctionSectionProps> = {}): ForkAuctionSectionProps {
-	return {
-		accountState: createAccountState(),
-		currentStageView: 'settlement',
-		embedInCard: true,
-		forkAuctionActiveAction: undefined,
-		forkAuctionDetails: createForkAuctionDetails(),
-		forkAuctionError: undefined,
-		forkAuctionForm: createForkAuctionForm(),
-		forkAuctionResult: undefined,
-		loadingForkAuctionDetails: false,
-		onClaimAuctionProceeds: () => undefined,
-		onCreateChildUniverse: () => undefined,
-		onFinalizeTruthAuction: () => undefined,
-		onForkAuctionFormChange: () => undefined,
-		onForkUniverse: () => undefined,
-		onForkWithOwnEscalation: () => undefined,
-		onInitiateFork: () => undefined,
-		onLoadForkAuction: () => undefined,
-		onClaimParentEscalationDeposits: () => undefined,
-		onMigrateUnresolvedEscalation: _selectedChildOutcome => undefined,
-		onMigrateRepToZoltar: () => undefined,
-		onMigrateVault: () => undefined,
-		onRefundLosingBids: () => undefined,
-		onSelectedStageViewChange: () => undefined,
-		onStartTruthAuction: () => undefined,
-		onSubmitBid: () => undefined,
-		onWithdrawForkedEscalation: (_outcome, _parentDepositIndexes) => undefined,
-		securityPools: [createChildPool()],
-		selectedStageView: 'settlement',
-		showHeader: false,
-		showSecurityPoolAddressInput: false,
-		...overrides,
-	}
+async function renderSettlementSummary(truthAuction: TruthAuctionMetrics, settlementBidRows: TruthAuctionSettlementBidRow[] = []) {
+	const childPool = createForkChildPool({ securityPoolAddress: CHILD_POOL_ADDRESS, truthAuctionAddress: TRUTH_AUCTION_ADDRESS })
+	mockedForkAuctionDetails = createForkAuctionDetails({ truthAuction })
+	mockedSecurityPools = [childPool]
+	mockedTruthAuctionSettlementState = createTruthAuctionSettlementState(settlementBidRows)
+	return await renderIntoDocument(
+		h(
+			ForkAuctionSection,
+			createForkAuctionSectionProps(mockedForkAuctionDetails, {
+				accountState: createAccountState({ address: getAddress(CONNECTED_WALLET) }),
+				currentStageView: 'settlement',
+				currentTimestamp: 700_000n,
+				embedInCard: true,
+				onSelectedStageViewChange: () => undefined,
+				previewPool: childPool,
+				securityPools: [childPool],
+				selectedStageView: 'settlement',
+				showHeader: false,
+				showSecurityPoolAddressInput: false,
+			}),
+		),
+	)
 }
 
 installTestRouting()
 describe('ForkAuctionSection settlement summary', () => {
-	let cleanupDom: (() => void) | undefined
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
-	beforeEach(() => {
-		cleanupDom = installDomEnvironment().cleanup
-		cleanupRenderedComponent = undefined
-		mockedForkAuctionDetails = undefined
-		mockedSecurityPools = []
-		mockedTruthAuctionBookState = createTruthAuctionBookState()
-		mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([])
-	})
-
-	afterEach(async () => {
-		if (cleanupRenderedComponent !== undefined) {
-			await cleanupRenderedComponent()
+	installDomTestLifecycle({
+		beforeTest: () => {
+			mockedForkAuctionDetails = undefined
+			mockedSecurityPools = []
+			mockedTruthAuctionBookState = createTruthAuctionBookState()
+			mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([])
+		},
+		afterTest: async () => {
+			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
-		}
-		if (cleanupDom !== undefined) {
-			cleanupDom()
-			cleanupDom = undefined
-		}
+		},
 	})
 
 	test('shows selected-bid settlement estimates for REP, assigned underwriting commitments, and refunds', async () => {
 		const truthAuction = createTruthAuction()
-		const childPool = createChildPool()
-		mockedForkAuctionDetails = createForkAuctionDetails({
-			truthAuction,
-		})
-		mockedSecurityPools = [childPool]
-		mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([
-			createSettlementRow(createBid({ bidIndex: 1n, tick: 9n }), truthAuction),
-			createSettlementRow(createBid({ bidIndex: 2n, tick: 11n }), truthAuction),
-			createSettlementRow(
-				createBid({
-					activeCumulativeBidBeforeAttoEth: ONE_UNIT,
-					bidIndex: 3n,
-					tick: 10n,
-				}),
-				truthAuction,
-			),
-		])
-
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({
-						address: getAddress(CONNECTED_WALLET),
+		cleanupRenderedComponent = (
+			await renderSettlementSummary(truthAuction, [
+				createSettlementRow(createBid({ bidIndex: 1n, tick: 9n }), truthAuction),
+				createSettlementRow(createBid({ bidIndex: 2n, tick: 11n }), truthAuction),
+				createSettlementRow(
+					createBid({
+						activeCumulativeBidBeforeAttoEth: ONE_UNIT,
+						bidIndex: 3n,
+						tick: 10n,
 					}),
-					currentTimestamp: 700_000n,
-					forkAuctionDetails: mockedForkAuctionDetails,
-					previewPool: childPool,
-					securityPools: [childPool],
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+					truthAuction,
+				),
+			])
+		).cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Settlement preview.')).not.toBeNull()
@@ -359,28 +254,7 @@ describe('ForkAuctionSection settlement summary', () => {
 			finalized: true,
 		})
 		const refundRow = createSettlementRow(createBid({ bidIndex: 9n, tick: 8n }), truthAuction)
-		const childPool = createChildPool()
-		mockedForkAuctionDetails = createForkAuctionDetails({
-			truthAuction,
-		})
-		mockedSecurityPools = [childPool]
-		mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([refundRow])
-
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({
-						address: getAddress(CONNECTED_WALLET),
-					}),
-					currentTimestamp: 700_000n,
-					forkAuctionDetails: mockedForkAuctionDetails,
-					previewPool: childPool,
-					securityPools: [childPool],
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		cleanupRenderedComponent = (await renderSettlementSummary(truthAuction, [refundRow])).cleanup
 
 		const documentQueries = within(document.body)
 		await act(() => {
@@ -402,27 +276,7 @@ describe('ForkAuctionSection settlement summary', () => {
 			underfundedThreshold: 2n * ONE_UNIT,
 			underfundedWinningAttoEth: 0n,
 		})
-		const childPool = createChildPool()
-		mockedForkAuctionDetails = createForkAuctionDetails({
-			truthAuction,
-		})
-		mockedSecurityPools = [childPool]
-
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({
-						address: getAddress(CONNECTED_WALLET),
-					}),
-					currentTimestamp: 700_000n,
-					forkAuctionDetails: mockedForkAuctionDetails,
-					previewPool: childPool,
-					securityPools: [childPool],
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		cleanupRenderedComponent = (await renderSettlementSummary(truthAuction)).cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Winning threshold')).toBeNull()
@@ -439,28 +293,7 @@ describe('ForkAuctionSection settlement summary', () => {
 			underfundedThreshold: HALF_UNIT,
 			underfundedWinningAttoEth: 4n * ONE_UNIT,
 		})
-		const childPool = createChildPool()
-		mockedForkAuctionDetails = createForkAuctionDetails({
-			truthAuction,
-		})
-		mockedSecurityPools = [childPool]
-		mockedTruthAuctionSettlementState = createTruthAuctionSettlementState([createSettlementRow(createBid({ bidIndex: 1n, tick: 0n }), truthAuction)])
-
-		const renderedComponent = await renderIntoDocument(
-			h(
-				ForkAuctionSection,
-				createProps({
-					accountState: createAccountState({
-						address: getAddress(CONNECTED_WALLET),
-					}),
-					currentTimestamp: 700_000n,
-					forkAuctionDetails: mockedForkAuctionDetails,
-					previewPool: childPool,
-					securityPools: [childPool],
-				}),
-			),
-		)
-		cleanupRenderedComponent = renderedComponent.cleanup
+		cleanupRenderedComponent = (await renderSettlementSummary(truthAuction, [createSettlementRow(createBid({ bidIndex: 1n, tick: 0n }), truthAuction)])).cleanup
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Estimated REP backing')).not.toBeNull()

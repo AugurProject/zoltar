@@ -184,26 +184,12 @@ export function renderSelectedReportActionSection({
 
 				return disputeAvailability.message
 			})()
-			const token1ApprovalGuardMessage = (() => {
-				if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
-				if (disputeSubmission?.token1ContributionAmount === undefined) return openOracleCopy.formatDisputeAmountsInvalidReason(token1Symbol)
-
-				return undefined
-			})()
-			const token2ApprovalGuardMessage = (() => {
-				if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
-				if (disputeSubmission?.token2ContributionAmount === undefined) return openOracleCopy.formatDisputeAmountsInvalidReason(token2Symbol)
-
-				return undefined
-			})()
 			const sharedApprovalGuardMessage = (() => {
 				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
 				if (!isOnActiveAppChain) return getWrongNetworkReason()
 				if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
 				return undefined
 			})()
-			const disputeToken1ApprovalGuardMessage = sharedApprovalGuardMessage ?? token1ApprovalGuardMessage
-			const disputeToken2ApprovalGuardMessage = sharedApprovalGuardMessage ?? token2ApprovalGuardMessage
 			const disputeActionDisabledReason = (() => {
 				if (!isConnected) return openOracleCopy.disputeWalletRequiredReason
 				if (!isOnActiveAppChain) return getWrongNetworkReason()
@@ -215,6 +201,38 @@ export function renderSelectedReportActionSection({
 			)
 			const disputeReportId = openOracleForm.reportId.trim() || 'unselected'
 			const sharedApprovalGuardMessageId = `open-oracle-dispute-approval-guard-${disputeReportId}`
+			const renderDisputeTokenApproval = (token: 'token1' | 'token2') => {
+				const isToken1 = token === 'token1'
+				const tokenSymbol = isToken1 ? token1Symbol : token2Symbol
+				const approval = isToken1 ? openOracleTokenAccessState.token1Approval : openOracleTokenAccessState.token2Approval
+				const requiredAmount = isToken1 ? disputeSubmission?.token1ContributionAmount : disputeSubmission?.token2ContributionAmount
+				const tokenApprovalGuardMessage = (() => {
+					if (openOracleReportDetails === undefined) return openOracleCopy.reportLoadRequired
+					if (requiredAmount === undefined) return openOracleCopy.formatDisputeAmountsInvalidReason(tokenSymbol)
+
+					return undefined
+				})()
+				return (
+					<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(tokenSymbol)} variant='embedded'>
+						<TokenApprovalControl
+							actionLabel={openOracleCopy.disputingTheReport}
+							allowanceError={approval.error}
+							allowanceLoading={approval.loading}
+							approvedAmount={approval.value}
+							disabled={!isConnected || !isOnActiveAppChain}
+							guardMessage={sharedApprovalGuardMessage ?? tokenApprovalGuardMessage}
+							guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
+							onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
+							pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
+							pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(tokenSymbol)}
+							requiredAmount={requiredAmount}
+							resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
+							tokenSymbol={tokenSymbol}
+							tokenUnits={(isToken1 ? disputeSubmission?.token1Decimals : disputeSubmission?.token2Decimals) ?? 18}
+						/>
+					</SectionBlock>
+				)
+			}
 			const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
 			// The token choice is a selection, so its error shows immediately; amount errors wait for blur.
 			const disputeInputFieldErrors = {
@@ -304,42 +322,8 @@ export function renderSelectedReportActionSection({
 						)}
 						{disputeSubmission?.inputBlockMessage === undefined ? (
 							<>
-								<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token1Symbol)} variant='embedded'>
-									<TokenApprovalControl
-										actionLabel={openOracleCopy.disputingTheReport}
-										allowanceError={openOracleTokenAccessState.token1Approval.error}
-										allowanceLoading={openOracleTokenAccessState.token1Approval.loading}
-										approvedAmount={openOracleTokenAccessState.token1Approval.value}
-										disabled={!isConnected || !isOnActiveAppChain}
-										guardMessage={disputeToken1ApprovalGuardMessage}
-										guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
-										onApprove={amount => onApproveToken1(amount)}
-										pending={openOracleActiveAction === 'approveToken1'}
-										pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token1Symbol)}
-										requiredAmount={disputeSubmission?.token1ContributionAmount}
-										resetKey={`dispute:token1:${token1Symbol}:${disputeSubmission?.token1ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-										tokenSymbol={token1Symbol}
-										tokenUnits={disputeSubmission?.token1Decimals ?? 18}
-									/>
-								</SectionBlock>
-								<SectionBlock headingLevel={4} title={openOracleCopy.formatTokenApprovalTitle(token2Symbol)} variant='embedded'>
-									<TokenApprovalControl
-										actionLabel={openOracleCopy.disputingTheReport}
-										allowanceError={openOracleTokenAccessState.token2Approval.error}
-										allowanceLoading={openOracleTokenAccessState.token2Approval.loading}
-										approvedAmount={openOracleTokenAccessState.token2Approval.value}
-										disabled={!isConnected || !isOnActiveAppChain}
-										guardMessage={disputeToken2ApprovalGuardMessage}
-										guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
-										onApprove={amount => onApproveToken2(amount)}
-										pending={openOracleActiveAction === 'approveToken2'}
-										pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(token2Symbol)}
-										requiredAmount={disputeSubmission?.token2ContributionAmount}
-										resetKey={`dispute:token2:${token2Symbol}:${disputeSubmission?.token2ContributionAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
-										tokenSymbol={token2Symbol}
-										tokenUnits={disputeSubmission?.token2Decimals ?? 18}
-									/>
-								</SectionBlock>
+								{renderDisputeTokenApproval('token1')}
+								{renderDisputeTokenApproval('token2')}
 							</>
 						) : (
 							disputeInputBlockDetail

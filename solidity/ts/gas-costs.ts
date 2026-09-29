@@ -9,7 +9,8 @@ import { manipulatePriceOracle, setVaultCapacityFixture } from './testSupport/si
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, forkZoltarWithOwnEscalationGame, getSecurityPoolForkerForkData, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from './testSupport/simulator/utils/contracts/securityPoolForker'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getRepToken, redeemCompleteSet, redeemFees, redeemRepFromVault, redeemShares, updateVaultFees, withdrawFromEscalationGame } from './testSupport/simulator/utils/contracts/securityPool'
 import { ensureZoltarDeployed, forkUniverse, getTotalTheoreticalSupply, getZoltarAddress } from './testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion, getQuestionId } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from './testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId, type ZoltarQuestionData as QuestionData } from '@zoltar/zoltar-shared/questions/questionId'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from './testSupport/simulator/utils/constants'
 import { addressString } from './testSupport/simulator/utils/bigint'
 import { approveToken, getChildUniverseId, getERC20Balance, setupTestAccounts, sortStringArrayByKeccak } from './testSupport/simulator/utils/utilities'
@@ -31,17 +32,6 @@ const isHash = (value: string): value is Hash => value.startsWith('0x')
 const requireHash = (value: unknown, context: string): Hash => {
 	if (typeof value !== 'string' || !isHash(value)) throw new Error(`${context} must be a transaction hash`)
 	return value
-}
-
-type QuestionData = {
-	title: string
-	description: string
-	startTime: bigint
-	endTime: bigint
-	numTicks: bigint
-	displayValueMin: bigint
-	displayValueMax: bigint
-	answerUnit: string
 }
 
 type PoolContext = {

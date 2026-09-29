@@ -1,9 +1,6 @@
 {
-	"extends": "../../shared/tsconfig.strict.json",
+	"extends": "../tsconfig.base.json",
 	"compilerOptions": {
-		"target": "ESNext",
-		"module": "ESNext",
-		"moduleResolution": "bundler",
 		"paths": {
 			"@zoltar/bot-shared/contracts/abi": ["../shared/src/contracts/abi.generated.ts"],
 			"@zoltar/bot-shared/*": ["../shared/src/*"],
@@ -11,12 +8,7 @@
 			"@zoltar/open-oracle-shared/*": ["../../shared/openOracle/ts/*"],
 			"@zoltar/statoblast-shared/*": ["../../shared/statoblast/ts/*"]
 		},
-		"allowImportingTsExtensions": true,
-		"resolveJsonModule": true,
-		"skipLibCheck": true,
-		"noEmit": true,
-		"lib": ["ESNext", "DOM", "DOM.Iterable"],
-		"types": ["bun-types", "node"]
+		"resolveJsonModule": true
 	},
 	"include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mts", "docs/**/*.ts"]
 }

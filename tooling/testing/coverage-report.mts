@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import * as ts from 'typescript'
+import { listRepositoryFiles, mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { discoverTestFiles } from './test-discovery.mts'
 
 export type CoverageMetric = {
@@ -781,18 +782,8 @@ function parseSoliditySummary(value: unknown): SolidityCoverageInput {
 	return { totalLines, totalCoveredLines, files }
 }
 
-async function runGit(args: string[], workingDirectory = process.cwd()) {
-	const child = Bun.spawn(['git', ...args], { cwd: workingDirectory, stdout: 'pipe', stderr: 'pipe' })
-	const stdout = await new Response(child.stdout).text()
-	const stderr = await new Response(child.stderr).text()
-	const exitCode = await child.exited
-	if (exitCode !== 0) throw new Error(stderr.trim() || `git ${args.join(' ')} failed`)
-	return stdout
-}
-
 export async function readTrackedTypeScriptSources(repositoryRoot: string) {
-	const trackedFiles = (await runGit(['ls-files', '--cached', '--others', '--exclude-standard'], repositoryRoot))
-		.split(/\r?\n/)
+	const trackedFiles = listRepositoryFiles({ cwd: repositoryRoot, untracked: true })
 		.filter(file => sourceExtensions.test(file))
 		.sort((left, right) => left.localeCompare(right))
 	const sources = await Promise.all(
@@ -817,10 +808,10 @@ function mergeChangedLines(target: Map<string, Set<number>>, source: Map<string,
 }
 
 export async function readTaskChangedLines(repositoryRoot: string, baseRef: string) {
-	const mergeBase = (await runGit(['merge-base', baseRef, 'HEAD'], repositoryRoot)).trim()
-	const diff = await runGit(['diff', '--unified=0', '--no-renames', mergeBase, '--'], repositoryRoot)
+	const mergeBase = mergeBaseWithMain(args => runGit(args, { cwd: repositoryRoot }), baseRef)
+	const diff = runGit(['diff', '--unified=0', '--no-renames', mergeBase, '--'], { cwd: repositoryRoot, trim: false })
 	const changedLines = parseChangedLines(diff)
-	const untrackedFiles = (await runGit(['ls-files', '--others', '--exclude-standard'], repositoryRoot)).split(/\r?\n/).filter(file => sourceExtensions.test(file))
+	const untrackedFiles = listRepositoryFiles({ cwd: repositoryRoot, tracked: false, untracked: true }).filter(file => sourceExtensions.test(file))
 	for (const file of untrackedFiles) {
 		const source = await readFile(resolve(repositoryRoot, file), 'utf8')
 		const lineCount = source.endsWith('\n') ? source.split(/\r?\n/).length - 1 : source.split(/\r?\n/).length

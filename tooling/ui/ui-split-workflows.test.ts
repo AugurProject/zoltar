@@ -247,7 +247,7 @@ ${command}`,
 		expect(triggers).toHaveProperty('workflow_dispatch')
 		const job = requireRecord(workflowJobs(workflow)['browser-workflow'], 'browser workflow job')
 		const steps = workflowSteps(job)
-		const checkout = steps.find(step => step['uses'] === 'actions/checkout@v7')
+		const checkout = steps.find(step => typeof step['uses'] === 'string' && step['uses'].startsWith('actions/checkout@'))
 		expect(requireRecord(checkout?.['with'], 'browser checkout options')['fetch-depth']).toBe(0)
 		const scope = steps.find(step => step['id'] === 'scope')
 		expect(scope).toBeDefined()

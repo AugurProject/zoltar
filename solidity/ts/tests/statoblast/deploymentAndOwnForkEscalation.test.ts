@@ -17,7 +17,8 @@ import {
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getQuestionEndDate } from '../../testSupport/simulator/utils/contracts/statoblast'
-import { createQuestion, getQuestionId } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { deployOriginSecurityPool, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { approveAndDepositRepToVault, triggerOwnGameFork, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
@@ -41,7 +42,7 @@ import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 describe('Statoblast: deployment and own-fork escalation', () => {
 	const fixture = useStatoblastDeploymentAndOwnForkEscalationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, deployOwnForkEscalationClaimHarness } = fixture
+	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, deployOwnForkEscalationClaimHarness, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastDeploymentAndOwnForkEscalationFixture['mockWindow']
 	let client: StatoblastDeploymentAndOwnForkEscalationFixture['client']
@@ -658,8 +659,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		// Create child security pools to verify outcomes
 		// Create Yes child
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesUniverse, yesSecurityPool } = getYesChildPool()
 		strictEqualTypeSafe(await getSystemState(client, yesSecurityPool.securityPool), SystemState.ForkMigration, 'Yes child should be in ForkMigration')
 		strictEqualTypeSafe(await getQuestionOutcome(client, yesSecurityPool.securityPool), QuestionOutcome.Yes, 'Yes outcome should be set')
 		assert.ok(await contractExists(client, yesSecurityPool.securityPool), 'YES security pool should exist')
@@ -729,8 +729,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const parentVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesSecurityPool } = getYesChildPool()
 		const yesChildVault = await getSecurityVault(client, yesSecurityPool.securityPool, client.account.address)
 		const yesChildDenominator = await getTotalRepBackingUnits(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(yesChildDenominator, ownForkRepBuckets.vaultRepAtForkAttoRep, 'own-fork child denominator should equal its child-local vault REP bucket')
@@ -773,8 +772,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		assert.strictEqual(ownForkRepBuckets.vaultRepAtForkAttoRep, 0n, 'all-rep-in-escalation scenario should have zero vaultRepAtForkAttoRep')
 		strictEqualTypeSafe(ownForkRepBuckets.escrowSourceRepAtForkAttoRep - ownForkRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep, ownForkThreshold / 5n, 'own-fork escalation backing should exclude exactly one fork admission haircut')
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesUniverse, yesSecurityPool } = getYesChildPool()
 		await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
 		const yesChildEscalationGame = await getSecurityPoolsEscalationGame(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(await getERC20Balance(client, getRepTokenAddress(yesUniverse), yesChildEscalationGame), ownForkRepBuckets.escalationChildRepPerSelectedOutcomeAttoRep, 'the child escalation game should receive the post-haircut aggregate backing before claims')
@@ -1184,8 +1182,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		}
 		await forkZoltarWithOwnEscalationGame(client, securityPoolAddresses.securityPool)
 
-		const yesUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
-		const yesSecurityPool = getSecurityPoolAddresses(securityPoolAddresses.securityPool, yesUniverse, questionId, statoblastSecurityMultiplierBps)
+		const { yesUniverse, yesSecurityPool } = getYesChildPool()
 		const claimOrderSnapshot = await mockWindow.anvilSnapshot()
 
 		await claimForkedEscalationDeposits(client, securityPoolAddresses.securityPool, client.account.address, QuestionOutcome.Yes, [0n])

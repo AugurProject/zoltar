@@ -1,8 +1,10 @@
 import { Window } from 'happy-dom'
 import assert from 'node:assert/strict'
-import { readdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot } from '../repo/root.mts'
+import { walkFiles } from '../repo/walk.mts'
 
 const docsDirectory = path.join(repositoryRoot, 'docs')
 const manifestPath = path.join(docsDirectory, 'manifest.json')
@@ -64,11 +66,10 @@ function assertManifest(value: unknown): asserts value is DocsManifest {
 
 async function filesIn(directory: string): Promise<string[]> {
 	// A Diátaxis section may have no pages yet; only existing directories contribute routes.
-	const entries = await readdir(path.join(docsDirectory, directory), { recursive: true, withFileTypes: true }).catch((error: unknown) => {
-		if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return []
-		throw error
-	})
-	return entries.filter(entry => entry.isFile() && entry.name.endsWith('.html')).map(entry => path.posix.join(directory, path.relative(path.join(docsDirectory, directory), path.join(entry.parentPath, entry.name)).split(path.sep).join('/')))
+	const directoryPath = path.join(docsDirectory, directory)
+	if (!(await pathExists(directoryPath))) return []
+	const filePaths = await walkFiles(directoryPath, { include: filePath => filePath.endsWith('.html') })
+	return filePaths.map(filePath => path.posix.join(directory, path.relative(directoryPath, filePath).split(path.sep).join('/')))
 }
 
 const checkOnly = process.argv.includes('--check')

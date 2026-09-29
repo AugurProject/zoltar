@@ -3,7 +3,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
-import { loadOperatorSettings, operatorProfilePath, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { networkProfilePath } from '@zoltar/bot-shared/config/profiles'
+import { loadOperatorSettings, saveOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
 import { parseSettlementSettings } from '#state/settlement-store'
 import { assertDistinctPersistentPaths } from '#config/configuration'
 import { deterministicDeploymentProxy, executorDeploymentPlan } from '#execution/executor-deployment-primitives'
@@ -279,7 +280,7 @@ describe('file-only startup configuration', () => {
 			sepoliaSettings.centralizedMarkets = { ...sepoliaSettings.centralizedMarkets, assetChainId: 11_155_111 }
 			sepoliaSettings.network = 'sepolia'
 			sepoliaSettings.rpcQuorum = sepoliaRpcQuorum
-			await saveOperatorSettings(operatorProfilePath(path, 'sepolia'), sepoliaSettings)
+			await saveOperatorSettings(networkProfilePath(path, 'sepolia'), sepoliaSettings)
 			const child = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
 				env: {
 					...process.env,
@@ -298,7 +299,7 @@ describe('file-only startup configuration', () => {
 		}
 		const mismatchedPath = join(directory, 'deploy-mismatched-profile.json')
 		await saveOperatorSettings(mismatchedPath, settings('http://127.0.0.1:1/', 4173))
-		await saveOperatorSettings(operatorProfilePath(mismatchedPath, 'sepolia'), settings('http://127.0.0.1:1/', 4173))
+		await saveOperatorSettings(networkProfilePath(mismatchedPath, 'sepolia'), settings('http://127.0.0.1:1/', 4173))
 		const mismatched = Bun.spawn([executable, deployExecutorSource, '--network=sepolia', '--rpc-url=http://127.0.0.1:1'], {
 			env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: mismatchedPath, PRIVATE_KEY: `0x${'11'.repeat(32)}` },
 			stderr: 'pipe',
@@ -420,8 +421,8 @@ describe('file-only startup configuration', () => {
 		})
 		expect(blockedProfile.status).toBe(400)
 		expect(await Bun.file(path).text()).toBe(activeBeforeBlockedSwitch)
-		expect(await Bun.file(operatorProfilePath(path, 'mainnet')).exists()).toBe(false)
-		expect(await Bun.file(operatorProfilePath(path, 'sepolia')).exists()).toBe(false)
+		expect(await Bun.file(networkProfilePath(path, 'mainnet')).exists()).toBe(false)
+		expect(await Bun.file(networkProfilePath(path, 'sepolia')).exists()).toBe(false)
 		await clearExecutorDeploymentIntent(deploymentIntentPath)
 		const dormantDeploymentIntentPath = executorDeploymentIntentPath(path, 'sepolia')
 		await saveExecutorDeploymentIntent(dormantDeploymentIntentPath, {
@@ -504,7 +505,7 @@ describe('file-only startup configuration', () => {
 		expect(resumedState['paused']).toBe(false)
 		expect(resumedState['operationLog']).toEqual(expect.arrayContaining([expect.objectContaining({ message: 'Operator resume queued', reason: 'Saved and queued for the next scan boundary' })]))
 		const configuredContents = await Bun.file(path).text()
-		const mainnetProfilePath = operatorProfilePath(path, 'mainnet')
+		const mainnetProfilePath = networkProfilePath(path, 'mainnet')
 		const compatibleMainnetProfile = await Bun.file(mainnetProfilePath).text()
 		const incompatibleMainnetProfile = JSON.parse(compatibleMainnetProfile) as Record<string, unknown>
 		const incompatibleMainnetRuntime = Reflect.get(incompatibleMainnetProfile, 'runtime')

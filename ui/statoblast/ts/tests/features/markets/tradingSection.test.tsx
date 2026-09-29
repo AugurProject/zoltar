@@ -22,6 +22,7 @@ import { describe, expect, test } from 'bun:test'
 import { render } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
+import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
 /** Amounts are plain text by default; their exact value (plus any unit) lives in the title. */
 function getExactValueTitles(root: ParentNode, exactValue: string) {
@@ -102,13 +103,7 @@ function createTradingForm(overrides: Partial<TradingFormState> = {}): TradingFo
 }
 
 function createAccountState(overrides: Partial<AccountState> = {}): AccountState {
-	return {
-		address: zeroAddress,
-		chainId: '0xaa36a7',
-		ethBalanceAttoEth: 10n * 10n ** 18n,
-		wethBalanceAttoEth: 0n,
-		...overrides,
-	}
+	return createEmptyAccountState({ ethBalanceAttoEth: 10n * 10n ** 18n, ...overrides })
 }
 
 function createTradingSectionProps(overrides: Partial<TradingSectionProps> = {}): TradingSectionProps {

@@ -11,12 +11,35 @@ import { routeOwnsLiveWallet, walletSummaryAfterRouteChange, walletSummaryForUni
 import { filterMarketsByUniverse, walletSummaryAvailability, walletSummaryDiscoveryRetryStart, walletSummaryRefreshState } from '../../features/liveTradingControllerHelpers.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
 import type { LiveMarket } from '../../protocol/live.js'
-import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
+import type { LiveTradingControllerServices } from '../../features/live/liveTradingTypes.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { etherScaleMarketFixture } from '../support/liveMarketFixture.js'
+import { offlineControllerServices } from '../support/liveTradingServices.js'
 
 beforeEach(() => installTradingRouting())
+
+function emptyDiscoveryPage(universeIds: bigint[], selectedUniverseId: bigint) {
+	return { start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds, selectedUniverseId }
+}
+
+function moreMenuButton(container: HTMLElement) {
+	const moreButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
+	if (moreButton === undefined) throw new Error('The More menu is missing')
+	return moreButton
+}
+
+/** Clicks the idle header wallet action; the tests run without an injected wallet, so the connection fails. */
+async function clickConnectWallet(container: HTMLElement) {
+	const walletButton = container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
+	expect(walletButton?.textContent).toBe('Connect wallet')
+	await act(async () => {
+		walletButton?.click()
+		await Bun.sleep(10)
+	})
+}
 
 describe('trading header', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
@@ -29,6 +52,15 @@ describe('trading header', () => {
 		url: 'http://localhost/#/market',
 	})
 
+	const configuration = deploymentConfigurationFixture({ rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}` })
+
+	// Renders the app against the configured deployment with offline controller services; each test overrides only the discovery it drives.
+	async function renderConfiguredApp(services: Partial<LiveTradingControllerServices>) {
+		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={{ ...offlineControllerServices, ...services }} />)
+		cleanupRendered = rendered.cleanup
+		return rendered
+	}
+
 	test('keeps a requested universe unconfirmed until discovery answers and offers the universe route instead of a header control', async () => {
 		window.history.replaceState(undefined, '', '/#/universe?universe=2')
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={() => new Promise<DeploymentConfiguration>(() => undefined)} />)
@@ -39,8 +71,7 @@ describe('trading header', () => {
 		expect(rendered.container.textContent).not.toContain('not deployed')
 		expect(rendered.container.querySelector('#app-content .route-header')?.textContent).toContain('Universe')
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
-		const moreButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
-		if (moreButton === undefined) throw new Error('The More menu is missing')
+		const moreButton = moreMenuButton(rendered.container)
 		expect(moreButton.classList.contains('active')).toBe(true)
 		await act(() => moreButton.click())
 		const universeTab = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Universe')
@@ -50,15 +81,9 @@ describe('trading header', () => {
 
 	test('rewrites an unknown universe request to the discovered universe so the URL, header, and routes agree', async () => {
 		window.history.replaceState(undefined, '', '/#/universe?universe=7&simulate=1')
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
-		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
-			discoverUniverses: async () => ({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 2n], selectedUniverseId: 0n }),
-		}
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
-		cleanupRendered = rendered.cleanup
+		const rendered = await renderConfiguredApp({
+			discoverUniverses: async () => emptyDiscoveryPage([0n, 2n], 0n),
+		})
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0&simulate=1'))
 		// The header names the universe with the shared switcher, which links back to the universe browser.
 		const universeSwitcher = rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value .universe-switcher')
@@ -70,64 +95,24 @@ describe('trading header', () => {
 	test('follows an addressed market into its universe and rewrites a disagreeing parameter', async () => {
 		const pool = `0x${'ab'.repeat(20)}`
 		window.history.replaceState(undefined, '', `/#/market/${pool}?universe=0`)
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
-		const market: LiveMarket = {
-			pool,
-			pair: `0x${'cd'.repeat(20)}`,
-			shareToken: `0x${'ef'.repeat(20)}`,
-			universeId: 5n,
-			questionId: 2n,
-			title: 'Universe five market',
-			description: 'Addressed route fixture',
-			endTime: 2n ** 255n,
-			statoblastSecurityMultiplierBps: 20_000n,
-			initialReportPriorityFeeAttoEthPerGas: 1n,
-			systemState: 0,
-			awaitingForkContinuation: false,
-			universeForkTime: 0n,
-			vaultCount: 1n,
-			shareTokenSupplyAttoShares: 10n * 10n ** 18n,
-			settlementCollateralAttoEth: 10n * 10n ** 18n,
-			currentRetentionRate: 10n ** 18n,
-			totalUnderwritingLimitAttoEth: 1n,
-			feeEligibleUnderwritingLimitAttoEth: 1n,
-			mintingCapacityCeilingAttoEth: 2n,
-			availableMintingCapacityAttoEth: 1n,
-			feeBps: 30n,
-			tradingStatus: 0,
-			questionOutcome: 3,
-			yesReserve: 50n * 10n ** 18n,
-			noReserve: 50n * 10n ** 18n,
-			lpTotalSupply: 50n * 10n ** 18n,
-		}
-		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+		const market = etherScaleMarketFixture({ pool, pair: `0x${'cd'.repeat(20)}`, shareToken: `0x${'ef'.repeat(20)}`, universeId: 5n, title: 'Universe five market', description: 'Addressed route fixture' })
+		const rendered = await renderConfiguredApp({
 			discoverAddressedMarket: async () => ({ start: 0n, count: 1n, total: 1n, previousStart: undefined, nextStart: undefined, markets: [market], universeIds: [5n], selectedUniverseId: 5n }),
-		}
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
-		cleanupRendered = rendered.cleanup
+		})
 		await waitFor(() => expect(window.location.hash).toBe(`#/market/${pool}?universe=5`))
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Universe 0x5'))
 	})
 
 	test('a request superseded while in flight settles nothing; only the answer to the current universe request does', async () => {
 		window.history.replaceState(undefined, '', '/#/universe?universe=5')
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
-		const answers: Array<ReturnType<typeof createDeferred<{ start: bigint; count: bigint; total: bigint; previousStart: undefined; nextStart: undefined; markets: never[]; universeIds: bigint[]; selectedUniverseId: bigint }>>> = []
-		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+		const answers: Array<ReturnType<typeof createDeferred<ReturnType<typeof emptyDiscoveryPage>>>> = []
+		const rendered = await renderConfiguredApp({
 			discoverUniverses: async () => {
-				const answer = createDeferred<{ start: bigint; count: bigint; total: bigint; previousStart: undefined; nextStart: undefined; markets: never[]; universeIds: bigint[]; selectedUniverseId: bigint }>()
+				const answer = createDeferred<ReturnType<typeof emptyDiscoveryPage>>()
 				answers.push(answer)
 				return await answer.promise
 			},
-		}
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
-		cleanupRendered = rendered.cleanup
+		})
 		await waitFor(() => expect(answers).toHaveLength(1))
 		// The user moves to universe 7 while the universe-5 discovery is still in flight.
 		await act(async () => {
@@ -135,7 +120,7 @@ describe('trading header', () => {
 			window.dispatchEvent(new Event('popstate'))
 		})
 		await act(async () => {
-			answers[0]?.resolve({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 5n], selectedUniverseId: 5n })
+			answers[0]?.resolve(emptyDiscoveryPage([0n, 5n], 5n))
 			await Bun.sleep(20)
 		})
 		// The superseded universe-5 answer neither confirms nor rewrites the universe-7 request.
@@ -144,7 +129,7 @@ describe('trading header', () => {
 		// Only the answer to the universe-7 request settles it (7 is unknown, so it falls back to genesis and rewrites).
 		await waitFor(() => expect(answers).toHaveLength(2))
 		await act(async () => {
-			answers[1]?.resolve({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n, 5n], selectedUniverseId: 0n })
+			answers[1]?.resolve(emptyDiscoveryPage([0n, 5n], 0n))
 			await Bun.sleep(20)
 		})
 		await waitFor(() => expect(window.location.hash).toBe('#/universe?universe=0'))
@@ -153,19 +138,13 @@ describe('trading header', () => {
 
 	test('settles on the discovered universe without re-discovering in a loop', async () => {
 		window.history.replaceState(undefined, '', '/#/market')
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
 		let discoveries = 0
-		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+		const rendered = await renderConfiguredApp({
 			discoverTradingMarketPage: async () => {
 				discoveries += 1
-				return { start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n], selectedUniverseId: 0n }
+				return emptyDiscoveryPage([0n], 0n)
 			},
-		}
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
-		cleanupRendered = rendered.cleanup
+		})
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
 		// The confirmed universe is re-requested once; a confirmed answer must not read as foreign and restart discovery.
 		await act(async () => await Bun.sleep(300))
@@ -176,17 +155,11 @@ describe('trading header', () => {
 
 	test('says the universe is unavailable when universe discovery fails', async () => {
 		window.history.replaceState(undefined, '', '/#/universe')
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
-		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
+		const rendered = await renderConfiguredApp({
 			discoverUniverses: async () => {
 				throw new Error('registry RPC unavailable')
 			},
-		}
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
-		cleanupRendered = rendered.cleanup
+		})
 		await waitFor(() => expect(rendered.container.textContent).toContain('Universe discovery failed: registry RPC unavailable'))
 		// The header learns about the failure through the route's state effect, one commit after the route itself.
 		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Unavailable'))
@@ -194,22 +167,11 @@ describe('trading header', () => {
 
 	test('shows wallet connection failures on the universe route', async () => {
 		window.history.replaceState(undefined, '', '/#/universe')
-		const configuration: DeploymentConfiguration = { chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 }
-		const services = {
-			...liveTradingControllerServices,
-			createTradingPublicClient: () => ({}),
-			validateLiveDeployment: async () => undefined,
-			discoverUniverses: async () => ({ start: 0n, count: 0n, total: 0n, previousStart: undefined, nextStart: undefined, markets: [], universeIds: [0n], selectedUniverseId: 0n }),
-		}
-		const rendered = await renderIntoDocument(<App initializeEnvironment={async () => undefined} loadLiveDeployment={async () => configuration} liveTradingServices={services} />)
-		cleanupRendered = rendered.cleanup
-		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
-		expect(walletButton?.textContent).toBe('Connect wallet')
-		await act(async () => {
-			walletButton?.click()
-			await Bun.sleep(10)
+		const rendered = await renderConfiguredApp({
+			discoverUniverses: async () => emptyDiscoveryPage([0n], 0n),
 		})
+		await waitFor(() => expect(rendered.container.querySelector('.header-toolbar-controls .universe-switcher-label')?.textContent).toBe('Genesis'))
+		await clickConnectWallet(rendered.container)
 		await waitFor(() => expect(rendered.container.querySelector('#app-content [role="alert"]')?.textContent).toContain('No injected wallet was found'))
 	})
 
@@ -257,28 +219,14 @@ describe('trading header', () => {
 
 	test('connects wallets from the persistent top-right header action', async () => {
 		window.history.replaceState(undefined, '', '/#/market')
-		const configuration: DeploymentConfiguration = {
-			chainId: 31_337,
-			chainName: 'Local',
-			rpcUrl: 'http://127.0.0.1:1',
-			securityPoolFactory: `0x${'11'.repeat(20)}`,
-			factory: `0x${'22'.repeat(20)}`,
-			router: `0x${'33'.repeat(20)}`,
-			feeBps: 30,
-		}
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => {
 			await Bun.sleep(10)
 		})
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
-		expect(walletButton?.textContent).toBe('Connect wallet')
-		expect(walletButton?.disabled).toBeFalse()
+		expect(rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')?.disabled).toBeFalse()
 		expect(rendered.container.querySelector('main .route-header .wallet-button')).toBeNull()
-		await act(async () => {
-			walletButton?.click()
-			await Bun.sleep(10)
-		})
+		await clickConnectWallet(rendered.container)
 		expect(rendered.container.querySelector('main')?.textContent).toContain('No injected wallet was found')
 	})
 
@@ -296,7 +244,7 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toContain('Loading')
 		expect(rendered.container.querySelector('.header-toolbar-controls select')).toBeNull()
 		if (resolveDeployment === undefined) throw new Error('Deployment resolver is unavailable')
-		resolveDeployment({ chainId: 31_337, chainName: 'Local', rpcUrl: 'http://127.0.0.1:1', securityPoolFactory: `0x${'11'.repeat(20)}`, factory: `0x${'22'.repeat(20)}`, router: `0x${'33'.repeat(20)}`, feeBps: 30 })
+		resolveDeployment(configuration)
 		await act(async () => {
 			await Bun.sleep(10)
 		})
@@ -374,9 +322,7 @@ describe('trading header', () => {
 		expect(rendered.container.querySelector('.header-toolbar-navigation select')).toBeNull()
 		expect(Array.from(rendered.container.querySelectorAll('.tab-nav .view-tabs a')).map(anchor => anchor.textContent)).toEqual(['Markets', 'Portfolio', 'Create'])
 		expect(rendered.container.querySelector('.tab-nav a[aria-current="page"]')?.textContent).toBe('Markets')
-		const moreButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
-		if (moreButton === undefined) throw new Error('The More menu is missing')
-		await act(() => moreButton.click())
+		await act(() => moreMenuButton(rendered.container).click())
 		expect(Array.from(rendered.container.querySelectorAll('.tab-nav-more-menu a')).map(anchor => anchor.textContent)).toEqual(['Liquidity', 'Universe', 'Help'])
 		const helpLink = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Help')
 		if (helpLink === undefined) throw new Error('Shared route navigation is missing')
@@ -388,26 +334,12 @@ describe('trading header', () => {
 
 	test('shows wallet connection failures on live security-pool routes', async () => {
 		window.history.replaceState(undefined, '', `/#/security-pool/0x${'44'.repeat(20)}`)
-		const configuration: DeploymentConfiguration = {
-			chainId: 31_337,
-			chainName: 'Local',
-			rpcUrl: 'http://127.0.0.1:1',
-			securityPoolFactory: `0x${'11'.repeat(20)}`,
-			factory: `0x${'22'.repeat(20)}`,
-			router: `0x${'33'.repeat(20)}`,
-			feeBps: 30,
-		}
 		const rendered = await renderIntoDocument(<App loadLiveDeployment={async () => configuration} />)
 		cleanupRendered = rendered.cleanup
 		await act(async () => {
 			await Bun.sleep(10)
 		})
-		const walletButton = rendered.container.querySelector<HTMLButtonElement>('.trading-wallet-actions .wallet-button')
-		expect(walletButton?.textContent).toBe('Connect wallet')
-		await act(async () => {
-			walletButton?.click()
-			await Bun.sleep(10)
-		})
+		await clickConnectWallet(rendered.container)
 		expect(rendered.container.querySelector('main [role="alert"]')?.textContent).toContain('No injected wallet was found')
 		await act(async () => {
 			window.history.replaceState(undefined, '', '/#/market')

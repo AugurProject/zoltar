@@ -2,18 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
 import { TRADING_OPERATIONS } from '../../src/operations/trading.ts'
 import type { OperationEvidence } from '../../src/operations/types.ts'
-import { address, hash, snapshotFixture } from './fixture.ts'
+import { address, hash, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 
-const options = {
-	allowHighRisk: true,
-	allowIrreversibleOperations: true,
-	maximumBlockIntervalSeconds: 15,
-	maxEthSpendAttoEth: (10n ** 15n).toString(),
-	maxRepSpendAttoRep: (10n ** 15n).toString(),
-	minimumEthReserveAttoEth: (10n ** 16n).toString(),
-	minimumRepReserveAttoRep: (10n ** 18n).toString(),
-	seed: 1,
-} as const
+const options = planningOptionsFixture({ seed: 1 })
 
 describe('idempotent trading keeper evidence', () => {
 	test('targets the requested genesis pool when unrelated eligible topology exists', () => {
