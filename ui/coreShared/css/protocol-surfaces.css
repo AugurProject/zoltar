@@ -2014,9 +2014,28 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	line-height: var(--line-height-body);
 }
 
+.transaction-approval-editor {
+	--approval-rows: 2;
+}
+
+.transaction-approval-editor:has(.field-error, .notice.error) {
+	--approval-rows: 3;
+}
+
+.transaction-plan-action:has(.approval-amount-field),
+.transaction-plan-action:has(.approval-amount-field) .form-grid {
+	display: grid;
+	grid-row: span var(--approval-rows);
+	grid-template-rows: subgrid;
+}
+
+.approval-button-label {
+	white-space: nowrap;
+}
+
 .transaction-approval-editor .form-grid {
 	gap: 0.5rem;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
+	grid-template-columns: minmax(0, 1fr) max-content;
 }
 
 .transaction-approval-editor .form-grid > .workflow-metric-grid,
@@ -2026,6 +2045,9 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .transaction-approval-editor .approval-amount-field {
+	align-content: end;
+	grid-column: 1;
+	grid-row: 2;
 	display: grid;
 	gap: 0.4rem;
 }
@@ -2035,6 +2057,8 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .transaction-approval-editor .form-grid > .actions {
+	grid-column: 2;
+	grid-row: 2;
 	align-self: end;
 }
 
@@ -2117,7 +2141,12 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 @media (max-width: 40rem) {
+	.modal-backdrop:has(.transaction-step-actions) {
+		padding: var(--space-2);
+	}
+
 	.modal-panel:has(.transaction-step-actions) {
+		width: 100%;
 		max-height: calc(100dvh - 2rem);
 		gap: 0.75rem;
 		padding: 0.75rem;
@@ -2141,11 +2170,6 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	.transaction-funding {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.5rem;
-	}
-
-	/* Side-by-side approval columns misalign once a label wraps, so stack them. */
-	.transaction-step-actions .tx-action-group > .actions {
-		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.transaction-step-content {
@@ -2203,10 +2227,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	}
 
 	.transaction-approval-editor .workflow-metric-grid > div {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		justify-content: space-between;
+		display: grid;
 		gap: 0.125rem;
 	}
 
@@ -2222,8 +2243,36 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 		flex: none;
 	}
 
+	.transaction-approval-editor {
+		--approval-rows: 3;
+	}
+
+	.transaction-approval-editor:has(.field-error, .notice.error) {
+		--approval-rows: 4;
+	}
+
+	.transaction-approval-editor .form-grid > .actions {
+		container-type: inline-size;
+		grid-column: 1;
+		grid-row: -2 / -1;
+		align-self: start;
+	}
+
+	.transaction-approval-editor .form-grid > .field-error,
+	.transaction-approval-editor .form-grid > .notice.error {
+		grid-row: 3;
+	}
+
 	.transaction-plan-action:has(.approval-amount-field) .tx-action-button {
 		min-height: 3rem;
+		font-size: 0.75rem;
+		padding-inline: 0;
+	}
+}
+
+@container (max-width: 10rem) {
+	.approval-button-amount-long {
+		display: none;
 	}
 }
 

@@ -10,7 +10,7 @@ import { LoadingText } from './LoadingText.js'
 import { MetricGrid } from './MetricGrid.js'
 import { MetricField } from './MetricField.js'
 import { TransactionActionButton } from './TransactionActionButton.js'
-import { formatCurrencyBalance } from '../lib/formatters.js'
+import { formatCurrencyBalance, formatCeilingAmount, withApproximateMarker } from '../lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage, parseTokenApprovalAmountInput, resolveTokenApprovalStatusMessage, shouldDisplayMaxTokenApprovalAmount } from '../transactions/tokenApproval.js'
 type TokenApprovalControlProps = {
 	compact?: boolean
@@ -56,7 +56,18 @@ function resolveApprovalButtonLabel({
 	if (pending) return <LoadingText>{pendingLabel}</LoadingText>
 	if (guardMessage !== undefined || nextApprovalAmount === undefined) return commonCopy.formatApproveValue(tokenSymbol)
 	if (requirementSatisfied && !isCustomAmount) return commonCopy.approvalSatisfied
-	return commonCopy.formatApproveTokenAmount(formatCurrencyBalance(nextApprovalAmount, tokenUnits), tokenSymbol)
+	const amount = formatCeilingAmount(nextApprovalAmount, tokenUnits)
+	const amountLabel = withApproximateMarker(amount)
+	return (
+		<span className='approval-button-label' title={commonCopy.formatApproveTokenAmount(amount.exact, tokenSymbol)}>
+			{commonCopy.approve}{' '}
+			<span className={amount.text.length > 3 ? 'approval-button-amount approval-button-amount-long' : 'approval-button-amount'}>
+				{amountLabel}
+				{'\u00a0'}
+			</span>
+			{tokenSymbol}
+		</span>
+	)
 }
 export function TokenApprovalControl({
 	compact = false,

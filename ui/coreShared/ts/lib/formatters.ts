@@ -57,9 +57,9 @@ function formatTrimmedDecimal(integerPart: bigint, fractionalPart: bigint, decim
 	return `${integerPart}.${fractionalPart.toString().padStart(decimals, '0').replace(/0+$/, '')}`
 }
 
-function formatRoundedScaledValue(value: bigint, divisor: bigint, decimals: number) {
+function formatRoundedScaledValue(value: bigint, divisor: bigint, decimals: number, rounding: 'nearest' | 'up' = 'nearest') {
 	const scale = 10n ** BigInt(decimals)
-	const rounded = (value * scale + divisor / 2n) / divisor
+	const rounded = (value * scale + (rounding === 'up' ? divisor - 1n : divisor / 2n)) / divisor
 	const integerPart = rounded / scale
 	const fractionalPart = rounded % scale
 
@@ -70,7 +70,7 @@ function formatRoundedScaledValue(value: bigint, divisor: bigint, decimals: numb
 	}
 }
 
-function formatScientificCurrencyBalance(value: bigint, units: number, decimals: number) {
+function formatScientificCurrencyBalance(value: bigint, units: number, decimals: number, rounding: 'nearest' | 'up' = 'nearest') {
 	const isNegative = value < 0n
 	const absoluteValue = isNegative ? -value : value
 	const unitBase = 10n ** BigInt(units)
@@ -79,7 +79,7 @@ function formatScientificCurrencyBalance(value: bigint, units: number, decimals:
 
 	while (true) {
 		const divisor = 10n ** BigInt(exponent) * unitBase
-		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals)
+		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals, rounding)
 		if (rounded.integerPart < 10n) return { approximate: rounded.approximate, text: `${isNegative ? '-' : ''}${rounded.text}E${exponent}` }
 		exponent += 1
 	}
@@ -176,7 +176,7 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 	return `${prefix}${formatGroupedInteger(integerPart)}.${fractionalPart.toString().padStart(effectiveDecimals, '0')}`
 }
 
-function formatCompactScaledValue(value: bigint, units: number, decimals: number) {
+function formatCompactScaledValue(value: bigint, units: number, decimals: number, rounding: 'nearest' | 'up' = 'nearest') {
 	const isNegative = value < 0n
 	const absoluteValue = isNegative ? -value : value
 	const unitBase = 10n ** BigInt(units)
@@ -185,12 +185,12 @@ function formatCompactScaledValue(value: bigint, units: number, decimals: number
 
 	while (suffixIndex < SI_SUFFIXES.length) {
 		const divisor = 1000n ** BigInt(suffixIndex + 1) * unitBase
-		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals)
+		const rounded = formatRoundedScaledValue(absoluteValue, divisor, decimals, rounding)
 		if (rounded.integerPart < 1000n) return { approximate: rounded.approximate, text: `${isNegative ? '-' : ''}${rounded.text}${SI_SUFFIXES[suffixIndex]}` }
 		suffixIndex += 1
 	}
 
-	return formatScientificCurrencyBalance(value, units, decimals)
+	return formatScientificCurrencyBalance(value, units, decimals, rounding)
 }
 
 export type AmountNotation = 'standard' | 'compact'
@@ -222,6 +222,18 @@ export function formatAmount(value: bigint, { decimals = 2, notation = 'standard
 	}
 
 	return { approximate: (absoluteValue * scale) % base !== 0n, exact, text: formatRoundedCurrencyBalance(value, units, decimals) }
+}
+
+/** Upward-rounded nonnegative amounts for approval labels: two decimals, SI suffixes, then scientific notation. */
+export function formatCeilingAmount(value: bigint, units = 18): FormattedAmount {
+	assertNonNegativeInteger(units, 'Units')
+	if (value < 0n) throw new RangeError('Approval amount must be non-negative')
+	const exact = formatCurrencyBalance(value, units)
+	const base = 10n ** BigInt(units)
+	const rounded = formatRoundedScaledValue(value, base, 2, 'up')
+	if (rounded.integerPart < COMPACT_NOTATION_THRESHOLD_UNITS) return { approximate: rounded.approximate, exact, text: rounded.text }
+	const compact = formatCompactScaledValue(value, units, 2, 'up')
+	return { approximate: compact.approximate, exact, text: compact.text }
 }
 
 /** Marks rounded text with `≈ ` only when rounding dropped digits. */
