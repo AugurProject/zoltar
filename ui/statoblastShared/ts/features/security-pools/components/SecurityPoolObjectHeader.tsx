@@ -1,4 +1,3 @@
-import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -57,7 +56,7 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 						{statusBadgeLabel}
 					</Badge>
 					<p className='pool-deadline'>
-						<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.ended : commonCopy.ends}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
+						<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.questionEnded : securityPoolCopy.questionEnds}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
 					</p>
 					{freshness === undefined ? undefined : <UpdatedAgo {...freshness} />}
 				</div>

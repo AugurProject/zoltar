@@ -9,6 +9,8 @@ import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAu
 import {
 	buildTruthAuctionDepthPoints,
 	getTruthAuctionBidSettlementEstimate,
+	formatTruthAuctionTickPriceInput,
+	getRepPerEthPrice,
 	getTruthAuctionBidDisposition,
 	getTruthAuctionBidGuardMessage,
 	getTruthAuctionBidPreview,
@@ -397,7 +399,7 @@ void describe('fork auction helpers', () => {
 
 		expect(depthPoints.map(point => point.tick)).toEqual([3n, 2n, 1n])
 		expect(depthPoints.map(point => point.cumulativeBidAttoEth)).toEqual([3n * 10n ** 18n, 3n * 10n ** 18n, 5n * 10n ** 18n])
-		expect(depthPoints.map(point => point.disposition.label)).toEqual(['Above clearing', 'Historical', 'Below clearing'])
+		expect(depthPoints.map(point => point.disposition.label)).toEqual(['Winning', 'Historical', 'Losing'])
 		expect(depthPoints.map(point => point.isSelected)).toEqual([true, false, false])
 		expect(depthPoints.map(point => point.isPreviewTick)).toEqual([false, false, true])
 		expect(depthPoints.map(point => point.submissionCount)).toEqual([3n, 1n, 2n])
@@ -848,7 +850,6 @@ void describe('fork auction helpers', () => {
 		expect(rows).toEqual([
 			{
 				bidder: walletAddress,
-				cumulativeBidAttoEth: 3n,
 				bidAmountAttoEth: 2n,
 				key: 'aggregate:11:1',
 				price: getTruthAuctionPriceAtTick(11n),
@@ -856,7 +857,7 @@ void describe('fork auction helpers', () => {
 				statusToneClassName: 'is-success',
 			},
 		])
-		expect(buildTruthAuctionBidRows({ bids: rows.map(row => createBid({ bidIndex: 1n, bidder: row.bidder, cumulativeBidAttoEth: row.cumulativeBidAttoEth, bidAmountAttoEth: row.bidAmountAttoEth, tick: 11n })), truthAuction: undefined })).toEqual([])
+		expect(buildTruthAuctionBidRows({ bids: rows.map(row => createBid({ bidIndex: 1n, bidder: row.bidder, cumulativeBidAttoEth: 3n, bidAmountAttoEth: row.bidAmountAttoEth, tick: 11n })), truthAuction: undefined })).toEqual([])
 	})
 
 	void test('builds viewer bid rows with settlement controls and local result status', () => {
@@ -892,9 +893,28 @@ void describe('fork auction helpers', () => {
 			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
 		})
 		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
+		expect(rowsViewModel.rows[0]?.estimate).toBeUndefined()
+		expect(rowsViewModel.rows[1]?.estimate).toEqual({ refundAttoEth: 0n, repAttoRep: getTruthAuctionBidSettlementEstimate(winningBid, finalizedAuction).purchasedRepAmountAttoRep })
 		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], winningBidKey, true)).toEqual([winningBidKey])
 		expect(updateTruthAuctionSettlementBidSelection([winningBidKey], '9:1', true)).toEqual([winningBidKey, '9:1'])
 		expect(updateTruthAuctionSettlementBidSelection([winningBidKey, '9:1'], winningBidKey, false)).toEqual(['9:1'])
+	})
+
+	void test('fills tick prices as short inputs that map back to the same tick', () => {
+		for (const tick of [-5000n, -1n, 0n, 10n, 11n, 5000n, 50_000n]) {
+			const input = formatTruthAuctionTickPriceInput(tick)
+			expect(getTruthAuctionBidPreview(input)?.tick).toBe(tick)
+			expect(input.split('.')[1]?.length ?? 0).toBeLessThanOrEqual(6)
+		}
+		expect(formatTruthAuctionTickPriceInput(12n)).toBe('1.001201')
+		expect(formatTruthAuctionTickPriceInput(13n)).toBe('1.001301')
+	})
+
+	void test('converts an ETH-per-REP price into REP per ETH', () => {
+		expect(getRepPerEthPrice(TRUTH_AUCTION_PRICE_PRECISION)).toBe(TRUTH_AUCTION_PRICE_PRECISION)
+		expect(getRepPerEthPrice(2n * TRUTH_AUCTION_PRICE_PRECISION)).toBe(TRUTH_AUCTION_PRICE_PRECISION / 2n)
+		expect(getRepPerEthPrice(3n * TRUTH_AUCTION_PRICE_PRECISION)).toBe(333_333_333_333_333_333n)
+		expect(getRepPerEthPrice(0n)).toBeUndefined()
 	})
 })
 

@@ -11,7 +11,7 @@ import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLi
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
+import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
@@ -97,26 +97,6 @@ export function renderTimestamp({ displayTimestamp, fallbackText }: { displayTim
 	if (displayTimestamp === undefined) return fallbackText
 	return <TimestampValue timestamp={displayTimestamp} />
 }
-export function renderTruthAuctionCapacityOwnershipNotice(showRefundOnlySettlementCopy = false) {
-	if (showRefundOnlySettlementCopy) {
-		return (
-			<WarningSurface as='section' surface='flat' variant='compact'>
-				<p className='detail'>
-					<strong>{forkAuctionCopy.refundSettlementDetail}</strong> {forkAuctionCopy.formatFinalizedRefundOnlySettlementNotice(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}
-				</p>
-			</WarningSurface>
-		)
-	}
-
-	return (
-		<WarningSurface as='section' surface='flat' variant='compact'>
-			<p className='detail'>
-				<strong>{forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}</strong> {forkAuctionCopy.formatWinningClaimSettlementNotice(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}
-			</p>
-		</WarningSurface>
-	)
-}
-
 export function renderTruthAuctionSettlementSelectionSummary({
 	estimatedAssignedUnderwritingLimitAttoEth,
 	estimatedRefundedAttoEth,
@@ -135,13 +115,9 @@ export function renderTruthAuctionSettlementSelectionSummary({
 	if (selectedRowCount === 0) return undefined
 
 	const summaryDescription = (() => {
-		if (selectedClaimCount > 0 && selectedRefundCount > 0) {
-			return forkAuctionCopy.formatMixedSettlementPreviewDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
-		}
-		if (selectedClaimCount > 0) {
-			return forkAuctionCopy.formatWinningSettlementPreviewDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
-		}
-		return forkAuctionCopy.formatRefundSettlementPreviewDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
+		if (selectedClaimCount > 0 && selectedRefundCount > 0) return forkAuctionCopy.mixedSettlementPreviewDetail
+		if (selectedClaimCount > 0) return forkAuctionCopy.winningSettlementPreviewDetail
+		return forkAuctionCopy.refundSettlementPreviewDetail
 	})()
 
 	const refundDescription = estimatedRefundedAttoEth > 0n ? forkAuctionCopy.truthAuctionRefundEstimateDetail : undefined
@@ -164,7 +140,7 @@ export function renderTruthAuctionSettlementSelectionSummary({
 				{ label: forkAuctionCopy.selectedWinningBids, value: selectedClaimCount.toString() },
 				{ label: forkAuctionCopy.selectedRefundRows, value: selectedRefundCount.toString() },
 				{ label: forkAuctionCopy.estimatedVaultRepBackingAttoRep, value: estimatedVaultRepBackingAttoRep === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedVaultRepBackingAttoRep} suffix={commonCopy.rep} /> },
-				{ label: forkAuctionCopy.formatEstimatedValue(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL), value: estimatedAssignedUnderwritingLimitAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
+				{ label: forkAuctionCopy.estimatedUnderwritingCommitments, value: estimatedAssignedUnderwritingLimitAttoEth === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={estimatedAssignedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 				{ label: forkAuctionCopy.estimatedRefundedAttoEth, value: <CurrencyValue value={estimatedRefundedAttoEth} suffix={commonCopy.eth} /> },
 			])}
 			{roundingDescription === undefined ? undefined : <p className='detail'>{roundingDescription}</p>}
@@ -377,6 +353,7 @@ export function ForkAuctionOutcomeStage({
 	auctionStatusMetrics,
 	auctionWideBidsSection,
 	auctionWideBidsStatusSection,
+	biddingClosed,
 	childSecurityPools,
 	disabled,
 	hasStartedTruthAuction,
@@ -385,6 +362,7 @@ export function ForkAuctionOutcomeStage({
 	selectedStage,
 	selectedStageAheadMessage,
 	settlementStatusMetrics,
+	showChildSecurityPools,
 	shouldShowVisualization,
 	startTruthAuctionSection,
 	submitBidSection,
@@ -399,6 +377,8 @@ export function ForkAuctionOutcomeStage({
 	auctionStatusMetrics: DisplayMetric[]
 	auctionWideBidsSection: ComponentChildren
 	auctionWideBidsStatusSection: ComponentChildren
+	/** The auction is finalized or past its end time, so the bid form and market depth give way to the finalize step. */
+	biddingClosed: boolean
 	childSecurityPools: ListedSecurityPool[]
 	disabled: boolean
 	hasStartedTruthAuction: boolean
@@ -407,6 +387,7 @@ export function ForkAuctionOutcomeStage({
 	selectedStage: ForkWorkflowSelectionStage
 	selectedStageAheadMessage: string | undefined
 	settlementStatusMetrics: DisplayMetric[]
+	showChildSecurityPools: boolean
 	shouldShowVisualization: boolean
 	startTruthAuctionSection: ComponentChildren
 	submitBidSection: ComponentChildren
@@ -427,8 +408,14 @@ export function ForkAuctionOutcomeStage({
 				{shouldShowVisualization ? (
 					<>
 						{truthAuctionHero}
-						<ReadOnlyDetailAccordion title={forkAuctionCopy.marketDepth}>{truthAuctionMarketViewSection}</ReadOnlyDetailAccordion>
-						{submitBidSection}
+						{biddingClosed ? undefined : (
+							<>
+								<ReadOnlyDetailAccordion defaultOpen title={forkAuctionCopy.marketDepth}>
+									{truthAuctionMarketViewSection}
+								</ReadOnlyDetailAccordion>
+								{submitBidSection}
+							</>
+						)}
 						{viewerTruthAuctionBidsSection}
 						{auctionWideBidsSection}
 					</>
@@ -465,7 +452,7 @@ export function ForkAuctionOutcomeStage({
 			)}
 			{truthAuctionSettlementSection}
 			{importedForkSettlementSection}
-			{renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurityPools, renderSelectedOutcomeChildPoolNotice })}
+			{showChildSecurityPools ? renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurityPools, renderSelectedOutcomeChildPoolNotice }) : undefined}
 		</fieldset>
 	)
 }

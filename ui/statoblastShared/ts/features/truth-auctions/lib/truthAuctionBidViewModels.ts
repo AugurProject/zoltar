@@ -2,7 +2,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { getTruthAuctionBidDisposition, getTruthAuctionDispositionClassName, getTruthAuctionPriceAtTick } from './truthAuctionBook.js'
+import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, getTruthAuctionDispositionClassName, getTruthAuctionPriceAtTick } from './truthAuctionBook.js'
 import { formatCurrencyInputBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -10,7 +10,6 @@ type LocalSettlementBidStatus = 'claimed' | 'refunded'
 
 export type TruthAuctionBidRowViewModel = {
 	bidder: Address
-	cumulativeBidAttoEth: bigint
 	bidAmountAttoEth: bigint
 	key: string
 	price: bigint
@@ -20,6 +19,8 @@ export type TruthAuctionBidRowViewModel = {
 
 export type ViewerTruthAuctionBidRowViewModel = {
 	bidAmountAttoEth: bigint
+	/** What the bid is expected to return at the current clearing result; `undefined` once the bid is settled. */
+	estimate: { refundAttoEth: bigint; repAttoRep: bigint } | undefined
 	key: string
 	price: bigint
 	settlementControl:
@@ -46,7 +47,6 @@ export function buildTruthAuctionBidRows({ bids, truthAuction }: { bids: TruthAu
 		const disposition = getTruthAuctionBidDisposition(bid, truthAuction)
 		return {
 			bidder: bid.bidder,
-			cumulativeBidAttoEth: bid.cumulativeBidAttoEth,
 			bidAmountAttoEth: bid.bidAmountAttoEth,
 			key: `aggregate:${bid.tick.toString()}:${bid.bidIndex.toString()}`,
 			price: getTruthAuctionPriceAtTick(bid.tick),
@@ -103,8 +103,10 @@ export function buildViewerTruthAuctionBidRows({
 			return getTruthAuctionDispositionClassName(disposition.tone)
 		})()
 
+		const settlementEstimate = bid.claimed || bid.refunded || inSessionSettlementResult !== undefined ? undefined : getTruthAuctionBidSettlementEstimate(bid, truthAuction)
 		return {
 			bidAmountAttoEth: bid.bidAmountAttoEth,
+			estimate: settlementEstimate === undefined ? undefined : { refundAttoEth: settlementEstimate.refundedBidAmountAttoEth, repAttoRep: settlementEstimate.purchasedRepAmountAttoRep },
 			key: `viewer:${bid.tick.toString()}:${bid.bidIndex.toString()}`,
 			price: getTruthAuctionPriceAtTick(bid.tick),
 			settlementControl: showSettlementActionColumn

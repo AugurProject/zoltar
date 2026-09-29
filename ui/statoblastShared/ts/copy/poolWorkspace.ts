@@ -39,6 +39,7 @@ export const actionLabels = {
 	depositRep: 'Deposit REP to back this pool',
 	escalationStake: 'Your escalation stake is locked',
 	exitVaultCommitment: 'Set your commitment limit to 0 ETH to redeem vault REP',
+	finalizeTruthAuction: 'Finalize the truth auction',
 	manageVault: 'Manage your vault',
 	migrateVault: 'Migrate your vault',
 	mintShares: 'Mint complete sets',

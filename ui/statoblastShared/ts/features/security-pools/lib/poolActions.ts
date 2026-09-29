@@ -19,6 +19,7 @@ type PoolActionId =
 	| 'migrateVault'
 	| 'reviewForkMigration'
 	| 'bidTruthAuction'
+	| 'finalizeTruthAuction'
 	| 'claimForkSettlement'
 	| 'redeemShares'
 	| 'withdrawVaultRep'
@@ -135,6 +136,7 @@ function getStageItems(input: PoolActionInput): PoolActionItem[] {
 		case 'forkMigration':
 			return getForkMigrationItems(input)
 		case 'truthAuction':
+			if (input.auctionEndsAt !== undefined && input.auctionEndsAt > 0n && input.now !== undefined && input.now >= input.auctionEndsAt) return [{ id: 'finalizeTruthAuction', tab: 'fork-workflow', tone: 'action' }]
 			return [withDeadline({ id: 'bidTruthAuction', tab: 'fork-workflow', tone: 'action' }, input.auctionEndsAt, input.now)]
 		case 'settled':
 			return getSettledItems(input)

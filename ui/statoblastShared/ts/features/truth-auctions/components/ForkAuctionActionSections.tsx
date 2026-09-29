@@ -4,14 +4,14 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
-import { renderTruthAuctionCapacityOwnershipNotice, renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
+import { renderTruthAuctionPriceValue } from './ForkAuctionPresentation.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import type { SecurityPoolStateModel } from '../../security-pools/lib/securityPoolState.js'
-import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
 import { withWalletGuardFirst, type WalletGuard } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
+import { formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { getTruthAuctionBidPreview, getRepPerEthPrice, type TruthAuctionBidPricePosition } from '../lib/truthAuctionBook.js'
 
 export type ForkAuctionActionOptions = {
 	action: NonNullable<ForkAuctionSectionProps['forkAuctionActiveAction']>
@@ -56,21 +56,22 @@ export function ForkAuctionOutcomePoolNotice({ error, loading, onRetry, outcomeL
 	)
 }
 
-export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finalized, truthAuctionEndsAt }: { actionButton: ComponentChildren; currentTimestamp: bigint | undefined; finalized: boolean; truthAuctionEndsAt: bigint | undefined }) {
+export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finalized, onOpenSettlement, truthAuctionEndsAt }: { actionButton: ComponentChildren; currentTimestamp: bigint | undefined; finalized: boolean; onOpenSettlement: (() => void) | undefined; truthAuctionEndsAt: bigint | undefined }) {
 	const hasEndedByTime = truthAuctionEndsAt !== undefined && currentTimestamp !== undefined && currentTimestamp >= truthAuctionEndsAt
 	if (!finalized && !hasEndedByTime) return undefined
 	return (
 		<div className='notice success'>
 			<p>
-				<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {finalized ? forkAuctionCopy.formatFinalizedSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL) : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}{' '}
-				{truthAuctionEndsAt === undefined ? undefined : (
-					<>
-						{forkAuctionCopy.endedAtLead}
-						<TimestampValue {...(currentTimestamp === undefined ? {} : { currentTimestamp })} timestamp={truthAuctionEndsAt} />
-					</>
-				)}
+				<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {finalized ? forkAuctionCopy.finalizedSettlementDetail : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}
 			</p>
 			{finalized ? undefined : <div className='actions'>{actionButton}</div>}
+			{!finalized || onOpenSettlement === undefined ? undefined : (
+				<div className='actions'>
+					<button className='primary' onClick={onOpenSettlement} type='button'>
+						{forkAuctionCopy.openSettlement}
+					</button>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -78,7 +79,7 @@ export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finaliz
 export function ForkAuctionStartSection({ actionButton, bypassReason, readyInText }: { actionButton: ComponentChildren; bypassReason: string | undefined; readyInText: string | undefined }) {
 	return (
 		<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
-			<p className='detail'>{forkAuctionCopy.formatStartTruthAuctionDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)}</p>
+			<p className='detail'>{forkAuctionCopy.startTruthAuctionDetail}</p>
 			{readyInText === undefined ? undefined : <p className='detail'>{readyInText}</p>}
 			{bypassReason === undefined ? undefined : <p className='detail'>{bypassReason}</p>}
 			<div className='actions'>{actionButton}</div>
@@ -107,32 +108,77 @@ export function ForkAuctionBidsStatusSection({ error, loading, onRetry, retrying
 	)
 }
 
+function formatRepPerEthDetail(repPrice: bigint) {
+	const repPerEthPrice = getRepPerEthPrice(repPrice)
+	return repPerEthPrice === undefined ? undefined : forkAuctionCopy.formatRepPerEthValue(formatRoundedCurrencyBalance(repPerEthPrice, 18, 4))
+}
+
+/** Shows the live clearing price and a one-click fill for the lowest price that wins in full. */
+function BidPriceGuidance({ clearingPrice, minimumWinningPriceInput, onBidPriceChange }: { clearingPrice: bigint | undefined; minimumWinningPriceInput: string | undefined; onBidPriceChange: (value: string) => void }) {
+	if (clearingPrice === undefined) return undefined
+	const repPerEthDetail = formatRepPerEthDetail(clearingPrice)
+	return (
+		<div className='truth-auction-bid-guidance'>
+			<p className='detail'>
+				{forkAuctionCopy.currentClearingPriceLead}
+				<strong>{renderTruthAuctionPriceValue(clearingPrice)}</strong>
+				{repPerEthDetail === undefined ? undefined : <> {repPerEthDetail}</>}
+			</p>
+			{minimumWinningPriceInput === undefined ? undefined : (
+				<button className='secondary' onClick={() => onBidPriceChange(minimumWinningPriceInput)} type='button'>
+					{forkAuctionCopy.formatUseMinimumWinningPrice(minimumWinningPriceInput)}
+				</button>
+			)}
+		</div>
+	)
+}
+
+function getBidPriceWarning(bidPricePosition: TruthAuctionBidPricePosition | undefined, clearingPrice: bigint | undefined) {
+	if (clearingPrice === undefined) return undefined
+	if (bidPricePosition === 'below') return forkAuctionCopy.formatBidBelowClearingWarning(formatRoundedCurrencyBalance(clearingPrice, 18, 4))
+	if (bidPricePosition === 'at') return forkAuctionCopy.bidAtClearingWarning
+	return undefined
+}
+
 export function ForkAuctionSubmitBidSection({
+	bidPricePosition,
+	clearingPrice,
+	minimumWinningPriceInput,
 	onBidAmountChange,
 	onBidPriceChange,
 	submitBidAction,
 	submitBidAmount,
-	submitBidPreviewPrice,
 	submitBidPrice,
 }: {
+	bidPricePosition: TruthAuctionBidPricePosition | undefined
+	clearingPrice: bigint | undefined
+	minimumWinningPriceInput: string | undefined
 	onBidAmountChange: (value: string) => void
 	onBidPriceChange: (value: string) => void
 	submitBidAction: ComponentChildren
 	submitBidAmount: string
-	submitBidPreviewPrice: bigint | undefined
 	submitBidPrice: string
 }) {
+	const bidPriceWarning = getBidPriceWarning(bidPricePosition, clearingPrice)
+	const submittedBidPrice = getTruthAuctionBidPreview(submitBidPrice)?.submittedPrice
+	const repPerEthDetail = submittedBidPrice === undefined ? undefined : formatRepPerEthDetail(submittedBidPrice)
 	return (
 		<SectionBlock title={forkAuctionCopy.submitBidTitle} variant='embedded'>
 			<div className='form-grid'>
-				{submitBidPreviewPrice === undefined ? undefined : (
-					<p className='detail'>
-						{forkAuctionCopy.selectedLadderPriceLead}
-						{renderTruthAuctionPriceValue(submitBidPreviewPrice)}
-					</p>
-				)}
-				<div className='field-row'>
-					<AmountField label={forkAuctionCopy.bidPrice} onChange={onBidPriceChange} unit={forkAuctionCopy.bidPriceUnit} value={submitBidPrice} />
+				<BidPriceGuidance clearingPrice={clearingPrice} minimumWinningPriceInput={minimumWinningPriceInput} onBidPriceChange={onBidPriceChange} />
+				<div className='field-row truth-auction-bid-fields'>
+					<AmountField
+						hint={
+							<>
+								{repPerEthDetail}
+								{bidPriceWarning === undefined ? undefined : <span className='truth-auction-bid-price-warning'> {bidPriceWarning}</span>}
+							</>
+						}
+						label={forkAuctionCopy.bidPrice}
+						onChange={onBidPriceChange}
+						unit={forkAuctionCopy.bidPriceUnit}
+						value={submitBidPrice}
+					/>
 					<AmountField label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
 				</div>
 				<div className='actions'>{submitBidAction}</div>
@@ -141,12 +187,11 @@ export function ForkAuctionSubmitBidSection({
 	)
 }
 
-export function ForkAuctionSettlementActionSection({ actionButton, description, selectionSummary, showRefundOnlyNotice, title }: { actionButton: ComponentChildren; description: ComponentChildren; selectionSummary: ComponentChildren; showRefundOnlyNotice: boolean; title: ComponentChildren }) {
+export function ForkAuctionSettlementActionSection({ actionButton, description, selectionSummary, title }: { actionButton: ComponentChildren; description: ComponentChildren; selectionSummary: ComponentChildren; title: ComponentChildren }) {
 	return (
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
 			{description === undefined || selectionSummary !== undefined ? undefined : <p className='detail'>{description}</p>}
 			{selectionSummary}
-			{selectionSummary === undefined ? renderTruthAuctionCapacityOwnershipNotice(showRefundOnlyNotice) : undefined}
 			<div className='actions'>{actionButton}</div>
 		</SectionBlock>
 	)
