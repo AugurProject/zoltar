@@ -1,0 +1,126 @@
+name: Version deploy
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: version-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  validate-tag:
+    name: Validate version tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require v<number>
+        env:
+          VERSION_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ ! "${VERSION_TAG}" =~ ^v[0-9]+$ ]]; then
+            echo "Version tags must match v<number>; received ${VERSION_TAG}" >&2
+            exit 1
+          fi
+  tests:
+    name: Run all tests
+    needs: validate-tag
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  deploy:
+    name: Publish IPFS apps and release
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-bun
+
+      - name: Read version number
+        id: version
+        shell: bash
+        run: echo "number=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build IPFS publisher
+        id: image
+        uses: ./.github/actions/build-ui-image
+        with:
+          registry: ${{ env.REGISTRY }}
+          tag: ${{ steps.version.outputs.number }}
+          file: ui/Dockerfile
+          target: publisher
+          cache-scope: zoltar-version-ipfs
+
+      - name: Read content identifier
+        env:
+          PUBLISHER_IMAGE: ${{ steps.image.outputs.image }}
+        shell: bash
+        run: |
+          IPFS_CID=$(docker run --rm --entrypoint /bin/sh "${PUBLISHER_IMAGE}" -c 'cat /ipfs_hash.txt')
+          [[ "${IPFS_CID}" =~ ^bafy[a-z2-7]+$ ]]
+          echo "IPFS_CID=${IPFS_CID}" >> "$GITHUB_ENV"
+
+      - name: Push versioned publisher image
+        env:
+          PUBLISHER_IMAGE: ${{ steps.image.outputs.image }}
+        run: docker push "${PUBLISHER_IMAGE}"
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          GENERATED_NOTES=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${GITHUB_REF_NAME}" \
+            --jq '.body')
+
+          cat > release-notes.md <<EOF
+          ## IPFS applications
+
+          The versioned publisher image contains the exact static files represented by this content identifier:
+
+          \`${IPFS_CID}\`
+
+          - [Zoltar — ipfs://${IPFS_CID}/zoltar/](ipfs://${IPFS_CID}/zoltar/)
+          - [Augur Statoblast — ipfs://${IPFS_CID}/statoblast/](ipfs://${IPFS_CID}/statoblast/)
+          - [Trading — ipfs://${IPFS_CID}/trading/](ipfs://${IPFS_CID}/trading/)
+          - [Zoltar gateway](https://${IPFS_CID}.ipfs.w3s.link/zoltar/)
+          - [Augur Statoblast gateway](https://${IPFS_CID}.ipfs.w3s.link/statoblast/)
+          - [Trading gateway](https://${IPFS_CID}.ipfs.w3s.link/trading/)
+
+          ${GENERATED_NOTES}
+          EOF
+
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest=false
+          else
+            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file release-notes.md --latest=false --verify-tag
+          fi
+
+  promote-release:
+    name: Promote latest published version
+    needs: deploy
+    runs-on: ubuntu-latest
+    concurrency:
+      group: version-release-latest
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - name: Promote highest published version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          RELEASE_TAGS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
+          LATEST_TAG=$(printf '%s\n' "${RELEASE_TAGS}" | grep -E '^v[0-9]+$' | sort -Vr | sed -n '1p')
+          # Reconcile published versions even when builds finish out of order.
+          gh release edit "${LATEST_TAG}" --repo "${GITHUB_REPOSITORY}" --latest
