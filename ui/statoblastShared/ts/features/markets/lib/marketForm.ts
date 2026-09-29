@@ -57,8 +57,8 @@ export function getDefaultForkAuctionFormState(): ForkAuctionFormState {
 		securityPoolAddress: '',
 		selectedOutcome: 'yes',
 		settlementAddress: '',
-		submitBidAmount: '0',
-		submitBidPrice: '0',
+		submitBidAmount: '',
+		submitBidPrice: '',
 		vaultAddress: '',
 	}
 }

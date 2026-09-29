@@ -55,7 +55,6 @@ describe('TruthAuctionBidsSection', () => {
 				rows={[
 					{
 						bidder: walletAddress,
-						cumulativeBidAttoEth: 5n,
 						bidAmountAttoEth: 2n,
 						key: 'aggregate:11:1',
 						price: 42n,
@@ -76,9 +75,10 @@ describe('TruthAuctionBidsSection', () => {
 		expect(scrollRegion.className).toContain('truth-auction-bid-table-scroll')
 		expect(scrollRegion.getAttribute('tabindex')).toBe('0')
 		expect(scrollRegion.contains(bidHistory)).toBe(true)
-		expect(within(bidHistory).getAllByRole('columnheader')).toHaveLength(5)
+		expect(within(bidHistory).getAllByRole('columnheader')).toHaveLength(4)
 		expect(within(bidHistory).getAllByRole('row')).toHaveLength(2)
-		expect(within(bidHistory).getAllByRole('cell')).toHaveLength(5)
+		expect(within(bidHistory).getAllByRole('cell')).toHaveLength(4)
+		expect(within(document.body).getByText('Showing 1 of 3 bids at the loaded prices')).not.toBeNull()
 		expect(within(bidHistory).queryByRole('button', { name: /Copy address/ })).toBeNull()
 		expect(within(bidHistory).queryByRole('button', { name: /Copy exact value/ })).toBeNull()
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Show more truth auction bids' }))
@@ -156,7 +156,17 @@ describe('ViewerTruthAuctionBidsSection', () => {
 
 	test('prompts for a wallet before showing viewer bids', async () => {
 		const rendered = await renderIntoDocument(
-			<ViewerTruthAuctionBidsSection accountAddress={undefined} hasMoreViewerBids={false} loadingTruthAuctionBook={false} onLoadNextViewerBidPage={() => undefined} onSettlementBidSelectionChange={() => undefined} renderPriceValue={renderPriceValue} rows={[]} showSettlementActionColumn={false} />,
+			<ViewerTruthAuctionBidsSection
+				accountAddress={undefined}
+				hasMoreViewerBids={false}
+				loadingTruthAuctionBook={false}
+				onLoadNextViewerBidPage={() => undefined}
+				onSettlementBidSelectionChange={() => undefined}
+				onSettlementBidSelectionReplace={() => undefined}
+				renderPriceValue={renderPriceValue}
+				rows={[]}
+				showSettlementActionColumn={false}
+			/>,
 		)
 		cleanupRendered = rendered.cleanup
 
@@ -166,6 +176,7 @@ describe('ViewerTruthAuctionBidsSection', () => {
 
 	test('renders settlement controls and emits selection changes', async () => {
 		const selectionChanges: Array<{ bidKey: string; checked: boolean }> = []
+		const selectionReplacements: string[][] = []
 		const rendered = await renderIntoDocument(
 			<ViewerTruthAuctionBidsSection
 				accountAddress={walletAddress}
@@ -175,10 +186,14 @@ describe('ViewerTruthAuctionBidsSection', () => {
 				onSettlementBidSelectionChange={(bidKey, checked) => {
 					selectionChanges.push({ bidKey, checked })
 				}}
+				onSettlementBidSelectionReplace={bidKeys => {
+					selectionReplacements.push(bidKeys)
+				}}
 				renderPriceValue={renderPriceValue}
 				rows={[
 					{
 						bidAmountAttoEth: 2n,
+						estimate: { refundAttoEth: 5n * 10n ** 17n, repAttoRep: 3n * 10n ** 18n },
 						key: 'viewer:11:1',
 						price: 42n,
 						settlementControl: {
@@ -201,12 +216,49 @@ describe('ViewerTruthAuctionBidsSection', () => {
 		expect(checkbox.disabled).toBe(false)
 		fireEvent.change(checkbox, { target: { checked: true } })
 		expect(selectionChanges).toEqual([{ bidKey: '11:1', checked: true }])
+		expect(within(document.body).getByText('3.00 REP')).not.toBeNull()
+		expect(within(document.body).getByText('0.50 ETH refund')).not.toBeNull()
+		expect((within(document.body).getByRole('button', { name: 'Clear selection' }) as HTMLButtonElement).disabled).toBe(true)
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Select all' }))
+		expect(selectionReplacements).toEqual([['11:1']])
 		expect(within(document.body).getByRole('button', { name: 'Show more of my bids' })).not.toBeNull()
+	})
+
+	test('hides the estimated result column once no bid has a pending outcome', async () => {
+		const rendered = await renderIntoDocument(
+			<ViewerTruthAuctionBidsSection
+				accountAddress={walletAddress}
+				hasMoreViewerBids={false}
+				loadingTruthAuctionBook={false}
+				onLoadNextViewerBidPage={() => undefined}
+				onSettlementBidSelectionChange={() => undefined}
+				onSettlementBidSelectionReplace={() => undefined}
+				renderPriceValue={renderPriceValue}
+				rows={[{ bidAmountAttoEth: 2n, estimate: undefined, key: 'viewer:11:1', price: 42n, settlementControl: undefined, statusLabel: 'Claimed', statusToneClassName: 'is-success' }]}
+				showSettlementActionColumn={false}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+
+		const myBids = within(document.body).getByRole('table', { name: 'My bids' })
+		expect(within(myBids).queryByText('Estimated result')).toBeNull()
+		expect(within(myBids).getAllByRole('columnheader')).toHaveLength(3)
+		expect(within(myBids).getAllByRole('cell')).toHaveLength(3)
 	})
 
 	test('disables viewer bid pagination while the next page is loading', async () => {
 		const rendered = await renderIntoDocument(
-			<ViewerTruthAuctionBidsSection accountAddress={walletAddress} hasMoreViewerBids={true} loadingTruthAuctionBook={true} onLoadNextViewerBidPage={() => undefined} onSettlementBidSelectionChange={() => undefined} renderPriceValue={renderPriceValue} rows={[]} showSettlementActionColumn={false} />,
+			<ViewerTruthAuctionBidsSection
+				accountAddress={walletAddress}
+				hasMoreViewerBids={true}
+				loadingTruthAuctionBook={true}
+				onLoadNextViewerBidPage={() => undefined}
+				onSettlementBidSelectionChange={() => undefined}
+				onSettlementBidSelectionReplace={() => undefined}
+				renderPriceValue={renderPriceValue}
+				rows={[]}
+				showSettlementActionColumn={false}
+			/>,
 		)
 		cleanupRendered = rendered.cleanup
 
@@ -228,6 +280,7 @@ describe('ViewerTruthAuctionBidsSection', () => {
 					retryCalls += 1
 				}}
 				onSettlementBidSelectionChange={() => undefined}
+				onSettlementBidSelectionReplace={() => undefined}
 				renderPriceValue={renderPriceValue}
 				rows={[]}
 				showSettlementActionColumn={true}

@@ -21,20 +21,9 @@ test('fork migration empty states are complete templates', () => {
 })
 
 test('truth-auction settlement copy identifies REP backing-unit credits', () => {
-	const capacityOwnership = 'auctioned underwriting commitments'
-	const settlementCopy = [
-		forkAuctionCopy.formatWinningClaimCapacityOwnershipHeadline(capacityOwnership),
-		forkAuctionCopy.formatWinningClaimSettlementNotice(capacityOwnership),
-		forkAuctionCopy.formatMixedSettlementPreviewDetail(capacityOwnership),
-		forkAuctionCopy.formatWinningSettlementPreviewDetail(capacityOwnership),
-		forkAuctionCopy.formatWinningBidBatchSettlementDetail(capacityOwnership),
-		forkAuctionCopy.formatMixedBidBatchSettlementDetail(capacityOwnership),
-		forkAuctionCopy.formatFinalizedSettlementDetail(capacityOwnership),
-		forkAuctionCopy.formatStartTruthAuctionDetail(capacityOwnership),
-	]
+	const settlementCopy = [forkAuctionCopy.mixedSettlementPreviewDetail, forkAuctionCopy.winningSettlementPreviewDetail, forkAuctionCopy.winningBidBatchSettlementDetail, forkAuctionCopy.mixedBidBatchSettlementDetail, forkAuctionCopy.startTruthAuctionDetail, forkAuctionCopy.finalizeTruthAuctionReviewDescription]
 	for (const copy of settlementCopy) expect(copy).toContain('REP backing units')
-	expect(forkAuctionCopy.formatFinalizedSettlementDetail(capacityOwnership)).toContain('credited for withdrawal')
-	expect(forkAuctionCopy.formatStartTruthAuctionDetail(capacityOwnership)).toContain('credited for withdrawal during settlement')
+	expect(forkAuctionCopy.startTruthAuctionDetail).toContain('credited for withdrawal during settlement')
 	expect(forkAuctionCopy.estimatedVaultRepBackingAttoRep).toBe('Estimated REP backing')
 })
 

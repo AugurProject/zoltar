@@ -19,6 +19,7 @@ import { ForkAuctionWorkflowShell, ForkTriggeredStage } from './ForkAuctionWorkf
 import { ForkAuctionBidsStatusSection, ForkAuctionSettlementActionSection, ForkAuctionStartSection, ForkAuctionSubmitBidSection } from './ForkAuctionActionSections.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL } from '../lib/forkAuction.js'
+import { isTruthAuctionBiddingClosed } from '../lib/truthAuctionBook.js'
 import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reporting.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
 import { type DisplayMetric, ForkAuctionOutcomeStage, ForkAuctionMigrationSummaryCard, FORK_MIGRATION_DURATION, ForkWorkflowStageNavigator, renderAddress, renderMetricValue, renderTruthAuctionPriceValue, renderTruthAuctionSettlementSelectionSummary, sameBigIntRecord } from './ForkAuctionPresentation.js'
@@ -39,9 +40,12 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const submitBidSection = (
 		<ForkAuctionSubmitBidSection
 			auctionSecurityPoolAddress={model.auctionSecurityPoolAddress}
+			bidPricePosition={model.liveBidGuidance?.bidPricePosition}
+			clearingPrice={model.liveBidGuidance?.clearingPrice}
 			enteredBidAmount={model.enteredBidAmount}
 			enteredBidPrice={model.enteredBidPrice}
 			estimatedAttoRep={model.estimatedAttoRep}
+			minimumWinningPriceInput={model.liveBidGuidance?.minimumWinningPriceInput}
 			onBidAmountChange={submitBidAmount => model.onForkAuctionFormChange({ submitBidAmount })}
 			onBidPriceChange={submitBidPrice => model.onForkAuctionFormChange({ submitBidPrice })}
 			questionTitle={model.selectedAuctionChildPool?.marketDetails.title ?? model.previewPool?.marketDetails.title}
@@ -49,7 +53,6 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			selectedAuctionLabel={model.selectedAuctionLabel}
 			submitBidAction={submitBidAction}
 			submitBidAmount={model.forkAuctionForm.submitBidAmount}
-			submitBidPreviewPrice={model.submitBidPreviewTickSummary?.price}
 			submitBidPrice={model.forkAuctionForm.submitBidPrice}
 			submittedBidPrice={model.submittedBidPrice}
 		/>
@@ -125,7 +128,12 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 	]
-	const auctionOutcomeSelector = (
+	const auctionOutcomeSelector = model.isViewingOwnAuction ? (
+		<p className='detail fork-workflow-outcome-selector'>
+			<strong>{commonCopy.outcome}: </strong>
+			{model.selectedOutcomeLabel}
+		</p>
+	) : (
 		<div className='form-grid fork-workflow-outcome-selector'>
 			<label className='field'>
 				<span>{commonCopy.outcome}</span>
@@ -138,6 +146,12 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	)
 	const truthAuctionHero = (() => {
 		if (!model.shouldShowTruthAuctionVisualization || model.truthAuctionStatus === undefined) return undefined
+		const hasPendingRefund = model.pendingEthRefundAttoEth !== undefined && model.pendingEthRefundAttoEth > 0n
+		const biddingClosed = isTruthAuctionBiddingClosed(model.truthAuctionStatus, model.effectiveCurrentTimestamp)
+		const progressDetail = (() => {
+			if (biddingClosed) return undefined
+			return model.truthAuctionStatus.hitCap ? forkAuctionCopy.truthAuctionClearingProgressDetail : forkAuctionCopy.truthAuctionOpenProgressDetail
+		})()
 		return (
 			<TruthAuctionSummaryCard
 				auctionedUnderwritingLimitAttoEthDisplay={model.selectedAuctionContext === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} />}
@@ -145,12 +159,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				clearingPriceDisplay={model.truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(model.truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared}
 				displayedEthRaisedAttoEth={model.displayedEthRaisedAttoEth}
 				displayedRepSoldAttoRep={model.displayedRepSoldAttoRep}
+				ended={biddingClosed}
 				endsDisplay={model.endsDisplay}
 				attoEthRaiseCap={model.truthAuctionStatus.attoEthRaiseCap}
 				ethRaisedProgress={model.ethRaisedProgress}
 				maxAttoRepBeingSold={model.truthAuctionStatus.maxAttoRepBeingSold}
 				minBidSizeAttoEth={model.truthAuctionStatus.minBidSizeAttoEth}
-				pendingRefundDisplay={pendingRefundDisplay}
+				pendingRefundDisplay={model.selectedStage !== 'settlement' && (model.truthAuctionStatus.finalized || hasPendingRefund) ? pendingRefundDisplay : undefined}
+				progressDetail={progressDetail}
 				repSoldProgress={model.repSoldProgress}
 				startedDisplay={model.startedDisplay}
 				winningThresholdPriceDisplay={model.winningThresholdPrice === undefined ? undefined : renderTruthAuctionPriceValue(model.winningThresholdPrice)}
@@ -219,6 +235,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				onLoadNextViewerBidPage={model.loadNextViewerBidPage}
 				onRetry={model.retryViewerTruthAuctionBids}
 				onSettlementBidSelectionChange={model.onSettlementBidSelectionChange}
+				onSettlementBidSelectionReplace={bidKeys => model.setSelectedSettlementBidKeys(bidKeys)}
 				renderPriceValue={renderTruthAuctionPriceValue}
 				retrying={model.retryingViewerTruthAuctionBids}
 				rows={model.viewerBidRows}
@@ -247,7 +264,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const pendingRefundWithdrawalAvailability = (() => {
 		if (model.loadingPendingEthRefund) return forkAuctionCopy.loadingPendingRefund
 		if (model.pendingEthRefundError !== undefined) return model.pendingEthRefundError
-		if (model.pendingEthRefundAttoEth === undefined || model.pendingEthRefundAttoEth === 0n) return forkAuctionCopy.noPendingRefund
+		if (model.pendingEthRefundAttoEth === undefined || model.pendingEthRefundAttoEth === 0n) return model.hasUnsettledRefundableBids ? forkAuctionCopy.settleRefundableBidsFirst : forkAuctionCopy.noPendingRefund
 		return undefined
 	})()
 	const withdrawRefundAction =
@@ -282,7 +299,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const truthAuctionSettlementSection =
 		!model.shouldShowTruthAuctionVisualization || model.truthAuctionStatus === undefined ? undefined : (
 			<Fragment>
-				<ForkAuctionSettlementActionSection actionButton={settlementActionButton} description={model.settlementActionDescription} selectionSummary={settlementSelectionSummary} showRefundOnlyNotice={model.showRefundOnlySettlementCapacityOwnershipNotice} title={model.settlementActionLabel} />
+				{model.hasSettleableBids ? <ForkAuctionSettlementActionSection actionButton={settlementActionButton} description={model.settlementActionDescription} selectionSummary={settlementSelectionSummary} title={model.settlementActionLabel} /> : undefined}
 				{withdrawRefundSection}
 			</Fragment>
 		)
@@ -376,12 +393,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				auctionStatusMetrics={auctionStatusMetrics}
 				auctionWideBidsSection={auctionWideBidsSection}
 				auctionWideBidsStatusSection={auctionWideBidsStatusSection}
+				biddingClosed={model.truthAuctionStatus !== undefined && isTruthAuctionBiddingClosed(model.truthAuctionStatus, model.effectiveCurrentTimestamp)}
 				childSecurityPools={model.childSecurityPools}
 				disabled={model.disabled}
 				hasStartedTruthAuction={model.hasStartedTruthAuction}
 				importedForkSettlementSection={importedForkSettlementSection}
 				renderSelectedOutcomeChildPoolNotice={model.renderSelectedOutcomeChildPoolNotice}
 				selectedStage={model.selectedStage}
+				showChildSecurityPools={!model.isViewingOwnAuction}
 				selectedStageAheadMessage={model.selectedStageAheadMessage}
 				settlementStatusMetrics={settlementStatusMetrics}
 				shouldShowVisualization={model.shouldShowTruthAuctionVisualization}

@@ -344,9 +344,9 @@ describe('ForkAuctionSection settlement summary', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Selected-bid settlement preview.')).not.toBeNull()
-		expect(documentQueries.getByText(/Winning rows receive estimated REP backing units plus estimated Auctioned underwriting commitments, while refund rows credit locked ETH for withdrawal\./)).not.toBeNull()
-		expect(documentQueries.getByText('Estimated Auctioned underwriting commitments')).not.toBeNull()
+		expect(documentQueries.getByText('Settlement preview.')).not.toBeNull()
+		expect(documentQueries.getByText('Winning bids add REP backing units to your vault, with a matching share of the auctioned underwriting commitments. Refundable bids credit their ETH for withdrawal.')).not.toBeNull()
+		expect(documentQueries.getByText('Estimated underwriting commitments')).not.toBeNull()
 		expect(documentQueries.getByText('1.50 REP')).not.toBeNull()
 		expect(documentQueries.getByText('3.00 ETH')).not.toBeNull()
 		expect(documentQueries.getByText('1.50 ETH')).not.toBeNull()
@@ -464,7 +464,7 @@ describe('ForkAuctionSection settlement summary', () => {
 
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByText('Estimated REP backing')).not.toBeNull()
-		expect(documentQueries.getByText(/Selected-bid settlement preview/)).not.toBeNull()
+		expect(documentQueries.getByText(/Settlement preview/)).not.toBeNull()
 		expect(documentQueries.queryByText(/Winning claims add REP backing units/)).toBeNull()
 		expect(documentQueries.queryByText(/Select winning bids and settle them together/)).toBeNull()
 		expect(documentQueries.queryByText(/per-tick ETH denominator/i)).toBeNull()

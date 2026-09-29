@@ -122,6 +122,12 @@ describe('pool action items', () => {
 		expect(derivePoolActionItems(createActionInput({ forkTriggerAvailable: true, step: 'forkMigration' }))[0]?.id).toBe('triggerFork')
 	})
 
+	test('asks to finalize the truth auction once bidding has ended instead of offering a bid', () => {
+		expect(derivePoolActionItems(createActionInput({ auctionEndsAt: 50n, step: 'truthAuction' })).map(item => item.id)).toEqual(['finalizeTruthAuction'])
+		expect(derivePoolActionItems(createActionInput({ auctionEndsAt: 40n, step: 'truthAuction' }))[0]).toEqual({ id: 'finalizeTruthAuction', tab: 'fork-workflow', tone: 'action' })
+		expect(derivePoolActionItems(createActionInput({ auctionEndsAt: 51n, step: 'truthAuction' }))[0]?.id).toBe('bidTruthAuction')
+	})
+
 	test('offers redemption only for positions the account holds once the pool settles', () => {
 		const poolState = evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false })
 		expect(derivePoolActionItems(createActionInput({ poolState, step: 'settled' })).map(item => item.id)).toEqual([])

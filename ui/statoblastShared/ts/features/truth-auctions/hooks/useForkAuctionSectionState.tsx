@@ -13,8 +13,8 @@ import { ForkAuctionMigrationBalances } from '../components/ForkAuctionMigration
 import { createForkAuctionActionRenderer, ForkAuctionEndedNotice } from '../components/ForkAuctionActionSections.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import { AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, getTimeRemaining } from '../lib/forkAuction.js'
-import { buildTruthAuctionDepthPoints, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
+import { getTimeRemaining } from '../lib/forkAuction.js'
+import { buildTruthAuctionDepthPoints, formatTruthAuctionTickPriceInput, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionLiveBidGuidance, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
@@ -222,9 +222,11 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		tickSummaries: activeTickSummaries,
 		truthAuction: truthAuctionStatus,
 	})
-	const selectedLoadedTickSummary = selectedBookTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === selectedBookTick)
-	const previewTickSummary = enteredBidTick === undefined ? undefined : activeTickSummaries.find(tickSummary => tickSummary.tick === enteredBidTick)
-	const submitBidPreviewTickSummary = previewTickSummary ?? (enteredBidTick !== undefined && selectedLoadedTickSummary?.tick === enteredBidTick ? selectedLoadedTickSummary : undefined)
+	const liveBidGuidance = getTruthAuctionLiveBidGuidance(truthAuctionStatus, enteredBidTick)
+	const selectBidPriceTick = (tick: bigint) => {
+		selectTruthAuctionTick(tick)
+		context.onForkAuctionFormChange({ submitBidPrice: formatTruthAuctionTickPriceInput(tick) })
+	}
 	const maxTickAttoEth = truthAuctionDepthPoints.reduce((maximumEth, point) => (point.currentTotalBidAttoEth > maximumEth ? point.currentTotalBidAttoEth : maximumEth), 0n)
 	const ethRaisedCapDisplay =
 		truthAuctionStatus === undefined ? (
@@ -279,15 +281,13 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 			selectionHasRefunds: settlementSelectionHasRefunds,
 			truthAuctionFinalized: truthAuctionStatus?.finalized === true,
 		}) ?? 'refundLosingBids'
-	const showRefundOnlySettlementCapacityOwnershipNotice = truthAuctionStatus?.finalized === true && selectedRefundSettlementBidRows.length > 0 && selectedClaimSettlementBidRows.length === 0
+	const hasUnsettledRefundableBids = settlementBidRows.some(row => row.disposition.canPrefillRefund)
+	const hasSettleableBids = settlementSelectionState.rowKeys.length > 0
 	const settlementActionLabel = forkAuctionCopy.settleSelectedBids
 	const settlementActionDescription = (() => {
-		if (settlementSelectionMode === 'claim') return forkAuctionCopy.formatWinningBidBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
-		if (settlementSelectionMode === 'refund') {
-			if (truthAuctionStatus?.finalized === true) return forkAuctionCopy.formatFinalizedRefundBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
-			return forkAuctionCopy.formatRefundableBidBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
-		}
-		return forkAuctionCopy.formatMixedBidBatchSettlementDetail(AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL)
+		if (settlementSelectionMode === 'claim') return forkAuctionCopy.winningBidBatchSettlementDetail
+		if (settlementSelectionMode === 'refund') return forkAuctionCopy.refundableBidBatchSettlementDetail
+		return forkAuctionCopy.mixedBidBatchSettlementDetail
 	})()
 	const settlementActionPendingLabel = forkAuctionCopy.submittingSettlementTransactionTruncated
 	const auctionBidRows = buildTruthAuctionBidRows({
@@ -359,8 +359,11 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		idleLabel: forkAuctionCopy.finalizeTruthAuction,
 		onClick: onFinalizeTruthAuctionForSelectedAuction,
 		pendingLabel: forkAuctionCopy.finalizingTruthAuctionTruncated,
+		tone: 'primary',
 	})
-	const truthAuctionEndedNotice = truthAuctionStatus === undefined ? undefined : <ForkAuctionEndedNotice actionButton={finalizeTruthAuctionAction} currentTimestamp={context.effectiveCurrentTimestamp} finalized={truthAuctionStatus.finalized} truthAuctionEndsAt={truthAuctionEndsAt} />
+	const openSettlementStage = context.onSelectedStageViewChange === undefined || context.selectedStage === 'settlement' ? undefined : () => context.onSelectedStageViewChange?.('settlement')
+	const truthAuctionEndedNotice =
+		truthAuctionStatus === undefined ? undefined : <ForkAuctionEndedNotice actionButton={finalizeTruthAuctionAction} currentTimestamp={context.effectiveCurrentTimestamp} finalized={truthAuctionStatus.finalized} onOpenSettlement={openSettlementStage} truthAuctionEndsAt={truthAuctionEndsAt} />
 	const startTruthAuctionReadyInText = (() => {
 		if (startTruthAuctionCountdown === undefined) return undefined
 		if (startTruthAuctionCountdown === 0n) return undefined
@@ -489,7 +492,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		enteredBidPrice,
 		estimatedAttoRep,
 		resultingBidBalanceAttoEth,
-		submitBidPreviewTickSummary,
 		submittedBidPrice,
 		isMigrationRequired,
 		activeReportingDetails,
@@ -517,7 +519,8 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		loadingTruthAuctionBook,
 		maxTickAttoEth,
 		loadNextTickPage,
-		selectTruthAuctionTick,
+		selectTruthAuctionTick: selectBidPriceTick,
+		liveBidGuidance,
 		truthAuctionBookError,
 		truthAuctionDepthPoints,
 		aggregatedAuctionBidCountForLoadedTicks,
@@ -552,7 +555,9 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		settlementActionPendingLabel,
 		isSettleSelectedBidsInProgress,
 		settlementActionDescription,
-		showRefundOnlySettlementCapacityOwnershipNotice,
+		hasUnsettledRefundableBids,
+		hasSettleableBids,
+		setSelectedSettlementBidKeys,
 		hasImportedForkSettlementDeposits,
 		onWithdrawForkedEscalationSubmit,
 		importedForkSettlementResolved,

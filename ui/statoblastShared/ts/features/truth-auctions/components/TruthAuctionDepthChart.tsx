@@ -121,7 +121,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 		<>
 			<div className='truth-auction-depth-frame'>
 				<div className='truth-auction-depth-y-axis'>
-					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>{forkAuctionCopy.loadedDepthEth}</span>
+					<span className='truth-auction-depth-axis-title truth-auction-depth-axis-title-y'>{forkAuctionCopy.cumulativeBidsEth}</span>
 					<div className='truth-auction-depth-y-ticks' aria-hidden='true'>
 						<span className='truth-auction-depth-axis-tick truth-auction-depth-y-tick is-max' style={{ top: `${(getDepthYPosition(maxLoadedDepth) / CHART_HEIGHT) * 100}%` }}>
 							<CurrencyValue value={maxLoadedDepth} suffix={commonCopy.eth} />
@@ -175,7 +175,7 @@ export function TruthAuctionDepthChart({ clearingTick, onSelectTick, points }: T
 				{midpointPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-mid'>{formatTruthAuctionPriceLabel(midpointPrice)}</span>}
 				{lowestLoadedPrice === undefined ? undefined : <span className='truth-auction-depth-axis-tick truth-auction-depth-x-tick is-min'>{formatTruthAuctionPriceLabel(lowestLoadedPrice)}</span>}
 			</div>
-			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>{forkAuctionCopy.priceEthPerRep}</div>
+			<div className='truth-auction-depth-axis-title truth-auction-depth-axis-title-x'>{forkAuctionCopy.depthChartPriceAxis}</div>
 		</>
 	)
 }
