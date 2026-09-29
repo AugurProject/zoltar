@@ -389,7 +389,8 @@ describe('bot process locks', () => {
 			expect(process.exitCode).toBe(1)
 		} finally {
 			console.error = originalError
-			process.exitCode = previousExitCode
+			// Bun keeps a failing exit code when it is reset to undefined, so restore an explicit success code.
+			process.exitCode = previousExitCode ?? 0
 		}
 	})
 })
