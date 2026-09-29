@@ -12,7 +12,7 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { useEffect, useId, useRef, useState } from 'preact/hooks'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
@@ -576,14 +576,7 @@ export function ReportingSection({
 
 			{forkTriggeredActions}
 
-			<ErrorNotice message={reportingError} />
-			{reportingError === undefined || showSecurityPoolAddressInput ? undefined : (
-				<div className='actions'>
-					<button className='secondary' disabled={loadingReportingDetails} onClick={onLoadReporting} type='button'>
-						{loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting}
-					</button>
-				</div>
-			)}
+			<RetryableNotice disabled={loadingReportingDetails} message={reportingError} onRetry={showSecurityPoolAddressInput ? undefined : onLoadReporting} retryLabel={loadingReportingDetails ? <LoadingText>{reportingCopy.loadingEscalation}</LoadingText> : reportingCopy.retryReporting} />
 		</>
 	)
 	if (embedInCard) return sections

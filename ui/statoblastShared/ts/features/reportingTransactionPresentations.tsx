@@ -3,52 +3,14 @@ import { createTransactionScope, securityPoolTransactionScope } from '@zoltar/ui
 import * as reportingCopy from '../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as openOracleCopy from '../copy/openOracle.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
-import { IdentifierValue } from '@zoltar/ui-core-shared/components/IdentifierValue.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
-import { getMarketTypeLabel } from '@zoltar/ui-core-shared/lib/marketType.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
-import type { MarketCreationResult, OpenOracleActionResult, ReportingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, ReportingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import * as priceRequestCopy from '../copy/priceRequest.js'
-
-type MarketCreationTransactionContext = {
-	marketType: MarketCreationResult['marketType']
-	title?: string | undefined
-	universeId?: bigint | undefined
-}
-
-function getMarketCreationTransactionRows(context: MarketCreationTransactionContext) {
-	return [...(context.title === undefined || context.title.trim() === '' ? [] : [{ label: marketCopy.title, value: context.title.trim() }]), { label: marketCopy.questionType, value: getMarketTypeLabel(context.marketType) }]
-}
-
-export function createMarketCreationTransactionIntent(context: MarketCreationTransactionContext) {
-	return buildIntent({
-		action: 'createMarket',
-		failedTitle: transactionCopy.questionCreation,
-		rows: getMarketCreationTransactionRows(context),
-		source: 'zoltar',
-		submittedTitle: transactionCopy.creatingQuestion,
-		universeId: context.universeId,
-	})
-}
-
-export function createMarketCreationSuccessPresentation(result: MarketCreationResult, context?: Omit<MarketCreationTransactionContext, 'marketType'>) {
-	return buildPresentation({
-		hash: result.createQuestionHash,
-		rows: [{ label: commonCopy.questionId, value: <IdentifierValue value={result.questionId} /> }, ...getMarketCreationTransactionRows({ ...context, marketType: result.marketType })],
-		title: transactionCopy.questionCreated,
-		tone: 'success',
-		universeId: context?.universeId,
-	})
-}
-
-export function createMarketCreationWarningPresentation(result: MarketCreationResult, message: string, context?: Omit<MarketCreationTransactionContext, 'marketType'>) {
-	return withWarning(createMarketCreationSuccessPresentation(result, context), message)
-}
 
 type ReportingTransactionContext = PoolUniverseTransactionContext & {
 	outcome?: ReportingActionResult['outcome'] | undefined

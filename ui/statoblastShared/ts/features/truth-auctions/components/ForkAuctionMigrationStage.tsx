@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { LoadingAwareText, LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -284,16 +284,7 @@ export function ForkAuctionMigrationStage({
 									<LoadingText>{forkAuctionCopy.selectedChildPoolRepReadinessLoading}</LoadingText>
 								</p>
 							) : undefined}
-							{selectedOutcomeMigrationSeedStatusError === undefined || loadingSelectedOutcomeMigrationSeedStatus ? undefined : (
-								<>
-									<ErrorNotice message={selectedOutcomeMigrationSeedStatusError} />
-									<div className='actions'>
-										<button className='secondary' onClick={retrySelectedOutcomeMigrationSeedStatus} type='button'>
-											{forkAuctionCopy.retryPoolRepReadiness}
-										</button>
-									</div>
-								</>
-							)}
+							{loadingSelectedOutcomeMigrationSeedStatus ? undefined : <RetryableNotice message={selectedOutcomeMigrationSeedStatusError} onRetry={retrySelectedOutcomeMigrationSeedStatus} retryLabel={forkAuctionCopy.retryPoolRepReadiness} />}
 							{loadingSelectedOutcomeMigrationSeedStatus || selectedOutcomeMigrationSeedStatusError !== undefined || selectedOutcomeMigrationSeedStatus === undefined || !selectedOutcomeMigrationSeedStatus.seeded ? undefined : (
 								<p className='detail'>{selectedOutcomeMigrationSeedStatus.childPoolRepBalanceAttoRep > 0n ? forkAuctionCopy.poolRepAlreadyMigratedDetail : forkAuctionCopy.poolRepStagedForVaultMigrationDetail}</p>
 							)}

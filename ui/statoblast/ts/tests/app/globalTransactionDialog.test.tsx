@@ -14,7 +14,7 @@ import { GlobalTransactionDialog } from '@zoltar/ui-core-shared/app/components/G
 import { OperationModal } from '@zoltar/ui-core-shared/components/OperationModal.js'
 import { GlobalTransactionPresentationProvider } from '@zoltar/ui-core-shared/components/GlobalTransactionPresentationContext.js'
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
-import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
+import { createMarketCreationSuccessPresentation, createMarketCreationTransactionIntent } from '@zoltar/ui-zoltar-shared/features/zoltarTransactionPresentations.js'
 import { createSecurityPoolCreationWarningPresentation } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
