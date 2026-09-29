@@ -1,5 +1,5 @@
 import { describe, test } from 'bun:test'
-import { encodeAbiParameters, getAddress, isHex, keccak256, parseAbiItem, toFunctionSelector, toHex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, getAddress, keccak256, parseAbiItem, toFunctionSelector, toHex } from '@zoltar/core-shared/evm/ethereum'
 import assert from '../../testSupport/simulator/utils/assert'
 import { useStatoblastVaultAccountingFixture } from './fixture'
 import { ReputationToken_ReputationToken, statoblast_interfaces_ISecurityPool_ISecurityPool } from '../../types/contractArtifact'
@@ -14,6 +14,7 @@ import { DAY, GENESIS_REPUTATION_TOKEN } from '../../testSupport/simulator/utils
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
+import { PERMIT_TYPES, RECEIVE_WITH_AUTHORIZATION_TYPES, signTypedDataV4, tokenDomain } from '../../testSupport/simulator/utils/typedDataSignatures'
 
 describe('Vault authorization deposit accounting', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
@@ -67,34 +68,15 @@ describe('Vault authorization deposit accounting', () => {
 		const boundNonce = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'address' }], [nonce, operationHash, owner]))
 		const validBefore = (await mockWindow.getTime()) + DAY
 		const name = await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'name' })
-		const signature = await mockWindow.request({
-			method: 'eth_signTypedData_v4',
-			params: [
-				owner,
-				JSON.stringify({
-					domain: { chainId: 1, name, version: '1', verifyingContract: token },
-					primaryType: 'ReceiveWithAuthorization',
-					types: {
-						ReceiveWithAuthorization: [
-							{ name: 'from', type: 'address' },
-							{ name: 'to', type: 'address' },
-							{ name: 'value', type: 'uint256' },
-							{ name: 'validAfter', type: 'uint256' },
-							{ name: 'validBefore', type: 'uint256' },
-							{ name: 'nonce', type: 'bytes32' },
-						],
-					},
-					message: { from: owner, to: pool, value: depositAmount.toString(), validAfter: '0', validBefore: validBefore.toString(), nonce: boundNonce },
-				}),
-			],
+		const signature = await signTypedDataV4(mockWindow, owner, {
+			domain: tokenDomain(token, name),
+			primaryType: 'ReceiveWithAuthorization',
+			types: RECEIVE_WITH_AUTHORIZATION_TYPES,
+			message: { from: owner, to: pool, value: depositAmount.toString(), validAfter: '0', validBefore: validBefore.toString(), nonce: boundNonce },
 		})
-		if (typeof signature !== 'string' || signature.length !== 132) throw new Error('Expected a 65-byte signature')
-		const r: `0x${string}` = `0x${signature.slice(2, 66)}`
-		const s: `0x${string}` = `0x${signature.slice(66, 130)}`
-		if (!isHex(r) || !isHex(s)) throw new Error('Invalid signature encoding')
-		const deposit = async (signatureR = r) =>
+		const deposit = async (signatureR = signature.r) =>
 			await client.waitForTransactionReceipt({
-				hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithAuthorization', args: [owner, depositAmount, depositTarget, 0n, validBefore, nonce, Number.parseInt(signature.slice(130, 132), 16), signatureR, s] }),
+				hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithAuthorization', args: [owner, depositAmount, depositTarget, 0n, validBefore, nonce, signature.v, signatureR, signature.s] }),
 			})
 		return { client, pool, token, owner, boundNonce, deposit, validBefore, name }
 	}
@@ -151,29 +133,12 @@ describe('Vault authorization deposit accounting', () => {
 		await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'approve', args: [pool, 0n] }) })
 		if (accruedFees) await fixture.mockWindow.advanceTime(3_600n)
 		const nonce = await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'nonces', args: [owner] })
-		const signature = await fixture.mockWindow.request({
-			method: 'eth_signTypedData_v4',
-			params: [
-				owner,
-				JSON.stringify({
-					domain: { chainId: 1, name, version: '1', verifyingContract: token },
-					primaryType: 'Permit',
-					types: {
-						Permit: [
-							{ name: 'owner', type: 'address' },
-							{ name: 'spender', type: 'address' },
-							{ name: 'value', type: 'uint256' },
-							{ name: 'nonce', type: 'uint256' },
-							{ name: 'deadline', type: 'uint256' },
-						],
-					},
-					message: { owner, spender: pool, value: depositAmount.toString(), nonce: nonce.toString(), deadline: validBefore.toString() },
-				}),
-			],
+		const permit = await signTypedDataV4(fixture.mockWindow, owner, {
+			domain: tokenDomain(token, name),
+			primaryType: 'Permit',
+			types: PERMIT_TYPES,
+			message: { owner, spender: pool, value: depositAmount.toString(), nonce: nonce.toString(), deadline: validBefore.toString() },
 		})
-		if (typeof signature !== 'string' || signature.length !== 132) throw new Error('Expected a 65-byte permit signature')
-		const r: `0x${string}` = `0x${signature.slice(2, 66)}`
-		const s: `0x${string}` = `0x${signature.slice(66, 130)}`
 		const readAccounting = async () => ({
 			owner: await getSecurityVault(client, pool, owner),
 			existing: await getSecurityVault(client, pool, client.account.address),
@@ -191,7 +156,7 @@ describe('Vault authorization deposit accounting', () => {
 				await depositRepToVault(ownerClient, pool, depositAmount, target)
 			} else if (path === 'permit') {
 				await fixture.mockWindow.setTime(depositTimestamp)
-				await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithPermit', args: [depositAmount, target, validBefore, Number.parseInt(signature.slice(130, 132), 16), r, s] }) })
+				await ownerClient.waitForTransactionReceipt({ hash: await ownerClient.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'depositRepToVaultWithPermit', args: [depositAmount, target, validBefore, permit.v, permit.r, permit.s] }) })
 				assert.strictEqual(await client.readContract({ address: token, abi: ReputationToken_ReputationToken.abi, functionName: 'nonces', args: [owner] }), nonce + 1n)
 			} else {
 				await fixture.mockWindow.setTime(depositTimestamp)

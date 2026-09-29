@@ -2,12 +2,13 @@ import { encodeReceiveBasedRedeemRequest } from '../../../../ui/trading/ts/proto
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deployContract } from '../../testSupport/deployContract'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { encodeDeployData, encodeFunctionData, isHex, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeDeployData, encodeFunctionData, privateKeyToAccount, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { signTyped } from 'micro-eth-signer'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
+import { PERMIT_TYPES, splitSignature } from '../../testSupport/simulator/utils/typedDataSignatures'
 import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../testSupport/coverage/traceToSource'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
@@ -15,15 +16,6 @@ const rate = 10n ** 18n
 const universe = 17n
 const question = 91n
 const unboundedShares = 2n ** 256n - 1n
-
-function splitSignature(signature: string) {
-	if (!isHex(signature) || signature.length !== 132) throw new Error('Expected a 65-byte signature')
-	return {
-		r: `0x${signature.slice(2, 66)}` as Hex,
-		s: `0x${signature.slice(66, 130)}` as Hex,
-		v: Number.parseInt(signature.slice(130, 132), 16),
-	}
-}
 
 describe('factory, pair, and router integration', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -475,13 +467,7 @@ describe('factory, pair, and router integration', () => {
 							{ name: 'chainId', type: 'uint256' },
 							{ name: 'verifyingContract', type: 'address' },
 						],
-						Permit: [
-							{ name: 'owner', type: 'address' },
-							{ name: 'spender', type: 'address' },
-							{ name: 'value', type: 'uint256' },
-							{ name: 'nonce', type: 'uint256' },
-							{ name: 'deadline', type: 'uint256' },
-						],
+						...PERMIT_TYPES,
 					},
 					message: { owner, spender, value, nonce: signedNonce, deadline: permitDeadline },
 				},
