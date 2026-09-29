@@ -11,21 +11,8 @@ for (const viewport of [
 	browserTest(
 		`returning to the page refreshes status and retries automatically at ${viewport.width}px`,
 		async () => {
-			const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/?demo=1`, viewport)
-			const evaluate = async (expression: string): Promise<unknown> => {
-				const response = await session.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-				if (typeof response !== 'object' || response === null) throw new Error('Missing browser response')
-				if ('exceptionDetails' in response) throw new Error(JSON.stringify(response.exceptionDetails))
-				if (!('result' in response) || typeof response.result !== 'object' || response.result === null || !('value' in response.result)) return undefined
-				return response.result.value
-			}
-			const waitFor = async (expression: string) => {
-				for (let attempt = 0; attempt < 100; attempt++) {
-					if (await evaluate(expression)) return
-					await Bun.sleep(50)
-				}
-				throw new Error(`Timed out: ${expression}`)
-			}
+			const session = await createDevToolsSession(process.env['CHROMIUM_PATH'] ?? '/usr/bin/chromium', `${origin}/?demo=1`, viewport, { evaluationDefaults: { intervalMilliseconds: 50 } })
+			const { evaluate, waitFor } = session
 			const capture = async (state: string) => {
 				const directory = process.env['AUGURSCAN_QA_SCREENSHOTS']
 				if (directory === undefined) return

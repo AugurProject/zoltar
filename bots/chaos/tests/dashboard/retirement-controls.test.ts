@@ -52,12 +52,8 @@ browserTest(
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
-		const browser = await startChromiumSession(chromium)
-		const evaluate = async (expression: string) => {
-			const response = await browser.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
-			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
-		}
+		const browser = await startChromiumSession(chromium, { evaluationDefaults: { exceptions: 'ignore' } })
+		const { evaluate } = browser
 		try {
 			await browser.send('Runtime.enable')
 			await browser.send('Page.enable')
@@ -172,19 +168,9 @@ browserTest(
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
-		const browser = await startChromiumSession(chromium)
-		const evaluate = async (expression: string) => {
-			const response = await browser.send('Runtime.evaluate', { awaitPromise: true, expression, returnByValue: true })
-			const result = typeof response === 'object' && response !== null ? Reflect.get(response, 'result') : undefined
-			return typeof result === 'object' && result !== null ? Reflect.get(result, 'value') : undefined
-		}
-		const waitFor = async (expression: string) => {
-			for (let attempt = 0; attempt < 120; attempt++) {
-				if (await evaluate(expression)) return
-				await Bun.sleep(25)
-			}
-			throw new Error(`Timed out waiting for ${expression}`)
-		}
+		const browser = await startChromiumSession(chromium, { evaluationDefaults: { attempts: 120, exceptions: 'ignore', intervalMilliseconds: 25 } })
+		const { evaluate } = browser
+		const waitFor = async (expression: string) => await browser.waitFor(expression, { message: `Timed out waiting for ${expression}` })
 		const review = () => evaluate("[...document.querySelectorAll('.operator-review-row')].map(row => [row.querySelector('strong')?.textContent, row.querySelectorAll('span')[2]?.textContent])")
 		const confirm = async () => {
 			await evaluate(
