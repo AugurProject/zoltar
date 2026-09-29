@@ -9,6 +9,7 @@ import type { SimulationScenario } from './scenarios.js'
 import type { SavedSimulationStateEnvelopeV1, SimulationInitialization } from './savedStates.js'
 import { createSimulationProvider, type SimulationProviderRequest } from './simulationProvider.js'
 import { DEFAULT_SIMULATION_WALLET_MODE, SIMULATION_WRONG_CHAIN_ID_HEX, type SimulationWalletMode } from './simulationWallet.js'
+import { withTransactionCallbacks } from './writeClientCallbacks.js'
 import type { SimulationWorkerCallMap, SimulationWorkerCallMessage, SimulationWorkerCallMethod, SimulationWorkerEvent, SimulationWorkerMessage, SimulationWorkerResultValue, SimulationWorkerRpcMessage, SimulationWorkerState } from './tevmWorkerProtocol.js'
 
 const QA_ACCOUNTS = [normalizeAccount('0x00000000000000000000000000000000000000a1'), normalizeAccount('0x00000000000000000000000000000000000000b2'), normalizeAccount('0x00000000000000000000000000000000000000c3')].filter((account): account is Address => account !== undefined)
@@ -332,42 +333,20 @@ export async function createSimulationBackend(
 			}),
 		createWriteClient: (accountAddress, callbacks = {}) => {
 			const baseClient = createBaseWriteClient(accountAddress)
-
-			const sendRawTransaction: typeof baseClient.sendRawTransaction = async parameters => {
-				const hash = await baseClient.sendRawTransaction(parameters)
-				callbacks.onTransactionSubmitted?.(hash)
-				return hash
-			}
-
-			const sendTransaction: typeof baseClient.sendTransaction = async parameters => {
-				const hash = await baseClient.sendTransaction(parameters)
-				callbacks.onTransactionSubmitted?.(hash)
-				return hash
-			}
-
-			const writeContract: typeof baseClient.writeContract = async parameters => {
-				const hash = await baseClient.writeContract(parameters)
-				callbacks.onTransactionSubmitted?.(hash)
-				return hash
-			}
-
-			const waitForTransactionReceipt: typeof baseClient.waitForTransactionReceipt = async parameters => await callWorker('waitForTransactionReceipt', { hash: parameters.hash })
-
-			return {
-				...baseClient,
-				installSimulationProxyDeployer: async ({ address, runtimeCode }) => {
-					await callWorker('installSimulationProxyDeployer', { address, runtimeCode })
+			return withTransactionCallbacks(
+				{
+					...baseClient,
+					installSimulationProxyDeployer: async ({ address, runtimeCode }) => {
+						await callWorker('installSimulationProxyDeployer', { address, runtimeCode })
+					},
+					patchSimulationGenesisRepToken: async ({ repAddress, zoltarAddress }) => {
+						await callWorker('patchSimulationGenesisRepToken', { repAddress, zoltarAddress })
+					},
+					requiresWalletConfirmation: false,
+					waitForTransactionReceipt: async parameters => await callWorker('waitForTransactionReceipt', { hash: parameters.hash }),
 				},
-				onTransactionPrepared: callbacks.onTransactionPrepared,
-				patchSimulationGenesisRepToken: async ({ repAddress, zoltarAddress }) => {
-					await callWorker('patchSimulationGenesisRepToken', { repAddress, zoltarAddress })
-				},
-				requiresWalletConfirmation: false,
-				sendRawTransaction,
-				sendTransaction,
-				waitForTransactionReceipt,
-				writeContract,
-			}
+				callbacks,
+			)
 		},
 		get blockCountSinceReset() {
 			return requireState().blockCountSinceReset

@@ -1,10 +1,8 @@
-import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { useRef } from 'preact/hooks'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage } from '../protocol/live.js'
-import type { DeploymentConfiguration } from '../protocol/config.js'
-import type { LiveTradingControllerServices } from './live/liveTradingTypes.js'
+import type { LiveTradingControllerServices, LiveTradingRouteContext } from './live/liveTradingTypes.js'
 import { useQuestionClock } from './live/useLiveTradingState.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { useMarketDiscovery } from './live/useMarketDiscovery.js'
@@ -29,16 +27,9 @@ export function useLiveTradingController({
 	walletSummaryRetryNonce,
 	settings,
 	services = liveTradingControllerServices,
-}: {
-	route: string
-	configuration: DeploymentConfiguration | undefined
-	configurationError: string | undefined
-	selectedUniverseId: string | undefined
-	urlUniverseId: bigint | undefined
-	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
+}: LiveTradingRouteContext & {
 	onWorkflowLockChange(locked: boolean): void
 	onWalletSummaryChange(summary: WalletSummaryState): void
-	walletSummaryRetryNonce: number
 	settings: TradeSettings
 	services?: LiveTradingControllerServices
 }) {

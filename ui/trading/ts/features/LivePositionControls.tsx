@@ -20,7 +20,7 @@ import type { BalanceState } from './live/liveTradingTypes.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
-import { QuotedTransactionPanel, type WalletStep } from './QuotedTransactionPanel.js'
+import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { TradeEstimatePanel } from './TradeEstimatePanel.js'
 import { formatAmountInput, probabilityPercent, roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
 import { useDebouncedValue } from './live/useDebouncedValue.js'
@@ -126,7 +126,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 	const amountId = useId()
 	const controlsDisabled = closed || workflowLocked
 	const estimate = model.estimate
-	const walletStep: WalletStep | undefined = model.primaryStep === 'submit' ? undefined : { label: wallet.actionLabel, disabled: workflowLocked, onClick: () => void wallet.connect() }
+	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
 	return (
 		<div className='position-controls' aria-busy={holdings.balanceState === 'loading' || revalidatingAfterReceipt}>

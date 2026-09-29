@@ -8,14 +8,14 @@ import { marketAcceptsNewRisk, publicErrorMessage, type LiveMarket } from '../..
 import { discoveryCommitAllowed, securityPoolAddressFromRoute, walletSummaryDiscoveryRetryStart, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import { transactionMarketKey } from './transactionWorkflow.js'
 import { liveCopy } from '../../copy/live.js'
-import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
 import { parsedUniverseId } from './useLiveTradingState.js'
 import { tradingListKindFor } from '../../lib/routing.js'
 import type { useMarketDiscovery } from './useMarketDiscovery.js'
 import type { usePortfolioQueries } from './usePortfolioQueries.js'
 import type { useTransactionWorkflow } from './useTransactionWorkflow.js'
 import type { useWalletSession } from './useWalletSession.js'
-import type { LiveTradingControllerServices } from './liveTradingTypes.js'
+import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
+import type { LiveTradingControllerServices, LiveTradingRouteContext } from './liveTradingTypes.js'
 
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
 
@@ -42,15 +42,7 @@ export function useMarketDiscoveryController({
 	discoveryRequests,
 	balanceRequests,
 	portfolioBalanceRequests,
-}: {
-	route: string
-	configuration: DeploymentConfiguration | undefined
-	configurationError: string | undefined
-	selectedUniverseId: string | undefined
-	/** The `universe` parameter the application is currently honouring; recorded in each answer's scope. */
-	urlUniverseId: bigint | undefined
-	onUniversesChange(universeIds: readonly bigint[], selectedUniverseId: bigint | undefined, scope: UniverseDiscoveryScope): void
-	walletSummaryRetryNonce: number
+}: LiveTradingRouteContext & {
 	selected: LiveMarket | undefined
 	routePool: Address | undefined
 	nowSeconds: bigint
