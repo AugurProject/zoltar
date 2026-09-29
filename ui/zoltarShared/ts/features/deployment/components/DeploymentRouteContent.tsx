@@ -8,7 +8,7 @@ import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { DeploymentSection } from './DeploymentSection.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
-import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { buildRouteHref, getRouteHash, getTopLevelRouteSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeZoltarViewQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
@@ -65,14 +65,7 @@ export function DeploymentRouteContent({
 				<p id={deploymentStatusReasonId} className='detail'>
 					{deploymentCopy.deploymentStatusUnavailableReason}
 				</p>
-				<ErrorNotice message={deploymentStatusError} />
-				{deploymentStatusError === undefined ? undefined : (
-					<div className='actions'>
-						<button className='secondary' type='button' onClick={onRetryDeploymentStatus}>
-							{commonCopy.retry}
-						</button>
-					</div>
-				)}
+				<RetryableNotice message={deploymentStatusError} onRetry={onRetryDeploymentStatus} retryLabel={commonCopy.retry} />
 			</>
 		)
 

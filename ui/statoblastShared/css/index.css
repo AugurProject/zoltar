@@ -926,29 +926,6 @@
 	color: var(--danger);
 }
 
-.modal-summary-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--space-3) var(--space-4);
-}
-
-.modal-summary-grid > div {
-	min-width: 0;
-	padding-top: var(--space-3);
-	border-top: 1px solid var(--border-default);
-}
-
-.modal-summary-grid strong {
-	display: block;
-	margin-top: var(--space-1);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-value);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	color: var(--value);
-	overflow-wrap: anywhere;
-}
-
 .reporting-header-stack {
 	display: grid;
 	gap: var(--space-4);
@@ -1047,7 +1024,8 @@
 	gap: var(--space-3);
 }
 
-.withdraw-deposit-option {
+.withdraw-deposit-option,
+.escalation-selection-item {
 	display: grid;
 	gap: var(--space-2);
 	padding: var(--space-4);
@@ -1094,15 +1072,6 @@
 .escalation-selection-list {
 	display: grid;
 	gap: var(--space-3);
-}
-
-.escalation-selection-item {
-	display: grid;
-	gap: var(--space-2);
-	padding: var(--space-4);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--radius-control);
-	background: var(--surface-inset);
 }
 
 .escalation-selection-item-copy {

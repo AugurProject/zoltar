@@ -7,6 +7,7 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
+import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNotice.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -86,14 +87,7 @@ export function LiveSecurityPoolDetails({
 							{refreshMessage}
 						</p>
 					)}
-					<ErrorNotice message={errorMessage} />
-					{errorMessage !== undefined && !refreshing ? (
-						<div className='actions'>
-							<button className='secondary' type='button' disabled={workflowLocked} onClick={retry}>
-								{hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool}
-							</button>
-						</div>
-					) : null}
+					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool} />
 
 					{market.loadError !== undefined ? (
 						<ReadOnlyDetailAccordion title={liveCopy.poolDetails}>
@@ -156,16 +150,6 @@ export function LiveSecurityPoolDetails({
 
 export function SecurityPoolRouteEmptyState({ discoveryState, discoveryError, workflowLocked, retry }: { discoveryState: 'loading' | 'ready' | 'error'; discoveryError: string | undefined; workflowLocked: boolean; retry(): void }) {
 	if (discoveryState === 'loading') return <EmptyState live title={liveCopy.loadingSecurityPoolDetails} />
-	if (discoveryState === 'error')
-		return (
-			<>
-				<ErrorNotice message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} />
-				<div className='actions'>
-					<button className='secondary' type='button' disabled={workflowLocked} onClick={retry}>
-						{liveCopy.retryDiscovery}
-					</button>
-				</div>
-			</>
-		)
+	if (discoveryState === 'error') return <RetryableNotice disabled={workflowLocked} message={liveCopy.securityPoolDiscoveryFailed(discoveryError ?? liveCopy.unknownDiscovery)} onRetry={retry} retryLabel={liveCopy.retryDiscovery} />
 	return <EmptyState title={liveCopy.noPoolSelected} detail={liveCopy.securityPoolUnavailableInUniverse} />
 }

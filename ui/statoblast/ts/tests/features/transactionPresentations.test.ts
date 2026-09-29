@@ -14,15 +14,8 @@ import {
 	createTradingTransactionIntent,
 	getSecurityVaultActionRepAmount,
 } from '@zoltar/ui-statoblast-shared/features/transactionPresentations.js'
-import {
-	createMarketCreationSuccessPresentation,
-	createOpenOracleSuccessPresentation,
-	createOpenOracleTransactionIntent,
-	createPoolOracleSuccessPresentation,
-	createPoolOracleTransactionIntent,
-	createReportingSuccessPresentation,
-	createReportingTransactionIntent,
-} from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
+import { createMarketCreationSuccessPresentation } from '@zoltar/ui-zoltar-shared/features/zoltarTransactionPresentations.js'
+import { createOpenOracleSuccessPresentation, createOpenOracleTransactionIntent, createPoolOracleSuccessPresentation, createPoolOracleTransactionIntent, createReportingSuccessPresentation, createReportingTransactionIntent } from '@zoltar/ui-statoblast-shared/features/reportingTransactionPresentations.js'
 import type { ForkAuctionActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createInitialTransactionTrayState, markTransactionFailed, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
 

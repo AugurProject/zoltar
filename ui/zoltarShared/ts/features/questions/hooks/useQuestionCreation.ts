@@ -17,7 +17,7 @@ import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-sha
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { useZoltarOperations } from '../../universes/hooks/useZoltarOperations.js'
 
-type UseQuestionCreationParameters = TransactionLifecycleParameters &
+export type UseQuestionCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
 		activeUniverseId: bigint
 		autoLoadInitialData: boolean
@@ -36,6 +36,13 @@ const defaultUseQuestionCreationDependencies: UseQuestionCreationDependencies = 
 	},
 }
 
+export type UseQuestionCreationOptions = {
+	/** Stores a separate draft per universe and labels creation transactions with the universe. */
+	universeScoped?: boolean
+	/** Forces every draft and submission to one question type. */
+	fixedMarketType?: MarketFormState['marketType']
+}
+
 const QUESTION_DRAFT_STORAGE_PREFIX = 'zoltar.questionDraft'
 
 type KeyedValue<T> = {
@@ -43,9 +50,10 @@ type KeyedValue<T> = {
 	value: T
 }
 
-function getQuestionDraftStorageKey(accountAddress: Address | undefined) {
+function getQuestionDraftStorageKey(accountAddress: Address | undefined, universeId: bigint | undefined) {
 	const ownerKey = accountAddress === undefined ? 'anonymous' : accountAddress.toLowerCase()
-	return `${QUESTION_DRAFT_STORAGE_PREFIX}:${ownerKey}`
+	const ownerStorageKey = `${QUESTION_DRAFT_STORAGE_PREFIX}:${ownerKey}`
+	return universeId === undefined ? ownerStorageKey : `${ownerStorageKey}:${universeId.toString()}`
 }
 
 function getQuestionDraftStorage() {
@@ -67,21 +75,23 @@ function isMarketFormState(value: unknown): value is MarketFormState {
 	return true
 }
 
-function readStoredQuestionDraft(storageKey: string | undefined) {
+type NormalizeQuestionForm = (form: MarketFormState) => MarketFormState
+
+function readStoredQuestionDraft(storageKey: string | undefined, normalizeForm: NormalizeQuestionForm) {
 	if (storageKey === undefined) return undefined
 	try {
 		const storedValue = getQuestionDraftStorage()?.getItem(storageKey)
 		if (storedValue === null || storedValue === undefined) return undefined
 		const parsedValue: unknown = JSON.parse(storedValue)
-		return isMarketFormState(parsedValue) ? parsedValue : undefined
+		return isMarketFormState(parsedValue) ? normalizeForm(parsedValue) : undefined
 	} catch (error) {
 		if (!(error instanceof SyntaxError) && !(error instanceof DOMException)) throw error
 		return undefined
 	}
 }
 
-function readQuestionDraft(storageKey: string | undefined) {
-	return readStoredQuestionDraft(storageKey) ?? getDefaultMarketFormState()
+function readQuestionDraft(storageKey: string | undefined, normalizeForm: NormalizeQuestionForm) {
+	return readStoredQuestionDraft(storageKey, normalizeForm) ?? getDefaultMarketFormState()
 }
 
 function writeQuestionDraft(storageKey: string | undefined, form: MarketFormState) {
@@ -108,8 +118,8 @@ function clearQuestionDraft(storageKey: string | undefined) {
 	}
 }
 
-function clearQuestionDraftIfUnchanged(storageKey: string | undefined, submittedForm: MarketFormState) {
-	const storedForm = readStoredQuestionDraft(storageKey)
+function clearQuestionDraftIfUnchanged(storageKey: string | undefined, submittedForm: MarketFormState, normalizeForm: NormalizeQuestionForm) {
+	const storedForm = readStoredQuestionDraft(storageKey, normalizeForm)
 	if (storedForm !== undefined && JSON.stringify(storedForm) === JSON.stringify(submittedForm)) clearQuestionDraft(storageKey)
 }
 
@@ -121,14 +131,17 @@ function getValueForStorageKey<T>(keyedValue: KeyedValue<T> | undefined, storage
 export function useQuestionCreation(
 	{ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseQuestionCreationParameters,
 	dependencies: UseQuestionCreationDependencies = defaultUseQuestionCreationDependencies,
+	{ fixedMarketType, universeScoped = false }: UseQuestionCreationOptions = {},
 ) {
 	const zoltar = useZoltarOperations({ accountAddress, activeUniverseId, autoLoadInitialData, deploymentStatuses, environmentRefreshKey, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState })
-	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress)
+	const normalizeForm: NormalizeQuestionForm = form => (fixedMarketType === undefined ? form : { ...form, marketType: fixedMarketType })
+	const draftUniverseId = universeScoped ? activeUniverseId : undefined
+	const questionDraftStorageKey = getQuestionDraftStorageKey(accountAddress, draftUniverseId)
 	const questionActionScopeKey = `${questionDraftStorageKey}:${environmentRefreshKey}`
 	const currentQuestionActionScopeKeyRef = useRef(questionActionScopeKey)
 	currentQuestionActionScopeKeyRef.current = questionActionScopeKey
-	const anonymousQuestionDraftStorageKey = getQuestionDraftStorageKey(undefined)
-	const questionFormState = useSignal<{ form: MarketFormState; storageKey: string | undefined }>({ form: readQuestionDraft(questionDraftStorageKey), storageKey: questionDraftStorageKey })
+	const anonymousQuestionDraftStorageKey = getQuestionDraftStorageKey(undefined, draftUniverseId)
+	const questionFormState = useSignal<{ form: MarketFormState; storageKey: string | undefined }>({ form: readQuestionDraft(questionDraftStorageKey, normalizeForm), storageKey: questionDraftStorageKey })
 	const questionCreatingScopes = useSignal<ReadonlySet<string>>(new Set())
 	const questionSubmissionScopesRef = useRef(new Set<string>())
 	const questionResult = useSignal<KeyedValue<MarketCreationResult> | undefined>(undefined)
@@ -137,7 +150,7 @@ export function useQuestionCreation(
 	const getQuestionFormForCurrentOwner = () => {
 		const keyedForm = questionFormState.value
 		if (keyedForm.storageKey === questionDraftStorageKey) return keyedForm.form
-		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey)
+		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey, normalizeForm)
 		if (storedOwnerDraft !== undefined) return storedOwnerDraft
 		if (accountAddress !== undefined && keyedForm.storageKey === anonymousQuestionDraftStorageKey) return keyedForm.form
 		return getDefaultMarketFormState()
@@ -146,21 +159,21 @@ export function useQuestionCreation(
 	useEffect(() => {
 		if (questionFormState.value.storageKey === questionDraftStorageKey) return
 		const previousStorageKey = questionFormState.value.storageKey
-		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey)
+		const storedOwnerDraft = readStoredQuestionDraft(questionDraftStorageKey, normalizeForm)
 		const nextForm = storedOwnerDraft ?? getQuestionFormForCurrentOwner()
 		const persistedOwnerDraft = storedOwnerDraft !== undefined || writeQuestionDraft(questionDraftStorageKey, nextForm)
 		questionFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
 		if (accountAddress !== undefined && previousStorageKey === anonymousQuestionDraftStorageKey && storedOwnerDraft === undefined && persistedOwnerDraft) {
 			clearQuestionDraft(anonymousQuestionDraftStorageKey)
 		}
-	}, [accountAddress, questionDraftStorageKey])
+	}, [accountAddress, activeUniverseId, questionDraftStorageKey])
 	const setQuestionForm = (updater: (current: MarketFormState) => MarketFormState) => {
-		const nextForm = updater(getQuestionForm())
+		const nextForm = normalizeForm(updater(getQuestionForm()))
 		writeQuestionDraft(questionDraftStorageKey, nextForm)
 		questionFormState.value = { form: nextForm, storageKey: questionDraftStorageKey }
 	}
 
-	const createQuestion = async () => {
+	const createQuestion = async ({ refreshQuestionList = true }: { refreshQuestionList?: boolean } = {}) => {
 		if (questionSubmissionScopesRef.current.has(questionActionScopeKey)) {
 			questionError.value = { storageKey: questionActionScopeKey, value: 'Question creation already in progress' }
 			return
@@ -172,10 +185,12 @@ export function useQuestionCreation(
 		const transactionContext = {
 			marketType: submittedMarketForm.marketType,
 			title: submittedMarketForm.title,
+			universeId: draftUniverseId,
 		}
 		questionSubmissionScopesRef.current.add(submittedQuestionActionScopeKey)
 		questionResult.value = undefined
 		questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createPendingActionFeedback('createMarket', 'Creating question') }
+		let createdResult: MarketCreationResult | undefined
 		try {
 			await runWriteAction(
 				{
@@ -208,18 +223,18 @@ export function useQuestionCreation(
 					refreshState: async () => {
 						if (!isCurrentQuestionActionScope()) return
 						await refreshWalletStateOnly(refreshState)
-						const createdQuestionId = getValueForStorageKey(questionResult.value, submittedQuestionActionScopeKey)?.questionId
-						if (createdQuestionId !== undefined) await zoltar.loadCreatedZoltarQuestion(createdQuestionId)
+						if (refreshQuestionList && createdResult !== undefined) await zoltar.loadCreatedZoltarQuestion(createdResult.questionId)
 					},
 					setErrorMessage: message => {
 						questionError.value = { storageKey: submittedQuestionActionScopeKey, value: message }
 					},
 				},
-				async walletAddress => {
+				async (walletAddress, context) => {
 					if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) throw new Error('Deploy ZoltarQuestionData before creating a question')
 					return await dependencies.createQuestion(
 						walletAddress,
 						{
+							reviewSignal: context.reviewSignal,
 							onTransactionPrepared: preview => {
 								if (isCurrentQuestionActionScope()) onTransactionPrepared?.(preview)
 							},
@@ -232,7 +247,8 @@ export function useQuestionCreation(
 				},
 				'Failed to create question',
 				result => {
-					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm)
+					createdResult = result
+					clearQuestionDraftIfUnchanged(submittedQuestionDraftStorageKey, submittedMarketForm, normalizeForm)
 					questionResult.value = { storageKey: submittedQuestionActionScopeKey, value: result }
 					questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createSuccessActionFeedback('createMarket', 'Question created', result.hash) }
 					if (isCurrentQuestionActionScope()) {
@@ -244,6 +260,8 @@ export function useQuestionCreation(
 		} finally {
 			questionSubmissionScopesRef.current.delete(submittedQuestionActionScopeKey)
 		}
+		if (!isCurrentQuestionActionScope()) return undefined
+		return createdResult
 	}
 
 	const resetQuestion = () => {
