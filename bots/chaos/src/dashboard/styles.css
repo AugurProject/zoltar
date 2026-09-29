@@ -1104,6 +1104,11 @@ tbody tr:last-child td {
 	color: var(--operator-muted);
 }
 
+.timeline-main {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 .timeline-main strong,
 .timeline-main span {
 	display: block;
