@@ -1,5 +1,3 @@
-@import "./priceOracle.css";
-
 /* Statoblast feature styles: truth auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
 
 .app-settings-price-oracle {
