@@ -1,3 +1,4 @@
+import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import { reportOutcomeWithWalletViaVault } from '../../../protocol/reportingWalletFunding.js'
 import { getReportingContributionFunding, getReportingWalletDepositAmount } from '../../../lib/reportingFunding.js'
 import * as reportingCopy from '../../../copy/reporting.js'
@@ -240,6 +241,8 @@ export function useReportingOperations(
 		const latestDetails = await dependencies.loadReportingDetails(securityPoolAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
+		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
+		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
 		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would become dispute-staked for this report.')
 		const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)

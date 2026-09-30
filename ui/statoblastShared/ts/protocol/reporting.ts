@@ -1,3 +1,4 @@
+import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { formatUnits, zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
@@ -462,6 +463,12 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		}))
 	const useWalletFunding = (contributionFunding ?? (forkContinuation ? 'vault' : 'wallet')) === 'wallet'
 	if (useWalletFunding && forkContinuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
+	if (escalationGameAddress !== zeroAddress) {
+		const [escalationEndTime, block] = await Promise.all([client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] }), client.getBlock()])
+		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime })
+		if (timingGuard !== undefined) throw new Error(timingGuard)
+	}
+
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,

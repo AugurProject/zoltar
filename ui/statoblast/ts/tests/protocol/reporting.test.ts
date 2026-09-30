@@ -176,12 +176,14 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'forkContinuation') return false
 					if (request.functionName === 'repToken') return repTokenAddress
 					throw new Error(`Unexpected readContract function: ${request.functionName}`)
 				},
 			),
 		)
+		client.getBlock = async () => createBlockWithTimestamp(1n)
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await approveReportingRep(client, securityPoolAddress, 'yes', 7n)
 		expect(previews[0]?.functionName).toBe('approve')
@@ -198,12 +200,14 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'forkContinuation') return false
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
 			),
 		)
 		const previews: TransactionRequestPreview[] = []
+		client.getBlock = async () => createBlockWithTimestamp(1n)
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'vault')
 		expect(previews[0]?.functionName).toBe('depositToEscalationGame')
@@ -221,6 +225,7 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'escalationGame') return escalationGameAddress
 					if (request.functionName === 'forkResumedAt') return 100n
 					if (request.functionName === 'forkElapsedAtStart') return 0n
+					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'forkContinuation') return true
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
@@ -240,6 +245,7 @@ describe('reporting protocol client', () => {
 			async request => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
 				if (request.functionName === 'forkContinuation') return false
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -247,6 +253,7 @@ describe('reporting protocol client', () => {
 
 		const previews: TransactionRequestPreview[] = []
 		const writeClient = asWriteClient(client)
+		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
 		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006 REP')
@@ -276,12 +283,13 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'forkResumedAt') return 100n
 				if (request.functionName === 'forkElapsedAtStart') return 0n
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
 				if (request.functionName === 'forkContinuation') return true
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		)
 
-		await reportOutcomeInSecurityPool(asWriteClient(client), securityPoolAddress, 'no', 11n)
+		await reportOutcomeInSecurityPool({ ...asWriteClient(client), getBlock: async () => createBlockWithTimestamp(1n) }, securityPoolAddress, 'no', 11n)
 
 		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()
@@ -1189,3 +1197,30 @@ describe('reporting protocol client', () => {
 		})
 	})
 })
+
+for (const remaining of [0n, 1n, 60n, 61n]) {
+	test(`reserves reporting submission time before the escalation cutoff (${remaining})`, async () => {
+		let sends = 0
+		const writer = createMockWriteClient(
+			() => {
+				sends += 1
+			},
+			async request => {
+				if (request.functionName === 'universeId') return 0n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			},
+		)
+		const client = { ...asWriteClient(writer), getBlock: async () => createBlockWithTimestamp(1000n - remaining) }
+		const result = reportOutcomeInSecurityPool(client, securityPoolAddress, 'no', 2n)
+		if (remaining > 60n) {
+			await expect(result).resolves.toHaveProperty('action', 'reportOutcome')
+			expect(sends).toBe(1)
+		} else {
+			await expect(result).rejects.toThrow('response window ends too soon')
+			expect(sends).toBe(0)
+		}
+	})
+}

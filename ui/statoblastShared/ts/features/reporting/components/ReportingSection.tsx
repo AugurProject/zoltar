@@ -1,3 +1,4 @@
+import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import { ReportingDepositPreview, getReportingApprovalLabel } from './ReportingDepositPreview.js'
 import { getReportingContributionFunding, getReportingWalletDepositAmount, getReportingWalletFundingQuote } from '../../../lib/reportingFunding.js'
 import { ReportingFundingSelector, ReportingWalletVaultHelp } from './ReportingFundingSelector.js'
@@ -254,7 +255,7 @@ export function ReportingSection({
 		viewerWalletRepAllowanceAttoRep: effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep,
 		viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
 	}
-	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingReportGuardMessage(reportGuardParameters)
+	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? getReportingReportGuardMessage(reportGuardParameters)
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
 	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
