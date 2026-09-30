@@ -35,6 +35,7 @@ const escalationGameFactory = await readFile('solidity/contracts/statoblast/fact
 const priceCoordinator = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 'utf8')
 const priceCoordinatorTypes = await readFile('solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol', 'utf8')
 const liquidationApprovalRegistry = await readFile('solidity/contracts/statoblast/LiquidationApprovalRegistry.sol', 'utf8')
+const authorizationSignatures = await readFile('solidity/contracts/vendor/authorization/AuthorizationSignatures.sol', 'utf8')
 const openOracleSource = await readFile('solidity/contracts/statoblast/openOracle/OpenOracle.sol', 'utf8')
 const openOracleProvenance = await readFile('solidity/contracts/statoblast/openOracle/UPSTREAM.md', 'utf8')
 const deploymentStatusOracle = await readFile('solidity/contracts/DeploymentStatusOracle.sol', 'utf8')
@@ -209,7 +210,8 @@ function assertMigrationSecurityCoverageCommitmentDocs(): void {
 	assert.match(coordinatorData, /"trigger": "requestPriceIfNeededAndStageLiquidation",\s*"preconditions": \["stale-cache", "pending-report", "pending callback batch is full"\],[\s\S]*?"the liquidation remains active outside the bounded callback batch"/)
 	assert.match(coordinatorData, /"trigger": "executeStagedOperation",\s*"preconditions": \["operation exists", "operation is expired", "cache may be stale"\],[\s\S]*?"operation is consumed without requiring a valid price"/)
 	assert.match(priceCoordinator, /event LiquidationRouteStaged\([\s\S]*address indexed operator,[\s\S]*address indexed receiverVault,[\s\S]*uint256 reservedDebtAttoEth[\s\S]*\);/)
-	assert.match(liquidationApprovalRegistry, /EIP712Domain\(string name,string version,uint256 chainId,address verifyingContract\)/)
+	assert.match(liquidationApprovalRegistry, /AuthorizationSignatures\.domainSeparator\(EIP712_NAME_HASH, EIP712_VERSION_HASH, address\(this\)\)/)
+	assert.match(authorizationSignatures, /EIP712Domain\(string name,string version,uint256 chainId,address verifyingContract\)/)
 	assert.match(securityPoolOperationsDelegate, /receiverLimitAttoEth >= minimumSecurityBondDebtAttoEth/)
 	assert.match(securityPoolOperationsDelegate, /remainingLimitAttoEth == 0 \|\| remainingLimitAttoEth >= minimumSecurityBondDebtAttoEth/)
 	assert.match(securityPoolOperationsDelegate, /securityVaults\[request\.targetVault\]\.underwritingLimitAttoEth -= debtToMoveAttoEth;[\s\S]*securityVaults\[request\.receiverVault\]\.underwritingLimitAttoEth \+= debtToMoveAttoEth/)
@@ -426,7 +428,7 @@ function assertOpenOracleVendorAndEventDocs(): void {
 
 async function assertLifecycleReferences(): Promise<void> {
 	assert.match(await readFile('solidity/contracts/statoblast/EscalationGameStorage.sol', 'utf8'), /ACTIVATION_DELAY = 3 days/)
-	assert.match(escalationGameTypes, /ESCALATION_TIME_LENGTH = 4233600; \/\/ 7 weeks/)
+	assert.match(escalationGameTypes, /ESCALATION_TIME_LENGTH = 7 weeks;/)
 	assert.match(securityPoolUtils, /MIGRATION_TIME = 8 weeks/)
 	for (const systemState of ['Operational', 'PoolForked', 'ForkMigration', 'ForkTruthAuction']) {
 		assert.match(securityPoolInterface, new RegExp(`\\b${systemState}\\b`))
@@ -578,7 +580,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameEscrow, /function recordForkedEscrowForOutcome\([\s\S]*EscalationGameDepositDelegate\.recordForkedEscrowForOutcome/)
 	assert.match(escalationGameDepositDelegate, /function recordForkedEscrowForOutcome\([\s\S]*if \(sourcePrincipalAttoRep == 0 && childRepAmountAttoRep == 0\) return;[\s\S]*emit ForkedEscrowRecorded\(/)
 	assert.match(escalationGame, /function _initializeStartParams\([\s\S]*if \(owner != msg\.sender\) revert\((?:'[^']*')?\);/)
-	assert.match(escalationGame, /function recordDepositFromSecurityPool\([\s\S]*require\(msg\.sender == address\(securityPool\), 'Only security pool'\);/)
+	assert.match(escalationGame, /function recordDepositFromSecurityPool\([\s\S]*require\(msg\.sender == address\(securityPool\), 'Only pool'\);/)
 	assert.match(escalationGameDepositDelegate, /function resumeFromFork\(\) external \{[\s\S]*IEscalationGameDepositContext game = IEscalationGameDepositContext\(address\(this\)\);[\s\S]*require\(msg\.sender == game\.securityPool\(\), 'Only pool'\);/)
 	assert.match(escalationGameDepositDelegate, /function applyTruthAuctionHaircut\([\s\S]*require\(msg\.sender == IEscalationGameSecurityPoolContext\(poolAddress\)\.securityPoolForker\(\), 'Only forker'\);/)
 	assert.match(escalationGameEscrow, /function _exportForkedEscrowByOutcome\([\s\S]*if \(exported\) \{[\s\S]*emit ForkedEscrowExported\([\s\S]*if \(totalChildRepToTransferAttoRep == 0\) return/)
@@ -621,7 +623,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(escalationGameForker, /block\.timestamp > forkDataByPool\[parent\]\.forkActivationTime \+ SecurityPoolUtils\.MIGRATION_TIME\) revert\((?:'[^']*')?\)/)
 	assert.match(escalationGameForker, /guards keep that initcode below EIP-3860's hard deployment limit/)
 	assert.match(securityPool, /event SystemStateSet\(SystemState systemState\)/)
-	assert.match(securityPool, /require\(zoltar\.getForkTime\(universeId\) == 0, 'Forked'\)/)
+	assert.match(securityPool, /_requireUnforkedOperational\(zoltar\.getForkTime\(universeId\)\)/)
 	assert.match(securityPool, /function activateForkMode\(\) external onlyForker/)
 	assert.match(securityPool, /function activateForkMode\(\) external onlyForker \{\s*if \(hasInheritedForkOutcome\) revert\((?:'[^']*')?\)/)
 	const externalForkBody = readSolidityFunctionBody(securityPoolForker, 'function initiateSecurityPoolFork(')
@@ -670,7 +672,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolFactory, /bytes32 securityPoolSalt = keccak256\([\s\S]*abi\.encode\(\s*address\(0x0\),\s*universeId,\s*questionId,\s*statoblastSecurityMultiplierBps,\s*initialReportPriorityFeeAttoEthPerGas\s*\)/)
 	assert.match(priceCoordinatorFactory, /bytes32 deploymentSalt = keccak256\(abi\.encode\(msg\.sender, salt\)\)[\s\S]*priceCoordinatorDeploymentWorker\.deploy\([\s\S]*deploymentSalt[\s\S]*liquidationApprovalRegistryDeployer\.deploy\([\s\S]*address\(coordinator\),\s*deploymentSalt/)
 	assert.match(truthAuctionFactory, /new UniformPriceDualCapBatchAuction\{\s*salt:\s*keccak256\(abi\.encode\(msg\.sender, salt\)\)\s*\}/)
-	assert.match(securityPoolDeployer, /create2\(0, add\(initCode, 0x20\), mload\(initCode\), 0\)/)
+	assert.match(securityPoolDeployer, /Create2Deployment\.deploy\(initCode, 0\)/)
 	assert.match(securityPoolFactory, /shareTokenFactory\.deployShareToken\(originId, questionId\)/)
 	assert.match(shareTokenFactory, /new ShareToken\{\s*salt:\s*salt\s*\}\(msg\.sender, zoltar, questionId\)/)
 	assert.match(priceCoordinator, /maximumPriorityFeeReportAttoEth \/= 2/)
@@ -681,10 +683,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPoolEventEmitter, /contract SecurityPoolEventEmitter is SecurityPoolStorage/)
 	assert.match(securityPoolEventEmitter, /contract SecurityPoolForkEventEmitter is SecurityPoolForkerStorage, ISecurityPoolForkerEvents/)
 	assert.match(securityPoolEventEmitter, /function emitForkSnapshotEvents\(\s*ISecurityPool parent,\s*address migrationProxy,\s*address sourceGame,\s*uint256 totalPoolHeldRepAtForkAttoRep,\s*uint256 disputeStakedRepAtForkAttoRep,\s*uint256 resultingLockedAttoRep\s*\) external payable/)
-	assert.match(
-		securityPoolForker,
-		/mstore\(pointer, shl\(224, 0x408d33da\)\)[\s\S]*mstore\(add\(pointer, 0x04\), parent\)[\s\S]*mstore\(add\(pointer, 0x24\), migrationProxy\)[\s\S]*mstore\(add\(pointer, 0x44\), sourceGame\)[\s\S]*mstore\(add\(pointer, 0x64\), totalPoolHeldRepAtForkAttoRep\)[\s\S]*mstore\(add\(pointer, 0x84\), disputeStakedRepAtForkAttoRep\)[\s\S]*mstore\(add\(pointer, 0xa4\), resultingLockedAttoRep\)[\s\S]*delegatecall\(gas\(\), eventEmitter, pointer, 0xc4, 0, 0\)/,
-	)
+	assert.match(securityPoolForker, /DelegateCall\.invoke\(forkEventEmitter, abi\.encodeCall\(SecurityPoolForkEventEmitter\.emitForkSnapshotEvents, \(parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep\)\)\)/)
 	assert.match(truthAuctionStorage, /function allocateFromCumulativePosition\(/)
 	assert.match(truthAuction, /function finalize\(\) external[\s\S]*payable\(owner\)\.call\{\s*value:\s*raisedAttoEthToSend\s*\}/)
 	assert.match(truthAuctionStorage, /return cumulativeAllocationAfter - cumulativeAllocationBefore/)

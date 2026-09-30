@@ -5,7 +5,7 @@ import { concatHex, encodeAbiParameters, encodeDeployData, keccak256, zeroAddres
 import assert from '../testSupport/simulator/utils/assert'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits } from '../testSupport/simulator/utils/contracts/escalationGame'
@@ -32,7 +32,6 @@ const initializeForkCarrySnapshotTestPoolAbi: Abi = [
 
 describe('Escalation math parity', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
-	const MAX_UINT256 = 2n ** 256n - 1n
 	const NULLIFIER_DEPTH = 64
 	const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 	const reportBond = 1n * 10n ** 18n

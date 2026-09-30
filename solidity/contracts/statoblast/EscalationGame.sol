@@ -56,7 +56,7 @@ contract EscalationGame is EscalationGameSettlement {
 	}
 
 	function recordDepositFromSecurityPool(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep, uint256 expectedCumulativeAttoRep) external returns (uint256 parentDepositIndex) {
-		require(msg.sender == address(securityPool), 'Only security pool');
+		require(msg.sender == address(securityPool), 'Only pool');
 		bytes memory returnData = _delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.recordDeposit, (depositor, outcome, amountAttoRep, expectedCumulativeAttoRep)));
 		parentDepositIndex = abi.decode(returnData, (uint256));
 	}
@@ -77,15 +77,20 @@ contract EscalationGame is EscalationGameSettlement {
 		return address(depositDelegate);
 	}
 
+	/// @notice Routes the signed deposit entry points to the deposit delegate and every other selector to the claim delegate.
+	/// @dev Returns or reverts with the delegate's exact output.
 	fallback() external {
 		address claimDelegateAddress = address(claimDelegate);
 		address depositDelegateAddress = address(depositDelegate);
+		// Right-aligned selector words compare directly against `shr(224, calldataload(0))`.
+		uint256 depositWithPermitSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithPermit.selector);
+		uint256 depositWithAuthorizationSelector = uint32(EscalationGameDepositDelegate.depositRepOnOutcomeWithAuthorization.selector);
 		assembly ('memory-safe') {
 			let selector := shr(224, calldataload(0))
 			let delegate := claimDelegateAddress
 			// Only the two signed public deposit entrypoints may reach the deposit
 			// delegate. Other selectors remain on the claim delegate's narrow surface.
-			if or(eq(selector, 0x8c18a0e1), eq(selector, 0x5a3df812)) {
+			if or(eq(selector, depositWithPermitSelector), eq(selector, depositWithAuthorizationSelector)) {
 				delegate := depositDelegateAddress
 			}
 			calldatacopy(0, 0, calldatasize())

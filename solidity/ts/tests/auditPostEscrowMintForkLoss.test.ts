@@ -1,6 +1,7 @@
 import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../testSupport/storage'
 import { manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
-import { getEthRaiseCapAttoEth, participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
+import { participateAuction } from '../testSupport/simulator/utils/contracts/statoblast'
 import { finalizeTruthAuction, migrateVault, startTruthAuction } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { createWriteClient } from '../testSupport/simulator/utils/clients'
 import { createCompleteSet, depositToEscalationGame, getSystemState } from '../testSupport/simulator/utils/contracts/securityPool'
@@ -12,13 +13,13 @@ import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { getSettlementCollateralAttoEth, getTotalPoolHeldAttoRep, getTotalRepBackingUnits } from '../testSupport/simulator/utils/contracts/securityPool'
 import { getSecurityPoolForkerForkData } from '../testSupport/simulator/utils/contracts/securityPoolForker'
-import { getMaxRepBeingSoldAttoRep } from '../testSupport/simulator/utils/contracts/auction'
+import { getMaxRepBeingSoldAttoRep, getEthRaiseCapAttoEth } from '../testSupport/simulator/utils/contracts/auction'
 import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 
 describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { PRICE_PRECISION, formatStorageSlot, getMappingStorageSlot, repDeposit, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
+	const { PRICE_PRECISION, repDeposit, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
 
 	test('cannot mint collateral after all pool-held REP was escrowed', async () => {
 		const { client, mockWindow, questionData, securityPoolAddresses } = fixture
@@ -49,14 +50,14 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 			[securityPoolAddresses.securityPool]: {
 				stateDiff: {
 					[formatStorageSlot(21n)]: settlementCollateralAttoEth,
-					[formatStorageSlot(getMappingStorageSlot(client.account.address, 22n))]: settlementCollateralAttoEth,
+					[formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 22n))]: settlementCollateralAttoEth,
 				},
 			},
 		})
 		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit), /Vault backing insufficient/)
 		// Explicitly reconstruct an orphaned commitment to retain the independent
 		// zero-pool-REP repair regression; ordinary escrow cannot reach this state.
-		await mockWindow.addStateOverrides({ [securityPoolAddresses.securityPool]: { stateDiff: { [formatStorageSlot(getMappingStorageSlot(client.account.address, 16n) + 1n)]: 0n, [formatStorageSlot(1n)]: 0n, [formatStorageSlot(12n)]: 0n } } })
+		await mockWindow.addStateOverrides({ [securityPoolAddresses.securityPool]: { stateDiff: { [formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 16n) + 1n)]: 0n, [formatStorageSlot(1n)]: 0n, [formatStorageSlot(12n)]: 0n } } })
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit)
 		await mockWindow.addStateOverrides({ [securityPoolAddresses.securityPool]: { stateDiff: { [formatStorageSlot(1n)]: settlementCollateralAttoEth } } })
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'the synthetic orphaned position retains collateral repair coverage without pool-held REP')

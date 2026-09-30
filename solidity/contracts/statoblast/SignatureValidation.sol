@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.35;
 
+import { AuthorizationSignatures } from '../vendor/authorization/AuthorizationSignatures.sol';
+
 interface IERC1271 {
 	function isValidSignature(bytes32 hash, bytes calldata signature) external view returns (bytes4 magicValue);
 }
 
 library SignatureValidation {
 	bytes4 internal constant ERC1271_MAGIC_VALUE = IERC1271.isValidSignature.selector;
-	uint256 private constant SECP256K1_HALF_ORDER = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
 	function isValidSignatureNow(address signer, bytes32 digest, bytes calldata signature) internal view returns (bool) {
 		if (signer.code.length != 0) {
@@ -23,7 +24,7 @@ library SignatureValidation {
 			s := calldataload(add(signature.offset, 0x20))
 			v := byte(0, calldataload(add(signature.offset, 0x40)))
 		}
-		if (uint256(s) > SECP256K1_HALF_ORDER || (v != 27 && v != 28)) return false;
+		if (uint256(s) > AuthorizationSignatures.SECP256K1_HALF_ORDER || (v != 27 && v != 28)) return false;
 		address recovered = ecrecover(digest, v, r, s);
 		return recovered != address(0) && recovered == signer;
 	}

@@ -9,7 +9,7 @@ import { createWriteClient, type WriteClient, writeContractAndWait } from '../te
 import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed, forkUniverse, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { approveToken, getChildUniverseId, setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { statoblast_tokens_ShareToken_ShareToken, test_statoblast_ERC1155ReceiverMock_ERC1155NonReceiver, test_statoblast_ERC1155ReceiverMock_ERC1155ReceiverMock, test_statoblast_ERC1155ReceiverMock_ShareTokenAuthorizationPoolMock } from '../types/contractArtifact'
@@ -488,16 +488,7 @@ describe('ERC1155 Compliance Test Suite', () => {
 			/ShareToken universe has not forked, so shares cannot migrate/,
 		)
 
-		const questionData = {
-			title: 'ERC1155 migration guard question',
-			description: '',
-			startTime: 0n,
-			endTime: 0n,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const questionData = makeQuestion('ERC1155 migration guard question')
 		const outcomes = sortStringArrayByKeccak(['Yes', 'No'])
 		await createQuestion(client, questionData, outcomes)
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())

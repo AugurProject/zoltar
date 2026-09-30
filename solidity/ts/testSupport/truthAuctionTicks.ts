@@ -1,7 +1,4 @@
-import { tickToPrice, TRUTH_AUCTION_MAX_TICK } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
-
-// UniformPriceDualCapBatchAuction's lowest representable tick; the UI never bids below the supported minimum.
-const TRUTH_AUCTION_MIN_TICK = -524288n
+import { tickToPrice, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 
 // Reference inversion of tickToPrice used to pick contract ticks for test bids.
 export function priceToClosestTick(price: bigint): bigint {

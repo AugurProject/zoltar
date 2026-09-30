@@ -1,4 +1,5 @@
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker, test_statoblast_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness } from '../../types/contractArtifact'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import { depositRepToVault, depositToEscalationGame, getTotalRepBackingUnits, getRepToken, getAwaitingForkContinuation, getSecurityPoolsEscalationGame, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { getEscalationGameOutcomeState } from '../../testSupport/simulator/utils/contracts/escalationGame'
@@ -42,7 +43,7 @@ import { createCarryProof, SparseNullifierTree } from '../carryProofHelpers'
 describe('Statoblast: deployment and own-fork escalation', () => {
 	const fixture = useStatoblastDeploymentAndOwnForkEscalationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, deployOwnForkEscalationClaimHarness, getYesChildPool } = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, deployOwnForkEscalationClaimHarness, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastDeploymentAndOwnForkEscalationFixture['mockWindow']
 	let client: StatoblastDeploymentAndOwnForkEscalationFixture['client']
@@ -294,7 +295,7 @@ describe('Statoblast: deployment and own-fork escalation', () => {
 		const firstChildUniverse = getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
 		const firstChildRepToken = getRepTokenAddress(firstChildUniverse)
 		const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
-		const firstChildBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+		const firstChildBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[firstChildRepToken]: {
 				stateDiff: {

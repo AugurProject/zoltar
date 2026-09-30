@@ -12,6 +12,7 @@ import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { EscalationGameDepositDelegate } from './EscalationGameDepositDelegate.sol';
 import { EscalationGameClaimDelegate } from './EscalationGameClaimDelegate.sol';
 import { EscalationClaimBundle } from './EscalationGameTypes.sol';
+import { DelegateCall } from './DelegateCall.sol';
 
 abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameEvents {
 	using SafeERC20Ops for IERC20;
@@ -88,24 +89,18 @@ abstract contract EscalationGameState is EscalationGameStorage, IEscalationGameE
 		_delegateDepositCall(abi.encodeCall(EscalationGameDepositDelegate.creditClaimOwners, (bundleId, amountAttoRep)));
 	}
 
+	// These two call sites keep their own delegatecall instead of `DelegateCall.invoke`:
+	// routing through the library adds 42 bytes to the size-constrained game runtime.
 	function _delegateDepositCall(bytes memory callData) internal returns (bytes memory returnData) {
 		address delegate = _getDepositDelegate();
 		(bool success, bytes memory result) = delegate.delegatecall(callData);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(result, 0x20), mload(result))
-			}
-		}
+		if (!success) DelegateCall.bubbleRevert(result);
 		return result;
 	}
 
 	function _delegateClaimCall(bytes memory callData) internal returns (bytes memory returnData) {
 		(bool success, bytes memory result) = address(claimDelegate).delegatecall(callData);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(result, 0x20), mload(result))
-			}
-		}
+		if (!success) DelegateCall.bubbleRevert(result);
 		return result;
 	}
 

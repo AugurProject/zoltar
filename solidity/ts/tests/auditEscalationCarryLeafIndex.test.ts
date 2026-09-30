@@ -1,5 +1,6 @@
 import { beforeEach, describe, test } from 'bun:test'
-import { encodeDeployData, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { initializeForkCarrySnapshotFromSourceAbi } from './carrySnapshotAbis'
+import { encodeDeployData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -7,7 +8,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
@@ -17,26 +18,8 @@ import { computeForkContinuationParentDepositIndex, createCarryProof, hashParent
 const REPORT_BOND = 10n ** 18n
 const NON_DECISION_THRESHOLD = 1000n * REPORT_BOND
 const FRESH_FORK_RESPONSE_PERIOD = 3n * 24n * 60n * 60n
-const MAX_UINT256 = 2n ** 256n - 1n
 const zeroHash: Hex = `0x${'0'.repeat(64)}`
 const zeroPeaks = () => Array.from({ length: 64 }, () => zeroHash)
-// The generated harness ABI types nested fixed arrays too narrowly for runtime peak arrays.
-const initializeForkCarrySnapshotFromSourceAbi: Abi = [
-	{
-		inputs: [
-			{ name: 'sourceGame', type: 'address' },
-			{ name: 'snapshotId', type: 'bytes32' },
-			{ name: 'inheritedCarryPeaks', type: 'bytes32[64][3]' },
-			{ name: 'inheritedCarryLeafCounts', type: 'uint256[3]' },
-			{ name: 'inheritedCarryTotals', type: 'uint256[3]' },
-			{ name: 'inheritedNullifierRoots', type: 'bytes32[3]' },
-		],
-		name: 'initializeForkCarrySnapshotFromSource',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-]
 
 type Game = { escalationGame: Address; securityPool: Address }
 

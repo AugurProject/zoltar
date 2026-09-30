@@ -1,4 +1,5 @@
-import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Abi, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { encodeAbiParameters, encodeDeployData, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { initializeForkCarrySnapshotWithResolutionBalancesAbi } from './carrySnapshotAbis'
 import { beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
@@ -7,7 +8,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { ensureZoltarDeployed, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
@@ -24,24 +25,7 @@ const ESCALATION_TIME_LENGTH = 4_233_600n
 const FORK_THRESHOLD = 20n * 10n ** 18n
 const NON_DECISION_THRESHOLD = FORK_THRESHOLD / 2n
 const START_BOND = 1n * 10n ** 18n
-const MAX_UINT256 = 2n ** 256n - 1n
 const ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT = 2n
-
-const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
-	{
-		inputs: [
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
-			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
-			{ name: 'snapshotResolutionBalances', type: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
-		],
-		name: 'initializeForkCarrySnapshotWithResolutionBalances',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-]
 
 describe('Audit regression: escalation fork burn divisor solvency', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()

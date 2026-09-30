@@ -1,9 +1,10 @@
-import { encodeAbiParameters, keccak256, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../AnvilWindowEthereum'
 import { addressString } from '../bigint'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../../storage'
 import { getSecurityPoolAddresses } from './deployStatoblast'
-import { GENESIS_REPUTATION_TOKEN } from '../constants'
+import { GENESIS_REPUTATION_TOKEN, GENESIS_UNIVERSE, STATOBLAST_SECURITY_MULTIPLIER_BPS } from '../constants'
 import { approveToken, contractExists, getERC20Balance, requireAddress } from '../utilities'
 import { WriteClient, writeContractAndWait } from '../clients'
 import assert from '../assert'
@@ -14,14 +15,12 @@ import { getTotalTheoreticalSupply } from './zoltar'
 import { depositRepToVault, depositToEscalationGame, getRepToken, getSecurityVault, backingUnitsToAttoRep } from './securityPool'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 
-const genesisUniverse = 0n
-const statoblastSecurityMultiplierBps = 20_000n
 const PRICE_PRECISION = 10n ** 18n
 const DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS = 5n * 60n
 const ORACLE_PRICE_VALID_FOR_SECONDS = 5n * 60n
 
 export const approveAndDepositRepToVault = async (client: WriteClient, repDeposit: bigint, questionId: bigint, targetHealthFactorBps?: bigint) => {
-	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
+	const securityPoolAddress = getSecurityPoolAddresses(zeroAddress, GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).securityPool
 	assert.ok(await contractExists(client, securityPoolAddress), 'security pool not deployed')
 
 	const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddress)
@@ -34,7 +33,7 @@ export const approveAndDepositRepToVault = async (client: WriteClient, repDeposi
 
 export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddress: Address) => {
 	const repToken = await getRepToken(client, securityPoolAddress)
-	const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
+	const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / STATOBLAST_SECURITY_MULTIPLIER_BPS
 	const vault = await getSecurityVault(client, securityPoolAddress, client.account.address)
 	const attoRepAmount = await backingUnitsToAttoRep(client, securityPoolAddress, vault.repBackingUnits)
 	assert.ok(attoRepAmount >= 2n * forkThresholdAttoRep, 'not enough rep in vault to fork')
@@ -99,8 +98,8 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 	])
 	// Synthetic commitment setup for accounting boundary tests, not an owner-authorized operation.
 	// Production-path tests must use setUnderwritingLimit instead.
-	const mappingSlot = (slot: bigint) => BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [targetVault, slot])))
-	const storageHex = (value: bigint): `0x${string}` => `0x${value.toString(16).padStart(64, '0')}`
+	const mappingSlot = (slot: bigint) => getAddressMappingStorageSlot(targetVault, slot)
+	const storageHex = formatStorageSlot
 	await mockWindow.addStateOverrides({
 		[securityPool]: {
 			stateDiff: {

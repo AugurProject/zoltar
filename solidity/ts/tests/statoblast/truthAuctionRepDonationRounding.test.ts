@@ -1,7 +1,7 @@
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
+import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/auction'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { getMigratedAttoRep, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { getERC20Balance } from '../../testSupport/simulator/utils/utilities'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'

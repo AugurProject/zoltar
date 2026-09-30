@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { SignatureValidation } from './SignatureValidation.sol';
 import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
+import { AuthorizationSignatures } from '../vendor/authorization/AuthorizationSignatures.sol';
 
 interface ILiquidationApprovalCoordinator {
 	function securityPool() external view returns (address);
@@ -40,7 +41,6 @@ contract LiquidationApprovalRegistry {
 
 	address public coordinator;
 	bytes32 public constant LIQUIDATION_APPROVAL_TYPEHASH = keccak256('LiquidationApproval(address securityPool,address receiverVault,address operator,address targetVault,uint256 maxCumulativeDebtAttoEth,uint256 maxDebtPerLiquidationAttoEth,uint256 minPostLiquidationHealthFactorBps,uint256 validAfter,uint256 validUntil,uint256 nonce)');
-	bytes32 private constant EIP712_DOMAIN_TYPEHASH = keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
 	bytes32 private constant EIP712_NAME_HASH = keccak256('Statoblast Liquidation Approvals');
 	bytes32 private constant EIP712_VERSION_HASH = keccak256('1');
 
@@ -67,12 +67,11 @@ contract LiquidationApprovalRegistry {
 	}
 
 	function DOMAIN_SEPARATOR() public view returns (bytes32) {
-		return
-			keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, EIP712_NAME_HASH, EIP712_VERSION_HASH, block.chainid, address(this)));
+		return AuthorizationSignatures.domainSeparator(EIP712_NAME_HASH, EIP712_VERSION_HASH, address(this));
 	}
 
 	function liquidationApprovalDigest(LiquidationApprovalParams calldata params) public view returns (bytes32) {
-		return keccak256(abi.encodePacked('\x19\x01', DOMAIN_SEPARATOR(), _structHash(params)));
+		return AuthorizationSignatures.hashTypedData(DOMAIN_SEPARATOR(), _structHash(params));
 	}
 
 	function getLiquidationApproval(bytes32 approvalId) external view returns (LiquidationApprovalState memory) {

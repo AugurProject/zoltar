@@ -1,4 +1,5 @@
 import { getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import { getChildUniverseId } from '../../testSupport/simulator/utils/utilities'
 import { migrateRepToZoltar, createChildUniverse, claimAuctionProceeds } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
@@ -1741,23 +1742,23 @@ describe('event-only replay', () => {
 		const vault = client.account.address
 		const storedVaultBefore = await getSecurityVault(client, pool, vault)
 		const backing = await client.readContract({ address: pool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [storedVaultBefore.repBackingUnits] })
-		const targetSlot = fixture.getMappingStorageSlot(vault, 28n)
-		const vaultSlot = fixture.getMappingStorageSlot(vault, 16n)
-		const vaultFeeRemainderSlot = fixture.getMappingStorageSlot(vault, 17n)
+		const targetSlot = getAddressMappingStorageSlot(vault, 28n)
+		const vaultSlot = getAddressMappingStorageSlot(vault, 16n)
+		const vaultFeeRemainderSlot = getAddressMappingStorageSlot(vault, 17n)
 		const firstFeeIndex = storedVaultBefore.feeIndex + 1n
 		const maxUint256 = (1n << 256n) - 1n
 		await mockWindow.addStateOverrides({
 			[pool]: {
 				stateDiff: {
 					// Keep the saved target consistent with this synthetic one-unit vault.
-					[fixture.formatStorageSlot(targetSlot)]: backing * 20_000n,
-					[fixture.formatStorageSlot(1n)]: 1n,
-					[fixture.formatStorageSlot(7n)]: maxUint256,
-					[fixture.formatStorageSlot(8n)]: firstFeeIndex,
-					[fixture.formatStorageSlot(12n)]: 1n,
-					[fixture.formatStorageSlot(13n)]: 1n,
-					[fixture.formatStorageSlot(vaultSlot + 1n)]: 1n,
-					[fixture.formatStorageSlot(vaultFeeRemainderSlot)]: fixture.PRICE_PRECISION - 2n,
+					[formatStorageSlot(targetSlot)]: backing * 20_000n,
+					[formatStorageSlot(1n)]: 1n,
+					[formatStorageSlot(7n)]: maxUint256,
+					[formatStorageSlot(8n)]: firstFeeIndex,
+					[formatStorageSlot(12n)]: 1n,
+					[formatStorageSlot(13n)]: 1n,
+					[formatStorageSlot(vaultSlot + 1n)]: 1n,
+					[formatStorageSlot(vaultFeeRemainderSlot)]: fixture.PRICE_PRECISION - 2n,
 				},
 			},
 		})
@@ -1777,9 +1778,9 @@ describe('event-only replay', () => {
 		await mockWindow.addStateOverrides({
 			[pool]: {
 				stateDiff: {
-					[fixture.formatStorageSlot(8n)]: firstFeeIndex + 1n,
-					[fixture.formatStorageSlot(11n)]: 1n,
-					[fixture.formatStorageSlot(13n)]: 1n,
+					[formatStorageSlot(8n)]: firstFeeIndex + 1n,
+					[formatStorageSlot(11n)]: 1n,
+					[formatStorageSlot(13n)]: 1n,
 				},
 			},
 		})
@@ -1892,7 +1893,7 @@ describe('event-only replay', () => {
 		if (snapshotLog.args === undefined) throw new Error('SecurityPoolForkSnapshot arguments missing')
 		const expectedMigrationProxy = await client.readContract({
 			address: forker,
-			abi: fixture.getMigrationProxyAddressAbi,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 			functionName: 'getMigrationProxyAddress',
 			args: [securityPoolAddresses.securityPool],
 		})

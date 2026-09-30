@@ -1,5 +1,6 @@
 import { describe, test } from 'bun:test'
-import { encodeAbiParameters, keccak256, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { type Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker, Zoltar_Zoltar } from '../../types/contractArtifact'
 import assert from '../../testSupport/simulator/utils/assert'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
@@ -72,7 +73,7 @@ describe('Statoblast: delayed repeated-fork carry', () => {
 		const repToken = await getRepToken(client, pool.securityPool)
 		const forkThreshold = await getZoltarForkThreshold(client, universe)
 		// Only fund the unrelated fork initiator; carry principal and backing come from real migrations.
-		const balanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [noDepositor.account.address, 0n]))
+		const balanceSlot = formatStorageSlot(getAddressMappingStorageSlot(noDepositor.account.address, 0n))
 		await mockWindow.addStateOverrides({ [repToken]: { stateDiff: { [balanceSlot]: forkThreshold * 2n } } })
 		await approveToken(noDepositor, repToken, getZoltarAddress())
 		return { noDepositor, pool, game, universe, deadline, proof, secondQuestionId: getQuestionId(secondQuestion, outcomes) }
