@@ -1,5 +1,5 @@
 import { assertNetworkEnabled } from './networkAvailability.js'
-import { createPublicClient, createWalletClient, custom, http, publicActions, requestRpc, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { createPublicClient, createWalletClient, custom, http, publicActions, type Account, type Address, type Hash, type Hex, type PublicActions, type Transport, type WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { getInjectedEthereum, normalizeInjectedAccount, parseInjectedChainId, readInjectedAccounts, requestWalletRpc, switchInjectedChain, type InjectedEthereum } from './injectedEthereum.js'
 import { hasErrorCode, hasErrorMessage } from '../lib/errors.js'
 import { sameChainId } from './chainId.js'
@@ -99,30 +99,10 @@ export type ChainBackend = {
 	waitUntilReady?(): Promise<void>
 }
 
-function createInjectedTransport(ethereum: InjectedEthereum, rpcUrl: string, retryCount?: number): Transport {
-	const rpc = http(rpcUrl)
-	return custom(
-		{
-			request: async parameters => {
-				try {
-					return await requestWalletRpc(ethereum, parameters)
-				} catch (error) {
-					const selector = Array.isArray(parameters.params) ? parameters.params[1] : undefined
-					// Some wallet failures obscure a contract revert. Retry only this observed
-					// internal error, preserving the exact call and canonical block selector.
-					if (parameters.method === 'eth_call' && typeof selector === 'object' && selector !== null && 'blockHash' in selector && hasErrorCode(error) && error.code === -32603 && hasErrorMessage(error) && error.message.endsWith('.slice is not a function')) return await requestRpc(rpc, parameters)
-					throw error
-				}
-			},
-		},
-		{ retryCount },
-	)
-}
-
 function createReadClientForProfile(profile: NetworkProfile, transportMode: ReadTransportMode, rpcUrl: string, getConfirmedBlock: () => bigint | undefined, ethereum?: InjectedEthereum): ReadClient {
 	return createPublicClient({
 		chain: profile.chain,
-		transport: createConfirmedReadTransport(transportMode === 'provider' && ethereum !== undefined ? createInjectedTransport(ethereum, rpcUrl, 0) : http(rpcUrl), getConfirmedBlock),
+		transport: createConfirmedReadTransport(transportMode === 'provider' && ethereum !== undefined ? custom({ request: parameters => requestWalletRpc(ethereum, parameters) }, { retryCount: 0 }) : http(rpcUrl), getConfirmedBlock),
 	})
 }
 
@@ -220,7 +200,7 @@ export function createInjectedBackend({ profile = getDefaultNetworkProfile(), rp
 			const baseClient = createWalletClient({
 				account: accountAddress,
 				chain: profile.chain,
-				transport: createConfirmedReadTransport(createInjectedTransport(ethereum, configuredRpc.url), getConfirmedBlock),
+				transport: createConfirmedReadTransport(custom({ request: parameters => requestWalletRpc(ethereum, parameters) }), getConfirmedBlock),
 			}).extend(publicActions) as WriteClient
 
 			return withTransactionCallbacks(baseClient, callbacks, onConfirmedBlock, async () => {
