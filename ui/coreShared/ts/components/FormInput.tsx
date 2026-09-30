@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from 'preact'
+import { UserMessage } from './UserMessage.js'
 import { useId } from 'preact/hooks'
 
 type FormInputProps = JSX.IntrinsicElements['input'] & {
@@ -51,12 +52,7 @@ export function FormInput({ action, adornment, 'aria-describedby': ariaDescribed
 				{action}
 			</div>
 		)
-	const errorMessage =
-		errorId === undefined ? undefined : (
-			<p className='field-error' id={errorId}>
-				{error}
-			</p>
-		)
+	const errorMessage = errorId === undefined ? undefined : <UserMessage placement='field' tone='error' id={errorId} detail={error} />
 	if (errorId === undefined && hintId === undefined && !liveError) return control
 
 	return (
@@ -69,11 +65,7 @@ export function FormInput({ action, adornment, 'aria-describedby': ariaDescribed
 			) : (
 				errorMessage
 			)}
-			{hintId === undefined ? undefined : (
-				<p className='field-hint' id={hintId}>
-					{hint}
-				</p>
-			)}
+			{hintId === undefined ? undefined : <UserMessage placement='field' id={hintId} detail={hint} />}
 		</>
 	)
 }
