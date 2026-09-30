@@ -18,7 +18,7 @@ import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEn
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { getUniverseDirectoryContextKey, isUniverseDirectoryLoadedForContext, shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { createSecurityPoolsRouteFormSync } from '../lib/routeFormSync.js'
-import { buildForkAuctionSectionProps, buildLiquidationSectionProps, buildReportingSectionProps, buildSecurityVaultSectionProps, buildTradingSectionProps } from '../lib/securityPoolsRouteSections.js'
+import { buildForkAuctionSectionProps, buildLiquidationSectionProps, buildPoolCreationSectionProps, buildReportingSectionProps, buildSecurityVaultSectionProps, buildTradingSectionProps } from '../lib/securityPoolsRouteSections.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import type { useStatoblastUrlState } from './useStatoblastUrlState.js'
@@ -206,20 +206,17 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 		activeView: activeSecurityPoolsView,
 		loadingUniverseDirectoryPools,
 		createPool: {
-			...poolCreation,
+			...buildPoolCreationSectionProps(poolCreation),
 			...pricedSection,
 			questionAndPoolCreating,
-			onRetryExistingQuestionCheck: poolCreation.retryExistingQuestionCheck,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
 			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),
-			onResetSecurityPoolCreation: poolCreation.resetSecurityPoolCreation,
 			onSecurityPoolFormChange: update => {
 				setSecurityPoolForm(current => ({ ...current, ...update }))
 				if (update.marketId !== undefined) urlState.setSecurityPoolQuestionId(update.marketId)
 			},
 			zoltarUniverseHasForked,
 			securityPools,
-			onDismissSecurityPoolReview: poolCreation.dismissSecurityPoolReview,
 			marketCreating,
 			marketError,
 			marketForm,

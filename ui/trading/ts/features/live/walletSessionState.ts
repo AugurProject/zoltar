@@ -55,7 +55,8 @@ function clearedSummary(universeId: string | undefined, status: WalletSummarySta
 
 /** Applies a partial update, keeping the current state object when every field already matches so unchanged transitions do not re-render. */
 function patch(state: WalletSessionState, update: Partial<WalletSessionState>): WalletSessionState {
-	const changed = (Object.keys(update) as (keyof WalletSessionState)[]).some(key => state[key] !== update[key])
+	const current: Record<string, unknown> = state
+	const changed = Object.entries(update).some(([key, value]) => current[key] !== value)
 	return changed ? { ...state, ...update } : state
 }
 
