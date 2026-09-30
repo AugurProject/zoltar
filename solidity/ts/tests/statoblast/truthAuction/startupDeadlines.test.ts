@@ -1,3 +1,4 @@
+import { TRUTH_AUCTION_MAX_TICK } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../../../types/contractArtifact'
 import { formatStorageSlot, getAddressMappingStorageSlot } from '../../../testSupport/storage'
 import { createCompleteSet, depositRepToVault, getSettlementCollateralAttoEth, getTotalRepBackingUnits, getRepToken, getSecurityVault, getSystemState, getTotalAccruedFees, getTotalUnderwritingLimitAttoEth, redeemFees } from '../../../testSupport/simulator/utils/contracts/securityPool'
@@ -383,7 +384,7 @@ describe('Statoblast: truth auction', () => {
 			await startTruthAuction(client, yesSecurityPool.securityPool)
 			const auctionEthRaiseCap = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const auctionParticipant = createWriteClient(mockWindow, TEST_ADDRESSES[3])
-			await submitBid(auctionParticipant, yesSecurityPool.truthAuction, 524288n, auctionEthRaiseCap)
+			await submitBid(auctionParticipant, yesSecurityPool.truthAuction, TRUTH_AUCTION_MAX_TICK, auctionEthRaiseCap)
 
 			await mockWindow.advanceTime(7n * DAY + DAY)
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)

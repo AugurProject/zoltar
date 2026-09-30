@@ -11,8 +11,9 @@ library Create2Deployment {
 			if iszero(deployed) {
 				let revertDataSize := returndatasize()
 				if gt(revertDataSize, 0) {
-					returndatacopy(0, 0, revertDataSize)
-					revert(0, revertDataSize)
+					let revertData := mload(0x40)
+					returndatacopy(revertData, 0, revertDataSize)
+					revert(revertData, revertDataSize)
 				}
 			}
 		}

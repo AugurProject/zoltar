@@ -126,7 +126,6 @@ Simulation mode details:
 - Supported seeded scenarios are `simScenario=baseline`, `simScenario=deployed`, `simScenario=security-pool`, `simScenario=securitypoolx2`, `simScenario=securitypoolx2-auction`, and `simScenario=trading-funded`
 - The live simulation chain is ephemeral and exists only in the current browser tab session; only states explicitly saved from the simulation banner persist in browser storage
 
-
 ## Common Commands
 
 Each serve command first builds the selected app and its dependencies, then serves the app. Watch commands also rebuild the selected app and its dependencies as you edit.

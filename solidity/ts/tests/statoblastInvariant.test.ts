@@ -1,3 +1,4 @@
+import { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_MIN_TICK } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import assert from '../testSupport/simulator/utils/assert'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -1325,7 +1326,7 @@ describe('Statoblast invariant harness', () => {
 		await mockWindow.advanceTime(AUCTION_TIME + 1n)
 		await finalizeAuction(client, auctionAddress)
 		const clearing = await computeClearing(client, auctionAddress)
-		assert.ok(clearing.foundTick >= -524288n && clearing.foundTick <= 524288n, 'auction should compute a valid clearing tick')
+		assert.ok(clearing.foundTick >= TRUTH_AUCTION_MIN_TICK && clearing.foundTick <= TRUTH_AUCTION_MAX_TICK, 'auction should compute a valid clearing tick')
 
 		const runSettlementOrder = async (order: readonly { bidder: WriteClient; tick: bigint }[]) => {
 			const auctionBalanceBefore = await getETHBalance(client, auctionAddress)
