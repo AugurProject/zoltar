@@ -1,4 +1,5 @@
 export const TRUTH_AUCTION_PRICE_PRECISION = 10n ** 18n
+/** @internal Lowest tick UniformPriceDualCapBatchAuction accepts; Solidity tests bid at this boundary. */
 export const TRUTH_AUCTION_MIN_TICK = -524288n
 export const TRUTH_AUCTION_MAX_TICK = 524288n
 
