@@ -13,16 +13,29 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Exit an insured position</h1>
-				<p>Use this guide to convert a directional position back into ETH without giving up more INVALID insurance than you hold.</p>
+				<p>Use this guide to turn Yes or No shares back into ETH before the market resolves, without spending more <a href="../reference/glossary.html#invalid">Invalid</a> insurance than you hold.</p>
 			</header>
-			<section id="steps">
-				<h2>Find and submit the exit</h2>
+			<section id="in-the-ui">
+				<h2>Exit in the UI</h2>
 				<ol>
-					<li>Call the SDK's <code>maximumInsuredExit</code> with your current wallet balances and the pair's reserves. It binary-searches for the largest <code>q</code> satisfying the wallet INVALID, wallet long-share, and opposite-reserve bounds. For a YES position, <code>q</code> complete sets require <code>q</code> INVALID, <code>q</code> YES for redemption, and enough additional YES to buy exactly <code>q</code> NO.</li>
-					<li>Set <code>maxLongSharesIn</code>, <code>minEthOut</code>, recipient, and deadline explicitly.</li>
-					<li>Build the exit as a ShareToken <code>safeBatchTransferFrom</code> to the router carrying <code>q</code> INVALID and <code>maxLongSharesIn</code> long shares with the encoded request (the <a href="../reference/trading/router.html#approval-free">router reference</a> lists the payload fields). Simulate it, then simulate again immediately before submission and confirm the result still satisfies the approved <code>maxLongSharesIn</code> and <code>minEthOut</code>. The UI does this for you from <strong>Exit</strong> → <strong>Preview trade</strong> → <strong>Exit insured YES</strong>.</li>
+					<li>Open the market, select <strong>Sell</strong> and the side you hold.</li>
+					<li>Select <strong>Max</strong> to fill <strong>Shares to sell</strong> with the largest amount you can sell now, or enter a smaller amount. The hint under the field shows your holding and that limit.</li>
+					<li>Check <strong>You receive ≈</strong>, <strong>Minimum received</strong>, and <strong>INVALID used</strong>, then select <strong>Sell YES</strong> (or <strong>Sell NO</strong>) and confirm.</li>
 				</ol>
-				<p>The UI reports whether a request exceeds the wallet's INVALID or the combined long-share and pair-liquidity capacity. In either case the remainder has not been lost; it stays in the wallet as directional shares. Acquiring more INVALID helps only when INVALID is the binding limit. <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> works through the bounds with numbers.</p>
+				<figure class="screenshot" id="fig-trading-exit" aria-labelledby="fig-trading-exit-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/sell-ticket.png"><img width="480" height="1213" src="../assets/screenshots/trading/sell-ticket.png" alt="The Trade tab with Sell and YES selected, 0.001 Yes in Shares to sell, the hint that up to 0.005 Yes can be sold now, 25%, 50%, and Max shortcuts, and the estimate with Invalid used, above an enabled Sell YES button." loading="lazy" /></a>
+					<figcaption id="fig-trading-exit-caption"><span class="figure-label">An insured Yes exit.</span> The hint under the amount is the limit set by your Invalid, your Yes, and the pool's liquidity.</figcaption>
+				</figure>
+				<p>If you enter more than that limit, the ticket shows <strong>Not enough INVALID to insure this sale.</strong> and offers <strong>Sell … instead</strong> with the largest amount. The shares you do not sell stay in your wallet. Acquiring more Invalid helps only when Invalid is the binding limit; <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> works through the bounds.</p>
+			</section>
+			<section id="through-the-sdk">
+				<h2>Exit through the SDK</h2>
+				<ol>
+					<li>Call the SDK's <code>maximumInsuredExit</code> with your wallet balances and the pool's reserves. It returns the largest number of complete sets <code>q</code> that your Invalid, your <a href="../reference/glossary.html#long-shares">long shares</a>, and the opposite reserve all allow. For a Yes position, <code>q</code> complete sets need <code>q</code> Invalid, <code>q</code> Yes to redeem, and enough extra Yes to buy exactly <code>q</code> No.</li>
+					<li>Choose <code>maxLongSharesIn</code>, <code>minEthOut</code>, <code>payoutRecipient</code>, <code>refundRecipient</code>, and <code>deadline</code> explicitly, and encode the request with <a href="../reference/trading/sdk.html#receive-request"><code>encodeReceiveRequest</code></a>.</li>
+					<li>Send a ShareToken <code>safeBatchTransferFrom</code> to the router carrying <code>q</code> Invalid and <code>maxLongSharesIn</code> long shares with the encoded request. Simulate it, simulate again immediately before submission, and submit only if the result still satisfies <code>maxLongSharesIn</code> and <code>minEthOut</code>.</li>
+				</ol>
+				<p>The <a href="../reference/trading/router.html#approval-free">router reference</a> lists the request fields and what the router returns.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

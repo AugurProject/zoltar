@@ -13,26 +13,20 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Configure the Trading UI</h1>
-				<p>The standalone Trading UI runs in one of two modes and verifies its contracts before it lets you trade. This guide shows how to pick the mode and network you need.</p>
+				<p>Use this guide to choose between live and simulated mode and to point the Trading UI at the network and RPC you need.</p>
 			</header>
 			<section id="modes">
 				<h2>Choose a mode</h2>
 				<ul>
-					<li>With no mode parameter, the application reads live RPC and wallet state.</li>
-
-					<li><code>?simulate=1</code> boots the shared browser-local TEVM simulator with seeded contracts and balances.</li>
+					<li>With no mode parameter, the UI reads live RPC and wallet state.</li>
+					<li><code>?simulate=1</code> boots a browser-local simulator with seeded contracts and balances. Add <code>&amp;simScenario=deployed</code> for a <a href="../reference/glossary.html#security-pool">SecurityPool</a> with no <a href="../reference/glossary.html#trading-pool">trading pool</a>, <code>&amp;simScenario=baseline</code> for a chain without Statoblast or Trading contracts, or leave it out for the default <code>trading-funded</code> scenario with one funded market. A banner labels the page as a simulation.</li>
 				</ul>
-				<p>Simulation mode is labeled as such and is never evidence of live chain state. <a href="./trading-set-up-development.html">Set up Trading development</a> lists the commands and URLs.</p>
+				<p><a href="./trading-set-up-development.html">Set up Trading development</a> lists the commands that serve the UI.</p>
 			</section>
 			<section id="network">
 				<h2>Select a network and RPC</h2>
-				<p>The build copies the canonical mainnet and Sepolia core factory and deterministic proxy addresses from the root deployment manifests, together with a default public RPC URL for each network. When you open the live UI it derives the fixed-fee trading factory and router addresses with CREATE2 and checks whether both contracts are deployed. If either is missing, the deployment screen opens automatically; <a href="./trading-deploy-contracts.html">Deploy the Trading contracts</a> covers that flow. The UI verifies the RPC chain and core bytecode and lists each deterministic contract's deployment status. After both contracts are verified, live trading opens without saving a separate trading deployment configuration.</p>
-				<p>Use <strong>Settings</strong> beside the wallet to select another supported network or override its RPC URL. A custom RPC must use HTTPS or loopback HTTP and match the selected chain. Browser-led deployment uses a fixed 0.30% trading fee, and every trading and pool-deployment surface shows the deployed immutable fee as a percentage. Share, complete-set, and LP amounts are shown as their settlement-collateral value in ETH at the pool's current rate.</p>
-			</section>
-			<section id="what-the-client-does">
-				<h2>What you will see the client verify</h2>
-				<p>Every workflow starts from a SecurityPool address: <code>#/market</code> opens a market by address or from the <strong>Markets</strong> list, and <code>#/create-market</code> opens a security pool that has no trading market yet so you can deploy its pair and seed liquidity. Before any submission the client checks that the wallet reports the selected network, then simulates the entry, exit, liquidity, settlement, or fork-migration call through the actual contracts. A new block does not invalidate a quote; the client simulates again at submission and stops if the result falls outside your approved bounds. The <a href="../reference/trading/configuration.html#client">configuration reference</a> describes the client's discovery and verification behavior in full.</p>
-				<p>Serve built assets from the same origin. Production code may connect only to the configured RPC, the wallet provider, and explicit explorer links. Simulation mode is unmistakably labeled and must never be presented as live state.</p>
+				<p>Open <strong>Settings</strong> in the header. Choose the <strong>RPC network</strong>, and optionally enter a <strong>Fallback RPC URL</strong> and select <strong>Save RPC</strong>. A custom RPC must use HTTPS, or HTTP on a loopback address, and must serve the selected chain. It is used only until a wallet is connected on the selected chain; after that, the wallet's own RPC serves reads and transactions.</p>
+				<p>The UI then checks the RPC chain and the core contracts, and derives the Trading factory and router addresses for that network. If either is not deployed, the deployment screen opens; <a href="./trading-deploy-contracts.html">Deploy the Trading contracts</a> covers it. Once both are found, the <strong>Markets</strong> tab opens. The <a href="../reference/trading/configuration.html#client">configuration reference</a> describes what the client derives and checks.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

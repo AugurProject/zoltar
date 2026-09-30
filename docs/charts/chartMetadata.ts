@@ -26,10 +26,4 @@ export const quantitativeChartMetadata = {
 		height: 420,
 		width: 900,
 	},
-	'fig-statoblast-collateral-repair': {
-		ariaDescription: 'Child collateral repair progress',
-		ariaLabel: 'Child collateral repair progress',
-		height: 170,
-		width: 760,
-	},
 } satisfies Record<string, ChartMetadata>

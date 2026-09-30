@@ -49,7 +49,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
 		['tooling/docs/contract-reference-metadata.mts', 1495],
 		['tooling/ui/dev-server.ts', 1116],
-		['tooling/docs/check-docs-examples.mts', 1076],
+		['tooling/docs/check-docs-examples.mts', 1043],
 		['tooling/testing/coverage-report.mts', 931],
 		['tooling/docs/check-docs-reference-values.mts', 831],
 		['tooling/ui/watch.mts', 781],
@@ -57,7 +57,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/docs/generate-contract-interaction-reference.mts', 634],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
-		['docs/charts/chartRuntime.ts', 1111],
+		['docs/charts/chartRuntime.ts', 1057],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/gas-costs.ts', 714],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 623],

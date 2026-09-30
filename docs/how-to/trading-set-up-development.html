@@ -35,7 +35,7 @@
 						</tr>
 						<tr>
 							<td><code>solidity/ts/trading/deploy/</code></td>
-							<td>Deployment from an existing Zoltar core manifest</td>
+							<td>Script deployment against an existing Statoblast core manifest</td>
 						</tr>
 						<tr>
 							<td><code>ui/trading/</code></td>
@@ -52,9 +52,9 @@
 				<h2>Build and run</h2>
 				<ol>
 					<li>From the repository root, confirm dependencies with <code>test -d node_modules</code>. If they are missing, run <code>bun install --frozen-lockfile &amp;&amp; bun run setup</code>.</li>
-					<li>Run <code>bun run trading:compile</code>. It compiles the core artifacts and then runs the Trading vendor build, which generates <code>ui/trading/ts/generated/contractArtifact.ts</code>. Never edit generated files.</li>
+					<li>Run <code>bun run trading:compile</code>. It compiles the contracts, builds the shared packages, and runs the Trading vendor build, which generates <code>ui/trading/ts/generated/contractArtifact.ts</code>. Never edit generated files.</li>
 					<li>Run <code>bun run trading:test</code> and <code>bun run trading:ui:build</code>.</li>
-					<li>Start <code>bun run app:serve:trading</code>, then open <code>http://localhost:4163/?simulate=1#/market</code> for the shared browser-local TEVM simulator.</li>
+					<li>Start <code>bun run app:serve:trading</code>, then open <code>http://localhost:4163/?simulate=1</code> for the browser-local simulator. <a href="./trading-configure-ui.html#modes">Configure the Trading UI</a> lists the Trading scenarios.</li>
 				</ol>
 				<p>To run the standalone UI in Docker instead, complete the repository-root setup first, then from <code>ui/trading</code>:</p>
 				<pre class="code-scroll" tabindex="0"><code>docker network inspect zoltar &gt;/dev/null 2&gt;&amp;1 \
@@ -64,7 +64,7 @@ docker compose up --build --force-recreate</code></pre>
 			</section>
 			<section id="external-node">
 				<h2>Test transactions against an external node</h2>
-				<p>Start Anvil and create a complete local Zoltar deployment with an operational binary SecurityPool. Export its manifest path as <code>ZOLTAR_DEPLOYMENT_MANIFEST</code>, then run <code>bun run trading:deploy:local</code> for script and integration testing. <a href="./trading-deploy-contracts.html#use-local-anvil">Deploy the Trading contracts</a> walks through the full Anvil flow. The live UI uses the canonical networks copied from the root deployment manifests; <code>?simulate=1</code> instead boots the same browser-local TEVM environment used by Zoltar and Statoblast.</p>
+				<p>To exercise the contracts on a local Anvil node, follow <a href="./trading-deploy-contracts.html#use-local-anvil">Use local Anvil</a>; for script and integration tests, <a href="./trading-deploy-contracts.html#deploy-script">Deploy for script and integration tests</a> covers <code>bun run trading:deploy:local</code>.</p>
 			</section>
 			<section id="commands">
 				<h2>Commands</h2>
@@ -82,7 +82,7 @@ docker compose up --build --force-recreate</code></pre>
 						</tr>
 						<tr>
 							<td><code>bun run trading:compile</code></td>
-							<td>Compile contracts and reusable Trading TypeScript through the main pipelines</td>
+							<td>Compile contracts, build shared packages, and generate the Trading contract artifact</td>
 						</tr>
 						<tr>
 							<td><code>bun run trading:test</code></td>
@@ -102,7 +102,7 @@ docker compose up --build --force-recreate</code></pre>
 						</tr>
 						<tr>
 							<td><code>bun run trading:deploy:local</code></td>
-							<td>Deploy against an existing local Zoltar manifest</td>
+							<td>Deploy script-only copies against an existing core manifest</td>
 						</tr>
 						<tr>
 							<td><code>cd ui/trading &amp;&amp; bun run docker:build</code> / <code>docker:run</code></td>
@@ -114,7 +114,7 @@ docker compose up --build --force-recreate</code></pre>
 						</tr>
 					</tbody>
 				</table>
-				<p>All root aliases use the <code>trading:*</code> prefix.</p>
+				<p>After a change that alters what the UI shows, run <code>bun run docs:screenshots -- --app trading</code> to recapture the documentation screenshots.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

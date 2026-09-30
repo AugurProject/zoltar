@@ -18,16 +18,6 @@ const presetDefinitions: Record<string, ToolPreset[]> = {
 			values: { aliceEth: '3', bobEth: '4', carolEth: '6', ethRaiseCap: '30', repInventory: '4' },
 		},
 	],
-	'collateral-repair-example': [
-		{
-			label: 'Fully repaired',
-			values: { auctionRaised: '2.5', forkSettlementCollateralReceived: '47.5', parentSettlementCollateral: '50' },
-		},
-		{
-			label: 'Residual shortfall',
-			values: { auctionRaised: '5', forkSettlementCollateralReceived: '35', parentSettlementCollateral: '50' },
-		},
-	],
 	'escalation-game-example': [
 		{
 			label: 'Leader deposit does not extend',

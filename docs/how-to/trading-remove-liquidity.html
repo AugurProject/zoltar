@@ -13,23 +13,31 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Remove liquidity</h1>
-				<p>Use this guide to withdraw an LP position. Removal works in every lifecycle phase, including after the market has closed.</p>
+				<p>Use this guide to withdraw an LP position from a <a href="../reference/glossary.html#trading-pool">trading pool</a>. Removal works in every lifecycle phase, including after the market has closed.</p>
 			</header>
-			<section id="steps">
-				<h2>Remove through the pair</h2>
+			<section id="in-the-ui">
+				<h2>Remove in the UI</h2>
 				<ol>
-					<li>Preview the proportional YES and NO outputs.</li>
-					<li>Set the pair's <code>minYes</code> and <code>minNo</code> bounds and a <code>deadline</code>.</li>
-					<li>Call the pair's own <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code>. The first-party UI uses this path, so it never asks for a router allowance. The deadline is enforced on chain.</li>
+					<li>Open the market and select the <strong>Liquidity</strong> tab, then <strong>Remove</strong>.</li>
+					<li>Enter an amount in <strong>LP tokens</strong>. <strong>Expected to receive</strong> shows the Yes and No you get back.</li>
+					<li>Select <strong>Remove liquidity</strong> and confirm. The transaction reverts if it would return less than the quote allows after your slippage tolerance.</li>
 				</ol>
+				<figure class="screenshot" id="fig-trading-remove-liquidity" aria-labelledby="fig-trading-remove-liquidity-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/remove-liquidity.png"><img width="480" height="1051" src="../assets/screenshots/trading/remove-liquidity.png" alt="The Liquidity tab with Remove selected, 0.001 LP tokens entered, the note that removal returns raw Yes and No and never consumes wallet Invalid, an expected 0.001 Yes and 0.001 No, and an enabled Remove liquidity button." loading="lazy" /></a>
+					<figcaption id="fig-trading-remove-liquidity-caption"><span class="figure-label">Removing liquidity.</span> The UI calls the trading pool directly, so it never asks for a router allowance.</figcaption>
+				</figure>
 			</section>
-			<section id="through-the-router">
-				<h2>Remove through the router</h2>
-				<p>Integrations that need router-based removal can call the router's <code>removeLiquidityWithPermit</code>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>, with an exact-amount ERC-2612 signature. Ordinary exact allowances remain available for already submitted permits, Safes, and clients without signature support. Never grant a permanent or implicit infinite allowance.</p>
+			<section id="through-the-pair">
+				<h2>Remove through the trading pool contract</h2>
+				<ol>
+					<li>Compute the outputs from <code>getEffectiveReserves()</code>: each reserve × <code>liquidity</code> ÷ LP total supply, rounded down. Removal first synchronizes the reserves, so donated shares count.</li>
+					<li>Call the trading pool's <code>removeLiquidity(liquidity, minYes, minNo, recipient, deadline)</code> with <code>minYes</code> and <code>minNo</code> set from those outputs and your tolerance. The deadline is enforced on chain.</li>
+				</ol>
+				<p>Integrations that need router-based removal can call the router's <code>removeLiquidityWithPermit</code>, whose bounds are named <code>minYesOut</code> and <code>minNoOut</code>, with an exact-amount ERC-2612 signature. Ordinary exact allowances also work for already submitted permits, Safes, and clients without signature support. Never grant a permanent or infinite allowance.</p>
 			</section>
 			<section id="what-removal-does-not-do">
 				<h2>What removal does not do</h2>
-				<p>Removal stays available after question end, resolution, fork, migration, and truth-auction phases, and always returns raw YES and NO. It does not inspect or consume your wallet INVALID, redeem complete sets, settle winning shares, select a child branch, or migrate liquidity. For those, see <a href="./trading-handle-resolution.html">Handle resolution</a> and <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</p>
+				<p>Removal always returns raw Yes and No, before and after question end, resolution, and forks. It does not use your wallet Invalid, redeem complete sets, settle winning shares, choose a child branch, or migrate liquidity. For those, see <a href="./trading-handle-resolution.html">Handle resolution</a> and <a href="./trading-handle-a-fork.html">Handle a universe fork</a>.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

@@ -424,6 +424,43 @@ test('deployment bit controls clear the active preset and stale status', async (
 	}
 })
 
+test('deployment decoder decodes a mask against the selected network mapping', async () => {
+	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
+	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
+	Object.defineProperty(globalThis, 'fetch', {
+		configurable: true,
+		value: async (input: URL | RequestInfo) => {
+			const source = String(input)
+			const path = source.includes('sepolia') ? 'docs/sepolia-deployment-addresses.json' : 'docs/mainnet-deployment-addresses.json'
+			return new Response(await Bun.file(path).text(), { headers: { 'content-type': 'application/json' }, status: 200 })
+		},
+	})
+	try {
+		await runGeneratedRuntime('deploymentMaskDecoder')
+		const network = document.querySelector<HTMLSelectElement>('[data-deployment-mask-network]')
+		const input = document.querySelector<HTMLInputElement>('#deployment-mask-input')
+		const summary = document.querySelector<HTMLOutputElement>('[data-deployment-mask-summary]')
+		const mainnetStatus = document.querySelector<HTMLTableCellElement>('#deployment-status-bit-mapping [data-deployment-bit-status="1"]')
+		const sepoliaStatus = document.querySelector<HTMLTableCellElement>('#sepolia-deployment-status-bit-mapping [data-deployment-bit-status="1"]')
+		if (network === null || input === null || summary === null || mainnetStatus === null || sepoliaStatus === null) throw new Error('Deployment decoder network controls are missing')
+		input.value = '0x2'
+		input.dispatchEvent(new Event('input'))
+		expect(summary.value).toBe('Ethereum mainnet: 1 of 14 tracked steps have set bits: Multicall3.')
+		expect(mainnetStatus.dataset['maskState']).toBe('set')
+		expect(sepoliaStatus.dataset['maskState']).toBeUndefined()
+		network.value = 'sepolia'
+		network.dispatchEvent(new Event('change'))
+		expect(summary.value).toBe('Sepolia: 1 of 15 tracked steps have set bits: Genesis Reputation Token.')
+		expect(sepoliaStatus.dataset['maskState']).toBe('set')
+		expect(mainnetStatus.dataset['maskState']).toBeUndefined()
+		expect(document.querySelectorAll('[data-deployment-bit-toggle]')).toHaveLength(15)
+	} finally {
+		if (fetchDescriptor === undefined) Reflect.deleteProperty(globalThis, 'fetch')
+		else Object.defineProperty(globalThis, 'fetch', fetchDescriptor)
+		cleanup()
+	}
+})
+
 test('deployment decoder exposes retryable HTTP and malformed-manifest failures', async () => {
 	const cleanup = await loadDocument('docs/reference/deployment-status.html', 'http://localhost/docs/reference/deployment-status.html')
 	const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')

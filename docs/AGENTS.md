@@ -143,6 +143,16 @@ Published HTML must not contain:
 - malformed HTML;
 - unfinished sentences or list items.
 
+## UI screenshots
+
+Tutorials and how-to guides that walk through a UI embed screenshots captured from the walletless simulation. They are generated, not hand-made:
+
+- `tooling/docs/ui-screenshot-specs.mts` lists every screenshot: app, simulation scenario, route, the clicks and inputs that reach the state, the visible text it must show, the element to crop to, and the pages that embed it.
+- `bun run docs:screenshots` builds the app from the current checkout, serves it on a free port, and captures them into `docs/assets/screenshots/<app>/<id>.png`, updates the `width` and `height` of every embedding `<img>`, and records a fingerprint of the app's rendering sources. Use `-- --app <app>` or `-- --only <id,id>` to narrow the run, and `-- --sync-sizes` after embedding an existing screenshot on another page.
+- `bun run docs:check-screenshots` verifies that specs, files, and embeds agree, and warns when the app changed after the last capture; `bun run test:plan` suggests the recapture when a documented UI changes.
+
+When a UI change alters a documented screen, recapture its app's screenshots, look at every changed image, and update the page text that quotes its labels. Steps and `expectText` address controls by visible label, so a renamed label fails the capture and points at the text to fix. Embed a screenshot as `<figure class="screenshot">` containing an `<a class="screenshot-link">` to the full-size PNG around an `<img>` whose alt text states what the reader should see, plus a `<figcaption>` with a `.figure-label`; use `loading="lazy"`. Crop to the card or panel the step is about so the image stays legible at phone width. Add a screenshot only when it shows the reader something the step text cannot.
+
 ## Validation
 
 Validate:

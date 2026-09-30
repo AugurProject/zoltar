@@ -4,11 +4,11 @@ export const securityPoolContractReference: ContractReference = {
 	compiledAbiFingerprint: 'fd8f17d694f363d1b2c06babb44175b6a670be59d755c0b09555b5098d8906cc',
 	name: 'SecurityPool',
 	delegatedInteractions:
-		'Vault owners authorize standing ETH limits with `setUnderwritingLimit(limitAttoEth)` or coordinator operation `SetVaultUnderwritingLimit` (2). The coordinator-only fallback is `setVaultUnderwritingLimit(vault, limitAttoEth)`. Increases require fresh-price backing for the entire resulting limit and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. Limits survive empty settlement epochs. `UnderwritingLimitSet` and accounting checkpoints report successful changes.',
-	purpose: 'Holds ETH collateral and REP underwriting, accounts for vaults and fees, mints shares, and routes local escalation.',
+		'Vault owners set their [underwriting commitments](./glossary.html#underwriting-commitment) with `setUnderwritingLimit(limitAttoEth)` or coordinator operation `SetVaultUnderwritingLimit` (2). The coordinator-only fallback is `setVaultUnderwritingLimit(vault, limitAttoEth)`. Increases require fresh-price backing for the entire resulting limit and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. Limits survive empty settlement epochs. `UnderwritingLimitSet` and accounting checkpoints report successful changes.',
+	purpose: 'Holds ETH [settlement collateral](./glossary.html#settlement-collateral) and REP underwriting, accounts for [vaults](./glossary.html#vault) and fees, mints [outcome shares](./glossary.html#outcome-share), and routes local escalation.',
 	readAbiFingerprint: '0c3be70871f3215bc12067202394cea6b9f5531d0c9cf4c3b8785347dbf88522',
 	readSurface:
-		'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. The escalation deposit is derived at construction from live universe theoretical REP supply rather than copied from factory configuration. Accounting getters include `totalUnderwritingLimitAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Aggregate and per-vault bad debt describe only the current collateral-claim generation; `getPoolAccountingSnapshot` exposes its `badDebtGeneration`. Exhausting the remaining claim supply clears aggregate debt and advances the generation before later collateral can be minted. Use `getVaultUnderwritingLimitAttoEth` for the standing owner-authorized ETH commitment, separate from REP deposits. Use `getVaultCapacityBackingFactorsBps` for current associated and pool-held REP-per-capacity ratios, `getCurrentMintingCapacityAttoEth` for total standing commitments when their aggregate backing is sufficient (zero with insufficient backing, a stale price, or an escalation game), and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getVaultCount`, `getVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getFeeEpochEndTime`, `getVaultFeeRemainder`, and `isEscalationResolved`. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on the full ETH limit, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from `securityVaults`, escalation stake, and bad debt. `isEscalationResolved()` is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-`None` outcome. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations. `getFeeEpochEndTime()` returns the effective fee cutoff, or `type(uint256).max` for an open child epoch. A resolved child without a continuation game fixes its cutoff at activation. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
+		'Immutable relationship and configuration getters are `questionId`, `universeId`, `initialEscalationGameDepositAttoRep`, `zoltar`, `parent`, `shareToken`, `repToken`, `priceOracleManagerAndOperatorQueuer`, `openOracle`, `escalationGameFactory`, `eventEmitter`, `questionData`, `securityPoolForker`, `truthAuction`, `securityPoolFactory`, and `statoblastSecurityMultiplierBps`; the current game is `escalationGame`. The escalation deposit is derived at construction from live universe theoretical REP supply rather than copied from factory configuration. Accounting getters include `totalUnderwritingLimitAttoEth`, `settlementCollateralAttoEth`, `totalRepBackingUnits`, `shareTokenSupplyAttoShares`, `securityVaults`, `minimumSecurityBondDebtAttoEth`, `minimumVaultRepDepositAttoRep`, `totalBadDebtAttoEth`, and `vaultBadDebtAttoEth`. Aggregate and per-vault bad debt describe only the current collateral-claim generation; `getPoolAccountingSnapshot` exposes its `badDebtGeneration`. Exhausting the remaining claim supply clears aggregate debt and advances the generation before later collateral can be minted. Use `getVaultUnderwritingLimitAttoEth` for the owner-authorized underwriting commitment, separate from REP deposits. Use `getVaultCapacityBackingFactorsBps` for current associated and pool-held REP-per-capacity ratios, `getCurrentMintingCapacityAttoEth` for the total underwriting commitment when its aggregate backing is sufficient (zero with insufficient backing, a stale price, or an escalation game), and `getVaultOpenInterestAttoEth` for a vault’s live proportional obligation. Other derived and paged reads are `getVaultCount`, `getVaults`, `attoSharesToAttoEth`, `attoEthToAttoShares`, `attoRepToBackingUnits`, `backingUnitsToAttoRep`, `getTotalPoolHeldAttoRep`, `totalAccruedFeesAttoEth`, `getPoolAccountingSnapshot`, `getFeeEpochEndTime`, `getVaultFeeRemainder`, and `isEscalationResolved`. The backing-factor ratios are not current vault health: associated REP includes dispute-staked principal as at-risk security, while current health also depends on the full ETH limit, REP/ETH price, the security multiplier, and both protocol constraints. The vault registry is append-only and newest-registered first. Registration requires only a nonzero address and can occur without economic state; consumers filter current positions from `securityVaults`, escalation stake, and bad debt. `isEscalationResolved()` is true when the pool inherits a fixed fork outcome, or when a local escalation game is configured and the forker routes a non-`None` outcome. An operational fixed-outcome child remains available for settlement and redemption but rejects new collateralized operations. `getFeeEpochEndTime()` returns the effective fee cutoff, or `type(uint256).max` for an open child epoch. A resolved child without a continuation game fixes its cutoff at activation. Lifecycle and fee getters are `totalClaimableVaultFeesAttoEth`, `lastUpdatedFeeAccumulator`, `feeIndex`, `currentRetentionRate`, `awaitingForkContinuation`, and `systemState`.',
 	securityBoundary:
 		'Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on [A16 timely inclusion](./security-model.html#assumption-a16), [A21 genesis REP and WETH behavior](./security-model.html#assumption-a21), [A19 observable correctable price](./security-model.html#assumption-a19), and [A06 lifecycle executors](./security-model.html#assumption-a06). User-initiated pool calls additionally depend on [A28 account authority](./security-model.html#assumption-a28).',
 	readDeclarations: [
@@ -68,7 +68,7 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`burnEscalationWinnerHaircut(amountAttoRep)`',
 			caller: "This pool's `EscalationGame` only",
-			effect: 'Burns the winning-deposit haircut from REP already escrowed in the game.',
+			effect: 'Burns the escalation haircut of a winning deposit from REP already escrowed in the game.',
 			declarations: [{ name: 'burnEscalationWinnerHaircut' }],
 			preconditions: 'Caller is the configured escalation game; amount is positive and the game has already transferred enough REP to the pool.',
 			signals: '`RepBurned` and ERC-20 `Transfer`; child REP also emits `Burn`',
@@ -76,7 +76,7 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`setUnderwritingLimit(limitAttoEth)`',
 			caller: 'Vault owner',
-			effect: 'Checkpoints fees and changes the standing ETH commitment independently of REP ownership.',
+			effect: 'Checkpoints fees and changes the underwriting commitment independently of REP ownership.',
 			declarations: [{ name: 'setUnderwritingLimit' }],
 			preconditions: 'Operational; increases require open admission, a fresh price and both full-limit backing checks. Reductions must leave total commitments at least equal to tracked collateral. Resolved operational pools may reduce limits after an unrelated late fork.',
 			signals: '`UnderwritingLimitSet` and accounting checkpoints; no-op calls preserve state',
@@ -84,7 +84,7 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`depositRepToVault(attoRepAmount, targetHealthFactorBps)`',
 			caller: 'Vault owner',
-			effect: 'Prices proportional REP backing units before receiving the transfer, including authorization deposits, then credits only those units. Depositing REP never changes the standing underwriting limit.',
+			effect: 'Prices proportional REP backing units before receiving the transfer, including authorization deposits, then credits only those units. Depositing REP never changes the underwriting commitment.',
 			declarations: [{ name: 'depositRepToVault' }],
 			preconditions:
 				'Operational and unforked; `isEscalationResolved()` is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least `statoblastSecurityMultiplierBps` and resulting vault REP meets the configured supply-scaled minimum. This input does not authorize a commitment.',
@@ -104,7 +104,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect: 'Adds collateral and mints one `Invalid`, `Yes`, and `No` share per complete-set unit, then invokes the ERC-1155 batch-receiver callback for a contract trader. Callback rejection rolls back the ETH, pool accounting, events, and share mint.',
 			declarations: [{ name: 'createCompleteSet' }],
 			preconditions:
-				'Operational and unforked; no escalation game or pending continuation; fresh oracle price; positive ETH converts to at least one complete-set unit. Resulting tracked collateral must not exceed total commitments, and pool-held REP must back the entire standing commitment total at the valid oracle price under both protocol backing constraints. Unassigned positions must remain healthy against their full limits. A contract trader must accept `onERC1155BatchReceived` under [A22 asset-recipient compatibility](./security-model.html#assumption-a22).',
+				'Operational and unforked; no escalation game or pending continuation; fresh oracle price; positive ETH converts to at least one complete-set unit. Resulting tracked collateral must not exceed total commitments, and pool-held REP must back the entire total underwriting commitment at the valid oracle price under both protocol backing constraints. Unassigned positions must remain healthy against their full limits. A contract trader must accept `onERC1155BatchReceived` under [A22 asset-recipient compatibility](./security-model.html#assumption-a22).',
 			signals: '`CompleteSetCreated`, `PoolAccountingCheckpoint`, then ERC-1155 `TransferBatch` on a successful callback',
 		},
 		{
@@ -130,13 +130,13 @@ export const securityPoolContractReference: ContractReference = {
 			caller: 'Vault owner; caller must equal `vault`, and REP is sent to `vault`',
 			effect: "Burns the vault's REP backing units and returns its proportional vault REP backing.",
 			declarations: [{ name: 'redeemRepFromVault' }],
-			preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow, has redeemable REP, and has exited its standing commitment by setting its limit to zero under the [limit-reduction rules](./invariants.html#bal-03).',
+			preconditions: 'Operational pool with a final outcome; the specified `vault` has no escalation escrow, has redeemable REP, and has exited its underwriting commitment by setting `underwritingLimitAttoEth` to zero under the [limit-reduction rules](./invariants.html#bal-03).',
 			signals: '`RepRedeemedFromVault`',
 		},
 		{
 			call: '`depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)`',
 			caller: 'REP holder with a token allowance for the pool',
-			effect: 'Starts an ordinary game if needed and transfers the accepted REP directly from the caller into game escrow. Records the caller as depositor without minting vault backing units or standing ETH commitments. Also accepts deposits if another reporter has already started the ordinary game.',
+			effect: 'Starts an ordinary game if needed and transfers the accepted REP directly from the caller into game escrow. Records the caller as depositor without minting vault backing units or underwriting commitments. Also accepts deposits if another reporter has already started the ordinary game.',
 			declarations: [{ name: 'depositWalletRepToEscalationGame' }],
 			preconditions:
 				'Question end has passed before starting a game; pool operational in an unforked universe, without an inherited fixed outcome or pending fork continuation; game is not a fork continuation; outcome and amount accepted; sufficient wallet REP and pool allowance. No existing vault or oracle price is required.',
@@ -149,7 +149,7 @@ export const securityPoolContractReference: ContractReference = {
 				"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThresholdAttoRep - 1` instead. Repeat deposits use the existing game's stored `startBondAttoRep` and `nonDecisionThresholdAttoRep`. Every accepted deposit removes enough REP backing units and escrows dispute-staked REP on the selected outcome.",
 			declarations: [{ name: 'depositToEscalationGame' }],
 			preconditions:
-				'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve both full-commitment backing requirements; a fresh price is required when total capacity ownership is nonzero.',
+				'Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve both full-commitment backing requirements; a fresh price is required when total underwriting commitment is nonzero.',
 			signals: '`EscalationGameSet` on first deposit; `DepositToEscalationGame`',
 		},
 		{
@@ -165,7 +165,7 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`withdrawForkedEscalationDeposits(outcome, proofs)`',
 			caller: 'Anyone; a nonempty list must name one original depositor across all proofs',
 			effect:
-				'A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game. Allocations follow the source-game chain and apply each auction haircut through cumulative interval rounding; read cost grows with fork depth. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.',
+				'A nonempty list verifies and consumes carried proofs, then pays winning child REP to the immutable depositor committed in each leaf. Stable continuation identities retain the creating game. Allocations follow the source-game chain and apply each auction REP removal through cumulative interval rounding; read cost grows with fork depth. An empty list returns after the outer lifecycle checks without proof verification, state change, or event.',
 			declarations: [{ name: 'withdrawForkedEscalationDeposits' }],
 			preconditions: 'Game configured; operational child pool; valid final outcome. A nonempty list additionally requires an initialized and fully resumed continuation game, valid unconsumed winning proofs, and one common depositor.',
 			signals: 'Per processed proof, escalation-game `CarryDepositConsumed` and `ClaimDeposit`. No event for an empty list',
@@ -174,15 +174,15 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`updateSettlementCollateral()`',
 			caller: 'Anyone',
 			effect:
-				'For an initial pool, accrues elapsed fees through question end while its universe remains unforked; if its question remains unresolved when the universe forks, the fork timestamp replaces question end as the cutoff, including a later question-end-to-fork interval. A question finalized before the fork retains its question-end cutoff. Finalizing an activated child starts a separate epoch at that finalization timestamp, which runs until the child game resolves or the child universe subsequently forks. An inherited fixed-outcome child without a continuation game fixes its cutoff at finalization and accrues no later fees. Accumulator timestamps prevent charging an interval twice. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible capacity ownership it clears denominator-specific remainder and advances the timestamp without charging fees.',
+				'For an initial pool, accrues elapsed fees through question end while its universe remains unforked; if its question remains unresolved when the universe forks, the fork timestamp replaces question end as the cutoff, including a later question-end-to-fork interval. A question finalized before the fork retains its question-end cutoff. Finalizing an activated child starts a separate epoch at that finalization timestamp, which runs until the child game resolves or the child universe subsequently forks. An inherited fixed-outcome child without a continuation game fixes its cutoff at finalization and accrues no later fees. Accumulator timestamps prevent charging an interval twice. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible underwriting commitment it clears denominator-specific remainder and advances the timestamp without charging fees.',
 			declarations: [{ name: 'updateSettlementCollateral' }],
 			preconditions: 'No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.',
-			signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-capacity-ownership branch; no event for an unchanged timestamp',
+			signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-commitment branch; no event for an unchanged timestamp',
 		},
 		{
 			call: '`updateRetentionRate()`',
 			caller: 'Anyone',
-			effect: 'Recalculates the retention rate from current collateral and total standing ETH commitments.',
+			effect: 'Recalculates the retention rate from current collateral and total underwriting commitment.',
 			declarations: [{ name: 'updateRetentionRate' }],
 			preconditions: 'No caller restriction. It returns unchanged when the pool is not `Operational` or the calculated rate equals the stored rate. Zero live minting capacity selects the maximum retention rate.',
 			signals: '`PoolAccountingCheckpoint` only when the stored retention rate changes; no event for a no-op',
@@ -191,7 +191,7 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`updateVaultFees(vault)`',
 			caller: 'Anyone for any address',
 			effect:
-				'A vault accounting checkpoint: first updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, registers any previously unseen nonzero vault address regardless of economic state, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible capacity ownership. It never changes a standing underwriting limit, including in an empty pool.',
+				'A vault accounting checkpoint: first updates pool accrual, then advances the vault fee index and fractional remainder, moves whole assigned fees from reserve to the vault, registers any previously unseen nonzero vault address regardless of economic state, and returns leftover reserve to settlement collateral once a forked pool has checkpointed all fee-eligible underwriting commitment. It never changes an underwriting commitment, including in an empty pool.',
 			declarations: [{ name: 'updateVaultFees' }],
 			preconditions: 'No caller, nonzero-vault, or lifecycle restriction.',
 			signals: 'Accrual `PoolAccountingCheckpoint` when due; `VaultAccountingCheckpoint` when the vault index, remainder, or claimable fee balance changes; an additional `PoolAccountingCheckpoint` when pool accounting changes; no event when neither accrual nor vault or pool accounting changes',
@@ -199,10 +199,10 @@ export const securityPoolContractReference: ContractReference = {
 		{
 			call: '`withdrawRepFromVault(vault, attoRepAmount)`',
 			caller: "This pool's `OpenOraclePriceCoordinator` only",
-			effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; preserves the vault and aggregate standing ETH commitments; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
+			effect: 'Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; preserves the vault and aggregate underwriting commitments; recalculates retention; and transfers the resulting withdrawable REP to `vault`.',
 			declarations: [{ name: 'withdrawRepFromVault' }],
 			preconditions:
-				'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow. The remaining vault backing must meet both upward-rounded associated-REP and pool-held-REP requirements for its full standing ETH limit, with equality healthy. The remaining aggregate backing must also cover the entire standing commitment total under both backing constraints. A withdrawal cannot implicitly exit a commitment.',
+				'Fresh coordinator price; operational pool in an unforked universe; `isEscalationResolved()` is false; no vault REP escrow. The remaining vault backing must meet both upward-rounded associated-REP and pool-held-REP requirements for its full underwriting commitment, with equality healthy. The remaining aggregate backing must also cover the entire total underwriting commitment under both backing constraints. A withdrawal cannot implicitly exit a commitment.',
 			signals: 'REP `Transfer`; `RepWithdrawnFromVault`; `VaultAccountingCheckpoint`; and applicable fee-accrual or retention `PoolAccountingCheckpoint` events',
 		},
 		{
@@ -276,7 +276,7 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`configureVault(vault, repBackingUnits, underwritingLimitAttoEth, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 			caller: '`SecurityPoolForker` only',
 			declarations: [{ name: 'configureVault' }],
-			effect: 'Replaces the vault REP backing units, price-independent capacity ownership, fee index, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when capacity ownership changes, and registers the nonzero vault address regardless of the supplied state.',
+			effect: 'Replaces the vault REP backing units, price-independent underwriting commitment, fee index, vault bad debt, and aggregate pool bad debt, clears pooled fee-index remainder when underwriting commitment changes, and registers the nonzero vault address regardless of the supplied state.',
 			preconditions: '`vault` is nonzero; no lifecycle or value-change guard.',
 			signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 		},
@@ -292,8 +292,8 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`configureFinalizedAuctionVault(vault, repBackingUnits, underwritingLimitAttoEth, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth)`',
 			caller: '`SecurityPoolForker` only',
 			declarations: [{ name: 'configureFinalizedAuctionVault' }],
-			effect: 'Assigns finalized-auction REP backing and already-fee-eligible capacity ownership to the winning vault without clearing the pool-wide fee-index remainder, then replaces the vault fee index, bad debt, and aggregate pool bad debt and registers the vault.',
-			preconditions: '`vault` is nonzero; the forker has already included the sold capacity ownership in the pool fee denominator at auction finalization.',
+			effect: 'Assigns finalized-auction REP backing and already-fee-eligible underwriting commitment to the winning vault without clearing the pool-wide fee-index remainder, then replaces the vault fee index, bad debt, and aggregate pool bad debt and registers the vault.',
+			preconditions: '`vault` is nonzero; the forker has already included the sold underwriting commitment in the pool fee denominator at auction finalization.',
 			signals: 'Always `VaultAccountingCheckpoint` and `PoolAccountingCheckpoint`, including when all supplied values repeat current state',
 		},
 		{
@@ -316,8 +316,8 @@ export const securityPoolContractReference: ContractReference = {
 			call: '`setPoolFinancials(newSettlementCollateralAttoEth, newTotalUnderwritingLimitAttoEth, newFeeEligibleUnderwritingLimitAttoEth, newTotalBadDebtAttoEth)`',
 			caller: '`SecurityPoolForker` only',
 			declarations: [{ name: 'setPoolFinancials' }],
-			effect: 'Replaces settlement collateral, both price-independent capacity-ownership totals, and aggregate pool bad debt, resets the fee timestamp to the current block, opens the finalized child fee epoch unless the child has a fixed outcome and no continuation game, and clears fee-index rounding carry.',
-			preconditions: 'Fee-eligible capacity ownership does not exceed total capacity ownership. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency.',
+			effect: 'Replaces settlement collateral, both price-independent underwriting-commitment totals, and aggregate pool bad debt, resets the fee timestamp to the current block, opens the finalized child fee epoch unless the child has a fixed outcome and no continuation game, and clears fee-index rounding carry.',
+			preconditions: 'Fee-eligible underwriting commitment does not exceed total underwriting commitment. Actual ETH covers the supplied collateral plus all accrued fee liabilities. Installing inherited liabilities does not require current REP solvency.',
 			signals: '`PoolAccountingCheckpoint`, including for repeated financial values',
 		},
 		{
@@ -341,8 +341,8 @@ export const securityPoolContractReference: ContractReference = {
 			caller: '`SecurityPoolForker` only',
 			declarations: [{ name: 'assignFinalizedAuctionFees' }],
 			effect:
-				'Assigns to the claiming vault the fees its auctioned capacity ownership accrued from truth-auction finalization through the current fee index, combines fractional carry with the vault remainder, and removes whole assigned fees from the unallocated reserve. The ownership was already included in the fee denominator and total ownership at finalization. This call preserves aggregate fees and settlement collateral; after every eligible ownership is reconciled on a forked pool, a subsequent permissionless `updateVaultFees` checkpoint returns any reserve that no vault can individually claim to settlement collateral.',
-			preconditions: 'The supplied finalization index does not exceed the current fee index; the forker credit workflow has already checkpointed the vault and added the claimed capacity ownership.',
+				'Assigns to the claiming vault the fees its auctioned underwriting commitment accrued from truth-auction finalization through the current fee index, combines fractional carry with the vault remainder, and removes whole assigned fees from the unallocated reserve. The ownership was already included in the fee denominator and total ownership at finalization. This call preserves aggregate fees and settlement collateral; after every eligible ownership is reconciled on a forked pool, a subsequent permissionless `updateVaultFees` checkpoint returns any reserve that no vault can individually claim to settlement collateral.',
+			preconditions: 'The supplied finalization index does not exceed the current fee index; the forker credit workflow has already checkpointed the vault and added the claimed underwriting commitment.',
 			signals: '`VaultAccountingCheckpoint` and auction-claim `PoolAccountingCheckpoint`; the calling forker emits `ClaimAuctionProceeds` only after the broader credit workflow completes',
 		},
 		{

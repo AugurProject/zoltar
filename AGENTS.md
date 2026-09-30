@@ -116,7 +116,7 @@ Run `bun run check:generated-clean` only for CI/release freshness work or when c
 
 Generated outputs are intentionally untracked, except for the documentation outputs, the
 shared bot ABI module, the arbitrager generated TypeScript, and the vendored deployment input
-listed below. The documentation outputs are tracked because the static documentation site loads them directly;
+listed below. The documentation outputs, including the UI screenshots, are tracked because the static documentation site loads them directly;
 `bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
 `bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
 pins the deployment input and prevents its large upstream packages from entering the lockfile.
@@ -150,6 +150,7 @@ checksums against the tracked source pins and never download replacements. `bun 
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
+| `docs/assets/screenshots/**` | `bun run docs:screenshots` (captures the specs in `tooling/docs/ui-screenshot-specs.mts` from the walletless simulation); validate with `bun run docs:check-screenshots` |
 | `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
 | `bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts` and `bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts` | `cd bots/open-oracle-arbitrager && bun run compile-contracts`; validate with `bun run check:generated` |
 | `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
@@ -170,6 +171,8 @@ Choose the smallest relevant scenario:
 - `simScenario=security-pool`
 - `simScenario=securitypoolx2`
 - `simScenario=trading-funded`
+
+When the change alters a screen that documentation screenshots show, run `bun run docs:screenshots -- --app <app>` and review the recaptured images and the page text that quotes their labels (`bun run test:plan` suggests this).
 
 Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
 

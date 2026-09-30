@@ -488,7 +488,7 @@ export const contractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: '9aec957d945308eaeaa9a2d497f6a1efefe2253de96b527a02b121a58d9dc2ec',
 		name: 'Zoltar',
-		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
+		purpose: 'Registers universe forks, charges the [fork haircut](./glossary.html#fork-haircut), and mints branch-specific [child REP](./glossary.html#child-rep).',
 		readAbiFingerprint: '888b513263619c6b31966cd009e078c19223641b9c4a6df0909bce3f797e37e2',
 		readSurface:
 			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
@@ -511,7 +511,7 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`forkUniverse(universeId, questionId)`',
 				caller: 'Any address able to fund the current fork threshold',
-				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the configured uncredited haircut.',
+				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the uncredited fork haircut.',
 				declarations: [{ name: 'forkUniverse' }],
 				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: '`UniverseForked`',
@@ -519,7 +519,7 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`burnRep(universeId, amountAttoRep)`',
 				caller: 'Any REP holder; the caller can burn only its own balance',
-				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this when the haircut was not paid through its own fork.',
+				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this to burn the [escalation haircut](./glossary.html#escalation-haircut) when its own fork has not already paid it.',
 				declarations: [{ name: 'burnRep' }],
 				preconditions: 'Initialized universe; positive amount; sufficient caller REP and theoretical supply. Genesis REP requires allowance.',
 				signals: '`RepBurned` and the token burn or transfer event',
@@ -697,10 +697,10 @@ export const contractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: 'c34478103a1804c8de4dcbcd49690e8864d3ca9afc9148d2bea9d5fbf5ccae3d',
 		name: 'SecurityPoolForker',
-		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair auctions.',
+		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair [Truth Auctions](./glossary.html#truth-auction).',
 		readAbiFingerprint: '278455ca0fe2ccf4ffe8682e913ee946cea32e3e54c70dd59e803e121dd140c1',
 		readSurface:
-			'Use `zoltar`, `forkData`, `getUnassignedPosition`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions. `forkData` includes cumulative migrated REP and the fork-activation timestamp. `getUnassignedPosition` returns pending REP backing units, capacity ownership, raw auction bad debt, that debt’s generation, and the auction-finalization fee index; consumers count the debt only while its generation equals the pool snapshot’s current `badDebtGeneration`.',
+			'Use `zoltar`, `forkData`, `getUnassignedPosition`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions. `forkData` includes cumulative migrated REP and the fork-activation timestamp. `getUnassignedPosition` returns pending REP backing units, underwriting commitment, raw auction bad debt, that debt’s generation, and the auction-finalization fee index; consumers count the debt only while its generation equals the pool snapshot’s current `badDebtGeneration`.',
 		readDeclarations: [
 			{ name: 'forkData' },
 			{ name: 'getUnassignedPosition' },
@@ -765,7 +765,7 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Vault owner for their non-escrowed position',
 				declarations: [{ name: 'migrateVault' }],
 				effect:
-					"Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers the standing ETH underwriting limit and any tracked vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. The standing ETH limit migrates separately from REP backing. Repeat calls can have no additional REP backing units, capacity ownership, or vault bad debt to move.",
+					"Converts the caller's parent REP backing-unit claim to REP at the fork snapshot and credits that REP amount as child-local backing units; transfers the underwriting commitment and any tracked vault bad debt into one child pool; checkpoints but retains claimable fees in the parent vault; and separately routes proportional pool-level settlement collateral while preserving aggregate bad debt. The underwriting commitment migrates separately from REP backing. Repeat calls can have no additional REP backing units, underwriting commitment, or vault bad debt to move.",
 				preconditions: "Migration window open; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary). The optional unresolved parent escalation-deposit accounting cleanup wrapper calls this function first to migrate transferable vault state.",
 				signals: '`VaultBadDebtMigrated` and `VaultMigrationCheckpoint`',
 			},
@@ -773,7 +773,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)`',
 				caller: 'The named vault owner',
 				effect:
-					"First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer capacity ownership and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. The standing ETH limit migrates separately from REP backing. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
+					"First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer underwriting commitment and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. The underwriting commitment migrates separately from REP backing. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.",
 				declarations: [{ name: 'migrateVaultWithUnresolvedEscalation' }],
 				preconditions: "Migration window open; caller equals `vault`; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the [child-game trust boundary](#child-game-trust-boundary).",
 				signals: 'Vault migration events, including `VaultBadDebtMigrated`, plus `EscalationMigrationEntitlementInitialized` on first export and `EscalationMigrationEntitlementMaterialized` for the selected child',
@@ -801,7 +801,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`finalizeTruthAuction(securityPool)`',
 				caller: 'Anyone',
 				effect:
-					'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, and records every unmigrated REP backing unit, capacity unit, and proportional bad debt in an explicit nonwithdrawable unassigned position. It activates the child and saves the fee index. For positive existing-owner REP residue, total backing units are P × H / (H − Q), rounded up to a whole unit, where P is fork-time pool-held REP for all existing owners including unmigrated vault owners, H is finalization pool-held REP including sold escrow REP, and Q is purchased REP. The bidder backing-unit budget is total units minus P. If H − Q is zero, bidder units use H × PRICE_PRECISION (1e18) while migrated units remain in the total. Capacity ownership has a separate budget. Positive-purchase auction ownership becomes fee eligible immediately; after a zero-purchase auction, the unassigned capacity remains outside fee eligibility. A nonzero repair contribution is rejected.',
+					'Finalizes the ended auction, accounts migration-routed settlement collateral plus accepted bid ETH, and records every unmigrated REP backing unit, commitment unit, and proportional bad debt in an explicit nonwithdrawable unassigned position. It activates the child and saves the fee index. For positive existing-owner REP residue, total backing units are P × H / (H − Q), rounded up to a whole unit, where P is fork-time pool-held REP for all existing owners including unmigrated vault owners, H is finalization pool-held REP including sold escrow REP, and Q is purchased REP. The bidder backing-unit budget is total units minus P. If H − Q is zero, bidder units use H × PRICE_PRECISION (1e18) while migrated units remain in the total. Underwriting commitment has a separate budget. Positive-purchase auction ownership becomes fee eligible immediately; after a zero-purchase auction, the unassigned capacity remains outside fee eligibility. A nonzero repair contribution is rejected.',
 				declarations: [{ name: 'finalizeTruthAuction' }],
 				preconditions:
 					'Truth Auction started, its one-week window has passed, and `msg.value` is zero. Actual child ETH covers the installed settlement collateral plus accrued fee liabilities. Installing these inherited liabilities does not require current REP capacity or backing. If unresolved escalation existed at fork, the game reported at completion passes the [child-game trust boundary](#child-game-trust-boundary).',
@@ -812,10 +812,10 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'settleAuctionBids' }],
 				effect:
-					"Before finalization, settles only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and transfers each claim's proportional REP backing units, capacity ownership, and finalization-to-claim fees from the unassigned position to the bidder vault. Its bad-debt share transfers only while the auction's recorded debt generation is still current; after those collateral claims are exhausted, the old debt expires while raw claimed-auction counters continue to settle deterministically. Capacity and bad-debt division dust follows each bid's deterministic cumulative ETH position, so claim order cannot change individual or aggregate settlement. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid may receive capacity ownership even when its REP allocation rounds to zero. The call's aggregate positive refund is credited to the named bidder's pull-payment balance without calling recipient code.",
+					"Before finalization, settles only provably losing bids. After finalization, combines claim and refund indexes into one settlement withdrawal and transfers each claim's proportional REP backing units, underwriting commitment, and finalization-to-claim fees from the unassigned position to the bidder vault. Its bad-debt share transfers only while the auction's recorded debt generation is still current; after those collateral claims are exhausted, the old debt expires while raw claimed-auction counters continue to settle deterministically. Capacity and bad-debt division dust follows each bid's deterministic cumulative ETH position, so claim order cannot change individual or aggregate settlement. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid may receive underwriting commitment even when its REP allocation rounds to zero. The call's aggregate positive refund is credited to the named bidder's pull-payment balance without calling recipient code.",
 				preconditions: 'At least one index; before finalization the claim list must be empty and refund indexes must be eligible; after finalization all indexes must belong to the named vault owner and remain unsettled.',
 				signals:
-					'Underlying auction `BidSettled`; one aggregate `EthRefundCredited` per call when total credited ETH is positive; `ClaimAuctionProceeds` when REP backing, capacity ownership, or raw auction bad-debt settlement advances. Its cumulative claimed and total auctioned bad-debt fields are raw counters; effective vault debt still requires the recorded auction generation to match the pool’s current generation',
+					'Underlying auction `BidSettled`; one aggregate `EthRefundCredited` per call when total credited ETH is positive; `ClaimAuctionProceeds` when REP backing, underwriting commitment, or raw auction bad-debt settlement advances. Its cumulative claimed and total auctioned bad-debt fields are raw counters; effective vault debt still requires the recorded auction generation to match the pool’s current generation',
 			},
 			{
 				call: '`takeOverUnassignedCommitment(securityPool, maximumCommitmentAttoEth)`',
@@ -830,10 +830,10 @@ export const contractReferences: ContractReference[] = [
 				caller: 'Anyone on behalf of the named bidder vault',
 				declarations: [{ name: 'claimAuctionProceeds' }],
 				effect:
-					"For a nonempty list, withdraws finalized bid settlements and transfers each claim's proportional REP backing units, capacity ownership, and finalization-to-claim fees from the unassigned position to the bidder vault. Its bad-debt share transfers only while the auction's recorded debt generation is still current; after those collateral claims are exhausted, the old debt expires while raw claimed-auction counters continue to settle deterministically. Capacity and bad-debt division dust follows each bid's deterministic cumulative ETH position, so claim order cannot change individual or aggregate settlement. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid can receive positive capacity ownership when its REP allocation rounds to zero. The call's aggregate positive refund is credited to the named bidder's pull-payment balance without calling recipient code. For an empty list, the wrapper exits after the finalization guard without validating bids or the named beneficiary, changing state, or emitting events.",
+					"For a nonempty list, withdraws finalized bid settlements and transfers each claim's proportional REP backing units, underwriting commitment, and finalization-to-claim fees from the unassigned position to the bidder vault. Its bad-debt share transfers only while the auction's recorded debt generation is still current; after those collateral claims are exhausted, the old debt expires while raw claimed-auction counters continue to settle deterministically. Capacity and bad-debt division dust follows each bid's deterministic cumulative ETH position, so claim order cannot change individual or aggregate settlement. The transfer does not change total capacity, fee eligibility, active open interest, total bad debt, retention, or aggregate accrued fees. A winning dust bid can receive positive underwriting commitment when its REP allocation rounds to zero. The call's aggregate positive refund is credited to the named bidder's pull-payment balance without calling recipient code. For an empty list, the wrapper exits after the finalization guard without validating bids or the named beneficiary, changing state, or emitting events.",
 				preconditions: 'Auction finalized. A nonempty list additionally requires every index to belong to the named vault owner and remain unsettled.',
 				signals:
-					'For processed bids, underlying auction `BidSettled`; one aggregate `EthRefundCredited` per call when total credited ETH is positive; `ClaimAuctionProceeds` when REP backing, capacity ownership, or raw auction bad-debt settlement advances. Its cumulative claimed and total auctioned bad-debt fields are raw counters; effective vault debt still requires the recorded auction generation to match the pool’s current generation; no event for an empty list',
+					'For processed bids, underlying auction `BidSettled`; one aggregate `EthRefundCredited` per call when total credited ETH is positive; `ClaimAuctionProceeds` when REP backing, underwriting commitment, or raw auction bad-debt settlement advances. Its cumulative claimed and total auctioned bad-debt fields are raw counters; effective vault debt still requires the recorded auction generation to match the pool’s current generation; no event for an empty list',
 			},
 			{
 				call: '`initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame)`',
@@ -857,7 +857,7 @@ export const contractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: '0cd67689ccaf5934b894e93259c66b744503d45986e0bca94f3ba978908a86c9',
 		name: 'EscalationGame',
-		purpose: 'Escrows outcome REP, raises the running resolution cost, detects non-decision, and settles local or carried deposits.',
+		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
 		readAbiFingerprint: '758abbd7c7c8651a4529ea9dd79049f8eb134075cde6fa80042ad2ec3151a30b',
 		readSurface:
 			'Base getters are `securityPool`, `repToken`, `activationTime`, `nonDecisionThresholdAttoRep`, `startBondAttoRep`, `nonDecisionTimestamp`, `nonDecisionState`, `forkContinuation`, `forkElapsedAtStart`, `forkResumedAt`, `fixedQuestionOutcome`, `nodes`, `disputeStakedRepByVaultAttoRep`, `totalDisputeStakedAttoRep`, `truthAuctionRepBeforeAttoRep`, and `truthAuctionRepRemainingAttoRep`. The claim delegate fallback exposes `rootClaimSourceGame`, `getInheritedClaimAllocation`, and `getUnresolvedClaimInterval`. The allocation read returns source principal, retained principal, reward-interval length, and the cumulative reward endpoint after per-generation auction rounding. The reward interval is the deposit’s range within its outcome’s cumulative deposits: its start is the returned endpoint minus the returned length. It determines which portion enters the reward calculation; the length is not a payable reward. Exported principal intervals compact consumed prefixes, while reward positions remain unshifted by prior claims. Allocations within a game stay fixed in every claim order. `disputeStakedRepByVaultAttoRep` is locally attributed current-game escrow used for health; inherited carry remains aggregate commitment state until proof settlement. Use `previewDepositOnOutcome`, `computeIterativeAttritionCostAttoRep`, `computeTimeSinceStartFromAttritionCostAttoRep`, `totalCostAttoRep`, `getEscalationGameEndDate`, `getQuestionResolution`, `getFinalQuestionResolution`, `hasReachedNonDecision`, `canTriggerOwnFork`, `getBindingCapitalAttoRep`, `getOutcomeBalancesAttoRep`, `getDepositsByOutcome`, `getDepositsByOutcomeLength`, `forkCarrySnapshotInitialized`, `getOutcomeState`, `getForkCarrySnapshot`, `getForkCarryRoots`, `isForkCarryFundingComplete`, `getCarryLeafPageByOutcome`, `getProofConsumedCarriedDepositIndexesByOutcome`, `getLocalUnresolvedPrincipalByVaultAndOutcome`, and `getForkedEscrowByVaultAndOutcome` for calculations, lifecycle authorization, pages, carry state, and escrow. Vault-funded deposits and all withdrawals route through `SecurityPool`; after an ordinary game starts, wallet-funded deposits use `depositRepOnOutcome` and mint no pool backing units.',
@@ -919,7 +919,7 @@ export const contractReferences: ContractReference[] = [
 			{
 				call: '`startFromFork(startBondAttoRep, nonDecisionThresholdAttoRep, elapsedAtFork, fixedQuestionOutcome, winnerHaircutPaidByFork, forkCarryInitialBackingAttoRep)`',
 				caller: 'Immutable owner (`EscalationGameFactory`) during atomic continuation deployment',
-				effect: 'Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time haircut/backing accounting. It does not start the remaining clock until `resumeFromFork`.',
+				effect: 'Initializes a paused continuation with inherited elapsed time, an optional fixed matching child outcome, and immutable fork-time escalation-haircut and backing accounting. It does not start the remaining clock until `resumeFromFork`.',
 				declarations: [{ name: 'startFromFork' }],
 				preconditions: 'Game not started; threshold exceeds the positive start bond; inherited elapsed time is no greater than seven weeks. Positive attoREP values are valid.',
 				signals: '`GameContinuedFromFork`',
@@ -931,7 +931,7 @@ export const contractReferences: ContractReference[] = [
 					'Records the resume timestamp once the immutable carry commitment is installed and funded. The new deadline is `max(rebasedCurveEnd, forkResumedAt + 3 days)`, so even an exhausted inherited clock receives a fresh response period. After that deadline, `getFinalQuestionResolution` returns the fixed outcome when the continuation has one.',
 				declarations: [{ name: 'resumeFromFork' }],
 				preconditions:
-					'Fork-continuation mode; not previously resumed; immutable carry snapshot installed; aggregate REP funding complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `sourcePrincipalAtForkAttoRep - ⌊sourcePrincipalAtForkAttoRep / 5⌋`, where `sourcePrincipalAtForkAttoRep` is the aggregate raw unresolved principal installed by the snapshot before effective direct-claim deductions. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims.',
+					'Fork-continuation mode; not previously resumed; immutable carry snapshot installed; aggregate REP funding complete. An unrelated fork requires one-to-one backing of effective unresolved principal. For an own-fork continuation, recorded initial backing must be at least `R - ⌊R / 5⌋`, where `R` is the sum of `inheritedUnresolvedTotalAttoRep` and `localUnresolvedTotalAttoRep` across all three outcomes before direct-claim deductions, and `5` is the fixed `Constants.MINIMUM_FORK_BURN_DIVISOR` rather than the configured fork burn divisor. The live balance must cover that initial backing minus child REP already exported by valid direct pre-resume claims, scaled down by any REP `applyTruthAuctionHaircut` removed.',
 				signals: '`ForkContinuationResumed`',
 			},
 			{
@@ -939,7 +939,7 @@ export const contractReferences: ContractReference[] = [
 				caller: "The child pool's `SecurityPoolForker` only",
 				declarations: [{ name: 'applyTruthAuctionHaircut' }],
 				effect:
-					'Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. If an unfixed continuation inherited two threshold-full outcome balances and the haircut leaves them below the current game threshold, ordinary pool-mediated deposit checks apply after the pool resumes the game. Fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.',
+					'Transfers sold REP to the pool, proportionally reduces escrow and outcome balances, and rebases curve time. If an unfixed continuation inherited two threshold-full outcome balances and the auction REP removal leaves them below the current game threshold, ordinary pool-mediated deposit checks apply after the pool resumes the game. Fixed outcomes and local non-decisions retain their state. The game stays paused until the pool resumes it.',
 				preconditions: "Paused fork continuation; no prior auction haircut; the requested amount is below the game's live REP balance.",
 				signals: '`TruthAuctionHaircutApplied` and REP `Transfer`; `InheritedThresholdTieReopened` when an unfixed inherited tie reopens',
 			},
@@ -963,9 +963,9 @@ export const contractReferences: ContractReference[] = [
 				call: '`withdrawDeposit(uint256 depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` only',
 				declarations: [{ name: 'withdrawDeposit', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
-				effect: "Consumes one local deposit after resolution. A winner pays the deposit's immutable depositor after its haircut; a loser only retires its escrow accounting.",
+				effect: "Consumes one local deposit after resolution. A winner pays the deposit's immutable depositor after its escalation haircut; a loser only retires its escrow accounting.",
 				preconditions: 'Explicit non-decision state is `None`; non-`None` supplied outcome; game final; game and pool final outcomes match; valid unsettled local deposit index.',
-				signals: '`CarryDepositConsumed` and `VaultEscrowUpdated`; for a winner, `ClaimDeposit`, positive REP payout `Transfer`, and haircut burn signals when nonzero',
+				signals: '`CarryDepositConsumed` and `VaultEscrowUpdated`; for a winner, `ClaimDeposit`, positive REP payout `Transfer`, and escalation-haircut burn signals when nonzero',
 			},
 			{
 				call: '`initializeForkCarrySnapshotWithResolutionBalances(...)`',
@@ -979,18 +979,18 @@ export const contractReferences: ContractReference[] = [
 				call: '`claimDepositForWinning(depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'claimDepositForWinning', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
-				effect: "Consumes a selected local deposit as a winner, consumes its vault escrow, burns the computed haircut when nonzero, and transfers the remaining positive REP payout to the deposit's immutable depositor.",
+				effect: "Consumes a selected local deposit as a winner, consumes its vault escrow, burns the computed escalation haircut when nonzero, and transfers the remaining positive REP payout to the deposit's immutable depositor.",
 				preconditions: 'Non-`None` supplied outcome and valid unsettled local deposit with sufficient escrow. This entrypoint itself does not check final resolution or that the supplied outcome won; its trusted caller selects that path.',
-				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and haircut burn signals only when their amounts are positive',
+				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and escalation-haircut burn signals only when their amounts are positive',
 			},
 			{
 				call: '`claimDepositForWinningWithoutTransfer(depositIndex, outcome)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'claimDepositForWinningWithoutTransfer', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
 				effect:
-					"Consumes a selected local deposit and its vault escrow. The depositor's raw escrow backing decreases by the inverse-retention claim units corresponding to the deposit's original principal: the principal itself with no local auction checkpoint, or `⌈originalPrincipal × truthAuctionRepBeforeAttoRep / truthAuctionRepRemainingAttoRep⌉` after a local haircut. Other unconsumed deposits by the same depositor remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed haircut.",
+					"Consumes a selected local deposit and its vault escrow. The depositor's raw escrow backing decreases by the inverse-retention claim units corresponding to the deposit's original principal: the principal itself with no local auction checkpoint, or `⌈originalPrincipal × truthAuctionRepBeforeAttoRep / truthAuctionRepRemainingAttoRep⌉` after a local auction REP removal. Other unconsumed deposits by the same depositor remain backed. The game returns the computed winner amount to the trusted caller but deliberately neither transfers REP nor burns the computed escalation haircut.",
 				preconditions: 'Valid in-range supplied outcome and unsettled local deposit with sufficient escrow. Unlike the transferring form, it has no explicit non-`None` guard; neither form checks final resolution or that the outcome won.',
-				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, and `ClaimDeposit` with `transferredRep = false`; no REP transfer or haircut burn',
+				signals: '`CarryDepositConsumed`, `VaultEscrowUpdated`, and `ClaimDeposit` with `transferredRep = false`; no REP transfer or escalation-haircut burn',
 			},
 			{
 				call: '`exportUnresolvedDeposit(depositIndex, outcome)`',
@@ -1004,9 +1004,9 @@ export const contractReferences: ContractReference[] = [
 				call: '`withdrawDeposit(CarriedDepositProof proof, outcome)`',
 				caller: 'Owning `SecurityPool` or its `SecurityPoolForker`',
 				declarations: [{ name: 'withdrawDeposit', sourcePath: 'solidity/contracts/statoblast/EscalationGameSettlement.sol' }],
-				effect: 'Consumes an inherited proof, transfers any positive winning payout, and burns the positive haircut unless the fork already paid it.',
+				effect: 'Consumes an inherited proof, transfers any positive winning payout, and burns the positive escalation haircut unless the fork already paid it.',
 				preconditions: 'Non-`None` supplied outcome; game final and matching the pool final outcome; supplied outcome is the winner; parent deposit was not directly claimed; valid unconsumed Merkle/nullifier proof.',
-				signals: '`CarryDepositConsumed` and `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and haircut burn signals only when positive',
+				signals: '`CarryDepositConsumed` and `ClaimDeposit` with `transferredRep = true`; REP payout `Transfer` and escalation-haircut burn signals only when positive',
 			},
 			{
 				call: '`exportVaultUnresolvedTotals(vault, repReceiver)`',
@@ -1205,7 +1205,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`requestPriceIfNeededAndStageLiquidation(targetVault, receiverVault, requestedDebtAttoEth, approvalId, ..., bountyAttoEth)`',
 				caller: 'Liquidation operator; a delegated receiver must have approved this exact operator',
 				effect:
-					'Stages explicit operator, receiver, target backing, and target capacity ownership and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.',
+					'Stages explicit operator, receiver, target backing, and target underwriting commitment and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageLiquidation' }],
 				preconditions: 'Receiver differs from target; delegated approval matches pool, receiver, operator, and target scope, has available cumulative and per-operation quota, and remains valid through latest execution.',
 				signals: '`LiquidationRouteStaged`; `LiquidationApprovalReserved` on a delegated route; staged-operation lifecycle events',
@@ -1214,7 +1214,7 @@ export const contractReferences: ContractReference[] = [
 				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
 				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
-					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute standing underwriting limit in attoETH), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. A newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
+					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute underwriting commitment in attoETH), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. A newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
 					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or underwriting-limit adjustment; liquidation and withdrawal require positive amounts, while an absolute underwriting limit may be zero to request an exit; and timeout from 1 second through 5 minutes. A committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
@@ -1291,7 +1291,7 @@ export const contractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: 'b4d43db4a275c3118a700ca255a7f63d42dfdca1fb1e7c554d681e589a76ac85',
 		name: 'ShareToken',
-		purpose: "Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.",
+		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
 		readAbiFingerprint: '6093653de73a0e5fa1e400d77bbded71a92de1197f58bd89da82a657887f349e',
 		readSurface:
 			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',

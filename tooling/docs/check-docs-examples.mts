@@ -1,19 +1,10 @@
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
+import { checkMmrConformanceVector, checkNonDecisionThresholdExample } from './check-docs-worked-examples.mts'
 
 import { Window } from 'happy-dom'
-import {
-	calculateAnnualizedRetentionFeePercent,
-	calculateAuctionModel,
-	computeCanonicalEscalationBindingCapital,
-	computeCanonicalEscalationDeadlineDays,
-	calculateCollateralRepairModel,
-	calculateEscalationDepositModel,
-	calculateForkThresholdSeries,
-	calculateResolutionModel,
-	ESCALATION_TIME_LENGTH_SECONDS,
-} from '../../docs/charts/chartModels'
+import { calculateAnnualizedRetentionFeePercent, calculateAuctionModel, computeCanonicalEscalationBindingCapital, computeCanonicalEscalationDeadlineDays, calculateEscalationDepositModel, calculateForkThresholdSeries, calculateResolutionModel, ESCALATION_TIME_LENGTH_SECONDS } from '../../docs/charts/chartModels'
 import { getWinningEscalationDepositClaimAmount } from '../../shared/statoblast/ts/escalationGame/escalationMath'
 import { centeredDiagramScrollLeft, updateDiagramControl } from '../../docs/charts/diagramControl'
 
@@ -499,13 +490,6 @@ async function checkInteractiveToolControls(): Promise<void> {
 				<input data-example-input="repInventory" value="5">
 				<div class="example-output-grid"><output>Default output</output></div>
 			</details>
-			<details class="interactive-example" id="collateral-repair-example">
-				<summary>Repair</summary>
-				<input data-example-input="auctionRaised" value="1">
-				<input data-example-input="forkSettlementCollateralReceived" value="2">
-				<input data-example-input="parentSettlementCollateral" value="3">
-				<div class="example-output-grid"><output>Default output</output></div>
-			</details>
 			<details class="interactive-example" id="initial-report-estimator-example">
 				<summary>Initial report</summary>
 				<input data-example-input="openInterestWeth" value="1">
@@ -584,8 +568,6 @@ async function checkInteractiveToolControls(): Promise<void> {
 		assert.equal(status.textContent, '', 'preset application must avoid redundant status narration')
 
 		for (const presetCase of [
-			{ expected: '47.5', input: 'forkSettlementCollateralReceived', presetIndex: '0', toolId: 'collateral-repair-example' },
-			{ expected: '50', input: 'parentSettlementCollateral', presetIndex: '0', toolId: 'collateral-repair-example' },
 			{ expected: '25', input: 'requestedInitialWeth', presetIndex: '1', toolId: 'initial-report-estimator-example' },
 			{ expected: '168', input: 'censorshipDuration', presetIndex: '2', toolId: 'binary-censorship-example' },
 		] as const) {
@@ -871,6 +853,8 @@ await checkSourceLabelsAndThresholdText('docs/explanation/truth-auctions.html', 
 await checkDynamicWethReportExample()
 await checkBinaryCensorshipExample()
 await checkMmrProofPlannerStates()
+await checkMmrConformanceVector()
+await checkNonDecisionThresholdExample()
 checkDiagramControlStates()
 await checkInteractiveToolControls()
 checkExactRepCapEquality()
@@ -879,7 +863,6 @@ const openOracleHtml = await readFile('docs/reference/open-oracle.html', 'utf8')
 assert.doesNotMatch(blockWithId(openOracleHtml, 'eq-openoracle-initial-report-size'), /<mi>(?:R|P|e|E|Q|N|D|T|H|m|u|F)<\/mi>/, 'dynamic report equation should use descriptive domain names instead of one-letter identifiers')
 
 const statoblastHtml = await readFile('docs/explanation/statoblast.html', 'utf8')
-assert.doesNotMatch(statoblastHtml, /id="collateral-repair-example"/i, 'the overview must delegate interactive auction mechanics to the focused Truth Auction page')
 for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 	const exampleId = bindMatch[1]
 	if (exampleId === undefined) {
@@ -922,9 +905,6 @@ assert.equal(
 	4n * payoutFixture,
 	'fork scaling should reduce even an above-cap principal-only withdrawal',
 )
-assert.match(chartRuntimeSource, /fig-statoblast-collateral-repair[\s\S]*collateralRepairChart/, 'collateral repair chart should use its native Plot renderer')
-assert.match(chartRuntimeSource, /x1: model\.received, x2: model\.received \+ model\.repairEth/, 'collateral repair Plot should append auction repair after migration-routed collateral')
-assert.match(chartRuntimeSource, /domain: \['Migration-routed', 'Auction repair'\]/, 'collateral repair Plot should preserve distinct migration and repair segment colors')
 const zeroUtilizationFee = calculateAnnualizedRetentionFeePercent(0)
 const dipUtilizationFee = calculateAnnualizedRetentionFeePercent(80)
 assert.ok(zeroUtilizationFee > 9 && zeroUtilizationFee < 11, 'retention Plot should annualize the maximum retention rate to roughly ten percent fees')
@@ -988,19 +968,6 @@ const sameTickAuction = calculateAuctionModel(8, 2, [
 ])
 assert.equal(sameTickAuction.bids[0]?.rep, 1.5, 'the first bid at a partially filled clearing tick should settle FIFO')
 assert.equal(sameTickAuction.bids[1]?.rep, 0.5, 'the second bid at a partially filled clearing tick should receive the FIFO remainder')
-
-assert.deepEqual(calculateCollateralRepairModel(50, 47.5, 1), {
-	initialShortfall: 2.5,
-	received: 47.5,
-	remainingShortfall: 1.5,
-	repairEth: 1,
-})
-assert.deepEqual(calculateCollateralRepairModel(50, 47.5, 10), {
-	initialShortfall: 2.5,
-	received: 47.5,
-	remainingShortfall: 0,
-	repairEth: 2.5,
-})
 
 const clippedDeposit = calculateEscalationDepositModel({
 	invalidBalance: 1,
