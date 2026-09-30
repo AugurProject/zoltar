@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
@@ -16,7 +17,7 @@ if (generated === undefined) throw new Error('Documentation chart runtime build 
 
 if (process.argv.includes('--check')) {
 	const current = await readFile(outputPath, 'utf8').catch(error => {
-		throw new Error(`Documentation chart runtime is missing: ${error instanceof Error ? error.message : String(error)}`)
+		throw new Error(`Documentation chart runtime is missing: ${errorMessage(error)}`)
 	})
 	if (current !== generated) throw new Error('Documentation chart runtime is stale; run bun run build:docs')
 } else {

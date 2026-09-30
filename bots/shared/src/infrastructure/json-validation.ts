@@ -1,3 +1,4 @@
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import type { Hex } from '../ethereum.ts'
 
 const HASH32_PATTERN = /^0x[0-9a-fA-F]{64}$/
@@ -49,8 +50,9 @@ export function nonemptyString(value: unknown, label: string, maximumLength?: nu
 	return value
 }
 
+/** A JSON object: the core `isObjectRecord` guard, narrowed further to exclude arrays. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
+	return isObjectRecord(value) && !Array.isArray(value)
 }
 
 export function optionalRecord(value: unknown): Record<string, unknown> | undefined {
