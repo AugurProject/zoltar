@@ -181,7 +181,6 @@ for (const [functionName, title, args] of [
 	['settle', 'Settle report #7', [7n]],
 	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
 	['report', 'Create oracle report', []],
-	['dispute', 'Dispute report', []],
 	['withdrawTo', 'Withdraw oracle balance', []],
 ] satisfies Array<[string, string, bigint[]]>) {
 	test(`uses explicit reporting copy for ${functionName}`, async () => {
@@ -191,6 +190,14 @@ for (const [functionName, title, args] of [
 		if (functionName === 'depositWalletRepToEscalationGame') expect(step?.paidFrom).toBe('Wallet REP')
 	})
 }
+
+test('keeps explicit dispute copy when missing report details prevent broadcasting', async () => {
+	const { reviewed, client, sendTransaction } = setup()
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'dispute', contractAddress: account, args: [], data: '0x', value: undefined })
+	await expect(reviewed.sendTransaction({ to: account, data: '0x' })).rejects.toThrow('Missing oracle dispute details')
+	expect(transactionSteps.value?.steps[0]?.title).toBe('Dispute report')
+	expect(sendTransaction).not.toHaveBeenCalled()
+})
 
 test('leaves the description empty for an unlabeled contract function instead of narrating the submission', async () => {
 	const step = await sendPreparedTransaction({ functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n] })

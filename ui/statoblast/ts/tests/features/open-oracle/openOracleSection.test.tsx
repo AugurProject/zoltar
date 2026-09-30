@@ -788,6 +788,16 @@ void describe('OpenOracleSection', () => {
 		expect(getSectionTitles(section)).not.toContain('Dispute Report')
 	})
 
+	void test('keeps the dispute action disabled within the reserve before settlement opens', () => {
+		const section = renderDisputeActionSection({
+			openOracleReportDetails: createDisputableReportDetails({ currentTime: 299n }),
+		})
+		const disputeButton = requireButton(section, 'Dispute & swap')
+		expect(getButtonDisabled(disputeButton)).toBe(true)
+		expect(getButtonDisabledReason(disputeButton)).toMatch(/ends too soon/)
+		expect(findButton(section, 'Settle report #7')).toBeUndefined()
+	})
+
 	void test('renders dispute approval controls and blocks submit until required approvals are present', () => {
 		const section = renderDisputeActionSection({
 			openOracleForm: createOpenOracleForm({ disputeNewAmount1: '20', disputeNewAmount2: '7' }),

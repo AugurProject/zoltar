@@ -13,6 +13,7 @@ import { type WriteContractClient, readRequiredMulticall, writeContractAndWait }
 import { getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openOracleState.js'
 import { requireBigintValue } from './decoders.js'
+import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTiming.js'
 
 const OPEN_ORACLE_PRICE_UNITS = 30n
 // Flags mirrored from OpenOracle.sol that the shared package does not export.
@@ -483,7 +484,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 	} satisfies OpenOracleActionResult
 }
 export async function disputeOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint, tokenToSwap: Address, newAmount1: bigint, newAmount2: bigint, _amt2Expected: bigint, stateHash: Hex) {
-	const state = await loadOpenOracleStoredState(client, openOracleAddress, reportId)
+	const state = await requireOpenOracleDisputeSubmissionWindow(client, openOracleAddress, reportId)
 	const currentStateHash = hashOpenOracleStatePreimage(state.latest)
 	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
 	const derivedTokenToSwap = getOpenOracleDisputeSwapToken(state.latest.game, newAmount1, newAmount2)
