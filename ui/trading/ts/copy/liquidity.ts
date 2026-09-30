@@ -40,3 +40,6 @@ export function lpHeld(amount: string) {
 export const youProvide = 'You provide'
 export const youReceive = 'Expected to receive'
 export const previewDetails = 'Liquidity breakdown'
+
+export const retryQuote = 'Retry quote'
+export const waitForTransaction = 'Wait for the current transaction to finish.'
