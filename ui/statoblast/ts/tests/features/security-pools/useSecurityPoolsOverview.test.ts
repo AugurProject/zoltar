@@ -103,7 +103,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		await act(async () => {
 			if (newerRead === 'explicit load') await state().loadSecurityPools(selectedAddress)
 			else {
-				appQueryCache.invalidateAll()
+				appQueryCache.invalidateAll('block')
 				void state().refreshSecurityPools()
 				expect(lineageReads).toBe(3)
 			}
@@ -164,11 +164,11 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		await act(async () => await state().loadBrowseSecurityPoolPage(0, 10, 'page'))
 		let pending: Promise<void> | undefined
 		await act(() => {
-			appQueryCache.invalidateAll()
+			appQueryCache.invalidateAll('block')
 			pending = state().refreshBrowseSecurityPoolPage()
 		})
 		await act(async () => {
-			appQueryCache.invalidateAll()
+			appQueryCache.invalidateAll('block')
 			void state().refreshBrowseSecurityPoolPage()
 		})
 		expect(reads).toBe(2)

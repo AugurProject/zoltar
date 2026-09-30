@@ -306,24 +306,42 @@ describe('standalone trading UI model', () => {
 		expect(results).toEqual([0, 10, 20, 30, 40])
 	})
 
-	test('publishes completed rows without waiting for a slow earlier row, preserving registry order', async () => {
-		const slow = createDeferred<number>()
-		const fastFinished = createDeferred<void>()
+	test('publishes only contiguous completed rows when reads finish out of order', async () => {
+		const first = createDeferred<number>()
+		const second = createDeferred<number>()
+		const third = createDeferred<number>()
 		const progress: number[][] = []
 		const pending = mapWithConcurrency(
-			[0, 1],
-			2,
-			async value => (value === 0 ? await slow.promise : 20),
-			rows => {
-				progress.push(rows)
-				fastFinished.resolve()
-			},
+			[first, second, third],
+			3,
+			async value => await value.promise,
+			rows => progress.push(rows),
 		)
-		await fastFinished.promise
-		expect(progress).toEqual([[20]])
-		slow.resolve(10)
-		expect(await pending).toEqual([10, 20])
-		expect(progress).toEqual([[20], [10, 20]])
+		second.resolve(20)
+		await Bun.sleep(0)
+		expect(progress).toEqual([])
+		first.resolve(10)
+		await Bun.sleep(0)
+		expect(progress).toEqual([[10, 20]])
+		third.resolve(30)
+		expect(await pending).toEqual([10, 20, 30])
+		expect(progress).toEqual([
+			[10, 20],
+			[10, 20, 30],
+		])
+	})
+
+	test('counts undefined mapper results as completed progress', async () => {
+		const progress: (number | undefined)[][] = []
+		expect(
+			await mapWithConcurrency(
+				[0, 1],
+				1,
+				async value => (value === 0 ? undefined : value),
+				rows => progress.push(rows),
+			),
+		).toEqual([undefined, 1])
+		expect(progress).toEqual([[undefined], [undefined, 1]])
 	})
 
 	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {

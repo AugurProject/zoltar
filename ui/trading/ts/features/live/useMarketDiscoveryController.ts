@@ -60,6 +60,7 @@ export function useMarketDiscoveryController({
 	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
 	// A background discovery slower than the block interval is left to finish instead of being restarted on each block.
 	const backgroundDiscovery = useRef<RequestIdentity>()
+	const partialSnapshot = useRef<{ markets: typeof market.markets; page: typeof market.marketPage }>()
 
 	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean, operation: ReadOperation, onProgress: MarketDiscoveryProgress) {
 		const client = readOperationClient(services.createTradingPublicClient(nextConfiguration), operation)
@@ -89,7 +90,7 @@ export function useMarketDiscoveryController({
 	const positionLockOnScreen = () => routePoolRef.current !== undefined && transaction.isPositionLocked(routePoolRef.current)
 	const refreshHeldByWorkflow = () => transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen()
 
-	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean; navigation?: boolean; ownerMarket?: Address }> = {}) {
+	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean; navigation?: boolean; ownerMarket?: Address; explicit?: boolean }> = {}) {
 		if (nextConfiguration === undefined) return
 		const background = options.background === true
 		// A trade's own refresh passes its market's lock; landing on another market's route, it waits like any other refresh.
@@ -98,7 +99,7 @@ export function useMarketDiscoveryController({
 		const commitAllowed = () => options.navigation === true || discoveryCommitAllowed(owner, positionLockOnScreen(), transaction.liquidityWorkflowLockedRef.current, ownerMarketOnScreen())
 		// Such a refresh would only supersede that market's own reads; its trade refreshes the route when it finishes.
 		if (owner === 'position' && !ownerMarketOnScreen() && refreshHeldByWorkflow()) return
-		if (background && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
+		if (background && options.explicit !== true && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
 		// It records the application's request (the `universe` parameter), not the resolved universe discovery is asked for.
@@ -118,12 +119,23 @@ export function useMarketDiscoveryController({
 			market.setDiscoveryState('loading')
 			market.setDiscoveryError(undefined)
 		}
+		const previousMarkets = market.markets
+		const previousPage = market.marketPage
+		const restorePartialProgress = () => {
+			// Preserve rollback ownership across explicit refreshes that supersede a partial first load.
+			const snapshot = partialSnapshot.current
+			if (snapshot === undefined) return
+			market.setMarkets(snapshot.markets)
+			market.setMarketPage(snapshot.page)
+			partialSnapshot.current = undefined
+		}
 		try {
 			let acceptingProgress = true
 			// Partial first loads can fill an empty view; refreshes keep every prior row until the full result arrives.
 			const publishProgress = market.markets.length === 0
 			const onProgress: MarketDiscoveryProgress = discovered => {
 				if (!publishProgress || !acceptingProgress || background || !discoveryRequests.isCurrent(request) || !commitAllowed()) return
+				partialSnapshot.current ??= { markets: previousMarkets, page: previousPage }
 				market.setMarkets(discovered.markets)
 				onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 				market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
@@ -133,9 +145,11 @@ export function useMarketDiscoveryController({
 			})
 			if (discovered === undefined || !discoveryRequests.isCurrent(request)) return
 			if (!commitAllowed()) {
+				restorePartialProgress()
 				market.setDiscoveryState('ready')
 				return
 			}
+			partialSnapshot.current = undefined
 			market.setMarkets(discovered.markets)
 			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 			market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
@@ -145,6 +159,7 @@ export function useMarketDiscoveryController({
 		} catch (error) {
 			if (!discoveryRequests.isCurrent(request)) return
 			if (!commitAllowed()) {
+				restorePartialProgress()
 				market.setDiscoveryState('ready')
 				return
 			}
@@ -194,7 +209,10 @@ export function useMarketDiscoveryController({
 		wallet.setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
 		if (previousRoute.current !== route) {
 			// Results only carry over between routes that discover the same thing, such as the trade and liquidity views of one pool.
-			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) market.setMarkets([])
+			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) {
+				partialSnapshot.current = undefined
+				market.setMarkets([])
+			}
 			void refresh(configuration, 0n, undefined, { navigation: true })
 		}
 		previousRoute.current = route
@@ -207,9 +225,9 @@ export function useMarketDiscoveryController({
 
 	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
 	const blockRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
-	useBlockRefresh(() => {
+	useBlockRefresh(event => {
 		if (refreshHeldByWorkflow()) return
-		void refreshRef.current(undefined, undefined, undefined, { background: true })
+		void refreshRef.current(undefined, undefined, undefined, { background: true, explicit: event.reason === 'invalidate' })
 	}, blockRefreshActive)
 
 	return {

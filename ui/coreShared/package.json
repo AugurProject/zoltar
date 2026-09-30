@@ -315,14 +315,6 @@
 			"bun": "./ts/tests/walletAssetControl.test.tsx",
 			"default": "./js/tests/walletAssetControl.test.js"
 		},
-		"./lib/readOperation.js": {
-			"bun": "./ts/lib/readOperation.ts",
-			"default": "./js/lib/readOperation.js"
-		},
-		"./lib/incrementalRegistry.js": {
-			"bun": "./ts/lib/incrementalRegistry.ts",
-			"default": "./js/lib/incrementalRegistry.js"
-		},
 		"./*": {
 			"bun": "./ts/*.ts",
 			"default": "./js/*.js"
@@ -739,6 +731,10 @@
 			"bun": "./ts/lib/formatters.ts",
 			"default": "./js/lib/formatters.js"
 		},
+		"./lib/incrementalRegistry.js": {
+			"bun": "./ts/lib/incrementalRegistry.ts",
+			"default": "./js/lib/incrementalRegistry.js"
+		},
 		"./lib/loadState.js": {
 			"bun": "./ts/lib/loadState.ts",
 			"default": "./js/lib/loadState.js"
@@ -766,6 +762,10 @@
 		"./lib/questionId.js": {
 			"bun": "./ts/lib/questionId.ts",
 			"default": "./js/lib/questionId.js"
+		},
+		"./lib/readOperation.js": {
+			"bun": "./ts/lib/readOperation.ts",
+			"default": "./js/lib/readOperation.js"
 		},
 		"./lib/refreshState.js": {
 			"bun": "./ts/lib/refreshState.ts",

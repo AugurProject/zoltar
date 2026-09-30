@@ -124,7 +124,8 @@ export function LiveTrading({
 	const recordedMarkets = useRef(new Map<string, LiveMarket>())
 	const marketCacheUpdates = selectMarketCacheUpdates(listedMarkets, recordedMarkets.current, favoriteMarketIds.entries, listsMarkets)
 	useEffect(() => {
-		if (marketCacheUpdates.length === 0) return
+		// A workflow can revoke partial discovery; persist only the completed list.
+		if (discoveryState !== 'ready' || marketCacheUpdates.length === 0) return
 		for (const update of marketCacheUpdates) recordedMarkets.current.set(update.id, update.data)
 		downloadedMarkets.record(marketCacheUpdates)
 	})

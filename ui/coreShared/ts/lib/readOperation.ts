@@ -9,7 +9,7 @@ export async function runReadOperation<T>(load: (operation: ReadOperation) => Pr
 	let active = true
 	let timer: ReturnType<typeof setTimeout> | undefined
 	let rejectTimeout: (reason: Error) => void = () => undefined
-	const timeoutError = new Error('RPC read timed out.')
+	const timeoutError = new Error('RPC read timed out. Retry loading data.')
 	const deadline = new Promise<never>((_resolve, reject) => {
 		rejectTimeout = reject
 	})

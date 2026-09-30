@@ -1,3 +1,5 @@
+import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
+import { marketDownloadStore } from '../../lib/favoriteMarkets.js'
 import type { discoverTradingMarketPage } from '../../protocol/marketDiscovery.js'
 import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { useLiveTradingController } from '../../features/liveTradingController.js'
@@ -9,7 +11,7 @@ import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { LiveTrading } from '../../features/LiveTrading.js'
 import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
-import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
+import { appBlockWatcher, invalidateAppData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import { largestExitForLongShares } from '@zoltar/trading-shared/trading/positions'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
@@ -51,6 +53,40 @@ function walletHolding(label: string) {
 	return document.querySelector(`.trade-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
 }
 
+async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services']) {
+	let controller: ReturnType<typeof useLiveTradingController> | undefined
+	function Harness() {
+		controller = useLiveTradingController({
+			route: 'market',
+			configuration,
+			configurationError: undefined,
+			selectedUniverseId: '1',
+			onUniversesChange: () => undefined,
+			onWorkflowLockChange: () => undefined,
+			onWalletSummaryChange: () => undefined,
+			walletSummaryRetryNonce: 0,
+			defaultSlippage: '0.5',
+			defaultValidityMinutes: '20',
+			services,
+		})
+		return (
+			<div>
+				{controller.discovery.visibleMarkets.map(market => (
+					<div key={market.pool}>{market.title}</div>
+				))}
+			</div>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	return {
+		...rendered,
+		state: () => {
+			if (controller === undefined) throw new Error('Controller has not rendered')
+			return controller
+		},
+	}
+}
+
 describe('live market refresh', () => {
 	let cleanupRendered: (() => Promise<void>) | undefined
 	let stopBlocks: (() => void) | undefined
@@ -64,6 +100,73 @@ describe('live market refresh', () => {
 		},
 		url: `http://localhost/?demo=0#/market/${pool}`,
 	})
+
+	test('explicit invalidation supersedes a pending block refresh without another block', async () => {
+		appBlockWatcher.reportBlock(appBlockWatcher.getLatestBlockNumber() ?? 0n)
+		const older = createDeferred<void>()
+		let reads = 0
+		const services = {
+			...offlineControllerServices,
+			discoverTradingMarketPage: async () => {
+				const read = ++reads
+				if (read === 2) await older.promise
+				return discoveryPage([{ ...market, title: read >= 3 ? 'Explicitly refreshed' : 'Old state' }])
+			},
+		}
+		const rendered = await renderDiscoveryController(services)
+		cleanupRendered = rendered.cleanup
+		await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'initial discovery')
+		await act(() => {
+			appBlockWatcher.reportBlock(appBlockWatcher.getLatestBlockNumber() ?? 0n)
+			appBlockWatcher.reportBlock((appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n)
+		})
+		await waitForDom(() => reads === 2, 'block refresh')
+		try {
+			await act(() => invalidateAppData())
+			await waitForDom(() => reads === 3, 'explicit refresh')
+			await waitForDom(() => document.body.textContent?.includes('Explicitly refreshed') === true, 'new state')
+			await act(async () => {
+				older.resolve()
+				await Bun.sleep(0)
+			})
+			expect(document.body.textContent).toContain('Explicitly refreshed')
+		} finally {
+			older.resolve()
+		}
+	})
+
+	for (const supersede of [false, true])
+		for (const outcome of ['success', 'error'])
+			test(`restores the initial list when a workflow blocks partial discovery ${outcome} (superseded: ${supersede})`, async () => {
+				const finish = createDeferred<void>()
+				let reads = 0
+				const discover: typeof discoverTradingMarketPage = async (_client, _configuration, _universe, _start, _size, _index, _isCurrent, onProgress) => {
+					reads += 1
+					onProgress?.(discoveryPage([market]))
+					await finish.promise
+					if (outcome === 'error') throw new Error('Read failed')
+					return discoveryPage([market])
+				}
+				const rendered = await renderDiscoveryController({ ...offlineControllerServices, discoverTradingMarketPage: discover })
+				cleanupRendered = rendered.cleanup
+				try {
+					await waitForDom(() => rendered.state().discovery.visibleMarkets.length === 1, 'partial row')
+					if (supersede) {
+						await act(() => invalidateAppData())
+						await waitForDom(() => reads === 2, 'replacement discovery')
+					}
+					await act(() => rendered.state().workflow.updateLiquidityWorkflowLock(true))
+					await act(async () => {
+						finish.resolve()
+						await Bun.sleep(0)
+					})
+					await waitForDom(() => rendered.state().discovery.discoveryState === 'ready', 'blocked discovery settled')
+					expect(rendered.state().discovery.visibleMarkets).toEqual([])
+					expect(rendered.state().discovery.marketPage.total).toBe(0n)
+				} finally {
+					finish.resolve()
+				}
+			})
 
 	test('shows completed markets while the rest of discovery is still pending', async () => {
 		let finish: () => void = () => undefined
@@ -85,8 +188,11 @@ describe('live market refresh', () => {
 			await waitForDom(() => document.body.textContent?.includes('Fast market') === true, 'first completed market')
 			expect(document.body.textContent).not.toContain('Slow market')
 			expect(document.querySelector('.market-browser')?.getAttribute('aria-busy')).toBe('true')
+			await settle(250)
+			expect(marketDownloadStore.read(getLocalEntityScope('trading', 'market'))).toEqual([])
 			finish()
 			await waitForDom(() => document.body.textContent?.includes('Slow market') === true, 'remaining market')
+			await waitForDom(() => marketDownloadStore.read(getLocalEntityScope('trading', 'market')).length === 2, 'completed discovery cached')
 		} finally {
 			finish()
 		}
@@ -102,7 +208,7 @@ describe('live market refresh', () => {
 			if (++reads === 1) return page([first, second])
 			onProgress?.(page([first]))
 			await timeout.promise
-			throw new Error('RPC read timed out.')
+			throw new Error('RPC read timed out. Retry loading data.')
 		}
 		const services = { ...offlineControllerServices, discoverTradingMarketPage: discover }
 		let controller: ReturnType<typeof useLiveTradingController> | undefined

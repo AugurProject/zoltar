@@ -1,4 +1,3 @@
-import type { TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import { readOperationClient, type ReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { createRegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 import type { ChainBackend } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -10,12 +9,6 @@ import { loadSecurityPoolLineage, loadSecurityPoolPage, loadSecurityPoolVaultSum
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-
-export type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
-	TransactionCancellationParameters &
-	WriteOperationContext & {
-		environmentRefreshKey: number
-	}
 
 /** The chain reads and writes the security-pools overview uses; tests replace them. */
 type SecurityPoolsOverviewReadClient = {

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { createQueryCache } from '../lib/queryCache.js'
-import { isSameQueryData } from '../lib/dataRefresh.js'
+import { appBlockWatcher, appQueryCache, invalidateAppData, isSameQueryData } from '../lib/dataRefresh.js'
 import { createDeferred } from './testUtils/deferred.js'
 
 async function flush() {
@@ -70,6 +70,26 @@ describe('query cache', () => {
 		expect(notifications).toEqual(['a', 'b'])
 	})
 
+	test.each(['cache', 'store', 'app'])('explicit %s invalidation retires an in-flight read and only the newest result settles', async source => {
+		const cache = source === 'app' ? appQueryCache : createQueryCache()
+		const store = cache.createStore<string>()
+		const older = createDeferred<string>()
+		const newer = createDeferred<string>()
+		let loads = 0
+		const loader = () => (++loads === 1 ? older.promise : newer.promise)
+		const first = store.fetch('page', loader)
+		if (source === 'store') store.invalidate('page')
+		else if (source === 'app') invalidateAppData()
+		else cache.invalidateAll()
+		const second = store.fetch('page', loader)
+		expect(loads).toBe(2)
+		newer.resolve('new state')
+		await second
+		older.resolve('old state')
+		await first
+		expect(store.get('page')).toMatchObject({ data: 'new state', stale: false, fetching: false })
+	})
+
 	test('lets an in-flight read finish across repeated block invalidations, then refreshes again', async () => {
 		const cache = createQueryCache()
 		const store = cache.createStore<string>()
@@ -81,7 +101,7 @@ describe('query cache', () => {
 		}
 		const first = store.fetch('page', loader)
 		for (let block = 0; block < 5; block++) {
-			cache.invalidateAll()
+			cache.invalidateAll('block')
 			expect(store.fetch('page', loader)).toBe(first)
 		}
 		expect(loads).toBe(1)
@@ -90,6 +110,18 @@ describe('query cache', () => {
 		expect(store.get('page')).toMatchObject({ data: 'slow result', stale: true, fetching: false })
 		await store.fetch('page', async () => 'latest result')
 		expect(store.get('page')).toMatchObject({ data: 'latest result', stale: false, fetching: false })
+	})
+
+	test('the app block watcher preserves a running read on a new block', async () => {
+		appBlockWatcher.reportBlock(appBlockWatcher.getLatestBlockNumber() ?? 0n)
+		const store = appQueryCache.createStore<string>()
+		const pending = createDeferred<string>()
+		const first = store.fetch('page', () => pending.promise)
+		appBlockWatcher.reportBlock((appBlockWatcher.getLatestBlockNumber() ?? 0n) + 1n)
+		expect(store.fetch('page', async () => 'replacement')).toBe(first)
+		pending.resolve('original')
+		await first
+		expect(store.get('page')).toMatchObject({ data: 'original', stale: true })
 	})
 
 	test('an older in-flight read cannot overwrite a result stored with set', async () => {

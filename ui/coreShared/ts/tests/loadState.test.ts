@@ -68,7 +68,7 @@ void describe('load state helpers', () => {
 		try {
 			await Promise.race([pending, new Promise(resolve => setTimeout(resolve, 50))])
 			expect(controller.isLoading.value).toBe(false)
-			expect(errorMessage).toContain('timed out')
+			expect(errorMessage).toBe('RPC read timed out. Retry loading data.')
 			await controller.run({
 				load: async () => 2,
 				onSuccess: value => {

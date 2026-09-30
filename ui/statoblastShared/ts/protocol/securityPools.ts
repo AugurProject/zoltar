@@ -537,7 +537,7 @@ function uniqueDeployments(deployments: readonly SecurityPoolDeploymentTuple[]) 
 	return [...new Map(deployments.map(deployment => [deployment.securityPool.toLowerCase(), deployment])).values()]
 }
 
-async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor, index: RegistryIndex<SecurityPoolDeploymentTuple> = createRegistryIndex()) {
+async function loadDeploymentRegistry(client: ReadClient, anchor: DeploymentRegistryAnchor, index: RegistryIndex<SecurityPoolDeploymentTuple> = createRegistryIndex()): Promise<readonly SecurityPoolDeploymentTuple[]> {
 	const factory = getInfraContractAddresses().securityPoolFactory
 	return await readIncrementalRegistry({
 		index,

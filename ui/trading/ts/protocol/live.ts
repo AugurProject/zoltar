@@ -84,21 +84,25 @@ async function loadOriginUniverseId(client: PublicClient, parent: Address, curre
 export async function mapWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>, onProgress?: (results: Output[]) => void) {
 	if (!Number.isInteger(maximumConcurrency) || maximumConcurrency <= 0) throw new Error('Async concurrency limit must be a positive integer')
 	const queue = items.map((item, index) => ({ item, index }))
-	const completed: Array<Readonly<{ index: number; value: Output }>> = []
+	const results: Output[] = []
+	const completed = new Set<number>()
+	let contiguousCount = 0
 	let nextQueueIndex = 0
 	async function worker() {
 		while (true) {
 			const job = queue[nextQueueIndex]
 			if (job === undefined) return
 			nextQueueIndex += 1
-			completed.push({ index: job.index, value: await mapper(job.item, job.index) })
-			onProgress?.([...completed].sort((left, right) => left.index - right.index).map(result => result.value))
+			results[job.index] = await mapper(job.item, job.index)
+			completed.add(job.index)
+			const previousCount = contiguousCount
+			while (completed.has(contiguousCount)) contiguousCount += 1
+			if (contiguousCount > previousCount) onProgress?.(results.slice(0, contiguousCount))
 		}
 	}
 	const workerCount = Math.min(maximumConcurrency, queue.length)
 	await Promise.all(Array.from({ length: workerCount }, worker))
-	completed.sort((left, right) => left.index - right.index)
-	return completed.map(result => result.value)
+	return results
 }
 
 type MarketDiscoveryResult = ReturnType<typeof marketDiscoveryPage> & {

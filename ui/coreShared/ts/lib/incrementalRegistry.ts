@@ -23,7 +23,7 @@ export async function readIncrementalRegistry<T>({
 	loadCount(): Promise<bigint>
 	loadRange(start: bigint, count: bigint): Promise<readonly T[]>
 	isCanonical(anchor: RegistryAnchor): Promise<boolean>
-}) {
+}): Promise<readonly T[]> {
 	const previous = index.pending
 	const pending = (async () => {
 		if (previous !== undefined) await previous.catch(() => undefined)
