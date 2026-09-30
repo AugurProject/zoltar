@@ -19,16 +19,7 @@ import { useTruthAuctionBookData } from './useTruthAuctionBookData.js'
 import { useTruthAuctionSettlementActionState } from './useTruthAuctionSettlementActionState.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
-import {
-	clampPercentage,
-	getFinalizeTruthAuctionGuardMessage,
-	getMigrationStateBadge,
-	getMigrationWindowClosedGuardMessage,
-	getStartTruthAuctionGuardMessage,
-	getTruthAuctionBypassReason,
-	getTruthAuctionStateBadge,
-	getTruthAuctionWindow,
-} from '../components/ForkAuctionPresentation.js'
+import { clampPercentage, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, getTruthAuctionWindow } from '../components/ForkAuctionPresentation.js'
 import { useForkAuctionContext } from './useForkAuctionContext.js'
 
 /** A metric shown either as literal text or as a timestamp the section renders. */

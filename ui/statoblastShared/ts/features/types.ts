@@ -4,7 +4,23 @@ import type { RequestPriceModalProps } from './security-pools/components/Securit
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
 import type { MarketCreationResult, MarketDetails, ReadClient, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OpenOracleActionResult, OracleManagerDetails, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TradingDetails } from '../types/contracts.js'
+import type {
+	ForkAuctionActionResult,
+	ForkAuctionDetails,
+	LiquidationApprovalDetails,
+	LiquidationFundingPreview,
+	ListedSecurityPool,
+	OpenOracleActionResult,
+	OracleManagerDetails,
+	ReportingDetails,
+	SecurityPoolCreationResult,
+	SecurityPoolOverviewActionResult,
+	SecurityPoolVaultSummary,
+	SecurityVaultActionResult,
+	SecurityVaultDetails,
+	TradingActionResult,
+	TradingDetails,
+} from '../types/contracts.js'
 import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
@@ -131,8 +147,7 @@ type SecurityPoolsOverviewRouteContentProps = {
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
-export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
-	RepPerEthPriceProps & {
+export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
 	controlledVaultView?: SelectedVaultView | undefined
 	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
@@ -167,7 +182,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	securityPools: ListedSecurityPool[]
 	securityVault: SecurityVaultRouteContentProps
 	trading: TradingRouteContentProps
-}
+} & RepPerEthPriceProps
 
 export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView

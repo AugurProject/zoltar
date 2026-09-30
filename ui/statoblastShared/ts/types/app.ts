@@ -85,7 +85,7 @@ export type ReportingFormState = {
 	selectedWithdrawDepositIndexesByOutcome: ReportingWithdrawDepositIndexesByOutcome
 }
 
-export type SelectedVaultView ='browse-vaults' | 'selected-vault' | 'vault-by-address'
+export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
 export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
 export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
 export type PoolStateFilter = 'all' | SecurityPoolLifecycleState

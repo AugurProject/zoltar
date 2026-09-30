@@ -1,4 +1,5 @@
 import type { Address, WalletClient } from '@zoltar/core-shared/evm/ethereum'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 
@@ -92,5 +93,7 @@ export function walletSessionReducer(state: WalletSessionState, transition: Wall
 			return patch(state, { walletSummaryStatus: 'error', walletSummaryError: transition.error, walletSummaryErrorLabel: transition.errorLabel })
 		case 'routeChanged':
 			return state.walletConnectionFeedback?.route === transition.route ? state : patch(state, { walletConnectionFeedback: undefined })
+		default:
+			return assertNever(transition)
 	}
 }
