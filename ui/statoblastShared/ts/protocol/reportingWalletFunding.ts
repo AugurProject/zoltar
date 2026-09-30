@@ -1,3 +1,4 @@
+import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReportingActionResult, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -12,6 +13,8 @@ import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 export async function reportOutcomeWithWalletViaVault(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, reportAmount: bigint, expectedDepositAmount: bigint, onVaultFunded: () => void) {
 	const details = await loadReportingDetails(client, securityPoolAddress, client.account.address)
 	if (details.status !== 'active' || !details.forkContinuation || details.systemState !== 'operational') throw new Error('Reporting changed. Refresh the pool before continuing.')
+	const initialTimingGuard = getReportingSubmissionTimingGuard(details)
+	if (initialTimingGuard !== undefined) throw new Error(initialTimingGuard)
 	const [actualReportAmount] = await client.readContract({ address: details.escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), reportAmount] })
 	if (actualReportAmount === undefined || actualReportAmount <= 0n) throw new Error('This report is no longer available. Refresh the pool before continuing.')
 	const fundingQuote = getReportingWalletFundingQuote(details, actualReportAmount)
@@ -46,10 +49,13 @@ export async function reportOutcomeWithWalletViaVault(client: WriteClient, secur
 		if (latest.status !== 'active' || !latest.forkContinuation || latest.systemState !== 'operational') throw new Error('The pool state changed.')
 		const [acceptedAmount] = await client.readContract({ address: latest.escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), reportAmount] })
 		if (acceptedAmount !== actualReportAmount) throw new Error('The report amount changed.')
+		const block = await client.getBlock()
+		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: latest.escalationEndTime })
+		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const hash = await writeContractAndWait(client, () => report)
 		return { action: 'reportOutcome', hash, outcome, securityPoolAddress, universeId: details.universeId } satisfies ReportingActionResult
 	} catch (error) {
 		// Keep partial completion visible even when the remaining review was canceled.
-		throw new Error(`Your REP was deposited into your vault, but the report did not complete. Use Pool vault REP to retry without another wallet deposit. ${getErrorMessage(error, 'Review the report before retrying.')}`)
+		throw new Error(`Your REP was deposited into your vault, but the report did not complete. ${getErrorMessage(error, 'Review the report before retrying.')}`)
 	}
 }

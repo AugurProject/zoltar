@@ -1224,3 +1224,56 @@ for (const remaining of [0n, 1n, 60n, 61n]) {
 		}
 	})
 }
+
+for (const advanceDuring of ['initial', 'deposit', 'preview'] as const) {
+	for (const remaining of [0n, 1n, 60n, 61n]) {
+		test(`wallet continuation guards submission time (${advanceDuring}, ${remaining})`, async () => {
+			const reader = createActiveReportingClient(() => [])
+			let timestamp = advanceDuring === 'initial' ? 150n - remaining : 88n
+			let funded = false
+			let submitted = 0
+			const writer = createMockWriteClient(() => {
+				submitted += 1
+				if (submitted === 1 && advanceDuring === 'deposit') timestamp = 150n - remaining
+			})
+			const client = {
+				...asWriteClient(writer),
+				...reader,
+				getBlock: async () => createBlockWithTimestamp(timestamp),
+				account: { address: vaultAddress, type: 'json-rpc' as const },
+				readContract: createReadContractStub(async request => {
+					if (request.functionName === 'forkResumedAt') return 1n
+					if (request.functionName === 'forkElapsedAtStart') return 0n
+					if (request.functionName === 'forkContinuation') return true
+					if (request.functionName === 'previewDepositOnOutcome') {
+						if (funded && advanceDuring === 'preview') timestamp = 150n - remaining
+						return [7n, 10n]
+					}
+					if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
+					if (request.functionName === 'minimumVaultRepDepositAttoRep') return 10n
+					if (request.functionName === 'securityVaults') return [funded ? 17n : 0n, 0n, 0n, 0n]
+					if (request.functionName === 'backingUnitsToAttoRep') return 17n
+					if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
+					if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
+					if (request.functionName === 'repToken') return repTokenAddress
+					if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
+					if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
+					if (request.functionName === 'hasReachedNonDecision') return false
+					return await reader.readContract(request)
+				}),
+			}
+			const result = reportOutcomeWithWalletViaVault(client, securityPoolAddress, 'no', 7n, 17n, () => {
+				funded = true
+			})
+			if (remaining > 60n) {
+				await expect(result).resolves.toHaveProperty('action', 'reportOutcome')
+				expect(submitted).toBe(2)
+			} else {
+				if (advanceDuring !== 'initial') await expect(result).rejects.toThrow('Your REP was deposited into your vault, but the report did not complete')
+				await expect(result).rejects.toThrow('response window ends too soon')
+				expect(submitted).toBe(advanceDuring === 'initial' ? 0 : 1)
+			}
+			expect(funded).toBe(remaining > 60n || advanceDuring !== 'initial')
+		})
+	}
+}
