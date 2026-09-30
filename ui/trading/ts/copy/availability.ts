@@ -21,3 +21,6 @@ export function formatInsufficientOutcomeReason(outcome: 'YES' | 'NO') {
 export function formatSwitchNetworkAction(networkName: string) {
 	return `Switch to ${networkName}`
 }
+
+export const holdingFeesBoundsReason = 'Holding fees exceed these limits before expiry. Increase slippage or shorten validity in Settings.'
+export const holdingFeesUnavailableReason = 'Holding fee projection unavailable. Refresh the market before submitting.'

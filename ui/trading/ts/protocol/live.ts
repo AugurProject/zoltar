@@ -10,6 +10,7 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from '@zoltar/ui-statoblast-shared/protocol/securityPoolAbi.js'
 import { shareBalanceScope, type LiveBalances, type LiveMarket } from './liveMarket.js'
 import { latestBlockIdentity, maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum, simulateWithDeadline, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
+import { loadTransactionFeeMarket, sellHoldingFeeBlocker } from './holdingFees.js'
 import { receiveBasedExitArguments, shareOperationRouter, shareTokenAbi } from './authorization.js'
 
 export { createTradingPublicClient, createTradingWalletClient, loadWalletHeaderBalances, validateLiveDeployment, validateRpcChainId, waitForActiveEnvironmentReady } from './runtimeClients.js'
@@ -53,7 +54,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 		parent,
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth: current.settlementCollateralAfterFeesAttoEth,
-		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth },
+		valuation: { timestamp: block.timestamp, feeEndTime, projectedCollateralAttoEth: projected.settlementCollateralAfterFeesAttoEth, feeAccounting: accounting },
 		currentRetentionRate: accounting.currentRetentionRate,
 		totalUnderwritingLimitAttoEth: accounting.totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth: accounting.feeEligibleUnderwritingLimitAttoEth,
@@ -466,7 +467,8 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		const longTokenId = side === 'YES' ? scope.yesTokenId : scope.noTokenId
 		const longBalance = await client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, longTokenId], blockHash: block.blockHash })
 		if (totalLongShares > longBalance) throw new Error(`Insufficient ${side} balance for this exit`)
-		const estimatedEthOut = market.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * market.settlementCollateralAttoEth) / market.shareTokenSupplyAttoShares
+		const feeMarket = await loadTransactionFeeMarket(client, market, block.blockHash, block.blockTimestamp)
+		const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
 		const slippageMaximum = maximumAfterSlippage(totalLongShares, slippageBps)
 		const maximumLongShares = slippageMaximum < longBalance ? slippageMaximum : longBalance
 		const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
@@ -502,6 +504,10 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 	if (refreshed.longBalance < quote.maximumLongShares) throw new Error('YES/NO balance no longer covers the approved exit transfer; simulate again')
 	const maximumLongShares = retainApprovedMaximum(quote.maximumLongShares, refreshed.result.totalLongShares, 'long shares')
 	const minimumEth = retainApprovedMinimum(quote.minimumEth, refreshed.result.ethOut, 'ETH output')
+	const block = await latestBlockIdentity(client)
+	const feeMarket = await loadTransactionFeeMarket(client, quote.market, block.blockHash, block.blockTimestamp)
+	const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.completeSets, minimumEth, quote.deadline)
+	if (feeBlocker !== undefined) throw new Error(feeBlocker)
 	const transfer = receiveBasedExitArguments(quote.market, quote.side, quote.completeSets, maximumLongShares, minimumEth, account, quote.deadline)
 	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data] }))
 }

@@ -5,6 +5,8 @@ import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, stato
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { getOracleManagerPriceValidUntilTimestamp, hasOracleMintSubmissionWindow } from './oracleTiming.js'
+import * as tradingCopy from '../copy/trading.js'
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
@@ -21,6 +23,7 @@ type SecurityPoolMintCapacity = {
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	isPriceValid: boolean
+	priceValidUntilTimestamp: bigint | undefined
 	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
@@ -69,8 +72,14 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
 	])
-	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]), client.getBlock()])
-	const [isPriceValid] = priceValidity
+	const [priceValidity, currentBlock] = await Promise.all([
+		readRequiredMulticall(client, [
+			{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] },
+			{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', address: priceOracleManagerAndOperatorQueuer, args: [] },
+		]),
+		client.getBlock(),
+	])
+	const [isPriceValid, lastSettlementTimestamp] = priceValidity
 	return {
 		currentRetentionRate,
 		currentTimestamp: currentBlock.timestamp,
@@ -84,6 +93,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		totalPoolHeldAttoRep,
 		totalUnderwritingLimitAttoEth: poolAccountingSnapshot.totalUnderwritingLimitAttoEth,
 		isPriceValid,
+		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
 }
@@ -189,6 +199,11 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const game = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' })
 	if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
+	const managerAddress = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'priceOracleManagerAndOperatorQueuer' })
+	const [lastSettlementTimestamp, currentBlock] = await Promise.all([client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: managerAddress, functionName: 'lastSettlementTimestamp' }), client.getBlock()])
+	const hasSubmissionWindow = hasOracleMintSubmissionWindow(currentBlock.timestamp, getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp))
+	if (hasSubmissionWindow === undefined) throw new Error(tradingCopy.loadingOraclePrice)
+	if (!hasSubmissionWindow) throw new Error(tradingCopy.oraclePriceExpiresTooSoon)
 	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,

@@ -43,6 +43,7 @@ import {
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 	getPoolMintingCapacityAttoEth,
 } from '../lib/trading.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import type { ReadinessAction } from '../../types.js'
 import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | undefined
@@ -115,10 +116,13 @@ export function TradingSection({
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
-	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable)
+	const priceValidUntilTimestamp = getOracleManagerPriceValidUntilTimestamp(selectedPool?.lastOracleSettlementTimestamp)
+	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable, currentTimestamp, priceValidUntilTimestamp)
 	const mintGuardMessage =
 		oraclePriceGuardMessage ??
 		getTradingMintGuardMessage({
+			currentTimestamp,
+			priceValidUntilTimestamp,
 			accountAddress: accountState.address,
 			settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
 			ethBalanceAttoEth: accountState.ethBalanceAttoEth,

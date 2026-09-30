@@ -1,7 +1,7 @@
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
 import { requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -929,9 +929,12 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	const reviewed = createReviewedClient({
 		...client,
 		sendTransaction,
+		getBlock: async () => createBlockWithTimestamp(1n),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'universeId') return 0n
+			if (request.functionName === 'priceOracleManagerAndOperatorQueuer') return account
+			if (request.functionName === 'lastSettlementTimestamp') return 1n
 			throw new Error(`Unexpected read: ${request.functionName}`)
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),

@@ -586,7 +586,7 @@ describe('securityPools protocol client', () => {
 					requestedAddresses.push(getAddress(address))
 				}
 				if (request.contracts.length === 8) return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress, 88n, feeEndTimestamp, zeroAddress]
-				return getContractFunctionName(request.contracts[0]) === 'isPriceValid' ? [true] : [77n]
+				return getContractFunctionName(request.contracts[0]) === 'isPriceValid' ? [true, 77n] : [77n]
 			}),
 			readContract: async () => {
 				throw new Error('readContract should not be called')
@@ -608,9 +608,10 @@ describe('securityPools protocol client', () => {
 			totalPoolHeldAttoRep: 33n,
 			totalUnderwritingLimitAttoEth: 44n,
 			isPriceValid: true,
+			priceValidUntilTimestamp: 77n + 60n * 60n,
 			totalFeesOwedRemainder: 0n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame', 'isPriceValid'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame', 'isPriceValid', 'lastSettlementTimestamp'])
+		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress, zeroAddress])
 	})
 })

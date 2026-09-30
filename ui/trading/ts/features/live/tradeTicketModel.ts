@@ -8,6 +8,7 @@ import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage } from '../../protocol/tradeQuote.js'
 import * as availabilityCopy from '../../copy/availability.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
+import { sellHoldingFeeBlocker } from '../../protocol/holdingFees.js'
 import type { BalanceState } from './liveTradingTypes.js'
 import type { TradeMode } from './useTransactionWorkflow.js'
 
@@ -207,6 +208,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		problem,
 		insufficient,
 		shortfall === undefined ? undefined : ticketCopy.invalidCoverageReason,
+		estimate?.kind === 'exit' ? sellHoldingFeeBlocker(market, estimate.quote.completeSetShares, estimate.minimumAttoEth, (market.valuation?.timestamp ?? 0n) + settings.validityMinutes * 60n) : undefined,
 		impactTier === 'blocked' ? ticketCopy.priceImpactBlockedReason : undefined,
 		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,

@@ -32,6 +32,32 @@ const ready: TradeTicketInputs = {
 }
 
 describe('trade ticket estimate', () => {
+	test('blocks a sell whose approved ETH minimum cannot cover holding fees through validity', () => {
+		const feeMarket = {
+			...market,
+			currentRetentionRate: 999_999_996_843_524_738n,
+			valuation: {
+				timestamp: 2n,
+				feeEndTime: 1_000_000n,
+				projectedCollateralAttoEth: eth,
+				feeAccounting: {
+					settlementCollateralAttoEth: eth,
+					totalUnderwritingLimitAttoEth: eth,
+					feeEligibleUnderwritingLimitAttoEth: eth,
+					currentRetentionRate: 999_999_996_843_524_738n,
+					lastUpdatedFeeAccumulator: 2n,
+					feeIndexRemainder: 0n,
+					totalFeesOwedRemainder: 0n,
+				},
+			},
+		}
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', settings: { slippageBps: 0n, validityMinutes: 20n } })
+		expect(result.availability.disabled).toBe(true)
+		expect(result.availability.reason).toContain('Holding fees')
+		const protectedResult = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01' })
+		expect(protectedResult.availability.disabled).toBe(false)
+	})
+
 	test('prices a buy locally with the router math and the slippage minimum', () => {
 		const estimate = ticketEstimateFor(market, 'entry', '1')
 		if (estimate.kind !== 'entry') throw new Error('Expected a buy estimate')
