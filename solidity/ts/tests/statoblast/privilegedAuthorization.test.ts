@@ -298,7 +298,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 						args: [attacker.account.address, QuestionOutcome.Yes, 1n, 1n],
 					}),
 				),
-			/Only security pool/,
+			/Only pool/,
 		)
 		const internalDelegateCalls = [
 			{

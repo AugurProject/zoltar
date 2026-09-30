@@ -935,7 +935,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				functionName: 'setRepEthPrice',
 				args: [lastPriceBefore + 1n],
 			}),
-			/Only security pool/,
+			/Only pool/,
 		)
 
 		assert.strictEqual(

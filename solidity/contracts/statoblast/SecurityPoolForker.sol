@@ -19,6 +19,7 @@ import { EscalationGameForker } from './EscalationGameForker.sol';
 import { SecurityPoolForkerBase } from './SecurityPoolForkerBase.sol';
 import { SecurityPoolForkEventEmitter } from './SecurityPoolEventEmitter.sol';
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { DelegateCall } from './DelegateCall.sol';
 import {
 	EscalationForkSnapshot,
 	EscalationMigrationEntitlement,
@@ -163,20 +164,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function _emitForkSnapshotEvents(ISecurityPool parent, address migrationProxy, address sourceGame, uint256 totalPoolHeldRepAtForkAttoRep, uint256 disputeStakedRepAtForkAttoRep, uint256 resultingLockedAttoRep) private {
-		address eventEmitter = forkEventEmitter;
-		assembly ('memory-safe') {
-			let pointer := mload(0x40)
-			mstore(pointer, shl(224, 0x408d33da))
-			mstore(add(pointer, 0x04), parent)
-			mstore(add(pointer, 0x24), migrationProxy)
-			mstore(add(pointer, 0x44), sourceGame)
-			mstore(add(pointer, 0x64), totalPoolHeldRepAtForkAttoRep)
-			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
-			mstore(add(pointer, 0xa4), resultingLockedAttoRep)
-			if iszero(delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)) {
-				revert(0, 0)
-			}
-		}
+		DelegateCall.invoke(forkEventEmitter, abi.encodeCall(SecurityPoolForkEventEmitter.emitForkSnapshotEvents, (parent, migrationProxy, sourceGame, totalPoolHeldRepAtForkAttoRep, disputeStakedRepAtForkAttoRep, resultingLockedAttoRep)));
 	}
 
 	function _forkOccurredBeforeEscalationSettled(EscalationGame escalationGame, uint256 forkTime) private view returns (bool) {
@@ -354,13 +342,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	}
 
 	function _delegateMigrationCall(address delegate, bytes memory callData) private returns (bytes memory data) {
-		(bool success, bytes memory returnData) = delegate.delegatecall(callData);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(returnData, 0x20), mload(returnData))
-			}
-		}
-		return returnData;
+		return DelegateCall.invoke(delegate, callData);
 	}
 
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external {

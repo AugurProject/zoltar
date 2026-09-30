@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 library UniformPriceDualCapBatchAuctionStorage {
 	struct Node {
@@ -31,7 +32,6 @@ library UniformPriceDualCapBatchAuctionStorage {
 	uint256 internal constant AUCTION_TIME = 1 weeks;
 	int256 internal constant MIN_TICK = -524288;
 	int256 internal constant MAX_TICK = 524288;
-	uint256 internal constant PRICE_PRECISION = 1e18;
 
 	function allocateFromCumulativePosition(uint256 cumulativeAmountBefore, uint256 amountUsed, uint256 allocationNumerator, uint256 denominator) internal pure returns (uint256 allocation) {
 		if (amountUsed == 0 || allocationNumerator == 0 || denominator == 0) return 0;
@@ -43,11 +43,11 @@ library UniformPriceDualCapBatchAuctionStorage {
 	function tickToPrice(int256 tick) internal pure returns (uint256 price) {
 		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
 		uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
-		price = PRICE_PRECISION;
+		price = SecurityPoolUtils.PRICE_PRECISION;
 		for (uint8 i = 0; i < 20; i++) {
-			if ((absTick & (1 << i)) != 0) price = (price * _powerOf1Point0001(i)) / PRICE_PRECISION;
+			if ((absTick & (1 << i)) != 0) price = (price * _powerOf1Point0001(i)) / SecurityPoolUtils.PRICE_PRECISION;
 		}
-		if (tick < 0) price = (PRICE_PRECISION * PRICE_PRECISION) / price;
+		if (tick < 0) price = (SecurityPoolUtils.PRICE_PRECISION * SecurityPoolUtils.PRICE_PRECISION) / price;
 	}
 
 	function getBidAttoEthAtTick(mapping(uint256 => Node) storage nodes, uint256 nodeId, int256 tick) internal view returns (uint256) {
@@ -152,15 +152,16 @@ library UniformPriceDualCapBatchAuctionStorage {
 		uint256 bidToTakeAttoEth = price == 0 ? 0 : node.totalBidAttoEth;
 		if (
 			cursor.accumulatedBidAttoEth > 0 &&
-			(cursor.accumulatedBidAttoEth * PRICE_PRECISION) / price > config.maxAttoRepBeingSold
+			(cursor.accumulatedBidAttoEth * SecurityPoolUtils.PRICE_PRECISION) / price > config.maxAttoRepBeingSold
 		) return (true, cursor.lastValidTick, cursor.lastValidBidAttoEth, cursor.lastValidBidAtTickAttoEth);
 		if (cursor.accumulatedBidAttoEth >= config.attoEthRaiseCap)
 			return (true, cursor.lastValidTick, cursor.lastValidBidAttoEth, cursor.lastValidBidAtTickAttoEth);
 		uint256 remainingCap = config.attoEthRaiseCap - cursor.accumulatedBidAttoEth;
 		if (bidToTakeAttoEth > remainingCap) bidToTakeAttoEth = remainingCap;
 		uint256 newAccumulatedBidAttoEth = cursor.accumulatedBidAttoEth + bidToTakeAttoEth;
-		if ((newAccumulatedBidAttoEth * PRICE_PRECISION) / price >= config.maxAttoRepBeingSold) {
-			uint256 maximumBidAtThisPriceAttoEth = (config.maxAttoRepBeingSold * price) / PRICE_PRECISION;
+		if ((newAccumulatedBidAttoEth * SecurityPoolUtils.PRICE_PRECISION) / price >= config.maxAttoRepBeingSold) {
+			uint256 maximumBidAtThisPriceAttoEth =
+				(config.maxAttoRepBeingSold * price) / SecurityPoolUtils.PRICE_PRECISION;
 			uint256 bidUsedAtTickAttoEth =
 				maximumBidAtThisPriceAttoEth > cursor.accumulatedBidAttoEth
 					? maximumBidAtThisPriceAttoEth - cursor.accumulatedBidAttoEth
@@ -183,7 +184,8 @@ library UniformPriceDualCapBatchAuctionStorage {
 		uint256 candidateBidAttoEth = accumulatedBidAttoEth + node.subtreeClearingBidAttoEth;
 		if (candidateBidAttoEth >= config.attoEthRaiseCap) return true;
 		return
-			(candidateBidAttoEth * PRICE_PRECISION) / tickToPrice(node.minClearingTick) >= config.maxAttoRepBeingSold;
+			(candidateBidAttoEth * SecurityPoolUtils.PRICE_PRECISION) / tickToPrice(node.minClearingTick) >=
+			config.maxAttoRepBeingSold;
 	}
 
 	function _isClearingTick(int256 tick, uint256 underfundedThreshold) private pure returns (bool) {

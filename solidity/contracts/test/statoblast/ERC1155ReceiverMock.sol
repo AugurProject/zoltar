@@ -6,10 +6,8 @@ import '../../statoblast/interfaces/ISecurityPool.sol';
 import '../../statoblast/interfaces/IShareToken.sol';
 
 contract ERC1155ReceiverMock is IERC1155Receiver {
-	bytes4 private constant ERC1155_RECEIVED_SELECTOR = 0xf23a6e61;
-	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = 0xbc197c81;
-	bytes4 private constant ERC1155_RECEIVER_INTERFACE_ID = 0x4e2312e0;
-	bytes4 private constant ERC165_INTERFACE_ID = 0x01ffc9a7;
+	bytes4 private constant ERC1155_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155Received.selector;
+	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155BatchReceived.selector;
 
 	bool public acceptSingle = true;
 	bool public acceptBatch = true;
@@ -34,7 +32,7 @@ contract ERC1155ReceiverMock is IERC1155Receiver {
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == ERC165_INTERFACE_ID || interfaceId == ERC1155_RECEIVER_INTERFACE_ID;
+		return interfaceId == type(IERC165).interfaceId || interfaceId == type(IERC1155Receiver).interfaceId;
 	}
 
 	function onERC1155Received(address operator, address from, uint256 id, uint256 value, bytes calldata data) external returns (bytes4) {

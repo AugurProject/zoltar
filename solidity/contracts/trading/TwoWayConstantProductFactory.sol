@@ -6,6 +6,7 @@ import { IShareToken } from '../statoblast/interfaces/IShareToken.sol';
 import { TwoWayConstantProductPair } from './TwoWayConstantProductPair.sol';
 import { PredeploymentShareSink } from './PredeploymentShareSink.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
+import { TwoWayConstantProductMath } from './TwoWayConstantProductMath.sol';
 
 contract TwoWayConstantProductFactory {
 	ISecurityPoolFactory public immutable securityPoolFactory;
@@ -18,7 +19,7 @@ contract TwoWayConstantProductFactory {
 
 	constructor(ISecurityPoolFactory _securityPoolFactory, uint256 _feeBps) {
 		require(address(_securityPoolFactory) != address(0), 'Security pool factory is zero');
-		require(_feeBps < 10_000, 'Invalid fee');
+		require(_feeBps < TwoWayConstantProductMath.BPS_DENOMINATOR, 'Invalid fee');
 		securityPoolFactory = _securityPoolFactory;
 		feeBps = _feeBps;
 		predeploymentShareSink = address(new PredeploymentShareSink());

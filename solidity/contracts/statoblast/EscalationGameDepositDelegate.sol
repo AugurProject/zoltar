@@ -7,6 +7,11 @@ import { BinaryOutcomes } from './BinaryOutcomes.sol';
 import { EscalationGameStorage } from './EscalationGameStorage.sol';
 import { SystemState } from './interfaces/ISecurityPool.sol';
 import { IEscalationGameEvents } from './interfaces/IEscalationGame.sol';
+import {
+	IEscalationGameDepositContext,
+	IEscalationGameSecurityPoolContext
+} from './interfaces/IEscalationGameDelegateContexts.sol';
+import { IZoltarForkState } from './interfaces/IZoltarForkState.sol';
 import { MerkleMountainRange } from './MerkleMountainRange.sol';
 import { IERC20PermitAuthorization, IERC3009Authorization } from '../vendor/authorization/IERC20Authorization.sol';
 import {
@@ -17,30 +22,6 @@ import {
 	NonDecisionState,
 	OutcomeState
 } from './EscalationGameTypes.sol';
-
-interface IEscalationGameDepositContext {
-	function getQuestionResolution() external view returns (BinaryOutcomes.BinaryOutcome);
-	function hasReachedNonDecision() external view returns (bool);
-	function previewDepositOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 amountAttoRep) external view returns (uint256 acceptedAmountAttoRep, uint256 resultingCumulativeAmountAttoRep);
-	function repToken() external view returns (address);
-	function securityPool() external view returns (address);
-	function getBindingCapitalAttoRep() external view returns (uint256);
-	function computeTimeSinceStartFromAttritionCostAttoRep(uint256 amountAttoRep) external view returns (uint256);
-	function isForkCarryFundingComplete() external view returns (bool);
-}
-
-interface IEscalationGameSecurityPoolContext {
-	function escalationGame() external view returns (address);
-	function questionId() external view returns (uint256);
-	function securityPoolForker() external view returns (address);
-	function systemState() external view returns (SystemState);
-	function universeId() external view returns (uint248);
-	function zoltar() external view returns (address);
-}
-
-interface IEscalationGameZoltarContext {
-	function getForkTime(uint248 universeId) external view returns (uint256);
-}
 
 contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGameEvents {
 	using SafeERC20Ops for IERC20;
@@ -99,7 +80,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		IEscalationGameSecurityPoolContext pool = IEscalationGameSecurityPoolContext(poolAddress);
 		require(pool.escalationGame() == address(this), 'Game inactive');
 		require(pool.systemState() == SystemState.Operational, 'Pool inactive');
-		require(IEscalationGameZoltarContext(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
+		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
 	}
 
 	function _recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) private returns (uint256 parentDepositIndex) {

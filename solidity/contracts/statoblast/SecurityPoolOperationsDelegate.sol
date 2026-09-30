@@ -15,6 +15,8 @@ import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
+import { DelegateCall } from './DelegateCall.sol';
+import { IQuestionEndTime, IZoltarForkState } from './interfaces/IZoltarForkState.sol';
 
 interface ISecurityPoolRepDepositContext {
 	function escalationGameFactory() external view returns (EscalationGameFactory);
@@ -32,15 +34,6 @@ interface ISecurityPoolRepDepositContext {
 	function updateSettlementCollateral() external;
 	function updateVaultFees(address vault) external;
 	function zoltar() external view returns (address);
-}
-
-interface IZoltarForkState {
-	function getNonDecisionThresholdAttoRep(uint248 universeId) external view returns (uint256);
-	function getForkTime(uint248 universeId) external view returns (uint256);
-}
-
-interface IQuestionEndTime {
-	function getQuestionEndDate(uint256 questionId) external view returns (uint256);
 }
 
 contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
@@ -166,8 +159,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		IZoltarForkState zoltar = IZoltarForkState(pool.zoltar());
 		uint248 universeId = pool.universeId();
-		require(zoltar.getForkTime(universeId) == 0, 'Forked');
-		require(systemState == SystemState.Operational, 'Pool inactive');
+		_requireUnforkedOperational(zoltar.getForkTime(universeId));
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0)) {
 			require(block.timestamp > IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()), 'Question active');
@@ -237,8 +229,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _requireVaultAdmissionOpen(ISecurityPoolRepDepositContext pool) private view {
-		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
-		require(systemState == SystemState.Operational, 'Pool inactive');
+		_requireUnforkedOperational(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()));
 		if (pool.isEscalationResolved()) revert('Escalation resolved');
 		if (
 			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
@@ -247,12 +238,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _delegateEvent(address emitter, bytes memory callData) private {
-		(bool success, bytes memory result) = emitter.delegatecall(callData);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(result, 0x20), mload(result))
-			}
-		}
+		DelegateCall.invoke(emitter, callData);
 	}
 
 	function resumeForkedEscalationGame() external {

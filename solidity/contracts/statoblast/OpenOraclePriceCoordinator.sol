@@ -138,7 +138,7 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function setRepEthPrice(uint256 _lastPrice) public {
-		require(msg.sender == address(securityPool), 'Only security pool');
+		require(msg.sender == address(securityPool), 'Only pool');
 		lastPrice = _lastPrice;
 		emit RepEthPriceSet(lastPrice);
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceSeeded, 0, 0);
@@ -340,7 +340,8 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function _isFreshPriceTimestamp(uint256 priceTimestamp) private view returns (bool) {
-		uint256 validForSeconds = block.chainid == 11155111 ? 1 hours : PRICE_VALID_FOR_SECONDS;
+		uint256 validForSeconds =
+			block.chainid == SEPOLIA_CHAIN_ID ? SEPOLIA_PRICE_VALID_FOR_SECONDS : PRICE_VALID_FOR_SECONDS;
 		return priceTimestamp != 0 && priceTimestamp + validForSeconds > block.timestamp;
 	}
 

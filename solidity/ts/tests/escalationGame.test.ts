@@ -1230,7 +1230,7 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'exportForkedEscrowByOutcome',
 				args: [client.account.address, zeroAddress],
 			}),
-			/REP receiver zero/,
+			/Recipient is zero/,
 		)
 		await assert.rejects(
 			client.writeContract({
@@ -1274,7 +1274,7 @@ describe('Escalation Game Test Suite', () => {
 				functionName: 'drainAllRep',
 				args: [zeroAddress],
 			}),
-			/REP receiver zero/,
+			/Recipient is zero/,
 		)
 		await assert.rejects(
 			client.writeContract({
