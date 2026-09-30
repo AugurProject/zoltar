@@ -1,5 +1,4 @@
-import { shorten } from '@zoltar/bot-shared/dashboard/dom'
-import { renderExecutionMode, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
+import { quorumRpcRow, relayDeliveryRow, renderExecutionMode, signerRow, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
 import type { Configuration, Snapshot } from './api-validation.ts'
 
 const NETWORK_LABELS = { mainnet: 'Ethereum mainnet', sepolia: 'Sepolia' } as const
@@ -23,19 +22,15 @@ function canonicalContractsRow(snapshot: Snapshot): ReadinessRow {
  * universes, and market evidence only decide what can be liquidated, so they are advisory.
  */
 function readinessRows(snapshot: Snapshot, configuration: Configuration): ReadinessRow[] {
-	const requiredQuorumRpcs = configuration.connectivity?.rpcQuorum === 2 ? 2 : 0
-	const quorumRpcs = configuration.connectivity?.quorumRpcUrls.length ?? 0
-	const relays = configuration.submission.relayUrls.length
-	const privateDelivery = configuration.submission.mode === 'private'
 	const consensus = snapshot.marketConsensus
 	let marketDetail = 'No market sources configured'
 	if (consensus !== undefined) marketDetail = consensus.reliable ? 'Reliable' : 'Guarded · unavailable'
 	return [
-		{ detail: snapshot.wallet === undefined ? 'Set one under Execution wallet' : shorten(snapshot.wallet), label: 'Execution signer', ready: snapshot.wallet !== undefined },
+		signerRow(snapshot.wallet),
 		networkRow(configuration),
-		{ detail: `${quorumRpcs.toString()} configured · ${requiredQuorumRpcs.toString()} required`, label: 'Independent quorum RPCs', ready: quorumRpcs >= requiredQuorumRpcs },
+		quorumRpcRow(configuration.connectivity?.quorumRpcUrls.length ?? 0, configuration.connectivity?.rpcQuorum),
 		canonicalContractsRow(snapshot),
-		{ detail: privateDelivery ? `Private · ${relays.toString()} relay${relays === 1 ? '' : 's'}` : 'Public mempool', label: 'Delivery', ready: !privateDelivery || relays > 0 },
+		relayDeliveryRow(configuration.submission.mode, configuration.submission.relayUrls.length),
 		{ advisory: true, detail: `${snapshot.metrics.approvedUniverseCount.toString()} approved`, label: 'Approved universes', ready: snapshot.metrics.approvedUniverseCount > 0 },
 		{ advisory: true, detail: `${snapshot.metrics.selectedPoolCount.toString()} selected · ${snapshot.metrics.eligiblePoolCount.toString()} eligible`, label: 'Monitored pools', ready: snapshot.metrics.selectedPoolCount > 0 },
 		{ advisory: true, detail: marketDetail, label: 'Market evidence', ready: consensus?.reliable === true },

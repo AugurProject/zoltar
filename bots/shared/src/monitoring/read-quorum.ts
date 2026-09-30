@@ -1,3 +1,4 @@
+import { errorMessage } from '../infrastructure/error-message.ts'
 import { ConnectivityDegradedError, operationalFailureDisposition } from './resilience.ts'
 import { rpcQuorumDescription, type RpcQuorumRequirement } from './rpc-quorum-policy.ts'
 
@@ -36,7 +37,7 @@ export async function settledQuorumValue<T>(label: string, observations: readonl
 	const settled = await Promise.allSettled(observations)
 	const available = availableSettledValues(settled)
 	if (available.length < requirement) {
-		const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : String(result.reason)] : []))
+		const failures = settled.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`${label} requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
 	}
 	return quorumValue(label, available, requirement)

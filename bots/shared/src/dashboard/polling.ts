@@ -60,3 +60,20 @@ export async function requestWithTimeout<T>(request: (signal: AbortSignal) => Pr
 		if (timeout !== undefined) clearTimeout(timeout)
 	}
 }
+
+/** What one reconnect check after a chain-profile switch found. */
+export type ProfileReconnectCheck = 'abandoned' | 'reconnected' | 'waiting'
+
+/**
+ * After a chain-profile switch the bot releases the old chain's resources and reopens them for the new profile, so the
+ * dashboard polls every half second until `check` reports the new profile is live or that a newer request made this
+ * wait obsolete. When 40 attempts run out, `onTimeout` tells the operator; a throwing `check` ends the wait with that
+ * error.
+ */
+export async function waitForProfileReconnect(check: () => Promise<ProfileReconnectCheck>, onTimeout: () => void, attempts = 40, intervalMilliseconds = 500) {
+	for (let attempt = 0; attempt < attempts; attempt++) {
+		await new Promise(resolve => setTimeout(resolve, intervalMilliseconds))
+		if ((await check()) !== 'waiting') return
+	}
+	onTimeout()
+}

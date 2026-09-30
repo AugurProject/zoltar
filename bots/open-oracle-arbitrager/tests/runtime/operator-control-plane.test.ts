@@ -112,6 +112,7 @@ async function startControlPlane(parameters: { deploymentRecovery?: DeploymentRe
 	const locks = recordingLockManager()
 	const { dashboard, pending } = startOperatorControlPlane({
 		config,
+		dashboardEnvironment: { loopbackPublished: false, password: undefined, publicAuthority: undefined },
 		deploymentRecovery: parameters.deploymentRecovery ?? { pending: false },
 		fixedState,
 		getCursor: () => undefined,

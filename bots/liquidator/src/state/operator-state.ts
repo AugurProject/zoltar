@@ -1,7 +1,8 @@
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
-import { readOwnerFileIfPresent, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
+import { readOwnerFileIfPresent, writeDurableStateFile } from '@zoltar/bot-shared/config/durable-file'
+import { stringifyWithBigInts } from '@zoltar/core-shared/serialization/bigInt'
 import { getAddress, isHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -9,6 +10,9 @@ import { isVaultMigrationSourceEligible } from '#core/fork-migration'
 import { vaultHealthBps, type LiquidationCandidate, type VaultPosition } from '#core/strategy'
 import { centralizedMarketConfigurationAllowsExecution, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, serializeCentralizedMarketEstimate, type CentralizedMarketEstimate, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '@zoltar/bot-shared/monitoring/market-consensus'
+
+/** Durable state holds bounded activity and recovery lists; a larger file means corruption or runaway growth. */
+const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
 
 export type PoolObservation = {
 	knownVaultCount: bigint
@@ -516,7 +520,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
-	const contents = await readOwnerFileIfPresent(path, 'Liquidator state')
+	const contents = await readOwnerFileIfPresent(path, 'Liquidator state', MAXIMUM_STATE_BYTES)
 	if (contents === undefined) return { activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')
@@ -607,39 +611,20 @@ export async function loadDurableState(path: string, expectedChainId: number): P
 	}
 }
 
+/** The on-disk document: bigints are written as decimal strings, which `loadDurableState` parses back. */
+function durableStateDocument(state: RuntimeState) {
+	return {
+		activities: state.activities,
+		chainId: state.chainId,
+		lastScannedBlock: state.lastScannedBlock,
+		pendingStagedOperations: state.pendingStagedOperations,
+		pendingTransactions: state.pendingTransactions,
+		version: 2,
+	}
+}
+
 export async function saveDurableState(path: string, state: RuntimeState) {
-	await writeFileAtomically(
-		path,
-		`${JSON.stringify({
-			activities: state.activities,
-			chainId: state.chainId,
-			lastScannedBlock: state.lastScannedBlock?.toString(),
-			pendingStagedOperations: state.pendingStagedOperations.map(operation => ({
-				...operation,
-				candidateOutcome:
-					operation.candidateOutcome === undefined
-						? undefined
-						: {
-								...operation.candidateOutcome,
-								blockNumber: operation.candidateOutcome.blockNumber.toString(),
-								operation: operation.candidateOutcome.operation.toString(),
-								operationId: operation.candidateOutcome.operationId.toString(),
-							},
-				latestRecoveryBlock: operation.latestRecoveryBlock?.toString(),
-				nextHistoricalBlock: operation.nextHistoricalBlock?.toString(),
-				operationId: operation.operationId.toString(),
-				queuedBlock: operation.queuedBlock.toString(),
-				recoveryAnchorBlock: operation.recoveryAnchorBlock?.toString(),
-			})),
-			pendingTransactions: state.pendingTransactions.map(intent => ({
-				...intent,
-				maxBlockNumber: intent.maxBlockNumber.toString(),
-				lastValidBlockNumber: intent.lastValidBlockNumber?.toString(),
-				nonce: intent.nonce.toString(),
-				receiptExpectation: intent.receiptExpectation.type === 'pending-liquidation' ? { ...intent.receiptExpectation, amount: intent.receiptExpectation.amount.toString() } : intent.receiptExpectation,
-				submissionBlock: intent.submissionBlock.toString(),
-			})),
-			version: 2,
-		})}\n`,
-	)
+	// Render before queueing so the file captures the state as of this call, not of a later mutation.
+	const contents = `${stringifyWithBigInts(durableStateDocument(state))}\n`
+	await writeDurableStateFile(path, contents, { label: 'Liquidator state', maximumBytes: MAXIMUM_STATE_BYTES })
 }

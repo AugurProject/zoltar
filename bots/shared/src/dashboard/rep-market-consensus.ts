@@ -21,7 +21,7 @@ export function repMarketConsensusPanel() {
 type Observation = { exchange: string; market: string; price: string; bidDepth: string; askDepth: string; observed: string }
 type ConsensusValues = { cexPrice: string; dexPrice: string; guardedPrice: string; dexBidDepth: string; dexAskDepth: string; cexBidDepth: string; cexAskDepth: string; sources: string }
 
-export function renderRepMarketConsensusPanel(root: ParentNode, model: { values: ConsensusValues; observations: readonly Observation[]; status: string; emptyText: string; state?: 'ready' | 'loading' | 'error' }) {
+function renderRepMarketConsensusPanel(root: ParentNode, model: { values: ConsensusValues; observations: readonly Observation[]; status: string; emptyText: string; state?: 'ready' | 'loading' | 'error' }) {
 	const panel = root.querySelector('.rep-market-consensus')
 	if (panel === null) throw new Error('Missing REP market consensus panel')
 	panel.setAttribute('aria-busy', String(model.state === 'loading'))
@@ -60,6 +60,61 @@ export function renderRepMarketConsensusPanel(root: ParentNode, model: { values:
 		rows.push(row)
 	}
 	body.replaceChildren(...rows)
+}
+
+/** The public CEX estimate every bot snapshot carries, as rendered by the dashboard. */
+export type CentralizedMarketView = {
+	askDepthEth: string
+	bidDepthEth: string
+	observations: readonly { askDepthEth: string; bidDepthEth: string; exchangeId: string; observedAt: number | string; priceRepPerEth: string; repMarket: string }[]
+	priceRepPerEth: string
+	reasons: readonly string[]
+	reliable: boolean
+}
+
+/** The public CEX + DEX consensus estimate every bot snapshot carries, as rendered by the dashboard. */
+export type MarketConsensusView = {
+	cex: { sourceCount: number }
+	dex: { askDepthEth: string; bidDepthEth: string; priceRepPerEth: string; reliable: boolean; sourceCount: number }
+	priceRepPerEth?: string | undefined
+	reasons: readonly string[]
+	reliable: boolean
+}
+
+function consensusStatusText(consensus: MarketConsensusView | undefined, reliableLabel: string) {
+	if (consensus === undefined) return undefined
+	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
+}
+
+function marketStatus(market: CentralizedMarketView | undefined, consensus: MarketConsensusView | undefined) {
+	if (market === undefined) return consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured'
+	return consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · '))
+}
+
+/** Fills the REP market consensus panel from a snapshot's CEX estimate and CEX + DEX consensus. */
+export function renderRepMarketConsensus(root: ParentNode, market: CentralizedMarketView | undefined, consensus: MarketConsensusView | undefined) {
+	renderRepMarketConsensusPanel(root, {
+		status: marketStatus(market, consensus),
+		emptyText: 'Add public exchange sources in the operator configuration.',
+		values: {
+			cexPrice: market?.priceRepPerEth ?? '—',
+			dexPrice: consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—',
+			guardedPrice: consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—',
+			dexBidDepth: consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`,
+			dexAskDepth: consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`,
+			cexBidDepth: market === undefined ? '—' : `${market.bidDepthEth} ETH`,
+			cexAskDepth: market === undefined ? '—' : `${market.askDepthEth} ETH`,
+			sources: consensus === undefined ? `${market?.observations.length ?? 0} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`,
+		},
+		observations: (market?.observations ?? []).map(observation => ({
+			exchange: observation.exchangeId,
+			market: observation.repMarket,
+			price: observation.priceRepPerEth,
+			bidDepth: `${observation.bidDepthEth} ETH`,
+			askDepth: `${observation.askDepthEth} ETH`,
+			observed: new Date(observation.observedAt).toLocaleTimeString(),
+		})),
+	})
 }
 
 /** Preserve last observations on failed refreshes, but replace the initial loading row. */

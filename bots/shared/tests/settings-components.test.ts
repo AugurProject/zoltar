@@ -1,7 +1,14 @@
 import { afterEach, expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import type { ReadinessRow } from '../src/dashboard/readiness.ts'
-import { executionModePanel, formActions, settingsGroup, settingsIntro, settingsPage, settingsSection, signerPanel, submissionPanel, switchField } from '../src/dashboard/settings-markup.ts'
+import { h } from 'preact'
+import { executionModePanel, FormActions, settingsGroup, settingsIntro, settingsPage, settingsSection, signerPanel, SubmissionPanel, SwitchField } from '../src/dashboard/settings-markup.ts'
+import { renderStaticMarkup } from '../src/dashboard/static-markup.ts'
+
+// The page mixes the string API the chaos bot uses with the components the other bots compose in JSX.
+const formActions = (props: Parameters<typeof FormActions>[0]) => renderStaticMarkup(h(FormActions, props))
+const switchField = (props: Parameters<typeof SwitchField>[0]) => renderStaticMarkup(h(SwitchField, props))
+const submissionPanel = (props: Parameters<typeof SubmissionPanel>[0]) => renderStaticMarkup(h(SubmissionPanel, props))
 
 const previousGlobals = new Map<string, unknown>()
 let window: Window | undefined

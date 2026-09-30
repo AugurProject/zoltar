@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import solc from 'solc'
@@ -108,7 +109,7 @@ const generatedOutputs = [
 for (const [filePath, generated] of generatedOutputs) {
 	if (process.argv.includes('--check')) {
 		const current = await readFile(filePath, 'utf8').catch(error => {
-			throw new Error(`Generated contract artifacts are missing: ${error instanceof Error ? error.message : String(error)}`)
+			throw new Error(`Generated contract artifacts are missing: ${errorMessage(error)}`)
 		})
 		if (current !== generated) throw new Error(`Generated contract artifacts ${path.relative(projectRoot, filePath)} are stale; run bun run compile-contracts`)
 	} else {

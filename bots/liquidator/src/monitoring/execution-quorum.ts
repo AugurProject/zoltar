@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError, operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 import type { RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -7,7 +8,7 @@ export function availableExecutionObservations<T, V>(label: string, settled: rea
 	if (safetyFailure?.status === 'rejected') throw safetyFailure.reason
 	const available = settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 	if (available.length < requirement) {
-		const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : String(result.reason)] : []))
+		const failures = settled.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`${label} requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}${failures.length === 0 ? '' : `: ${failures.join('; ')}`}`)
 	}
 	quorumValue(label, available.map(observation), requirement)

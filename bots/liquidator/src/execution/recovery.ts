@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { createPublicClient, createWalletClient, encodeFunctionData, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges, latestLogRange, newestFirstScanRanges } from '@zoltar/bot-shared/monitoring/block-sync'
@@ -133,7 +134,7 @@ export async function recoverPendingTransactions(
 				settings.connectivity.rpcQuorum,
 			)
 		} catch (error) {
-			await requireReconciliation(`Current-chain replay simulation failed: ${error instanceof Error ? error.message : String(error)}`)
+			await requireReconciliation(`Current-chain replay simulation failed: ${errorMessage(error)}`)
 		}
 		// Read the envelope head after simulation so a slow preflight cannot reuse an expired window.
 		const block = await settledQuorumValue(

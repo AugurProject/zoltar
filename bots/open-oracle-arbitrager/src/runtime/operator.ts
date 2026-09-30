@@ -1,978 +1,126 @@
-import { reportCompletedScan, reportOperatorStarted } from './operator-reporting.ts'
-import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
-import { discoverCoordinatorPolicies } from '#monitoring/coordinator-discovery'
 import type { Configuration } from '#config/configuration'
-import type { DeploymentSettings } from '#config/deployment-settings'
-import type { NetworkConfiguration } from '#config/network'
-import { authenticateConfiguredDeployments, loadCoordinatorPolicies, refreshIncompleteCanonicalDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
-import type { ExecutionCandidate } from '#core/operator-types'
-import { plannedGasPriceAttoEth, positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
-import { executeDispute } from '#execution/dispute-execution'
-import { loadBalances } from '#execution/balances'
 import type { ExecutionLockManager } from '#execution/execution-locks'
-import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, REORG_OVERLAP_BLOCKS, selectBestExecution } from '#execution/execution-orchestration'
-import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
-import { processPositionLifecycle, reconcileExpiredAttemptsWithQuorum } from '#execution/position-lifecycle'
-import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
-import { transactionLogLevel, type TrackTransaction } from '#execution/transaction-tracker'
-import { loadApprovedUniverses } from '#monitoring/approved-universes'
-import { checkConnectivity, checkSubmissionEndpoints } from '#monitoring/connectivity'
-import { logMarketDiscoveryFailure, recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
-import { appendPriceHistory, createTokenCatalogTracker, createTokenMetadataCache, discoverAugurRepTokens, discoverTokenPools, loadPriceHistory, loadTokenMarkets, missingPricePoints, pricePoints } from '#monitoring/market-monitor'
-import { candidateRiskMismatch } from '#monitoring/opportunity-evaluation'
-import { poolsForTokens } from '#monitoring/execution-pools'
-import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
-import { inspectReport } from '#monitoring/report-inspection'
-import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type QueuedSigner } from '#state/operator-state'
-import { countOpportunities, type OpportunitySnapshot } from '#state/opportunity-snapshot'
-import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
-import { bigintToSafeNumber, createContextualPublicClient, createRpcEndpointPool, createWalletClient, privateKeyToAccount, zeroAddress, type Address, type Chain, type PublicClient, type TransactionLog, type Transport } from '@zoltar/bot-shared/ethereum'
+import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
+import type { ExclusiveProcessLock } from '#state/position-store'
 import type { BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
-import { advanceCursorAfterSuccessfulHead, cursorForHeadScan, fetchLogsWithAdaptiveRanges, finalityAnchorRequiresReset, initialCursor, latestLogRange, newestFirstScanRanges, withFinalityAnchor, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
-import { centralizedMarketConfigurationAllowsExecution, centralizedMarketConsensusObservations, centralizedPriceAllowsExecution, centralizedPriceDeviationBps, marketConsensusSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { observeConstantProductMarkets, requireCurrentConstantProductMarketEvidence } from '@zoltar/bot-shared/monitoring/constant-product-markets'
-import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
-import {
-	clearOrphanedDexEvidenceForHeadReplacement,
-	discardDexMarketObservations,
-	estimateMarketConsensus,
-	marketConsensusAllowsExecution,
-	marketConsensusDeviationBps,
-	mergeMarketObservations,
-	requireCanonicalBlock,
-	requireCanonicalDexEvidence,
-	type MarketConsensusObservation,
-} from '@zoltar/bot-shared/monitoring/market-consensus'
-import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
-
-import { OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC, OPEN_ORACLE_REPORT_SUBMITTED_TOPIC } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { createOperatorHeadWatcher, createScanWakeGate, startCentralizedMarketSampler } from './background-observers.ts'
-import { deploymentUpdateMustWait } from './deployment-transition.ts'
-import { startOperatorControlPlane } from './operator-control-plane.ts'
-import { applyQueuedExecutionSettings, applyQueuedSigner, recordScanDecision, resetReportScanState } from './operator-execution-state.ts'
-import { createSettlementJournal, recoverPendingSettlements, runSettlementStage } from './settlement-stage.ts'
-import { createConfiguredDexPairReader } from './configured-dex-pair.ts'
-import { emptySettlementSnapshot } from '#state/settlement-store'
+import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
+import { advanceCursorAfterSuccessfulHead } from '@zoltar/bot-shared/monitoring/block-sync'
+import { pollUntilStopped, type PollResult } from '@zoltar/bot-shared/monitoring/resilience'
+import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
+import { evaluatePinnedHead, type CompletedHead, type PinnedHeadScan } from './head-evaluation.ts'
+import { flushHistoryOutboxes, type OperatorContext, type OperatorRuntime, type ScanPass } from './operator-runtime.ts'
+import { startOperator } from './operator-startup.ts'
 import { completeSuccessfulPoll, completeUnconfiguredPoll } from './poll-completion.ts'
-import { selectQuorumChainClient, selectQuorumHead } from './quorum-head.ts'
+import { maintainPositions } from './position-maintenance.ts'
+import { discoverReports } from './report-discovery.ts'
+import { applyScanBoundaryUpdates } from './scan-boundary-updates.ts'
+import { finalizeScan, type ScanReport } from './scan-finalization.ts'
+import { resetAfterFinalityAnchorReorg, selectScanHead, validateStartupOrRefreshDeployments } from './scan-head.ts'
+import { waitBeforeNextScan } from './scan-wait.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
-import { createDeploymentRecoveryReconciliation, loadDeploymentRecovery } from './deployment-recovery.ts'
 
-const MAX_LOG_SCAN_RANGE = 256n
-/** A failing scan retries within this bound (or the poll interval when that is longer) so a transient fault never leaves the operator blind for minutes. */
-const MAXIMUM_SCAN_RETRY_DELAY_MILLISECONDS = 30_000
+/** Confirmed disputes whose history write failed on an earlier scan are retried before any new work. */
+async function retryHistoryOutboxes(runtime: OperatorRuntime, context: OperatorContext, scan: ScanPass) {
+	if (!runtime.positions.some(position => position.historyOutbox !== undefined)) return
+	try {
+		await flushHistoryOutboxes(runtime, context)
+	} catch (error) {
+		const message = `Confirmed dispute history is not durable: ${errorMessage(error)}`
+		scan.nextError = message
+		logEvent('arbitrager', 'historyPersistenceFailed', { error: message }, 'error')
+	}
+}
 
-export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: BotShutdownController) {
-	if (config.lookbackBlocks < 0n || config.lookbackBlocks > MAX_LOG_SCAN_RANGE) throw new Error('lookbackBlocks must be from 0 through 256')
-	if (!Number.isSafeInteger(config.uiPort) || config.uiPort < 1 || config.uiPort > 65_535) throw new Error('ui-port must be an integer from 1 to 65535')
-	if (config.ui && config.once) throw new Error('runtime.ui cannot be combined with runtime.once')
-	if (config.execute && config.privateKey === undefined && !config.ui) throw new Error('Execution requires a saved privateKey unless runtime.ui is enabled to unlock the signer')
-	if (config.execute && lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
-	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
-	let positionJournal = await loadPositionJournalState(config.positionFile, config.network.chain.id)
-	let positions = positionJournal.positions
-	if (config.execute) positionJournal = await savePositionJournalState(config.positionFile, positionJournal, config.network.chain.id)
-	let readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
-	let clientRpcUrl: string | undefined
-	let wakeProfileSwitchWait: (() => void) | undefined
-	let wakeCentralizedMarketSampler: (() => void) | undefined
-	const createClient = (rpcUrl?: string) => createContextualPublicClient(config.network.chain, readPool, config.execute ? rpcUrl : undefined)
-	const contextualRpcRead = async <Value>(_method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string | undefined = clientRpcUrl) => await request(createClient(explicitRpcUrl))
-	const contextualLogRead = async <Value>(request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>) => await request(createContextualPublicClient(config.network.chain, readPool))
-	const createWallet = () =>
-		config.privateKey === undefined
-			? undefined
-			: createWalletClient({
-					account: privateKeyToAccount(config.privateKey),
-					chain: config.network.chain,
-					transport: readPool.transport,
-				})
-	let client = createClient()
-	let readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
-	const readConfiguredDexPair = createConfiguredDexPairReader(config, contextualRpcRead)
-	let wallet = createWallet()
-	let coordinatorPolicies: Awaited<ReturnType<typeof loadCoordinatorPolicies>> = []
-	let startupValidated = !config.networkConfigured
-	/** Endpoints or deployment identities changed: rebuild every read client and forget what the previous ones inspected. */
-	const resetReadClients = () => {
-		readPool = createRpcEndpointPool([config.connectivity.readRpcUrl, ...config.quorumRpcUrls])
-		state.rpcEndpointHealth = readPool.snapshot()
-		client = createClient()
-		clientRpcUrl = undefined
-		readClients = [createClient(config.connectivity.readRpcUrl), ...config.quorumRpcUrls.map(url => createClient(url))]
-		wallet = createWallet()
-		state.canonicalDeployments = undefined
-		startupValidated = false
+/** Scans one pinned head of a configured network, from startup validation through the completed head. */
+async function scanConfiguredNetwork(runtime: OperatorRuntime, context: OperatorContext, scanReport: ScanReport, executionActivationPending: boolean): Promise<PollResult> {
+	const { config, shutdown, state } = context
+	await validateStartupOrRefreshDeployments(runtime, context, executionActivationPending)
+	const scan: ScanPass = { nextError: undefined }
+	await retryHistoryOutboxes(runtime, context, scan)
+	const block = await selectScanHead(runtime, context)
+	scanReport.update({ block: block.number })
+	recordObservedHead(state, block)
+	context.scanWakeGate.headScanned({ hash: block.hash, number: block.number })
+	if (await resetAfterFinalityAnchorReorg(runtime, context, block.number)) return 'deferred'
+	const positionResult = await maintainPositions(runtime, context, scan, block.number)
+	if (positionResult !== undefined) return positionResult
+	const discovery = await discoverReports(runtime, context, scan, block)
+	if (discovery.kind === 'head-unchanged') {
+		scanReport.update({ status: 'waiting' })
+		state.blockNumber = block.number.toString()
+		state.blockTimestamp = block.timestamp.toString()
+		return completeSuccessfulPoll(state, scan.nextError, config.once)
 	}
-	const executionHistory = await loadExecutionHistory(config.historyFile, config.network.chain.id)
-	for (const position of positions) {
-		const record = position.historyOutbox
-		if (record !== undefined && !executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) executionHistory.unshift(record)
-	}
-	const state: OperatorState = {
-		activeReportCount: 0,
-		consecutivePollFailures: 0,
-		balances: undefined,
-		blockNumber: undefined,
-		blockTimestamp: undefined,
-		centralizedMarket: undefined,
-		marketConsensus: undefined,
-		marketObservations: [],
-		executionHistory,
-		endpointChecks: [],
-		rpcEndpointHealth: readPool.snapshot(),
-		gameCapital: { eth: '0', totalEthWeth: '0', weth: '0' },
-		lastError: undefined,
-		lastPollAt: undefined,
-		lastPollFailureAt: undefined,
-		lastRetryAt: undefined,
-		nextRetryAt: undefined,
-		retryInProgress: false,
-		opportunities: [],
-		positions,
-		positionArchive: positionJournal.archived,
-		operationLog: [],
-		paused: config.paused,
-		status: config.networkConfigured ? 'syncing' : 'paused',
-		tokenAddresses: [],
-		tokenMarkets: [],
-		priceHistory: await loadPriceHistory(config.priceHistoryFile, config.network.chain.id),
-		reportPaths: [],
-		settlements: emptySettlementSnapshot(config.settlement),
-		transactionActivity: [],
-	}
-	const settlementJournal = await createSettlementJournal(config, state)
-	const fixedState: {
-		deployment: DeploymentSettings
-		execute: boolean
-		executor: Address | undefined
-		expectedChainId: number
-		explorerUrl: string
-		network: NetworkConfiguration['name']
-		networkConfigured: boolean
-		openOracle: Address
-		queuedSigner: QueuedSigner | undefined
-		savedWallet: Address | undefined
-		wallet: Address | undefined
-	} = {
-		deployment: config.operatorSettings.deployment,
-		execute: config.execute,
-		executor: config.executor,
-		expectedChainId: config.network.chain.id,
-		explorerUrl: config.network.explorerUrl,
-		network: config.network.name,
-		networkConfigured: config.networkConfigured,
-		openOracle: config.openOracle,
-		queuedSigner: undefined,
-		savedWallet: config.persistedPrivateKey === undefined ? undefined : privateKeyToAccount(config.persistedPrivateKey).address,
-		wallet: wallet?.account.address,
-	}
-	let activeSignerLock = initialSignerLock
-	const signerOperationGate = createSignerOperationGate()
-	let cursor: SyncCursor | undefined
-	const executorIntentPath = executorDeploymentIntentPath(config.settingsFile, config.network.name)
-	const deploymentRecovery = await loadDeploymentRecovery(executorIntentPath, config, state)
-	const deploymentRecoveryReconciliation = createDeploymentRecoveryReconciliation({ config, readClients: () => readClients, state })
-	const trackTransaction: TrackTransaction = activity => {
-		state.transactionActivity = [activity, ...state.transactionActivity.filter(existing => existing.originalHash.toLowerCase() !== activity.originalHash.toLowerCase())].slice(0, 100)
-		recordOperation(state, {
-			category: 'transaction',
-			details: activity.failedTargets.map(target => `${target.target}: ${target.error ?? 'failed'}`).join('; ') || undefined,
-			level: transactionLogLevel(activity.status),
-			message: `${activity.kind} ${activity.status}`,
-			reason: `Transaction ${activity.hash}`,
-			reportId: activity.reportId,
-		})
-	}
-	const controlPlane = startOperatorControlPlane({
-		config,
-		deploymentRecovery,
-		fixedState,
-		getCursor: () => cursor,
-		...(shutdown === undefined ? {} : { isStopping: shutdown.isRequested }),
-		lockManager,
-		onNetworkProfileSwitch: () => {
-			wakeProfileSwitchWait?.()
-			wakeCentralizedMarketSampler?.()
-		},
-		signerOperationGate,
-		state,
+	const head: PinnedHeadScan = { block, discoversReportsFromCoordinators: discovery.discoversReportsFromCoordinators, executionReady: discovery.executionReady, scan, shutdownDuringHead: false }
+	let completed: CompletedHead | undefined
+	await context.centralizedMarketSampler.ready // background sampling, but the first scan still waits for the first sample
+	if (shutdown?.isRequested()) return true
+	const completedCursor = await advanceCursorAfterSuccessfulHead(block.number, block.hash, async () => {
+		completed = await evaluatePinnedHead(runtime, context, head)
 	})
-	const { dashboard, pending } = controlPlane
-	let operatorStopped = false
-	const stopping = () => operatorStopped || pending.profileSwitch || shutdown?.isRequested() === true
-	const headWatcher = createOperatorHeadWatcher({ config, isStopping: stopping, readClient: () => createClient() })
-	const scanWakeGate = createScanWakeGate(headWatcher)
-	/**
-	 * Waits for the next scan trigger: a new head from the watcher wakes the scan immediately, while the
-	 * configured poll interval still bounds how long queued settings or lifecycle work can wait on an idle chain.
-	 */
-	const waitForProfileSwitchOrDelay = async (milliseconds: number, afterFailure: boolean) => {
-		if (stopping()) return
-		const headWake = scanWakeGate.wait(milliseconds, afterFailure)
-		await Promise.race([
-			shutdown?.wait(milliseconds) ?? Bun.sleep(milliseconds),
-			...(headWake === undefined ? [] : [headWake]),
-			new Promise<void>(resolve => {
-				wakeProfileSwitchWait = resolve
-				if (pending.profileSwitch) resolve()
-			}),
-		])
-		wakeProfileSwitchWait = undefined
-	}
-	const reports = new Map<bigint, ActiveReport>()
-	const persistPosition = async (position: PositionRecord) => {
-		const nextPositions = [position, ...positions.filter(existing => existing.reportId !== position.reportId)]
-		positionJournal = await savePositionJournalState(config.positionFile, { archived: positionJournal.archived, positions: nextPositions }, config.network.chain.id)
-		positions = positionJournal.positions
-		state.positions = positions
-		state.positionArchive = positionJournal.archived
-	}
-	const flushHistoryOutboxes = async () => {
-		for (const position of positions.filter(candidate => candidate.historyOutbox !== undefined)) {
-			const record = position.historyOutbox
-			if (record === undefined) continue
-			if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
-			await appendExecutionHistoryIfMissing(config.historyFile, record, config.network.chain.id)
-			await persistPosition({ ...position, historyOutbox: undefined })
+	if (head.shutdownDuringHead || shutdown?.isRequested()) return true
+	if (completed === undefined) throw new Error('Successful scan did not produce a finality anchor')
+	return finalizeScan(runtime, context, scan, scanReport, block.number, completedCursor, completed)
+}
+
+async function pollOnce(runtime: OperatorRuntime, context: OperatorContext, consecutiveFailures: number): Promise<PollResult> {
+	const { config, pending, shutdown, state } = context
+	if (pending.profileSwitch || shutdown?.isRequested()) return true
+	state.consecutivePollFailures = consecutiveFailures
+	context.scanWakeGate.beginPoll()
+	const scanIntentLock = await acquireScanSignerOperation(context.signerOperationGate, context.deploymentRecovery, context.executorIntentPath, context.deploymentRecoveryReconciliation)
+	if (scanIntentLock === undefined) return 'deferred'
+	state.nextRetryAt = undefined
+	state.retryInProgress = consecutiveFailures > 0
+	let scanReport: ScanReport | undefined
+	if (state.retryInProgress) state.lastRetryAt = new Date().toISOString()
+	try {
+		state.rpcEndpointHealth = runtime.readPool.snapshot()
+		const executionActivationPending = await applyScanBoundaryUpdates(runtime, context)
+		if (!config.networkConfigured) return completeUnconfiguredPoll(state)
+		scanReport = startScanReport({
+			network: { chainId: config.network.chain.id, name: config.network.name },
+			blockTimeMs: context.scanBlockTimeOverride ?? scanBlockTimeMs(config.network.chain.id),
+			readHead: () => runtime.client.getBlockNumber(),
+		})
+		return await scanConfiguredNetwork(runtime, context, scanReport, executionActivationPending)
+	} catch (error) {
+		scanReport?.update({ status: 'failed' })
+		throw error
+	} finally {
+		await scanReport?.finish(shutdown?.isRequested() ? 'incomplete' : undefined)
+		try {
+			context.signerOperationGate.release('scan')
+		} finally {
+			await scanIntentLock.release()
 		}
 	}
-	let cachedLogs: TransactionLog[] = []
-	let tokenMetadataCache = createTokenMetadataCache()
-	let catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
-	reportOperatorStarted(config, state)
-	headWatcher.start()
-	const centralizedMarketSampler = startCentralizedMarketSampler({ config, isStopping: stopping, state, wait: shutdown?.wait })
-	wakeCentralizedMarketSampler = centralizedMarketSampler.wake
+}
+
+async function stopOperator(runtime: OperatorRuntime, context: OperatorContext) {
+	runtime.operatorStopped = true
+	await Promise.all([context.headWatcher.stop(), context.centralizedMarketSampler.stop()])
+	context.state.status = 'stopped'
+	await context.dashboard?.stop(context.pending.profileSwitch)
+}
+
+/** Runs the operator until it stops; returns whether it stopped to switch the network profile. */
+export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: BotShutdownController) {
+	const { context, runtime } = await startOperator(config, lockManager, initialSignerLock, shutdown)
 	try {
 		await pollUntilStopped(
-			async consecutiveFailures => {
-				if (pending.profileSwitch || shutdown?.isRequested()) return true
-				state.consecutivePollFailures = consecutiveFailures
-				scanWakeGate.beginPoll()
-				const scanIntentLock = await acquireScanSignerOperation(signerOperationGate, deploymentRecovery, executorIntentPath, deploymentRecoveryReconciliation)
-				if (scanIntentLock === undefined) return 'deferred'
-				state.nextRetryAt = undefined
-				state.retryInProgress = consecutiveFailures > 0
-				let scanReport: ReturnType<typeof startScanReport> | undefined
-				if (state.retryInProgress) state.lastRetryAt = new Date().toISOString()
-				try {
-					let executionActivationPending = false
-					state.rpcEndpointHealth = readPool.snapshot()
-					const deploymentSettingsDeferred = pending.deployment !== undefined && deploymentUpdateMustWait(fixedState.deployment, pending.deployment, positions)
-					const networkInitializationPending = pending.network !== undefined
-					if (deploymentSettingsDeferred) {
-						state.paused = true
-						state.status = 'paused'
-						if (!state.operationLog.some(entry => entry.message === 'Deployment update waiting for open positions'))
-							recordOperation(state, {
-								category: 'configuration',
-								details: undefined,
-								level: 'warning',
-								message: 'Deployment update waiting for open positions',
-								reason: 'OpenOracle, executor, REP, and WETH identities remain unchanged until every risk-consuming position is closed',
-								reportId: undefined,
-							})
-					} else if (!networkInitializationPending) {
-						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
-						if (appliedSettings.reportScanReset) {
-							const reset = resetReportScanState<TransactionLog>(state, reports)
-							cursor = reset.cursor
-							cachedLogs = reset.cachedLogs
-						}
-					}
-					if (!deploymentSettingsDeferred && pending.execute !== undefined) {
-						executionActivationPending = pending.execute && !fixedState.execute
-						if (executionActivationPending) {
-							if (lockManager === undefined) throw new Error('Execution requires exclusive journal and signer lock management')
-							await ensureExecutionHistoryWritable(config.historyFile)
-							positionJournal = await savePositionJournalState(config.positionFile, { archived: positionJournal.archived, positions }, config.network.chain.id)
-							positions = positionJournal.positions
-							state.positions = positions
-							state.positionArchive = positionJournal.archived
-							config.execute = true
-							state.paused = true
-							startupValidated = false
-						} else {
-							config.execute = pending.execute
-							fixedState.execute = pending.execute
-							pending.execute = undefined
-						}
-					}
-					if (!deploymentSettingsDeferred && pending.deployment !== undefined) {
-						const deployment = pending.deployment
-						pending.deployment = undefined
-						config.coordinatorAddresses = [...deployment.coordinatorAddresses]
-						config.executor = deployment.executor
-						config.openOracle = deployment.openOracle
-						config.quorumRpcUrls = [...deployment.quorumRpcUrls]
-						config.router = deployment.uniswapRouter
-						config.v2Router = deployment.uniswapV2Router
-						config.v4PoolManager = deployment.uniswapV4PoolManager
-						config.v4Quoter = deployment.uniswapV4Quoter
-						fixedState.deployment = deployment
-						fixedState.executor = deployment.executor
-						fixedState.openOracle = deployment.openOracle
-						config.network.rep = deployment.rep
-						config.network.weth = deployment.weth
-						resetReadClients()
-						cursor = undefined
-						reports.clear()
-						cachedLogs = []
-						state.activeReportCount = 0
-						state.opportunities = []
-						state.reportPaths = []
-						state.tokenMarkets = []
-						state.marketObservations = []
-						state.marketConsensus = undefined
-						tokenMetadataCache = createTokenMetadataCache()
-						catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
-					}
-					if (!deploymentSettingsDeferred && networkInitializationPending) {
-						const appliedSettings = applyQueuedExecutionSettings(config, state, pending)
-						if (appliedSettings.reportScanReset) {
-							const reset = resetReportScanState<TransactionLog>(state, reports)
-							cursor = reset.cursor
-							cachedLogs = reset.cachedLogs
-						}
-						const network = pending.network
-						if (network === undefined) throw new Error('Queued network initialization is missing its network identity')
-						config.network = network
-						config.networkConfigured = true
-						fixedState.network = network.name
-						fixedState.expectedChainId = network.chain.id
-						fixedState.explorerUrl = network.explorerUrl
-						fixedState.networkConfigured = true
-						pending.network = undefined
-						await settlementJournal.reload()
-						centralizedMarketSampler.wake()
-					}
-					if (!deploymentSettingsDeferred && pending.connectivity !== undefined) {
-						config.connectivity = pending.connectivity
-						pending.connectivity = undefined
-						resetReadClients()
-					}
-					if (!deploymentSettingsDeferred && pending.signerUpdate) {
-						const appliedSigner = await applyQueuedSigner({
-							activeSignerLock,
-							config,
-							createWallet,
-							fixedState,
-							lockManager,
-							pending,
-							state,
-							walletAddress: current => current?.account.address,
-						})
-						activeSignerLock = appliedSigner.activeSignerLock
-						wallet = appliedSigner.wallet
-					}
-					if (executionActivationPending) {
-						resetReadClients()
-					}
-					if (!config.networkConfigured) return completeUnconfiguredPoll(state)
-					scanReport = startScanReport({
-						network: { chainId: config.network.chain.id, name: config.network.name },
-						blockTimeMs: scanBlockTimeMs(config.network.chain.id, process.env['SCAN_BLOCK_TIME_MS']),
-						readHead: () => client.getBlockNumber(),
-					})
-					if (!startupValidated) {
-						if (config.execute) {
-							const selected = await selectQuorumChainClient(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], config.network, contextualRpcRead, config.rpcQuorum)
-							client = selected.client
-							clientRpcUrl = selected.rpcUrl
-						}
-						await contextualRpcRead('eth_chainId', async requestClient => {
-							const value = await requestClient.getChainId()
-							if (value !== config.network.chain.id) throw new Error(`Read RPC chain mismatch: expected ${config.network.chain.id.toString()}, received ${value.toString()}`)
-						})
-						await requireDeployedContractsOnce(client, [{ name: 'Multicall3', address: config.network.multicall3 }])
-						await authenticateConfiguredDeployments(readClients, config, state)
-						state.endpointChecks = [...(config.execute ? [] : await checkConnectivity(config.connectivity, config.network.chain.id)), ...(await checkSubmissionEndpoints(config.submission, config.network.chain.id))]
-						startupValidated = true
-						if (executionActivationPending) {
-							fixedState.execute = true
-							pending.execute = undefined
-							state.paused = config.paused
-						}
-					} else state.canonicalDeployments = await refreshIncompleteCanonicalDeployments(readClients, config, state.canonicalDeployments)
-					let nextError: string | undefined
-					if (positions.some(position => position.historyOutbox !== undefined)) {
-						try {
-							await flushHistoryOutboxes()
-						} catch (error) {
-							const message = `Confirmed dispute history is not durable: ${errorMessage(error)}`
-							nextError = message
-							console.error(`historyPersistenceFailed=${message}`)
-						}
-					}
-					let quorumHead: Awaited<ReturnType<typeof selectQuorumHead>>['block'] | undefined
-					if (config.execute) {
-						const selected = await selectQuorumHead(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], contextualRpcRead, config.rpcQuorum)
-						client = selected.client
-						clientRpcUrl = selected.rpcUrl
-						quorumHead = selected.block
-					}
-					const block =
-						quorumHead ??
-						(await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-							const value = await requestClient.getBlock()
-							if (value.number == null) throw new Error('Latest block is missing its number')
-							if (value.hash == null) throw new Error('Latest block is missing its hash')
-							return { ...value, hash: value.hash, number: value.number }
-						}))
-					const blockNumber = block.number
-					scanReport.update({ block: blockNumber })
-					recordObservedHead(state, block)
-					const blockHash = block.hash
-					scanWakeGate.headScanned({ hash: blockHash, number: blockNumber })
-					const finalityAnchorForHead = async () => {
-						const number = blockNumber > REORG_OVERLAP_BLOCKS ? blockNumber - REORG_OVERLAP_BLOCKS : 0n
-						const anchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-							const value = await requestClient.getBlock({ blockNumber: number })
-							if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-							return { ...value, hash: value.hash }
-						})
-						return { hash: anchor.hash, number }
-					}
-					if (cursor?.finalityAnchorNumber !== undefined && cursor.finalityAnchorHash !== undefined) {
-						const anchorNumber = cursor.finalityAnchorNumber
-						let observedAnchorHash: string | undefined
-						if (anchorNumber <= blockNumber) {
-							const anchor = await contextualRpcRead('eth_getBlockByNumber', async requestClient => {
-								const value = await requestClient.getBlock({
-									blockNumber: anchorNumber,
-								})
-								if (value.hash == null) throw new Error('Finality anchor block is missing its canonical hash')
-								return { ...value, hash: value.hash }
-							})
-							observedAnchorHash = anchor.hash
-						}
-						if (finalityAnchorRequiresReset(cursor, blockNumber, observedAnchorHash)) {
-							cachedLogs = []
-							reports.clear()
-							state.activeReportCount = 0
-							state.opportunities = []
-							state.reportPaths = []
-							state.tokenMarkets = []
-							state.marketObservations = []
-							state.marketConsensus = undefined
-							tokenMetadataCache = createTokenMetadataCache()
-							catalogForScan = createTokenCatalogTracker((configured, observed) => discoverAugurRepTokens(client, config.network.multicall3, config.network.chain.id, configured, observed))
-							cursor = config.coordinatorAddresses.length !== 0 || config.lookbackBlocks === 0n ? initialCursor(blockNumber, 0n) : { ...initialCursor(blockNumber, 0n), nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock }
-							state.status = 'syncing'
-							recordOperation(state, {
-								category: 'scan',
-								details: `anchor=${anchorNumber.toString()}`,
-								level: 'warning',
-								message: 'Canonical history changed beyond the retained overlap',
-								reason: 'Execution stayed blocked while report and market caches were cleared; the latest bounded window will rebuild on the next scan',
-								reportId: undefined,
-							})
-							return 'deferred'
-						}
-					}
-					let lifecycleProcessed = false
-					if (config.execute && wallet !== undefined) {
-						for (const position of positions.filter(candidate => candidate.status !== 'recovery-required' && candidate.manualReconciliation === undefined && (candidate.expiredTransactionAttempts?.length ?? 0) !== 0)) {
-							try {
-								const reconciled = await reconcileExpiredAttemptsWithQuorum(readClients, config, position, blockNumber)
-								if (reconciled !== position) {
-									await persistPosition(reconciled)
-									recordOperation(state, {
-										category: 'transaction',
-										details: `entryGas=${reconciled.actualEntryGasCostEth} ETH lifecycleGas=${reconciled.lifecycleGasCostEth} ETH`,
-										level: 'info',
-										message: 'Late atomic revert gas reconciled',
-										reason: (reconciled.expiredTransactionAttempts?.length ?? 0) === 0 ? `Report ${position.reportId} expired transaction monitoring completed` : `Report ${position.reportId} expired transaction monitoring remains active`,
-										reportId: position.reportId,
-									})
-								}
-							} catch (error) {
-								if (isExecutionPausedError(error)) {
-									if (shutdown?.isRequested()) return true
-									state.lastPollAt = new Date().toISOString()
-									return completeSuccessfulPoll(state, nextError, config.once)
-								}
-								if (shutdown?.isRequested()) return true
-								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-								const message = `Position ${position.reportId} expired transaction requires attention: ${errorMessage(error)}`
-								nextError = message
-								recordOperation(state, {
-									category: 'transaction',
-									details: undefined,
-									level: 'error',
-									message: 'Expired transaction monitoring failed closed',
-									reason: message,
-									reportId: position.reportId,
-								})
-							}
-						}
-						for (const position of positions.filter(candidate => candidate.status !== 'replaced' && positionConsumesRisk(candidate.status))) {
-							try {
-								if (shutdown?.isRequested()) break
-								const result = await processPositionLifecycle(client, readClients, wallet, config, position, blockNumber, persistPosition, trackTransaction, () => state.paused || shutdown?.isRequested() === true)
-								if (result === 'processed' || result === 'progressed') {
-									lifecycleProcessed = true
-									const updatedPosition = state.positions.find(candidate => candidate.reportId === position.reportId)
-									const replacementClaimed = updatedPosition?.status === 'replaced'
-									let lifecycleMessage = 'Position lifecycle advanced'
-									let lifecycleReason = `Report ${position.reportId} completed one durable public lifecycle transaction`
-									if (result === 'processed') {
-										lifecycleMessage = 'Position lifecycle completed'
-										lifecycleReason = `Report ${position.reportId} was settled and withdrawn`
-									}
-									if (replacementClaimed) {
-										lifecycleMessage = 'Replacement credit claimed'
-										lifecycleReason = `Report ${position.reportId} credit is final; the one-sided inventory remains risk-consuming until reconciled`
-									}
-									recordOperation(state, {
-										category: 'transaction',
-										details: `withdrawn=${updatedPosition?.withdrawnWeth ?? 'unknown'} WETH; ${updatedPosition?.withdrawnToken ?? 'unknown'} ${updatedPosition?.tokenSymbol ?? 'token'}`,
-										level: 'info',
-										message: lifecycleMessage,
-										reason: lifecycleReason,
-										reportId: position.reportId,
-									})
-								}
-							} catch (error) {
-								if (isExecutionPausedError(error)) {
-									if (shutdown?.isRequested()) return true
-									state.lastPollAt = new Date().toISOString()
-									return completeSuccessfulPoll(state, nextError, config.once)
-								}
-								if (shutdown?.isRequested()) return true
-								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-								const message = `Position ${position.reportId} lifecycle requires attention: ${errorMessage(error)}`
-								nextError = message
-								recordOperation(state, {
-									category: 'transaction',
-									details: undefined,
-									level: 'error',
-									message: 'Position lifecycle failed closed',
-									reason: message,
-									reportId: position.reportId,
-								})
-							}
-						}
-					}
-					if (lifecycleProcessed) {
-						state.lastPollAt = new Date().toISOString()
-						return completeSuccessfulPoll(state, nextError, config.once)
-					}
-					coordinatorPolicies = await discoverCoordinatorPolicies(config.execute ? readClients : [client], config, blockNumber, blockHash)
-					config.coordinatorAddresses = coordinatorPolicies.map(policy => policy.coordinator)
-					fixedState.deployment = { ...fixedState.deployment, coordinatorAddresses: config.coordinatorAddresses }
-					const executionReady = positions.every(position => position.historyOutbox === undefined) && nextError === undefined
-					const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
-					cursor ??=
-						discoversReportsFromCoordinators || config.lookbackBlocks === 0n
-							? initialCursor(blockNumber, 0n)
-							: {
-									...initialCursor(blockNumber, 0n),
-									nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock,
-								}
-					const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
-						canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'previous market head', previousBlockNumber, config.rpcQuorum),
-					)
-					const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
-					if (scanCursor === undefined) {
-						scanReport.update({ status: 'waiting' })
-						state.blockNumber = blockNumber.toString()
-						state.blockTimestamp = block.timestamp.toString()
-						return completeSuccessfulPoll(state, nextError, config.once)
-					}
-					if (discoversReportsFromCoordinators) {
-						const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(readClients, config, blockNumber) : await pendingCoordinatorReports(client, config, blockNumber)
-						applyCoordinatorReports(reports, pendingReports)
-						cachedLogs = []
-					} else if (config.lookbackBlocks > 0n) {
-						const recentRange = latestLogRange(blockNumber, config.lookbackBlocks)
-						const fromBlock = scanCursor.nextBlock > recentRange.fromBlock ? scanCursor.nextBlock : recentRange.fromBlock
-						for (const range of newestFirstScanRanges(fromBlock, blockNumber, MAX_LOG_SCAN_RANGE)) {
-							const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAX_LOG_SCAN_RANGE, requestedRange =>
-								contextualLogRead(requestClient =>
-									requestClient.getLogs({
-										address: config.openOracle,
-										fromBlock: requestedRange.fromBlock,
-										toBlock: requestedRange.toBlock,
-										topics: [[OPEN_ORACLE_REPORT_SUBMITTED_TOPIC, OPEN_ORACLE_REPORT_DISPUTED_TOPIC, OPEN_ORACLE_REPORT_SETTLED_TOPIC]],
-									}),
-								),
-							)
-							cachedLogs = [...cachedLogs.filter(log => logBlockNumber(log) < range.fromBlock || logBlockNumber(log) > range.toBlock), ...logs].sort(compareLogs)
-						}
-						reports.clear()
-						applyLogs(reports, cachedLogs)
-						cachedLogs = retainReportsAndLogs(reports, cachedLogs, coordinatorPolicies, config.openOracle, blockNumber)
-					} else {
-						cachedLogs = []
-						reports.clear()
-					}
-					if (replacedMarketHead) {
-						recordOperation(state, {
-							category: 'decision',
-							details: `block=${blockNumber.toString()}`,
-							level: 'warning',
-							message: 'Market evidence reset after canonical head replacement',
-							reason: 'DEX evidence from the replaced block was discarded before this poll re-evaluated every report',
-							reportId: undefined,
-						})
-					}
-					let completedScan = { evaluated: 0, skipped: 0 }
-					let completedFinalityAnchor: Awaited<ReturnType<typeof finalityAnchorForHead>> | undefined
-					let shutdownDuringHead = false
-					const stopHead = () => {
-						if (shutdown?.isRequested() !== true) return false
-						shutdownDuringHead = true
-						return true
-					}
-					await centralizedMarketSampler.ready // background sampling, but the first scan still waits for the first sample
-					if (shutdown?.isRequested()) return true
-					const completedCursor = await advanceCursorAfterSuccessfulHead(blockNumber, blockHash, async () => {
-						// DEX evidence read at a head that turns out to be non-canonical is discarded before the failure propagates.
-						const discardDexEvidence = (error: unknown) => {
-							state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
-							state.marketConsensus = undefined
-							throw error
-						}
-						// Every stage below is pinned to the head block; the canonical hash is revalidated once after the reads.
-						const [configuredDexMarkets, { universes, approvedTokens }] = await Promise.all([
-							observeConstantProductMarkets(config.centralizedMarkets, config.network.rep, config.network.weth, async pair => readConfiguredDexPair(pair, { hash: blockHash, number: blockNumber })).catch(discardDexEvidence),
-							loadApprovedUniverses(readClients, config, blockNumber),
-						])
-						if (stopHead()) return
-						state.universes = universes
-						const observedTokens = [...reports.values()].flatMap(report => [report.latest.game.token1, report.latest.game.token2]).filter(address => address !== zeroAddress && address.toLowerCase() !== config.network.weth.toLowerCase())
-						const { executionTokens, monitoringTokens: discoveredTokens } = await catalogForScan(config.tokenAddresses, [...universes.map(universe => universe.repToken), ...observedTokens], approvedTokens)
-						if (stopHead()) return
-						state.tokenAddresses = [...executionTokens]
-						const discoveredPools = await discoverTokenPools(client, {
-							blockNumber,
-							chainId: config.network.chain.id,
-							factory: config.router === undefined ? undefined : config.network.factory,
-							multicall3: config.network.multicall3,
-							tokens: discoveredTokens,
-							weth: config.network.weth,
-						})
-						if (stopHead()) return
-						const pools = await poolsForTokens(client, config, discoveredPools, blockNumber)
-						const [tokenMarkets, balances] = await Promise.all([
-							loadTokenMarkets(client, {
-								blockNumber,
-								explorerUrl: config.network.explorerUrl,
-								metadataCache: tokenMetadataCache,
-								multicall3: config.network.multicall3,
-								pools: discoveredPools,
-								wallet: wallet?.account.address,
-								weth: config.network.weth,
-							}),
-							loadBalances(client, wallet, config, discoveredTokens, pools, blockNumber),
-						])
-						if (stopHead()) return
-						state.tokenMarkets = tokenMarkets
-						state.marketAvailability = pools.length === 0 ? { kind: 'no-execution-pools', chainId: config.network.chain.id } : undefined
-						const gasPrice = plannedGasPriceAttoEth(block.baseFeePerGas ?? 0n)
-						const opportunities: OpportunitySnapshot[] = []
-						const candidates: ExecutionCandidate[] = []
-						const cycleDexObservations: MarketConsensusObservation[] = []
-						const evaluatedReports = await Promise.all(
-							[...reports.values()]
-								.filter(report => !report.settled)
-								.map(async report => {
-									const reportId = report.latest.helper.reportId.toString()
-									try {
-										const metadata = tokenMarkets.find(market => market.address.toLowerCase() === report.latest.game.token2.toLowerCase())
-										if (metadata === undefined) throw new Error('Token metadata is unavailable')
-										const evaluated = await inspectReport(client, wallet, config, report.latest, pools, blockNumber, blockHash, block.timestamp, gasPrice, balances?.raw, metadata, executionTokenAllowed(executionTokens, report.latest.game.token2), executionReady, state.paused, coordinatorPolicies, (message, reason) =>
-											recordOperation(state, {
-												category: 'decision',
-												details: undefined,
-												level: 'info',
-												message,
-												reason,
-												reportId,
-											}),
-										)
-										return { evaluated, report }
-									} catch (error) {
-										logMarketDiscoveryFailure(`report=${reportId} skipped=`, error)
-										recordOperation(state, {
-											category: 'decision',
-											details: undefined,
-											level: 'warning',
-											message: 'Report evaluation failed',
-											reason: errorMessage(error),
-											reportId,
-										})
-										throw error
-									}
-								}),
-						)
-						if (stopHead()) return
-						// One canonical-hash check after all pinned reads confirms none of them straddled a head replacement.
-						const [, headFinalityAnchor] = await Promise.all([
-							requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber, config.rpcQuorum)).catch(discardDexEvidence),
-							finalityAnchorForHead(),
-						])
-						if (stopHead()) return
-						const sampledAt = new Date(bigintToSafeNumber(block.timestamp * 1_000n, 'Price sample block timestamp')).toISOString()
-						const samples = missingPricePoints(state.priceHistory, pricePoints(state.tokenMarkets, blockNumber, sampledAt))
-						await appendPriceHistory(config.priceHistoryFile, samples, config.network.chain.id)
-						state.priceHistory = [...state.priceHistory, ...samples]
-						state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], [...centralizedMarketConsensusObservations(state.centralizedMarket), ...configuredDexMarkets.observations], config.centralizedMarkets.maximumObservationAgeMilliseconds)
-						// Settlements mined during a crash or receipt timeout must charge their gas before any candidate is judged against today's budget.
-						const reconciledSettlements = await recoverPendingSettlements({ blockNumber, config, journal: settlementJournal, readClients, state })
-						for (const { evaluated, report } of evaluatedReports) {
-							if (stopHead()) return
-							try {
-								if (evaluated !== undefined) {
-									cycleDexObservations.push(...evaluated.dexObservations)
-									opportunities.push(evaluated.opportunity)
-									recordScanDecision(state, evaluated.opportunity)
-									if (evaluated.candidate !== undefined) {
-										const referenceWeth = evaluated.candidate.quote.direction === 'sell-rep' ? evaluated.candidate.quote.grossProceedsAttoWeth : evaluated.candidate.quote.hedgeCostAttoWeth
-										const dexPriceRepPerEth = referenceWeth === 0n ? 0n : (evaluated.candidate.quote.hedgeAmountAttoRep * 10n ** 18n) / referenceWeth
-										const primaryRep = evaluated.candidate.report.game.token2.toLowerCase() === config.network.rep.toLowerCase()
-										evaluated.opportunity.centralizedPriceDeviationBps = state.centralizedMarket === undefined ? undefined : centralizedPriceDeviationBps(dexPriceRepPerEth, state.centralizedMarket, evaluated.candidate.report.game.token2)?.toString()
-										const venueConsensus = config.centralizedMarkets.venueConsensus
-										const consensusEstimate =
-											venueConsensus === undefined
-												? undefined
-												: estimateMarketConsensus(
-														[...(state.marketObservations ?? []), ...evaluated.dexObservations].filter(observation => observation.assetId.toLowerCase() === evaluated.candidate?.report.game.token2.toLowerCase() && observation.marketId?.toLowerCase() !== evaluated.candidate?.hedgePool.toLowerCase()),
-														marketConsensusSettings(config.centralizedMarkets),
-														evaluated.candidate.report.game.token2,
-														config.network.chain.id,
-														Date.now(),
-														evaluated.candidate.hedgeVenue,
-														evaluated.candidate.hedgePool,
-													)
-										let marketAllowed = false
-										if (centralizedMarketConfigurationAllowsExecution(config.centralizedMarkets)) {
-											if (consensusEstimate === undefined) {
-												marketAllowed = !config.centralizedMarkets.requiredForExecution && centralizedPriceAllowsExecution(dexPriceRepPerEth, state.centralizedMarket, config.centralizedMarkets, evaluated.candidate.report.game.token2)
-											} else {
-												marketAllowed = marketConsensusAllowsExecution(
-													dexPriceRepPerEth,
-													consensusEstimate,
-													{
-														maximumDeviationBps: config.centralizedMarkets.maximumDexDeviationBps,
-														maximumObservationAgeMilliseconds: config.centralizedMarkets.maximumObservationAgeMilliseconds,
-														requiredForExecution: config.centralizedMarkets.requiredForExecution,
-													},
-													evaluated.candidate.report.game.token2,
-													config.network.chain.id,
-												)
-											}
-										}
-										if (consensusEstimate !== undefined) evaluated.opportunity.centralizedPriceDeviationBps = marketConsensusDeviationBps(dexPriceRepPerEth, consensusEstimate, evaluated.candidate.report.game.token2)?.toString()
-										evaluated.candidate.marketConsensus = consensusEstimate
-										if (!marketAllowed) {
-											evaluated.opportunity.decision = 'market-risk'
-											recordOperation(state, {
-												category: 'decision',
-												details: `dexRepPerEth=${decimalSignedEth(dexPriceRepPerEth)}`,
-												level: 'warning',
-												message: 'Market consensus guard blocked report',
-												reason: primaryRep ? 'Executable price was not confirmed by independent CEX and leave-one-out DEX consensus' : 'Required market consensus is unavailable for this REP token',
-												reportId: evaluated.opportunity.reportId,
-											})
-											continue
-										}
-										const riskDate = dateFromBlockTimestamp(block.timestamp)
-										const mismatch = candidateRiskMismatch(evaluated.candidate, positions, config.riskLimits, riskDate, archivedUtcDayGasSpentWeth(positionJournal.archived, riskDate) + reconciledSettlements.gasSpentAttoEthOnUtcDay(riskDate))
-										if (mismatch === undefined) candidates.push(evaluated.candidate)
-										else {
-											evaluated.opportunity.decision = 'risk-limit'
-											recordOperation(state, {
-												category: 'decision',
-												details: undefined,
-												level: 'warning',
-												message: 'Risk limit blocked report',
-												reason: mismatch,
-												reportId: evaluated.opportunity.reportId,
-											})
-										}
-									}
-								}
-							} catch (error) {
-								const reportId = report.latest.helper.reportId.toString()
-								logMarketDiscoveryFailure(`report=${reportId} skipped=`, error)
-								recordOperation(state, {
-									category: 'decision',
-									details: undefined,
-									level: 'warning',
-									message: 'Report evaluation failed',
-									reason: errorMessage(error),
-									reportId,
-								})
-								throw error
-							}
-						}
-						state.activeReportCount = evaluatedReports.length
-						state.marketObservations = mergeMarketObservations(state.marketObservations ?? [], cycleDexObservations, config.centralizedMarkets.maximumObservationAgeMilliseconds)
-						state.marketConsensus =
-							config.centralizedMarkets.venueConsensus === undefined
-								? undefined
-								: estimateMarketConsensus(
-										(state.marketObservations ?? []).filter(observation => observation.assetId.toLowerCase() === config.network.rep.toLowerCase()),
-										marketConsensusSettings(config.centralizedMarkets),
-										config.network.rep,
-										config.network.chain.id,
-									)
-						state.reportPaths = discoversReportsFromCoordinators
-							? []
-							: [...reports.entries()].map(([id, report]) => ({
-									reportId: id.toString(),
-									settled: report.settled,
-									steps: report.steps,
-								}))
-						state.balances = balances?.snapshot
-						state.blockNumber = blockNumber.toString()
-						state.blockTimestamp = block.timestamp.toString()
-						state.gameCapital = gameCapitalSnapshot(
-							[...reports.values()].filter(report => !report.settled).map(report => report.latest.game),
-							config.network.weth,
-						)
-						state.lastPollAt = new Date().toISOString()
-						state.opportunities = opportunities
-						const selected = selectBestExecution(candidates, candidate => candidate.quote.netProfitAttoWeth)
-						const disputeAttempted = selected !== undefined && wallet !== undefined // a dispute attempt owns this poll's transaction slot even when it fails
-						if (selected !== undefined && wallet !== undefined) {
-							selected.opportunity.decision = 'selected'
-							try {
-								const metadata = state.tokenMarkets.find(market => market.address.toLowerCase() === selected.report.game.token2.toLowerCase())
-								if (metadata === undefined) throw new Error('Token metadata is unavailable')
-								const record = await executeDispute(
-									client,
-									readClients,
-									wallet,
-									config,
-									selected.report,
-									selected.quote,
-									selected.pool,
-									selected.hedgeVenue,
-									selected.hedgeFee,
-									metadata,
-									positions,
-									state.centralizedMarket,
-									selected.marketConsensus,
-									async () => {
-										try {
-											await requireCanonicalDexEvidence(selected.marketConsensus, evidenceBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market evidence', evidenceBlockNumber, config.rpcQuorum))
-											await requireCurrentConstantProductMarketEvidence(config.centralizedMarkets, selected.report.game.token2, config.network.weth, selected.marketConsensus, readConfiguredDexPair)
-											return true
-										} catch (error) {
-											if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-											state.marketObservations = discardDexMarketObservations(state.marketObservations ?? [])
-											state.marketConsensus = undefined
-											selected.marketConsensus = undefined
-											return false
-										}
-									},
-									() => state.paused || shutdown?.isRequested() === true,
-									trackTransaction,
-									persistPosition,
-									archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)) + reconciledSettlements.gasSpentAttoEthOnUtcDay(dateFromBlockTimestamp(block.timestamp)),
-								)
-								selected.opportunity.decision = 'submitted'
-								if (!state.executionHistory.some(existing => existing.transactionHash.toLowerCase() === record.transactionHash.toLowerCase())) state.executionHistory.unshift(record)
-								try {
-									await flushHistoryOutboxes()
-								} catch (error) {
-									if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-									const message = `Confirmed dispute ${record.transactionHash} is visible but history persistence failed: ${errorMessage(error)}`
-									nextError = message
-									console.error(`historyPersistenceFailed=${message}`)
-								}
-							} catch (error) {
-								if (shutdown?.isRequested()) {
-									shutdownDuringHead = true
-									return
-								}
-								if (operationalFailureDisposition(error) === 'connectivity-degraded') throw error
-								const message = errorMessage(error)
-								selected.opportunity.decision = executionFailureDecision(error)
-								if (selected.opportunity.decision === 'execution-failed') {
-									nextError = `Report ${selected.report.helper.reportId.toString()} execution failed: ${message}`
-								}
-								console.error(`report=${selected.report.helper.reportId.toString()} executionFailed=${message}`)
-							}
-						}
-						await runSettlementStage({
-							block: { baseFeePerGas: block.baseFeePerGas ?? 0n, number: blockNumber, timestamp: block.timestamp },
-							client,
-							config,
-							coordinatorPolicies,
-							dailyPositionGasSpentAttoWeth: utcDayGasSpentWeth(positions, dateFromBlockTimestamp(block.timestamp)) + archivedUtcDayGasSpentWeth(positionJournal.archived, dateFromBlockTimestamp(block.timestamp)),
-							executionReady,
-							gasPrice,
-							isPaused: () => state.paused || shutdown?.isRequested() === true,
-							journal: settlementJournal,
-							readClients,
-							reports: reports.values(),
-							state,
-							tokenSymbol: token => tokenMarkets.find(market => market.address.toLowerCase() === token.toLowerCase())?.symbol,
-							track: trackTransaction,
-							transactionSlotFree: !disputeAttempted,
-							wallet,
-						})
-						state.priceHistory = state.priceHistory.slice(-2_000)
-						completedScan = countOpportunities(opportunities)
-						completedFinalityAnchor = headFinalityAnchor
-					})
-					if (shutdownDuringHead || shutdown?.isRequested()) return true
-					if (completedFinalityAnchor === undefined) throw new Error('Successful scan did not produce a finality anchor')
-					cursor = withFinalityAnchor(completedCursor, completedFinalityAnchor.number, completedFinalityAnchor.hash)
-					const settledReportIds = new Set(
-						[...reports.entries()]
-							.filter(([, report]) => {
-								const settlement = report.steps.findLast(step => step.event === 'settled')
-								return report.settled && settlement !== undefined && blockNumber > BigInt(settlement.blockNumber) + REORG_OVERLAP_BLOCKS
-							})
-							.map(([id]) => id),
-					)
-					if (settledReportIds.size !== 0) {
-						for (const id of settledReportIds) reports.delete(id)
-						cachedLogs = cachedLogs.filter(log => !settledReportIds.has(reportId(log)))
-					}
-					scanReport.update({ status: state.paused ? 'paused' : 'live', details: { activeReports: state.activeReportCount, opportunities: completedScan.evaluated, skipped: completedScan.skipped } })
-					reportCompletedScan(state, blockNumber, completedScan, nextError)
-					return completeSuccessfulPoll(state, nextError, config.once)
-				} catch (error) {
-					scanReport?.update({ status: 'failed' })
-					throw error
-				} finally {
-					await scanReport?.finish(shutdown?.isRequested() ? 'incomplete' : undefined)
-					try {
-						signerOperationGate.release('scan')
-					} finally {
-						await scanIntentLock.release()
-					}
-				}
-			},
-			consecutiveFailures => {
-				state.consecutivePollFailures = consecutiveFailures
-				state.retryInProgress = false
-				if (consecutiveFailures === 0) return waitForProfileSwitchOrDelay(config.pollMilliseconds, false)
-				const delayMilliseconds = retryDelayMilliseconds(config.pollMilliseconds, consecutiveFailures, Math.random, MAXIMUM_SCAN_RETRY_DELAY_MILLISECONDS)
-				state.nextRetryAt = new Date(Date.now() + delayMilliseconds).toISOString()
-				return waitForProfileSwitchOrDelay(delayMilliseconds, true)
-			},
+			async consecutiveFailures => await pollOnce(runtime, context, consecutiveFailures),
+			consecutiveFailures => waitBeforeNextScan(runtime, context, consecutiveFailures),
 			config.once,
 			error => {
 				if (shutdown?.isRequested()) return
-				state.rpcEndpointHealth = readPool.snapshot()
-				recordMarketDiscoveryFailure(state, error)
+				context.state.rpcEndpointHealth = runtime.readPool.snapshot()
+				recordMarketDiscoveryFailure(context.state, error)
 			},
 		)
 	} finally {
-		operatorStopped = true
-		await Promise.all([headWatcher.stop(), centralizedMarketSampler.stop()])
-		state.status = 'stopped'
-		await dashboard?.stop(pending.profileSwitch)
+		await stopOperator(runtime, context)
 	}
-	return pending.profileSwitch
+	return context.pending.profileSwitch
 }

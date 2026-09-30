@@ -120,6 +120,28 @@ export async function writeFileAtomically(path: string, contents: string, option
 	}
 }
 
+type BoundedWriteOptions = AtomicWriteOptions & {
+	/** Names the file in the size-limit error, such as `Liquidator state`. */
+	label: string
+	maximumBytes: number
+}
+
+/** `writeFileAtomically`, refusing contents above `maximumBytes` before anything touches the disk. */
+async function writeBoundedFileAtomically(path: string, contents: string, { label, maximumBytes, ...options }: BoundedWriteOptions) {
+	if (Buffer.byteLength(contents, 'utf8') > maximumBytes) throw new Error(`${label} exceeds the ${maximumBytes.toString()}-byte safety limit`)
+	await writeFileAtomically(path, contents, options)
+}
+
+/**
+ * Persists a bot's durable state file: the caller renders `contents` synchronously from the state it holds now, then
+ * this queues the write behind every earlier write to the same path in this process, enforces the size cap, and
+ * replaces the file atomically. Readers should pass the same `maximumBytes` to `readOwnerFileIfPresent`.
+ */
+export async function writeDurableStateFile(path: string, contents: string, options: BoundedWriteOptions) {
+	const resolvedPath = resolve(path)
+	await serializeWritesToPath(resolvedPath, () => writeBoundedFileAtomically(resolvedPath, contents, options))
+}
+
 /** Appends to an owner-only file and syncs it and its directory; without contents it only ensures the file exists. */
 export async function appendFileDurably(path: string, contents: string | undefined, filesystem: DurableAppendFilesystem = durableFilesystem) {
 	await filesystem.mkdir(dirname(path), { mode: OWNER_ONLY_DIRECTORY_MODE, recursive: true })

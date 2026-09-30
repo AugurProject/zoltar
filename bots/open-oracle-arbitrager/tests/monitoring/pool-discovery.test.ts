@@ -132,7 +132,7 @@ test('loads pool state for every discovered pool in one batch and drops empty po
 })
 
 test('market overview skips one unreadable pool while keeping the token and caches its metadata', async () => {
-	const logged = spyOn(console, 'error').mockImplementation(() => {})
+	const logged = spyOn(console, 'warn').mockImplementation(() => {})
 	try {
 		const pools = new Map<string, PoolState>([
 			[pool500.toLowerCase(), { liquidity: 10n, tick: 5n, tickCumulatives: [0n, 600n] }],
@@ -149,6 +149,7 @@ test('market overview skips one unreadable pool while keeping the token and cach
 		const markets = await loadTokenMarkets(deployed.client, parameters)
 		expect(markets).toEqual([{ address: token, balance: undefined, decimals: 18, name: 'Reputation', pools: [{ address: pool500, fee: 500, liquidity: '10', priceWeth: '1', url: `https://explorer.example/address/${pool500}`, venue: 'Uniswap V3' }], symbol: 'REP' }])
 		expect(logged).toHaveBeenCalledTimes(1)
+		expect(String(logged.mock.calls[0]?.[0])).toStartWith(`bot=arbitrager event=marketSnapshotSkipped pool=${pool3000} reason=`)
 		const callsBefore = deployed.contractCalls()
 		await loadTokenMarkets(deployed.client, parameters)
 		// The second overview reuses the cached name, symbol, and decimals.

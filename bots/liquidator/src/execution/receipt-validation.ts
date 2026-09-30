@@ -1,8 +1,7 @@
+import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { decodeEventLog, decodeFunctionData, parseTransaction, type Address, type TransactionReceipt } from '@zoltar/bot-shared/ethereum'
 import { openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
 import type { PendingTransactionIntent } from '#state/operator-state'
-
-const sameAddress = (left: Address, right: Address) => left.toLowerCase() === right.toLowerCase()
 
 type OperationIdentity = { coordinator: Address; operation: 0 | 1; operator: Address; target: Address; receiver: Address; amount: bigint }
 type ReceiptOutcome = { type: 'terminal-success' } | { type: 'terminal-failure'; reason: string } | { type: 'queued'; queuedOperationId: bigint; identity: OperationIdentity }

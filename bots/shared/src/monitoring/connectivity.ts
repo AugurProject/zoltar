@@ -1,3 +1,4 @@
+import { errorMessage } from '../infrastructure/error-message.ts'
 import type { Address, Hex, JsonValue } from '../ethereum.ts'
 import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'
@@ -58,7 +59,7 @@ function endpointFailureDisposition(error: unknown): 'connectivity-degraded' | '
 
 function endpointMethodFailure(error: unknown, url: string, method: string) {
 	const target = endpointLabel(url)
-	const detail = (error instanceof Error ? error.message : String(error)).split(url).join(target)
+	const detail = errorMessage(error).split(url).join(target)
 	const targetPrefix = `RPC ${target} `
 	const normalizedDetail = detail.startsWith(targetPrefix) ? detail.slice(targetPrefix.length) : detail
 	const message = normalizedDetail.includes(method) ? `RPC ${target} ${normalizedDetail}` : `RPC ${target} failed while calling ${method}: ${normalizedDetail}`
@@ -240,7 +241,7 @@ export async function checkRpcEndpoint(url: string, expectedChainId: number, kin
 		return {
 			chainId: undefined,
 			checkedAt,
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage(error),
 			failureDisposition: endpointFailureDisposition(error),
 			kind,
 			status: 'failed',
@@ -424,7 +425,7 @@ async function checkPublicTransactionSubmissionEndpoint(url: string, expectedCha
 		return {
 			chainId,
 			checkedAt: new Date().toISOString(),
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage(error),
 			failureDisposition: endpointFailureDisposition(error),
 			kind: 'public-rpc',
 			status: 'failed',
@@ -497,7 +498,7 @@ async function checkPrivateTransactionRelayEndpoint(url: string, expectedChainId
 			authenticatedAddress,
 			chainId,
 			checkedAt: new Date().toISOString(),
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage(error),
 			failureDisposition: endpointFailureDisposition(error),
 			kind: 'private-relay',
 			status: 'failed',
@@ -519,7 +520,7 @@ async function checkPrivateRelayEndpoint(url: string, expectedChainId: number): 
 		return {
 			chainId,
 			checkedAt,
-			error: error instanceof Error ? error.message : String(error),
+			error: errorMessage(error),
 			failureDisposition: endpointFailureDisposition(error),
 			kind: 'private-relay',
 			status: 'failed',

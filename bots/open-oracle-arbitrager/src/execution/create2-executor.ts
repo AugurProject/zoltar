@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { createPublicClient, keccak256, privateKeyToAccount, type Address, type Chain, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '#monitoring/connectivity'
@@ -39,7 +40,7 @@ async function includedExecutorDeployment(parameters: { address: Address; client
 	)
 	const available = availableSettledValues(settled)
 	if (available.length < requirement) {
-		const failures = settled.flatMap(result => (result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : String(result.reason)] : []))
+		const failures = settled.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`executor deployment receipt requires at least ${requirement === 1 ? 'one available RPC endpoint' : 'two available independent RPC endpoints'}${failures.length === 0 ? '' : `; ${failures.join('; ')}`}`)
 	}
 	const visible = available.flatMap(observation => (observation.value === undefined ? [] : [{ endpoint: observation.endpoint, value: observation.value }]))
