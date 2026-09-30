@@ -8,11 +8,13 @@ import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.
 import {
 	ZERO_LIQUIDATION_APPROVAL_ID,
 	formatHealthFactorBps,
+	getApprovalClampedLiquidationAmount,
 	getApprovalStatus,
 	getDelegatedLiquidationApprovalReason,
 	getLiquidationBlockers,
 	getLiquidationButtonLabels,
 	getLiquidationExecutionMode,
+	getLiquidationLifecycleBlocker,
 	getLiquidationModalTitle,
 	getQueuedLiquidationOperation,
 	getQueuedLiquidationStatus,
@@ -21,6 +23,7 @@ import {
 	isLiquidationApprovalRouteMismatch,
 	isValidLiquidationApprovalId,
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidationModalGuards.js'
+import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import { createOracleManagerDetails } from './workflow/builders.js'
 
 const OPERATOR = getAddress('0x1111111111111111111111111111111111111111')
@@ -62,7 +65,6 @@ function createDelegatedApprovalInput(overrides: Partial<Parameters<typeof getDe
 		approvalRouteMismatch: false,
 		currentTimestamp: 200n,
 		delegatedReceiver: true,
-		liquidationAmountValue: 3n,
 		liquidationApprovalDetails: createApprovalDetails(),
 		liquidationApprovalError: undefined,
 		liquidationApprovalId: APPROVAL_ID,
@@ -153,7 +155,7 @@ describe('liquidation modal guards', () => {
 		expect(isLiquidationApprovalNonceInvalidated(createApprovalDetails({ minimumValidNonce: 1n }))).toBe(false)
 	})
 
-	test('orders delegated approval reasons from input validity to quota', () => {
+	test('orders delegated approval reasons from input validity to approval timing', () => {
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ delegatedReceiver: false, liquidationApprovalId: ZERO_LIQUIDATION_APPROVAL_ID }))).toBeUndefined()
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ liquidationApprovalId: ZERO_LIQUIDATION_APPROVAL_ID }))).toBe(liquidationCopy.delegatedApprovalRequired)
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ liquidationApprovalId: '0x12' }))).toBe(liquidationCopy.invalidDelegatedApprovalId)
@@ -166,9 +168,25 @@ describe('liquidation modal guards', () => {
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ liquidationApprovalDetails: createApprovalDetails({ availableDebtAttoEth: 0n }) }))).toBe(liquidationCopy.approvalUnavailable)
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ currentTimestamp: 50n }))).toBe(liquidationCopy.approvalNotActive)
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ approvalLatestExecutionTimestamp: 1_001n }))).toBe(liquidationCopy.approvalExpiresBeforeExecution)
-		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ liquidationAmountValue: 6n }))).toBe(liquidationCopy.approvalQuotaTooLow)
-		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ liquidationAmountValue: 11n, liquidationApprovalDetails: createApprovalDetails({ availableDebtAttoEth: 10n }, { maxDebtPerLiquidationAttoEth: 20n }) }))).toBe(liquidationCopy.approvalQuotaTooLow)
+		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput({ liquidationApprovalDetails: createApprovalDetails({}, { maxDebtPerLiquidationAttoEth: 0n }) }))).toBe(liquidationCopy.approvalUnavailable)
 		expect(getDelegatedLiquidationApprovalReason(createDelegatedApprovalInput())).toBeUndefined()
+	})
+
+	test('clamps a delegated liquidation amount to the approval limits like the registry instead of blocking it', () => {
+		const details = createApprovalDetails({ availableDebtAttoEth: 4n }, { maxDebtPerLiquidationAttoEth: 5n })
+		expect(getApprovalClampedLiquidationAmount({ delegatedReceiver: true, liquidationAmountValue: 3n, liquidationApprovalDetails: details })).toBe(3n)
+		expect(getApprovalClampedLiquidationAmount({ delegatedReceiver: true, liquidationAmountValue: 6n, liquidationApprovalDetails: details })).toBe(4n)
+		expect(getApprovalClampedLiquidationAmount({ delegatedReceiver: true, liquidationAmountValue: 6n, liquidationApprovalDetails: createApprovalDetails({ availableDebtAttoEth: 10n }, { maxDebtPerLiquidationAttoEth: 5n }) })).toBe(5n)
+		expect(getApprovalClampedLiquidationAmount({ delegatedReceiver: false, liquidationAmountValue: 6n, liquidationApprovalDetails: details })).toBe(6n)
+		expect(getApprovalClampedLiquidationAmount({ delegatedReceiver: true, liquidationAmountValue: undefined, liquidationApprovalDetails: details })).toBeUndefined()
+	})
+
+	test('explains lifecycle states that disable liquidation', () => {
+		expect(getLiquidationLifecycleBlocker(undefined)).toBeUndefined()
+		expect(getLiquidationLifecycleBlocker(evaluateSecurityPoolState({ lifecycleState: 'operational', universeHasForked: false }))).toBeUndefined()
+		expect(getLiquidationLifecycleBlocker(evaluateSecurityPoolState({ lifecycleState: 'ended', universeHasForked: false }))).toBe(liquidationCopy.liquidationUnavailableEndedReason)
+		expect(getLiquidationLifecycleBlocker(evaluateSecurityPoolState({ lifecycleState: 'forkMigration', universeHasForked: true }))).toBe(liquidationCopy.liquidationUnavailableForkMigrationReason)
+		expect(getLiquidationLifecycleBlocker(evaluateSecurityPoolState({ lifecycleState: 'forkTruthAuction', universeHasForked: true }))).toBe(liquidationCopy.liquidationUnavailableTruthAuctionReason)
 	})
 
 	test('reports the first liquidation blocker in priority order with its loading flag', () => {
@@ -202,6 +220,9 @@ describe('liquidation modal guards', () => {
 		expect(getQueuedLiquidationOperation({ currentPoolOracleManagerDetails: undefined, liquidationTargetVault: TARGET, securityPoolOverviewResult: { action: 'queueLiquidation', hash: HASH, securityPoolAddress: POOL } })).toBeUndefined()
 		const pendingSlot = createOracleManagerDetails({ pendingOperation: { amount: 3n, operation: 'liquidation', operationId: 9n, operator: OPERATOR, targetVault: TARGET } })
 		expect(getQueuedLiquidationOperation({ currentPoolOracleManagerDetails: pendingSlot, liquidationTargetVault: TARGET, securityPoolOverviewResult: queuedResult })).toEqual({ amount: 3n, isPendingSlot: true, operationId: 9n })
+		const mixedCaseTarget = getAddress('0xabcdefabcdefabcdefabcdefabcdefabcdefabcd')
+		const mixedCasePendingSlot = createOracleManagerDetails({ pendingOperation: { amount: 3n, operation: 'liquidation', operationId: 9n, operator: OPERATOR, targetVault: mixedCaseTarget } })
+		expect(getQueuedLiquidationOperation({ currentPoolOracleManagerDetails: mixedCasePendingSlot, liquidationTargetVault: mixedCaseTarget.toLowerCase(), securityPoolOverviewResult: queuedResult })).toEqual({ amount: 3n, isPendingSlot: true, operationId: 9n })
 		expect(getQueuedLiquidationOperation({ currentPoolOracleManagerDetails: pendingSlot, liquidationTargetVault: RECEIVER, securityPoolOverviewResult: queuedResult })).toEqual({ amount: undefined, isPendingSlot: false, operationId: 7n })
 	})
 

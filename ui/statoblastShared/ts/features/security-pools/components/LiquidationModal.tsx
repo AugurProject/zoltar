@@ -13,7 +13,7 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalanceWithUnit, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
@@ -22,10 +22,12 @@ import type { UiRepPriceSource } from '../lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import {
 	ZERO_LIQUIDATION_APPROVAL_ID,
+	getApprovalClampedLiquidationAmount,
 	getDelegatedLiquidationApprovalReason,
 	getLiquidationBlockers,
 	getLiquidationButtonLabels,
 	getLiquidationExecutionMode,
+	getLiquidationLifecycleBlocker,
 	getLiquidationModalTitle,
 	getQueuedLiquidationOperation,
 	getQueuedLiquidationStatus,
@@ -208,18 +210,24 @@ export function LiquidationModal({
 		approvalRouteMismatch,
 		currentTimestamp,
 		delegatedReceiver,
-		liquidationAmountValue,
 		liquidationApprovalDetails,
 		liquidationApprovalError,
 		liquidationApprovalId,
 		loadingLiquidationApproval,
 	})
+	// The approval registry clamps a delegated request to its limits, so validation simulates the clamped amount.
+	const simulatedLiquidationAmount = getApprovalClampedLiquidationAmount({ delegatedReceiver, liquidationAmountValue, liquidationApprovalDetails })
+	const approvalClampedNotice =
+		liquidationAmountValue !== undefined && simulatedLiquidationAmount !== undefined && simulatedLiquidationAmount > 0n && simulatedLiquidationAmount < liquidationAmountValue ? liquidationCopy.formatApprovalClampedNotice(formatCurrencyBalanceWithUnit(simulatedLiquidationAmount, commonCopy.eth)) : undefined
+	const minLiquidationPriceDistanceBps = currentPoolOracleManagerDetails?.minLiquidationPriceDistanceBps
 	const computedLiquidationMaxAmount = getMaxLiquidationAmount({
+		minLiquidationPriceDistanceBps,
 		repPerEthPrice: uiCalculationPrice,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
 	})
 	const protocolLiquidationMaxAmount = getMaxLiquidationAmount({
+		minLiquidationPriceDistanceBps,
 		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
 		statoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
 		targetVaultSummary,
@@ -227,9 +235,10 @@ export function LiquidationModal({
 	const liquidationMaxActionAmount = computedLiquidationMaxAmount ?? (uiPriceOracle === undefined ? maximumLiquidationDebtAttoEth : undefined)
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
-		requestedDebtAttoEth: liquidationAmountValue,
+		requestedDebtAttoEth: simulatedLiquidationAmount,
 		totalUnderwritingLimitAttoEth: selectedPool?.totalUnderwritingLimitAttoEth,
 		maxLiquidationDebtAttoEth: protocolLiquidationMaxAmount,
+		minLiquidationPriceDistanceBps,
 		minimumSecurityBondDebtAttoEth: selectedPool?.minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep: selectedPool?.minimumVaultRepDepositAttoRep,
 		repPerEthPrice: hasUsableOraclePrice ? poolOraclePrice : undefined,
@@ -243,9 +252,10 @@ export function LiquidationModal({
 
 		return getLiquidationFailureReason({
 			callerVaultSummary: receiverVaultSummary,
-			requestedDebtAttoEth: liquidationAmountValue,
+			requestedDebtAttoEth: simulatedLiquidationAmount,
 			totalUnderwritingLimitAttoEth: selectedPool.totalUnderwritingLimitAttoEth,
 			minimumReceiverHealthFactorBps: delegatedReceiver ? liquidationApprovalDetails?.params.minPostLiquidationHealthFactorBps : undefined,
+			minLiquidationPriceDistanceBps,
 			minimumSecurityBondDebtAttoEth: selectedPool.minimumSecurityBondDebtAttoEth,
 			minimumVaultRepDepositAttoRep: selectedPool.minimumVaultRepDepositAttoRep,
 			repPerEthPrice: poolOraclePrice,
@@ -262,7 +272,8 @@ export function LiquidationModal({
 					requiredCostAttoEth: liquidationFundingPreview?.totalWalletEthRequiredAttoEth,
 					walletBalanceAttoEth,
 				})
-	const liquidationEnabled = poolState?.actions.queueLiquidation.enabled ?? true
+	const liquidationLifecycleBlocker = getLiquidationLifecycleBlocker(poolState)
+	const liquidationEnabled = liquidationLifecycleBlocker === undefined
 	const walletGuard = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain })
 	const canUseLiquidationAction = !walletGuard.blocked
 	const liquidationBlockers = getLiquidationBlockers({
@@ -292,7 +303,7 @@ export function LiquidationModal({
 	let disabledReasonElementId = !walletGuard.blocked && delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
 	if (!walletGuard.blocked && initialPriceError !== undefined && initialPrice.price !== '') disabledReasonElementId = `${initialPriceFieldId}-error`
 	const liquidationActionReason = initialPriceError ?? liquidationBlocker?.reason
-	const liquidationButtonDisabledReason = walletGuard.reason ?? (liquidationEnabled ? liquidationActionReason : undefined)
+	const liquidationButtonDisabledReason = walletGuard.reason ?? liquidationLifecycleBlocker ?? liquidationActionReason
 	const queuedLiquidationOperation = getQueuedLiquidationOperation({ currentPoolOracleManagerDetails, liquidationTargetVault, securityPoolOverviewResult })
 	const queuedLiquidationStatus = getQueuedLiquidationStatus({ currentPoolOracleManagerDetails, currentTimestamp, loadingPoolOracleManager, queuedLiquidationOperation, securityPoolOverviewResult })
 	return (
@@ -389,6 +400,11 @@ export function LiquidationModal({
 				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
+				{approvalClampedNotice === undefined ? null : (
+					<p className='notice warning' role='status'>
+						{approvalClampedNotice}
+					</p>
+				)}
 				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
 				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={securityPoolOverviewActiveAction !== undefined} fieldId={initialPriceFieldId} /> : undefined}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (

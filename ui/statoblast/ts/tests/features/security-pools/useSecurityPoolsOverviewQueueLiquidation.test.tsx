@@ -233,6 +233,29 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const firstWalletFunding = () => createPricedFunding()
 		const secondWalletFunding = () => createPricedFunding({ currentRepBalanceAttoRep: 50n, currentWethBalanceAttoEth: 4n, wethShortfallAttoEth: 1n })
 
+		test('moves a receiver that follows the wallet to the newly connected wallet', async () => {
+			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies())
+			await act(() => {
+				state().openLiquidationModal(zeroAddress, zeroAddress, REP_TOKEN_ADDRESS, 1n)
+			})
+			expect(state().liquidationReceiverVault).toBe(WALLET_ADDRESS)
+
+			await rerender({ accountAddress: SECOND_WALLET_ADDRESS })
+			expect(state().liquidationReceiverVault).toBe(SECOND_WALLET_ADDRESS)
+		})
+
+		test('keeps a custom receiver when the wallet changes', async () => {
+			const customReceiver = getAddress('0x00000000000000000000000000000000000000c1')
+			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies())
+			await act(() => {
+				state().openLiquidationModal(zeroAddress, zeroAddress, REP_TOKEN_ADDRESS, 1n)
+				state().setLiquidationReceiverVault(customReceiver)
+			})
+
+			await rerender({ accountAddress: SECOND_WALLET_ADDRESS })
+			expect(state().liquidationReceiverVault).toBe(customReceiver)
+		})
+
 		test('invalidates a resolved liquidation funding preview when the wallet changes', async () => {
 			const loadCoordinatorInitialReportFundingRequirement = mock(async (_client: TestSecurityPoolsOverviewWriteClient, _managerAddress: Address, walletAddress: Address) => (walletAddress === WALLET_ADDRESS ? firstWalletFunding() : secondWalletFunding()))
 			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue: mock(async () => 12n) }))

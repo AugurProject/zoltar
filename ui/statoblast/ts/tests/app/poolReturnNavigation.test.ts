@@ -61,3 +61,8 @@ test('returns to Browse or Universes with the same list controls and selected un
 		expect(getRouteHref('pools')).toBe(path + '?universe=7&poolSearch=hello')
 	}
 })
+
+test('uses the Favorites browser when no pool context was selected', () => {
+	window.history.replaceState({}, '', '#/open-oracle')
+	expect(getRouteHref('pools')).toBe('#/pools')
+})

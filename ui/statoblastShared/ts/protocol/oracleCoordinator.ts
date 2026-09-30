@@ -90,7 +90,7 @@ async function readOracleRequestCost(client: Pick<ReadClient, 'getBlock' | 'read
 }
 
 export async function loadOracleManagerDetails(client: ReadClient, managerAddress: Address, openOracleAddress?: Address): Promise<OracleManagerDetails> {
-	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime] = await readRequiredMulticall(client, [
+	const [lastPrice, pendingOperationSlotId, pendingSettlementOperationIds, pendingSettlementQueueCapacity, pendingReportId, queuedOperationCostAttoEth, rawIsPriceValid, lastSettlementTimestamp, activeStagedOperationCount, settlementTime, minLiquidationPriceDistanceBps] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'lastPrice',
@@ -148,6 +148,12 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		{
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'settlementTime',
+			address: managerAddress,
+			args: [],
+		},
+		{
+			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
+			functionName: 'minLiquidationPriceDistanceBps',
 			address: managerAddress,
 			args: [],
 		},
@@ -235,6 +241,7 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 		lastPrice,
 		lastSettlementTimestamp,
 		managerAddress,
+		minLiquidationPriceDistanceBps,
 		openOracleAddress: resolvedOracleAddress,
 		pendingOperation,
 		pendingOperationSlotId,

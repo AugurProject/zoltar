@@ -182,6 +182,8 @@ export type SecurityVaultDetails = {
 	minimumVaultRepDepositAttoRep?: bigint
 	openInterestAttoEth?: bigint
 	poolHeldRepPerCapacityBps?: bigint
+	/** Pool-held REP read in the same block as the vault, so it pairs with totalRepBackingUnits for unit conversions. */
+	totalPoolHeldRepBalanceAttoRep: bigint
 	totalRepBackingUnits: bigint
 	vaultAttoRepBacking: bigint
 	repToken: Address
@@ -214,6 +216,8 @@ export type OracleManagerDetails = {
 	lastPrice: bigint
 	lastSettlementTimestamp: bigint
 	managerAddress: Address
+	/** The coordinator's immutable minimum price distance past a vault's liquidation threshold, in basis points. */
+	minLiquidationPriceDistanceBps?: bigint | undefined
 	openOracleAddress: Address
 	pendingOperation: StagedOracleOperation | undefined
 	pendingOperationSlotId: bigint
@@ -288,6 +292,10 @@ export type OpenOracleReportDetails = OpenOracleReportSummary & {
 	callbackGasLimit: number
 	protocolFeeRecipient: Address
 	trackDisputes: boolean
+	/** OpenOracle FLAG_FEES_ONLY_AT_HALT: disputes pay no fees until the current base amount reaches escalationHalt. */
+	feesOnlyAtHalt: boolean
+	/** OpenOracle FLAG_FLEXIBLE_ESCALATION: disputes may choose any base amount from the expected amount up to escalationHalt. */
+	flexibleEscalation: boolean
 	numReports: bigint
 	lastReportOppoTime: bigint
 }

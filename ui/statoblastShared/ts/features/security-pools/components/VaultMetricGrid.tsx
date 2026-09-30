@@ -71,25 +71,19 @@ export function VaultMetricGrid({
 		selectedPoolStatoblastSecurityMultiplierBps,
 	})
 
+	// The directory preview is one flat metric row, so every figure shares the grid's label, value size, and baseline.
 	if (layout === 'preview')
 		return (
 			<div className={['vault-preview-strip', className].filter(Boolean).join(' ')}>
-				<div className='vault-preview-strip-head'>
-					<div className='vault-preview-capacity-ownership'>
-						<span>{securityPoolCopy.exposureSupported}</span>
-						<strong>
-							<VaultExposureValue capacity={underwritingLimitAttoEth} />
-						</strong>
-					</div>
-				</div>
-				<div className='vault-preview-side-metrics'>
-					<VaultPrimaryMetric label={commonCopy.poolHeldVaultRepBackingAttoRep} value={vaultAttoRepBacking} suffix={commonCopy.rep} />
-				</div>
-				<div className='vault-preview-meta'>
-					{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? <BadDebtMetric value={badDebtAttoEth} /> : undefined}
-					{disputeStakedAttoRep === undefined ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
-					{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
-				</div>
+				<MetricField label={securityPoolCopy.exposureSupported}>
+					<VaultExposureValue capacity={underwritingLimitAttoEth} />
+				</MetricField>
+				<MetricField label={commonCopy.poolHeldVaultRepBackingAttoRep}>
+					<CurrencyValue exactWhenRoundedToZero value={vaultAttoRepBacking} suffix={commonCopy.rep} />
+				</MetricField>
+				{disputeStakedAttoRep === undefined ? undefined : <DisputeStakedMetric value={disputeStakedAttoRep} />}
+				{badDebtAttoEth !== undefined && badDebtAttoEth > 0n ? <BadDebtMetric value={badDebtAttoEth} valueClassName='metric-value-danger' /> : undefined}
+				{priceValidUntilTimestamp === undefined ? undefined : <PriceValidUntilMetric timestamp={priceValidUntilTimestamp} />}
 			</div>
 		)
 

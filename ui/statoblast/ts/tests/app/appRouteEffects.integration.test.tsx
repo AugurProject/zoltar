@@ -448,6 +448,35 @@ describe('app route effects integration', () => {
 		}
 	})
 
+	test('reloads pools once per new create or trade result hash, not on later pool changes', async () => {
+		const dom = installDomEnvironment('http://localhost/#/pools')
+		const calls: Array<string | undefined> = []
+		const poolA = '0x84834d4Dccea071b363e53952BD300F7bf56a009'
+		const poolB = '0x00000000000000000000000000000000000000ab'
+		const loadSecurityPools = async (address?: string) => {
+			calls.push(address)
+		}
+		const propsFor = (securityPoolAddress: string, overrides: Partial<RouteEffectsProps> = {}) => createDefaultProps({ loadSecurityPools, route: 'pools', securityPoolAddress, securityPoolResultHash: '0xcreate', selectedPoolSecurityPoolAddress: securityPoolAddress, tradingResultHash: '0xtrade', ...overrides })
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...propsFor(poolA)} />)
+		try {
+			expect(calls).toEqual([poolA, poolA])
+			await act(() => {
+				render(<RouteEffectsHarness {...propsFor(poolB)} />, container)
+			})
+			await act(() => {
+				render(<RouteEffectsHarness {...propsFor(poolA)} />, container)
+			})
+			expect(calls).toEqual([poolA, poolA])
+			await act(() => {
+				render(<RouteEffectsHarness {...propsFor(poolA, { tradingResultHash: '0xtrade2' })} />, container)
+			})
+			expect(calls).toEqual([poolA, poolA, poolA])
+		} finally {
+			await cleanup()
+			dom.cleanup()
+		}
+	})
+
 	test('refreshes the selected pool with its route address after pool creation succeeds', async () => {
 		const dom = installDomEnvironment('http://localhost/#/pools')
 		const calls: Array<string | undefined> = []

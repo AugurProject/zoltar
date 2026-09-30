@@ -82,6 +82,8 @@ export function useAppRouteEffects({
 	const lastUrlVaultAddress = useRef<string | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
+	const lastHandledSecurityPoolResultHash = useRef<string | undefined>(undefined)
+	const lastHandledTradingResultHash = useRef<string | undefined>(undefined)
 
 	loadSecurityPoolsRef.current = loadSecurityPools
 	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady, isOpenOracleRoute: route === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId })
@@ -150,17 +152,20 @@ export function useAppRouteEffects({
 		void loadSecurityPoolsRef.current(securityPoolAddress)
 	}, [activeEnvironmentNonce, environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
 
+	// A create or trade result refreshes pools once per new transaction hash; later pool changes do not replay it.
 	useEffect(() => {
 		if (!environmentReady) return
 		if (route !== 'pools') return
-		if (securityPoolResultHash === undefined) return
+		if (securityPoolResultHash === undefined || lastHandledSecurityPoolResultHash.current === securityPoolResultHash) return
+		lastHandledSecurityPoolResultHash.current = securityPoolResultHash
 		void loadSecurityPoolsRef.current(securityPoolAddress === '' ? undefined : securityPoolAddress)
 	}, [environmentReady, route, securityPoolAddress, securityPoolResultHash])
 
 	useEffect(() => {
 		if (!environmentReady) return
 		if (route !== 'pools') return
-		if (tradingResultHash === undefined || !isHexAddressInput(securityPoolAddress)) return
+		if (tradingResultHash === undefined || lastHandledTradingResultHash.current === tradingResultHash || !isHexAddressInput(securityPoolAddress)) return
+		lastHandledTradingResultHash.current = tradingResultHash
 		void loadSecurityPoolsRef.current(securityPoolAddress)
 	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
 }

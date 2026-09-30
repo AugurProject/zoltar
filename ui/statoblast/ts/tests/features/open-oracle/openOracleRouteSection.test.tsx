@@ -17,7 +17,7 @@ import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { AccountState, OpenOracleCreateFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -150,6 +150,8 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		token2Decimals: 18,
 		token2Symbol: 'WETH',
 		trackDisputes: false,
+		feesOnlyAtHalt: false,
+		flexibleEscalation: false,
 		...overrides,
 	}
 }

@@ -654,7 +654,8 @@ export async function loadSecurityPoolPage(client: ReadClient, pageIndex: number
 
 export async function loadSecurityVaultDetails(client: ReadClient, securityPoolAddress: Address, vaultAddress: Address): Promise<SecurityVaultDetails | undefined> {
 	if (!(await securityPoolExists(client, securityPoolAddress))) return undefined
-
+	// Every read is pinned to one block so the vault's backing and the pool totals used for deposit rounding agree.
+	const blockNumber = await client.getBlockNumber()
 	const [
 		badDebtAttoEth,
 		currentRetentionRate,
@@ -673,31 +674,27 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		statoblastSecurityMultiplierBps,
 		settlementCollateralAttoEth,
 	] = await Promise.all([
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumSecurityBondDebtAttoEth', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalUnderwritingLimitAttoEth', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress] }),
-		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress]).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', address: securityPoolAddress, args: [vaultAddress] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [] }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', address: securityPoolAddress, args: [] }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumSecurityBondDebtAttoEth', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalUnderwritingLimitAttoEth', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'universeId', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
+		loadEscalationVaultData(client, securityPoolAddress, [vaultAddress], blockNumber).then(values => values[0]?.disputeStakedAttoRep ?? 0n),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultOpenInterestAttoEth', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultCapacityBackingFactorsBps', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'settlementCollateralAttoEth', address: securityPoolAddress, args: [], blockNumber }),
 	])
-	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [] })
+	const repTokenSymbol = await client.readContract({ abi: ReputationToken_ReputationToken.abi, functionName: 'symbol', address: repToken, args: [], blockNumber })
 
 	const [repBackingUnits, underwritingLimitAttoEth, claimableFeesAttoEth] = vaultData
-	const vaultAttoRepBacking = getVaultRepBackingAttoRepFromRepBackingUnits({
-		repBackingUnits,
-		totalRepBackingUnits,
-		totalPoolHeldRepBalanceAttoRep,
-	})
+	const vaultAttoRepBacking = getVaultRepBackingAttoRepFromRepBackingUnits({ repBackingUnits, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep })
 
 	return {
 		statoblastSecurityMultiplierBps,
@@ -711,6 +708,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 		minimumVaultRepDepositAttoRep,
 		openInterestAttoEth,
 		poolHeldRepPerCapacityBps: capacityBackingFactorsBps[1],
+		totalPoolHeldRepBalanceAttoRep,
 		totalRepBackingUnits,
 		vaultAttoRepBacking,
 		repToken,

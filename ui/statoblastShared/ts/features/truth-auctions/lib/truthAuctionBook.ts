@@ -1,5 +1,5 @@
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
-import { TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
@@ -51,9 +51,21 @@ function ceilDiv(dividend: bigint, divisor: bigint) {
 	return divideUp(dividend, divisor)
 }
 
+// The contract's underfundedThreshold: an auction that misses its cap only fills bids priced at or above this reserve.
+export function getTruthAuctionReservePrice(auction: Pick<TruthAuctionMetrics, 'attoEthRaiseCap' | 'maxAttoRepBeingSold' | 'underfundedThreshold'>) {
+	if (auction.underfundedThreshold !== undefined) return auction.underfundedThreshold
+	if (auction.maxAttoRepBeingSold <= 0n) return undefined
+	return ceilDiv(auction.attoEthRaiseCap * TRUTH_AUCTION_PRICE_PRECISION, auction.maxAttoRepBeingSold)
+}
+
+function isBelowTruthAuctionReserve(price: bigint, auction: TruthAuctionMetrics) {
+	const reserve = getTruthAuctionReservePrice(auction)
+	return reserve !== undefined && price < reserve
+}
+
 function findUnderfundedWinningAttoEth(tickSummaries: TruthAuctionTickSummary[], auction: TruthAuctionMetrics) {
-	if (auction.maxAttoRepBeingSold <= 0n) return 0n
-	const reserve = auction.underfundedThreshold ?? ceilDiv(auction.attoEthRaiseCap * TRUTH_AUCTION_PRICE_PRECISION, auction.maxAttoRepBeingSold)
+	const reserve = getTruthAuctionReservePrice(auction)
+	if (reserve === undefined) return 0n
 	return tickSummaries.reduce((total, tick) => total + (tick.price >= reserve ? tick.currentTotalBidAttoEth : 0n), 0n)
 }
 
@@ -89,7 +101,10 @@ function getTruthAuctionTickDisposition(tickSummary: TruthAuctionTickSummary, tr
 	const winningThresholdPrice = getTruthAuctionWinningThresholdPrice(truthAuction)
 	if (winningThresholdPrice !== undefined) return isUnderfundedWinningTick(tickSummary.tick, truthAuction) ? { label: 'Winning', tone: 'success' } : { label: 'Out', tone: 'danger' }
 	if (isFinalizedUnderfundedWithoutWinningPrefix(truthAuction)) return { label: 'Out', tone: 'danger' }
-	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? { label: 'Winning', tone: 'success' } : { label: 'In book', tone: 'default' }
+	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
+		if (truthAuction.finalized) return { label: 'Winning', tone: 'success' }
+		return isBelowTruthAuctionReserve(tickSummary.price, truthAuction) ? { label: 'Below reserve', tone: 'danger' } : { label: 'In book', tone: 'default' }
+	}
 	if (tickSummary.tick > truthAuction.clearingTick) return { label: 'Winning', tone: 'success' }
 	if (tickSummary.tick < truthAuction.clearingTick) return { label: truthAuction.finalized ? 'Out' : 'Losing', tone: 'danger' }
 	return { label: 'Clearing price', tone: 'warning' }
@@ -135,7 +150,10 @@ export function getTruthAuctionBidDisposition(bid: TruthAuctionBidView, truthAuc
 
 	if (isFinalizedUnderfundedWithoutWinningPrefix(truthAuction)) return finalizedRefundDisposition(bid)
 
-	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('In book', 'default')
+	if (!truthAuction.hitCap || truthAuction.clearingTick === undefined || truthAuction.clearingPrice === undefined) {
+		if (truthAuction.finalized) return finalizedRepClaimDisposition(bid)
+		return isBelowTruthAuctionReserve(getTruthAuctionPriceAtTick(bid.tick), truthAuction) ? openBidDisposition('Below reserve', 'danger') : openBidDisposition('In book', 'default')
+	}
 
 	if (bid.tick > truthAuction.clearingTick) return truthAuction.finalized ? finalizedRepClaimDisposition(bid) : openBidDisposition('Winning', 'success')
 	if (bid.tick < truthAuction.clearingTick) {
@@ -372,6 +390,7 @@ function normalizeTruthAuctionPriceInput(value: string) {
 }
 
 const TRUTH_AUCTION_MAX_PRICE = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK)
+const TRUTH_AUCTION_MIN_PRICE = getTruthAuctionPriceAtTick(findTruthAuctionMinSupportedTick())
 
 function formatTruthAuctionValidationPrice(price: bigint) {
 	const wholePart = (price / TRUTH_AUCTION_PRICE_PRECISION).toString()
@@ -380,6 +399,7 @@ function formatTruthAuctionValidationPrice(price: bigint) {
 }
 
 const TRUTH_AUCTION_MAX_PRICE_INPUT = formatTruthAuctionValidationPrice(TRUTH_AUCTION_MAX_PRICE)
+const TRUTH_AUCTION_PRICE_RANGE_MESSAGE = `Bid price must be between ${formatTruthAuctionValidationPrice(TRUTH_AUCTION_MIN_PRICE)} and ${TRUTH_AUCTION_MAX_PRICE_INPUT} ETH per REP.`
 const truthAuctionMaxPriceParts = TRUTH_AUCTION_MAX_PRICE_INPUT.split('.')
 const TRUTH_AUCTION_MAX_PRICE_WHOLE = truthAuctionMaxPriceParts[0] ?? '0'
 const rawTruthAuctionMaxPriceFraction = truthAuctionMaxPriceParts[1] ?? ''
@@ -414,11 +434,11 @@ export function getTruthAuctionBidPreview(submitBidPriceInput: string) {
 
 export function getTruthAuctionBidPriceValidationMessage(submitBidPriceInput: string) {
 	if (submitBidPriceInput.trim() === '') return 'Enter a bid price greater than zero.'
-	if (isTruthAuctionPriceInputDefinitelyOutOfRange(submitBidPriceInput)) return 'Bid price is outside the supported auction range.'
+	if (isTruthAuctionPriceInputDefinitelyOutOfRange(submitBidPriceInput)) return TRUTH_AUCTION_PRICE_RANGE_MESSAGE
 	const enteredBidPrice = tryParseTruthAuctionPriceInput(submitBidPriceInput)
 	if (enteredBidPrice === undefined) return 'Enter a valid bid price.'
 	if (enteredBidPrice <= 0n) return 'Enter a bid price greater than zero.'
-	if (getTruthAuctionTickAtPrice(enteredBidPrice) === undefined) return 'Bid price is outside the supported auction range.'
+	if (getTruthAuctionTickAtPrice(enteredBidPrice) === undefined) return TRUTH_AUCTION_PRICE_RANGE_MESSAGE
 	return undefined
 }
 

@@ -128,13 +128,32 @@ export function convertAttoSharesToSettlementCollateralAttoEth(amountAttoShares:
 	return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares
 }
 
-export function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
+function convertSettlementCollateralAttoEthToAttoShares(amountAttoEth: bigint, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
 	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return amountAttoEth
 	if (settlementCollateralAttoEth === 0n) {
 		if (shareTokenSupplyAttoShares !== 0n) return undefined
 		return amountAttoEth
 	}
 	return divideRoundedUp(amountAttoEth * shareTokenSupplyAttoShares, settlementCollateralAttoEth)
+}
+
+// Converting ETH back to shares rounds up, yet a maximum ETH amount rounded down from the share balance can map to fewer
+// shares and strand dust. An amount at the redeemable maximum therefore redeems the exact share balance.
+export function getCompleteSetRedeemAttoShares({
+	maxRedeemableAttoShares,
+	redeemAmountAttoEth,
+	settlementCollateralAttoEth,
+	shareTokenSupplyAttoShares,
+}: {
+	maxRedeemableAttoShares: bigint | undefined
+	redeemAmountAttoEth: bigint
+	settlementCollateralAttoEth: bigint | undefined
+	shareTokenSupplyAttoShares: bigint | undefined
+}) {
+	const convertedAttoShares = convertSettlementCollateralAttoEthToAttoShares(redeemAmountAttoEth, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
+	if (convertedAttoShares === undefined || maxRedeemableAttoShares === undefined || convertedAttoShares > maxRedeemableAttoShares) return convertedAttoShares
+	const maxRedeemableAttoEth = convertAttoSharesToSettlementCollateralAttoEth(maxRedeemableAttoShares, settlementCollateralAttoEth, shareTokenSupplyAttoShares)
+	return redeemAmountAttoEth >= maxRedeemableAttoEth ? maxRedeemableAttoShares : convertedAttoShares
 }
 
 export function getShareSettlementBalances(shareBalances: TradingShareBalances | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
@@ -309,7 +328,8 @@ export function getTradingMigrateSharesGuardMessage({
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before migrating shares.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
-	if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return 'Refresh the fork target universes.'
+	if (tradingForkUniverse === undefined) return tradingCopy.forkTargetsRefreshRequired
+	if (!tradingForkUniverse.hasForked) return tradingCopy.shareMigrationRequiresFork
 
 	const targetOutcomeIndexes = tryParseBigIntListInput(targetOutcomeIndexesInput)
 	if (targetOutcomeIndexes === undefined) return targetOutcomeIndexesInput.trim() === '' ? 'Select at least one target child universe.' : 'Select valid target child universes.'

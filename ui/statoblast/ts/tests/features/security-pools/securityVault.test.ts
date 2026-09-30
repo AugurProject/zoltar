@@ -14,12 +14,19 @@ import {
 	hasValidSecurityVaultOraclePrice,
 	isOracleManagerPriceUsable,
 	isSecurityVaultDepositBelowMinimum,
+	doesVaultWithdrawalExitEntireVault,
 	isSelectedVaultOwnedByAccount,
 	MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '@zoltar/ui-statoblast-shared/protocol/oracleTiming.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
+import { createMulticallStub, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { loadSecurityVaultDetails } from '@zoltar/ui-statoblast-shared/protocol/securityPools.js'
+
+/** A vault in an empty pool, where deposits convert to backing units without rounding. */
+function createDepositState(vaultAttoRepBacking: bigint) {
+	return { vaultAttoRepBacking, totalPoolHeldRepBalanceAttoRep: 0n, totalRepBackingUnits: 0n }
+}
 
 void describe('security vault helpers', () => {
 	void test('defaults to the connected wallet vault when no explicit vault is selected', () => {
@@ -140,14 +147,14 @@ void describe('security vault helpers', () => {
 		expect(formatCurrencyInputBalance(1234567890000000000000n)).toBe('1234.56789')
 	})
 
-	void test('requires a minimum first deposit for brand-new vaults only', () => {
-		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
+	void test('requires every deposit to leave the vault at the minimum or above', () => {
+		expect(isSecurityVaultDepositBelowMinimum(createDepositState(0n), MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
 		expect(isSecurityVaultDepositBelowMinimum(undefined, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP - 1n)).toBe(true)
-		expect(isSecurityVaultDepositBelowMinimum(0n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
-		expect(isSecurityVaultDepositBelowMinimum(1n, 1n)).toBe(false)
-		expect(isSecurityVaultDepositBelowMinimum(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, 5n * 10n ** 17n)).toBe(false)
-		expect(isSecurityVaultDepositBelowMinimum(0n, 19n * 10n ** 18n, 20n * 10n ** 18n)).toBe(true)
-		expect(isSecurityVaultDepositBelowMinimum(0n, 20n * 10n ** 18n, 20n * 10n ** 18n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(createDepositState(0n), MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(createDepositState(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP), 1n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(createDepositState(MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP), 5n * 10n ** 17n)).toBe(false)
+		expect(isSecurityVaultDepositBelowMinimum(createDepositState(0n), 19n * 10n ** 18n, 20n * 10n ** 18n)).toBe(true)
+		expect(isSecurityVaultDepositBelowMinimum(createDepositState(0n), 20n * 10n ** 18n, 20n * 10n ** 18n)).toBe(false)
 	})
 
 	void test('requires matching valid oracle manager details for queued vault actions', () => {
@@ -199,6 +206,51 @@ void describe('security vault helpers', () => {
 
 		await expect(loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))).resolves.toBeUndefined()
 		expect(readContractCalled).toBe(false)
+	})
+
+	void test('pins every vault and pool-total read to one block', async () => {
+		const pinnedBlockNumber = 77n
+		const readBlockNumbers = new Map<string, bigint | undefined>()
+		const readValues: Record<string, unknown> = {
+			currentRetentionRate: 0n,
+			escalationGame: getAddress('0x00000000000000000000000000000000000000e1'),
+			getTotalPoolHeldAttoRep: 100n * 10n ** 18n,
+			getVaultCapacityBackingFactorsBps: [0n, 0n],
+			getVaultOpenInterestAttoEth: 0n,
+			minimumSecurityBondDebtAttoEth: 0n,
+			minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
+			priceOracleManagerAndOperatorQueuer: getAddress('0x00000000000000000000000000000000000000d1'),
+			repToken: getAddress('0x00000000000000000000000000000000000000a2'),
+			securityVaults: [50n * 10n ** 18n, 0n, 0n, 0n],
+			settlementCollateralAttoEth: 0n,
+			statoblastSecurityMultiplierBps: 20_000n,
+			symbol: 'REP',
+			totalRepBackingUnits: 100n * 10n ** 18n,
+			totalUnderwritingLimitAttoEth: 0n,
+			universeId: 0n,
+			vaultBadDebtAttoEth: 0n,
+		}
+		const client = createConnectedReadClient()
+		const getCode: typeof client.getCode = async () => '0x01'
+		const getBlockNumber: typeof client.getBlockNumber = async () => pinnedBlockNumber
+		client.getCode = getCode
+		client.getBlockNumber = getBlockNumber
+		client.readContract = createReadContractStub(async request => {
+			readBlockNumbers.set(request.functionName, request.blockNumber)
+			if (!(request.functionName in readValues)) throw new Error(`Unexpected read: ${request.functionName}`)
+			return readValues[request.functionName]
+		})
+		client.multicall = createMulticallStub(async request => {
+			readBlockNumbers.set('escalation multicall', request.blockNumber)
+			return request.contracts.map(() => 0n)
+		})
+
+		const details = await loadSecurityVaultDetails(client, getAddress('0x00000000000000000000000000000000000000b1'), getAddress('0x00000000000000000000000000000000000000c1'))
+
+		expect(details?.totalPoolHeldRepBalanceAttoRep).toBe(100n * 10n ** 18n)
+		// A read left on the latest block could mix the vault's units with pool totals from another block in the deposit rounding.
+		expect([...readBlockNumbers.keys()].sort()).toEqual([...Object.keys(readValues), 'escalation multicall'].sort())
+		for (const [read, blockNumber] of readBlockNumbers) expect({ read, blockNumber }).toEqual({ read, blockNumber: pinnedBlockNumber })
 	})
 
 	void test('returns zero or no withdrawal when balance inputs are missing or blocked', () => {
@@ -332,4 +384,31 @@ void test('commitment maximum is healthy and one attoETH more is liquidatable ac
 	}
 	expect(getMaximumHealthyCommitment(undefined, 1n, 20000n)).toBeUndefined()
 	expect(getMaximumHealthyCommitment({ vaultAttoRepBacking: 1n, disputeStakedAttoRep: 0n }, 0n, 20000n)).toBeUndefined()
+})
+
+void test('an exact minimum first deposit is below the minimum when the unit round trip floors it', () => {
+	// SecurityPoolOperationsDelegate._creditRepDeposit floors REP into backing units, then checks the vault's REP after
+	// converting those units back against the post-deposit pool, so an inexact REP-per-unit ratio loses one attoREP.
+	const vault = { vaultAttoRepBacking: 0n, totalPoolHeldRepBalanceAttoRep: 30n * 10n ** 18n + 1n, totalRepBackingUnits: 20n * 10n ** 18n }
+	expect(isSecurityVaultDepositBelowMinimum(vault, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(true)
+	expect(isSecurityVaultDepositBelowMinimum(vault, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP + 1n, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
+	// An exact ratio or an empty pool credits the full deposit.
+	expect(isSecurityVaultDepositBelowMinimum({ vaultAttoRepBacking: 0n, totalPoolHeldRepBalanceAttoRep: 30n * 10n ** 18n, totalRepBackingUnits: 30n * 10n ** 36n }, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
+	expect(isSecurityVaultDepositBelowMinimum(createDepositState(0n), MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP)).toBe(false)
+	// The contract checks the whole vault after every deposit, including an existing vault below the minimum.
+	expect(isSecurityVaultDepositBelowMinimum(createDepositState(4n * 10n ** 18n), 5n * 10n ** 18n)).toBe(true)
+	expect(isSecurityVaultDepositBelowMinimum(createDepositState(4n * 10n ** 18n), 6n * 10n ** 18n)).toBe(false)
+})
+
+void test('a partial withdrawal maximum keeps the vault minimum unless coverage allows a full exit', () => {
+	const minimum = 10n * 10n ** 18n
+	// A commitment locks 4 REP of 20: withdrawing more than 10 would leave less than the minimum and exit the whole vault, which coverage rejects.
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 20n * 10n ** 18n, repPerEthPrice: 2n * 10n ** 18n, underwritingLimitAttoEth: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, minimumVaultRepDepositAttoRep: minimum })).toBe(10n * 10n ** 18n)
+	// Without a commitment the whole vault can leave.
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: 20n * 10n ** 18n, repPerEthPrice: undefined, underwritingLimitAttoEth: 0n, statoblastSecurityMultiplierBps: 20_000n, minimumVaultRepDepositAttoRep: minimum })).toBe(20n * 10n ** 18n)
+	// A committed vault at the minimum cannot withdraw anything partially.
+	expect(getSecurityVaultWithdrawableRepAmount({ vaultAttoRepBacking: minimum, repPerEthPrice: 10n ** 18n, underwritingLimitAttoEth: 1n, statoblastSecurityMultiplierBps: 20_000n, minimumVaultRepDepositAttoRep: minimum })).toBe(0n)
+	expect(doesVaultWithdrawalExitEntireVault(11n * 10n ** 18n, 20n * 10n ** 18n, minimum)).toBe(true)
+	expect(doesVaultWithdrawalExitEntireVault(10n * 10n ** 18n, 20n * 10n ** 18n, minimum)).toBe(false)
+	expect(doesVaultWithdrawalExitEntireVault(undefined, 20n * 10n ** 18n, minimum)).toBe(false)
 })
