@@ -1,14 +1,15 @@
 import { expect, spyOn, test } from 'bun:test'
 import { ScannerDatabase, type IndexedBlock } from '../../src/database.ts'
-import { NetworkIndexer } from '../../src/indexer/block-ingestion.ts'
+import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
+import { type PollOperations, poll } from '../../src/indexer/network-synchronization.ts'
 import { toHex, zeroAddress, zeroHash } from '../../src/ethereum.ts'
 
 for (const mode of ['committed', 'empty', 'failed', 'reorg'] as const) {
 	test(`scan summary reflects ${mode} ingestion and only counts committed logs`, async () => {
 		const database = new ScannerDatabase('postgres://unused')
 		const signal = new AbortController().signal
-		const indexer = new NetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, signal)
-		indexer.stateBoundaryDiscovered = true
+		const indexer = createNetworkIndexer({ id: 'sepolia', name: 'Sepolia', chainId: 11_155_111, rpcUrls: ['http://unused.invalid'], startBlock: 10n, confirmationDepth: 12n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, signal)
+		indexer.stateBoundary.discovered = true
 		indexer.lease = { backendPid: 1, connection: Object.assign(database.sql, { release() {}, [Symbol.dispose]() {} }), assertHeld: async () => {}, release: async () => {} }
 		const hash = toHex(10n, { size: 32 })
 		const header = { number: 10n, hash, parentHash: zeroHash, timestamp: 1_700_000_000n, transactions: [] }
@@ -41,22 +42,24 @@ for (const mode of ['committed', 'empty', 'failed', 'reorg'] as const) {
 			spyOn(database, 'contracts').mockResolvedValue(new Map()),
 			spyOn(database, 'tokenMetadata').mockResolvedValue(new Map()),
 			spyOn(database, 'logScanCursors').mockResolvedValue(new Map()),
-			spyOn(indexer, 'reconcileReorg').mockResolvedValue(),
-			spyOn(indexer, 'refreshContractDeployment').mockResolvedValue(),
-			spyOn(indexer.client, 'getBlockNumber').mockResolvedValueOnce(10n).mockResolvedValue(12n),
-			spyOn(indexer, 'getNextLogSegment').mockResolvedValue({ toBlock: 10n, logs: [], scanInputs: [], deploymentObservations: [], endBlockHash: hash, endBlockHeader: header }),
-			spyOn(indexer, 'getBlockHeader').mockResolvedValue({ ...header, hash: mode === 'reorg' ? zeroHash : hash }),
-			// The completed ingestion result includes logs discovered after the initial empty RPC segment.
-			spyOn(indexer, 'indexBlock').mockResolvedValue({ block, contracts: new Map(), tokenMetadata: new Map() }),
+			spyOn(indexer.providers.client, 'getBlockNumber').mockResolvedValueOnce(10n).mockResolvedValue(12n),
 			spyOn(database, 'storeBlocks').mockImplementation(async (_chainId, _blocks, _lease, _provenance, validate) => {
 				await validate?.()
 				if (mode === 'failed') throw new Error('Commit failed')
 				committed = true
 			}),
 		]
+		const operations: PollOperations = {
+			reconcileReorg: async () => {},
+			refreshContractDeployment: async () => {},
+			getNextLogSegment: async () => ({ toBlock: 10n, logs: [], scanInputs: [], deploymentObservations: [], endBlockHash: hash, endBlockHeader: header }),
+			getBlockHeader: async () => ({ ...header, hash: mode === 'reorg' ? zeroHash : hash }),
+			// The completed ingestion result includes logs discovered after the initial empty RPC segment.
+			indexBlock: async () => ({ block, contracts: new Map(), tokenMetadata: new Map() }),
+		}
 		try {
-			if (mode === 'failed') await expect(indexer.poll()).rejects.toThrow('Commit failed')
-			else expect(await indexer.poll()).toBe(mode !== 'reorg')
+			if (mode === 'failed') await expect(poll(indexer, operations)).rejects.toThrow('Commit failed')
+			else expect(await poll(indexer, operations)).toBe(mode !== 'reorg')
 			expect(lines).toHaveLength(1)
 			if (mode === 'committed' || mode === 'empty') {
 				expect(lines[0]).toContain(`logsAdded=${block.logs.length}`)

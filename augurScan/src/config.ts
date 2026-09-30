@@ -177,4 +177,6 @@ export const runtimeConfig = {
 	accessCredentials: parseBasicAccessCredentials(process.env['AUGURSCAN_ACCESS_USERNAME'], process.env['AUGURSCAN_ACCESS_PASSWORD']),
 	apiRateLimitPerMinute: requirePositiveInteger(process.env['API_RATE_LIMIT_PER_MINUTE'] ?? '600', 'API_RATE_LIMIT_PER_MINUTE', true),
 	liveBackpressureTimeoutMs: requirePositiveInteger(process.env['LIVE_BACKPRESSURE_TIMEOUT_MS'] ?? '60000', 'LIVE_BACKPRESSURE_TIMEOUT_MS'),
+	/** Raw lagging-report block interval override; `scanBlockTimeMs` validates it and applies per-chain defaults. */
+	scanBlockTimeMsOverride: process.env['SCAN_BLOCK_TIME_MS'],
 }

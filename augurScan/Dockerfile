@@ -77,6 +77,7 @@ COPY shared/core/ts/errors/ ./shared/core/ts/errors/
 COPY shared/core/ts/math/ ./shared/core/ts/math/
 COPY shared/core/ts/monitoring/ ./shared/core/ts/monitoring/
 COPY shared/core/ts/deployment/uniswapDeployments.ts ./shared/core/ts/deployment/uniswapDeployments.ts
+COPY shared/core/ts/validation/guards.ts ./shared/core/ts/validation/guards.ts
 COPY shared/statoblast/ts/statoblast/liquidation.ts ./shared/statoblast/ts/statoblast/liquidation.ts
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
