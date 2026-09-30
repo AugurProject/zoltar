@@ -250,6 +250,10 @@ export function useQuotedTransaction<Quote>({
 		resetUnlocked,
 		invalidateWalletContext,
 		invalidate,
+		retryQuote() {
+			if (workflowLocked || quoteKey === undefined || !invalidate()) return
+			setFailureCount(count => count + 1)
+		},
 		submit,
 	}
 }

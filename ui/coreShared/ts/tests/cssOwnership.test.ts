@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 
 const cssRoot = 'ui/coreShared/css'
-const featureStylesheets = { statoblast: 'ui/statoblastShared/css/index.css', zoltar: 'ui/zoltarShared/css/index.css', zoltarDeployment: 'ui/zoltarShared/css/deployment.css', zoltarQuestions: 'ui/zoltarShared/css/questions.css' } as const
+const featureStylesheets = { statoblast: 'ui/statoblastShared/css/index.css', priceOracle: 'ui/statoblastShared/css/priceOracle.css', zoltar: 'ui/zoltarShared/css/index.css', zoltarDeployment: 'ui/zoltarShared/css/deployment.css', zoltarQuestions: 'ui/zoltarShared/css/questions.css' } as const
 
 function readStylesheet(name: string) {
 	return readFileSync(`${cssRoot}/${name}`, 'utf8')
@@ -79,6 +79,7 @@ test('feature stylesheets own their product rules and load after the shared shee
 	const zoltarQuestionsLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/questions.css" />'
 	const zoltarDeploymentLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/deployment.css" />'
 	const zoltarLink = '<link rel="stylesheet" href="/ui/zoltarShared/css/index.css" />'
+	const priceOracleLink = '<link rel="stylesheet" href="/ui/statoblastShared/css/priceOracle.css" />'
 	const statoblastLink = '<link rel="stylesheet" href="/ui/statoblastShared/css/index.css" />'
 	const zoltarPage = readFileSync('ui/zoltar/index.html', 'utf8')
 	const statoblastPage = readFileSync('ui/statoblast/index.html', 'utf8')
@@ -91,10 +92,10 @@ test('feature stylesheets own their product rules and load after the shared shee
 	expectLinkOrder(zoltarPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, zoltarLink])
 	expect(zoltarPage).not.toContain(statoblastLink)
 	// Statoblast renders Zoltar question previews, the question create form, and the deployment route, but none of the Zoltar-only rules.
-	expectLinkOrder(statoblastPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, statoblastLink])
+	expectLinkOrder(statoblastPage, [sharedLink, zoltarQuestionsLink, zoltarDeploymentLink, priceOracleLink, statoblastLink])
 	expect(statoblastPage).not.toContain(zoltarLink)
-	// Trading renders the shared fork question preview on its universe route, so it loads only the question sheet after the shared sheet.
-	expectLinkOrder(tradingPage, [sharedLink, zoltarQuestionsLink])
+	// Trading shares question previews and the oracle price request without the full Statoblast stylesheet.
+	expectLinkOrder(tradingPage, [sharedLink, zoltarQuestionsLink, priceOracleLink])
 	expect(tradingPage).not.toContain(zoltarDeploymentLink)
 	expect(tradingPage).not.toContain(zoltarLink)
 	expect(tradingPage).not.toContain(statoblastLink)
@@ -148,6 +149,7 @@ test('production styles reserve sub-13px type for nonessential eyebrows and deco
 		readStylesheet('simulation-banner.css'),
 		readStylesheet('protocol-surfaces.css'),
 		readFeatureStylesheet('statoblast'),
+		readFeatureStylesheet('priceOracle'),
 		readFeatureStylesheet('zoltar'),
 		readFeatureStylesheet('zoltarQuestions'),
 		readFeatureStylesheet('zoltarDeployment'),
@@ -169,6 +171,7 @@ test('product accent hues are only defined in tokens so Statoblast never inherit
 		'visual-foundation.css',
 		'protocol-apps.css',
 		featureStylesheets.statoblast,
+		featureStylesheets.priceOracle,
 		featureStylesheets.zoltar,
 		featureStylesheets.zoltarQuestions,
 		featureStylesheets.zoltarDeployment,

@@ -1587,3 +1587,22 @@ button.tx-action-wallet-fix {
 		flex-basis: 100%;
 	}
 }
+
+/* Guidance and notices share semantic tones without inheriting a boxed surface. */
+[data-message-placement="field"],
+[data-message-placement="inline"],
+[data-message-placement="section"] {
+	overflow-wrap: anywhere;
+}
+
+:is([data-message-placement="field"], [data-message-placement="inline"], [data-message-placement="section"])[data-message-tone="warning"] {
+	color: var(--warning);
+}
+
+:is([data-message-placement="field"], [data-message-placement="inline"], [data-message-placement="section"])[data-message-tone="error"] {
+	color: var(--danger);
+}
+
+:is([data-message-placement="field"], [data-message-placement="inline"], [data-message-placement="section"])[data-message-tone="success"] {
+	color: var(--success);
+}

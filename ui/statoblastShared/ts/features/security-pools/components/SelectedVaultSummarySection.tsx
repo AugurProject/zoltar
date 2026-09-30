@@ -14,12 +14,24 @@ import type { SecurityVaultSectionProps } from '../../types.js'
 type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl' | 'selectedPoolStatoblastSecurityMultiplierBps'> & {
 	underwritingLimitAttoEth: bigint
 	currentVaultIsHealthy?: boolean | undefined
+	poolEnded?: boolean | undefined
 	securityVaultDetails: NonNullable<SecurityVaultSectionProps['securityVaultDetails']>
 	selectedVaultIsOwnedByAccount: boolean
 	variant?: 'embedded' | 'record'
 }
 
-export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, underwritingLimitAttoEth, currentVaultIsHealthy, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+export function SelectedVaultSummarySection({
+	repPerEthPrice,
+	repPerEthSource,
+	repPerEthSourceUrl,
+	underwritingLimitAttoEth,
+	currentVaultIsHealthy,
+	poolEnded = false,
+	securityVaultDetails,
+	selectedPoolStatoblastSecurityMultiplierBps,
+	selectedVaultIsOwnedByAccount,
+	variant = 'record',
+}: SelectedVaultSummarySectionProps) {
 	const requiredBaseAttoRep = repPerEthPrice === undefined || repPerEthPrice <= 0n ? undefined : ceilDiv(underwritingLimitAttoEth * repPerEthPrice, 10n ** 18n)
 	const associatedRepPerCapacityBps = requiredBaseAttoRep === undefined || requiredBaseAttoRep === 0n ? undefined : ((securityVaultDetails.vaultAttoRepBacking + securityVaultDetails.disputeStakedAttoRep) * 10_000n) / requiredBaseAttoRep
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
@@ -72,6 +84,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 			layout='grid'
 			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}
 			isCurrentlyHealthy={currentVaultIsHealthy}
+			poolEnded={poolEnded}
 			poolHeldRepPerCapacityBps={securityVaultDetails.poolHeldRepPerCapacityBps}
 			vaultAttoRepBacking={securityVaultDetails.vaultAttoRepBacking}
 			repPerEthPrice={repPerEthPrice}

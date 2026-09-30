@@ -1,3 +1,4 @@
+import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -46,6 +47,7 @@ export function LiveLiquidityControls({
 	Readonly<{
 		walletEthAttoEth: bigint | undefined
 		nowSeconds: bigint
+		oracleBlocker?: string | undefined
 		services?: LiveLiquidityServices
 	}>) {
 	const { market, balanceState, account, walletClient, settings } = context
@@ -54,7 +56,7 @@ export function LiveLiquidityControls({
 	const { quote, state, workflowLocked } = transaction
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const walletConnected = account !== undefined && walletClient !== undefined
-	const availability = resolveLiquidityAvailability({
+	const baseAvailability = resolveLiquidityAvailability({
 		walletConnected,
 		networkMismatchReason,
 		balanceState,
@@ -68,6 +70,7 @@ export function LiveLiquidityControls({
 		quoteState: transaction.quoteState,
 		quoteError: transaction.quoteError,
 	})
+	const availability = operation !== 'remove' && context.oracleBlocker !== undefined && walletConnected && networkMismatchReason === undefined ? { disabled: true, reason: context.oracleBlocker } : baseAvailability
 	const walletStep = panelWalletStep(wallet, walletConnected && networkMismatchReason === undefined, workflowLocked)
 	const fieldId = useId()
 	const amountId = `${fieldId}-amount`
@@ -124,6 +127,9 @@ export function LiveLiquidityControls({
 			) : null}
 			<p className='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={availability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submit()}>
+				{transaction.quoteState === 'error' ? (
+					<TransactionActionButton idleLabel={liquidityCopy.retryQuote} pendingLabel={liquidityCopy.gettingQuote} pending={false} tone='secondary' availability={{ disabled: workflowLocked, reason: workflowLocked ? liquidityCopy.waitForTransaction : undefined }} onClick={transaction.retryQuote} />
+				) : null}
 				{transaction.quoteState === 'loading' && quote === undefined ? <LoadingText>{liquidityCopy.gettingQuote}</LoadingText> : null}
 				{quote === undefined ? null : (
 					<section className='trade-estimate' aria-label={liquidityCopy.quoteHeading} aria-busy={transaction.quoteState === 'loading'}>

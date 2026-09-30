@@ -1,5 +1,6 @@
 import * as commonCopy from '../copy/common.js'
 import { useEffect, useState } from 'preact/hooks'
+import { UserMessage } from './UserMessage.js'
 import { isCloseableErrorMessage } from '../lib/errors.js'
 
 type ErrorNoticeProps = {
@@ -18,14 +19,5 @@ export function ErrorNotice({ id, message }: ErrorNoticeProps) {
 	if (message === undefined) return undefined
 	if (isCloseable && dismissed) return undefined
 
-	return (
-		<div id={id} className={`notice error${isCloseable ? ' closeable' : ''}`} role='alert' aria-live='assertive' aria-atomic='true'>
-			{isCloseable ? (
-				<button type='button' className='notice-dismiss' aria-label={commonCopy.dismissErrorActionLabel} onClick={() => setDismissed(true)}>
-					<span className='notice-dismiss-icon' aria-hidden='true' />
-				</button>
-			) : undefined}
-			<p>{message}</p>
-		</div>
-	)
+	return <UserMessage id={id} placement='page' tone='error' announcement='assertive' detail={message} dismiss={isCloseable ? { label: commonCopy.dismissErrorActionLabel, onDismiss: () => setDismissed(true) } : undefined} />
 }
