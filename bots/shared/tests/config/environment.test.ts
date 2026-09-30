@@ -7,7 +7,6 @@ test('reads every shared bot variable into one typed object with its defaults', 
 	expect(readBotEnvironment({})).toEqual({
 		dashboard: { loopbackPublished: false, password: undefined, publicAuthority: undefined },
 		scanBlockTimeMs: undefined,
-		signerLockRoot: join(tmpdir(), 'zoltar-bot-locks'),
 	})
 	expect(
 		readBotEnvironment({
@@ -21,7 +20,6 @@ test('reads every shared bot variable into one typed object with its defaults', 
 	).toEqual({
 		dashboard: { loopbackPublished: true, password: 'correct horse battery staple', publicAuthority: 'bot.example:4183' },
 		scanBlockTimeMs: 2000,
-		signerLockRoot: '/state/locks',
 	})
 })
 
@@ -33,5 +31,6 @@ test('rejects malformed values with the variable name and keeps lenient fallback
 	expect(() => rpcQuorumEnvironment({ ZOLTAR_BOT_RPC_QUORUM: '' })).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
 	expect(() => readBotEnvironment({ SCAN_BLOCK_TIME_MS: 'soon' })).toThrow('SCAN_BLOCK_TIME_MS must be a positive integer')
 	expect(signerLockRootEnvironment({ ZOLTAR_BOT_SIGNER_LOCK_ROOT: '   ' })).toBe(join(tmpdir(), 'zoltar-bot-locks'))
+	expect(signerLockRootEnvironment({ ZOLTAR_BOT_SIGNER_LOCK_ROOT: '/state/locks' })).toBe('/state/locks')
 	expect(readBotEnvironment({ ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: '1' }).dashboard.loopbackPublished).toBe(false)
 })

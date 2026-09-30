@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
+import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recordActivity, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
 import { getAddress, keccak256, privateKeyToAccount, type Hex } from '@zoltar/bot-shared/ethereum'
 
 describe('liquidator durable state', () => {
@@ -116,6 +116,21 @@ describe('liquidator durable state', () => {
 		const evidence: { centralizedMarket: unknown; marketConsensus: unknown; marketObservations: unknown[] } = { centralizedMarket: 'old-cex', marketConsensus: 'old-consensus', marketObservations: ['old-observation'] }
 		clearMarketEvidenceForConfigurationChange(evidence)
 		expect(evidence).toEqual({ centralizedMarket: undefined, marketConsensus: undefined, marketObservations: [] })
+	})
+
+	test('keeps a full activity history of long error details under the state file cap', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-activities-'))
+		const path = join(directory, 'state.json')
+		try {
+			const state = initialRuntimeState(true, undefined, 1)
+			for (let index = 0; index < 600; index += 1) recordActivity(state, { details: 'x'.repeat(100_000), kind: 'scan', message: `Scan failed ${index.toString()}`, status: 'failed' })
+			await saveDurableState(path, state)
+			const loaded = await loadDurableState(path, 1)
+			expect(loaded.activities).toHaveLength(500)
+			expect(loaded.activities.every(activity => (activity.details?.length ?? 0) === 1_500)).toBe(true)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
 	})
 
 	test('persists a signed intent before submission for restart recovery', async () => {

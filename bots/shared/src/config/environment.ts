@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseScanBlockTimeOverride } from '@zoltar/core-shared/monitoring/scanStatus'
 import type { RpcQuorumRequirement } from '../monitoring/rpc-quorum-policy.ts'
 
 /**
@@ -27,8 +28,6 @@ export type BotEnvironment = {
 	readonly dashboard: DashboardEnvironment
 	/** `SCAN_BLOCK_TIME_MS`: overrides the block interval scan status reports use; `undefined` keeps the chain default. */
 	readonly scanBlockTimeMs: number | undefined
-	/** `ZOLTAR_BOT_SIGNER_LOCK_ROOT`: the directory every bot sharing a signer coordinates through. */
-	readonly signerLockRoot: string
 }
 
 function dashboardEnvironment(environment: ProcessEnvironment = process.env): DashboardEnvironment {
@@ -50,15 +49,10 @@ export function rpcQuorumEnvironment(environment: ProcessEnvironment = process.e
 	throw new Error('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
 }
 
-function scanBlockTimeEnvironment(environment: ProcessEnvironment = process.env) {
-	const configured = environment['SCAN_BLOCK_TIME_MS']
-	if (configured === undefined) return undefined
-	const value = Number(configured)
-	if (!Number.isSafeInteger(value) || value <= 0) throw new Error('SCAN_BLOCK_TIME_MS must be a positive integer')
-	return value
-}
-
-/** An unset or blank `ZOLTAR_BOT_SIGNER_LOCK_ROOT` falls back to a per-host temporary directory. */
+/**
+ * `ZOLTAR_BOT_SIGNER_LOCK_ROOT`: the directory every bot sharing a signer coordinates through, resolved when a signer lock
+ * is acquired. An unset or blank value falls back to a per-host temporary directory.
+ */
 export function signerLockRootEnvironment(environment: ProcessEnvironment = process.env) {
 	const configured = environment['ZOLTAR_BOT_SIGNER_LOCK_ROOT']
 	if (configured === undefined || configured.trim() === '') return join(tmpdir(), 'zoltar-bot-locks')
@@ -69,7 +63,6 @@ export function signerLockRootEnvironment(environment: ProcessEnvironment = proc
 export function readBotEnvironment(environment: ProcessEnvironment = process.env): BotEnvironment {
 	return {
 		dashboard: dashboardEnvironment(environment),
-		scanBlockTimeMs: scanBlockTimeEnvironment(environment),
-		signerLockRoot: signerLockRootEnvironment(environment),
+		scanBlockTimeMs: parseScanBlockTimeOverride(environment['SCAN_BLOCK_TIME_MS']),
 	}
 }

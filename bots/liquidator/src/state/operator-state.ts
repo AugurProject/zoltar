@@ -13,6 +13,8 @@ import { marketConsensusAllowsExecution, marketConsensusDeviationBps, serializeM
 
 /** Durable state holds bounded activity and recovery lists; a larger file means corruption or runaway growth. */
 const MAXIMUM_STATE_BYTES = 5 * 1024 * 1024
+// 500 retained activities with bounded details always fit under the state file cap.
+const MAXIMUM_ACTIVITY_DETAILS_LENGTH = 1_500
 
 export type PoolObservation = {
 	knownVaultCount: bigint
@@ -230,7 +232,7 @@ export function resolveRecoveredIntentJournal(state: Pick<RuntimeState, 'pending
 export function recordActivity(state: RuntimeState, activity: Omit<Activity, 'at'> & { at?: string | undefined }) {
 	state.activities.unshift({
 		at: activity.at ?? new Date().toISOString(),
-		...(activity.details === undefined ? {} : { details: activity.details }),
+		...(activity.details === undefined ? {} : { details: activity.details.slice(0, MAXIMUM_ACTIVITY_DETAILS_LENGTH) }),
 		...(activity.hash === undefined ? {} : { hash: activity.hash }),
 		kind: activity.kind,
 		message: activity.message,
