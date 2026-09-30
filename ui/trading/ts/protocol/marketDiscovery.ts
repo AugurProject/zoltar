@@ -4,7 +4,20 @@ import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.j
 import type { DeploymentConfiguration } from './config.js'
 import { shareTokenAbi } from './authorization.js'
 import { tradingContracts } from '../generated/contractArtifact.js'
-import { createSecurityPoolDeploymentIndex, loadSecurityPoolRegistry, mapWithConcurrency, loadLiveMarket, loadUniverseIds, marketDiscoveryPage, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, unavailableMarket, type SecurityPoolDeployment, type SecurityPoolDeploymentIndex } from './live.js'
+import {
+	type MarketDiscoveryProgress,
+	createSecurityPoolDeploymentIndex,
+	loadSecurityPoolRegistry,
+	mapWithConcurrency,
+	loadLiveMarket,
+	loadUniverseIds,
+	marketDiscoveryPage,
+	refreshSecurityPoolDeploymentIndex,
+	registryBlockAnchorIsCanonical,
+	unavailableMarket,
+	type SecurityPoolDeployment,
+	type SecurityPoolDeploymentIndex,
+} from './live.js'
 import { latestBlockIdentity } from './tradeQuote.js'
 
 const poolAbi = statoblast_SecurityPool_SecurityPool.abi
@@ -61,7 +74,7 @@ export async function discoverUniverses(client: PublicClient, configuration: Dep
 	return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
 }
 
-export async function discoverTradingMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createTradingPairIndex(), isCurrent = () => true) {
+export async function discoverTradingMarketPage(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, requestedStart = 0n, pageSize = 25n, index = createTradingPairIndex(), isCurrent = () => true, onProgress?: MarketDiscoveryProgress) {
 	const universeIds = await loadUniverseIds(client, configuration, isCurrent)
 	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
 	if (selectedUniverseId === undefined) return { ...marketDiscoveryPage(0n), total: 0n, markets: [], universeIds, selectedUniverseId }
@@ -72,8 +85,9 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 		`${configuration.chainId}:${configuration.factory}:${configuration.rpcUrl}:${selectedUniverseId}`,
 		async () => await latestBlockIdentity(client),
 		canonical,
-		async ({ blockNumber }) => {
-			const pools = await loadSecurityPoolRegistry(client, configuration, selectedUniverseId, blockNumber, isCurrent)
+		async anchor => {
+			const { blockNumber } = anchor
+			const pools = await loadSecurityPoolRegistry(client, configuration, selectedUniverseId, blockNumber, isCurrent, { index: index.registry, anchor })
 			const pairs = await mapWithConcurrency(pools, 8, async deployment => {
 				if (!isCurrent()) throw new Error('Market discovery cancelled')
 				const pair = await client.readContract({ abi: tradingFactoryAbi, address: configuration.factory, functionName: 'getPair', args: [deployment.securityPool], blockNumber })
@@ -85,8 +99,10 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 	if (!isCurrent()) throw new Error('Market discovery cancelled')
 	const page = marketDiscoveryPage(BigInt(deployments.length), requestedStart, pageSize)
 	const pageDeployments = deployments.filter((_deployment, position) => BigInt(position) >= page.start && BigInt(position) < page.start + page.count)
-	const markets = await Promise.all(
-		pageDeployments.map(async deployment => {
+	const markets = await mapWithConcurrency(
+		pageDeployments,
+		6,
+		async deployment => {
 			try {
 				const { markets } = await discoverAddressedMarket(client, configuration, deployment.securityPool)
 				const market = markets[0]
@@ -95,7 +111,8 @@ export async function discoverTradingMarketPage(client: PublicClient, configurat
 			} catch (error) {
 				return { ...unavailableMarket({ ...deployment, questionId: 0n, statoblastSecurityMultiplierBps: 0n, initialReportPriorityFeeAttoEthPerGas: 0n }, error, configuration.feeBps), title: `Pool ${deployment.securityPool}` }
 			}
-		}),
+		},
+		markets => onProgress?.({ ...page, total: BigInt(deployments.length), markets, universeIds, selectedUniverseId }),
 	)
 	return { ...page, total: BigInt(deployments.length), markets, universeIds, selectedUniverseId }
 }
