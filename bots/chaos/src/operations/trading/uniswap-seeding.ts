@@ -72,9 +72,9 @@ function uniswapSeedAmounts(snapshot: EcosystemSnapshot, options: PlanningOption
 	const repBalance = amount(repInventory.balance)
 	const spendableRep = repBalance > minimumRepReserve ? repBalance - minimumRepReserve : 0n
 	const repAmount = minimumOf([spendableRep, maximumRep, MAXIMUM_SEED_AMOUNT])
-	const wethAmount = minimumOf([amount(wethInventory.balance), maximumWeth, MAXIMUM_SEED_AMOUNT])
-	if (repAmount === 0n || wethAmount === 0n || (repAmount < wethAmount ? repAmount : wethAmount) / 2n === 0n) return undefined
-	return { repAmount, wethAmount }
+	const wethAmountAttoEth = minimumOf([amount(wethInventory.balance), maximumWeth, MAXIMUM_SEED_AMOUNT])
+	if (repAmount === 0n || wethAmountAttoEth === 0n || (repAmount < wethAmountAttoEth ? repAmount : wethAmountAttoEth) / 2n === 0n) return undefined
+	return { repAmount, wethAmountAttoEth }
 }
 
 function seederApprovalStep(snapshot: EcosystemSnapshot, scope: SeedScope, token: Address, seeder: Address, required: bigint, index: 0 | 1) {
@@ -82,13 +82,13 @@ function seederApprovalStep(snapshot: EcosystemSnapshot, scope: SeedScope, token
 }
 
 /** Orders the REP/WETH pair, bounds liquidity and builds the approval and seed steps shared by genesis and child-universe seeding. */
-function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, pool: Address, rep: Address, amounts: { repAmount: bigint; wethAmount: bigint }, seedLabel: string) {
+function uniswapSeedSteps(snapshot: EcosystemSnapshot, scope: SeedScope, pool: Address, rep: Address, amounts: { repAmount: bigint; wethAmountAttoEth: bigint }, seedLabel: string) {
 	const { weth } = snapshot.deployments
 	const seeder = genesisUniswapSeederDeployment().address
 	const token0 = rep.toLowerCase() < weth.toLowerCase() ? rep : weth
 	const token1 = token0 === rep ? weth : rep
-	const maximum0 = token0 === rep ? amounts.repAmount : amounts.wethAmount
-	const maximum1 = token1 === rep ? amounts.repAmount : amounts.wethAmount
+	const maximum0 = token0 === rep ? amounts.repAmount : amounts.wethAmountAttoEth
+	const maximum1 = token1 === rep ? amounts.repAmount : amounts.wethAmountAttoEth
 	const liquidity = (maximum0 < maximum1 ? maximum0 : maximum1) / 2n
 	if (liquidity === 0n) return undefined
 	const steps = []
