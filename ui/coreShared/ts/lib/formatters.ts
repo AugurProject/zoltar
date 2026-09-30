@@ -153,7 +153,7 @@ export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFra
 	return `${negative ? '-' : ''}${formatGroupedInteger(whole)}${fraction.length > 0 ? `.${fraction}` : ''}`
 }
 
-/** `down` truncates toward zero, for figures such as limits that must never read above the exact value. */
+/** `down` truncates toward zero, for figures such as limits that must never read above the exact value. It always uses standard notation, because compact SI rounding could read above the exact value. */
 export type AmountRounding = 'nearest' | 'down'
 
 export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2, rounding: AmountRounding = 'nearest') {

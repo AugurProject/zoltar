@@ -119,6 +119,8 @@ void describe('formatting helpers', () => {
 			expect(formatAmount(4_266_666_666_666_667n, { rounding: 'down' }).text).toBe('0.0042')
 			expect(formatAmount(999_999_999_999_999_999n, { rounding: 'down' }).text).toBe('0.99')
 			expect(formatAmount(5n * 10n ** 18n, { rounding: 'down' })).toEqual({ approximate: false, exact: '5', text: '5.00' })
+			// Compact SI rounding could read above the exact value, so rounding down keeps standard notation.
+			expect(formatAmount(1_234_567n * 10n ** 18n, { notation: 'compact', rounding: 'down' }).text).toBe('1 234 567.00')
 		})
 
 		void test('does not mark exact values, including zero, as approximate', () => {

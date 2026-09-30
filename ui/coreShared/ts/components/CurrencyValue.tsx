@@ -18,7 +18,7 @@ type CurrencyValueProps = {
 	/** `compact` switches to SI suffixes from 1 000 (`1.2k`, `1T`) so dense surfaces render the same value identically at every width. */
 	notation?: AmountNotation
 	precision?: 'exact' | 'rounded'
-	/** `down` keeps a rounded figure at or below the exact value, for limits a user may type back. */
+	/** `down` keeps a rounded figure at or below the exact value, for limits a user may type back. It forces standard notation, overriding `notation: 'compact'`. */
 	rounding?: AmountRounding
 	suffix?: string
 	units?: number
