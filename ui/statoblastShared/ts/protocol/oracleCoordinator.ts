@@ -15,7 +15,7 @@ import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracle
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, StagedOracleExecutionResult, StagedOracleQueuedResult } from '../types/contracts.js'
+import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, StagedOracleExecutionResult, StagedOracleOperation, StagedOracleQueuedResult } from '../types/contracts.js'
 import { requireStagedOperationTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -168,8 +168,8 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
-	let pendingOperation: import('../types/contracts.js').StagedOracleOperation | undefined
-	let stagedOperations: import('../types/contracts.js').StagedOracleOperation[] = []
+	let pendingOperation: StagedOracleOperation | undefined
+	let stagedOperations: StagedOracleOperation[] = []
 	let token1: Address | undefined
 	let token2: Address | undefined
 	let pendingReportReadyAtTimestamp: bigint | undefined
