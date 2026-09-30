@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { taskProjects } from '../repo/projects.ts'
@@ -8,7 +9,11 @@ import { PRODUCTION_WORKFLOW_SCENARIOS } from './productionWorkflowScenarios.ts'
 import { repositoryRoot } from '../repo/root.mts'
 import { dockerGlobalArguments, dockerInstructions, parseDockerfile } from '../testing/packaging-parsers.ts'
 
-const workflowDefinitionPath = (name: string) => join(repositoryRoot, '.github', 'workflows', name)
+// Validate pending workflow definitions until they are moved into GitHub's active directory.
+const workflowDefinitionPath = (name: string) => {
+	const pendingPath = join(repositoryRoot, 'workflow', name)
+	return existsSync(pendingPath) ? pendingPath : join(repositoryRoot, '.github', 'workflows', name)
+}
 const ciWorkflowPath = workflowDefinitionPath('ci.yml')
 const browserWorkflowPath = workflowDefinitionPath('browser-workflow.yml')
 const coverageWorkflowPath = workflowDefinitionPath('coverage.yml')
@@ -54,7 +59,7 @@ const workflowTestPaths = (workflow: Record<string, unknown>) =>
 			return [...command.matchAll(/(?:^|\s)([A-Za-z0-9_./-]+\.test\.(?:ts|tsx))(?=\s|$)/gu)].map(match => join(workingDirectory ?? '', match[1] ?? '').replaceAll('\\', '/'))
 		}),
 	)
-describe('split UI workflow definitions', () => {
+describe('split UI workflow definitions (pending updates when present)', () => {
 	test('CI keeps formatting and the unused incremental cache off the production build path', async () => {
 		const jobs = workflowJobs(await readWorkflow(ciWorkflowPath))
 		const prepare = workflowSteps(jobs['prepare'])

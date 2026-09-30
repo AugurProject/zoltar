@@ -66,6 +66,7 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
 		reason: 'CI or coverage workflow wiring changed',
 		matches: filePath =>
+			filePath.startsWith('workflow/') ||
 			filePath === '.github/actions/setup-ci/action.yml' ||
 			filePath === '.github/actions/setup-component/action.yml' ||
 			filePath === '.github/workflows/ci.yml' ||

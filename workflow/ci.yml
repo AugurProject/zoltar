@@ -92,7 +92,7 @@ jobs:
         id: projects
         run: bun ./tooling/repo/query-projects.mts --github-output
       - name: Upload contract and shared inputs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-contract-inputs
           path: ${{ steps.projects.outputs.component_artifact_outputs }}
@@ -101,7 +101,7 @@ jobs:
           retention-days: 1
       - name: Upload full build inputs
         if: needs.changes.outputs.core == 'true' || needs.changes.outputs.docs == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ci-build-inputs
           path: ${{ steps.projects.outputs.generated_cache_paths }}
@@ -145,7 +145,7 @@ jobs:
         id: projects
         run: bun ./tooling/repo/query-projects.mts --github-output
       - name: Upload production UI inputs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: domain-production-ui
           path: ${{ steps.projects.outputs.ui_artifact_outputs }}
@@ -187,7 +187,7 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           build-inputs: ci-build-inputs
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: domain-production-ui
           path: ui
@@ -278,7 +278,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Download generated build inputs
         if: matrix.artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: ci-contract-inputs
           path: .
