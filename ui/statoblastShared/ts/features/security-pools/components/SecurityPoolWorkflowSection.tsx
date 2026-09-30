@@ -224,7 +224,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				{showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined}
 				<div className='pool-secondary-context'>
 					{showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined}
-					{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined} />}
+					{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined && model.selectedPoolLifecycleState !== 'ended'} />}
 				</div>
 			</div>
 
