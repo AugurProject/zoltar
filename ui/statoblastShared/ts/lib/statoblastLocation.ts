@@ -1,5 +1,8 @@
+import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
+import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
+import type { PoolBrowseState, PoolSortKey, PoolStateFilter, SelectedVaultView } from '../types/app.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { setOrDeleteSearchParam, updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 
 export const POOLS_ROUTE_HASH = '#/pools'
@@ -21,14 +24,19 @@ function decodeSegment(segment: string) {
 	}
 }
 
-/** Parses `#/pools/open`, `#/pools`, `#/pools/create`, `#/pools/universes`, and `#/pools/<address>[/<tab>]`; returns `undefined` for any other hash. */
+/** Path segments that name a list view (or the pool page itself) and are never read as a pool address. */
+const RESERVED_POOLS_SEGMENTS = new Set(['browse', 'create', 'open', 'operate', 'universes'])
+
+/** Parses `#/pools`, `#/pools/browse`, `#/pools/open`, `#/pools/create`, `#/pools/universes`, and `#/pools/<address>[/<tab>]`; returns `undefined` for any other hash. */
 export function parsePoolsRouteHash(routeHash: string): PoolsLocation | undefined {
 	if (routeHash === POOLS_ROUTE_HASH || routeHash === POOLS_PATH_PREFIX) return { view: 'browse' }
 	if (!routeHash.startsWith(POOLS_PATH_PREFIX)) return undefined
 	const segments = routeHash.slice(POOLS_PATH_PREFIX.length).replace(/\/$/, '').split('/').map(decodeSegment)
 	if (segments.length > 2 || segments.some(segment => segment === undefined || segment.trim() === '')) return undefined
 	const [first = '', tab = ''] = segments.map(segment => segment?.trim() ?? '')
-	if (first === 'open' || first === 'create' || first === 'universes') return tab === '' ? { view: first } : undefined
+	if (first === 'open' || first === 'browse' || first === 'create' || first === 'universes') return tab === '' ? { view: first } : undefined
+	// `operate` is the pool page's internal view name, not an address; a hand-written `#/pools/operate` link is unroutable.
+	if (RESERVED_POOLS_SEGMENTS.has(first)) return undefined
 	return { securityPoolAddress: first, tab, view: 'operate' }
 }
 
@@ -78,4 +86,49 @@ export function mapLegacyStatoblastHash(hash: string): string | undefined {
 		if (location.view !== 'create') nextParams.delete(QUESTION_ID_QUERY_PARAM)
 	})
 	return `${buildPoolsRouteHash(location)}${nextSearch}`
+}
+
+/** Clears pool-scoped vault context when navigating to another pool or to the list. */
+export function writePoolsLocationSearch(search: string, current: PoolsLocation | undefined, next: PoolsLocation) {
+	return updateSearchParams(search, params => {
+		if (next.view !== 'create') params.delete('questionId')
+		if (next.view !== 'operate' || current?.view !== 'operate' || current.securityPoolAddress.toLowerCase() !== next.securityPoolAddress.toLowerCase()) {
+			params.delete('vault')
+			params.delete('vaultView')
+		}
+	})
+}
+
+export const STATOBLAST_CONTEXT_QUERY_PARAMS = ['poolsView', 'openOracleReportId', 'openOracleView', 'vault', 'vaultView', 'poolSearch', 'poolSort', 'poolFilter'] as const
+
+export function readPoolBrowseState(search: string): PoolBrowseState {
+	const params = new URLSearchParams(search)
+	return {
+		searchText: params.get('poolSearch') ?? '',
+		sortKey: resolveEnumValue<PoolSortKey>(params.get('poolSort') ?? '', 'recent', ['recent', 'remainingCapacity', 'endTime', 'state']),
+		stateFilter: resolveEnumValue<PoolStateFilter>(params.get('poolFilter') ?? '', 'all', ['all', 'operational', 'ended', 'poolForked', 'forkMigration', 'forkTruthAuction']),
+	}
+}
+
+export function writePoolBrowseState(search: string, update: Partial<PoolBrowseState>) {
+	return updateSearchParams(search, params => {
+		if (update.searchText !== undefined) {
+			if (update.searchText === '') params.delete('poolSearch')
+			else params.set('poolSearch', update.searchText)
+		}
+		if (update.sortKey !== undefined) setOrDeleteSearchParam(params, 'poolSort', update.sortKey === 'recent' ? undefined : update.sortKey)
+		if (update.stateFilter !== undefined) setOrDeleteSearchParam(params, 'poolFilter', update.stateFilter === 'all' ? undefined : update.stateFilter)
+	})
+}
+
+export function readVaultSelection(search: string) {
+	const params = new URLSearchParams(search)
+	const address = params.get('vault')?.trim()
+	const view = resolveEnumValue<SelectedVaultView | ''>(params.get('vaultView') ?? '', '', ['browse-vaults', 'selected-vault', 'vault-by-address'])
+	const vaultAddress = view !== 'selected-vault' && address !== undefined && isHexAddressInput(address) ? address : undefined
+	const defaultView: SelectedVaultView | undefined = vaultAddress === undefined ? undefined : 'vault-by-address'
+	return {
+		vaultAddress,
+		vaultView: view === '' ? defaultView : view,
+	}
 }

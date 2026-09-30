@@ -13,6 +13,7 @@ import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.
 import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
+import { signal } from '@preact/signals'
 import { act } from 'preact/test-utils'
 import { appBlockWatcher } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { createOracleManagerDetails as createBaseOracleManagerDetails } from './workflow/builders.js'
@@ -80,6 +81,7 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 			throw new Error('depositRepToVaultToSecurityPool should not be called in this test')
 		},
 		isSecurityPoolVaultAdmissionClosed: mock(async () => false),
+		isSecurityPoolEscalationResolved: mock(async () => false),
 		loadCoordinatorInitialReportFundingRequirement: mock(async () => ({
 			currentRepBalanceAttoRep: 1n,
 			currentWethBalanceAttoEth: 1n,
@@ -104,6 +106,9 @@ function createSecurityVaultOperationsDependencies(overrides: Partial<UseSecurit
 		},
 		redeemSecurityVaultFees: async () => {
 			throw new Error('redeemSecurityVaultFees should not be called in this test')
+		},
+		setUnderwritingLimit: async () => {
+			throw new Error('setUnderwritingLimit should not be called in this test')
 		},
 		updateSecurityVaultFees: async () => {
 			throw new Error('updateSecurityVaultFees should not be called in this test')
@@ -1133,5 +1138,103 @@ describe('useSecurityVaultOperations', () => {
 		})
 
 		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+	})
+
+	test.each([
+		['exit', '0', undefined],
+		['partial reduction', '2', undefined],
+		['increase', '6', 'Commitments can only be lowered after the question resolves'],
+	] as const)('after resolution lowers the commitment directly on the pool instead of the rejected queue: %s', async (_name, limit, error) => {
+		// OpenOraclePriceCoordinator rejects staged operations once the escalation resolves, while
+		// SecurityPool.setUnderwritingLimit still accepts reductions; redemption requires a zero commitment.
+		const setUnderwritingLimit = mock(async () => ({ action: 'setVaultUnderwritingLimit' as const, hash: '0x0a' as const }))
+		const queueOracleManagerOperation = mock(async () => ({ hash: '0x01' as const }))
+		const loadOracleManagerDetails = mock(async () => createOracleManagerDetails({ isPriceValid: false }))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			isSecurityPoolEscalationResolved: mock(async () => true),
+			isSecurityPoolVaultAdmissionClosed: mock(async () => true),
+			loadOracleManagerDetails,
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 5n * 10n ** 18n, totalUnderwritingLimitAttoEth: 5n * 10n ** 18n, settlementCollateralAttoEth: 0n })),
+			queueOracleManagerOperation,
+			setUnderwritingLimit,
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(async () => await requireHookState(state).adjustBackingFactor(limit))
+		expect(queueOracleManagerOperation).not.toHaveBeenCalled()
+		expect(loadOracleManagerDetails).not.toHaveBeenCalled()
+		if (error === undefined) {
+			expect(requireHookState(state).securityVaultError).toBeUndefined()
+			expect(setUnderwritingLimit).toHaveBeenCalledWith(expect.anything(), SECURITY_POOL_ADDRESS, BigInt(limit) * 10n ** 18n)
+			expect(requireHookState(state).securityVaultResult?.action).toBe('setVaultUnderwritingLimit')
+		} else {
+			expect(setUnderwritingLimit).not.toHaveBeenCalled()
+			expect(requireHookState(state).securityVaultError).toContain(error)
+		}
+	})
+
+	test('refuses REP redemption while the vault keeps a commitment', async () => {
+		const redeemRepFromVaultFromSecurityPool = mock(async () => ({ action: 'redeemRepFromVault' as const, hash: '0x0b' as const }))
+		const dependencies = createSecurityVaultOperationsDependencies({
+			loadSecurityVaultDetails: mock(async () => createSecurityVaultDetails({ underwritingLimitAttoEth: 1n })),
+			redeemRepFromVaultFromSecurityPool,
+		})
+		let state: UseSecurityVaultOperationsState | undefined
+		const Harness = createHarness(dependencies, next => {
+			state = next
+		})
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(async () => await requireHookState(state).redeemRepFromVault())
+		expect(redeemRepFromVaultFromSecurityPool).not.toHaveBeenCalled()
+		expect(requireHookState(state).securityVaultError).toContain('Set your commitment limit to 0 ETH before redeeming REP.')
+	})
+
+	test('moves the vault owner to a newly connected wallet only when it named the previous wallet', async () => {
+		const NEXT_WALLET = getAddress('0x0000000000000000000000000000000000000011')
+		const THIRD_WALLET = getAddress('0x0000000000000000000000000000000000000012')
+		const TYPED_OWNER = getAddress('0x0000000000000000000000000000000000000013')
+		const account = signal<Address | undefined>(WALLET_ADDRESS)
+		let state: UseSecurityVaultOperationsState | undefined
+		const dependencies = createSecurityVaultOperationsDependencies()
+		function Harness() {
+			const next = useSecurityVaultOperations(
+				{
+					accountAddress: account.value,
+					enabled: true,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+				},
+				dependencies,
+			)
+			state = next
+			return h('div', {})
+		}
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		expect(requireHookState(state).securityVaultForm.selectedVaultOwner).toBe(WALLET_ADDRESS)
+		await act(() => {
+			account.value = NEXT_WALLET
+		})
+		expect(requireHookState(state).securityVaultForm.selectedVaultOwner).toBe(NEXT_WALLET)
+		// Disconnecting and reconnecting another wallet still follows the wallet.
+		await act(() => {
+			account.value = undefined
+		})
+		await act(() => {
+			account.value = THIRD_WALLET
+		})
+		expect(requireHookState(state).securityVaultForm.selectedVaultOwner).toBe(THIRD_WALLET)
+		// An owner typed in for another vault stays put across wallet switches.
+		await act(() => requireHookState(state).setSecurityVaultForm(current => ({ ...current, selectedVaultOwner: TYPED_OWNER })))
+		await act(() => {
+			account.value = WALLET_ADDRESS
+		})
+		expect(requireHookState(state).securityVaultForm.selectedVaultOwner).toBe(TYPED_OWNER)
 	})
 })

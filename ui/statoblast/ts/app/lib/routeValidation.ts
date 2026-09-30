@@ -8,7 +8,7 @@ const OPEN_ORACLE_VIEWS: readonly OpenOracleView[] = ['browse', 'create', 'selec
 /** Pool locations come from the hash path, so only an unknown pool tab or Open Oracle view can make an otherwise resolved route invalid. */
 export function getInvalidStatoblastRouteState({ openOracleView, resolvedRoute, search, selectedPoolView }: { openOracleView: string; resolvedRoute: Route; search: string; selectedPoolView: string }) {
 	return {
-		hasInvalidOpenOracleView: hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle'], allowedViews: OPEN_ORACLE_VIEWS, key: 'openOracleView', resolvedRoute, search, value: openOracleView }),
+		hasInvalidOpenOracleView: hasInvalidViewQueryParam({ allowedRoutes: ['open-oracle', 'pools', 'deploy'], allowedViews: OPEN_ORACLE_VIEWS, key: 'openOracleView', resolvedRoute, search, value: openOracleView }),
 		hasInvalidSelectedPoolView: resolvedRoute === 'pools' && !isSupportedSelectedPoolView(selectedPoolView),
 	}
 }

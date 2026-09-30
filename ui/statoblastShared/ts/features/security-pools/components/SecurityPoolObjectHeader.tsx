@@ -1,5 +1,5 @@
-import * as statoblastAppCopy from '../../../copy/app.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import * as statoblastAppCopy from '../../../copy/app.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -67,8 +67,9 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	)
 }
 
-export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProps) {
-	const { currentPoolOracleManagerDetails, currentPoolOraclePrice, currentPoolOracleSettlementTimestamp, currentTimestamp, marketDetails, selectedPoolParentPool, selectedPoolView } = props
+/** `showOraclePrice` is false while the page's price row already shows the Open Oracle price, so the details do not repeat it. */
+export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProps & { showOraclePrice: boolean }) {
+	const { currentPoolOracleManagerDetails, currentPoolOraclePrice, currentPoolOracleSettlementTimestamp, currentTimestamp, marketDetails, selectedPoolParentPool, selectedPoolView, showOraclePrice } = props
 	const summaryPool = getSummaryPool(props)
 	return (
 		<div className='pool-reference-details'>
@@ -78,15 +79,17 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 					<MetricField label={securityPoolCopy.managerAddress}>
 						<AddressValue address={summaryPool.managerAddress} />
 					</MetricField>
-					<MetricField label={statoblastAppCopy.openOraclePrice}>
-						<OpenOraclePriceValue
-							currentTimestamp={currentTimestamp}
-							lastPrice={currentPoolOraclePrice}
-							lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n}
-							pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp}
-							priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
-						/>
-					</MetricField>
+					{showOraclePrice ? (
+						<MetricField label={statoblastAppCopy.openOraclePrice}>
+							<OpenOraclePriceValue
+								currentTimestamp={currentTimestamp}
+								lastPrice={currentPoolOraclePrice}
+								lastSettlementTimestamp={currentPoolOracleSettlementTimestamp ?? 0n}
+								pendingReportReadyAtTimestamp={currentPoolOracleManagerDetails?.pendingReportReadyAtTimestamp}
+								priceValidUntilTimestamp={currentPoolOracleManagerDetails?.priceValidUntilTimestamp}
+							/>
+						</MetricField>
+					) : undefined}
 					{summaryPool.parent === zeroAddress ? undefined : (
 						<MetricField label={securityPoolCopy.parentPool}>
 							<SecurityPoolLink securityPoolAddress={summaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />

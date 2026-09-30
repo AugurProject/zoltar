@@ -1,3 +1,4 @@
+import type { PoolBrowseState, SelectedVaultView } from '../types/app.js'
 import type { ComponentType } from 'preact'
 import type { RequestPriceModalProps } from './security-pools/components/SecurityPoolOracleSections.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -139,6 +140,8 @@ type LiquidationModalStateProps = {
 }
 
 type SecurityPoolsOverviewRouteContentProps = {
+	browseState?: PoolBrowseState | undefined
+	onBrowseStateChange?: ((update: Partial<PoolBrowseState>) => void) | undefined
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
@@ -148,6 +151,8 @@ type SecurityPoolsOverviewRouteContentProps = {
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
+	controlledVaultView?: SelectedVaultView | undefined
+	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
 	inlineOracle?: import('./oracleTypes.js').OpenOracleSectionProps
 	accountState: AccountState
@@ -189,9 +194,10 @@ export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
 	loadingUniverseDirectoryPools?: boolean | undefined
-	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
 	onLoadUniverseDirectoryPools?: (() => void) | undefined
+	/** Opens a Browse pools row in its universe with one history entry and one pool load. */
+	onOpenSecurityPool: (securityPoolAddress: string, universeId: bigint) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined

@@ -1,9 +1,10 @@
 export const poolDetails = 'Pool details'
-export const tools = 'Tools'
+export const moreTools = 'More tools'
+export const moreToolsShort = 'More'
 export const switchPool = 'Switch pool / refresh'
 export const openPoolDescription = 'Open its vaults, shares, and reporting workspace.'
 export const moreActions = 'More actions'
-export const capacityLabel = 'Settlement collateral / standing commitments'
+export const capacityLabel = 'Collateral in use / capacity'
 export const capacityUnavailable = 'Capacity needs a current price.'
 export const viewReport = 'View report'
 export const stagedOperationCount = (count: bigint) => `${count.toString()} staged ${count === 1n ? 'operation' : 'operations'}`
@@ -39,6 +40,7 @@ export const actionLabels = {
 	connectWallet: 'Connect a wallet to see actions for your positions',
 	depositRep: 'Deposit REP to back this pool',
 	escalationStake: 'Your escalation stake is locked',
+	exitVaultCommitment: 'Set your commitment limit to 0 ETH to redeem vault REP',
 	finalizeTruthAuction: 'Finalize the truth auction',
 	manageVault: 'Manage your vault',
 	migrateVault: 'Migrate your vault',
@@ -60,3 +62,6 @@ export const actionButtonLabels = {
 	trading: 'Open shares',
 	vaults: 'Open vaults',
 } as const
+export const copyPoolAddress = 'Copy'
+export const copiedPoolAddress = 'Copied'
+export const actionShownBelow = 'Shown below'

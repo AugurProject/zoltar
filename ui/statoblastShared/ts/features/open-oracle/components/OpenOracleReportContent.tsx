@@ -16,7 +16,7 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients.js'
-import { getOpenOracleDisputeAvailability, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleDisputeAvailability, getOpenOracleSettleAvailability, type OpenOracleCreateField, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleSelectedReportActionMode } from '../lib/openOracle.js'
 import { loadOpenOracleReportSummaries } from '../../../protocol/openOracle.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
@@ -254,7 +254,7 @@ export function renderSelectedReportActionSection({
 							: renderReportSection(openOracleCopy.currentReportState, [
 									{ label: openOracleCopy.report, value: `#${openOracleReportDetails.reportId.toString()}` },
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
-									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(token1Symbol, token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
+									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} /> },
 								])}
 						<label className='field'>
 							<span>{openOracleCopy.tokenToSwapOut}</span>
@@ -302,7 +302,13 @@ export function renderSelectedReportActionSection({
 								/>
 							</label>
 						</div>
-						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : <p className='detail'>{openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))}</p>}
+						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : (
+							<p className='detail'>
+								{disputeSubmission.maximumNewAmount1 === undefined
+									? openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))
+									: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))}
+							</p>
+						)}
 						{sharedApprovalGuardMessage === undefined ? undefined : (
 							// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
 							<WalletActionFixReason availability={disputeActionAvailability} id={sharedApprovalGuardMessageId}>

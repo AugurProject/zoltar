@@ -32,4 +32,13 @@ describe('securityPoolNavigation', () => {
 		expect(getSecurityPoolLinkHref(securityPoolAddress).split('?')[1]).toContain('universe=11')
 		expect(getSecurityPoolLinkHref(securityPoolAddress, '').split('?')[0]).toBe(`#/pools/${securityPoolAddress}`)
 	})
+	test('keeps vault context only for links within the same pool', () => {
+		const pool = '0x0000000000000000000000000000000000000100'
+		window.history.replaceState({}, '', '#/pools/' + pool + '/vaults?vault=0x0000000000000000000000000000000000000200&vaultView=vault-by-address&poolSearch=test')
+		expect(getSecurityPoolLinkHref(pool, 'reporting')).toContain('vaultView=vault-by-address')
+		const otherPool = getSecurityPoolLinkHref('0x0000000000000000000000000000000000000101')
+		expect(otherPool).not.toContain('vault=')
+		expect(otherPool).not.toContain('vaultView=')
+		expect(otherPool).toContain('poolSearch=test')
+	})
 })

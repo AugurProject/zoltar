@@ -477,7 +477,7 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('Total across outcomes')).not.toBeNull()
+		expect(documentQueries.queryByText('Total across outcomes')).toBeNull()
 		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
 		expect(documentQueries.getAllByText('1.00').length).toBeGreaterThanOrEqual(4)
@@ -767,7 +767,7 @@ void describe('TradingSection', () => {
 		const documentQueries = within(document.body)
 		const migrateButton = documentQueries.getByRole('button', { name: 'Migrate forked shares' }) as HTMLButtonElement
 		expect(migrateButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Migrate forked shares').reason).toBe('Refresh the fork target universes.')
+		expect(getTransactionButtonState(document.body, 'Migrate forked shares').reason).toBe('Available only after this pool forks.')
 	})
 
 	void test('opens the migration modal with the shared outcome selector and target picker when migration is available', async () => {

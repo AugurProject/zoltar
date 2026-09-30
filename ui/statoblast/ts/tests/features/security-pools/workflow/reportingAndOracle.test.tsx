@@ -317,7 +317,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		await rerender({ ...baseProps, poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false, pendingReportId: 0n, requestPriceCostAttoEth: 3n * 10n ** 18n }) })
 		expect(within(dialog).queryByText('3.6 ETH')).toBeNull()
 
-		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Request new price' }))
 		expect(requests).toEqual([{ managerAddress: pool.managerAddress, reviewedRequestValueAttoEth: 2_400_000_000_000_000_000n, securityPoolAddress: pool.securityPoolAddress, universeId: pool.universeId }])
 	})
@@ -366,7 +366,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 		const dialog = openPriceRequestDialog()
 		const confirm = within(dialog).getByRole('button', { name: 'Request new price' })
 		expect(getTransactionButtonState(dialog, 'Request new price').disabled).toBe(true)
-		const input = queries.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })
+		const input = queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })
 		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull()
 		for (const value of ['0', '-1', 'abc', '0.0000000000000000001', (2n ** 256n).toString()]) {
 			fireEvent.input(input, { target: { value } })
@@ -410,7 +410,7 @@ describe('SecurityPoolWorkflowSection: reporting and oracle', () => {
 
 		await rerender({ ...baseProps, activeUniverseId: newlySelectedPool.universeId, checkedSecurityPoolAddress: newlySelectedPool.securityPoolAddress, securityPoolAddress: newlySelectedPool.securityPoolAddress, securityPools: [newlySelectedPool] })
 
-		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' }), { target: { value: '3' } })
+		fireEvent.input(within(dialog).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Request new price' }))
 		expect(requests).toEqual([{ securityPoolAddress: reviewedPool.securityPoolAddress, universeId: reviewedPool.universeId }])
 	})

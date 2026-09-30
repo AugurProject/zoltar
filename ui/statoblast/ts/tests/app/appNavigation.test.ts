@@ -9,7 +9,7 @@ test('shows one primary row with Pools and Open Oracle under Advanced', () => {
 	const tabs = getStatoblastRouteTabs({ route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
 	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Advanced'])
-	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools/open', '#/open-oracle'])
+	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
 })
 
 test('keeps deployment reachable while needed and while its route is active', () => {
@@ -59,8 +59,10 @@ test('uses the route and active view to isolate transaction presentation', () =>
 	expect(getRouteSecondaryNavigation({ ...views, route: 'not-found', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
 })
 
-test('opens the address-based pool entry by default and rejects the removed portfolio route', () => {
+test('lands on Browse pools by default, keeps Open pool routable, and rejects the removed portfolio route', () => {
 	expect(statoblastRouting.resolve('')).toBe('pools')
-	expect(statoblastRouting.getHash('pools')).toBe('#/pools/open')
+	expect(statoblastRouting.getHash('pools')).toBe('#/pools')
+	expect(statoblastRouting.resolve('#/pools/open')).toBe('pools')
+	expect(statoblastRouting.resolve('#/pools/browse')).toBe('pools')
 	expect(statoblastRouting.resolve('#/portfolio')).toBe('not-found')
 })

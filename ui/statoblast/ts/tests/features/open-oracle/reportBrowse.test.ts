@@ -69,6 +69,8 @@ void describe('Open Oracle report browse cache', () => {
 			settlerRewardAttoEth: 1n,
 			stateHash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 			trackDisputes: true,
+			feesOnlyAtHalt: false,
+			flexibleEscalation: false,
 		}
 		expect(toCachedOpenOracleReportSummary(details)).toEqual(report)
 	})

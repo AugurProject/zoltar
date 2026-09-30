@@ -155,7 +155,7 @@ describe('live portfolio scope', () => {
 	})
 
 	test('keeps live pool identifiers and operational details in the security pool view', async () => {
-		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, feeBps: 47n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
+		const rendered = await renderIntoDocument(<LiveSecurityPoolDetails market={{ ...market, feeBps: 47n, initialReportPriorityFeeAttoEthPerGas: 2_000_000_000n }} retry={() => undefined} workflowLocked={false} nowSeconds={market.endTime - 1n} />)
 		cleanupRendered = rendered.cleanup
 		expect(rendered.container.textContent).toContain(pool)
 		expect(rendered.container.textContent).toContain(shareToken)
@@ -171,6 +171,7 @@ describe('live portfolio scope', () => {
 		expect(rendered.container.querySelector(`a[href="#/create-market/${pool}"]`)?.textContent).toContain('Deploy trading pool')
 		expect(rendered.container.textContent).toContain('available to browse')
 		expect(rendered.container.textContent).toContain('Trading fee: 0.47%')
+		expect(rendered.container.textContent).toContain('2\u00a0nanoETH per gas')
 		expect(rendered.container.textContent).not.toContain('Checkpointed collateral')
 		expect(rendered.container.querySelector('.route-header a[href="#/create-market"]')).not.toBeNull()
 	})

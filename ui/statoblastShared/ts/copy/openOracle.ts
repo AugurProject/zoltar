@@ -34,6 +34,8 @@ export const callbackGasLimit = 'Callback gas limit'
 export const formatCurrentAmount1Label = (tokenSymbol: string) => `Current amount 1 (${tokenSymbol})`
 export const formatCurrentAmount2Label = (tokenSymbol: string) => `Current amount 2 (${tokenSymbol})`
 export const formatTokenPairSuffix = (token1Symbol: string, token2Symbol: string) => `${token1Symbol} / ${token2Symbol}`
+// Report prices are quote tokens per base token, matching the pool oracle's REP per ETH direction.
+export const formatReportPriceUnit = (token1Symbol: string, token2Symbol: string) => `${token2Symbol} per ${token1Symbol}`
 export const formatReportBrowseTitle = (token1Symbol: string, token2Symbol: string, reportId: string) => `${token1Symbol} / ${token2Symbol} · report #${reportId}`
 export const createAnother = 'Create another'
 export const createReport = 'Create report'
@@ -67,6 +69,7 @@ export const reportLoadError = 'Failed to load Open Oracle reports.'
 export const reportLoadRequired = 'Select a report first.'
 export const escalationMultiplierHelpText = 'Dispute escalation multiplier.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
+export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'
 export const oracleBalancesDetail = 'Settlement rewards, returned report liquidity, and dispute proceeds stay in the oracle until the credited account withdraws them.'
 export const noOracleBalances = 'No withdrawable oracle balances are available for this token pair.'

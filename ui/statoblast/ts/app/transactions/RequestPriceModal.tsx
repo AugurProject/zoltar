@@ -73,6 +73,9 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setFailedPlan(undefined)
 		setRetry(value => value + 1)
 	}
+	// A quote resolves after an await; it reads the latched failure, pause, and retry of the latest render, not of the click that started it.
+	const latestPreparationState = useRef({ failureLatched, preparationPaused, retryPreparation })
+	latestPreparationState.current = { failureLatched, preparationPaused, retryPreparation }
 	useEffect(() => {
 		if (!previousFailureDismissed.current && failureDismissed && failureLatched) retryPreparation()
 		previousFailureDismissed.current = failureDismissed
@@ -99,10 +102,11 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		const tracked = run.current
 		if (preparationPaused && !running && !failureLatched && !failedCurrentAttempt && tracked?.steps !== undefined && finalSubmittedHash === undefined && !getRunSubmission(tracked).inFlight) retryPreparation()
 	}, [preparationPaused, running, failureLatched, failedCurrentAttempt, finalSubmittedHash])
-	const estimatePrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
-	let previewPrompt = estimatePrompt
+	let previewPrompt = validPrice ? priceRequestCopy.preparingPriceRequest : priceRequestCopy.enterPriceEstimate
 	if (fetching) previewPrompt = priceRequestCopy.fetchingUniswapPrice
 	if (preparationPaused) previewPrompt = priceRequestCopy.waitingForPriceRequest
+	// Preparing and fetching progress is carried by the request and fetch buttons, so the prompt does not repeat it.
+	const estimatePrompt = previewPrompt === priceRequestCopy.preparingPriceRequest || previewPrompt === priceRequestCopy.fetchingUniswapPrice ? undefined : previewPrompt
 
 	useLayoutEffect(() => {
 		if (review === undefined) return
@@ -231,7 +235,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		try {
 			const value = await fetchPrice(review)
 			if (attempt !== quoteAttempt.current || !mounted.current) return
-			if (failureLatched || preparationPaused) retryPreparation()
+			const latest = latestPreparationState.current
+			if (latest.failureLatched || latest.preparationPaused) latest.retryPreparation()
 			setPrice(formatUnits(value, 18))
 		} catch (error) {
 			if (attempt === quoteAttempt.current && mounted.current) setQuoteError(getErrorMessage(error, priceRequestCopy.uniswapPriceFailed))
@@ -276,6 +281,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 					) : (
 						<PriceRequestPreview
 							requestValue={review?.requestValueAttoEth}
+							prompt={estimatePrompt}
 							failedPlan={failedPlan}
 							onRetry={canRetry ? retryPreparation : undefined}
 							reason={confirmationGuardMessage ?? priceError ?? previewPrompt}

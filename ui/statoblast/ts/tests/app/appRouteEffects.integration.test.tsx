@@ -448,6 +448,35 @@ describe('app route effects integration', () => {
 		}
 	})
 
+	test('reloads pools once per new create or trade result hash, not on later pool changes', async () => {
+		const dom = installDomEnvironment('http://localhost/#/pools')
+		const calls: Array<string | undefined> = []
+		const poolA = '0x84834d4Dccea071b363e53952BD300F7bf56a009'
+		const poolB = '0x00000000000000000000000000000000000000ab'
+		const loadSecurityPools = async (address?: string) => {
+			calls.push(address)
+		}
+		const propsFor = (securityPoolAddress: string, overrides: Partial<RouteEffectsProps> = {}) => createDefaultProps({ loadSecurityPools, route: 'pools', securityPoolAddress, securityPoolResultHash: '0xcreate', selectedPoolSecurityPoolAddress: securityPoolAddress, tradingResultHash: '0xtrade', ...overrides })
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...propsFor(poolA)} />)
+		try {
+			expect(calls).toEqual([poolA, poolA])
+			await act(() => {
+				render(<RouteEffectsHarness {...propsFor(poolB)} />, container)
+			})
+			await act(() => {
+				render(<RouteEffectsHarness {...propsFor(poolA)} />, container)
+			})
+			expect(calls).toEqual([poolA, poolA])
+			await act(() => {
+				render(<RouteEffectsHarness {...propsFor(poolA, { tradingResultHash: '0xtrade2' })} />, container)
+			})
+			expect(calls).toEqual([poolA, poolA, poolA])
+		} finally {
+			await cleanup()
+			dom.cleanup()
+		}
+	})
+
 	test('refreshes the selected pool with its route address after pool creation succeeds', async () => {
 		const dom = installDomEnvironment('http://localhost/#/pools')
 		const calls: Array<string | undefined> = []
@@ -544,5 +573,35 @@ describe('app route effects integration', () => {
 
 		await cleanup()
 		dom.cleanup()
+	})
+	test('restores a URL vault owner and resets it when the URL selection clears or the wallet changes', async () => {
+		const dom = installDomEnvironment('http://localhost/#/pools')
+		const updates: string[] = []
+		const owner = '0x2222222222222222222222222222222222222222'
+		const account = '0x1111111111111111111111111111111111111111'
+		const props = createDefaultProps({
+			accountAddress: account,
+			route: 'pools',
+			securityPoolAddress: '0x3333333333333333333333333333333333333333',
+			urlVaultAddress: owner,
+			setSecurityVaultFormSelectedVaultOwner: value => updates.push(value),
+		})
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...props} />)
+		try {
+			expect(updates).toEqual([owner])
+			await act(() => render(<RouteEffectsHarness {...props} />, container))
+			expect(updates).toEqual([owner])
+			await act(() => render(<RouteEffectsHarness {...props} setSecurityVaultFormSelectedVaultOwner={value => updates.push(value)} />, container))
+			expect(updates).toEqual([owner])
+			await act(() => render(<RouteEffectsHarness {...props} urlVaultAddress={undefined} />, container))
+			expect(updates.at(-1)).toBe(account)
+			await act(() => render(<RouteEffectsHarness {...props} urlVaultAddress={undefined} accountAddress={owner} />, container))
+			expect(updates.at(-1)).toBe(owner)
+			await act(() => render(<RouteEffectsHarness {...props} />, container))
+			expect(updates.at(-1)).toBe(owner)
+		} finally {
+			await cleanup()
+			dom.cleanup()
+		}
 	})
 })

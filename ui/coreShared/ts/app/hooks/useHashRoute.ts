@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
-import { buildRouteHref, ensureRouteHash, getCurrentRoute, getRouteHash, getTopLevelRouteSearch } from '../../navigation/routing.js'
+import { ensureRouteHash, getCurrentRoute, getRouteHref } from '../../navigation/routing.js'
 
 type Route = string
 
@@ -23,7 +23,7 @@ export function useRouteSignal<TRoute extends string>(readRoute: () => TRoute, a
 export function useHashRoute() {
 	const route = useRouteSignal(getCurrentRoute)
 	const navigate = (nextRoute: Route, preservedParameters: ReadonlySet<string> = new Set()) => {
-		window.location.hash = buildRouteHref(getRouteHash(nextRoute), getTopLevelRouteSearch(nextRoute, undefined, preservedParameters))
+		window.location.hash = getRouteHref(nextRoute, preservedParameters)
 	}
 	useEffect(() => {
 		ensureRouteHash()

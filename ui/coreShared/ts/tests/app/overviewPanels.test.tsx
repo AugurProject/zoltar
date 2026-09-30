@@ -170,6 +170,16 @@ describe('OverviewPanels', () => {
 		expect(documentQueries.getByRole('button', { name: 'Refresh REP prices' })).not.toBeNull()
 	})
 
+	test('explains a missing REP per ETH price with the application-provided reason', async () => {
+		const documentQueries = await renderOverviewPanels({
+			accountState: connectedAccount,
+			repPrices: { isLoading: true, repPerEthUnavailableLabel: 'Open a pool to see its oracle price' },
+		})
+		openAccountMenu()
+
+		expect(documentQueries.getByText('Open a pool to see its oracle price').classList.contains('rep-price-failure')).toBe(true)
+	})
+
 	test('renders an application-provided REP per ETH source label', async () => {
 		const documentQueries = await renderOverviewPanels({
 			accountState: connectedAccount,
