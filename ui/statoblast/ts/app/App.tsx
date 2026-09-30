@@ -35,6 +35,12 @@ export function App() {
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const {
 		activeUniverseId,
+		poolBrowseState,
+		vaultAddress,
+		vaultView,
+		setPoolBrowseState,
+		setVaultAddress,
+		setVaultView,
 		openSecurityPoolInUniverse,
 		openOracleReportId: urlOpenOracleReportId,
 		openOracleView,
@@ -117,6 +123,11 @@ export function App() {
 		currentTimestamp,
 		deploymentStatuses,
 		marketCreation,
+		poolBrowseState,
+		setPoolBrowseState,
+		vaultView,
+		setVaultAddress,
+		setVaultView,
 		onViewPendingReport,
 		openSecurityPoolInUniverse,
 		priceOracleManager,
@@ -193,6 +204,7 @@ export function App() {
 		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		tradingResultHash: tradingResult?.hash,
 		urlOpenOracleReportId,
+		urlVaultAddress: vaultAddress,
 		walletBootstrapComplete,
 	})
 	const secondaryNavigation = getRouteSecondaryNavigation({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute, setOpenOracleView, setSecurityPoolsView })

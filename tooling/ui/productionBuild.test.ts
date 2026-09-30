@@ -134,6 +134,12 @@ for (const appId of UI_APP_IDS) {
 		const stylesheetLinkOffsets = stylesheetLinks.map(link => html.indexOf(link))
 		expect(stylesheetLinkOffsets.every(offset => offset >= 0)).toBe(true)
 		expect([...stylesheetLinkOffsets].sort((left, right) => left - right)).toEqual(stylesheetLinkOffsets)
+		if (appId === 'statoblast' || appId === 'trading') {
+			expect(html).toContain('<link rel="stylesheet" href="./css/price-oracle.css" />')
+			const oracleCss = await fs.readFile(path.join(distRootPath, 'css', 'price-oracle.css'), 'utf8')
+			expect(oracleCss).toContain('.request-price-fields {')
+			expect(oracleCss).toContain('.price-request-estimate-prompt {')
+		}
 		for (const otherTitle of otherTitles) expect(html).not.toContain(`<title>${otherTitle}</title>`)
 	})
 

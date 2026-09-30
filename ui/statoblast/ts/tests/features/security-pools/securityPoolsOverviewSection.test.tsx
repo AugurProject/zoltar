@@ -1,3 +1,4 @@
+import { render } from 'preact'
 import { SecurityPoolSummaryMetrics } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolSummaryMetrics.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
@@ -802,5 +803,24 @@ describe('SecurityPoolsOverviewSection', () => {
 			fireEvent.click(documentQueries.getByRole('button', { name: 'Open pool at this address' }))
 		})
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(address, 1n)
+	})
+	test('uses restored browser controls and follows history-driven updates', async () => {
+		const updates: Array<Partial<NonNullable<SecurityPoolsOverviewSectionProps['browseState']>>> = []
+		const props = createProps({
+			browseState: { searchText: 'saved query', sortKey: 'endTime', stateFilter: 'ended' },
+			onBrowseStateChange: update => updates.push(update),
+		})
+		const { container, cleanup } = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
+		cleanupRenderedComponent = cleanup
+		const query = within(document.body)
+		expect(query.getByRole('textbox', { name: 'Search pools' }).value).toBe('saved query')
+		expect(query.getByRole('combobox', { name: 'System state' }).value).toBe('ended')
+		expect(query.getByRole('combobox', { name: 'Sort' }).value).toBe('endTime')
+		await act(() => fireEvent.input(query.getByRole('textbox', { name: 'Search pools' }), { target: { value: 'new query' } }))
+		expect(updates).toContainEqual({ searchText: 'new query' })
+		await act(() => render(<SecurityPoolsOverviewSection {...props} browseState={{ searchText: '', sortKey: 'recent', stateFilter: 'all' }} />, container))
+		expect(query.getByRole('textbox', { name: 'Search pools' }).value).toBe('')
+		expect(query.getByRole('combobox', { name: 'System state' }).value).toBe('all')
+		expect(query.getByRole('combobox', { name: 'Sort' }).value).toBe('recent')
 	})
 })

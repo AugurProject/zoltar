@@ -153,6 +153,39 @@ describe('live guarded transaction writes', () => {
 		}
 	})
 
+	test('never opens the wallet when liquidity revalidation reverts with a stale oracle price', async () => {
+		for (const scenario of [
+			{ operation: 'initialize', market: { ...market, pair: undefined } },
+			{ operation: 'initialize', market },
+			{ operation: 'add', market },
+		] as const) {
+			let stale = false
+			let sends = 0
+			let signatures = 0
+			const client = blockTwoWalletClient(async method => {
+				if (method === 'eth_call') {
+					if (stale) throw new Error('execution reverted: Stale price')
+					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+				}
+				if (method === 'eth_sendTransaction') {
+					sends += 1
+					return transactionHash
+				}
+				throw new Error(`Unexpected RPC method ${method}`)
+			})
+			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n)
+			stale = true
+			await expect(
+				submitFreshLiquidity(client, configuration, account, quote, async write => {
+					signatures += 1
+					return await write()
+				}),
+			).rejects.toThrow('Stale price')
+			expect(signatures).toBe(0)
+			expect(sends).toBe(0)
+		}
+	})
+
 	test('uses one approved deadline for liquidity simulation, revalidation, and submission', async () => {
 		const calls: ReturnType<typeof decodeFunctionData>[] = []
 		const client = blockTwoWalletClient(async (method, params) => {
