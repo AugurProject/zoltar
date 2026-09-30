@@ -245,6 +245,14 @@
 	grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
 	align-items: stretch;
 }
+.market-discovery-slot {
+	block-size: 28rem;
+	overflow: auto;
+}
+.market-discovery-slot > .entity-card,
+.market-discovery-slot > .skeleton-list {
+	min-block-size: 100%;
+}
 .market-card.entity-card {
 	grid-template-rows: auto 1fr auto;
 	align-content: start;
