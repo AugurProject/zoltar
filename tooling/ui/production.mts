@@ -61,6 +61,7 @@ const featureStylesheetSources: Record<string, (paths: UiAppPaths) => string> = 
 	'zoltar-questions.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'questions.css'),
 	'zoltar-deployment.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'deployment.css'),
 	'zoltar-shared.css': paths => path.join(paths.uiRoot, 'zoltarShared', 'css', 'index.css'),
+	'price-oracle.css': paths => path.join(paths.uiRoot, 'statoblastShared', 'css', 'priceOracle.css'),
 	'statoblast-shared.css': paths => path.join(paths.uiRoot, 'statoblastShared', 'css', 'index.css'),
 	'app.css': paths => path.join(paths.appRoot, 'css', 'app.css'),
 }

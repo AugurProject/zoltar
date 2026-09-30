@@ -111,38 +111,6 @@
 	color: var(--accent);
 }
 
-.oracle-price-value {
-	display: inline-flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: var(--space-1);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-value);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	line-height: var(--line-height-tight);
-	color: var(--value);
-}
-
-.oracle-price-validity {
-	font-family: var(--font-family-sans);
-	font-size: var(--font-caption);
-	font-weight: 500;
-	letter-spacing: normal;
-}
-
-.oracle-price-validity.success {
-	color: var(--success);
-}
-
-.oracle-price-validity.danger {
-	color: var(--danger);
-}
-
-.oracle-price-validity.warning {
-	color: var(--warning);
-}
-
 .comparison-record-list {
 	display: grid;
 	gap: var(--space-2);
@@ -3384,17 +3352,6 @@ span.rep-price-status.stale,
 		grid-column: 1 / -1;
 	}
 }
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group,
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group:has(.tx-action-feedback:empty) {
-	gap: var(--space-2);
-}
-
-.request-price-fields {
-	display: grid;
-	gap: var(--space-4);
-}
-
 .security-pool-link.existing-pool-action {
 	display: inline-flex;
 	align-items: center;
@@ -3464,116 +3421,6 @@ span.rep-price-status.stale,
 
 	.existing-pool-identifiers .address-value-abbreviated {
 		display: inline;
-	}
-}
-
-.price-request-estimate-prompt {
-	min-block-size: 1lh;
-	margin: 0;
-}
-
-.request-price-fields .lookup-field-controls.has-action {
-	grid-template-columns: minmax(0, 1fr) auto;
-	column-gap: var(--space-3);
-	row-gap: var(--space-1);
-}
-
-.request-price-fetch {
-	inline-size: 12.5rem;
-	min-inline-size: 12.5rem;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions {
-	display: grid;
-	grid-column: 1;
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions > .tx-action {
-	width: 100%;
-	max-width: none;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
-	min-block-size: 4rem;
-}
-
-.price-request-preview .tx-action-group > .actions {
-	margin-block-start: 0;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final > .tx-action-feedback {
-	grid-column: 1 / -1;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
-	min-inline-size: 6.5rem;
-	min-block-size: 2.75rem;
-}
-
-.operation-modal-body:has(> .request-price-fields) {
-	gap: var(--space-2);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions {
-	padding-top: var(--space-2);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-inline-final-status .global-transaction-notice {
-	width: 100%;
-	max-height: none;
-}
-
-@media (max-width: 40rem) {
-	.request-price-fields .lookup-field-controls.has-action {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.request-price-fields .lookup-field-controls.has-action > .actions {
-		grid-column: 1;
-		grid-row: 2;
-	}
-
-	.request-price-fetch {
-		inline-size: 100%;
-		min-inline-size: 0;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .workflow-metric-grid > div {
-		display: grid;
-		justify-content: start;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .tx-action-button {
-		min-block-size: 3.625rem;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
-		min-block-size: 3.625rem;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {
-		column-gap: var(--space-1);
-	}
-}
-
-@media (max-height: 40rem) {
-	.operation-modal-body:has(> .request-price-fields) {
-		display: flex;
-		flex-direction: column;
-		overflow: auto;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) > * {
-		flex-shrink: 0;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-step-content {
-		overflow: visible;
 	}
 }
 
