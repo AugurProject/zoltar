@@ -85,7 +85,7 @@ void describe('useSecurityPoolsOverview helpers', () => {
 			await state().loadSecurityPools(selectedAddress)
 		})
 
-		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress)
+		expect(loadSecurityPoolLineage).toHaveBeenCalledWith(selectedAddress, zeroAddress, expect.objectContaining({ read: expect.any(Function) }))
 		expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x01'])
 	})
 
@@ -121,16 +121,46 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		await act(async () => {
 			if (newerRead === 'explicit load') await state().loadSecurityPools(selectedAddress)
 			else {
-				appQueryCache.invalidateAll()
-				await state().refreshSecurityPools()
+				appQueryCache.invalidateAll('block')
+				void state().refreshSecurityPools()
+				expect(lineageReads).toBe(3)
 			}
 		})
-		expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		if (newerRead === 'explicit load') expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
 		await act(async () => {
 			staleRefresh.resolve([createListedSecurityPool('0x03', selectedAddress)])
 			await pendingRefresh
 		})
-		expect(state().securityPools.map(pool => pool.questionId)).toEqual(['0x04'])
+		expect(state().securityPools.map(pool => pool.questionId)).toEqual([newerRead === 'explicit load' ? '0x04' : '0x03'])
+		appQueryCache.clear()
+	})
+
+	void test('stops background lineage follow-up RPC reads after unmount', async () => {
+		const firstRead = createDeferred<void>()
+		let loads = 0
+		let followupReads = 0
+		const dependencies = createSecurityPoolsOverviewDependencies({
+			loadSecurityPoolLineage: mock(async (_address, _account, operation) => {
+				if (++loads === 1) return []
+				if (operation === undefined) throw new Error('Missing read operation')
+				await operation.read(() => firstRead.promise)
+				await operation.read(async () => ++followupReads)
+				return []
+			}),
+		})
+		const rendered = await renderHook(dependencies)
+		const { state } = rendered
+		await act(async () => await state().loadSecurityPools('0x0000000000000000000000000000000000000001'))
+		let pending: Promise<void> | undefined
+		await act(() => {
+			pending = state().refreshSecurityPools()
+		})
+		expect(loads).toBe(2)
+		await rendered.cleanup()
+		cleanupRenderedComponent = undefined
+		firstRead.resolve()
+		await pending
+		expect(followupReads).toBe(0)
 		appQueryCache.clear()
 	})
 

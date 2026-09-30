@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { DiscoveryControl } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
@@ -42,7 +42,7 @@ function listPresentation(listKind: TradingListKind) {
 	return { title: liveCopy.marketList, description: undefined, empty: liveCopy.noMarkets }
 }
 
-function MarketListControls({ options, onChange }: { options: MarketListOptions; onChange(next: MarketListOptions): void }) {
+function MarketListControls({ options, registryOrder, onChange }: { options: MarketListOptions; registryOrder: boolean; onChange(next: MarketListOptions): void }) {
 	return (
 		<div className='market-list-controls' role='group' aria-label={marketsCopy.listControls}>
 			<div className='field market-list-search'>
@@ -53,7 +53,14 @@ function MarketListControls({ options, onChange }: { options: MarketListOptions;
 				<span className='metric-label' aria-hidden='true'>
 					{marketsCopy.sortLabel}
 				</span>
-				<EnumDropdown ariaLabel={marketsCopy.sortLabel} value={options.sort} options={SORT_OPTIONS} onChange={sort => onChange({ ...options, sort })} />
+				<EnumDropdown
+					ariaLabel={marketsCopy.sortLabel}
+					value={registryOrder ? 'registry' : options.sort}
+					options={registryOrder ? [{ value: 'registry', label: marketsCopy.sortRegistry }, ...SORT_OPTIONS] : SORT_OPTIONS}
+					onChange={sort => {
+						if (sort !== 'registry') onChange({ ...options, sort })
+					}}
+				/>
 			</div>
 		</div>
 	)
@@ -77,6 +84,7 @@ function MarketCardList({ markets, listKind, lookupRoute, nowSeconds }: { market
 export function LiveMarketBrowser({
 	lookupRoute,
 	markets,
+	discoveryRows,
 	favorites = [],
 	pageMarketCount,
 	discoveryState,
@@ -91,6 +99,7 @@ export function LiveMarketBrowser({
 	lookupRoute: TradingLookupRoute
 	/** The market list passes every downloaded market; the security-pool list passes the loaded page. */
 	markets: readonly LiveMarket[]
+	discoveryRows?: readonly (LiveMarket | undefined)[] | undefined
 	favorites?: readonly FavoriteEntry[]
 	pageMarketCount: number
 	discoveryState: 'loading' | 'ready' | 'error'
@@ -103,18 +112,33 @@ export function LiveMarketBrowser({
 	loadMarketPage(start: bigint | undefined): void
 }) {
 	const [listOptions, setListOptions] = useState(DEFAULT_LIST_OPTIONS)
+	const hadRetainedMarkets = useRef(false)
+	if (discoveryRows === undefined) hadRetainedMarkets.current = markets.length > 0
+	// Saved rows remain visible during reloads; positional placeholders belong to an empty first load.
+	const rows = hadRetainedMarkets.current ? undefined : discoveryRows
 	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
 	const presentation = listPresentation(listKind)
 	const browsesDownloads = listKind === 'markets'
 	// Filters, search, and sort run over every downloaded market; security-pool candidates are all open by construction.
-	const arrangeable = browsesDownloads && markets.length > 0
-	const shownMarkets = arrangeable ? arrangeMarkets(markets, listOptions, nowSeconds) : markets
+	const arrangeable = browsesDownloads && (markets.length > 0 || rows !== undefined)
+	const positional = rows !== undefined && listOptions === DEFAULT_LIST_OPTIONS
+	const shownMarkets = arrangeable && !positional ? arrangeMarkets(markets, listOptions, nowSeconds) : markets
 	const groups = browsesDownloads ? partitionFavoriteMarkets(shownMarkets, favorites) : { favorites: [], others: shownMarkets }
-	const initialLoad = discoveryState === 'loading' && pageMarketCount === 0 && (!browsesDownloads || markets.length === 0)
+	const initialLoad = rows === undefined && discoveryState === 'loading' && pageMarketCount === 0 && (!browsesDownloads || markets.length === 0)
 	const retryAction = <RetryAction label={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} />
 	const cardList = (listed: readonly LiveMarket[]) => <MarketCardList markets={listed} listKind={listKind} lookupRoute={lookupRoute} nowSeconds={nowSeconds} />
 	let list: ComponentChildren
-	if (markets.length === 0) list = <EmptyState title={presentation.empty} />
+	if (rows !== undefined && listOptions === DEFAULT_LIST_OPTIONS)
+		list = (
+			<div className='entity-card-list market-list'>
+				{rows.map((market, index) => (
+					<div className='market-discovery-slot' data-discovery-slot={index} key={index}>
+						{market === undefined ? <SkeletonList label={liveCopy.discoveringSecurityPoolsFromFactory} rows={1} /> : <MarketCard listKind={listKind} lookupRoute={lookupRoute} market={market} nowSeconds={nowSeconds} />}
+					</div>
+				))}
+			</div>
+		)
+	else if (markets.length === 0) list = <EmptyState title={presentation.empty} />
 	else if (shownMarkets.length === 0)
 		list = (
 			<EmptyState
@@ -168,7 +192,7 @@ export function LiveMarketBrowser({
 		content = (
 			<>
 				{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
-				{arrangeable ? <MarketListControls options={listOptions} onChange={setListOptions} /> : undefined}
+				{arrangeable ? <MarketListControls options={listOptions} registryOrder={positional} onChange={setListOptions} /> : undefined}
 				{browseBar}
 				{list}
 			</>
