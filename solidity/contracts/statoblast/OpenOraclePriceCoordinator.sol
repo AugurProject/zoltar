@@ -122,14 +122,16 @@ contract OpenOraclePriceCoordinator {
 		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
 	}
 
+	/// @notice Coordinator-factory-only: sets the liquidation approval registry once.
 	function setLiquidationApprovalRegistry(LiquidationApprovalRegistry registry) external {
 		require(msg.sender == coordinatorFactory && address(liquidationApprovalRegistry) == address(0) && address(registry) != address(0), 'Registry setup invalid');
 		liquidationApprovalRegistry = registry;
 	}
 
-	// One-time wiring. SecurityPoolFactory deploys this coordinator (through the coordinator
-	// factory's deployment worker, with a caller-scoped salt) and sets the pool in the same
-	// transaction, so no other caller can reach this before the pool is set.
+	/// @notice Sets the security pool this coordinator serves; callable once.
+	/// @dev One-time wiring. SecurityPoolFactory deploys this coordinator (through the coordinator
+	/// factory's deployment worker, with a caller-scoped salt) and sets the pool in the same
+	/// transaction, so no other caller can reach this before the pool is set.
 	function setSecurityPool(ISecurityPool _securityPool) public {
 		require(address(securityPool) == address(0x0), 'Security pool already set');
 		securityPool = _securityPool;
@@ -137,6 +139,7 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.SecurityPoolSetup, 0, 0);
 	}
 
+	/// @notice Pool-only: seeds `lastPrice` without changing the settlement timestamp.
 	function setRepEthPrice(uint256 _lastPrice) public {
 		require(msg.sender == address(securityPool), 'Only pool');
 		lastPrice = _lastPrice;
@@ -144,6 +147,7 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceSeeded, 0, 0);
 	}
 
+	/// @notice Returns the minimum bounty for a price request at the current base fee.
 	function getRequestPriceCostAttoEth() public view returns (uint256) {
 		return block.basefee * _requestGasUnits() + REQUEST_BOUNTY_OFFSET_ATTO_ETH;
 	}
@@ -152,16 +156,19 @@ contract OpenOraclePriceCoordinator {
 		return 4 * (getSettlementCallbackGasLimit() + gasConsumedOpenOracleReportPrice);
 	}
 
+	/// @notice Returns the extra cost of queuing an operation, which is zero.
 	function getQueuedOperationCostAttoEth() public pure returns (uint256) {
 		return 0;
 	}
 
+	/// @notice Returns the settlement callback gas limit, sized for the maximum pending settlement operations.
 	function getSettlementCallbackGasLimit() public view returns (uint32) {
 		uint256 callbackGasLimit = uint256(gasConsumedSettlement) * MAX_PENDING_SETTLEMENT_OPERATIONS;
 		require(callbackGasLimit <= type(uint32).max, 'Callback gas exceeds uint32');
 		return uint32(callbackGasLimit);
 	}
 
+	/// @notice Returns the minimum initial WETH report: the priority-fee dispute bound plus the larger of the base-fee bound and 1% of settlement collateral.
 	function minimumToken1ReportAttoEth() public view returns (uint256) {
 		uint256 priorityFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(initialReportPriorityFeeAttoEthPerGas);
 		uint256 baseFeeReportAttoEth = _minimumToken1ReportAttoEthForGasPrice(block.basefee);
@@ -183,7 +190,8 @@ contract OpenOraclePriceCoordinator {
 			Math.mulDiv(disputeGasCost, openOracleSecurityMultiplierBps * (OPEN_ORACLE_PERCENTAGE_PRECISION + targetPriceErrorForDispute), SecurityPoolUtils.BPS_DENOMINATOR * correctionProfitNumerator, Math.Rounding.Ceil);
 	}
 
-	// The caller commits an explicit bounty so the retained ETH never depends on the inclusion block's basefee.
+	/// @notice Opens an OpenOracle REP/ETH report funded by the caller's WETH and REP when the price is stale, refunding excess ETH.
+	/// @dev The caller commits an explicit bounty so the retained ETH never depends on the inclusion block's basefee.
 	function requestPrice(uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {
 		_requireRequestBounty(bountyAttoEth);
 		require(!isPriceValid(), 'Oracle price already fresh');
@@ -243,6 +251,7 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRequested, pendingReportId, 0);
 	}
 
+	/// @notice Clears a settled report the callback did not clear, returning reporter balances to the sponsor and failing pending operations.
 	function recoverSettledPendingReport() public {
 		uint256 reportId = pendingReportId;
 		require(reportId != 0, 'No report to recover');
@@ -257,6 +266,7 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PendingReportRecovered, reportId, 0);
 	}
 
+	/// @notice OpenOracle-only settlement callback: validates the report, records the price, and executes pending operations.
 	function openOracleCallback(uint256 reportId, uint256 amount1, uint256 amount2, uint256, address, address) external {
 		require(msg.sender == address(openOracle), 'Only OpenOracle');
 		require(reportId == pendingReportId, 'Oracle report mismatch');
@@ -335,6 +345,7 @@ contract OpenOraclePriceCoordinator {
 		_emitCoordinatorStateCheckpoint(CoordinatorCheckpointReason.PriceRejected, reportId, 0);
 	}
 
+	/// @notice Returns true when a nonzero price exists and its settlement timestamp is still fresh.
 	function isPriceValid() public view returns (bool) {
 		return lastPrice > 0 && _isFreshPriceTimestamp(lastSettlementTimestamp);
 	}
@@ -345,10 +356,13 @@ contract OpenOraclePriceCoordinator {
 		return priceTimestamp != 0 && priceTimestamp + validForSeconds > block.timestamp;
 	}
 
+	/// @notice Stages an operation with the caller as operator and receiver, executing it under a valid price or queuing it for the next price.
 	function requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) public payable {
 		_requestPriceIfNeededAndStageOperation(operation, targetVault, msg.sender, bytes32(0), operationValue, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 	}
 
+	/// @notice Stages a liquidation of `targetVault` into `receiverVault`, executing it under a valid price or queuing it for the next price.
+	/// @dev A receiver other than the caller must have approved the caller through `approvalId` in the liquidation approval registry.
 	function requestPriceIfNeededAndStageLiquidation(address targetVault, address receiverVault, uint256 requestedDebtAttoEth, bytes32 approvalId, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) external payable {
 		_requestPriceIfNeededAndStageOperation(OperationType.Liquidation, targetVault, receiverVault, approvalId, requestedDebtAttoEth, validForSeconds, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
 	}
@@ -442,6 +456,7 @@ contract OpenOraclePriceCoordinator {
 				: 0;
 	}
 
+	/// @notice Executes a staged operation under a valid price, or consumes it as failed when expired or stale; callable by anyone.
 	function executeStagedOperation(uint256 operationId) public {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		require(stagedOperation.operator != address(0), 'Staged operation unavailable');
@@ -471,6 +486,7 @@ contract OpenOraclePriceCoordinator {
 		}
 	}
 
+	/// @notice Consumes an expired staged operation as failed; callable by anyone.
 	function expireStagedOperation(uint256 operationId) external {
 		StagedOperation memory stagedOperation = stagedOperations[operationId];
 		require(stagedOperation.operator != address(0), 'Staged operation unavailable');
@@ -570,22 +586,27 @@ contract OpenOraclePriceCoordinator {
 		stagedOperations[operationId].operator = address(0);
 	}
 
+	/// @notice Returns the first pending settlement operation.
 	function getPendingOperationSlot() public view returns (StagedOperation memory) {
 		return stagedOperations[pendingOperationSlotId];
 	}
 
+	/// @notice Returns the number of active staged operations.
 	function getActiveStagedOperationCount() public view returns (uint256) {
 		return activeStagedOperationCount;
 	}
 
+	/// @notice Returns the number of operations waiting for the next price settlement.
 	function getPendingSettlementOperationCount() public view returns (uint256) {
 		return pendingSettlementOperationIds.length;
 	}
 
+	/// @notice Returns the operation ids waiting for the next price settlement.
 	function getPendingSettlementOperationIds() public view returns (uint256[] memory) {
 		return pendingSettlementOperationIds;
 	}
 
+	/// @notice Returns up to `count` active staged operations, newest first, after skipping `startIndex`.
 	function getActiveStagedOperations(uint256 startIndex, uint256 count) public view returns (uint256[] memory operationIds, StagedOperation[] memory operations) {
 		if (count == 0 || startIndex >= activeStagedOperationCount) {
 			return (new uint256[](0), new StagedOperation[](0));

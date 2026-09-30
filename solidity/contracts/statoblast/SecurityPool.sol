@@ -130,10 +130,12 @@ contract SecurityPool is SecurityPoolStorage {
 		minimumVaultRepDepositAttoRep = SecurityPoolUtils.calculateMinimumVaultRepDepositAttoRep(universeTheoreticalSupplyAttoRep, securityPoolFactory.minimumVaultRepDepositAttoRep());
 	}
 
+	/// @notice Returns the number of registered vaults.
 	function getVaultCount() external view returns (uint256) {
 		return vaultAddresses.length;
 	}
 
+	/// @notice Returns up to `count` registered vaults, newest first, after skipping `startIndex` newest entries.
 	function getVaults(uint256 startIndex, uint256 count) external view returns (address[] memory vaultRange) {
 		uint256 vaultCount = vaultAddresses.length;
 		if (count == 0 || startIndex >= vaultCount) return new address[](0);
@@ -146,8 +148,9 @@ contract SecurityPool is SecurityPoolStorage {
 		}
 	}
 
-	// A child with an inherited fixed outcome stays operational for settlement and redemption,
-	// but its finalized question must still freeze collateralized operations.
+	/// @notice Returns true when the pool inherited a fixed fork outcome or its escalation game has a final question outcome.
+	/// @dev A child with an inherited fixed outcome stays operational for settlement and redemption,
+	/// but its finalized question must still freeze collateralized operations.
 	function isEscalationResolved() public view returns (bool) {
 		return
 			hasInheritedForkOutcome ||
@@ -156,6 +159,7 @@ contract SecurityPool is SecurityPoolStorage {
 					BinaryOutcomes.BinaryOutcome.None);
 	}
 
+	/// @notice Burns `amountAttoRep` of pool-held REP through Zoltar; callable only by the pool's escalation game.
 	function burnEscalationWinnerHaircut(uint256 amountAttoRep) external {
 		if (msg.sender != address(escalationGame)) revert('Unauthorized');
 		if (address(repToken) == address(zoltar.genesisReputationToken()))
@@ -163,6 +167,7 @@ contract SecurityPool is SecurityPoolStorage {
 		zoltar.burnRep(universeId, amountAttoRep);
 	}
 
+	/// @notice Factory-only: initializes the fee clock, retention rate, settlement collateral, and seeded oracle price.
 	function setStartingParams(uint256 _currentRetentionRate, uint256 _settlementCollateralAttoEth) external {
 		require(msg.sender == address(securityPoolFactory), 'Only factory');
 		lastUpdatedFeeAccumulator = block.timestamp;
@@ -175,6 +180,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.PoolInitialization, address(0x0));
 	}
 
+	/// @notice Accrues fees out of settlement collateral up to the current fee epoch end; callable by anyone.
 	function updateSettlementCollateral() public {
 		uint256 feeEndDate = getFeeEpochEndTime();
 		feeEpochEndTime = feeEndDate;
@@ -200,6 +206,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.Accrual, address(0x0));
 	}
 
+	/// @notice Returns the timestamp at which fee accrual stops, accounting for forks and escalation resolution.
 	function getFeeEpochEndTime() public view returns (uint256) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (feeEpochEndTime != type(uint256).max) {
@@ -215,6 +222,7 @@ contract SecurityPool is SecurityPoolStorage {
 		return forkTime != 0 && forkTime < endTime ? forkTime : endTime;
 	}
 
+	/// @notice Accrues fees and recomputes the retention rate while the pool is operational; no-op otherwise.
 	function updateRetentionRate() public {
 		if (systemState != SystemState.Operational) return; // if system state is not operational do not change fees
 		updateSettlementCollateral();
@@ -224,15 +232,18 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.RetentionRateChange, address(0x0));
 	}
 
+	/// @notice Returns claimable vault fees plus accrued fees not yet assigned to vaults, in attoEth.
 	function totalAccruedFeesAttoEth() external view returns (uint256) {
 		return totalClaimableVaultFeesAttoEth + unallocatedAccruedFeesAttoEth;
 	}
 
+	/// @notice Returns the pool-level collateral, capacity, and fee accounting state.
 	function getPoolAccountingSnapshot() external view returns (PoolAccountingSnapshot memory) {
 		return
 			PoolAccountingSnapshot({settlementCollateralAttoEth: settlementCollateralAttoEth, totalUnderwritingLimitAttoEth: totalUnderwritingLimitAttoEth, feeEligibleUnderwritingLimitAttoEth: feeEligibleUnderwritingLimitAttoEth, totalClaimableVaultFeesAttoEth: totalClaimableVaultFeesAttoEth, unallocatedAccruedFeesAttoEth: unallocatedAccruedFeesAttoEth, feeIndex: feeIndex, feeIndexRemainder: feeIndexRemainder, totalFeesOwedRemainder: totalFeesOwedRemainder, uncheckpointedFeeEligibleUnderwritingLimitAttoEth: uncheckpointedFeeEligibleUnderwritingLimitAttoEth, lastUpdatedFeeAccumulator: lastUpdatedFeeAccumulator, currentRetentionRate: currentRetentionRate, badDebtGeneration: badDebtGeneration});
 	}
 
+	/// @notice Returns the vault's carried fee rounding remainder.
 	function getVaultFeeRemainder(address vault) external view returns (uint256) {
 		return vaultFeeRemainders[vault];
 	}
@@ -249,10 +260,12 @@ contract SecurityPool is SecurityPoolStorage {
 		DelegateCallForwarder.invokeWithDecodedRevert(address(eventEmitter), eventCall);
 	}
 
+	/// @notice Accrues pool fees and checkpoints `vault`'s share into its claimable fees; callable by anyone.
 	function updateVaultFees(address vault) public {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.updateVaultFees, (vault)));
 	}
 
+	/// @notice Checkpoints `vault` and sends its claimable fees to it in ETH; callable by anyone.
 	function redeemFees(address vault) external {
 		updateVaultFees(vault);
 		uint256 fees = securityVaults[vault].claimableFeesAttoEth;
@@ -270,6 +283,8 @@ contract SecurityPool is SecurityPoolStorage {
 		feeIndexRemainder = 0;
 	}
 
+	/// @notice Coordinator-only: withdraws up to `attoRepAmount` of REP to `vault` if the vault and pool stay backed.
+	/// @dev Withdraws the vault's full backing when the remainder would fall below the minimum vault REP deposit.
 	function withdrawRepFromVault(address vault, uint256 attoRepAmount) external isOperational onlyValidOracle {
 		if (isEscalationResolved()) revert('Escalation resolved');
 		updateVaultFees(vault);
@@ -300,6 +315,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitVaultAccountingCheckpoint(vault);
 	}
 
+	/// @notice Converts attoRep to backing units at the current pool rate, rounding down.
 	function attoRepToBackingUnits(uint256 attoRepAmount) public view returns (uint256) {
 		uint256 totalPoolHeldRepBalanceAttoRep = getTotalPoolHeldAttoRep();
 		if (totalRepBackingUnits == 0 || totalPoolHeldRepBalanceAttoRep == 0)
@@ -314,38 +330,46 @@ contract SecurityPool is SecurityPoolStorage {
 		return Math.mulDiv(attoRepAmount, totalRepBackingUnits, totalPoolHeldRepBalanceAttoRep, Math.Rounding.Ceil);
 	}
 
+	/// @notice Converts backing units to attoRep at the current pool rate, rounding down.
 	function backingUnitsToAttoRep(uint256 repBackingUnits) public view returns (uint256) {
 		if (totalRepBackingUnits == 0) return 0;
 		return Math.mulDiv(repBackingUnits, getTotalPoolHeldAttoRep(), totalRepBackingUnits);
 	}
 
+	/// @notice Returns the pool's REP token balance.
 	function getTotalPoolHeldAttoRep() public view returns (uint256) {
 		return repToken.balanceOf(address(this));
 	}
 
+	/// @notice Returns the total underwriting limit when pool-held REP backs it at a valid price and no escalation game exists; otherwise zero.
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
 		if (!openOraclePriceCoordinator.isPriceValid() || address(escalationGame) != address(0)) return 0;
 		uint256 backedCapacityAttoEth = SecurityPoolUtils.calculateBackingSupportedLimitAttoEth(getTotalPoolHeldAttoRep(), openOraclePriceCoordinator.lastPrice(), statoblastSecurityMultiplierBps);
 		return backedCapacityAttoEth >= totalUnderwritingLimitAttoEth ? totalUnderwritingLimitAttoEth : 0;
 	}
 
+	/// @notice Returns the vault's share of settlement collateral pro rata to its underwriting limit, rounded up.
 	function getVaultOpenInterestAttoEth(address vault) public view returns (uint256) {
 		return
 			SecurityPoolUtils.calculateVaultOpenInterestAttoEth(settlementCollateralAttoEth, securityVaults[vault].underwritingLimitAttoEth, totalUnderwritingLimitAttoEth);
 	}
 
+	/// @notice Returns the vault's underwriting limit in attoEth.
 	function getVaultUnderwritingLimitAttoEth(address vault) external view returns (uint256) {
 		return securityVaults[vault].underwritingLimitAttoEth;
 	}
 
+	/// @notice Sets the caller's vault underwriting limit; increases require open vault admission, a valid price, and sufficient backing.
 	function setUnderwritingLimit(uint256 limitAttoEth) external {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.setUnderwritingLimit, (limitAttoEth)));
 	}
 
+	/// @notice Forker-only: makes a recovered vault commitment fee-eligible after checking the vault's backing.
 	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external onlyForker {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.activateRecoveredCommitment, (vault, commitmentAttoEth)));
 	}
 
+	/// @notice Returns the vault's bad debt in the current bad-debt generation.
 	function vaultBadDebtAttoEth(address vault) external view returns (uint256) {
 		return _getVaultBadDebtAttoEth(vault);
 	}
@@ -390,12 +414,14 @@ contract SecurityPool is SecurityPoolStorage {
 		require(openOraclePriceCoordinator.isPriceValid(), 'Stale price');
 	}
 
+	/// @notice Converts shares to settlement collateral at the current rate, rounding down.
 	function attoSharesToAttoEth(uint256 amountAttoShares) public view returns (uint256) {
 		if (amountAttoShares == 0) return 0;
 		if (shareTokenSupplyAttoShares == 0) return 0;
 		return (amountAttoShares * settlementCollateralAttoEth) / shareTokenSupplyAttoShares;
 	}
 
+	/// @notice Converts attoEth to shares at the current rate; 1:1 while no shares or collateral exist.
 	function attoEthToAttoShares(uint256 amountAttoEth) public view returns (uint256) {
 		if (shareTokenSupplyAttoShares == 0) {
 			require(settlementCollateralAttoEth == 0, 'Exchange rate undefined');
@@ -405,13 +431,16 @@ contract SecurityPool is SecurityPoolStorage {
 		return (amountAttoEth * shareTokenSupplyAttoShares) / settlementCollateralAttoEth;
 	}
 
+	/// @notice Deposits `attoRepAmount` of REP from the caller into the caller's vault.
+	/// @dev Requires open vault admission and `targetHealthFactorBps` of at least the pool security multiplier.
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositRepToVault, (attoRepAmount, targetHealthFactorBps)));
 	}
 
 	// liquidating vault
-	// Liquidation transfers standing ETH commitment and a capped REP award. Residual commitments remain visible.
 
+	/// @notice Coordinator-only: executes a staged liquidation, moving commitment and capped REP from the target to the receiver vault.
+	/// @dev Liquidation transfers standing ETH commitment and a capped REP award. Residual commitments remain visible.
 	function performLiquidation(LiquidationRequest calldata request)
 		external
 		isOperational
@@ -440,6 +469,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	// Complete Sets
+	/// @notice Mints complete sets to the caller for `msg.value` of settlement collateral while no escalation game exists.
 	function createCompleteSet() external payable isOperational {
 		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolSettlementDelegate.createCompleteSet, ()));
 		uint256 completeSetsToMintAttoShares = abi.decode(result, (uint256));
@@ -448,9 +478,10 @@ contract SecurityPool is SecurityPoolStorage {
 		updateRetentionRate();
 	}
 
+	/// @notice Burns `amountAttoShares` complete sets from the caller and sends the matching settlement collateral in ETH.
+	/// @dev Complete-set exits use the current collateral-per-share rate after fee
+	/// accrual, preserving the exchange rate for remaining complete sets.
 	function redeemCompleteSet(uint256 amountAttoShares) external isOperational {
-		// Complete-set exits use the current collateral-per-share rate after fee
-		// accrual, preserving the exchange rate for remaining complete sets.
 		updateSettlementCollateral();
 		bytes memory result = DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.redeemCompleteSet, (shareToken, universeId, msg.sender, amountAttoShares)));
 		uint256 settlementCollateralRedeemedAttoEth = abi.decode(result, (uint256));
@@ -460,6 +491,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_sendEth(payable(msg.sender), settlementCollateralRedeemedAttoEth);
 	}
 
+	/// @notice Burns the caller's winning-outcome shares after finalization and sends their settlement collateral in ETH.
 	function redeemShares() external {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		updateSettlementCollateral();
@@ -470,6 +502,8 @@ contract SecurityPool is SecurityPoolStorage {
 		_sendEth(payable(msg.sender), settlementCollateralRedeemedAttoEth);
 	}
 
+	/// @notice Vault-only: after the question is final, redeems all of the vault's pool-held REP to the vault.
+	/// @dev Requires no escrowed dispute stake and a zero underwriting limit.
 	function redeemRepFromVault(address vault) external {
 		require(msg.sender == vault, 'Unauthorized');
 		require(systemState == SystemState.Operational, 'Pool inactive');
@@ -490,6 +524,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitVaultAccountingCheckpoint(vault);
 	}
 
+	/// @notice Withdraws fork-carried escalation deposits after the question is final; all proofs must share one depositor.
 	function withdrawForkedEscalationDeposits(QuestionOutcome outcome, CarriedDepositProof[] calldata proofs) external {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
@@ -513,11 +548,15 @@ contract SecurityPool is SecurityPoolStorage {
 
 	// Escalation Game (migrate vault (oi+rep), truth truthAuction)
 
+	/// @notice Deposits REP from the caller's wallet directly into the escalation game on `outcome`, deploying the game if needed.
+	/// @dev Wallet-funded deposits never acquire pool backing or capacity.
 	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		if (hasInheritedForkOutcome) revert('Forked');
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.depositWalletRepToEscalationGame, (outcome, maximumDepositAttoRep)));
 	}
 
+	/// @notice Moves up to `maximumDepositAttoRep` of the caller's vault REP into the escalation game on `outcome`, deploying the game if needed.
+	/// @dev The vault and pool must stay backed, and the vault must keep at least the minimum REP or none.
 	function depositToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external isOperational {
 		if (hasInheritedForkOutcome) revert('Forked');
 		require(!awaitingForkContinuation, 'Fork await');
@@ -563,6 +602,8 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitVaultAccountingCheckpoint(msg.sender);
 	}
 
+	/// @notice Withdraws local escalation deposits after the question is final; all indexes must share one depositor.
+	/// @dev Reverts when the universe forked before the game ended without a non-decision.
 	function withdrawFromEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256[] calldata depositIndexes) external {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		require(systemState == SystemState.Operational, 'Pool inactive');
@@ -589,6 +630,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_registerVault(beneficiaryVault);
 	}
 
+	/// @notice Forker-only: marks the pool forked, accrues fees, and sends all pool-held and escalation-game REP to the forker.
 	function activateForkMode() external onlyForker {
 		if (hasInheritedForkOutcome) revert('Forked');
 		systemState = SystemState.PoolForked;
@@ -600,6 +642,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkActivation, address(0x0));
 	}
 
+	/// @notice Forker-only: deploys the fork-continuation escalation game and reopens post-end vault admission.
 	function initializeForkedEscalationGame(uint256 startBondAttoRep, uint256 nonDecisionThresholdAttoRep, uint256 elapsedAtFork, BinaryOutcomes.BinaryOutcome fixedQuestionOutcome) external onlyForker {
 		// Keep the data-free revert because this runtime is within bytes of the EIP-170 limit.
 		if (address(escalationGame) != address(0x0)) revert();
@@ -608,29 +651,35 @@ contract SecurityPool is SecurityPoolStorage {
 		emit EscalationGameSet(escalationGame);
 	}
 
+	/// @notice Forker-only: installs the inherited fork carry snapshot on the pool's escalation game.
 	function initializeForkCarrySnapshotWithResolutionBalances(address sourceGame, bytes32 snapshotId, bytes32[64][3] memory inheritedCarryPeaks, uint256[3] memory inheritedCarryLeafCounts, uint256[3] memory inheritedCarryTotals, uint256[3] memory inheritedResolutionBalances, bytes32[3] memory inheritedNullifierRoots) external onlyForker {
 		require(address(escalationGame) != address(0x0), 'Game missing');
 		EscalationGame(payable(address(escalationGame))).initializeForkCarrySnapshotWithResolutionBalances(sourceGame, snapshotId, inheritedCarryPeaks, inheritedCarryLeafCounts, inheritedCarryTotals, inheritedResolutionBalances, inheritedNullifierRoots);
 	}
 
+	/// @notice Resumes a paused fork-continuation escalation game once its carry is funded; callable by anyone.
 	function resumeForkedEscalationGame() external {
 		DelegateCallForwarder.invokeWithDecodedRevert(operationsDelegate, abi.encodeCall(SecurityPoolOperationsDelegate.resumeForkedEscalationGame, ()));
 	}
 
+	/// @notice Forker-only: sets whether the pool awaits escalation fork continuation.
 	function setAwaitingForkContinuation(bool shouldAwait) external onlyForker {
 		awaitingForkContinuation = shouldAwait;
 		emit AwaitingForkContinuationSet(awaitingForkContinuation);
 	}
 
+	/// @notice Forker-only: sets the pool system state.
 	function setSystemState(SystemState newState) external onlyForker {
 		systemState = newState;
 		emit SystemStateSet(systemState);
 	}
 
+	/// @notice Forker-only: overwrites a vault's backing units, underwriting limit, fee index, and bad debt.
 	function configureVault(address vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
 		_configureVault(vault, repBackingUnits, underwritingLimitAttoEth, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, true);
 	}
 
+	/// @notice Forker-only: like `configureVault`, but keeps the fee index remainder when the underwriting limit changes.
 	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
 		_configureVault(vault, repBackingUnits, underwritingLimitAttoEth, vaultFeeIndex, newVaultBadDebtAttoEth, newTotalBadDebtAttoEth, false);
 	}
@@ -653,6 +702,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.CapacityOwnershipChange, vault);
 	}
 
+	/// @notice Forker-only: credits `vault` with fees accrued since auction finalization on its newly assigned auction capacity.
 	function assignFinalizedAuctionFees(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization) external onlyForker {
 		require(auctionFeeIndexAtFinalization <= feeIndex, 'Fee index');
 		uint256 previousVaultFeeRemainder = vaultFeeRemainders[vault];
@@ -674,16 +724,19 @@ contract SecurityPool is SecurityPoolStorage {
 		vaultAddresses.push(vault);
 	}
 
+	/// @notice Forker-only: sets the pool's total REP backing units.
 	function setTotalRepBackingUnits(uint256 newTotalRepBackingUnits) external onlyForker {
 		totalRepBackingUnits = newTotalRepBackingUnits;
 		emit TotalRepBackingUnitsSet(totalRepBackingUnits);
 	}
 
+	/// @notice Forker-only: sets the pool's share supply.
 	function setShareTokenSupplyAttoShares(uint256 newShareTokenSupplyAttoShares) external onlyForker {
 		shareTokenSupplyAttoShares = newShareTokenSupplyAttoShares;
 		emit ShareTokenSupplySet(shareTokenSupplyAttoShares);
 	}
 
+	/// @notice Forker-only: installs funded settlement collateral, underwriting totals, and bad debt, and restarts fee accrual.
 	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalUnderwritingLimitAttoEth, uint256 newFeeEligibleUnderwritingLimitAttoEth, uint256 newTotalBadDebtAttoEth) external onlyForker {
 		// Fee-eligible capacity is a subset of total capacity.
 		if (newFeeEligibleUnderwritingLimitAttoEth > newTotalUnderwritingLimitAttoEth)
@@ -699,6 +752,7 @@ contract SecurityPool is SecurityPoolStorage {
 		_emitPoolAccountingCheckpoint(AccountingReason.ForkFinalization, address(0x0));
 	}
 
+	/// @notice Forker-only: sends settlement collateral ETH to `receiver` without spending ETH reserved for fee liabilities.
 	function transferEth(address payable receiver, uint256 amountAttoEth) external onlyForker {
 		uint256 feeLiabilitiesAttoEth = totalClaimableVaultFeesAttoEth + unallocatedAccruedFeesAttoEth;
 		require(feeLiabilitiesAttoEth <= address(this).balance && amountAttoEth <= address(this).balance - feeLiabilitiesAttoEth && amountAttoEth <= settlementCollateralAttoEth, 'Collateral low');
@@ -712,14 +766,17 @@ contract SecurityPool is SecurityPoolStorage {
 		require(sent, 'ETH failed');
 	}
 
+	/// @notice Forker-only: authorizes a child pool on the share token.
 	function authorizeChildPool(ISecurityPool pool) external onlyForker {
 		shareToken.authorize(pool);
 	}
 
+	/// @notice Accepts ETH only from the forker, the truth auction, or the parent pool.
 	receive() external payable {
 		require(msg.sender == securityPoolForker || msg.sender == truthAuction || msg.sender == address(parent), 'Bad ETH sender');
 	}
 
+	/// @notice Forwards the underwriting-limit, permit, and authorization vault operations to the operations delegate; rejects other selectors.
 	fallback() external {
 		bytes4 selector = msg.sig;
 		require(selector == SecurityPoolOperationsDelegate.setVaultUnderwritingLimit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithPermit.selector || selector == SecurityPoolOperationsDelegate.depositRepToVaultWithAuthorization.selector, 'Unsupported pool operation');

@@ -74,6 +74,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_;
 	}
 
+	/// @notice Owner-only: starts the auction with an ETH raise cap and a REP sale cap.
 	function startAuction(uint256 _attoEthRaiseCap, uint256 _maxAttoRepBeingSold) public {
 		require(owner == msg.sender, 'Only the auction owner can start the auction');
 		require(auctionStarted == 0, 'Auction has already been started');
@@ -92,6 +93,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		emit AuctionStarted(auctionStarted, auctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, _attoEthRaiseCap, _maxAttoRepBeingSold, minBidSizeAttoEth);
 	}
 
+	/// @notice Places `msg.value` as a bid at `tick` while bidding is open.
 	function submitBid(int256 tick) external payable isOperational {
 		require(msg.value >= minBidSizeAttoEth, 'Auction bid is smaller than the minimum bid size');
 		require(msg.value <= type(uint128).max, 'Auction bid too high');
@@ -107,6 +109,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		emit BidSubmitted(msg.sender, tick, bidIndex, msg.value, bidsAtTick[tick][bidIndex].cumulativeBidAttoEth);
 	}
 
+	/// @notice Owner-only: after bidding ends, fixes the clearing result and sends the raised ETH to the owner.
 	function finalize() external {
 		require(!finalized, 'Auction has already been finalized');
 		require(msg.sender == owner, 'Only the auction owner can finalize');
@@ -138,6 +141,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		require(sent, 'Auction failed to send raised ETH to the owner');
 	}
 
+	/// @notice Returns the ETH finalization would send and the REP it would sell under the current bids.
 	function previewFinalization() external view returns (uint256 raisedAttoEthToSend, uint256 repPurchasedAttoRep) {
 		(bool hitCap, int256 foundTick, uint256 accumulatedBidAttoEth, ) = computeClearing();
 		(, , repPurchasedAttoRep, raisedAttoEthToSend) = _computeFinalizationOutcome(hitCap, foundTick, accumulatedBidAttoEth);
@@ -184,6 +188,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		);
 	}
 
+	/// @notice Returns whether current active bids fund the auction, the clearing tick, the accumulated ETH, and the ETH filled at that tick.
 	function computeClearing()
 		public
 		view
@@ -193,6 +198,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			UniformPriceDualCapBatchAuctionStorage.computeClearing(nodes, root, UniformPriceDualCapBatchAuctionStorage.ClearingConfig({attoEthRaiseCap: attoEthRaiseCap, maxAttoRepBeingSold: maxAttoRepBeingSold, underfundedThreshold: underfundedThreshold}));
 	}
 
+	/// @notice Owner-only: settles `withdrawFor`'s finalized bids, crediting ETH refunds and returning REP filled and pro-rata allocations.
 	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal, uint256 repBackingUnitsTotal)
 		external
 		returns (
@@ -294,10 +300,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
 	}
 
+	/// @notice Before finalization, refunds the caller's bids below the current funded clearing tick as credited ETH.
 	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		_refundLosingBids(msg.sender, tickIndices);
 	}
 
+	/// @notice Owner-only: `refundLosingBids` on behalf of `bidder`.
 	function refundLosingBidsFor(address bidder, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		require(msg.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders');
 		_refundLosingBids(bidder, tickIndices);
@@ -340,6 +348,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_creditRefund(bidder, totalRefundAttoEth);
 	}
 
+	/// @notice Sends the caller's credited ETH refunds.
 	function withdrawPendingEthRefund() external {
 		uint256 amountAttoEth = pendingEthRefundsAttoEth[msg.sender];
 		require(amountAttoEth > 0, 'Auction has no credited ETH refund');
@@ -356,18 +365,22 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		emit EthRefundCredited(bidder, amountAttoEth, pendingAmountAttoEth);
 	}
 
+	/// @notice Returns the price at `tick`.
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {
 		return UniformPriceDualCapBatchAuctionStorage.tickToPrice(tick);
 	}
 
+	/// @notice Returns the bid summary for `tick`.
 	function getTickSummary(int256 tick) external view returns (IUniformPriceDualCapBatchAuction.TickSummary memory) {
 		return _buildTickSummary(tick);
 	}
 
+	/// @notice Returns the number of distinct ticks that ever received a bid.
 	function getTickCount() external view returns (uint256) {
 		return seenTicks.length;
 	}
 
+	/// @notice Returns summaries of ticks that ever received a bid, in first-bid order.
 	function getTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
 		uint256 end = _sliceEnd(offset, limit, seenTicks.length);
 		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
@@ -378,6 +391,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		}
 	}
 
+	/// @notice Returns summaries of ticks with active bids, highest tick first.
 	function getActiveTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
 		uint256 end = _sliceEnd(offset, limit, activeTickCount);
 		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
@@ -386,10 +400,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_fillActiveTickPage(root, offset, summaries, 0);
 	}
 
+	/// @notice Returns the number of bids ever placed at `tick`.
 	function getBidCountAtTick(int256 tick) external view returns (uint256) {
 		return bidsAtTick[tick].length;
 	}
 
+	/// @notice Returns bids at `tick` in submission order.
 	function getBidPageAtTick(int256 tick, uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.BidView[] memory bidViews) {
 		uint256 total = bidsAtTick[tick].length;
 		uint256 end = _sliceEnd(offset, limit, total);
@@ -401,10 +417,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		}
 	}
 
+	/// @notice Returns the number of bids placed by `bidder`.
 	function getBidderBidCount(address bidder) external view returns (uint256) {
 		return bidderBidRefs[bidder].length;
 	}
 
+	/// @notice Returns `bidder`'s bids in submission order.
 	function getBidderBidPage(address bidder, uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.BidView[] memory bidViews) {
 		uint256 total = bidderBidRefs[bidder].length;
 		uint256 end = _sliceEnd(offset, limit, total);

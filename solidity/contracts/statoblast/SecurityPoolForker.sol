@@ -42,6 +42,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 	event TruthAuctionStarted(ISecurityPool indexed securityPool, uint256 settlementCollateralAttoEth, uint256 repMigratedAttoRep, uint256 auctionableAttoRepAtFork);
 	event TruthAuctionFinalized(ISecurityPool indexed securityPool);
 
+	/// @notice Returns the fork and truth-auction bookkeeping recorded for `securityPool`.
 	function forkData(ISecurityPool securityPool)
 		public
 		view
@@ -77,6 +78,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
+	/// @notice Returns unclaimed auction backing units, underwriting limit, and bad debt, then the auction bad-debt generation and fee index.
 	function getUnassignedPosition(ISecurityPool securityPool) external view returns (uint256, uint256, uint256, uint256, uint256) {
 		SecurityPoolForkerForkData storage data = forkDataByPool[securityPool];
 		return (
@@ -88,6 +90,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
+	/// @notice Returns whether a parent escalation deposit was already claimed through `claimForkedEscalationDeposits`.
 	function isEscalationDepositClaimedDirectly(ISecurityPool securityPool, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256 parentDepositIndex) external view returns (bool) {
 		return
 			directlyClaimedEscalationDepositById[
@@ -95,18 +98,22 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 			];
 	}
 
+	/// @notice Returns the identifier used to track a parent escalation deposit claim.
 	function getEscalationDepositId(ISecurityPool securityPool, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256 parentDepositIndex) external view returns (bytes32) {
 		return _getEscalationDepositId(securityPool, uint8(outcomeIndex), parentDepositIndex);
 	}
 
+	/// @notice Returns the source principal claimed for `outcomeIndex` through `claimForkedEscalationDeposits`.
 	function getDirectlyClaimedEscalationPrincipal(ISecurityPool securityPool, BinaryOutcomes.BinaryOutcome outcomeIndex) external view returns (uint256) {
 		return directlyClaimedEscalationPrincipalByPoolAndOutcome[securityPool][uint8(outcomeIndex)];
 	}
 
+	/// @notice Returns whether `securityPool` forked on its own escalation game, in which case the fork paid the winner haircut.
 	function isEscalationWinnerHaircutPaidByFork(ISecurityPool securityPool) external view returns (bool) {
 		return forkDataByPool[securityPool].ownFork;
 	}
 
+	/// @notice Returns `vault`'s escalation migration entitlement and which child outcomes have materialized it.
 	function getEscalationMigrationEntitlementStatus(ISecurityPool securityPool, address vault) external view returns (bool initialized, uint256 totalCurrentAttoRep, bool[3] memory materializedByOutcome) {
 		EscalationMigrationEntitlement storage entitlement = escalationMigrationEntitlementByPoolAndVault[securityPool][
 			vault
@@ -119,6 +126,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return (entitlement.initialized, entitlement.totalCurrentAttoRep, materializedByOutcome);
 	}
 
+	/// @notice Returns the vault, per-child escalation, and escrow source REP recorded at an own-game fork.
 	function getOwnForkRepBuckets(ISecurityPool securityPool)
 		public
 		view
@@ -136,6 +144,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		);
 	}
 
+	/// @notice Returns whether the pool forked on its own game, its auctionable REP at fork, and its own-fork REP buckets.
 	function getOwnForkMigrationStatus(ISecurityPool securityPool)
 		public
 		view
@@ -251,6 +260,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return keccak256(abi.encode(address(securityPool)));
 	}
 
+	/// @notice Returns the deterministic CREATE2 address of `securityPool`'s migration proxy.
 	function getMigrationProxyAddress(ISecurityPool securityPool) public view returns (address) {
 		bytes32 salt = _getMigrationProxySalt(securityPool);
 		bytes32 initCodeHash = keccak256(abi.encodePacked(type(SecurityPoolMigrationProxy).creationCode, abi.encode(zoltar, securityPool.repToken(), securityPool.universeId(), address(this))));
@@ -278,11 +288,13 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return super._initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
+	/// @notice Self-call only: initializes the child's fork-continuation escalation game when the parent forked with an unresolved escalation.
 	function initializeChildForkedEscalationGameIfNeeded(ISecurityPool parent, ISecurityPool child, EscalationGame childEscalationGame) external returns (EscalationGame) {
 		if (msg.sender != address(this)) revert('Only self');
 		return _initializeChildForkedEscalationGameIfNeeded(parent, child, childEscalationGame);
 	}
 
+	/// @notice Activates fork mode on a pool in a forked universe and locks its REP and unresolved escrow REP into Zoltar migration; callable by anyone.
 	function initiateSecurityPoolFork(ISecurityPool securityPool) external {
 		EscalationGame escalationGame = _getEscalationGame(securityPool);
 		SecurityPoolForkerForkData storage data = _prepareForkState(securityPool, escalationGame);
@@ -318,6 +330,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		_emitForkSnapshotEvents(securityPool, address(migrationProxy), address(escalationGame), poolRepToLockAttoRep, disputeStakedRepToLockAttoRep, migrationBalanceAttoRep);
 	}
 
+	/// @notice Ensures the pool's migration REP is split into the selected outcome children during the migration window; callable by anyone.
 	function migrateRepToZoltar(ISecurityPool securityPool, uint256[] calldata outcomeIndices) external {
 		SecurityPoolMigrationProxy migrationProxy = migrationProxyByPool[securityPool];
 		if (address(migrationProxy) == address(0x0)) revert('Migration proxy unavailable');
@@ -345,15 +358,18 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return DelegateCall.invoke(delegate, callData);
 	}
 
+	/// @notice Deploys the child universe (if needed) and child pool for `outcomeIndex` during the migration window; reverts if the pool exists.
 	function createChildUniverse(ISecurityPool securityPool, uint256 outcomeIndex) external {
 		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.createChildUniverse, (securityPool, outcomeIndex)));
 	}
 
+	/// @notice Vault-only: after an own-game fork, carries the vault's deposits on `outcomeIndex` into the child game and exports the child REP to the vault.
 	function claimForkedEscalationDeposits(ISecurityPool securityPool, address vault, BinaryOutcomes.BinaryOutcome outcomeIndex, uint256[] calldata depositIndexes) external {
 		require(msg.sender == vault, 'Vault');
 		_delegateMigrationCall(escalationGameForkerDelegate, abi.encodeCall(EscalationGameForker.claimForkedEscalationDeposits, (securityPool, vault, outcomeIndex, depositIndexes)));
 	}
 
+	/// @notice Migrates the caller's non-escrowed vault accounting into the `outcomeIndex` child pool during the migration window.
 	function migrateVault(ISecurityPool securityPool, uint256 outcomeIndex) public {
 		_migrateVaultAndReturnChild(securityPool, outcomeIndex);
 	}
@@ -363,6 +379,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return abi.decode(returnData, (ISecurityPool, EscalationGame));
 	}
 
+	/// @notice Vault-only: during the migration window, migrates the vault and materializes its unresolved escalation entitlement in a child pool.
 	function migrateVaultWithUnresolvedEscalation(ISecurityPool securityPool, address vault, uint256 childOutcomeIndex) external {
 		ISecurityPool child;
 		EscalationGame childEscalationGame;
@@ -375,6 +392,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		_delegateMigrationCall(escalationGameForkerDelegate, abi.encodeCall(EscalationGameForker.migrateVaultWithUnresolvedEscalation, (securityPool, vault, childOutcomeIndex, child, childEscalationGame)));
 	}
 
+	/// @notice After the parent's migration window, starts the child pool's truth auction, or finalizes directly when nothing needs raising.
 	function startTruthAuction(ISecurityPool securityPool) external {
 		SecurityPoolForkerForkData storage data;
 		SecurityPoolForkerForkData storage parentData;
@@ -540,12 +558,14 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		securityPool.escalationGame().applyTruthAuctionHaircut(disputeStakedRepSoldAttoRep);
 	}
 
+	/// @notice Finalizes the child pool's truth auction after the auction period and installs the post-auction pool state; callable by anyone.
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable {
 		require(msg.value == 0, 'No repair ETH');
 		require(block.timestamp >= _getForkData(securityPool).truthAuctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, 'Auction open');
 		_finalizeTruthAuction(securityPool);
 	}
 
+	/// @notice Forks the universe on the pool's own question once its escalation game allows it, using pool-held and escrowed REP; callable by anyone.
 	function forkZoltarWithOwnEscalationGame(ISecurityPool securityPool) external {
 		EscalationGame escalationGame = _getEscalationGame(securityPool);
 		require(address(escalationGame) != address(0x0) && escalationGame.canTriggerOwnFork(), 'Need game');
@@ -594,18 +614,18 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.takeOverUnassignedCommitment, (securityPool, maximumCommitmentAttoEth)));
 	}
 
-	// Settles finalized truth-auction bids through the forker-owned auction.
-	// Winning and partial bids credit purchased REP into the vault and assign the
-	// corresponding share of auctioned capacity ownership. Finalized losing bids may still
-	// settle here as ETH-only refunds, in which case no vault accounting changes.
-	// Anyone can call this so that settlement is not blocked on the bidder.
+	/// @notice Settles finalized truth-auction bids through the forker-owned auction.
+	/// @dev Winning and partial bids credit purchased REP into the vault and assign the
+	/// corresponding share of auctioned capacity ownership. Finalized losing bids may still
+	/// settle here as ETH-only refunds, in which case no vault accounting changes.
+	/// Anyone can call this so that settlement is not blocked on the bidder.
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		_claimAuctionProceeds(securityPool, vault, tickIndices);
 	}
 
-	// settleAuctionBids lets callers submit both claim and refund batches in a single
-	// transaction. Before finalization, only refundable bids can be settled.
-	// After finalization, both sets are withdrawn as settlement payouts from the auction.
+	/// @notice Submits claim and refund batches for `vault`'s truth-auction bids in a single transaction.
+	/// @dev Before finalization, only refundable bids can be settled.
+	/// After finalization, both sets are withdrawn as settlement payouts from the auction.
 	function settleAuctionBids(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] calldata claimTickIndices, IUniformPriceDualCapBatchAuction.TickIndex[] calldata refundTickIndices) external {
 		require(claimTickIndices.length > 0 || refundTickIndices.length > 0, 'Need action');
 		if (forkDataByPool[securityPool].truthAuction.finalized()) {
@@ -641,6 +661,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		forkDataByPool[securityPool].truthAuction.refundLosingBidsFor(vault, tickIndices);
 	}
 
+	/// @notice Returns the pool's final question outcome, or None while unresolved or while the pool is forked.
 	function getQuestionOutcome(ISecurityPool securityPool) external view returns (BinaryOutcomes.BinaryOutcome outcome) {
 		SystemState systemState = securityPool.systemState();
 		if (systemState == SystemState.PoolForked) return BinaryOutcomes.BinaryOutcome.None;
@@ -654,6 +675,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		return BinaryOutcomes.BinaryOutcome.None;
 	}
 
+	/// @notice Accepts ETH only from trusted truth auctions.
 	receive() external payable {
 		if (!trustedAuctionAddresses[msg.sender]) revert('Only trusted auction');
 	}

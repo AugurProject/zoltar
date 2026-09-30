@@ -31,14 +31,17 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 	event ForkContinuationResumed(uint256 resumedAt);
 	event ForkedEscrowRecorded(address indexed depositor, BinaryOutcomes.BinaryOutcome indexed outcome, uint256 sourcePrincipalTotalAttoRep, uint256 childRepTotalAttoRep, uint256 disputeStakedRepByVaultAttoRep, uint256 totalDisputeStakedAttoRep, uint256 outcomeBalanceAttoRep);
 
+	/// @notice Game delegatecall target: records a pool-funded deposit for `depositor` on `outcome` and returns its parent deposit index.
 	function recordDeposit(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 attoRepAmount, uint256 expectedCumulativeRepAmountAttoRep) external returns (uint256 parentDepositIndex) {
 		return _recordDeposit(depositor, outcome, attoRepAmount, expectedCumulativeRepAmountAttoRep);
 	}
 
+	/// @notice Game delegatecall target: transfers the caller's previewed REP deposit on `outcome` into the game and records it.
 	function depositRepOnOutcome(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		_depositRepOnOutcome(outcome, maximumDepositAttoRep);
 	}
 
+	/// @notice Game delegatecall target: like `depositRepOnOutcome`, after a permit, falling back to an existing allowance.
 	function depositRepOnOutcomeWithPermit(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
@@ -55,6 +58,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		_recordDeposit(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
+	/// @notice Game delegatecall target: pulls `owner`'s previewed deposit through an ERC-3009 authorization bound to this operation and records it.
 	function depositRepOnOutcomeWithAuthorization(address owner, BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		_validateGameForDeposit(game);
@@ -123,6 +127,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		}
 	}
 
+	/// @notice Game delegatecall target: records fork-carried escrow for `depositor` on `outcome`, applying any truth-auction retention.
 	function recordForkedEscrowForOutcome(address depositor, BinaryOutcomes.BinaryOutcome outcome, uint256 sourcePrincipalAttoRep, uint256 childRepAmountAttoRep) external {
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'No outcome');
 		require(depositor != address(0x0), 'Depositor is zero');
@@ -185,6 +190,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.currentLeafCount = leafCount + 1;
 	}
 
+	/// @notice Game delegatecall target, forker-only: scales a paused fork game's balances by the auction-sold REP and sends that REP to the pool.
 	function applyTruthAuctionHaircut(uint256 repToRemoveAttoRep) external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		address poolAddress = game.securityPool();
@@ -218,6 +224,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit TruthAuctionHaircutApplied(repBeforeAttoRep, repToRemoveAttoRep, repRemainingAttoRep, forkElapsedAtStart);
 	}
 
+	/// @notice Game delegatecall target, pool-only: resumes a paused fork-continuation game once its carry funding is complete.
 	function resumeFromFork() external {
 		IEscalationGameDepositContext game = IEscalationGameDepositContext(address(this));
 		require(msg.sender == game.securityPool(), 'Only pool');
@@ -234,6 +241,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit ForkContinuationResumed(block.timestamp);
 	}
 
+	/// @notice Game delegatecall target: reduces `ownerAddress`'s escrowed REP claim and the total dispute stake by `amountAttoRep`.
 	function consumeEscrowedRepForOwner(address ownerAddress, uint256 amountAttoRep) external {
 		if (amountAttoRep == 0) return;
 		uint256 claimUnits = _repToClaimUnits(amountAttoRep);
@@ -243,6 +251,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		emit VaultEscrowUpdated(ownerAddress, _claimEscrowedRepByVault(ownerAddress), totalDisputeStakedAttoRep);
 	}
 
+	/// @notice Game delegatecall target: marks an inherited parent deposit consumed and records its retained principal.
 	function consumeCarriedDeposit(uint8 outcomeIndex, uint256 parentDepositIndex, uint256 amountAttoRep, uint256 cumulativeAmountAttoRep, uint256 leafIndex, uint256 effectiveInheritedAttoRep) external {
 		require(!outcomeState[outcomeIndex].consumedParentDepositIndexes[parentDepositIndex], 'Deposit settled');
 		OutcomeState storage state = outcomeState[outcomeIndex];
@@ -256,6 +265,7 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		state.inheritedUnresolvedTotalAttoRep -= sourceBasisAttoRep;
 	}
 
+	/// @notice Game delegatecall target: reduces `bundleId`'s local unresolved principal on `outcomeIndex` by `amountAttoRep`.
 	function consumeUnresolvedRepForClaimOwners(address bundleId, uint8 outcomeIndex, uint256 amountAttoRep, uint256 leafIndex) external {
 		_recordConsumedPrincipal(outcomeIndex, leafIndex, amountAttoRep);
 		require(unresolvedRepByVaultAttoRep[bundleId] >= amountAttoRep, 'Claim accounting remainder');
@@ -265,11 +275,13 @@ contract EscalationGameDepositDelegate is EscalationGameStorage, IEscalationGame
 		totalLocalUnresolvedAttoRep -= amountAttoRep;
 	}
 
+	/// @notice Game delegatecall target: transfers `amountAttoRep` of REP to `bundleId`.
 	function creditClaimOwners(address bundleId, uint256 amountAttoRep) external {
 		if (amountAttoRep == 0) return;
 		IERC20(IEscalationGameDepositContext(address(this)).repToken()).safeTransfer(bundleId, amountAttoRep);
 	}
 
+	/// @notice Game delegatecall target: pays a carried-deposit claim to `bundleId` and releases the consumed fork-carry dispute stake.
 	function creditExternalClaimOwners(address, address bundleId, uint256, uint256 amountAttoRep, uint256 burnAmountAttoRep) external {
 		uint256 backingConsumed = amountAttoRep + (winnerHaircutPaidByFork ? 0 : burnAmountAttoRep);
 		IERC20 token = IERC20(IEscalationGameDepositContext(address(this)).repToken());
