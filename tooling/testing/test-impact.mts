@@ -6,7 +6,7 @@ import { sharedPackages } from '../repo/sharedPackages.ts'
 import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
 
-// Simulation scenarios seeded only for the production browser workflows (see tooling/ui/productionWorkflowScenarios.ts).
+// statoblastWorkflowScenarios.ts seeds the ended-pool-exit and liquidation-distance workflows; statoblastScenarioSeeding.ts is the shared seeding layer every production workflow scenario depends on.
 const WORKFLOW_SIMULATION_SCENARIO_PATHS = new Set(['ui/statoblastShared/ts/simulation/statoblastWorkflowScenarios.ts', 'ui/statoblastShared/ts/simulation/statoblastScenarioSeeding.ts'])
 
 export type TestImpactRecommendation = {
