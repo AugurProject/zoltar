@@ -1,4 +1,5 @@
 import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
@@ -127,7 +128,7 @@ export function LiveLiquidityControls({
 					<FormInput id={probabilityId} name='probability' value={probability} disabled={workflowLocked} inputMode='decimal' adornment={liquidityCopy.percent} error={probabilityInvalid ? liquidityCopy.conditionalYesPriceValidation : undefined} onInput={event => updateProbability(event.currentTarget.value)} />
 				</FormField>
 			) : null}
-			<p className='detail'>{operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance}</p>
+			<UserMessage className='detail' detail={operation === 'remove' ? liquidityCopy.removalGuidance : liquidityCopy.additionGuidance} />
 			<QuotedTransactionPanel phase={state} actionLabel={actionLabel} availability={availability} transactionHash={transaction.transactionHash} receiptWarning={transaction.receiptWarning} error={transaction.error} walletStep={walletStep} onSubmit={() => void submit()}>
 				{transaction.quoteState === 'error' ? (
 					<TransactionActionButton idleLabel={liquidityCopy.retryQuote} pendingLabel={liquidityCopy.gettingQuote} pending={false} tone='secondary' availability={{ disabled: workflowLocked, reason: workflowLocked ? liquidityCopy.waitForTransaction : undefined }} onClick={transaction.retryQuote} />
@@ -175,7 +176,7 @@ export function LiveLiquidityControls({
 								<MetricField label={liquidityCopy.quoteBlock}>{quote.blockNumber.toString()}</MetricField>
 							</DataGrid>
 						</ReadOnlyDetailAccordion>
-						<p className='detail trade-estimate-note'>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question-or-oracle')}</p>
+						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question-or-oracle')} />
 					</section>
 				)}
 			</QuotedTransactionPanel>

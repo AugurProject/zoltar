@@ -1,4 +1,5 @@
-import { useState } from 'preact/hooks'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
+import { useId, useState } from 'preact/hooks'
 import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import type { UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 
@@ -26,6 +27,9 @@ export function readUiPriceOracle(storage?: Pick<Storage, 'getItem'>): UiPriceOr
 }
 
 export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { priceOracle: UiPriceOracle; onPriceOracleChange: (value: UiPriceOracle) => void }) {
+	const scopeId = useId()
+	const descriptionId = useId()
+	const errorId = useId()
 	const [error, setError] = useState<string | undefined>(undefined)
 	const savePriceOracle = (value: UiPriceOracle) => {
 		onPriceOracleChange(value)
@@ -45,8 +49,9 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 	return (
 		<label className='app-settings-price-oracle'>
 			<span>{appCopy.uiPriceOracle}</span>
-			<small>{appCopy.uiPriceOracleScope}</small>
+			<UserMessage placement='field' as='span' id={scopeId} detail={appCopy.uiPriceOracleScope} />
 			<select
+				aria-describedby={[scopeId, descriptionId, error === undefined ? undefined : errorId].filter(value => value !== undefined).join(' ')}
 				value={priceOracle}
 				onChange={event => {
 					const value = event.currentTarget.value as UiPriceOracle
@@ -57,12 +62,8 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 				<option value='open-oracle'>{appCopy.latestOpenOraclePrice}</option>
 				<option value='open-oracle-fallback'>{appCopy.openOracleThenUniswap}</option>
 			</select>
-			<small>{priceOracleDescriptions[priceOracle]}</small>
-			{error === undefined ? undefined : (
-				<small className='field-error' role='alert'>
-					{error}
-				</small>
-			)}
+			<UserMessage placement='field' as='span' id={descriptionId} detail={priceOracleDescriptions[priceOracle]} />
+			{error === undefined ? undefined : <UserMessage placement='field' as='span' id={errorId} tone='error' announcement='assertive' detail={error} />}
 		</label>
 	)
 }

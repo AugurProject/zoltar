@@ -1,8 +1,8 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TruthAuctionDepthChart } from './TruthAuctionDepthChart.js'
@@ -29,7 +29,7 @@ function clampPercentage(value: bigint, maxValue: bigint) {
 export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummaries, loadingTruthAuctionBook, maxTickAttoEth, onLoadNextTickPage, onSelectTick, renderPriceValue, showDepthClearingTick, truthAuctionBookError, truthAuctionDepthPoints }: TruthAuctionMarketViewSectionProps) {
 	return (
 		<SectionBlock variant='embedded'>
-			{truthAuctionBookError === undefined ? undefined : <p className='detail truth-auction-book-error'>{truthAuctionBookError}</p>}
+			{truthAuctionBookError === undefined ? undefined : <UserMessage className='detail truth-auction-book-error' tone='error' detail={truthAuctionBookError} />}
 			<div className='truth-auction-market-board'>
 				<div className='truth-auction-market-section truth-auction-depth-panel'>
 					<div className='truth-auction-depth-header'>
@@ -37,12 +37,8 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 							<h4>{forkAuctionCopy.visibleDepth}</h4>
 						</div>
 					</div>
-					{loadingTruthAuctionBook ? (
-						<p className='detail'>
-							<LoadingText>{forkAuctionCopy.loadingOrderBook}</LoadingText>
-						</p>
-					) : undefined}
-					{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{forkAuctionCopy.auctionLiveLevelsEmpty}</p> : undefined}
+					{loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingOrderBook} /> : undefined}
+					{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.auctionLiveLevelsEmpty} /> : undefined}
 					{truthAuctionDepthPoints.length === 0 ? undefined : <TruthAuctionDepthChart onSelectTick={onSelectTick} points={truthAuctionDepthPoints} {...(showDepthClearingTick && clearingTick !== undefined ? { clearingTick } : {})} />}
 				</div>
 				<div className='truth-auction-market-detail-grid'>
@@ -50,16 +46,12 @@ export function TruthAuctionMarketViewSection({ clearingTick, hasMoreTickSummari
 						<div className='truth-auction-panel-header'>
 							<div>
 								<h4>{forkAuctionCopy.priceLadder}</h4>
-								{truthAuctionDepthPoints.length === 0 ? undefined : <p className='detail'>{forkAuctionCopy.priceLadderHint}</p>}
+								{truthAuctionDepthPoints.length === 0 ? undefined : <UserMessage className='detail' detail={forkAuctionCopy.priceLadderHint} />}
 							</div>
 						</div>
 						<div className='truth-auction-ladder'>
-							{loadingTruthAuctionBook ? (
-								<p className='detail'>
-									<LoadingText>{forkAuctionCopy.loadingPriceLevels}</LoadingText>
-								</p>
-							) : undefined}
-							{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <p className='detail'>{forkAuctionCopy.visibleAuctionLevelsEmpty}</p> : undefined}
+							{loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingPriceLevels} /> : undefined}
+							{truthAuctionBookError === undefined && !loadingTruthAuctionBook && truthAuctionDepthPoints.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.visibleAuctionLevelsEmpty} /> : undefined}
 							{truthAuctionDepthPoints.map(point => (
 								<button
 									aria-pressed={point.isSelected}

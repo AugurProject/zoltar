@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { FormField, RequiredFieldLabel } from '@zoltar/ui-core-shared/components/FormField.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
@@ -223,7 +224,7 @@ export function QuestionCreateSection({
 										</span>
 									)
 
-								return <p className='detail'>{marketCopy.questionDetailsUnavailable}</p>
+								return <UserMessage className='detail' detail={marketCopy.questionDetailsUnavailable} />
 							}
 
 							return <Question question={selectedQuestionDetails} showTitle={false} abbreviateIdentifier />
@@ -265,7 +266,7 @@ export function QuestionCreateSection({
 									<span>{marketCopy.description}</span>
 								</label>
 								<textarea id='market-create-description' value={questionForm.description} onInput={event => onQuestionFormChange({ description: event.currentTarget.value })} placeholder={marketCopy.optionalQuestionContext} />
-								<p className='field-help'>{marketCopy.resolutionSourceHelpText}</p>
+								<UserMessage placement='field' detail={marketCopy.resolutionSourceHelpText} />
 							</div>
 
 							<div className='field-row'>
@@ -296,14 +297,8 @@ export function QuestionCreateSection({
 									/>
 								</FormField>
 							</div>
-							{timingRelationshipError === undefined ? undefined : (
-								<p className='field-error' id={timingRelationshipErrorId}>
-									{timingRelationshipError}
-								</p>
-							)}
-							<p className='field-help' id={timeZoneHelpId}>
-								{marketCopy.formatQuestionTimingHelpText(timeZoneLabel)}
-							</p>
+							{timingRelationshipError === undefined ? undefined : <UserMessage placement='field' tone='error' id={timingRelationshipErrorId} detail={timingRelationshipError} />}
+							<UserMessage placement='field' id={timeZoneHelpId} detail={marketCopy.formatQuestionTimingHelpText(timeZoneLabel)} />
 
 							{questionForm.marketType === 'categorical' ? (
 								<div className='field' role='group' aria-labelledby='market-create-outcomes-label'>
@@ -338,17 +333,9 @@ export function QuestionCreateSection({
 											</div>
 										))}
 									</div>
-									{questionForm.categoricalOutcomes.length <= 2 ? (
-										<p className='detail' id='minimum-outcomes-reason'>
-											{marketCopy.minimumOutcomeCountReason}
-										</p>
-									) : undefined}
-									{getVisibleFieldError('categoricalOutcomes') === undefined ? undefined : (
-										<p className='field-error' id='market-create-outcomes-error'>
-											{getVisibleFieldError('categoricalOutcomes')}
-										</p>
-									)}
-									<p className='field-help'>{marketCopy.categoricalOutcomeLabelsHelpText}</p>
+									{questionForm.categoricalOutcomes.length <= 2 ? <UserMessage className='detail' id='minimum-outcomes-reason' detail={marketCopy.minimumOutcomeCountReason} /> : undefined}
+									{getVisibleFieldError('categoricalOutcomes') === undefined ? undefined : <UserMessage placement='field' tone='error' id='market-create-outcomes-error' detail={getVisibleFieldError('categoricalOutcomes')} />}
+									<UserMessage placement='field' detail={marketCopy.categoricalOutcomeLabelsHelpText} />
 									<button className='secondary categorical-outcome-add' type='button' onClick={addCategoricalOutcome}>
 										{marketCopy.addOutcome}
 									</button>
@@ -404,7 +391,7 @@ export function QuestionCreateSection({
 									</FormField>
 								</div>
 							) : undefined}
-							{questionForm.marketType === 'scalar' ? <p className='field-help'>{marketCopy.scalarResolutionHelpText}</p> : undefined}
+							{questionForm.marketType === 'scalar' ? <UserMessage placement='field' detail={marketCopy.scalarResolutionHelpText} /> : undefined}
 							{showEndedQuestionWarning ? (
 								<WarningSurface ariaLive='polite' role='status' surface='flat' variant='compact'>
 									<p>{marketCopy.endedQuestionWarning}</p>
@@ -415,7 +402,7 @@ export function QuestionCreateSection({
 						<QuestionDraftPreview currentTimestamp={currentTimestamp} description={draftDescription} endTime={questionForm.endTime} marketType={questionForm.marketType} outcomeItems={draftOutcomeItems} startTime={questionForm.startTime} timeZone={timeZone} title={draftTitle}>
 							{(() => {
 								if (questionForm.marketType !== 'scalar') return undefined
-								if (scalarCreatePreviewDetails === undefined) return <p className='detail'>{marketCopy.scalarPreviewInputHint}</p>
+								if (scalarCreatePreviewDetails === undefined) return <UserMessage className='detail' detail={marketCopy.scalarPreviewInputHint} />
 								return <ScalarCreatePreview details={scalarCreatePreviewDetails} selectedTick={scalarCreatePreviewTick} onSelectedTickChange={setScalarCreatePreviewTick} />
 							})()}
 						</QuestionDraftPreview>

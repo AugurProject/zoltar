@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import { useState } from 'preact/hooks'
@@ -324,7 +325,7 @@ export function TradingSection({
 									</span>
 								)}
 							</strong>
-							<p className='detail'>{tradingCopy.completeSetBalanceLimitDetail}</p>
+							<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
 						</div>
 						<div className='trading-holdings-layout'>
 							<RankedBarList
@@ -351,7 +352,7 @@ export function TradingSection({
 									},
 								]}
 							/>
-							<p className='detail'>{tradingCopy.shareBackingDetail}</p>
+							<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
 						</div>
 					</div>
 				</SectionBlock>
@@ -391,7 +392,7 @@ export function TradingSection({
 
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
 				<AmountField fillMax={{ amount: displayMaxRedeemableCompleteSets }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={commonCopy.eth} value={tradingForm.redeemAmount} />
-				<p className='detail'>{tradingCopy.redeemCompleteSetsFeeDetail}</p>
+				<UserMessage className='detail' detail={tradingCopy.redeemCompleteSetsFeeDetail} />
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.redeemCompleteSetsActionLabel}

@@ -1,10 +1,10 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getViewerPositions } from '../lib/reportingViewerStatus.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EscalationDepositSelectionList } from './EscalationDepositSelectionList.js'
-import { LoadingAwareText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
@@ -192,15 +192,15 @@ export function ReportingSettlementSection({
 	if (!isPoolQuestionFinalized(effectiveReportingDetails) && !showPositions)
 		return (
 			<>
-				{settlementContextMessage === undefined ? undefined : <p className='detail'>{settlementContextMessage}</p>}
-				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
+				{settlementContextMessage === undefined ? undefined : <UserMessage className='detail' detail={<>{settlementContextMessage}</>} />}
+				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <UserMessage className='detail' detail={<>{displayedWithdrawGuardMessage}</>} /> : undefined}
 			</>
 		)
 	if (!isPoolQuestionFinalized(effectiveReportingDetails))
 		return (
 			<SectionBlock className='reporting-settlement-section' title={reportingCopy.yourPositions} variant='embedded'>
-				{settlementContextMessage === undefined ? undefined : <p className='detail'>{settlementContextMessage}</p>}
-				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <p className='detail'>{displayedWithdrawGuardMessage}</p> : undefined}
+				{settlementContextMessage === undefined ? undefined : <UserMessage className='detail' detail={<>{settlementContextMessage}</>} />}
+				{activeReportingDetails?.hasReachedNonDecision && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason ? <UserMessage className='detail' detail={<>{displayedWithdrawGuardMessage}</>} /> : undefined}
 
 				{activeReportingDetails === undefined
 					? undefined
@@ -225,13 +225,11 @@ export function ReportingSettlementSection({
 				id={settlementDisabledReasonId}
 				visible={displayedWithdrawGuardMessage !== undefined && displayedWithdrawGuardMessage !== sharedReportSettlementDisabledReason}
 			>
-				<p className='detail' id={settlementDisabledReasonId}>
-					<LoadingAwareText loading={loadingReportingDetails}>{displayedWithdrawGuardMessage}</LoadingAwareText>
-				</p>
+				<UserMessage className='detail' id={settlementDisabledReasonId} loading={loadingReportingDetails} detail={displayedWithdrawGuardMessage} />
 			</WalletActionFixReason>
-			{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <p className='detail'>{settlementContextMessage}</p>}
-			{hasImportedForkedDeposits ? <p className='detail'>{reportingCopy.forkCarriedSettlementRedirectDetail}</p> : undefined}
-			{shouldShowWithdrawEmptyState && !migrationSettlement ? <p className='detail'>{reportingCopy.walletUnsettledDepositsEmpty}</p> : undefined}
+			{settlementContextMessage === undefined || settlementContextMessage === withdrawGuardMessage ? undefined : <UserMessage className='detail' detail={<>{settlementContextMessage}</>} />}
+			{hasImportedForkedDeposits ? <UserMessage className='detail' detail={<>{reportingCopy.forkCarriedSettlementRedirectDetail}</>} /> : undefined}
+			{shouldShowWithdrawEmptyState && !migrationSettlement ? <UserMessage className='detail' detail={<>{reportingCopy.walletUnsettledDepositsEmpty}</>} /> : undefined}
 			{migrationSettlement
 				? undefined
 				: withdrawableSides.map((side, index) => (

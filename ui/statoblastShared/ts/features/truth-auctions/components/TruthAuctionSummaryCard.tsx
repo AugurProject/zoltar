@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
@@ -74,7 +75,7 @@ export function TruthAuctionSummaryCard({
 							<div className='truth-auction-progress-fill is-rep' style={{ width: `${repSoldProgress}%` }} />
 						</div>
 					</div>
-					{progressDetail === undefined ? undefined : <p className='detail'>{progressDetail}</p>}
+					{progressDetail === undefined ? undefined : <UserMessage className='detail' detail={progressDetail} />}
 				</div>
 				<div className='fork-workflow-summary-metrics'>
 					<MetricField label={forkAuctionCopy.started}>{startedDisplay}</MetricField>

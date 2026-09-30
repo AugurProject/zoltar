@@ -1,4 +1,5 @@
 import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ReportingDepositPreview, getReportingApprovalLabel } from './ReportingDepositPreview.js'
 import { getReportingContributionFunding, getReportingWalletDepositAmount, getReportingWalletFundingQuote } from '../../../lib/reportingFunding.js'
 import { ReportingFundingSelector, ReportingWalletVaultHelp } from './ReportingFundingSelector.js'
@@ -18,7 +19,7 @@ import { RetryableNotice } from '@zoltar/ui-core-shared/components/RetryableNoti
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { LifecycleStageBanner } from '@zoltar/ui-core-shared/components/LifecycleStageBanner.js'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
-import { LoadingAwareText, LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -446,11 +447,7 @@ export function ReportingSection({
 					/>
 					{finalized ? undefined : (
 						<>
-							{reportOutcomeSelectionMessage === undefined ? undefined : (
-								<p id={reportDisabledReasonId} className='detail'>
-									{reportOutcomeSelectionMessage}
-								</p>
-							)}
+							{reportOutcomeSelectionMessage === undefined ? undefined : <UserMessage id={reportDisabledReasonId} className='detail' detail={reportOutcomeSelectionMessage} />}
 							<AmountField
 								disabled={reportControlsLocked}
 								id='reporting-contribution-amount'
@@ -492,29 +489,33 @@ export function ReportingSection({
 									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyInputBalance(maxProfitContribution.amountAttoRep))}
 								</button>
 							</div>
-							{presetBlocker === undefined ? undefined : (
-								<p id={presetBlockerId} className='detail'>
-									{presetBlocker}
-								</p>
-							)}
+							{presetBlocker === undefined ? undefined : <UserMessage id={presetBlockerId} className='detail' detail={presetBlocker} />}
 
 							{actualReportDepositAmount === undefined || selectedAmount === undefined || actualReportDepositAmount === selectedAmount ? undefined : (
-								<p className='detail'>
-									{reportingCopy.currentEscalationDisputeStakeLead}
-									<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
-									{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
-								</p>
+								<UserMessage
+									className='detail'
+									detail={
+										<>
+											{reportingCopy.currentEscalationDisputeStakeLead}
+											<CurrencyValue value={actualReportDepositAmount} suffix={commonCopy.rep} />
+											{usesWalletFunding ? reportingCopy.acceptedWalletAmountTail : reportingCopy.acceptedAmountTail}
+										</>
+									}
+								/>
 							)}
-							{visiblePresetReasons.length === 0 ? undefined : <p className='detail'>{visiblePresetReasons.join(' ')}</p>}
-							<p className='detail'>
-								{usesWalletFunding ? reportingCopy.paidFromWallet : reportingCopy.paidFromVault} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
-							</p>
+							{visiblePresetReasons.length === 0 ? undefined : <UserMessage className='detail' detail={visiblePresetReasons.join(' ')} />}
+							<UserMessage
+								className='detail'
+								detail={
+									<>
+										{usesWalletFunding ? reportingCopy.paidFromWallet : reportingCopy.paidFromVault} · {reportingCopy.availableBalance(formatKnownAmount(availableReportingRep))}
+									</>
+								}
+							/>
 							{activeReportingDetails?.forkContinuation && usesWalletFunding ? <ReportingWalletVaultHelp remainingAmount={walletFundingQuote?.remainingVaultRepAttoRep} depositAmount={walletDepositAmount} reportAmount={actualReportDepositAmount} /> : undefined}
 							<div className='reporting-shared-action-region'>
 								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={settlementDisabledReasonId} visible={shouldRenderSharedReportSettlementDisabledReason}>
-									<p className='detail' id={settlementDisabledReasonId}>
-										<LoadingAwareText loading={loadingReportingDetails}>{sharedReportSettlementDisabledReason}</LoadingAwareText>
-									</p>
+									<UserMessage className='detail' id={settlementDisabledReasonId} loading={loadingReportingDetails} detail={sharedReportSettlementDisabledReason} />
 								</WalletActionFixReason>
 								<div className={`actions${usesWalletFunding ? ' reporting-wallet-action-row' : ''}`}>
 									{usesWalletFunding ? (
@@ -544,9 +545,7 @@ export function ReportingSection({
 									/>
 								</div>
 								<WalletActionFixReason actionButtonRef={reportActionButtonRef} availability={reportActionAvailability} id={reportDisabledReasonId} visible={standaloneReportDisabledReason !== undefined}>
-									<p className='detail disabled-reason' id={reportDisabledReasonId}>
-										<LoadingAwareText loading={reportActionAvailability.loading === true}>{standaloneReportDisabledReason}</LoadingAwareText>
-									</p>
+									<UserMessage className='detail disabled-reason' id={reportDisabledReasonId} loading={reportActionAvailability.loading === true} detail={standaloneReportDisabledReason} />
 								</WalletActionFixReason>
 							</div>
 						</>

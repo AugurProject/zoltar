@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
@@ -217,7 +218,7 @@ export function VaultActionLaunchers({
 						availability={withWalletBlocker({ disabled: action.readiness === 'blocked' || action.onAction === undefined || action.blocker !== undefined, reason: action.blocker }, action.walletBlocker)}
 					/>
 				)}
-				{action.description === undefined ? undefined : <p className='detail'>{action.description}</p>}
+				{action.description === undefined ? undefined : <UserMessage className='detail' detail={action.description} />}
 			</div>
 		)
 	}
@@ -225,16 +226,8 @@ export function VaultActionLaunchers({
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
 				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
-				{vaultLifecycleBlocker === undefined ? undefined : (
-					<p className='notice warning' id={vaultLifecycleBlockerId}>
-						{vaultLifecycleBlocker}
-					</p>
-				)}
-				{showSharedRefreshVaultBlocker ? (
-					<p className='detail' id={refreshVaultActionsDescriptionId}>
-						{vaultActionsLoadBlocker}
-					</p>
-				) : undefined}
+				{vaultLifecycleBlocker === undefined ? undefined : <UserMessage tone='warning' id={vaultLifecycleBlockerId} detail={vaultLifecycleBlocker} />}
+				{showSharedRefreshVaultBlocker ? <UserMessage className='detail' id={refreshVaultActionsDescriptionId} detail={vaultActionsLoadBlocker} /> : undefined}
 				<div className='vault-primary-actions'>{vaultReadinessActions.map(renderAction)}</div>
 			</SectionBlock>
 			<ErrorNotice message={securityVaultError} />

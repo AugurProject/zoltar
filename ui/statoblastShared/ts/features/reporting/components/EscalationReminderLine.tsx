@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useEffect, useState } from 'preact/hooks'
 import type { ActiveReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
@@ -27,25 +28,30 @@ export function EscalationReminderLine({ details }: { details: ActiveReportingDe
 	return (
 		<>
 			{!open || movedDeadline === undefined ? undefined : (
-				<div role='status'>
-					<p className='detail'>{copy.deadlineMoved(formatReportingDeadline(movedDeadline, details.currentTime))}</p>
-					<div className='actions'>
-						<button className='quiet' type='button' onClick={download}>
-							{copy.updateReminder}
-						</button>
-						<button className='quiet' type='button' aria-label={copy.dismissDeadlineNotice} onClick={() => setMovedDeadline(undefined)}>
-							{copy.dismissReminderUpdate}
-						</button>
-					</div>
-				</div>
+				<UserMessage
+					announcement='polite'
+					detail={copy.deadlineMoved(formatReportingDeadline(movedDeadline, details.currentTime))}
+					actions={
+						<>
+							<button className='quiet' type='button' onClick={download}>
+								{copy.updateReminder}
+							</button>
+							<button className='quiet' type='button' aria-label={copy.dismissDeadlineNotice} onClick={() => setMovedDeadline(undefined)}>
+								{copy.dismissReminderUpdate}
+							</button>
+						</>
+					}
+				/>
 			)}
 			{open && movedDeadline === undefined ? (
-				<div>
-					<p className='detail'>{copy.checkBack(deadline)}</p>
-					<button className='quiet' type='button' onClick={download}>
-						{copy.addReminder}
-					</button>
-				</div>
+				<UserMessage
+					detail={copy.checkBack(deadline)}
+					actions={
+						<button className='quiet' type='button' onClick={download}>
+							{copy.addReminder}
+						</button>
+					}
+				/>
 			) : undefined}
 		</>
 	)

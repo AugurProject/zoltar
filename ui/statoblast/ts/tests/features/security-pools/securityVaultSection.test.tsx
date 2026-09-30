@@ -1734,6 +1734,11 @@ describe('SecurityVaultSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(document.body.textContent?.includes('If queued, this operation expires 5m after the oracle settlement window completes.')).toBe(true)
+		const input = within(document.body).getByLabelText(/^Manual execution timeout/)
+		const help = document.getElementById(input.getAttribute('aria-describedby') ?? '')
+		expect(help?.getAttribute('data-message-placement')).toBe('field')
+		expect(help?.getAttribute('aria-live')).toBeNull()
+		expect(help?.textContent).toContain('5m')
 	})
 
 	test('does not render a local vault transaction status card', async () => {

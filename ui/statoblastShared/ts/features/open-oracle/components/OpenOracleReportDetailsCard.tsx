@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useRef, useState } from 'preact/hooks'
@@ -214,11 +215,7 @@ export function OpenOracleReportDetailsCard({
 	const showWithdrawableBalances = isConnected && (openOracleReportDetails.isDistributed || hasWithdrawableBalance || openOracleWithdrawableBalancesLoading || openOracleWithdrawableBalancesError !== undefined)
 	let withdrawableBalancesContent: ComponentChildren
 	if (openOracleWithdrawableBalances === undefined) {
-		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading ? (
-			<p className='detail'>
-				<LoadingText>{openOracleCopy.loadingOracleBalances}</LoadingText>
-			</p>
-		) : undefined
+		withdrawableBalancesContent = openOracleWithdrawableBalancesLoading ? <UserMessage className='detail' loading detail={openOracleCopy.loadingOracleBalances} /> : undefined
 	} else {
 		withdrawableBalancesContent = <MetricGrid>{withdrawableBalanceItems.map(item => renderReportField(item.symbol, <CurrencyValue value={item.amount ?? 0n} suffix={item.symbol} units={item.units} />))}</MetricGrid>
 	}
@@ -270,11 +267,7 @@ export function OpenOracleReportDetailsCard({
 					<div className='action-readiness-grid open-oracle-report-actions'>
 						{readinessActions.map(action => (
 							<ActionLauncherCard key={action.key} action={action} pending={action.key === 'settle-report' && openOracleActiveAction === 'settle'} pendingLabel={openOracleCopy.settlingReport}>
-								{action.key === 'settle-report' && settleCountdown !== undefined ? (
-									<p id='open-oracle-settle-countdown' className='detail'>
-										{settleCountdown}
-									</p>
-								) : undefined}
+								{action.key === 'settle-report' && settleCountdown !== undefined ? <UserMessage id='open-oracle-settle-countdown' className='detail' detail={settleCountdown} /> : undefined}
 							</ActionLauncherCard>
 						))}
 					</div>
@@ -285,7 +278,7 @@ export function OpenOracleReportDetailsCard({
 					<ErrorNotice message={openOracleWithdrawableBalancesError} />
 					<ErrorNotice message={openOracleWithdrawalReviewMessage?.message} />
 					{withdrawableBalancesContent}
-					{!hasWithdrawableBalance && !openOracleWithdrawableBalancesLoading && openOracleWithdrawableBalancesError === undefined ? <p className='detail'>{openOracleCopy.noOracleBalances}</p> : undefined}
+					{!hasWithdrawableBalance && !openOracleWithdrawableBalancesLoading && openOracleWithdrawableBalancesError === undefined ? <UserMessage className='detail' detail={openOracleCopy.noOracleBalances} /> : undefined}
 					{!hasWithdrawableBalance ? undefined : (
 						<div className='actions'>
 							{withdrawableBalanceItems

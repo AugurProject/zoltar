@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
@@ -118,10 +119,10 @@ export function VaultBackingFactorForm({
 					</MetricField>
 				)}
 			</MetricGrid>
-			{maximum === undefined && !directExecution ? <p className='detail'>{securityPoolCopy.commitmentPriceUnavailable}</p> : undefined}
+			{maximum === undefined && !directExecution ? <UserMessage className='detail' detail={securityPoolCopy.commitmentPriceUnavailable} /> : undefined}
 			{unsafe ? (
 				<>
-					<p className='detail'>{securityPoolCopy.commitmentRiskWarning}</p>
+					<UserMessage className='detail' tone='warning' detail={securityPoolCopy.commitmentRiskWarning} />
 					<label className='commitment-risk-confirmation'>
 						<input type='checkbox' checked={acknowledgedRisk === riskKey} disabled={busy} onChange={event => setAcknowledgedRisk(event.currentTarget.checked ? riskKey : undefined)} />
 						<span>{securityPoolCopy.commitmentRiskAcknowledgement}</span>

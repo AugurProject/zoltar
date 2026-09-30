@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as tradingCopy from '../../../copy/trading.js'
 import * as forkTargetCopy from '@zoltar/ui-zoltar-shared/copy/forkTargets.js'
 import type { ComponentChildren } from 'preact'
@@ -32,7 +33,7 @@ function scalarTargetOption(childUniverseByOutcomeIndex: ReadonlyMap<string, Zol
 function renderUnavailableSection(children: ComponentChildren) {
 	return (
 		<WorkflowSubsection className='fork-target-picker' title={forkTargetCopy.targetChildUniverses}>
-			<p className='detail'>{children}</p>
+			<UserMessage className='detail' detail={children} />
 		</WorkflowSubsection>
 	)
 }

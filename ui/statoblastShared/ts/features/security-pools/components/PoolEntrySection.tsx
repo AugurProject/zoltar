@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useState } from 'preact/hooks'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
@@ -12,7 +13,7 @@ export function PoolEntrySection({ onBrowsePools, onCreatePool, onOpenPool }: { 
 	const validAddress = isHexAddressInput(address.trim())
 	return (
 		<SectionBlock className='pool-entry-primary' variant='surface'>
-			<p className='detail'>{workspaceCopy.openPoolDescription}</p>
+			<UserMessage className='detail' detail={workspaceCopy.openPoolDescription} />
 			<form
 				onSubmit={event => {
 					event.preventDefault()

@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import type { ComponentChildren } from 'preact'
 import { OverviewHeaderPanel } from '@zoltar/ui-core-shared/app/components/OverviewHeaderPanel.js'
 import { WalletBalanceGroup } from '@zoltar/ui-core-shared/components/WalletBalanceGroup.js'
@@ -34,8 +35,8 @@ export function TradingOverviewPanel({ badges, controls, navigation, onRetryWall
 					<>
 						{walletSummary.status === 'error' ? (
 							<div className='trading-wallet-error'>
-								<span className='error' role='alert' title={walletSummary.error} aria-label={copy.walletBalanceError(walletSummary.errorLabel, walletSummary.error)}>
-									{walletSummary.errorLabel ?? copy.balancesUnavailable}
+								<span title={walletSummary.error}>
+									<UserMessage placement='field' as='span' tone='error' announcement='assertive' ariaLabel={copy.walletBalanceError(walletSummary.errorLabel, walletSummary.error)} detail={walletSummary.errorLabel ?? copy.balancesUnavailable} />
 								</span>
 								{onRetryWalletSummary === undefined ? undefined : (
 									<button className='secondary' type='button' onClick={onRetryWalletSummary}>
@@ -44,11 +45,7 @@ export function TradingOverviewPanel({ badges, controls, navigation, onRetryWall
 								)}
 							</div>
 						) : undefined}
-						{walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined ? (
-							<span className='visually-hidden' role='status'>
-								{copy.loadingWalletBalances}
-							</span>
-						) : undefined}
+						{walletSummary.status === 'loading' && walletSummary.ethAttoEth === undefined ? <UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={copy.loadingWalletBalances} /> : undefined}
 					</>
 				)
 			}
