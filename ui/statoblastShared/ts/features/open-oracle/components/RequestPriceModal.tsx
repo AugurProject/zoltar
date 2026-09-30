@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
@@ -246,11 +247,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	}
 	const priceControls = (
 		<div className='request-price-fields' ref={priceControlsRef}>
-			{quoteError === undefined ? undefined : (
-				<span className='visually-hidden' role='alert'>
-					{quoteError}
-				</span>
-			)}
+			{quoteError === undefined ? undefined : <UserMessage placement='field' as='span' className='visually-hidden' tone='error' announcement='assertive' detail={quoteError} />}
 			<OpenOraclePriceInput
 				value={price}
 				disabled={completedRequest}

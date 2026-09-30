@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useId, useState } from 'preact/hooks'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { formatSlippagePercent, parseSlippagePercent, parseValidityMinutes, SLIPPAGE_PRESETS_BPS, VALIDITY_PRESETS_MINUTES, type TradeSettings } from '../lib/tradeSettings.js'
@@ -71,7 +72,7 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 					}}
 				/>
 			</div>
-			<p className='field-help'>{settingsCopy.settingsHelp}</p>
+			<UserMessage placement='field' detail={settingsCopy.settingsHelp} />
 		</section>
 	)
 }

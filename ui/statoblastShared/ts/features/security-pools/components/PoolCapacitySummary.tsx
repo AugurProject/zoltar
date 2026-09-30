@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
@@ -40,7 +41,7 @@ export function PoolCapacitySummary({ capacity, minted, remainingCapacity, showU
 				<div className='pool-capacity-unavailable'>
 					<span className='metric-label'>{copy.capacityLabel}</span>
 					<strong>{value}</strong>
-					{capacity === undefined && showUnavailableReason ? <p className='detail'>{copy.capacityUnavailable}</p> : undefined}
+					{capacity === undefined && showUnavailableReason ? <UserMessage className='detail' detail={copy.capacityUnavailable} /> : undefined}
 				</div>
 			)}
 		</div>

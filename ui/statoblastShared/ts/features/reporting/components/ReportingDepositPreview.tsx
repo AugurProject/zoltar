@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -14,9 +15,5 @@ export function ReportingDepositPreview({ details, outcome, amount }: { details:
 	if (details === undefined || outcome === undefined || amount === undefined) return undefined
 	const preview = previewReportingDeadline(details, outcome, amount)
 	if (preview === undefined) return undefined
-	return (
-		<p className='detail' role='status'>
-			{preview.reachesNonDecision ? reportingCopy.depositTriggersFork : reportingCopy.depositDeadlinePreview(formatReportingDeadline(preview.deadline, details.currentTime), formatDuration(preview.extension), preview.extension === 0n)}
-		</p>
-	)
+	return <UserMessage className='detail' announcement='polite' detail={preview.reachesNonDecision ? reportingCopy.depositTriggersFork : reportingCopy.depositDeadlinePreview(formatReportingDeadline(preview.deadline, details.currentTime), formatDuration(preview.extension), preview.extension === 0n)} />
 }

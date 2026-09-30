@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as deploymentCopy from '../../../copy/deployment.js'
@@ -53,18 +54,11 @@ export function DeploymentRouteContent({
 	if (isLoadingDeploymentStatuses) nextDeployableContent = <LoadingText />
 	else if (deploymentStateReady) nextDeployableContent = nextMissingStep?.label ?? deploymentCopy.allDeployed
 	let deploymentStatusNotice: ComponentChildren
-	if (!deploymentStateReady && isLoadingDeploymentStatuses)
-		deploymentStatusNotice = (
-			<p id={deploymentStatusReasonId} className='detail'>
-				<LoadingText>{deploymentCopy.loadingDeploymentStatus}</LoadingText>
-			</p>
-		)
+	if (!deploymentStateReady && isLoadingDeploymentStatuses) deploymentStatusNotice = <UserMessage loading id={deploymentStatusReasonId} className='detail' detail={deploymentCopy.loadingDeploymentStatus} />
 	else if (!deploymentStateReady)
 		deploymentStatusNotice = (
 			<>
-				<p id={deploymentStatusReasonId} className='detail'>
-					{deploymentCopy.deploymentStatusUnavailableReason}
-				</p>
+				<UserMessage id={deploymentStatusReasonId} className='detail' detail={deploymentCopy.deploymentStatusUnavailableReason} />
 				<RetryableNotice message={deploymentStatusError} onRetry={onRetryDeploymentStatus} retryLabel={commonCopy.retry} />
 			</>
 		)

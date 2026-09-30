@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useEffect, useState } from 'preact/hooks'
 import { LookupFieldRow } from '@zoltar/ui-core-shared/components/LookupFieldRow.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
@@ -32,11 +33,7 @@ function PoolAddressDisplay({ address, loading, onLoad }: { address: string; loa
 					<RefreshPoolButton address={address} loading={loading} onLoad={onLoad} poolLoaded />
 				</div>
 			</div>
-			{copied.value ? (
-				<span className='visually-hidden' role='status'>
-					{commonCopy.copiedAddress}
-				</span>
-			) : undefined}
+			{copied.value ? <UserMessage placement='field' as='span' className='visually-hidden' announcement='polite' detail={commonCopy.copiedAddress} /> : undefined}
 			<CopyErrorMessage id={copyErrorId} manualValue={address} message={copyError.value} />
 		</div>
 	)

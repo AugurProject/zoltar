@@ -2,6 +2,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 /// <reference types="bun-types" />
 
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
@@ -58,6 +59,7 @@ function getTextContent(node: unknown): string {
 	if (typeof node === 'string' || typeof node === 'number') return String(node)
 	if (Array.isArray(node)) return node.map(child => getTextContent(child)).join('')
 	if (!isVNodeLike(node)) return ''
+	if (node.type === UserMessage) return getTextContent(node.props['detail'])
 	return getTextContent(node.props['children'])
 }
 

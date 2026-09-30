@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -21,13 +22,18 @@ export function SecurityPoolUniverseMismatchNotice({
 }) {
 	return (
 		<SectionBlock title={securityPoolCopy.universeMismatch} tone='critical' variant='embedded'>
-			<p className='detail'>
-				<span>{securityPoolCopy.poolUniverseLead}</span> <UniverseLink universeId={selectedPool.universeId} /> <span>{securityPoolCopy.activeUniverseSeparator}</span>{' '}
-				<span>
-					<UniverseName universeId={activeUniverseId} />
-				</span>
-				. <span>{securityPoolCopy.missingPoolDetail}</span>
-			</p>
+			<UserMessage
+				className='detail'
+				detail={
+					<>
+						<span>{securityPoolCopy.poolUniverseLead}</span> <UniverseLink universeId={selectedPool.universeId} /> <span>{securityPoolCopy.activeUniverseSeparator}</span>{' '}
+						<span>
+							<UniverseName universeId={activeUniverseId} />
+						</span>
+						. <span>{securityPoolCopy.missingPoolDetail}</span>
+					</>
+				}
+			/>
 			<div className='actions'>
 				<button className='primary' type='button' onClick={() => onSwitchToPoolUniverse?.(selectedPool.universeId, selectedPool.securityPoolAddress)}>
 					{securityPoolCopy.switchToPoolUniverse}
