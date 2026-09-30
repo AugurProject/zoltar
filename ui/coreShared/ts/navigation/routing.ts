@@ -8,6 +8,7 @@ type RouteDefinitionBase = {
 type RouteDefinition<TRoute extends AppRoute = AppRoute> = RouteDefinitionBase & ({ readonly hash: string; readonly match?: never; readonly name: TRoute } | { readonly hash?: never; readonly match: (routeHash: string) => TRoute | undefined; readonly name?: never })
 
 export type RoutingConfig<TRoute extends AppRoute = AppRoute> = {
+	readonly buildNavigationHref?: (route: AppRoute, routeHash: string, search: string) => string
 	readonly defaultRoute: TRoute
 	readonly routes: readonly RouteDefinition<TRoute>[]
 }
@@ -179,4 +180,11 @@ export function getCurrentRouteHash() {
 
 export function buildRouteHref(routeHash: string, search: string) {
 	return `${routeHash}${search}`
+}
+
+/** Builds the same destination for primary navigation links and programmatic navigation. */
+export function getRouteHref(route: AppRoute, preservedParameters: ReadonlySet<string> = new Set(), routeHash = getRouteHash(route)) {
+	const routing = requireRouting()
+	const search = getTopLevelRouteSearch(route, undefined, preservedParameters)
+	return routing.config.buildNavigationHref?.(route, routeHash, search) ?? buildRouteHref(routeHash, search)
 }

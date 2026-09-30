@@ -6,7 +6,7 @@ export type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 export type Route = 'deploy' | 'pools' | 'open-oracle' | 'not-found'
 
 export type SecurityPoolFormState = {
-	initialReportPriorityFeeEth: string
+	initialReportPriorityFeeNanoEth: string
 	marketId: string
 	statoblastSecurityMultiplierBps: string
 }
@@ -43,4 +43,14 @@ export type ForkAuctionFormState = {
 	submitBidAmount: string
 	submitBidPrice: string
 	vaultAddress: string
+}
+
+export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
+export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
+export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
+export type PoolStateFilter = 'all' | SecurityPoolLifecycleState
+export type PoolBrowseState = {
+	searchText: string
+	sortKey: PoolSortKey
+	stateFilter: PoolStateFilter
 }

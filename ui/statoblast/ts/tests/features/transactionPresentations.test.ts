@@ -84,18 +84,18 @@ describe('transaction presentations', () => {
 		expect(getSecurityVaultActionRepAmount('queueWithdrawRep', { depositAmount: '', repWithdrawAmount: 'abc' })).toBeUndefined()
 	})
 
-	test('normalizes the Statoblast security multiplier in security pool creation intents', () => {
+	test('normalizes the security multiplier in security pool creation intents', () => {
 		const intent = createSecurityPoolCreationTransactionIntent({
 			statoblastSecurityMultiplierBps: 25_000n,
 		})
 
-		expect(intent.rows).toEqual([{ label: 'Statoblast security multiplier', value: '2.5×' }])
+		expect(intent.rows).toEqual([{ label: 'Security multiplier', value: '2.5×' }])
 		expect(intent.failedTitle).toBe('Security pool creation')
 	})
 
 	test('orders security pool creation rows like the success presentation and leads with a new question title', () => {
 		const intent = createSecurityPoolCreationTransactionIntent({
-			initialReportPriorityFeeEth: '0.00000001',
+			initialReportPriorityFeeNanoEth: '10',
 			questionTitle: ' Will it rain? ',
 			statoblastSecurityMultiplierBps: 20_000n,
 		})
@@ -109,8 +109,40 @@ describe('transaction presentations', () => {
 		})
 
 		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
-		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Statoblast security multiplier', 'Initial report priority fee'])
-		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Statoblast security multiplier', 'Initial report priority fee'])
+		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Security multiplier', 'Initial report priority fee'])
+		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Security multiplier', 'Initial report priority fee'])
+		// The fee is a per-gas price: review and success state it the same way, in nanoETH per gas.
+		expect(intent.rows?.at(-1)?.value).toBe('10\u00a0nanoETH per gas')
+		expect(success.rows?.at(-1)?.value).toBe('10\u00a0nanoETH per gas')
+	})
+
+	test('does not present a failed staged execution as a success', () => {
+		const vaultPresentation = createSecurityVaultSuccessPresentation({
+			action: 'queueWithdrawRep',
+			hash: transactionHash,
+			queuedOperation: { operation: 'withdrawRep', operationId: 3n, isPendingSlot: false },
+			stagedExecution: { operation: 'withdrawRep', operationId: 3n, success: false, errorMessage: 'Price is stale' },
+		})
+		expect(vaultPresentation.tone).toBe('error')
+		expect(vaultPresentation.detail).toBe('Price is stale')
+		const liquidationPresentation = createLiquidationSuccessPresentation({
+			action: 'queueLiquidation',
+			hash: transactionHash,
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			queuedOperation: { operation: 'liquidation', operationId: 4n, isPendingSlot: false },
+			stagedExecution: { operation: 'liquidation', operationId: 4n, success: false, errorMessage: undefined },
+		})
+		expect(liquidationPresentation.tone).toBe('error')
+		expect(liquidationPresentation.title).toBe('Liquidation failed')
+		const revertedPresentation = createLiquidationSuccessPresentation({
+			action: 'queueLiquidation',
+			hash: transactionHash,
+			securityPoolAddress: '0x0000000000000000000000000000000000000001',
+			queuedOperation: { operation: 'liquidation', operationId: 5n, isPendingSlot: false },
+			stagedExecution: { operation: 'liquidation', operationId: 5n, success: false, errorMessage: 'Liquidation distance too low' },
+		})
+		// The contract revert string is shown in the same plain language as the liquidation modal.
+		expect(revertedPresentation.detail).toBe('The oracle price has not moved far enough past the target vault’s liquidation threshold.')
 	})
 
 	test('uses resolved token symbols in Open Oracle approval and withdrawal titles', () => {
@@ -268,7 +300,7 @@ describe('transaction presentations', () => {
 		for (const presentation of [requested.active, prepared.active, submitted.active, failed.active, success]) {
 			expect(presentation?.universeId).toBe(7n)
 			expect(presentation?.rows?.map(row => row.label)).not.toContain('Universe')
-			expect(presentation?.rows?.find(row => row.label === 'Attempted REP / ETH price')?.value).toBe('3')
+			expect(presentation?.rows?.find(row => row.label === 'Attempted REP per ETH price')?.value).toBe('3')
 		}
 		expect(intent.failedTitle).toBe('Price request')
 		expect(failed.active?.title).toBe('Price request')

@@ -10,6 +10,7 @@ import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features
 import {
 	buildVaultReadinessActions,
 	getMaximumWithdrawableAttoRep,
+	getVaultWithdrawalRepPerEthPrice,
 	getVaultActionDisabledReasonId,
 	getVaultActionsLoadBlocker,
 	getVaultDepositAmountNotice,
@@ -42,6 +43,7 @@ function createLauncherContext(overrides: Partial<VaultLauncherBlockerContext> =
 function createReadinessInput(overrides: Partial<Parameters<typeof buildVaultReadinessActions>[0]> = {}): Parameters<typeof buildVaultReadinessActions>[0] {
 	return {
 		adjustmentBlocker: undefined,
+		adjustmentDisabledReasonId: undefined,
 		canUseLoadedVaultActions: true,
 		claimFeesAvailabilityBlocker: undefined,
 		claimFeesDisabledReasonId: undefined,
@@ -87,10 +89,20 @@ describe('security vault availability', () => {
 	})
 
 	test('caps the withdrawable amount at zero while dispute stake is locked and falls back to backing without a price', () => {
-		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: 1n, repPerEthPrice: 5n, vaultAttoRepBacking: 10n, withdrawableRepAmountAttoRep: 7n })).toBe(0n)
-		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: 0n, repPerEthPrice: 5n, vaultAttoRepBacking: 10n, withdrawableRepAmountAttoRep: 7n })).toBe(7n)
-		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: 0n, repPerEthPrice: undefined, vaultAttoRepBacking: 10n, withdrawableRepAmountAttoRep: 7n })).toBe(10n)
-		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: undefined, repPerEthPrice: undefined, vaultAttoRepBacking: undefined, withdrawableRepAmountAttoRep: undefined })).toBeUndefined()
+		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: 1n, withdrawableRepAmountAttoRep: 7n })).toBe(0n)
+		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: 0n, withdrawableRepAmountAttoRep: 7n })).toBe(7n)
+		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: undefined, withdrawableRepAmountAttoRep: undefined })).toBeUndefined()
+	})
+
+	test('never falls back to the whole backing when no price can bound a committed withdrawal', () => {
+		// Without a price the coverage calculation cannot bound a committed vault, so the maximum stays unknown instead of the whole backing.
+		expect(getMaximumWithdrawableAttoRep({ disputeStakedAttoRep: 0n, withdrawableRepAmountAttoRep: undefined })).toBeUndefined()
+	})
+
+	test('bounds withdrawals by the execution oracle price before the UI estimate', () => {
+		expect(getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice: 4n, estimateRepPerEthPrice: 9n })).toEqual({ isEstimate: false, repPerEthPrice: 4n })
+		expect(getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice: undefined, estimateRepPerEthPrice: 9n })).toEqual({ isEstimate: true, repPerEthPrice: 9n })
+		expect(getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice: 0n, estimateRepPerEthPrice: undefined })).toEqual({ isEstimate: true, repPerEthPrice: undefined })
 	})
 
 	test('prefers the wallet shortfall notice over the minimum deposit notice', () => {
@@ -142,6 +154,7 @@ describe('security vault availability', () => {
 		const actions = buildVaultReadinessActions(
 			createReadinessInput({
 				adjustmentBlocker: 'adjust',
+				adjustmentDisabledReasonId: 'adjust-id',
 				claimFeesAvailabilityBlocker: 'fees',
 				claimFeesLauncherBlocker: 'fees',
 				depositDisabledReasonId: 'deposit-id',
@@ -158,7 +171,7 @@ describe('security vault availability', () => {
 		expect(actions[0]?.blocker).toBeUndefined()
 		expect(actions.find(action => action.key === 'rep-exit')).toMatchObject({ blocker: 'exit', disabledReasonId: 'exit-id' })
 		expect(actions.find(action => action.key === 'claim-fees')).toMatchObject({ blocker: 'fees' })
-		expect(actions.find(action => action.key === 'adjust-backing')).toMatchObject({ blocker: 'adjust', disabledReasonId: 'deposit-id' })
+		expect(actions.find(action => action.key === 'adjust-backing')).toMatchObject({ blocker: 'adjust', disabledReasonId: 'adjust-id' })
 		const sharedRefresh = buildVaultReadinessActions(createReadinessInput({ adjustmentBlocker: 'adjust', showSharedRefreshVaultBlocker: true }))
 		expect(sharedRefresh[3]?.blocker).toBeUndefined()
 	})

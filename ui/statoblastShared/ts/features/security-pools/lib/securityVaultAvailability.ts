@@ -25,15 +25,37 @@ export function getVaultRepExitAmountLabel(repExitMode: VaultRepExitMode, hasVal
 	return securityPoolCopy.repAvailableToQueue
 }
 
-export function getMaximumWithdrawableAttoRep({ disputeStakedAttoRep, repPerEthPrice, vaultAttoRepBacking, withdrawableRepAmountAttoRep }: { disputeStakedAttoRep: bigint | undefined; repPerEthPrice: bigint | undefined; vaultAttoRepBacking: bigint | undefined; withdrawableRepAmountAttoRep: bigint | undefined }) {
+/**
+ * The withdrawal ceiling offered to the user. It comes only from the coverage calculation, which needs a price whenever a
+ * commitment locks REP; without one the ceiling stays unknown rather than falling back to the whole backing.
+ */
+export function getMaximumWithdrawableAttoRep({ disputeStakedAttoRep, withdrawableRepAmountAttoRep }: { disputeStakedAttoRep: bigint | undefined; withdrawableRepAmountAttoRep: bigint | undefined }) {
 	if (disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n) return 0n
-	if (repPerEthPrice !== undefined) return withdrawableRepAmountAttoRep
-	return vaultAttoRepBacking
+	return withdrawableRepAmountAttoRep
 }
 
-export function getVaultDepositAmountNotice({ depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep }: { depositAmount: bigint | undefined; isDepositBelowMinimum: boolean; minimumVaultRepDepositAttoRep: bigint; walletRepShortfallAttoRep: bigint | undefined }) {
+/** Queued withdrawals execute at the oracle price, so a valid oracle price wins; otherwise the selected UI price gives an estimate. */
+export function getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice, estimateRepPerEthPrice }: { executionRepPerEthPrice: bigint | undefined; estimateRepPerEthPrice: bigint | undefined }) {
+	if (executionRepPerEthPrice !== undefined && executionRepPerEthPrice > 0n) return { isEstimate: false, repPerEthPrice: executionRepPerEthPrice }
+	if (estimateRepPerEthPrice !== undefined && estimateRepPerEthPrice > 0n) return { isEstimate: true, repPerEthPrice: estimateRepPerEthPrice }
+	return { isEstimate: true, repPerEthPrice: undefined }
+}
+
+export function getVaultDepositAmountNotice({
+	currentVaultRepBackingAttoRep,
+	depositAmount,
+	isDepositBelowMinimum,
+	minimumVaultRepDepositAttoRep,
+	walletRepShortfallAttoRep,
+}: {
+	currentVaultRepBackingAttoRep?: bigint | undefined
+	depositAmount: bigint | undefined
+	isDepositBelowMinimum: boolean
+	minimumVaultRepDepositAttoRep: bigint
+	walletRepShortfallAttoRep: bigint | undefined
+}) {
 	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
-	if (isDepositBelowMinimum) return getVaultDepositGuardMessage({ approvalSatisfied: true, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
+	if (isDepositBelowMinimum) return getVaultDepositGuardMessage({ approvalSatisfied: true, currentVaultRepBackingAttoRep, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
 	return undefined
 }
 
@@ -91,6 +113,8 @@ export function getVaultActionDisabledReasonId({
 
 export type VaultReadinessActionInput = {
 	adjustmentBlocker: string | undefined
+	/** Describes a lifecycle blocker for the commitment action, which stays available after deposits close. */
+	adjustmentDisabledReasonId: string | undefined
 	canUseLoadedVaultActions: boolean
 	claimFeesAvailabilityBlocker: string | undefined
 	claimFeesDisabledReasonId: string | undefined
@@ -115,6 +139,7 @@ export type VaultReadinessActionInput = {
 
 export function buildVaultReadinessActions({
 	adjustmentBlocker,
+	adjustmentDisabledReasonId,
 	canUseLoadedVaultActions,
 	claimFeesAvailabilityBlocker,
 	claimFeesDisabledReasonId,
@@ -157,7 +182,7 @@ export function buildVaultReadinessActions({
 			key: 'adjust-backing',
 			...(adjustmentReady ? { onAction: () => onOpenModal('adjust-backing') } : {}),
 			readiness: adjustmentReady ? 'ready' : 'blocked',
-			...(depositDisabledReasonId === undefined ? {} : { disabledReasonId: depositDisabledReasonId }),
+			...(adjustmentDisabledReasonId === undefined ? {} : { disabledReasonId: adjustmentDisabledReasonId }),
 			...(showSharedRefreshVaultBlocker ? {} : withBlocker(adjustmentBlocker)),
 		},
 		{

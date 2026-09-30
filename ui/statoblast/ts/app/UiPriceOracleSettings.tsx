@@ -15,8 +15,9 @@ function isExpectedStorageReadError(error: unknown) {
 
 export function readUiPriceOracle(storage?: Pick<Storage, 'getItem'>): UiPriceOracle {
 	try {
-		const resolvedStorage = storage ?? globalThis.localStorage
-		const value = resolvedStorage.getItem(PRICE_ORACLE_STORAGE_KEY)
+		// Some browsers expose `localStorage` as null when storage is disabled; the default applies then.
+		const resolvedStorage: Pick<Storage, 'getItem'> | null | undefined = storage ?? globalThis.localStorage
+		const value = resolvedStorage?.getItem(PRICE_ORACLE_STORAGE_KEY)
 		if (value === 'uniswap' || value === 'open-oracle' || value === 'open-oracle-fallback') return value
 	} catch (error) {
 		if (!isExpectedStorageReadError(error)) throw error
@@ -29,7 +30,12 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 	const savePriceOracle = (value: UiPriceOracle) => {
 		onPriceOracleChange(value)
 		try {
-			globalThis.localStorage.setItem(PRICE_ORACLE_STORAGE_KEY, value)
+			const storage: Storage | null | undefined = globalThis.localStorage
+			if (storage === null || storage === undefined) {
+				setError(appCopy.priceOracleSaveFailed)
+				return
+			}
+			storage.setItem(PRICE_ORACLE_STORAGE_KEY, value)
 			setError(undefined)
 		} catch (caughtError) {
 			setError(caughtError instanceof Error ? caughtError.message : appCopy.priceOracleSaveFailed)

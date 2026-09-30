@@ -1,3 +1,4 @@
+import type { PoolBrowseState, SelectedVaultView } from '../types/app.js'
 import type { ComponentType } from 'preact'
 import type { RequestPriceModalProps } from './security-pools/components/SecurityPoolOracleSections.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -17,7 +18,6 @@ import type {
 	ReadClient,
 	ReportingDetails,
 	ReportingOutcomeKey,
-	SecurityPoolBrowsePage,
 	SecurityPoolCreationResult,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
@@ -140,25 +140,19 @@ type LiquidationModalStateProps = {
 }
 
 type SecurityPoolsOverviewRouteContentProps = {
-	accountState: AccountState
+	browseState?: PoolBrowseState | undefined
+	onBrowseStateChange?: ((update: Partial<PoolBrowseState>) => void) | undefined
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
-	environmentRefreshKey: number
-	loadingSecurityPoolPage: boolean
-	onCreateSecurityPool?: () => void
-	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
-	/** Re-reads the visible page in place on each new block. */
-	onRefreshSecurityPoolPage?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	securityPoolOverviewError: string | undefined
-	securityPoolPage: SecurityPoolBrowsePage | undefined
-	securityPoolPageFreshness?: DataFreshness | undefined
 	securityPools: ListedSecurityPool[]
 }
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
 export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
+	controlledVaultView?: SelectedVaultView | undefined
+	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
 	inlineOracle?: import('./oracleTypes.js').OpenOracleSectionProps
 	accountState: AccountState
@@ -200,9 +194,10 @@ export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
 	loadingUniverseDirectoryPools?: boolean | undefined
-	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
 	onLoadUniverseDirectoryPools?: (() => void) | undefined
+	/** Opens a Browse pools row in its universe with one history entry and one pool load. */
+	onOpenSecurityPool: (securityPoolAddress: string, universeId: bigint) => void
 	overview: SecurityPoolsOverviewRouteContentProps
 	securityPools: ListedSecurityPool[]
 	securityPoolUniverseDirectoryError?: string | undefined

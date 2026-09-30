@@ -1382,7 +1382,7 @@ describe('ForkAuctionSection', () => {
 		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(documentQueries.queryByText('You pay')).toBeNull()
-		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Bid price is outside the supported auction range.')
+		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toStartWith('Bid price must be between ')
 		expect(submitBidButton.disabled).toBe(true)
 	})
 

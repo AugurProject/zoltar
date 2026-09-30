@@ -5,6 +5,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
+import type { SecurityPoolStateModel } from './securityPoolState.js'
 import type { LiquidationApprovalDetails, OracleManagerDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 
 export const ZERO_LIQUIDATION_APPROVAL_ID = `0x${'00'.repeat(32)}`
@@ -107,7 +108,6 @@ export function getDelegatedLiquidationApprovalReason({
 	approvalRouteMismatch,
 	currentTimestamp,
 	delegatedReceiver,
-	liquidationAmountValue,
 	liquidationApprovalDetails,
 	liquidationApprovalError,
 	liquidationApprovalId,
@@ -118,7 +118,6 @@ export function getDelegatedLiquidationApprovalReason({
 	approvalRouteMismatch: boolean
 	currentTimestamp: bigint | undefined
 	delegatedReceiver: boolean
-	liquidationAmountValue: bigint | undefined
 	liquidationApprovalDetails: LiquidationApprovalDetails | undefined
 	liquidationApprovalError: string | undefined
 	liquidationApprovalId: string
@@ -132,11 +131,40 @@ export function getDelegatedLiquidationApprovalReason({
 	if (liquidationApprovalDetails === undefined) return liquidationCopy.boundedApprovalRequiredBeforeSubmission
 	if (approvalRouteMismatch) return liquidationCopy.approvalRouteMismatch
 	if (approvalNonceInvalidated) return liquidationCopy.approvalNonceInvalidated
-	if (liquidationApprovalDetails.revoked || liquidationApprovalDetails.availableDebtAttoEth === 0n) return liquidationCopy.approvalUnavailable
+	if (liquidationApprovalDetails.revoked || liquidationApprovalDetails.availableDebtAttoEth === 0n || liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth === 0n) return liquidationCopy.approvalUnavailable
 	if (currentTimestamp !== undefined && currentTimestamp < liquidationApprovalDetails.params.validAfter) return liquidationCopy.approvalNotActive
 	if (approvalLatestExecutionTimestamp !== undefined && approvalLatestExecutionTimestamp > liquidationApprovalDetails.params.validUntil) return liquidationCopy.approvalExpiresBeforeExecution
-	if (liquidationAmountValue !== undefined && (liquidationAmountValue > liquidationApprovalDetails.availableDebtAttoEth || liquidationAmountValue > liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth)) return liquidationCopy.approvalQuotaTooLow
 	return undefined
+}
+
+/**
+ * The amount a delegated liquidation actually reserves: `LiquidationApprovalRegistry.reserve` clamps the
+ * requested commitment to the per-liquidation limit and the available quota instead of rejecting it.
+ */
+export function getApprovalClampedLiquidationAmount({ delegatedReceiver, liquidationAmountValue, liquidationApprovalDetails }: { delegatedReceiver: boolean; liquidationAmountValue: bigint | undefined; liquidationApprovalDetails: LiquidationApprovalDetails | undefined }) {
+	if (!delegatedReceiver || liquidationAmountValue === undefined || liquidationApprovalDetails === undefined) return liquidationAmountValue
+	let clampedAmount = liquidationAmountValue
+	if (clampedAmount > liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth) clampedAmount = liquidationApprovalDetails.params.maxDebtPerLiquidationAttoEth
+	if (clampedAmount > liquidationApprovalDetails.availableDebtAttoEth) clampedAmount = liquidationApprovalDetails.availableDebtAttoEth
+	return clampedAmount
+}
+
+export function getLiquidationLifecycleBlocker(poolState: SecurityPoolStateModel | undefined) {
+	if (poolState === undefined || poolState.actions.queueLiquidation.enabled) return undefined
+	switch (poolState.lifecycleState) {
+		case 'ended':
+			return liquidationCopy.liquidationUnavailableEndedReason
+		case 'poolForked':
+		case 'forkMigration':
+			return liquidationCopy.liquidationUnavailableForkMigrationReason
+		case 'forkTruthAuction':
+			return liquidationCopy.liquidationUnavailableTruthAuctionReason
+		case 'operational':
+		case undefined:
+			return liquidationCopy.liquidationUnavailableReason
+		default:
+			return assertNever(poolState.lifecycleState)
+	}
 }
 
 export function getLiquidationBlockers({
@@ -214,7 +242,7 @@ export function getQueuedLiquidationOperation({
 	securityPoolOverviewResult: SecurityPoolOverviewActionResult | undefined
 }): QueuedLiquidationOperationView | undefined {
 	if (securityPoolOverviewResult?.action !== 'queueLiquidation') return undefined
-	if (currentPoolOracleManagerDetails?.pendingOperation?.operation === 'liquidation' && currentPoolOracleManagerDetails.pendingOperation.targetVault === liquidationTargetVault) {
+	if (currentPoolOracleManagerDetails?.pendingOperation?.operation === 'liquidation' && sameAddress(currentPoolOracleManagerDetails.pendingOperation.targetVault, liquidationTargetVault)) {
 		return {
 			amount: currentPoolOracleManagerDetails.pendingOperation.amount,
 			isPendingSlot: true,

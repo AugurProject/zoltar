@@ -332,6 +332,10 @@
 			"bun": "./ts/features/open-oracle/lib/openOracle.ts",
 			"default": "./js/features/open-oracle/lib/openOracle.js"
 		},
+		"./features/open-oracle/lib/openOracleDispute.js": {
+			"bun": "./ts/features/open-oracle/lib/openOracleDispute.ts",
+			"default": "./js/features/open-oracle/lib/openOracleDispute.js"
+		},
 		"./features/open-oracle/lib/openOracleReadiness.js": {
 			"bun": "./ts/features/open-oracle/lib/openOracleReadiness.ts",
 			"default": "./js/features/open-oracle/lib/openOracleReadiness.js"
@@ -583,6 +587,14 @@
 		"./features/security-pools/components/OracleInitialPriceFields.js": {
 			"bun": "./ts/features/security-pools/components/OracleInitialPriceFields.tsx",
 			"default": "./js/features/security-pools/components/OracleInitialPriceFields.js"
+		},
+		"./features/open-oracle/components/PriceRequestPreview.js": {
+			"bun": "./ts/features/open-oracle/components/PriceRequestPreview.tsx",
+			"default": "./js/features/open-oracle/components/PriceRequestPreview.js"
+		},
+		"./features/open-oracle/components/RequestPriceModal.js": {
+			"bun": "./ts/features/open-oracle/components/RequestPriceModal.tsx",
+			"default": "./js/features/open-oracle/components/RequestPriceModal.js"
 		}
 	},
 	"version": "1.0.0"

@@ -245,7 +245,7 @@ describe('live workflow safety boundary', () => {
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'initial market details')
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
-		expect(document.body.textContent).not.toContain('2 nETH / gas')
+		expect(document.body.textContent).not.toContain('2\u00a0nanoETH per gas')
 		expect(document.body.textContent).toContain('Invalid timestamp')
 		expect(document.body.textContent).not.toContain('Invalid timestamp UTC')
 		expect(document.body.textContent).not.toContain('Refresh')
@@ -357,6 +357,7 @@ describe('live workflow safety boundary', () => {
 		await flush()
 		rejectDiscovery = true
 		await rerouteForRefresh('portfolio')
+		await waitForDom(() => Array.from(document.querySelectorAll('[role="alert"]')).some(candidate => candidate.textContent?.includes('Security pool discovery failed') === true), 'discovery failure notice')
 		expect(Array.from(document.querySelectorAll('[role="alert"]')).filter(candidate => candidate.textContent?.includes('Security pool discovery failed') === true)).toHaveLength(1)
 		expect(hasButton('Refresh')).toBeFalse()
 		expect(document.body.textContent).not.toContain('Retry balances')

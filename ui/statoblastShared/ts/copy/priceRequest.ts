@@ -7,4 +7,4 @@ export const uniswapPriceFailed = 'Could not fetch the Uniswap price. Try again 
 export const enterPriceEstimate = 'Enter a starting price.'
 export const requestPrice = 'Request new price'
 export const waitingForPriceRequest = 'Waiting for the current request to finish.'
-export const attemptedRepPerEthPrice = 'Attempted REP / ETH price'
+export const attemptedRepPerEthPrice = 'Attempted REP per ETH price'

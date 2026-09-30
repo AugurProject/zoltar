@@ -1,3 +1,4 @@
+import { LiveLiquidityWorkspace } from './LiveLiquidityWorkspace.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -19,7 +20,7 @@ import { liveTradingControllerServices } from './liveTradingControllerHelpers.js
 import type { LiveTradingControllerServices, LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
-import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
+import { liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
@@ -102,7 +103,7 @@ export function LiveTrading({
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, refreshLocked, loadMarketPage } = discovery
+	const { discoveryRows, visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, refreshLocked, loadMarketPage } = discovery
 	const { setMode, setSide } = position
 	const { workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -115,6 +116,8 @@ export function LiveTrading({
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
 	const favoriteMarketIds = useFavorites('trading', 'market')
+	const listedPools = new Set(listedMarkets.map(market => market.pool))
+	const listedDiscoveryRows = discoveryRows?.filter(market => market === undefined || listedPools.has(market.pool))
 	const downloadedMarkets = useDownloadedEntities('trading', 'market', marketDownloadStore)
 	// The market list browses every downloaded market; discovered pages join the cache, other routes only refresh cached favorites.
 	const listsMarkets = tradingListKindFor(route) === 'markets'
@@ -124,7 +127,8 @@ export function LiveTrading({
 	const recordedMarkets = useRef(new Map<string, LiveMarket>())
 	const marketCacheUpdates = selectMarketCacheUpdates(listedMarkets, recordedMarkets.current, favoriteMarketIds.entries, listsMarkets)
 	useEffect(() => {
-		if (marketCacheUpdates.length === 0) return
+		// A workflow can revoke partial discovery; persist only the completed list.
+		if (discoveryState !== 'ready' || marketCacheUpdates.length === 0) return
 		for (const update of marketCacheUpdates) recordedMarkets.current.set(update.id, update.data)
 		downloadedMarkets.record(marketCacheUpdates)
 	})
@@ -204,6 +208,7 @@ export function LiveTrading({
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
 				<LiveMarketBrowser
+					discoveryRows={listedDiscoveryRows}
 					lookupRoute={route}
 					markets={listsMarkets ? selectBrowseMarkets(downloadedMarkets.entries, listedMarkets, selectedUniverseId) : listedMarkets}
 					favorites={favoriteMarketIds.entries}
@@ -343,7 +348,7 @@ export function LiveTrading({
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<LiveLiquidityControls
+								<LiveLiquidityWorkspace
 									{...workflowPanelProps}
 									walletEthAttoEth={walletEthAttoEth}
 									nowSeconds={nowSeconds}
@@ -360,7 +365,7 @@ export function LiveTrading({
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? <LiveSettlementControls {...workflowPanelProps} services={settlementServices} /> : null}
-								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
+								{activeView === 'liquidity' ? <LiveLiquidityWorkspace {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 								{activeView === 'trade' && selectedPairInitialized ? <LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={ticketLocked} /> : null}
 							</div>

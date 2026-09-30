@@ -183,6 +183,10 @@
 			"bun": "./ts/tests/app/useOnchainState.integration.test.tsx",
 			"default": "./js/tests/app/useOnchainState.integration.test.js"
 		},
+		"./tests/app/useProtocolAppRuntime.test.js": {
+			"bun": "./ts/tests/app/useProtocolAppRuntime.test.tsx",
+			"default": "./js/tests/app/useProtocolAppRuntime.test.js"
+		},
 		"./tests/app/useTransactionTrayController.test.js": {
 			"bun": "./ts/tests/app/useTransactionTrayController.test.tsx",
 			"default": "./js/tests/app/useTransactionTrayController.test.js"
@@ -731,6 +735,10 @@
 			"bun": "./ts/lib/formatters.ts",
 			"default": "./js/lib/formatters.js"
 		},
+		"./lib/incrementalRegistry.js": {
+			"bun": "./ts/lib/incrementalRegistry.ts",
+			"default": "./js/lib/incrementalRegistry.js"
+		},
 		"./lib/loadState.js": {
 			"bun": "./ts/lib/loadState.ts",
 			"default": "./js/lib/loadState.js"
@@ -758,6 +766,10 @@
 		"./lib/questionId.js": {
 			"bun": "./ts/lib/questionId.ts",
 			"default": "./js/lib/questionId.js"
+		},
+		"./lib/readOperation.js": {
+			"bun": "./ts/lib/readOperation.ts",
+			"default": "./js/lib/readOperation.js"
 		},
 		"./lib/refreshState.js": {
 			"bun": "./ts/lib/refreshState.ts",
@@ -1046,6 +1058,18 @@
 		"./tests/components/universeLink.test.js": {
 			"bun": "./ts/tests/components/universeLink.test.tsx",
 			"default": "./js/tests/components/universeLink.test.js"
+		},
+		"./components/UserMessage.js": {
+			"bun": "./ts/components/UserMessage.tsx",
+			"default": "./js/components/UserMessage.js"
+		},
+		"./tests/userMessage.test.js": {
+			"bun": "./ts/tests/userMessage.test.tsx",
+			"default": "./js/tests/userMessage.test.js"
+		},
+		"./tests/fixtures/userMessageShowcase.js": {
+			"bun": "./ts/tests/fixtures/userMessageShowcase.tsx",
+			"default": "./js/tests/fixtures/userMessageShowcase.js"
 		}
 	},
 	"version": "1.0.0"

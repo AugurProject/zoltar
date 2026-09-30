@@ -61,20 +61,23 @@ function PoolActionRow({ context, control, currentTimestamp, item }: { context?:
 	)
 }
 
-/** The pool page's "What you can do now" surface: each action row switches to the tab that holds it. */
+/** Next actions retain position, deadline, and exception context even when their tab is open. */
 export function PoolActionCard({ currentTimestamp, currentView, items, onChange }: { currentTimestamp: bigint | undefined; currentView: SelectedPoolView; items: readonly PoolActionItem[]; onChange: (view: SelectedPoolView) => void }) {
+	const visibleItems = items.filter(item => item.id !== 'manageVault' || item.tab !== currentView)
+	if (visibleItems.length === 0 && items.length > 0) return undefined
 	return (
 		<section className='pool-action-card' aria-labelledby='pool-action-card-heading'>
-			<h3 id='pool-action-card-heading'>{copy.whatYouCanDoNow}</h3>
-			{items.length === 0 ? (
+			<h3 id='pool-action-card-heading'>{copy.nextActions}</h3>
+			{visibleItems.length === 0 ? (
 				<p className='detail'>{copy.nothingToDoNow}</p>
 			) : (
 				<ul className='pool-action-list'>
-					{items.map(item => {
+					{visibleItems.map(item => {
 						const { tab } = item
 						let control: ComponentChildren = undefined
-						// A row for the open tab needs no control: its work is already on screen below.
-						if (tab !== undefined && tab !== currentView)
+						// A row for the open tab keeps its control slot, marked as already shown below, so rows do not jump when tabs change.
+						if (tab !== undefined && tab === currentView) control = <span className='pool-action-current'>{copy.actionShownBelow}</span>
+						else if (tab !== undefined)
 							control = (
 								<button type='button' className='link' onClick={() => onChange(tab)}>
 									{copy.actionButtonLabels[tab]}

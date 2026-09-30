@@ -5,7 +5,7 @@ import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/component
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
-import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
+import * as priceRequestCopy from '../../../copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 
 export type FailedPricePlan = {
@@ -16,6 +16,7 @@ export type FailedPricePlan = {
 
 export function PriceRequestPreview({
 	requestValue,
+	prompt,
 	reason,
 	error,
 	errorWalletBlocker,
@@ -26,6 +27,8 @@ export function PriceRequestPreview({
 	onRetry,
 }: {
 	requestValue: bigint | undefined
+	/** Guidance shown above the action while its reason is hidden; progress already carried by a button is omitted. */
+	prompt: string | undefined
 	reason: string
 	error: string | undefined
 	/** The wallet prerequisite, when it is the error that blocks the request. */
@@ -51,11 +54,12 @@ export function PriceRequestPreview({
 	} else if (!reasonHidden) {
 		visibleFeedback = <InlineHint id={reasonId} message={reason} />
 	}
-	let estimatePrompt = priceRequestCopy.enterPriceEstimate
-	if (preparing) estimatePrompt = priceRequestCopy.preparingPriceRequest
+	// The prompt stands in for a hidden reason; a visible reason or error already says why the action waits.
+	const visiblePrompt = visibleFeedback === undefined ? prompt : undefined
 	return (
 		<>
-			{failedPlan === undefined && onRetry === undefined ? <p className='detail price-request-estimate-prompt'>{estimatePrompt}</p> : undefined}
+			{/* The prompt row keeps its slot while empty so the dialog does not change height as the request state changes. */}
+			{failedPlan === undefined && onRetry === undefined ? <p className='detail price-request-estimate-prompt'>{visiblePrompt}</p> : undefined}
 			{failedPlan === undefined ? undefined : (
 				<div className='transaction-step-content'>
 					<TransactionFundingSummary funding={failedPlan.funding} totalAttoEth={failedPlan.totalAttoEth} outcome={failedPlan.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />

@@ -1,5 +1,4 @@
 export const QUESTION_PAGE_SIZE = 10
-export const SECURITY_POOL_PAGE_SIZE = 6
 
 function getPageSizeBigInt(pageSize: number) {
 	if (!Number.isSafeInteger(pageSize) || pageSize <= 0) throw new RangeError('Page size must be a positive safe integer')

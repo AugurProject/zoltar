@@ -4,9 +4,9 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import {
 	estimateMintCheckpoint,
-	convertSettlementCollateralAttoEthToAttoShares,
 	convertAttoSharesToSettlementCollateralAttoEth,
 	formatStatoblastSecurityMultiplier,
+	getCompleteSetRedeemAttoShares,
 	getDefaultShareMigrationTargetOutcomeIndexes,
 	getMaximumMintAmount,
 	getRemainingMintCapacity,
@@ -157,7 +157,7 @@ void describe('trading helpers', () => {
 		expect(isTradingSystemDeployed([createDeploymentStep('proxyDeployer', true), createDeploymentStep('zoltar', true), createDeploymentStep('securityPoolFactory', false)])).toBe(false)
 	})
 
-	void test('formats Statoblast security multiplier basis points with the multiplication sign', () => {
+	void test('formats security multiplier basis points with the multiplication sign', () => {
 		expect(formatStatoblastSecurityMultiplier(20_000n)).toBe('2×')
 		expect(formatStatoblastSecurityMultiplier(25_000n)).toBe('2.5×')
 		expect(formatStatoblastSecurityMultiplier(20_001n)).toBe('2.0001×')
@@ -457,7 +457,7 @@ void describe('trading helpers', () => {
 	void test('converts first-mint share token amounts through the pool exchange rate', () => {
 		const firstMintShareAmount = TOKEN_PRECISION
 		expect(convertAttoSharesToSettlementCollateralAttoEth(firstMintShareAmount, TOKEN_PRECISION, firstMintShareAmount)).toBe(TOKEN_PRECISION)
-		expect(convertSettlementCollateralAttoEthToAttoShares(TOKEN_PRECISION, TOKEN_PRECISION, firstMintShareAmount)).toBe(firstMintShareAmount)
+		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: undefined, redeemAmountAttoEth: TOKEN_PRECISION, settlementCollateralAttoEth: TOKEN_PRECISION, shareTokenSupplyAttoShares: firstMintShareAmount })).toBe(firstMintShareAmount)
 		expect(
 			getTradingRedeemCompleteSetGuardMessage({
 				accountAddress: '0x1234567890123456789012345678901234567890',
@@ -474,6 +474,28 @@ void describe('trading helpers', () => {
 				shareTokenSupplyAttoShares: firstMintShareAmount,
 			}),
 		).toBe('Max redeemable amount is 1\u00a0ETH.')
+	})
+
+	void test('redeems every complete-set share when the ETH amount reaches the redeemable maximum', () => {
+		// 99 shares at 7 / 100 ETH per share are worth 6 ETH, but 6 ETH converts back to only 86 shares.
+		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: 99n, redeemAmountAttoEth: 6n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(99n)
+		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: 99n, redeemAmountAttoEth: 5n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(72n)
+		expect(getCompleteSetRedeemAttoShares({ maxRedeemableAttoShares: undefined, redeemAmountAttoEth: 6n, settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })).toBe(86n)
+	})
+
+	void test('explains that share migration waits for the pool to fork', () => {
+		const guardInput = {
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			loadingTradingForkUniverse: false,
+			loadingTradingDetails: false,
+			selectedShareOutcome: 'yes',
+			shareBalances,
+			targetOutcomeIndexesInput: '0, 1, 2',
+		} as const
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: { ...binaryForkUniverse, hasForked: false } })).toBe('Available only after this pool forks.')
+		expect(getTradingMigrateSharesGuardMessage({ ...guardInput, tradingForkUniverse: undefined })).toBe('Refresh the fork target universes.')
 	})
 
 	void test('validates share migration targets and positive balances once migration is available', () => {
