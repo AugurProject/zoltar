@@ -34,7 +34,7 @@ test('detects slow processing independently from a block backlog and preserves e
 	expect(await completedLine(network, sample, 12_000, 12_000, now)).toContain('status=live lagging=false')
 	expect(await completedLine(network, sample, 12_001, 12_000, now)).toContain('status=lagging lagging=true reason=slow-processing blocksBehind=0')
 	expect(await completedLine(network, { ...sample, observedHead: 103n }, 23, 12_000, now)).toContain('reason=behind-head blocksBehind=3')
-	for (const status of ['paused', 'failed', 'incomplete', 'waiting', 'backfilling'] as const) {
+	for (const status of ['paused', 'failed', 'incomplete', 'backfilling'] as const) {
 		expect(await completedLine(network, { ...sample, status }, 15_000, 12_000, now)).toContain(`status=${status} lagging=true`)
 	}
 	expect(await completedLine(network, { ...sample, observedHead: 99n }, 23, 12_000, now)).toContain('blocksBehind=0')
@@ -126,4 +126,42 @@ test('warns during a stalled cycle and stops warning on failed completion', asyn
 	} finally {
 		await report.finish()
 	}
+})
+
+test('idle polls of an already scanned block emit no summary or diagnostic head read', async () => {
+	const lines: string[] = []
+	let headReads = 0
+	for (const sample of [
+		{ block: 100n, status: 'live' },
+		{ block: 100n, status: 'waiting' },
+		{ block: 100n, status: 'waiting' },
+		{ block: 101n, status: 'live' },
+	] as const) {
+		const report = startScanReport({
+			network,
+			blockTimeMs: 12_000,
+			write: line => lines.push(line),
+			readHead: async () => {
+				headReads++
+				return 101n
+			},
+		})
+		report.update(sample)
+		await report.finish()
+		await report.finish()
+	}
+	expect(lines).toHaveLength(2)
+	expect(lines[0]).toContain('Sepolia 100:')
+	expect(lines[1]).toContain('Sepolia 101:')
+	expect(headReads).toBe(2)
+})
+
+test('waiting without a known block and failures during idle polls remain visible', async () => {
+	expect(await completedLine(network, { status: 'waiting' }, 10, 12_000, now)).toContain('status=waiting')
+	const lines: string[] = []
+	const report = startScanReport({ network, blockTimeMs: 12_000, write: line => lines.push(line) })
+	report.update({ block: 100n, status: 'waiting' })
+	await report.finish('failed')
+	expect(lines).toHaveLength(1)
+	expect(lines[0]).toContain('status=failed')
 })

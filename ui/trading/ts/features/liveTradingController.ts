@@ -177,6 +177,7 @@ export function useLiveTradingController({
 			retryPortfolioBalances,
 		},
 		discovery: {
+			discoveryRows: marketDiscovery.discoveryRows,
 			visibleMarkets,
 			listedMarkets,
 			selected,

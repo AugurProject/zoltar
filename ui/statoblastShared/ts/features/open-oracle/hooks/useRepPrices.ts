@@ -106,12 +106,12 @@ async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadCl
 	const quoter = getRepPriceQuoter()
 	const repAddress = quoter.getRepAddress()
 	try {
-		const { amountOut, source } = await quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
+		const { amountOut, source } = await withTimeout(quoter.quoteBestExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, 'RPC timeout while loading the Uniswap V4 REP price.')
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v4', sourceUrl: source.poolUrl }
 	} catch (error) {
 		if (!isRecoverableQuoteError(error)) throw error
-		// V4 REP/ETH pool doesn't exist yet — fall back to V3 WETH/REP (1% pool)
-		const { amountOut, source } = await quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH)
+		// Missing or stalled V4 quotes must still allow a bounded V3 fallback.
+		const { amountOut, source } = await withTimeout(quoter.quoteBestV3ExactInputWithSource(client, ETH_ADDRESS, repAddress, ATTO_ETH_PER_ETH), 30_000, 'RPC timeout while loading the Uniswap V3 REP price.')
 		return { price: amountOut, source: source.protocol === 'mock' ? 'mock' : 'v3', sourceUrl: source.poolUrl }
 	}
 }
@@ -141,10 +141,7 @@ async function loadRepPrices(backend: ChainBackend, forceRefresh: boolean) {
 	repPriceRefreshGenerationByBackend.set(backend, refreshGeneration)
 	const refreshPromise = (async () => {
 		const client = backend.createReadClient()
-		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([
-			withTimeout(fetchRepPerEthPrice(client), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.'),
-			withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.'),
-		])
+		const [repPerEthResult, repUsdcResult] = await Promise.allSettled([fetchRepPerEthPrice(client), withTimeout(getRepPriceQuoter().quoteRepForUsdcV4WithSource(client, ATTO_REP), 30_000, 'RPC timeout while loading REP price. Refresh prices to retry.')])
 		if (repPerEthResult.status === 'rejected' && !isRecoverableQuoteError(repPerEthResult.reason)) throw repPerEthResult.reason
 		if (repUsdcResult.status === 'rejected' && !isRecoverableQuoteError(repUsdcResult.reason)) throw repUsdcResult.reason
 		const nextCachedRepPrices: CachedRepPrices = {

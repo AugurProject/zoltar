@@ -44,7 +44,7 @@ function formatScanStatus(network: ScanNetwork, sample: ScanSample, elapsedMs: n
 	return `${now.toISOString().slice(0, 19).replace('T', ' ')} ${name} ${sample.block ?? 'unknown'}: ProcessedMs=${duration}${details.length === 0 ? '' : ` ${details.join(' ')}`} status=${status} lagging=${lagging}${reason === undefined ? '' : ` reason=${reason}`} blocksBehind=${behind ?? 'unknown'} blockTimeMs=${blockTimeMs ?? 'unknown'}`
 }
 
-/** One final line on every exit, with rate-limited warnings while the cycle is still occupied. */
+/** Report completed scans and exceptional exits, with rate-limited warnings while occupied. */
 export function startScanReport(options: {
 	network: ScanNetwork
 	blockTimeMs: number | undefined
@@ -78,6 +78,8 @@ export function startScanReport(options: {
 			finished = true
 			clearInterval(timer)
 			if (status !== undefined) sample.status = status
+			// A known-block waiting cycle did not scan a new block. Keep idle polling silent.
+			if (sample.status === 'waiting' && sample.block !== undefined) return
 			const elapsed = clock() - startedAt
 			// Diagnostic head reads must not stall the worker or turn successful processing into a failure.
 			if (sample.block !== undefined && options.readHead !== undefined) {

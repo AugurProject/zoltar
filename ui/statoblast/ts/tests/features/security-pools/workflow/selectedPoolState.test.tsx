@@ -217,9 +217,9 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 	})
 
 	test('offers retry after a timed-out initial read without claiming the pool is missing', async () => {
-		await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: '0x00000000000000000000000000000000000000ab', securityPoolOverviewError: 'Loading timed out. Please retry.' }))
+		await renderWorkflow(createSecurityPoolWorkflowProps({ securityPoolAddress: '0x00000000000000000000000000000000000000ab', securityPoolOverviewError: 'RPC read timed out. Retry loading data.' }))
 		const queries = within(document.body)
-		expect(queries.getByRole('alert').textContent).toContain('Loading timed out')
+		expect(queries.getByRole('alert').textContent).toContain('RPC read timed out. Retry loading data.')
 		expect(queries.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(false)
 		expect(queries.queryByText('Pool not found.') === null).toBe(true)
 	})

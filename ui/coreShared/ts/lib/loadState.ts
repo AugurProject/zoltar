@@ -1,4 +1,5 @@
 import { computed, signal, type ReadonlySignal } from '@preact/signals'
+import { runReadOperation, type ReadOperation } from './readOperation.js'
 import { withTimeout } from './promise.js'
 
 export type LoadPhase = 'idle' | 'loading'
@@ -6,7 +7,7 @@ export type LoadableValueState = 'unknown' | 'loading' | 'ready' | 'missing'
 
 type RunLoadOptions<TResult> = {
 	isCurrent?: () => boolean
-	load: () => Promise<TResult>
+	load: (operation: ReadOperation) => Promise<TResult>
 	waitUntilReady?: () => Promise<void>
 	onStart?: () => void
 	onSuccess?: (result: TResult) => Promise<void> | void
@@ -86,7 +87,7 @@ export function createLoadController({ timeoutMilliseconds = 30_000 }: { timeout
 			try {
 				if (waitUntilReady !== undefined) await withTimeout(waitUntilReady(), 120_000, 'Backend readiness timed out. Please retry.')
 				if (!isCurrentRequest()) return undefined
-				const result = await withTimeout(load(), timeoutMilliseconds, 'Loading timed out. Please retry.')
+				const result = await runReadOperation(load, { timeoutMilliseconds, isCurrent: isCurrentRequest })
 				if (!isCurrentRequest()) return undefined
 				await onSuccess?.(result)
 				return result
