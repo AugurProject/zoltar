@@ -656,6 +656,8 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.waitForBodyWithoutText('Requested new price')
 	expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 	await driver.clickButton('+10 min')
+	// Reporting opens with the one-year jump above; if its default tab lands after the tool was chosen, reopen the price tool so the pending request is visible.
+	await selectPoolTool('Price oracle')
 	await driver.waitForBodyText('Pending request')
 	const pendingReportId = await driver.evaluate(
 		`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return undefined; const reportId = button.textContent?.trim().slice('Report #'.length).trim(); button.click(); return reportId })()`,
@@ -677,7 +679,8 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 
 	const selectReportingOutcome = async (outcome: 'Yes' | 'No') => {
 		let selected = false
-		for (let attempt = 0; attempt < 100 && !selected; attempt += 1) {
+		// Outcome radios stay disabled while reporting details load, which can take well over five seconds on a loaded machine; use the shared body-wait budget.
+		for (let attempt = 0; attempt < 2400 && !selected; attempt += 1) {
 			selected =
 				(await driver.evaluate(
 					`(() => { const radio = [...document.querySelectorAll('[role="radio"]')].find(candidate => candidate.querySelector('.panel-label')?.textContent?.trim() === ${JSON.stringify(outcome)}); if (!(radio instanceof HTMLButtonElement) || radio.disabled) return false; radio.click(); return true })()`,
