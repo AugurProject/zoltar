@@ -1,4 +1,4 @@
-import { withReadTimeout } from '../../lib/promise.js'
+import { readOperationClient, runReadOperation } from '../../lib/readOperation.js'
 import { signalValues } from '../../lib/signalValues.js'
 import { batch, useComputed, useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
@@ -322,7 +322,7 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 		if (shouldLoadDeploymentState && backend.isBootstrapped !== false && isReadBackendReady())
 			deploymentStatePromise = deploymentStatusLoad.track(async () => {
 				try {
-					const snapshot = await withReadTimeout(dependencies.loadDeploymentStatusOracleSnapshot(backend.createReadClient()))
+					const snapshot = await runReadOperation(async operation => await dependencies.loadDeploymentStatusOracleSnapshot(readOperationClient(backend.createReadClient(), operation)), { isCurrent })
 					if (!isCurrent()) return
 					batch(() => {
 						applicationDeploymentComplete.value = snapshot.applicationDeploymentComplete

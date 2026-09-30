@@ -12,7 +12,7 @@ export const appBlockWatcher = createBlockWatcher(createDocumentBlockWatcherEnvi
 /** The application's query cache; every entry turns stale on a new block or an explicit invalidation. */
 export const appQueryCache = createQueryCache()
 
-appBlockWatcher.subscribe(() => appQueryCache.invalidateAll())
+appBlockWatcher.subscribe(event => appQueryCache.invalidateAll(event.reason))
 
 export function blockPollIntervalMilliseconds(simulation: boolean) {
 	return simulation ? SIMULATION_BLOCK_POLL_INTERVAL_MILLISECONDS : LIVE_BLOCK_POLL_INTERVAL_MILLISECONDS

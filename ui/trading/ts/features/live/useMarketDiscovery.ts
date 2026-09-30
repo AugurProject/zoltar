@@ -6,6 +6,8 @@ import { createSecurityPoolDeploymentIndex, type LiveMarket, type SecurityPoolDe
 
 export function useMarketDiscovery() {
 	const [markets, setMarkets] = useState<LiveMarket[]>([])
+	// Presentation-only registry slots; balances and persistence receive real markets only.
+	const [discoveryRows, setDiscoveryRows] = useState<readonly (LiveMarket | undefined)[]>()
 	const [discoveryState, setDiscoveryState] = useState<'loading' | 'ready' | 'error'>('loading')
 	const [discoveryError, setDiscoveryError] = useState<string>()
 	// The age of the committed discovery and whether a background refresh is re-reading it.
@@ -14,5 +16,5 @@ export function useMarketDiscovery() {
 	const pairIndex = useRef(createTradingPairIndex()).current
 	const deploymentIndex = useRef(createSecurityPoolDeploymentIndex<SecurityPoolDeployment, { blockNumber: bigint; blockHash: Hash }>()).current
 
-	return { freshness, setFreshness, markets, setMarkets, discoveryState, setDiscoveryState, discoveryError, setDiscoveryError, marketPage, setMarketPage, deploymentIndex, pairIndex }
+	return { discoveryRows, setDiscoveryRows, freshness, setFreshness, markets, setMarkets, discoveryState, setDiscoveryState, discoveryError, setDiscoveryError, marketPage, setMarketPage, deploymentIndex, pairIndex }
 }
