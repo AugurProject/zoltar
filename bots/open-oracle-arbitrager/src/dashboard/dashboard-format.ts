@@ -1,9 +1,11 @@
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'
 import { countOpportunities, type EvaluatedOpportunitySnapshot, type OpportunityDecision, type OpportunitySnapshot, type SkippedOpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { MarketPricePoint } from '#monitoring/market-monitor'
 import type { RewardWithdrawalDecision, SettlementCandidateSnapshot, SettlementDecision, SettlementSnapshot } from '#state/settlement-store'
+import { blockAge } from '@zoltar/bot-shared/dashboard/block-status'
 
 const DECIMAL_SCALE = 18
 
@@ -150,12 +152,7 @@ export function pollRetryStatus(timing: PollRetryTiming, nowMilliseconds = Date.
 }
 
 export function blockAgeLabel(blockTimestamp: string | undefined, nowMilliseconds = Date.now()) {
-	if (blockTimestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(blockTimestamp)) return 'timestamp unavailable'
-	const timestampMilliseconds = Number(blockTimestamp) * 1_000
-	if (!Number.isSafeInteger(timestampMilliseconds) || !Number.isFinite(nowMilliseconds)) return 'timestamp unavailable'
-	const differenceSeconds = Math.floor(Math.abs(nowMilliseconds - timestampMilliseconds) / 1_000)
-	const label = compactDuration(differenceSeconds)
-	return nowMilliseconds >= timestampMilliseconds ? `seen ${label} ago` : `${label} ahead of local clock`
+	return blockAge(blockTimestamp, nowMilliseconds, compactDuration)
 }
 
 export function botStatusLabels(state: Pick<PublicOperatorSnapshot, 'mode' | 'paused' | 'status' | 'marketAvailability'> | undefined) {
@@ -253,7 +250,7 @@ export function requiredSignerPrivateKey(value: string) {
 
 export function statePollingFailureMessage(error: unknown) {
 	if (error instanceof SyntaxError) return 'The state server returned an unreadable response. Automatic retry remains active; check the dashboard server if the next attempt also fails.'
-	const message = error instanceof Error ? error.message : String(error)
+	const message = errorMessage(error)
 	return message.startsWith('The bot tried to ') ? `${message} Use Refresh to retry now.` : `The bot tried to load the latest operator state for the dashboard, but it failed: ${message}. Automatic retry remains active; use Refresh to retry now.`
 }
 

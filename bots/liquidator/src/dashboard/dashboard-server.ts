@@ -4,13 +4,14 @@ import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivi
 import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { publicOperatorFailure } from '@zoltar/bot-shared/dashboard/public-failures'
+import { publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { PoolCatalogPage } from '../monitoring/pool-catalog.ts'
 import { PENDING_INTENT_MODE_CHANGE, PENDING_SIGNER_RECOVERY } from '#core/go-live-controls'
 import { operatorHeader } from './header.ts'
-import { settingsPageMarkup } from './settings-page.ts'
+import { settingsPageMarkup } from './settings-page.tsx'
 
 export type DashboardController = {
 	getPoolCatalog?: (page: number, address?: Address, scope?: 'all' | 'monitored') => Promise<PoolCatalogPage>
@@ -211,11 +212,6 @@ function publicOperatorSnapshot(value: unknown) {
 	return snapshot
 }
 
-function publicError(error: unknown, status: number, operation: string, fallback: string) {
-	console.error(`dashboardOperation=${operation} failed=${errorMessage(error)}`)
-	return json({ error: fallback }, status)
-}
-
 export function startDashboardServer(port: number, controller: DashboardController) {
 	return startBotDashboardServer({
 		directory: import.meta.dir,
@@ -234,7 +230,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(publicOperatorSnapshot(await controller.getState()))
 				} catch (error) {
-					return publicError(error, 503, 'state-read', publicOperatorFailure(errorMessage(error), 'Dashboard state is unavailable. Automatic retry remains active; check protected bot logs for details.'))
+					return publicDashboardError('liquidator', error, 503, 'state-read', 'Dashboard state is unavailable. Automatic retry remains active; check protected bot logs for details.', true)
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/api/pool-catalog' && controller.getPoolCatalog !== undefined) {
@@ -248,21 +244,21 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					try {
 						address = getAddress(rawAddress.trim())
 					} catch (error) {
-						return publicError(error, 400, 'pool-search', 'Enter a valid pool address.')
+						return publicDashboardError('liquidator', error, 400, 'pool-search', 'Enter a valid pool address.')
 					}
 				}
 				if (!(await controller.isNetworkConfigured())) return json({ error: 'Configure the chain and RPC endpoints in Settings to browse pools.' }, 400)
 				try {
 					return json(await controller.getPoolCatalog(page, address, scope))
 				} catch (error) {
-					return publicError(error, 503, 'pool-catalog', 'Pool discovery failed. Check RPC connectivity and retry.')
+					return publicDashboardError('liquidator', error, 503, 'pool-catalog', 'Pool discovery failed. Check RPC connectivity and retry.')
 				}
 			}
 			if (request.method === 'GET' && url.pathname === '/api/configuration') {
 				try {
 					return json(await controller.getConfiguration())
 				} catch (error) {
-					return publicError(error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
+					return publicDashboardError('liquidator', error, 503, 'configuration-read', 'Configuration is unavailable. Retry or check protected bot logs for details.')
 				}
 			}
 			if (request.method === 'PUT' && !dashboardRequestIsSameOrigin(request, acceptedAuthorities)) {
@@ -297,7 +293,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					else if (url.pathname === '/api/execution') fallback = publicExecutionUpdateError(error)
 					else if ((url.pathname === '/api/signer' || url.pathname === '/api/paused') && EXECUTION_UPDATE_MESSAGES.has(errorMessage(error))) fallback = errorMessage(error)
 					else if (url.pathname === '/api/submission') fallback = publicSubmissionUpdateError(error)
-					return publicError(error, 400, `mutation:${url.pathname}`, fallback)
+					return publicDashboardError('liquidator', error, 400, `mutation:${url.pathname}`, fallback)
 				}
 			}
 			return undefined

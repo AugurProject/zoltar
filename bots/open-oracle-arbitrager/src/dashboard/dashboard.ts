@@ -1,4 +1,6 @@
-import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
+import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { renderRepMarketConsensus, renderRepMarketConsensusError } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
+import { renderBlockStatus as renderSharedBlockStatus, WAITING_FOR_BLOCK } from '@zoltar/bot-shared/dashboard/block-status'
 import { isSnapshot } from './snapshot-validation.ts'
 import { decodeConnectivity, decodePrediction, decodeExecutorDeployment, isRuntimeLimits, isSettlementSettings, isStrategySettings, isSubmissionSettings, isDeploymentSettings, isStringArray } from './api-validation.ts'
 import { applyQuorumRpcUrls, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, registerFocusedSettingsForms, setLoadedRpcQuorum } from './settings-forms.ts'
@@ -16,7 +18,7 @@ import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deploymen
 import { resumePreflightRows } from './resume-preflight-rows.ts'
 import { endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
-import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS, waitForProfileReconnect } from '@zoltar/bot-shared/dashboard/polling'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { urlLines } from '@zoltar/bot-shared/dashboard/forms'
@@ -242,7 +244,7 @@ async function loadCompleteConfiguration() {
 	} catch (error) {
 		if (requestEpoch !== profileRequestEpoch) return
 		configurationLoaded = false
-		configurationLoadError = error instanceof Error ? error.message : String(error)
+		configurationLoadError = errorMessage(error)
 		setText('configuration-status', `${configurationLoadError} Use Reload configuration to retry.`)
 	} finally {
 		configurationLoading = false
@@ -254,22 +256,26 @@ async function loadCompleteConfiguration() {
 
 async function waitForNetworkProfile(network: 'mainnet' | 'sepolia') {
 	const requestEpoch = profileRequestEpoch
-	for (let attempt = 0; attempt < 40; attempt++) {
-		await new Promise(resolve => setTimeout(resolve, 500))
-		if (requestEpoch !== profileRequestEpoch || pendingNetworkProfile !== network) return
-		try {
-			await refresh()
-			if (pendingProfileStateConfirmed) await loadCompleteConfiguration()
-			if (pendingNetworkProfile === undefined) return
-		} catch (error) {
-			// The dashboard is briefly unavailable while the bot releases the old
-			// chain's resources and reopens them for the selected profile.
-			void error
-		}
-	}
-	profileSwitchTimedOut = true
-	setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
-	updateConfigurationControls()
+	await waitForProfileReconnect(
+		async () => {
+			if (requestEpoch !== profileRequestEpoch || pendingNetworkProfile !== network) return 'abandoned'
+			try {
+				await refresh()
+				if (pendingProfileStateConfirmed) await loadCompleteConfiguration()
+				if (pendingNetworkProfile === undefined) return 'reconnected'
+			} catch (error) {
+				// The dashboard is briefly unavailable while the bot releases the old
+				// chain's resources and reopens them for the selected profile.
+				void error
+			}
+			return 'waiting'
+		},
+		() => {
+			profileSwitchTimedOut = true
+			setText('connectivity-status', 'The profile was saved, but the dashboard did not reconnect in time. Retry the profile load when the dashboard is available.')
+			updateConfigurationControls()
+		},
+	)
 }
 
 async function api(path: string, init?: RequestInit) {
@@ -571,30 +577,7 @@ function renderTokenMarkets(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderCentralizedMarket(snapshot: PublicOperatorSnapshot) {
-	const market = snapshot.centralizedMarket
-	const consensus = snapshot.marketConsensus
-	renderRepMarketConsensusPanel(document, {
-		status: market === undefined ? (consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured') : (consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · '))),
-		emptyText: 'Add public exchange sources in the operator configuration.',
-		values: {
-			cexPrice: market?.priceRepPerEth ?? '—',
-			dexPrice: consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—',
-			guardedPrice: consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—',
-			dexBidDepth: consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`,
-			dexAskDepth: consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`,
-			cexBidDepth: market === undefined ? '—' : `${market.bidDepthEth} ETH`,
-			cexAskDepth: market === undefined ? '—' : `${market.askDepthEth} ETH`,
-			sources: consensus === undefined ? `${market?.observations.length ?? 0} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`,
-		},
-		observations: (market?.observations ?? []).map(observation => ({
-			exchange: observation.exchangeId,
-			market: observation.repMarket,
-			price: observation.priceRepPerEth,
-			bidDepth: `${observation.bidDepthEth} ETH`,
-			askDepth: `${observation.askDepthEth} ETH`,
-			observed: new Date(observation.observedAt).toLocaleTimeString(),
-		})),
-	})
+	renderRepMarketConsensus(document, snapshot.centralizedMarket, snapshot.marketConsensus)
 }
 
 function renderDisputePaths(snapshot: PublicOperatorSnapshot) {
@@ -663,8 +646,7 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 }
 
 function renderBlockStatus(snapshot = latestSnapshot) {
-	const value = snapshot?.blockNumber === undefined ? 'Block — · waiting for first observation' : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`
-	setText('header-block-status', value)
+	renderSharedBlockStatus(snapshot?.blockNumber === undefined ? WAITING_FOR_BLOCK : `Block ${snapshot.blockNumber} · ${blockAgeLabel(snapshot.blockTimestamp)}`)
 }
 
 element('transaction-filter', HTMLSelectElement).addEventListener('change', () => renderTransactions(latestSnapshot?.transactionActivity ?? [], latestSnapshot?.explorerUrl))
@@ -673,11 +655,6 @@ element('operation-filter', HTMLSelectElement).addEventListener('change', () => 
 function pauseButtonLabel(pausing: boolean, paused: boolean) {
 	if (pausing) return 'Pausing…'
 	return paused ? 'Resume bot' : 'Pause bot'
-}
-
-function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
-	if (consensus === undefined) return undefined
-	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
 }
 
 function runStatusKey(snapshot: PublicOperatorSnapshot) {
@@ -928,7 +905,7 @@ element('network-name', HTMLSelectElement).addEventListener('change', async even
 		pendingNetworkProfile = undefined
 		pendingProfileStateConfirmed = false
 		profileSwitchTimedOut = false
-		setText('connectivity-status', error instanceof Error ? error.message : String(error))
+		setText('connectivity-status', errorMessage(error))
 		select.value = previousNetwork ?? 'mainnet'
 		updateNetworkTargetStatus()
 		setControlsEnabled(connected)
@@ -955,7 +932,7 @@ element('tokens-form').addEventListener('submit', async event => {
 		markFormClean('tokens-form')
 		setText('tokens-status', 'Universe approvals saved.')
 	} catch (error) {
-		if (requestEpoch === profileRequestEpoch) setText('tokens-status', error instanceof Error ? error.message : String(error))
+		if (requestEpoch === profileRequestEpoch) setText('tokens-status', errorMessage(error))
 	} finally {
 		universeSavePending = false
 		setFormSubmitting('tokens-form', false)
@@ -982,7 +959,7 @@ async function changePaused(paused: boolean) {
 		closeResumePreflight()
 	} catch (error) {
 		setControlsEnabled(false)
-		pauseFailure = { message: error instanceof Error ? error.message : String(error), recoverySeen: false, requestedPaused: paused }
+		pauseFailure = { message: errorMessage(error), recoverySeen: false, requestedPaused: paused }
 		if (latestSnapshot !== undefined) renderOperatorNotice(latestSnapshot)
 	} finally {
 		pauseRequestPending = undefined
@@ -1052,7 +1029,7 @@ element('connectivity-form', HTMLFormElement).addEventListener('submit', async e
 		setText('connectivity-status', 'Chain and RPCs passed validation and were saved.')
 	} catch (error) {
 		await refresh()
-		setText('connectivity-status', error instanceof Error ? error.message : String(error))
+		setText('connectivity-status', errorMessage(error))
 	} finally {
 		connectivityRequestPending = false
 		setControlsEnabled(connected)
@@ -1090,7 +1067,7 @@ element('create2-form', HTMLFormElement).addEventListener('submit', async event 
 		if (pauseFailure?.message === EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED) pauseFailure = undefined
 		await refresh()
 	} catch (error) {
-		setText('create2-status', error instanceof Error ? error.message : String(error))
+		setText('create2-status', errorMessage(error))
 	} finally {
 		button.disabled = !connected
 	}
@@ -1113,7 +1090,7 @@ async function updateSigner(privateKey: string | undefined, rememberSigner: bool
 		signerFeedback = undefined
 	} catch (error) {
 		input.value = ''
-		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
+		signerFeedback = { error: true, message: errorMessage(error) }
 	} finally {
 		signerRequestPending = false
 		await refresh()
@@ -1126,7 +1103,7 @@ element('signer-form', HTMLFormElement).addEventListener('submit', event => {
 		const privateKey = requiredSignerPrivateKey(element('private-key', HTMLInputElement).value)
 		void updateSigner(privateKey, element('remember-signer', HTMLInputElement).checked)
 	} catch (error) {
-		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
+		signerFeedback = { error: true, message: errorMessage(error) }
 		if (latestSnapshot !== undefined) renderSignerStatus(latestSnapshot)
 	}
 })
@@ -1151,7 +1128,7 @@ element('forget-signer-button').addEventListener('click', async () => {
 		})
 		signerFeedback = undefined
 	} catch (error) {
-		signerFeedback = { error: true, message: error instanceof Error ? error.message : String(error) }
+		signerFeedback = { error: true, message: errorMessage(error) }
 	} finally {
 		signerRequestPending = false
 		await refresh()

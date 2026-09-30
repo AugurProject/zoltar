@@ -1,6 +1,6 @@
 import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
-import { renderExecutionMode, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
+import { quorumRpcRow, relayDeliveryRow, renderExecutionMode, signerRow, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
 import type { DashboardDeployment } from './api-validation.ts'
 import { shorten } from './dom.js'
 
@@ -52,18 +52,15 @@ function canonicalContractsRow(snapshot: PublicOperatorSnapshot, deployment: Das
 function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveConfiguration): ReadinessRow[] {
 	let signer = snapshot.wallet
 	if (snapshot.queuedSigner !== undefined) signer = snapshot.queuedSigner.kind === 'apply' ? snapshot.queuedSigner.address : undefined
-	const requiredQuorumRpcs = configuration.rpcQuorum === 2 ? 2 : 0
-	const quorumRpcs = configuration.deployment.quorumRpcUrls.length
 	const venueEnabled = configuration.deployment.uniswapV3Enabled || configuration.deployment.uniswapV4Enabled || (configuration.deployment.uniswapV2Enabled && snapshot.network === 'mainnet')
-	const relays = configuration.relayUrls.length
 	const coordinators = snapshot.coordinatorAddresses.length
 	return [
-		{ detail: signer === undefined ? 'Set one under Execution wallet' : shorten(signer), label: 'Execution signer', ready: signer !== undefined },
-		{ detail: `${quorumRpcs.toString()} configured · ${requiredQuorumRpcs.toString()} required`, label: 'Independent quorum RPCs', ready: quorumRpcs >= requiredQuorumRpcs },
+		signerRow(signer),
+		quorumRpcRow(configuration.deployment.quorumRpcUrls.length, configuration.rpcQuorum),
 		{ detail: venueEnabled ? 'Enabled' : 'Enable a Uniswap version under Venues and executor', label: 'Trading venue', ready: venueEnabled },
 		executorRow(snapshot),
 		canonicalContractsRow(snapshot, configuration.deployment),
-		{ detail: configuration.submissionMode === 'private' ? `Private · ${relays.toString()} relay${relays === 1 ? '' : 's'}` : 'Public mempool', label: 'Delivery', ready: configuration.submissionMode === 'public' || relays > 0 },
+		relayDeliveryRow(configuration.submissionMode, configuration.relayUrls.length),
 		{ advisory: true, detail: coordinators === 0 ? 'None discovered' : `${coordinators.toString()} discovered`, label: 'Pool coordinators', ready: coordinators > 0 },
 	]
 }
