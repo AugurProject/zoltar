@@ -53,6 +53,7 @@ if (import.meta.main) {
 		if (projectPath === undefined) throw new Error('--project-path requires a registered path')
 		const selectedProject = projects.find(project => project.path === projectPath)
 		if (selectedProject === undefined) throw new Error(`Unknown project path: ${projectPath}`)
+		createProjectTaskPlan(taskName as ProjectTaskName, [selectedProject.id])
 		selected = withDependencies ? projectDependencyClosure([selectedProject.id]) : [selectedProject]
 	} else if (prefixIndex >= 0) {
 		const prefix = args[prefixIndex + 1]
@@ -62,9 +63,13 @@ if (import.meta.main) {
 		const projectIds = args.filter(argument => argument !== '--dependencies')
 		const unknownProjectId = projectIds.find(projectId => !projects.some(project => project.id === projectId))
 		if (unknownProjectId !== undefined) throw new Error(`Unknown project: ${unknownProjectId}`)
-		if (projectIds.length > 0) selected = withDependencies ? projectDependencyClosure(projectIds) : projects.filter(project => projectIds.includes(project.id))
+		if (projectIds.length > 0) {
+			createProjectTaskPlan(taskName as ProjectTaskName, projectIds)
+			selected = withDependencies ? projectDependencyClosure(projectIds) : projects.filter(project => projectIds.includes(project.id))
+		}
 	}
 	const selectedIds = selected?.filter(project => project.tasks[taskName as ProjectTaskName] !== undefined).map(project => project.id)
+	if (selectedIds?.length === 0) throw new Error(`No projects support ${taskName} for the requested selection`)
 	const exitCode = await runProjectTaskPlan(createProjectTaskPlan(taskName as ProjectTaskName, selectedIds))
 	if (exitCode !== 0) process.exit(exitCode)
 }

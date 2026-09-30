@@ -193,3 +193,30 @@ test('limits the registry-order label to the positional first-load presentation'
 		dom.cleanup()
 	}
 })
+
+test('an empty discovery page on the security-pool list shows its empty state instead of an empty grid', async () => {
+	const dom = installDomEnvironment('http://localhost/#/create-market')
+	const rendered = await renderIntoDocument(
+		<LiveMarketBrowser
+			freshness={{ refreshing: false, updatedAt: 1 }}
+			lookupRoute='create-market'
+			markets={[]}
+			discoveryRows={[]}
+			pageMarketCount={0}
+			discoveryState='ready'
+			discoveryError={undefined}
+			marketPage={{ start: 0n, total: 0n, previousStart: undefined, nextStart: undefined }}
+			workflowLocked={false}
+			nowSeconds={FIXTURE_NOW}
+			retry={() => undefined}
+			loadMarketPage={() => undefined}
+		/>,
+	)
+	try {
+		expect(rendered.container.querySelector('.market-list')).toBeNull()
+		expect(rendered.container.querySelector('.empty-state')?.textContent).toContain('No security pools on this page are available for a new market.')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})

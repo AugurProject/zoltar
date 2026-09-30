@@ -1,5 +1,7 @@
 import { useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
+import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { DiscoveryControl } from '@zoltar/ui-core-shared/components/LocalBrowseControls.js'
 import * as favoritesCopy from '@zoltar/ui-core-shared/copy/favorites.js'
 import type { FavoriteEntry } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
@@ -17,7 +19,7 @@ import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
 import { partitionFavoriteMarkets } from '../lib/favoriteMarkets.js'
 import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
-import { tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
+import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import type { LiveMarket } from '../protocol/live.js'
 import { MarketCard } from './MarketCard.js'
 import { OpenPoolForm } from './OpenPoolForm.js'
@@ -38,30 +40,52 @@ const SORT_OPTIONS: readonly { value: MarketSort; label: string }[] = [
 ]
 
 function listPresentation(listKind: TradingListKind) {
-	if (listKind === 'security-pools') return { title: liveCopy.securityPoolList, description: liveCopy.securityPoolListDescription, empty: liveCopy.noEligiblePools }
-	return { title: liveCopy.marketList, description: undefined, empty: liveCopy.noMarkets }
+	if (listKind === 'security-pools') return { title: liveCopy.securityPoolList, description: liveCopy.securityPoolListDescription, empty: liveCopy.noEligiblePools, emptyDetail: liveCopy.noEligiblePoolsDetail }
+	return { title: liveCopy.marketList, description: undefined, empty: liveCopy.noMarkets, emptyDetail: undefined }
 }
 
-function MarketListControls({ options, registryOrder, onChange }: { options: MarketListOptions; registryOrder: boolean; onChange(next: MarketListOptions): void }) {
+/** A pasted security pool address opens that pool in the lookup route's workflow, whether or not it is among the downloaded markets. */
+function searchedPoolAddress(query: string) {
+	const parsed = tryParseAddressInput(query.trim())
+	return parsed === undefined || parsed === zeroAddress ? undefined : parsed
+}
+
+/** Search (which also opens a pasted pool address) and sort share the first row; the status filter leads the second. */
+function MarketSearchRow({ options, arrangeable, registryOrder, lookupRoute, onChange }: { options: MarketListOptions; arrangeable: boolean; registryOrder: boolean; lookupRoute: TradingLookupRoute; onChange(next: MarketListOptions): void }) {
+	const address = searchedPoolAddress(options.query)
 	return (
 		<div className='market-list-controls' role='group' aria-label={marketsCopy.listControls}>
-			<div className='field market-list-search'>
+			<form
+				className='field market-list-search'
+				role='search'
+				onSubmit={event => {
+					event.preventDefault()
+					if (address === undefined) return
+					window.location.hash = getTradingRouteHref(`#/${lookupRoute}/${address}`)
+				}}
+			>
 				<FormInput type='search' aria-label={marketsCopy.searchLabel} placeholder={marketsCopy.searchPlaceholder} value={options.query} onInput={event => onChange({ ...options, query: event.currentTarget.value })} />
-			</div>
-			<ViewTabs ariaLabel={marketsCopy.filterLabel} className='market-list-filters' semantics='switcher' size='compact' variant='segmented' value={options.filter} onChange={filter => onChange({ ...options, filter })} options={FILTER_OPTIONS.map(option => ({ ...option }))} />
-			<div className='market-list-sort'>
-				<span className='metric-label' aria-hidden='true'>
-					{marketsCopy.sortLabel}
-				</span>
-				<EnumDropdown
-					ariaLabel={marketsCopy.sortLabel}
-					value={registryOrder ? 'registry' : options.sort}
-					options={registryOrder ? [{ value: 'registry', label: marketsCopy.sortRegistry }, ...SORT_OPTIONS] : SORT_OPTIONS}
-					onChange={sort => {
-						if (sort !== 'registry') onChange({ ...options, sort })
-					}}
-				/>
-			</div>
+				{address === undefined ? undefined : (
+					<button className='primary' type='submit'>
+						{liveCopy.openPool}
+					</button>
+				)}
+			</form>
+			{arrangeable ? (
+				<div className='market-list-sort'>
+					<span className='metric-label' aria-hidden='true'>
+						{marketsCopy.sortLabel}
+					</span>
+					<EnumDropdown
+						ariaLabel={marketsCopy.sortLabel}
+						value={registryOrder ? 'registry' : options.sort}
+						options={registryOrder ? [{ value: 'registry', label: marketsCopy.sortRegistry }, ...SORT_OPTIONS] : SORT_OPTIONS}
+						onChange={sort => {
+							if (sort !== 'registry') onChange({ ...options, sort })
+						}}
+					/>
+				</div>
+			) : undefined}
 		</div>
 	)
 }
@@ -128,7 +152,8 @@ export function LiveMarketBrowser({
 	const retryAction = <RetryAction label={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} />
 	const cardList = (listed: readonly LiveMarket[]) => <MarketCardList markets={listed} listKind={listKind} lookupRoute={lookupRoute} nowSeconds={nowSeconds} />
 	let list: ComponentChildren
-	if (rows !== undefined && listOptions === DEFAULT_LIST_OPTIONS)
+	// An empty discovery page has no positions to hold, so it falls through to the empty state.
+	if (rows !== undefined && rows.length > 0 && listOptions === DEFAULT_LIST_OPTIONS)
 		list = (
 			<div className='entity-card-list market-list'>
 				{rows.map((market, index) => (
@@ -138,7 +163,7 @@ export function LiveMarketBrowser({
 				))}
 			</div>
 		)
-	else if (markets.length === 0) list = <EmptyState title={presentation.empty} />
+	else if (markets.length === 0) list = <EmptyState title={presentation.empty} detail={presentation.emptyDetail} />
 	else if (shownMarkets.length === 0)
 		list = (
 			<EmptyState
@@ -192,14 +217,20 @@ export function LiveMarketBrowser({
 		content = (
 			<>
 				{discoveryState === 'error' ? <RetryableNotice message={liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery)} retryLabel={liveCopy.retryDiscovery} disabled={workflowLocked} onRetry={retry} /> : undefined}
-				{arrangeable ? <MarketListControls options={listOptions} registryOrder={positional} onChange={setListOptions} /> : undefined}
-				{browseBar}
+				{browsesDownloads ? (
+					<div className='market-list-subbar'>
+						{arrangeable ? (
+							<ViewTabs ariaLabel={marketsCopy.filterLabel} className='market-list-filters' semantics='switcher' size='compact' variant='segmented' value={listOptions.filter} onChange={filter => setListOptions({ ...listOptions, filter })} options={FILTER_OPTIONS.map(option => ({ ...option }))} />
+						) : undefined}
+						{browseBar}
+					</div>
+				) : undefined}
 				{list}
 			</>
 		)
 	return (
 		<SectionBlock className='market-browser' title={listKind === 'security-pools' ? presentation.title : undefined} description={presentation.description} variant='plain' busy={discoveryState === 'loading'} actions={browsesDownloads ? undefined : <UpdatedAgo {...freshness} />}>
-			<OpenPoolForm disabled={false} target={lookupRoute} />
+			{browsesDownloads ? <MarketSearchRow options={listOptions} arrangeable={arrangeable} registryOrder={positional} lookupRoute={lookupRoute} onChange={setListOptions} /> : <OpenPoolForm disabled={false} target={lookupRoute} />}
 			{content}
 			{browsesDownloads ? undefined : (
 				<PaginationControls

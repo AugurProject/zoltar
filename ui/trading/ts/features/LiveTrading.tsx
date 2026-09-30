@@ -30,7 +30,8 @@ import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { LiveMarketBrowser } from './LiveMarketBrowser.js'
-import { MarketContracts, MarketFacts, MarketOverview } from './MarketOverview.js'
+import { MarketContracts, MarketFacts, MarketOverview, MarketPageHeader } from './MarketOverview.js'
+import { MarketPosition } from './MarketPosition.js'
 import { MarketTicketSheet } from './MarketTicketSheet.js'
 import { marketOddsPercent } from '../lib/marketListing.js'
 import { hashWithoutTicketSide, readTicketSideParam } from '../lib/ticketSide.js'
@@ -288,11 +289,13 @@ export function LiveTrading({
 					},
 				}
 			: undefined
-	// The route header names the workflow; the object header below carries the market question, status, and facts, so
-	// neither repeats the other. Focus lands on the object header when the addressed market changes.
+	// A loaded market's trade and liquidity pages are titled by the market question itself, with a way back to the list;
+	// other states name the workflow and let the object header below carry the question. Focus lands on whichever
+	// heading names the market when the addressed market changes.
+	const showsMarketPage = selected !== undefined && !creatingMarket && selected.loadError === undefined
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />
+			{showsMarketPage ? <MarketPageHeader market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} actions={walletAction} /> : <RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />}
 			<ErrorNotice message={connectionMessage} />
 			{createdMarketTitle === undefined ? null : (
 				<UserMessage
@@ -385,7 +388,7 @@ export function LiveTrading({
 					return (
 						<div key={selected.pool} className='market-layout'>
 							<SectionBlock className='market-layout__main' variant='plain'>
-								<MarketOverview market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
+								<MarketOverview market={selected} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
 							</SectionBlock>
 							<MarketTicketSheet viewLabel={viewOptions.find(option => option.value === activeView)?.label ?? appCopy.trade} quickPick={quickPick} openRequested={ticketOpenRequested} onOpenRequestHandled={handleTicketOpenRequest}>
 								{ticket}

@@ -35,7 +35,7 @@ import { ToolbarField } from '@zoltar/ui-core-shared/components/ToolbarField.js'
 import { hasTradingWalletControls, TradingWalletControls } from '../components/TradingWalletControls.js'
 import { initializeTradingActiveEnvironment } from './activeEnvironment.js'
 import { getTradingEnvironmentLocationKey, getTradingRouteHref, tradingRouting, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
-import { tradingNavigationTabs } from '../lib/tradingNavigation.js'
+import { tradingNavigationRoute, tradingNavigationTabs } from '../lib/tradingNavigation.js'
 import { TradeSettingsPanel } from '../components/TradeSettingsPanel.js'
 import { loadTradeSettings, saveTradeSettings, type TradeSettings } from '../lib/tradeSettings.js'
 
@@ -181,7 +181,7 @@ export function App({
 	const deploymentSetupActive = route !== 'not-found' && route !== 'help' && (route === 'deploy' || liveDeploymentStatus === 'missing')
 	const connectionErrorActive = route !== 'not-found' && route !== 'help' && !deploymentSetupActive && liveDeploymentStatus === 'unreachable'
 	const workflowRoute = tradingWorkflowRoute(route)
-	const displayedRoute = deploymentSetupActive ? 'deploy' : workflowRoute
+	const displayedRoute = deploymentSetupActive ? 'deploy' : tradingNavigationRoute(workflowRoute)
 	const refreshActiveEnvironment = useCallback(async () => {
 		const previousLocationKey = activeEnvironmentLocationRef.current
 		const nextLocationKey = getTradingEnvironmentLocationKey()

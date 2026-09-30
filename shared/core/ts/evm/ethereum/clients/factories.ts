@@ -1,6 +1,6 @@
 import { type Account, type Address, type Chain, type ExtendableClient, type PublicClient, type Transport, type WalletClient } from '../types.js'
 
-import { buildPublicClientActions, buildRpcTransactionRequest, isAlreadyKnownTransactionError } from './actions.js'
+import { buildPublicClientActions, buildRpcTransactionRequest, isAlreadyKnownTransactionError, withDefaultAccount } from './actions.js'
 
 import { getAddress, keccak256, normalizeHash, normalizeRpcHex } from '../encoding.js'
 
@@ -53,6 +53,7 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 	const baseClient = publicClient as PublicClient<TTransport, TChain>
 	const walletActions: Omit<WalletClient<TTransport, TChain, Account | undefined>, 'extend'> = {
 		...baseClient,
+		...withDefaultAccount(baseClient, normalizedAccount?.address),
 		account: normalizedAccount,
 		call: async parameters => {
 			const account = parameters.account ?? normalizedAccount
@@ -78,11 +79,6 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				data,
 			}
 		},
-		estimateContractGas: async parameters =>
-			await baseClient.estimateContractGas({
-				...parameters,
-				account: parameters.account ?? normalizedAccount,
-			}),
 		sendRawTransaction: async parameters => {
 			const expectedHash = keccak256(parameters.serializedTransaction)
 			try {
@@ -99,11 +95,6 @@ export function createWalletClient<TTransport extends Transport = Transport, TCh
 				return expectedHash
 			}
 		},
-		simulateContract: async parameters =>
-			await baseClient.simulateContract({
-				...parameters,
-				account: parameters.account ?? normalizedAccount,
-			}),
 		sendTransaction: async parameters => {
 			const sender = parameters.account ?? normalizedAccount
 			if (typeof sender === 'object' && sender !== null && sender.type === 'local' && sender.signTransaction !== undefined) {
