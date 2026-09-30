@@ -18,7 +18,6 @@ import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { useSecurityPoolBrowsePage } from './useSecurityPoolBrowsePage.js'
 import { useLiquidationReceiverVault } from './useLiquidationReceiverVault.js'
 import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
@@ -87,15 +86,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const nextUniverseDirectoryLoad = useRequestGuard()
 	const nextLiquidationFundingPreviewLoad = useRequestGuard()
 	const nextLiquidationApprovalLoad = useRequestGuard()
-	const browsePage = useSecurityPoolBrowsePage({
-		accountAddress,
-		environmentRefreshKey,
-		loadSecurityPoolPage: dependencies.loadSecurityPoolPage,
-		setOverviewError: message => {
-			securityPoolOverviewError.value = message
-		},
-		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
-	})
 
 	const securityPoolsCommitVersion = useRef(0)
 	const getLineageQueryKey = (address: string | undefined) => (address === undefined ? undefined : `${environmentRefreshKey}:${address}:${accountAddress?.toLowerCase() ?? 'no-account'}`)
@@ -458,7 +448,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const loadingCurrentLiquidationApproval = currentLiquidationApprovalRequestKey !== undefined && liquidationApprovalLoadingKey.value === currentLiquidationApprovalRequestKey && liquidationApprovalLoad.isLoading.value
 
 	return {
-		...browsePage,
 		liquidationDebtEthAmount: liquidationDebtEthAmount.value,
 		maximumLiquidationDebtAttoEth: maximumLiquidationDebtAttoEth.value,
 		liquidationManagerAddress: liquidationManagerAddress.value,

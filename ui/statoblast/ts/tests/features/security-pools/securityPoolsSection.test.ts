@@ -9,7 +9,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
-import type { ListedSecurityPool, SecurityPoolBrowsePage, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import { SelectedPoolRepPriceContext } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
 import { VaultMetricGrid } from '@zoltar/ui-statoblast-shared/features/security-pools/components/VaultMetricGrid.js'
@@ -27,49 +27,8 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 	return createBuilderSelectedPool({ vaultCount: 3n, ...overrides })
 }
 
-type SecurityPoolsOverviewRouteTestOverrides = Omit<Partial<SecurityPoolsOverviewRouteContentProps>, 'securityPoolPage'> & {
-	securityPoolPage?: SecurityPoolPage | SecurityPoolBrowsePage | undefined
-}
-
-function getSecurityPoolPageRequestKey(page: SecurityPoolPage | SecurityPoolBrowsePage): string | undefined {
-	return 'requestKey' in page ? page.requestKey : undefined
-}
-
-function createOverviewProps(overrides: SecurityPoolsOverviewRouteTestOverrides = {}): SecurityPoolsOverviewRouteContentProps {
-	const accountState = overrides.accountState ?? createAccountState()
-	const securityPools = overrides.securityPools ?? []
-	const environmentRefreshKey = overrides.environmentRefreshKey ?? 0
-	const accountRequestKey = accountState.address?.toLowerCase() ?? 'no-account'
-	const hasSecurityPoolPageOverride = Object.hasOwn(overrides, 'securityPoolPage')
-	const defaultSecurityPoolPage: SecurityPoolBrowsePage | undefined =
-		securityPools.length === 0
-			? undefined
-			: {
-					pageIndex: 0,
-					pageSize: 6,
-					poolCount: BigInt(securityPools.length),
-					pools: securityPools,
-					requestKey: `${environmentRefreshKey}:0:6:${accountRequestKey}`,
-				}
-	const overrideSecurityPoolPage = hasSecurityPoolPageOverride ? overrides.securityPoolPage : defaultSecurityPoolPage
-	const securityPoolPage =
-		overrideSecurityPoolPage === undefined
-			? undefined
-			: {
-					...overrideSecurityPoolPage,
-					requestKey: getSecurityPoolPageRequestKey(overrideSecurityPoolPage) ?? `${environmentRefreshKey}:${overrideSecurityPoolPage.pageIndex.toString()}:${overrideSecurityPoolPage.pageSize.toString()}:${accountRequestKey}`,
-				}
-	return {
-		accountState,
-		activeUniverseId: 1n,
-		loadingSecurityPoolPage: false,
-		onLoadSecurityPoolPage: () => undefined,
-		securityPoolOverviewError: undefined,
-		...overrides,
-		environmentRefreshKey,
-		securityPoolPage,
-		securityPools,
-	}
+function createOverviewProps(overrides: Partial<SecurityPoolsOverviewRouteContentProps> = {}): SecurityPoolsOverviewRouteContentProps {
+	return { activeUniverseId: 1n, currentTimestamp: undefined, securityPools: [], ...overrides }
 }
 
 function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps> = {}): SecurityPoolRouteContentProps {
@@ -139,7 +98,7 @@ void describe('SecurityPoolsSection', () => {
 		const props = createSecurityPoolsSectionProps({
 			activeView: 'open',
 			onLoadUniverseDirectoryPools: () => calls.push('universes'),
-			overview: createOverviewProps({ onLoadSecurityPoolPage: () => calls.push('browse') }),
+			overview: createOverviewProps(),
 			workflow: createSecurityPoolWorkflowProps({ onSecurityPoolAddressChange: address => calls.push(address), onRefreshSelectedPoolData: () => calls.push('refresh') }),
 		})
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, props))
@@ -181,25 +140,11 @@ void describe('SecurityPoolsSection', () => {
 		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
 	})
 
-	void test('opens the browse view from local favorites without scanning the chain', async () => {
-		const calls: string[] = []
-		const renderedComponent = await renderIntoDocument(
-			h(
-				SecurityPoolsSection,
-				createSecurityPoolsSectionProps({
-					overview: createOverviewProps({
-						loadingSecurityPoolPage: false,
-						onLoadSecurityPoolPage: (pageIndex, pageSize) => {
-							calls.push(`${pageIndex}:${pageSize}`)
-						},
-					}),
-				}),
-			),
-		)
+	void test('opens the browse view with only favorites and no discovery controls', async () => {
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps()))
 		cleanupRenderedComponent = renderedComponent.cleanup
-
-		expect(calls).toEqual([])
-		expect(within(document.body).getByRole('button', { name: 'Discover pools' })).not.toBeNull()
+		expect(within(document.body).getByText('Favorites (0)')).not.toBeNull()
+		expect(within(document.body).queryByRole('button', { name: /Discover|Downloaded/ })).toBeNull()
 	})
 
 	void test('opens a created pool through the single pool navigation and returns to browse without a refresh', async () => {

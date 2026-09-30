@@ -44,13 +44,8 @@ function createCreatePoolProps(): SecurityPoolRouteContentProps {
 
 function createOverviewProps(activeUniverseId: bigint): SecurityPoolsOverviewRouteContentProps {
 	return {
-		accountState: createAccountState(),
 		activeUniverseId,
-		environmentRefreshKey: 0,
-		loadingSecurityPoolPage: false,
-		onLoadSecurityPoolPage: () => undefined,
-		securityPoolOverviewError: undefined,
-		securityPoolPage: undefined,
+		currentTimestamp: undefined,
 		securityPools: [],
 	}
 }
