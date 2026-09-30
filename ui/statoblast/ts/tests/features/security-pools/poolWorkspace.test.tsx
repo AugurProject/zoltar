@@ -47,8 +47,7 @@ test('shows a loaded pool address read-only and keeps typed entry for an address
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
 	const switcher = document.querySelector<HTMLDetailsElement>('details.pool-switcher')
 	if (switcher === null) throw new Error('Expected the pool switcher')
-	expect(switcher.open).toBe(false)
-	switcher.open = true
+	expect(switcher.open).toBe(true)
 	const page = within(document.body)
 	expect(page.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
 	expect(page.queryByRole('button', { name: 'Open pool' }) === null).toBe(true)
@@ -59,6 +58,8 @@ test('shows a loaded pool address read-only and keeps typed entry for an address
 	expect(addressChanges).toEqual([])
 	await act(() => fireEvent.input(input, { target: { value: pool.securityPoolAddress } }))
 	expect(addressChanges).toEqual([pool.securityPoolAddress])
+	expect(switcher.open).toBe(false)
+	switcher.open = true
 	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
 	expect(page.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
 	expect(document.querySelector('.pool-address-display .address-value')?.getAttribute('title')).toBe(pool.securityPoolAddress)

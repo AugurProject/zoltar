@@ -219,7 +219,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 						{workspaceCopy.allPools}
 					</a>
 					<details className='pool-switcher' open={selectedPool === undefined}>
-						<summary>{workspaceCopy.switchPool}</summary>
+						<summary>{workspaceCopy.poolAddressAndRefresh}</summary>
 						<PoolSelectionControl address={securityPoolAddress} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} poolLoaded={selectedPool !== undefined} />
 					</details>
 				</div>

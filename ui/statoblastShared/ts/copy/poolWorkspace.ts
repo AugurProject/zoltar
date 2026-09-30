@@ -1,7 +1,7 @@
 export const poolDetails = 'Pool details'
 export const moreTools = 'More tools'
 export const moreToolsShort = 'More'
-export const switchPool = 'Switch pool / refresh'
+export const poolAddressAndRefresh = 'Pool address / refresh'
 export const openPoolDescription = 'Open its vaults, shares, and reporting workspace.'
 export const moreActions = 'More actions'
 export const capacityLabel = 'Collateral in use / capacity'

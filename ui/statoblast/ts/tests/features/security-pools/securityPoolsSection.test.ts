@@ -264,7 +264,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(document.body).getByRole('button', { name: 'universe' }).getAttribute('aria-expanded')).toBe('false')
 	})
 
-	void test('shows the role guide on the browse-pools landing view until it is dismissed', async () => {
+	void test('shows the role guide on browse and entry views until it is dismissed', async () => {
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
 		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'browse' })))
 		cleanupRenderedComponent = firstRender.cleanup
@@ -287,6 +287,8 @@ void describe('SecurityPoolsSection', () => {
 		const openRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
 		await secondRender.cleanup()
 		cleanupRenderedComponent = openRender.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' }) === null).toBe(false)
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss the role guide' })))
 		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 	})
 
