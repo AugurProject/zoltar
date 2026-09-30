@@ -5,6 +5,9 @@ import { receiveBasedExitArguments } from '../../protocol/authorization.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { forkedMarketFixture } from '../support/liveMarketFixture.js'
+import type { LiveMarket } from '../../protocol/liveMarket.js'
+import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
+import { holdingFeesBoundsReason } from '../../copy/availability.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
 const shareToken = `0x${'22'.repeat(20)}` as Address
@@ -61,16 +64,19 @@ function requireTransactionData(params: unknown) {
 }
 
 /** A wallet client at block 2 that records every simulated and broadcast transaction's data in order. */
-function recordingSettlementClient() {
+function recordingSettlementClient(feeMarket: LiveMarket = market) {
 	const transactionData: Hex[] = []
 	const counts = { sends: 0, simulations: 0 }
+	const chain = { market: feeMarket, timestamp: 1n }
 	const client = createWalletClient({
 		account,
 		transport: custom({
 			async request({ method, params }) {
 				if (method === 'eth_blockNumber') return '0x2'
-				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'66'.repeat(32)}`, timestamp: `0x${chain.timestamp.toString(16)}`, transactions: [] }
 				if (method === 'eth_call') {
+					const accountingResult = feeAccountingRpcResult(requireTransactionData(params), chain.market, chain.timestamp)
+					if (accountingResult !== undefined) return accountingResult
 					counts.simulations++
 					transactionData.push(requireTransactionData(params))
 					return '0x'
@@ -84,7 +90,7 @@ function recordingSettlementClient() {
 			},
 		}),
 	})
-	return { client, counts, transactionData }
+	return { client, counts, transactionData, chain }
 }
 
 function isHexValue(value: unknown): value is Hex {
@@ -124,7 +130,7 @@ describe('live settlement contract encoding', () => {
 	test('simulates and submits the exact final receive-based redemption payload', async () => {
 		const pair = `0x${'66'.repeat(20)}` as Address
 		const canonicalMarket = { ...market, pair, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
-		const { client, transactionData } = recordingSettlementClient()
+		const { client, transactionData } = recordingSettlementClient(canonicalMarket)
 		const quote = await simulateSettlement(client, configuration, canonicalMarket, account, 'redeem-complete-set', { amount: 10n, validityMinutes: 7n, slippageBps: 500n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		expect(quote.expectedAttoEth).toBe(10n)
@@ -143,11 +149,83 @@ describe('live settlement contract encoding', () => {
 	})
 
 	test('rejects complete-set submission when refreshed output falls below the approved minimum', async () => {
-		const { client, counts } = recordingSettlementClient()
 		const canonicalMarket = { ...market, pair: `0x${'66'.repeat(20)}` as Address, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
+		const { client, counts } = recordingSettlementClient(canonicalMarket)
 		const quote = await simulateSettlement(client, configuration, canonicalMarket, account, 'redeem-complete-set', { amount: 10n ** 18n })
 		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
 		await expect(submitFreshSettlement(client, configuration, account, { ...quote, minimumAttoEth: quote.expectedAttoEth + 1n }, async write => await write())).rejects.toThrow('approved minimum ETH output')
+		expect(counts.sends).toBe(0)
+	})
+
+	test('rejects zero-slippage child redemption while holding fees accrue beyond question end', async () => {
+		const unit = 10n ** 18n
+		const child = {
+			...market,
+			pair: account,
+			systemState: 0,
+			universeForkTime: 0n,
+			shareTokenSupplyAttoShares: unit,
+			settlementCollateralAttoEth: unit,
+			totalUnderwritingLimitAttoEth: unit,
+			feeEligibleUnderwritingLimitAttoEth: unit,
+			currentRetentionRate: 999_000_000_000_000_000n,
+			valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit },
+		}
+		const { client, counts } = recordingSettlementClient(child)
+		await expect(simulateSettlement(client, configuration, child, account, 'redeem-complete-set', { amount: unit, slippageBps: 0n })).rejects.toThrow(holdingFeesBoundsReason)
+		expect(counts.sends).toBe(0)
+	})
+
+	test('prices redemption from pinned fresh collateral and supply after the user changes the pool', async () => {
+		const cached = { ...market, pair: account, shareTokenSupplyAttoShares: 100n, settlementCollateralAttoEth: 100n }
+		const fresh = { ...cached, shareTokenSupplyAttoShares: 200n, settlementCollateralAttoEth: 300n }
+		const { client } = recordingSettlementClient(fresh)
+		const quote = await simulateSettlement(client, configuration, cached, account, 'redeem-complete-set', { amount: 10n, slippageBps: 0n })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		expect(quote.expectedAttoEth).toBe(15n)
+	})
+
+	test('allows zero slippage after fee end but blocks new accrual before submission', async () => {
+		const unit = 10n ** 18n
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
+		const { client, chain, counts } = recordingSettlementClient(ended)
+		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 0n })
+		expect(await submitFreshSettlement(client, configuration, account, quote, async write => await write())).toBe(transactionHash)
+		chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
+		await expect(submitFreshSettlement(client, configuration, account, quote, async write => await write())).rejects.toThrow(holdingFeesBoundsReason)
+		expect(counts.sends).toBe(1)
+	})
+
+	test('checks the retained approved minimum through expiry even when the refreshed slippage minimum is safe', async () => {
+		const unit = 10n ** 18n
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_990_000_000_000_000n }
+		const { client, chain, counts } = recordingSettlementClient(ended)
+		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 500n })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
+		await expect(submitFreshSettlement(client, configuration, account, { ...quote, minimumAttoEth: unit }, async write => await write())).rejects.toThrow(holdingFeesBoundsReason)
+		expect(counts.sends).toBe(0)
+	})
+
+	test('rechecks holding fees and expiry inside the final wallet guard without sending', async () => {
+		const unit = 10n ** 18n
+		const ended = { ...market, pair: account, shareTokenSupplyAttoShares: unit, settlementCollateralAttoEth: unit, totalUnderwritingLimitAttoEth: unit, feeEligibleUnderwritingLimitAttoEth: unit, currentRetentionRate: 999_000_000_000_000_000n }
+		const { client, chain, counts } = recordingSettlementClient(ended)
+		const quote = await simulateSettlement(client, configuration, ended, account, 'redeem-complete-set', { amount: unit, slippageBps: 0n })
+		if (quote.operation !== 'redeem-complete-set') throw new Error('Expected complete-set quote')
+		await expect(
+			submitFreshSettlement(client, configuration, account, quote, async write => {
+				chain.market = { ...ended, valuation: { timestamp: 1n, feeEndTime: 2n ** 256n - 1n, projectedCollateralAttoEth: unit } }
+				return await write()
+			}),
+		).rejects.toThrow(holdingFeesBoundsReason)
+		chain.market = ended
+		await expect(
+			submitFreshSettlement(client, configuration, account, quote, async write => {
+				chain.timestamp = quote.deadline
+				return await write()
+			}),
+		).rejects.toThrow('Transaction deadline has passed')
 		expect(counts.sends).toBe(0)
 	})
 
