@@ -1755,6 +1755,28 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
 	})
 
+	test('hides the vault health and its price source once the pool has ended', async () => {
+		const renderVault = async (poolState: ReturnType<typeof createEndedPoolState> | undefined) =>
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						currentVaultIsHealthy: true,
+						oracleManagerDetails: createOracleManagerDetails(),
+						poolState,
+						repPerEthPrice: 3n * 10n ** 18n,
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n }),
+					})}
+				/>,
+			)
+		const operational = await renderVault(undefined)
+		expect(document.body.querySelector('.vault-health-status')).not.toBeNull()
+		operational.cleanup()
+		cleanupRenderedComponent = (await renderVault(createEndedPoolState())).cleanup
+		// After resolution liquidation is closed, so a health verdict priced from an expired oracle is only noise.
+		expect(document.body.querySelector('.vault-health-status')).toBeNull()
+		expect(within(document.body).queryByText('Healthy')).toBeNull()
+	})
+
 	test('disables REP approval after the selected pool has ended', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<SecurityVaultSection

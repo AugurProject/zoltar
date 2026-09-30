@@ -6,6 +6,9 @@ import { sharedPackages } from '../repo/sharedPackages.ts'
 import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
 
+// statoblastWorkflowScenarios.ts seeds the ended-pool-exit and liquidation-distance workflows; statoblastScenarioSeeding.ts is the shared seeding layer every production workflow scenario depends on.
+const WORKFLOW_SIMULATION_SCENARIO_PATHS = new Set(['ui/statoblastShared/ts/simulation/statoblastWorkflowScenarios.ts', 'ui/statoblastShared/ts/simulation/statoblastScenarioSeeding.ts'])
+
 export type TestImpactRecommendation = {
 	command: string
 	reason: string
@@ -88,7 +91,8 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 	{
 		command: 'bun run test:browser:workflow',
 		reason: 'production browser workflow coverage changed',
-		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/productionWorkflowScenarios.ts',
+		// The workflow scenarios' simulation seeding lives with the app, so edits there must also select the workflow tier.
+		matches: filePath => filePath === 'tooling/ui/production.mts' || filePath === 'tooling/ui/productionWorkflowScenarios.ts' || WORKFLOW_SIMULATION_SCENARIO_PATHS.has(filePath),
 		ownedTestOptions: {
 			environment: 'RUN_PRODUCTION_BROWSER_WORKFLOWS=1',
 			testNamePattern: "'^production workflow:'",
