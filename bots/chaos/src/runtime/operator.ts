@@ -1,374 +1,34 @@
 import { preflightOperationPreview } from '../execution/operation-preview.ts'
-import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
-import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
-import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
 import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
-import { privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
-import { errorMessage as formatErrorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
-import { type EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
-import { operationalFailureDisposition, pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'
+import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { saveSettings, type OperatorSettings } from '../config/settings.ts'
-import { randomInteger } from '../core/random.ts'
-import { backfillWaitMilliseconds, operatorWaitMilliseconds } from '../core/scheduler.ts'
 import { startDashboardServer } from '../dashboard/dashboard-server.ts'
-import { recoverPendingTransactions } from '../execution/recovery.ts'
-import { recordPreflightFailure } from '../execution/preflight-failure.ts'
-import { executeOperationPlan, TransactionAwaitingRecovery } from '../execution/transaction-executor.ts'
-import { executionEnvironment } from './execution-environment.ts'
-import { ChaosProtocolIndexReorgError } from '../monitoring/protocol-index-context.ts'
-import type { CanonicalImmutableTopologyCache } from '../monitoring/topology-cache.ts'
-import { evaluateSelectableOperationDefinition, operationHasCanonicalContinuationBuilder } from '../operations/catalog.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
-import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity, saveDurableState, setRuntimeExecutionAddress, type RuntimeState } from '../state/operator-state.ts'
+import { bindRuntimeStateToSigner, loadRuntimeState, recordActivity } from '../state/operator-state.ts'
 import { isPristineBootstrapState } from '../state/pristine.ts'
-import { applyExecutionPolicy, blockExecutableEvaluations, chaosReadClients, createChaosReadPool, performCanonicalScan, planningOptions, unavailableOperationCatalog } from './canonical-scan.ts'
-import { restartSafeSettings } from './configuration-candidates.ts'
+import { performCanonicalScan } from './canonical-scan.ts'
 import { createChaosDashboardController, type ChaosProcessLocks, type ConfigurationState } from './dashboard-controller.ts'
-import { checkDeploymentAvailability, recordUnavailableDeploymentScan, tradingDeploymentNotice } from './deployment-availability.ts'
 import { resetPristineStateForDeploymentProfile, verifyRetirementCompletionFinality } from './deployment-profile.ts'
-import { actionableUrgentLifecyclePlan, lifecycleObstructions } from './lifecycle-readiness.ts'
+import { executionEnvironment } from './execution-environment.ts'
 import { createManualOperationController } from './manual-operations.ts'
-import { beginLifecycleObligation, blockNovelEvaluations, completeLifecycleObligation, failLifecycleObligation, lifecyclePresenceBlockerMessage, obligationForPlan, synchronizeLifecycleObligations, waitForCanonicalLifecycleConfirmation } from './obligations.ts'
-import { retirementPlanAllowed } from './retirement-operation-policy.ts'
-import { enforceRetirementContinuation, processRetirementCycle, retirementCompletionEvidenceCanonical, retirementPositionsForScan, updateRetirementAssessment } from './retirement-runner.ts'
-import { closeInterruptedSchedulerRun, executeScheduledOperation, recordDryRun, scheduleAfterRecoveredTransaction, schedulerFor } from './scheduled-operation.ts'
-import { genesisInitializationDefinitionId, genesisInitializationPlan, randomOperationPlans } from './selection.ts'
-import { ensureReadPreflight, preflightTransactionSubmissionNetwork, recordEndpointPreflightChecks, refreshSubmissionReadiness, submissionPreflightConfigurationIdentity, type SubmissionPreflightResources } from './submission-preflight.ts'
-import { runtimeTopologySummary } from './topology-summary.ts'
-import { evaluatePolicySafeContinuation } from './workflow-continuation.ts'
-import { abandonRetryableSelectableFailure, rediscoverableExecutionFailure, repairDurableSelectableFailures, workflowForPlan } from './workflow-repair.ts'
-import { blockInterruptedWorkflows, durableWorkflowPlan, refreshWorkflowContinuation, retryableOnChainWorkflowFailure, workflowNeedsContinuation } from './workflows.ts'
+import { assertDurableSignerScope, configuredWallet, createRuntimeResources, currentResources, persistState, resourceHealth, type OperatorDependencies, type OperatorState } from './operator-context.ts'
+import { logCycleFailure, recordScanResult, runOperatorCycle, synchronizeScanObligations, waitForNextCycle } from './operator-cycle.ts'
+import { executeLifecyclePlan, executeRandomPlan, handleCycleFailure, safetyPause } from './operator-execution.ts'
+import { recordDryRun, closeInterruptedSchedulerRun } from './scheduled-operation.ts'
+import { ensureReadPreflight } from './submission-preflight.ts'
+import { blockInterruptedWorkflows } from './workflows.ts'
+import { repairDurableSelectableFailures } from './workflow-repair.ts'
 
 type LoadedConfiguration = { needsDeploymentPin?: boolean; path: string; revision: string; settings: OperatorSettings }
 
-type RuntimeResources = SubmissionPreflightResources & {
-	pool: ReturnType<typeof createChaosReadPool>
-	readPreflightChecks: readonly EndpointCheck[]
-}
-
-const errorMessage = (error: unknown) => formatErrorMessage(error).slice(0, 1_500)
-
-function configuredWallet(settings: OperatorSettings): Address | undefined {
-	return settings.privateKey === undefined ? undefined : privateKeyToAccount(settings.privateKey).address
-}
-
-function assertDurableSignerScope(state: RuntimeState, wallet: Address | undefined, stateFile: string) {
-	if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) {
-		throw new Error(`Durable state ${stateFile} is scoped to signer ${state.signerAddress}; configure a distinct state file for signer ${wallet}`)
-	}
-}
-
 export { executionProfileId } from '../config/execution-profile.ts'
 
-function currentStatus(settings: OperatorSettings) {
-	if (settings.paused) return 'paused' as const
-	return settings.runtime.execute ? ('running' as const) : ('dry-run' as const)
-}
-
-async function persistState(configuration: ConfigurationState, state: RuntimeState) {
-	await saveDurableState(configuration.settings.runtime.stateFile, state)
-}
-
-async function ensureSubmissionPreflight(resources: RuntimeResources, settings: OperatorSettings) {
-	const configurationIdentity = submissionPreflightConfigurationIdentity(settings)
-	await recordEndpointPreflightChecks(
-		async () => await preflightTransactionSubmissionNetwork(settings),
-		checks => {
-			resources.submissionPreflightConfigurationIdentity = configurationIdentity
-			resources.submissionPreflightChecks = checks
-		},
-	)
-}
-
-function resourceHealth(resources: RuntimeResources) {
-	return [...resources.readPreflightChecks, ...resources.submissionPreflightChecks, ...resources.pool.snapshot()]
-}
-
-async function executeLifecyclePlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
-	const obligation = obligationForPlan(state, plan)
-	if (obligation === undefined) throw new Error(`Lifecycle plan ${plan.id} has no durable obligation`)
-	beginLifecycleObligation(obligation)
-	await persistState(configuration, state)
-	try {
-		await executeOperationPlan(
-			executionEnvironment(
-				configuration.settings,
-				state,
-				resources,
-				undefined,
-				async () => {
-					await ensureSubmissionPreflight(resources, configuration.settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-				},
-				executionCancelled,
-			),
-			plan,
-		)
-		if (!completeLifecycleObligation(state, obligation)) {
-			const workflow = workflowForPlan(state, plan)
-			if (workflow?.status !== 'waiting-obligation') {
-				throw new Error(`Lifecycle workflow ${obligation.workflowId} did not complete every step`)
-			}
-			waitForCanonicalLifecycleConfirmation(obligation)
-		}
-		await persistState(configuration, state)
-	} catch (error) {
-		if (error instanceof TransactionAwaitingRecovery) {
-			failLifecycleObligation(obligation, error, true)
-			await persistState(configuration, state)
-			throw error
-		}
-		if (rediscoverableExecutionFailure(state, plan, error)) {
-			failLifecycleObligation(obligation, error, true)
-			recordPreflightFailure(state, plan, error, `Lifecycle preflight changed before signing: ${plan.label}`)
-			await persistState(configuration, state)
-			return
-		}
-		if (operationalFailureDisposition(error) === 'connectivity-degraded') {
-			failLifecycleObligation(obligation, error, true)
-			await persistState(configuration, state)
-			throw error
-		}
-		const failedWorkflow = workflowForPlan(state, plan)
-		if (failedWorkflow !== undefined && retryableOnChainWorkflowFailure(failedWorkflow)) {
-			failLifecycleObligation(obligation, error, false)
-			recordActivity(state, {
-				ecosystem: plan.ecosystem,
-				message: `Finalized lifecycle revert retained for canonical reconciliation: ${plan.label}`,
-				operationId: plan.definitionId,
-				status: 'skipped',
-				type: 'recovery',
-			})
-			await persistState(configuration, state)
-			return
-		}
-		failLifecycleObligation(obligation, error, false)
-		await persistState(configuration, state)
-		throw error
-	}
-}
-
-async function executeRandomPlan(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean, trigger: 'scheduled' | 'manual' | 'retirement' = 'scheduled') {
-	await executeScheduledOperation(
-		configuration,
-		state,
-		plan,
-		async () => {
-			await executeOperationPlan(
-				executionEnvironment(
-					configuration.settings,
-					state,
-					resources,
-					undefined,
-					async () => {
-						await ensureSubmissionPreflight(resources, configuration.settings)
-						state.rpcEndpointHealth = resourceHealth(resources)
-					},
-					executionCancelled,
-				),
-				plan,
-			)
-		},
-		error => {
-			if (rediscoverableExecutionFailure(state, plan, error)) {
-				recordPreflightFailure(state, plan, error, `Operation requires fresh preflight: ${plan.label}`)
-				return true
-			}
-			if (abandonRetryableSelectableFailure(state, plan)) {
-				return true
-			}
-			return false
-		},
-		trigger,
-	)
-}
-
-async function executeRandomContinuation(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, plan: OperationPlan, executionCancelled: () => boolean) {
-	const scheduler = schedulerFor(configuration, state)
-	try {
-		await executeOperationPlan(
-			executionEnvironment(
-				configuration.settings,
-				state,
-				resources,
-				undefined,
-				async () => {
-					await ensureSubmissionPreflight(resources, configuration.settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-				},
-				executionCancelled,
-			),
-			plan,
-		)
-		await (state.retirement.status === 'inactive' ? scheduler.complete(plan.definitionId) : scheduler.pause())
-	} catch (error) {
-		if (error instanceof TransactionAwaitingRecovery) throw error
-		if (rediscoverableExecutionFailure(state, plan, error)) {
-			recordPreflightFailure(state, plan, error, `Continuation requires fresh canonical discovery: ${plan.label}`, 'recovery')
-			await persistState(configuration, state)
-			return
-		}
-		if (abandonRetryableSelectableFailure(state, plan)) {
-			await (state.retirement.status === 'inactive' ? scheduler.complete(plan.definitionId) : scheduler.pause())
-			return
-		}
-		throw error
-	}
-}
-
-async function reconcilePendingWork(configuration: ConfigurationState, state: RuntimeState, resources: RuntimeResources, executionCancelled: () => boolean) {
-	const included = state.includedTransactions[0]
-	if (included !== undefined || state.rollbackQueue.length !== 0) await reconcileIncludedTransactions(executionEnvironment(configuration.settings, state, resources, included?.intent.sender ?? state.rollbackQueue[0]?.intent.sender, undefined, executionCancelled))
-	if (state.pendingTransactions.length === 0) return false
-	const settings = configuration.settings
-	const wallet = configuredWallet(settings)
-	const profileMatches = state.profileId === executionProfileId(settings)
-	const pending = state.pendingTransactions[0]
-	if (pending === undefined) throw new Error('Pending transaction journal changed during recovery')
-	if (wallet !== undefined && pending.sender.toLowerCase() !== wallet.toLowerCase()) {
-		throw new Error('The configured signer does not match the pending transaction recovery signer')
-	}
-	const workflowId = pending.workflowId
-	const operationId = pending.operationId
-	let recoveryFailure: unknown
-	const refreshSubmissionPreflight = async () => {
-		if (state.paused || configuration.settings.paused || !configuration.settings.runtime.execute) {
-			throw new Error('Chaos bot paused before pending transaction resubmission')
-		}
-		await ensureSubmissionPreflight(resources, settings)
-		state.rpcEndpointHealth = resourceHealth(resources)
-	}
-	try {
-		await recoverPendingTransactions(executionEnvironment(settings, state, resources, pending.sender, refreshSubmissionPreflight, executionCancelled), {
-			beforeResubmit: refreshSubmissionPreflight,
-			resubmit: wallet !== undefined && profileMatches && settings.runtime.execute && !settings.paused && !state.paused,
-		})
-	} catch (error) {
-		recoveryFailure = error
-	}
-	if (state.pendingTransactions.length !== 0) {
-		if (!profileMatches) {
-			state.error = 'The pending transaction belongs to the previous deployment profile and is being checked read-only; restore that exact profile or queue a verified replacement reconciliation'
-			state.status = 'paused'
-			await persistState(configuration, state)
-		} else if (wallet === undefined) {
-			state.error = 'The pending transaction was checked read-only and is waiting for the exact recovery signer before resubmission'
-			state.status = 'paused'
-			await persistState(configuration, state)
-		}
-		if (recoveryFailure !== undefined) throw recoveryFailure
-		return true
-	}
-	blockInterruptedWorkflows(state)
-	const failureRepair = repairDurableSelectableFailures(state)
-	const workflow = state.workflows.find(candidate => candidate.id === workflowId)
-	if (workflow === undefined) throw new Error(`Recovered workflow ${workflowId} is unavailable`)
-	const obligation = state.obligations.find(candidate => candidate.workflowId === workflowId)
-	let retryableLifecycleFailure = false
-	const retryableSelectableFailure = failureRepair.repairedWorkflowIds.includes(workflow.id)
-	if (workflowNeedsContinuation(workflow)) {
-		if (obligation !== undefined) {
-			failLifecycleObligation(obligation, 'Recovered one workflow step; canonical continuation is required before novelty', true)
-		}
-	} else if (obligation !== undefined) {
-		if (workflow.status === 'failed') {
-			retryableLifecycleFailure = retryableOnChainWorkflowFailure(workflow)
-			failLifecycleObligation(obligation, recoveryFailure ?? 'Recovered transaction failed on chain', false)
-		} else if (workflow.status === 'waiting-obligation') {
-			waitForCanonicalLifecycleConfirmation(obligation)
-		} else if (!completeLifecycleObligation(state, obligation) && workflow.status === 'blocked') {
-			failLifecycleObligation(obligation, 'Recovered a prerequisite; canonical rediscovery is required for the remaining lifecycle steps', true)
-		}
-	} else {
-		await scheduleAfterRecoveredTransaction(configuration, state, operationId)
-	}
-	await persistState(configuration, state)
-	if (recoveryFailure !== undefined && !retryableLifecycleFailure && !retryableSelectableFailure) {
-		throw recoveryFailure
-	}
-	return true
-}
-
-async function safetyPause(configuration: ConfigurationState, state: RuntimeState) {
-	state.safetyPaused = true
-	state.paused = true
-	state.scheduler.status = 'paused'
-	state.status = 'paused'
-	const failures: unknown[] = []
-	try {
-		await persistState(configuration, state)
-	} catch (error) {
-		failures.push(error)
-	}
-	if (!configuration.settings.paused) {
-		const candidate = { ...configuration.settings, paused: true }
-		try {
-			const revision = await saveSettings(configuration.path, restartSafeSettings(candidate, configuration.rememberSigner), configuration.revision)
-			configuration.revision = revision
-			configuration.settings = candidate
-		} catch (error) {
-			failures.push(error)
-		}
-	}
-	if (failures.length !== 0) {
-		throw new AggregateError(failures, 'Chaos bot entered an in-memory safety pause, but one or more durable pause records could not be saved')
-	}
-}
-
-async function handleCycleFailure(error: unknown, configuration: ConfigurationState, state: RuntimeState) {
-	state.deploymentNotice = undefined
-	if (error instanceof ChaosProtocolIndexReorgError) {
-		state.protocolIndex = undefined
-		state.error = 'A protocol-index reorganization was detected; canonical backfill will restart from the configured protocol start block'
-		state.status = currentStatus(configuration.settings)
-		recordActivity(state, {
-			message: 'Canonical protocol index invalidated by a chain reorganization',
-			status: 'info',
-			type: 'recovery',
-		})
-		await persistState(configuration, state)
-		return
-	}
-	if (error instanceof TransactionAwaitingRecovery && error.severity === 'pending') {
-		state.error = undefined
-		const message = errorMessage(error)
-		if (state.activities[0]?.message !== message) {
-			recordActivity(state, {
-				hash: error.hash,
-				message,
-				status: 'pending',
-				type: 'transaction',
-			})
-		}
-		await persistState(configuration, state)
-		return
-	}
-	const message = errorMessage(error)
-	const changed = state.error !== message
-	state.error = message
-	if (changed) {
-		recordActivity(state, {
-			message: `Operator cycle stopped safely: ${message}`,
-			status: 'failed',
-			type: 'error',
-		})
-	}
-	if (error instanceof TransactionAwaitingRecovery) {
-		state.status = 'connectivity-degraded'
-	} else if (operationalFailureDisposition(error) === 'connectivity-degraded') {
-		state.status = 'connectivity-degraded'
-	} else {
-		await safetyPause(configuration, state)
-		state.status = 'paused'
-	}
-	await persistState(configuration, state)
-}
-
-export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
+/** Load, migrate and repair durable runtime state, then pin the configuration the operator starts from. */
+async function startOperator(loaded: LoadedConfiguration): Promise<OperatorState> {
 	const initialWallet = configuredWallet(loaded.settings)
 	const storedState = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
 	assertDurableStateFactories(loaded.settings, storedState)
@@ -410,461 +70,101 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		await persistState(configuration, state)
 	}
 	await closeInterruptedSchedulerRun(configuration, state)
-	let resources: RuntimeResources | undefined
-	if (loaded.settings.networkConfigured) {
-		resources = {
-			pool: createChaosReadPool(loaded.settings),
-			readPreflightChecks: [],
-			submissionPreflightConfigurationIdentity: undefined,
-			submissionPreflightChecks: [],
-		}
-	}
+	const resources = loaded.settings.networkConfigured ? createRuntimeResources(loaded.settings) : undefined
 	state.rpcEndpointHealth = resources === undefined ? [] : resourceHealth(resources)
-	const signerOperationGate = createSignerOperationGate()
+	return {
+		backfillIncomplete: false,
+		configuration,
+		consecutiveBackfillCycles: 0,
+		resources,
+		runtime: state,
+		topology: { cache: undefined, profileId: undefined, stateFile: undefined },
+	}
+}
+
+function manualOperationInputError(message: string) {
+	const error = new Error(message)
+	error.name = 'ManualOperationInputError'
+	return error
+}
+
+/** Scan canonical state on behalf of a dashboard operation request. */
+async function scanForManualOperation(operator: OperatorState, deps: OperatorDependencies) {
+	const { configuration, runtime: state } = operator
+	if (operator.resources === undefined || state.wallet === undefined) throw manualOperationInputError('Configure the network and signer before planning an operation')
+	const settings = configuration.settings
+	const expectedProfile = executionProfileId(settings)
+	if (state.profileId !== expectedProfile || deps.shutdown.isRequested()) throw manualOperationInputError('Wait for the bot to initialize the current deployment profile')
+	assertDurableSignerScope(state, configuredWallet(settings), settings.runtime.stateFile)
+	if (operator.topology.stateFile !== settings.runtime.stateFile || operator.topology.profileId !== expectedProfile) operator.topology.cache = undefined
+	await ensureReadPreflight(currentResources(operator), settings)
+	const scan = await performCanonicalScan(settings, currentResources(operator).pool, state.wallet, 0, state.protocolIndex, operator.topology.cache)
+	recordScanResult(operator, scan, executionProfileId(settings), settings.runtime.stateFile, scan.evaluations)
+	synchronizeScanObligations(state, scan.evaluations, scan)
+	await persistState(configuration, state)
+	return scan
+}
+
+async function executeManualOperation(operator: OperatorState, deps: OperatorDependencies, plan: OperationPlan) {
+	const { configuration, runtime: state } = operator
+	const resources = currentResources(operator, 'Operation RPC resources are unavailable')
+	try {
+		if (!configuration.settings.runtime.execute) {
+			recordDryRun(state, plan)
+			await persistState(configuration, state)
+		} else if (plan.classification === 'lifecycle-obligation') {
+			await executeLifecyclePlan(configuration, state, resources, plan, deps.shutdown.isRequested)
+		} else {
+			await executeRandomPlan(configuration, state, resources, plan, deps.shutdown.isRequested, 'manual')
+		}
+	} catch (error) {
+		await handleCycleFailure(error, configuration, state)
+		throw error
+	}
+}
+
+/** Wire the dashboard controller and manual operations to the operator state. */
+function createOperatorDashboard(operator: OperatorState, deps: OperatorDependencies, locks: ChaosProcessLocks) {
+	const { configuration, runtime: state } = operator
 	const dashboardController = createChaosDashboardController({
 		configuration,
-		onScheduleRequested: shutdown.wake,
-		gate: signerOperationGate,
-		hostname: loaded.settings.runtime.uiHost,
+		onScheduleRequested: deps.shutdown.wake,
+		gate: deps.gate,
+		hostname: configuration.settings.runtime.uiHost,
 		locks,
 		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
 		onConnectivityUpdated: (settings, checks) => {
-			resources = {
-				pool: createChaosReadPool(settings),
-				readPreflightChecks: checks.filter(check => check.kind === 'read-rpc'),
-				submissionPreflightConfigurationIdentity: undefined,
-				submissionPreflightChecks: checks.filter(check => check.kind === 'public-rpc'),
-			}
+			operator.resources = createRuntimeResources(settings, checks)
 		},
 		state,
 	})
-	let topologyCache: CanonicalImmutableTopologyCache | undefined
-	let topologyCacheProfileId: string | undefined
-	let topologyCacheStateFile: string | undefined
-	await using manualOperations = createManualOperationController({
+	const manualOperations = createManualOperationController({
 		configuration,
-		gate: signerOperationGate,
+		gate: deps.gate,
 		state,
-		scan: async () => {
-			if (resources === undefined || state.wallet === undefined) {
-				const error = new Error('Configure the network and signer before planning an operation')
-				error.name = 'ManualOperationInputError'
-				throw error
-			}
-			const settings = configuration.settings
-			const expectedProfile = executionProfileId(settings)
-			if (state.profileId !== expectedProfile || shutdown.isRequested()) {
-				const error = new Error('Wait for the bot to initialize the current deployment profile')
-				error.name = 'ManualOperationInputError'
-				throw error
-			}
-			assertDurableSignerScope(state, configuredWallet(settings), settings.runtime.stateFile)
-			if (topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfile) topologyCache = undefined
-			await ensureReadPreflight(resources, settings)
-			const scan = await performCanonicalScan(settings, resources.pool, state.wallet, 0, state.protocolIndex, topologyCache)
-			state.protocolIndex = scan.index
-			topologyCache = scan.topologyCache
-			topologyCacheStateFile = settings.runtime.stateFile
-			topologyCacheProfileId = executionProfileId(settings)
-			state.evaluations = scan.evaluations
-			state.inventory = scan.inventory
-			state.inventoryAddress = scan.inventoryAddress
-			state.topology = runtimeTopologySummary(scan)
-			state.lastScanAt = new Date().toISOString()
-			state.lastScannedBlock = scan.anchor.blockNumber
-			synchronizeLifecycleObligations(
-				state,
-				scan.evaluations,
-				scan.canonicalLifecyclePresence,
-				scan.canonicalLifecyclePresenceComplete,
-				scan.anchor.blockNumber,
-				scan.anchor.timestamp,
-				scan.executionReady && scan.index?.availableStartBlock !== undefined ? BigInt(scan.index.availableStartBlock) : undefined,
-				scan.index?.availableStartBlock === undefined ? undefined : BigInt(scan.index.availableStartBlock),
-				scan.carryProofsComplete,
-			)
-			await persistState(configuration, state)
-			return scan
-		},
+		scan: async () => await scanForManualOperation(operator, deps),
 		preflight: async plan => {
-			if (resources === undefined) throw new Error('Operation RPC resources are unavailable')
+			const resources = currentResources(operator, 'Operation RPC resources are unavailable')
 			await preflightOperationPreview(executionEnvironment(configuration.settings, state, resources), plan)
 		},
-		execute: async plan => {
-			if (resources === undefined) throw new Error('Operation RPC resources are unavailable')
-			try {
-				if (!configuration.settings.runtime.execute) {
-					recordDryRun(state, plan)
-					await persistState(configuration, state)
-				} else if (plan.classification === 'lifecycle-obligation') {
-					await executeLifecyclePlan(configuration, state, resources, plan, shutdown.isRequested)
-				} else {
-					await executeRandomPlan(configuration, state, resources, plan, shutdown.isRequested, 'manual')
-				}
-			} catch (error) {
-				await handleCycleFailure(error, configuration, state)
-				throw error
-			}
-		},
+		execute: async plan => await executeManualOperation(operator, deps, plan),
 	})
 	dashboardController.setOperation = manualOperations.handle
+	return { dashboardController, manualOperations }
+}
+
+export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
+	const operator = await startOperator(loaded)
+	const deps: OperatorDependencies = { gate: createSignerOperationGate(), shutdown }
+	const { dashboardController, manualOperations } = createOperatorDashboard(operator, deps, locks)
+	await using _manualOperations = manualOperations
 	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
 	await using _dashboardLifecycle = dashboard === undefined ? undefined : botDashboardLifecycle(dashboard)
-	let backfillIncomplete = false
-	let consecutiveBackfillCycles = 0
-	await persistState(configuration, state)
+	await persistState(operator.configuration, operator.runtime)
 	await pollUntilStopped(
-		async () => {
-			if (shutdown.isRequested()) return true
-			const cycleRevision = configuration.revision
-			const settings = configuration.settings
-			const scanReport = startScanReport({
-				network: settings.network,
-				blockTimeMs: scanBlockTimeMs(settings.network.chainId, process.env['SCAN_BLOCK_TIME_MS']),
-				readHead: async () => (resources === undefined || settings.connectivity === undefined ? undefined : await chaosReadClients(settings, resources.pool)[0]?.client.getBlockNumber()),
-			})
-			let scanCompleted = false
-			let gateHeld = false
-			const acquireCycleGate = () => {
-				if (gateHeld) return true
-				if (!signerOperationGate.acquire('scan')) return false
-				gateHeld = true
-				return true
-			}
-			const configurationIsCurrent = () => configuration.revision === cycleRevision && configuration.settings === settings
-			try {
-				const expectedProfileId = executionProfileId(settings)
-				if (state.profileId !== expectedProfileId) {
-					if (!acquireCycleGate()) return 'deferred'
-					if (!configurationIsCurrent()) return 'deferred'
-					const wallet = configuredWallet(settings)
-					assertDurableSignerScope(state, wallet, settings.runtime.stateFile)
-					await resetPristineStateForDeploymentProfile(state, expectedProfileId, settings.deployment.uniswapV3Factory, settings.paused, wallet, settings.runtime.stateFile, async evidence => verifyRetirementCompletionFinality(settings, evidence))
-					topologyCache = undefined
-					topologyCacheProfileId = undefined
-					topologyCacheStateFile = undefined
-					recordActivity(state, {
-						message: 'Durable runtime reset because the canonical deployment changed',
-						status: 'info',
-						type: 'configuration',
-					})
-					await persistState(configuration, state)
-				}
-				const profileMismatch = state.profileId !== expectedProfileId
-				state.paused = settings.paused || profileMismatch || state.safetyPaused
-				setRuntimeExecutionAddress(state, configuredWallet(settings) ?? state.signerAddress)
-				state.status = profileMismatch || state.safetyPaused ? 'paused' : currentStatus(settings)
-				state.scanning = true
-				backfillIncomplete = false
-				if (!settings.networkConfigured || settings.connectivity === undefined) {
-					if (!acquireCycleGate()) return 'deferred'
-					if (!configurationIsCurrent()) return 'deferred'
-					state.evaluations = unavailableOperationCatalog('Configure and authenticate the network deployment before discovery')
-					state.error = 'Network deployment and RPC connectivity are not configured'
-					scanReport.update({ status: 'paused' })
-					state.status = 'paused'
-					if (state.scheduler.status !== 'paused') {
-						await schedulerFor(configuration, state).pause()
-					}
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				if (resources === undefined) {
-					throw new Error('Configured network is missing its RPC endpoint pool')
-				}
-				await ensureReadPreflight(resources, settings)
-				state.rpcEndpointHealth = resourceHealth(resources)
-				if (state.pendingTransactions.length !== 0 || state.includedTransactions.length !== 0 || state.rollbackQueue.length !== 0) {
-					if (!acquireCycleGate()) return 'deferred'
-					if (!configurationIsCurrent()) return 'deferred'
-					if (await reconcilePendingWork(configuration, state, resources, shutdown.isRequested)) {
-						return settings.runtime.once
-					}
-				}
-				const deploymentCheck = await checkDeploymentAvailability(settings, resources.pool)
-				const deploymentNotice = deploymentCheck.notice
-				if (deploymentCheck.blocking && deploymentNotice !== undefined) {
-					if (!acquireCycleGate() || !configurationIsCurrent()) return 'deferred'
-					recordUnavailableDeploymentScan(state, deploymentNotice, deploymentCheck)
-					scanReport.update({ status: 'waiting' })
-					await schedulerFor(configuration, state).pause()
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				const discoveryWallet = state.wallet
-				if (state.protocolIndex === undefined || topologyCacheStateFile !== settings.runtime.stateFile || topologyCacheProfileId !== expectedProfileId) topologyCache = undefined
-				const scan = await performCanonicalScan(settings, resources.pool, discoveryWallet, randomInteger(0, 0x1_0000_0000), state.protocolIndex, topologyCache)
-				if (!acquireCycleGate()) return 'deferred'
-				if (!configurationIsCurrent()) return 'deferred'
-				state.protocolIndex = scan.index
-				topologyCache = scan.topologyCache
-				topologyCacheProfileId = expectedProfileId
-				topologyCacheStateFile = settings.runtime.stateFile
-				state.evaluations = state.wallet === undefined ? blockExecutableEvaluations(scan.evaluations, 'Configure the dedicated transaction signer before execution') : scan.evaluations
-				state.inventory = scan.inventory
-				state.inventoryAddress = scan.inventoryAddress
-				state.topology = runtimeTopologySummary(scan)
-				state.lastScanAt = new Date().toISOString()
-				state.lastScannedBlock = scan.anchor.blockNumber
-				scanReport.update({ block: scan.anchor.blockNumber })
-				state.deploymentNotice = tradingDeploymentNotice(scan.snapshot)
-				state.lastDeploymentCheckedBlock = undefined
-				state.lastDeploymentCheckAt = undefined
-				state.error = undefined
-				state.warnings = [...scan.snapshot.warnings]
-				state.rpcEndpointHealth = resourceHealth(resources)
-				synchronizeLifecycleObligations(
-					state,
-					state.evaluations,
-					scan.canonicalLifecyclePresence,
-					scan.canonicalLifecyclePresenceComplete,
-					scan.anchor.blockNumber,
-					scan.anchor.timestamp,
-					scan.executionReady && scan.index?.availableStartBlock !== undefined ? BigInt(scan.index.availableStartBlock) : undefined,
-					scan.index?.availableStartBlock === undefined ? undefined : BigInt(scan.index.availableStartBlock),
-					scan.carryProofsComplete,
-				)
-				if (state.lifecyclePresenceBlocker !== undefined) {
-					state.error = lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
-					state.evaluations = blockNovelEvaluations(state.evaluations, state.lifecyclePresenceBlocker)
-				}
-				const retirementV3 = await retirementPositionsForScan({ anchor: scan.anchor, pool: resources.pool, profileId: expectedProfileId, settings, state, wallet: state.wallet })
-				updateRetirementAssessment(scan, settings, state, retirementV3, await retirementCompletionEvidenceCanonical(settings, resources.pool, state, scan.anchor))
-				await persistState(configuration, state)
-				scanCompleted = true
-				if (!scan.executionReady) {
-					backfillIncomplete = true
-					return settings.runtime.once
-				}
-				// Submission evidence is refreshed in every mode so the go-live checklist can be satisfied before arming.
-				const submissionReadiness = await refreshSubmissionReadiness(resources, settings)
-				if (submissionReadiness !== 'current') state.rpcEndpointHealth = resourceHealth(resources)
-				if (submissionReadiness === 'failed') console.log('chaosBot=submission readiness refresh failed in dry run; the recorded endpoint evidence stays visible until the next refresh')
-				const continuationWorkflows = state.workflows.filter(workflowNeedsContinuation)
-				if (continuationWorkflows.length > 1) {
-					throw new Error('Multiple partial workflows require explicit operator reconciliation')
-				}
-				const continuationWorkflow = continuationWorkflows[0]
-				if (continuationWorkflow !== undefined) {
-					const continuationPlan = durableWorkflowPlan(continuationWorkflow)
-					if (!enforceRetirementContinuation(state, continuationWorkflow, operationHasCanonicalContinuationBuilder(continuationWorkflow.operationId), state.retirement.status === 'inactive' || retirementPlanAllowed(continuationPlan, scan.snapshot, state.retirement.policies))) {
-						await persistState(configuration, state)
-						return settings.runtime.once
-					}
-					const continuationSelection = evaluatePolicySafeContinuation(scan.snapshot, continuationWorkflow, settings, scan.anchor.blockNumber.toString(), state.retirement.status !== 'inactive' && continuationWorkflow.continuationDisposition === 'cleanup-only', { state, observations: retirementV3 })
-					const continuationEvaluation = continuationSelection.evaluation
-					if (continuationSelection.continuationDisposition !== undefined && continuationWorkflow.continuationDisposition !== continuationSelection.continuationDisposition) {
-						continuationWorkflow.continuationDisposition = continuationSelection.continuationDisposition
-						await persistState(configuration, state)
-					}
-					const freshPlan = continuationEvaluation.eligibility.eligible ? continuationEvaluation.plan : undefined
-					if (freshPlan === undefined) {
-						const blockers = continuationEvaluation.eligibility.blockers.join('; ')
-						state.error = `Partial workflow ${continuationWorkflow.label} is waiting for its canonical continuation; novel work remains blocked${blockers === '' ? '' : `: ${blockers}`}`
-						await persistState(configuration, state)
-						return settings.runtime.once
-					}
-					if (continuationWorkflow.operationId === V3_RETIREMENT_OPERATION && freshPlan.steps.length === 0) {
-						reconcileClosedV3RetirementWorkflow(scan.snapshot, continuationWorkflow, { state, observations: retirementV3 })
-						await persistState(configuration, state)
-						return settings.runtime.once
-					}
-					refreshWorkflowContinuation(continuationWorkflow, freshPlan)
-					await persistState(configuration, state)
-					if (state.paused || !settings.runtime.execute) {
-						state.error = `Partial workflow ${continuationWorkflow.label} is ready to continue after live execution resumes`
-						await persistState(configuration, state)
-						return settings.runtime.once
-					}
-					await ensureSubmissionPreflight(resources, settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-					const refreshedContinuationPlan = durableWorkflowPlan(continuationWorkflow)
-					const obligation = state.obligations.find(candidate => candidate.workflowId === continuationWorkflow.id)
-					if (obligation === undefined) {
-						await executeRandomContinuation(configuration, state, resources, refreshedContinuationPlan, shutdown.isRequested)
-					} else {
-						await executeLifecyclePlan(configuration, state, resources, refreshedContinuationPlan, shutdown.isRequested)
-					}
-					return settings.runtime.once
-				}
-				const obstructions = lifecycleObstructions(state)
-				if (obstructions.hard !== undefined) {
-					const obstructingObligation = obstructions.hard
-					const blocker = obstructingObligation.blockers[0]
-					const message = `Lifecycle obligation ${obstructingObligation.label} is ${obstructingObligation.status} and prevents all execution${blocker === undefined ? '' : `: ${blocker}`}. Resolve its precondition or use explicit operator reconciliation.`
-					if (state.error !== message) {
-						recordActivity(state, {
-							ecosystem: obstructingObligation.ecosystem,
-							message,
-							operationId: obstructingObligation.operationId,
-							status: 'failed',
-							type: 'error',
-						})
-					}
-					state.error = message
-					if (obstructingObligation.status !== 'blocked') {
-						await safetyPause(configuration, state)
-						state.status = 'paused'
-					}
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				const scheduler = schedulerFor(configuration, state)
-				if (state.paused) {
-					if (state.scheduler.status !== 'paused') await scheduler.pause()
-					return settings.runtime.once
-				}
-				const actionableUrgent = actionableUrgentLifecyclePlan(state, plan => state.retirement.status === 'inactive' || retirementPlanAllowed(plan, scan.snapshot, state.retirement.policies))
-				if (actionableUrgent !== undefined && settings.runtime.execute) {
-					await ensureSubmissionPreflight(resources, settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-					await executeLifecyclePlan(configuration, state, resources, actionableUrgent, shutdown.isRequested)
-					return settings.runtime.once
-				}
-				if (obstructions.automaticRetry !== undefined) {
-					const retry = obstructions.automaticRetry
-					const blocker = retry.blockers[0]
-					state.error = `Lifecycle obligation ${retry.label} prevents random novelty while awaiting bounded automatic canonical retry${blocker === undefined ? '' : `: ${blocker}`}`
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				const pendingObligation = state.obligations.find(obligation => obligation.status === 'pending')
-				if (pendingObligation !== undefined) {
-					state.error = settings.runtime.execute
-						? `Lifecycle obligation ${pendingObligation.label} remains pending and prevents random work until its canonical plan is actionable`
-						: `Lifecycle obligation ${pendingObligation.label} requires live execution or explicit reconciliation before random dry-run work can continue`
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				if (state.lifecyclePresenceBlocker !== undefined) {
-					state.error = lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				const retirementResources = resources
-				const retirementResult = await processRetirementCycle({
-					execute: async plan => await executeRandomPlan(configuration, state, retirementResources, plan, shutdown.isRequested, 'retirement'),
-					persist: async () => await persistState(configuration, state),
-					prepareExecution: async () => {
-						await ensureSubmissionPreflight(retirementResources, settings)
-						state.rpcEndpointHealth = resourceHealth(retirementResources)
-					},
-					scan,
-					settings,
-					state,
-					v3: retirementV3,
-				})
-				if (retirementResult !== undefined) return retirementResult
-				await scheduler.resume()
-				await scheduler.ensureScheduled()
-				await scheduler.markDue()
-				if (!scheduler.isDue() && state.scheduler.status !== 'due') {
-					return settings.runtime.once
-				}
-				const candidates = randomOperationPlans(state.evaluations, settings.strategy.selectableOperationAllowlist)
-				const initializerQuestion = [...scan.snapshot.questions]
-					.filter(question => question.kind === 'binary')
-					.sort((left, right) => {
-						if (BigInt(left.id) < BigInt(right.id)) return -1
-						return BigInt(left.id) > BigInt(right.id) ? 1 : 0
-					})[0]
-				const genesisPool = initializerQuestion === undefined ? undefined : scan.snapshot.pools.find(pool => pool.universeId === '0' && pool.questionId === initializerQuestion.id)
-				const genesisPair = genesisPool === undefined ? undefined : scan.snapshot.pairs.find(pair => pair.pool.toLowerCase() === genesisPool.address.toLowerCase())
-				const initializationState = {
-					genesisUniversePresent: scan.snapshot.universes.some(universe => universe.id === '0'),
-					hasInitializedPair: genesisPair !== undefined && BigInt(genesisPair.totalSupply) > 0n,
-					hasPair: genesisPair !== undefined,
-					hasPool: genesisPool !== undefined,
-					hasQuestion: initializerQuestion !== undefined,
-					hasWalletVault: genesisPool?.walletVaultRegistered === true,
-					hasUniswapPool: scan.snapshot.genesisUniswap?.pool !== undefined,
-					hasUniswapSeeder: scan.snapshot.genesisUniswap?.seeder ?? false,
-					hasWeth: BigInt(scan.snapshot.wallet.tokens.find(token => token.address.toLowerCase() === scan.snapshot.deployments.weth.toLowerCase())?.balance ?? '0') > 1n,
-					hasInitializedUniswapPool: scan.snapshot.genesisUniswap?.initialized ?? false,
-					hasSeededUniswapPool: BigInt(scan.snapshot.genesisUniswap?.liquidity ?? '0') > 0n,
-					tradingFactoryDeployed: scan.snapshot.tradingDeployment?.factory ?? true,
-					tradingRouterDeployed: scan.snapshot.tradingDeployment?.router ?? true,
-				}
-				const initializationDefinitionId = settings.strategy.initializeGenesisUniverse ? genesisInitializationDefinitionId(initializationState) : undefined
-				const initializationEvaluation =
-					initializationDefinitionId === undefined
-						? undefined
-						: applyExecutionPolicy(
-								[
-									evaluateSelectableOperationDefinition(initializationDefinitionId, scan.snapshot, {
-										...planningOptions(settings, 0),
-										genesisInitializationTarget: {
-											...(genesisPair === undefined ? {} : { pair: genesisPair.address }),
-											...(genesisPool === undefined ? {} : { pool: genesisPool.address }),
-											...(initializerQuestion === undefined ? {} : { questionId: initializerQuestion.id }),
-											universeId: '0',
-										},
-									}),
-								],
-								settings,
-								scan.executionReady,
-								scan.anchor.blockNumber.toString(),
-								scan.anchor.blockNumber.toString(),
-								BigInt(scan.snapshot.wallet.ethBalanceAttoEth),
-							)[0]
-				const initializationPlan = initializationEvaluation === undefined ? undefined : genesisInitializationPlan([initializationEvaluation], initializationState)
-				if (initializationDefinitionId !== undefined && initializationPlan === undefined) {
-					state.error = `Genesis initialization is waiting for ${initializationDefinitionId} to become eligible; unrelated random work is blocked`
-					await persistState(configuration, state)
-					return settings.runtime.once
-				}
-				const plan = initializationPlan ?? (candidates.length === 0 ? undefined : candidates[randomInteger(0, candidates.length)])
-				if (plan === undefined) {
-					recordActivity(state, {
-						message: 'No random operation is currently eligible',
-						status: 'skipped',
-						type: 'scheduler',
-					})
-					await scheduler.complete()
-					return settings.runtime.once
-				}
-				if (settings.runtime.execute) {
-					await ensureSubmissionPreflight(resources, settings)
-					state.rpcEndpointHealth = resourceHealth(resources)
-				}
-				await executeRandomPlan(configuration, state, resources, plan, shutdown.isRequested)
-				return settings.runtime.once
-			} catch (error) {
-				scanCompleted = false
-				scanReport.update({ status: 'failed' })
-				if (!acquireCycleGate()) return 'deferred'
-				if (!configurationIsCurrent()) return 'deferred'
-				if (resources !== undefined) state.rpcEndpointHealth = resourceHealth(resources)
-				await handleCycleFailure(error, configuration, state)
-				throw error
-			} finally {
-				if (scanCompleted && configurationIsCurrent()) {
-					const eligible = state.evaluations.filter(evaluation => evaluation.eligibility.eligible).length
-					const scanStatus = state.paused ? 'paused' : 'live'
-					scanReport.update({ status: backfillIncomplete ? 'backfilling' : scanStatus, details: { evaluated: state.evaluations.length, eligible, skipped: state.evaluations.length - eligible } })
-				}
-				await scanReport.finish(shutdown.isRequested() || !configurationIsCurrent() ? 'incomplete' : undefined)
-				state.scanning = false
-				if (resources !== undefined) {
-					state.rpcEndpointHealth = resourceHealth(resources)
-				}
-				if (gateHeld) signerOperationGate.release('scan')
-			}
-		},
-		async consecutiveFailures => {
-			let milliseconds = backfillIncomplete ? backfillWaitMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveBackfillCycles) : retryDelayMilliseconds(configuration.settings.runtime.lifecyclePollMilliseconds, consecutiveFailures)
-			if (!backfillIncomplete && consecutiveFailures === 0) milliseconds = operatorWaitMilliseconds(milliseconds, state)
-			if (backfillIncomplete) consecutiveBackfillCycles += 1
-			else consecutiveBackfillCycles = 0
-			await shutdown.wait(milliseconds)
-		},
+		async () => await runOperatorCycle(operator, deps),
+		async consecutiveFailures => await waitForNextCycle(operator, deps, consecutiveFailures),
 		loaded.settings.runtime.once,
-		error => {
-			if (error instanceof TransactionAwaitingRecovery && error.severity === 'pending') {
-				console.log(`chaosBot=${errorMessage(error)}`)
-				return
-			}
-			console.error(`chaosBot=${errorMessage(error)}`)
-		},
+		logCycleFailure,
 	)
 }
