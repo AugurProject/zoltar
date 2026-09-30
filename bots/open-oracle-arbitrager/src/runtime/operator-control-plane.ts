@@ -6,6 +6,7 @@ import { assertDistinctPersistentPaths, mutableStrategy, runnableOperatorSetting
 import { monitoringTokensForDeployment, assertFocusedDeploymentCompatible, mergeStoredDeploymentUpdate, prepareDeploymentTokenTransition, type DeploymentSettings } from '#config/deployment-settings'
 import { loadOperatorSettingsWithRevision, operatorConfigurationRevisionConflict, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile, type PersistedOperatorSettings } from '#config/settings-store'
 import { signerCandidate } from '@zoltar/bot-shared/config/signer'
+import type { DashboardEnvironment } from '@zoltar/bot-shared/config/environment'
 import { startDashboardServer } from '#dashboard/dashboard-server'
 import { assertStoredExecutorDeploymentIntent } from '#execution/create2-executor'
 import { executorDeploymentPlan } from '#execution/executor-deployment-primitives'
@@ -83,6 +84,8 @@ async function preflightOperatorProfile(settingsFile: string, target: PersistedO
 
 export function startOperatorControlPlane(parameters: {
 	config: Configuration
+	/** The dashboard exposure settings the operator read from its environment at startup. */
+	dashboardEnvironment: DashboardEnvironment
 	deploymentRecovery: DeploymentRecoveryState
 	fixedState: OperatorSnapshotFixedState & { deployment: DeploymentSettings }
 	getCursor: () => SyncCursor | undefined
@@ -153,9 +156,7 @@ export function startOperatorControlPlane(parameters: {
 		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, snapshotFixedState(), config.riskLimits, queuedSettingsSections(pending)),
 		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
-		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
-		password: process.env['ZOLTAR_BOT_DASHBOARD_PASSWORD'],
-		publicAuthority: process.env['ZOLTAR_BOT_DASHBOARD_PUBLIC_AUTHORITY'],
+		...parameters.dashboardEnvironment,
 		switchNetworkProfile: value =>
 			queueSettingsUpdate(async () => {
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || (value.network !== 'mainnet' && value.network !== 'sepolia')) throw new Error('Chain profile must be mainnet or sepolia')
