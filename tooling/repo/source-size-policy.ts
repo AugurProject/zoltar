@@ -34,9 +34,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['ui/statoblastShared/ts/protocol/securityPools.ts', 725],
 		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 605],
 	]),
-	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [
-		['augurScan/browser/live-update.ts', 1096],
-	]),
+	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [['augurScan/browser/live-update.ts', 1096]]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [
 		['bots/open-oracle-arbitrager/scripts/capture-docs-screenshots.mts', 1871],
 		['bots/chaos/scripts/capture-dashboard-qa.mts', 884],
