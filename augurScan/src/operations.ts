@@ -1,6 +1,8 @@
 import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { plainRecord } from './record-serialization.ts'
+
 type ReportClock = 'block' | 'timestamp'
 
 export const ETH_QUOTE_DECIMALS = 18
@@ -36,10 +38,8 @@ type ReportFieldChange = {
 
 type ReportRoundEvidence = Record<string, unknown>
 
-const reportRecord = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
-
 const flattenReportFields = (value: unknown, path: string, fields: Map<string, unknown>): void => {
-	const record = reportRecord(value)
+	const record = plainRecord(value)
 	const entries = Object.entries(record).toSorted(([left], [right]) => left.localeCompare(right))
 	if (entries.length === 0) {
 		if (path !== '') fields.set(path, value)
@@ -50,7 +50,7 @@ const flattenReportFields = (value: unknown, path: string, fields: Map<string, u
 
 const stableReportValue = (value: unknown): string => {
 	if (Array.isArray(value)) return `[${value.map(stableReportValue).join(',')}]`
-	const record = reportRecord(value)
+	const record = plainRecord(value)
 	if (Object.keys(record).length > 0)
 		return `{${Object.entries(record)
 			.toSorted(([left], [right]) => left.localeCompare(right))
@@ -83,8 +83,8 @@ const reportFieldChanges = (before: unknown, after: unknown): readonly ReportFie
 export const reportRoundChanges = (rows: readonly ReportRoundEvidence[]): readonly ReportRoundEvidence[] =>
 	rows.map((row, index) => {
 		const previous = rows[index + 1]
-		const currentData = reportRecord(row['report_data'])
-		const previousData = previous === undefined ? {} : reportRecord(previous['report_data'])
+		const currentData = plainRecord(row['report_data'])
+		const previousData = previous === undefined ? {} : plainRecord(previous['report_data'])
 		return {
 			...row,
 			report_data: currentData,

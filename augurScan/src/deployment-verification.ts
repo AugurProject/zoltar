@@ -1,4 +1,4 @@
-const record = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
+import { plainRecord as record } from './record-serialization.ts'
 
 const requiredSourceError = 'Bundled mode requires the resolved app POSTGRES_URL to use augurscan@postgres:5432/augurscan; use external mode otherwise'
 
