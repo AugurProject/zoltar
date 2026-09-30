@@ -15,7 +15,7 @@ void describe('complete-set mint submission', () => {
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'escalationGame') return zeroAddress
 					if (request.functionName === 'universeId') return 1n
-					if (request.functionName === 'priceOracleManagerAndOperatorQueuer') return manager
+					if (request.functionName === 'openOraclePriceCoordinator') return manager
 					if (request.functionName === 'lastSettlementTimestamp') return 1n
 					throw new Error(`Unexpected read ${request.functionName}`)
 				}),
@@ -37,7 +37,7 @@ void describe('complete-set mint submission', () => {
 				createMockWriteClient(send, async request => {
 					if (request.functionName === 'escalationGame') return zeroAddress
 					if (request.functionName === 'universeId') return 1n
-					if (request.functionName === 'priceOracleManagerAndOperatorQueuer') return manager
+					if (request.functionName === 'openOraclePriceCoordinator') return manager
 					if (request.functionName === 'lastSettlementTimestamp') return 1n
 					throw new Error(`Unexpected read ${request.functionName}`)
 				}),

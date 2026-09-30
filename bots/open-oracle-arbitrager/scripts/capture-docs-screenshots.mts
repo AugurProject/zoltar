@@ -1634,7 +1634,7 @@ const positionDerivedSnapshot = operatorSnapshot(
 	{ maxSpotTwapTicks: 120n, minimumProfitBps: 100n, minimumProfitAttoWeth: 10n ** 16n, minimumRemainingBlocks: 3n, minimumRemainingSeconds: 36n, pollMilliseconds: 12_000, twapSeconds: 1_800 },
 	{ minimumBundleRelaySuccesses: 1, mode: 'private', relayUrls: ['https://relay.flashbots.net/'] },
 	{ publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://read.example/' },
-	{ execute: true, executor, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle, queuedWallet: undefined, savedWallet: wallet, wallet },
+	{ execute: true, executor, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle, queuedSigner: undefined, savedWallet: wallet, wallet },
 	{ lifecycleGasReserveAttoWeth: 10n ** 16n, maxConcurrentPositions: 2, maxDailyGasSpendAttoWeth: 5n * 10n ** 16n, maxPositionNotionalAttoWeth: 5n * 10n ** 18n, maxTotalLockedAttoWeth: 10n * 10n ** 18n },
 )
 
@@ -1720,7 +1720,7 @@ const snapshot = {
 	positions: positionDerivedSnapshot.positions,
 	priceHistory,
 	queuedSettings: [],
-	queuedWallet: undefined,
+	queuedSigner: undefined,
 	reportPaths: [
 		{
 			reportId: '816',

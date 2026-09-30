@@ -1,7 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useId, useState } from 'preact/hooks'
 import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
-import type { UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { parseUiPriceOracle, type UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 
 const PRICE_ORACLE_STORAGE_KEY = 'statoblast.uiPriceOracle'
 const priceOracleDescriptions: Record<UiPriceOracle, string> = {
@@ -18,8 +18,8 @@ export function readUiPriceOracle(storage?: Pick<Storage, 'getItem'>): UiPriceOr
 	try {
 		// Some browsers expose `localStorage` as null when storage is disabled; the default applies then.
 		const resolvedStorage: Pick<Storage, 'getItem'> | null | undefined = storage ?? globalThis.localStorage
-		const value = resolvedStorage?.getItem(PRICE_ORACLE_STORAGE_KEY)
-		if (value === 'uniswap' || value === 'open-oracle' || value === 'open-oracle-fallback') return value
+		const value = parseUiPriceOracle(resolvedStorage?.getItem(PRICE_ORACLE_STORAGE_KEY))
+		if (value !== undefined) return value
 	} catch (error) {
 		if (!isExpectedStorageReadError(error)) throw error
 	}
@@ -54,8 +54,8 @@ export function UiPriceOracleSettings({ priceOracle, onPriceOracleChange }: { pr
 				aria-describedby={[scopeId, descriptionId, error === undefined ? undefined : errorId].filter(value => value !== undefined).join(' ')}
 				value={priceOracle}
 				onChange={event => {
-					const value = event.currentTarget.value as UiPriceOracle
-					savePriceOracle(value)
+					const value = parseUiPriceOracle(event.currentTarget.value)
+					if (value !== undefined) savePriceOracle(value)
 				}}
 			>
 				<option value='uniswap'>{appCopy.uniswap}</option>

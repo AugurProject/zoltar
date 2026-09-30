@@ -30,8 +30,6 @@ ui/*/ts/**/*.js
 ui/*/ts/**/*.js.map
 ui/*/ts/abis.ts
 ui/*/ts/contractArtifact.ts
-ui/*/ts/deploymentArtifacts.ts
-ui/*/ts/deploymentsArtifacts.ts
 
 # Build scanner metadata from pinned inputs inside the image.
 augurScan/config/abis.json

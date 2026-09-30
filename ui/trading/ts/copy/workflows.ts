@@ -5,6 +5,7 @@ export const checkingLatestPrice = 'Checking price…'
 export const confirmInWallet = 'Confirm in wallet…'
 export const waitingForConfirmation = 'Waiting for confirmation…'
 export { outcome } from '@zoltar/ui-core-shared/copy/common.js'
+import { walletBalancesUnavailable as walletBalancesUnavailableLabel } from './app.js'
 export const retryBalances = 'Retry balances'
 export const amountPlaceholder = '0.0'
 export const walletYes = 'Wallet YES'
@@ -15,7 +16,7 @@ export const balanceRefreshFailed = 'Balance refresh failed.'
 export { eth, no, yes } from './outcomes.js'
 
 export function walletBalancesUnavailable(reason: string) {
-	return `Wallet balances are unavailable; retry before trading. ${reason}`
+	return `${walletBalancesUnavailableLabel}; retry before trading. ${reason}`
 }
 
 export function preparingAction(action: string) {

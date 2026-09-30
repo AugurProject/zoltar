@@ -5,8 +5,8 @@ export type AddressHistoryQuery = {
 	readonly address: string
 	readonly snapshotBlock: string
 	readonly limit: number
-	readonly cursorBlock?: string
-	readonly cursorIndex?: number
+	readonly cursorBlock?: string | undefined
+	readonly cursorIndex?: number | undefined
 }
 
 export const transactionHistoryAnchor = async (sql: SQL, chainId: number, address: string) =>

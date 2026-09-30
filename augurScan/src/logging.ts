@@ -52,47 +52,44 @@ export const installConsoleTimestamps = (): void => {
 
 const DEFAULT_RPC_LOG_MAX_BYTES = 100 * 1024 * 1024
 
-export class RotatingJsonLog {
-	readonly #filename: string
-	readonly #maximumBytes: number
-	#pending: Promise<void> = Promise.resolve()
+export const createRotatingJsonLog = (filename: string, maximumBytes = DEFAULT_RPC_LOG_MAX_BYTES) => {
+	if (!Number.isSafeInteger(maximumBytes) || maximumBytes < MINIMUM_LOG_RECORD_BYTES) throw new Error(`Log maximum size must be a safe integer of at least ${MINIMUM_LOG_RECORD_BYTES} bytes`)
+	let pending: Promise<void> = Promise.resolve()
 
-	constructor(filename: string, maximumBytes = DEFAULT_RPC_LOG_MAX_BYTES) {
-		if (!Number.isSafeInteger(maximumBytes) || maximumBytes < MINIMUM_LOG_RECORD_BYTES) throw new Error(`Log maximum size must be a safe integer of at least ${MINIMUM_LOG_RECORD_BYTES} bytes`)
-		this.#filename = filename
-		this.#maximumBytes = maximumBytes
-	}
-
-	append(record: unknown): Promise<void> {
-		const line = boundedLogLine(record, this.#maximumBytes)
-		const write = this.#pending.then(() => this.#appendLine(line))
-		this.#pending = write.catch(() => {})
-		return write
-	}
-
-	async #appendLine(line: string): Promise<void> {
-		await mkdir(path.dirname(this.#filename), { recursive: true })
+	const appendLine = async (line: string): Promise<void> => {
+		await mkdir(path.dirname(filename), { recursive: true })
 		const lineBytes = Buffer.byteLength(line)
-		if (lineBytes > this.#maximumBytes) throw new Error('Log record exceeds the file size limit')
+		if (lineBytes > maximumBytes) throw new Error('Log record exceeds the file size limit')
 		let currentBytes = 0
 		try {
-			currentBytes = (await stat(this.#filename)).size
+			currentBytes = (await stat(filename)).size
 		} catch (error) {
 			if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT')) throw error
 		}
-		if (currentBytes > 0 && currentBytes + lineBytes > this.#maximumBytes) {
-			const rotatedFilename = `${this.#filename}.1`
+		if (currentBytes > 0 && currentBytes + lineBytes > maximumBytes) {
+			const rotatedFilename = `${filename}.1`
 			await rm(rotatedFilename, { force: true })
-			await rename(this.#filename, rotatedFilename)
+			await rename(filename, rotatedFilename)
 		}
-		const file = await open(this.#filename, 'a', 0o600)
+		const file = await open(filename, 'a', 0o600)
 		try {
 			await file.writeFile(line)
 		} finally {
 			await file.close()
 		}
 	}
+
+	const append = (record: unknown): Promise<void> => {
+		const line = boundedLogLine(record, maximumBytes)
+		const write = pending.then(() => appendLine(line))
+		pending = write.catch(() => {})
+		return write
+	}
+
+	return { append }
 }
+
+export type RotatingJsonLog = ReturnType<typeof createRotatingJsonLog>
 
 type RpcEnvelope = {
 	readonly id?: JsonValue

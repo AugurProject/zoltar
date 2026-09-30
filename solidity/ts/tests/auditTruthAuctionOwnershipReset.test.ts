@@ -37,12 +37,12 @@ describe('Recursive truth-auction ownership regression', () => {
 		const auctionWinner = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 
-		await manipulatePriceOracleAndPerformOperation(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, attacker.account.address, repDeposit)
+		await manipulatePriceOracleAndPerformOperation(attacker, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, attacker.account.address, repDeposit)
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'the fixture pool should be empty before constructing the recursive scenario')
 
 		await approveAndDepositRepToVault(attacker, attackerRep, questionId)
 		await approveAndDepositRepToVault(passiveVault, passiveRep, questionId)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, PRICE_PRECISION)
 
@@ -147,7 +147,7 @@ describe('Recursive truth-auction ownership regression', () => {
 		await approveToken(client, childRepToken, getInfraContractAddresses().openOracle)
 		const questionEndTime = await getQuestionEndDate(client, questionId)
 		if ((await mockWindow.getTime()) <= questionEndTime) await mockWindow.setTime(questionEndTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, currentPool.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, currentPool.openOraclePriceCoordinator)
 		await depositToEscalationGame(auctionWinner, currentPool.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 		await withdrawFromEscalationGame(auctionWinner, currentPool.securityPool, QuestionOutcome.Yes, [0n])

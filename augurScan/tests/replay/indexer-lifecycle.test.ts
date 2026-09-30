@@ -2860,7 +2860,7 @@ describe('network indexer lifecycle', () => {
 		expect(tokenMetadataNeedsRead(undefined, 1n)).toBe(true)
 		expect(tokenMetadataNeedsRead(tokenMetadata, 34n)).toBe(false)
 		expect(tokenMetadataNeedsRead(tokenMetadata, 35n)).toBe(true)
-		expect(tokenMetadataNeedsRead({ ...tokenMetadata, decimals: 6, readError: undefined }, 100n)).toBe(false)
+		expect(tokenMetadataNeedsRead({ address: tokenMetadata.address, decimals: 6, readBlock: tokenMetadata.readBlock }, 100n)).toBe(false)
 		expect(tokenMetadataNeedsRead(undefined, 41n, 42n)).toBe(false)
 		expect(tokenMetadataNeedsRead(tokenMetadata, 41n, 42n)).toBe(false)
 		expect(tokenMetadataNeedsRead(undefined, 42n, 42n)).toBe(true)

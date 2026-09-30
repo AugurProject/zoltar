@@ -51,11 +51,11 @@ describe('Statoblast: fork migration', () => {
 	describe('liquidation and collateral accounting', () => {
 		const prepareMinimumDebtLiquidation = async (receiverLimitAttoEth = 0n) => {
 			const targetUnderwritingLimitAttoEth = 75n * 10n ** 18n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, targetUnderwritingLimitAttoEth)
 			const receiverClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 			await approveToken(receiverClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRepToVault(receiverClient, securityPoolAddresses.securityPool, repDeposit * 10n, 2_000_000_000n)
-			await setVaultCapacityFixture(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, receiverClient.account.address, receiverLimitAttoEth)
+			await setVaultCapacityFixture(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, receiverClient.account.address, receiverLimitAttoEth)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 30n * 10n ** 18n)
 			await mockWindow.advanceTime(100000n)
 			return { receiverClient, forcedPrice: PRICE_PRECISION * 200n }
@@ -64,8 +64,8 @@ describe('Statoblast: fork migration', () => {
 		test('liquidation transfers REP from the target to the liquidator', async () => {
 			const securityPoolUnderwritingLimitAttoEth = 75n * 10n ** 18n
 			strictEqualTypeSafe(await getCurrentRetentionRate(client, securityPoolAddresses.securityPool), MAX_RETENTION_RATE, 'retention rate was not at max')
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			const initialPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			const initialPrice = await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator)
 			assert.ok(initialPrice > 0n, 'Price was not set!')
 			strictEqualTypeSafe(await getTotalUnderwritingLimitAttoEth(client, securityPoolAddresses.securityPool), securityPoolUnderwritingLimitAttoEth, 'capacity ownership')
 
@@ -83,7 +83,7 @@ describe('Statoblast: fork migration', () => {
 			// REP/ETH increases until the target's live open interest exceeds its backing.
 			const forcedPrice = PRICE_PRECISION * 200n
 			const liquidationDebtAttoEth = 20n * 10n ** 18n
-			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationDebtAttoEth, forcedPrice)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, liquidationDebtAttoEth, forcedPrice)
 			await writeContractAndWait(liquidatorClient, () =>
 				liquidatorClient.writeContract({
 					abi: ReputationToken_ReputationToken.abi,
@@ -97,9 +97,9 @@ describe('Statoblast: fork migration', () => {
 			const targetClaimBeforeLiquidation = await getVaultRepClaim(client.account.address)
 			const liquidatorClaimBeforeLiquidation = await getVaultRepClaim(liquidatorClient.account.address)
 
-			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
-			const currentPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			const currentPrice = await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator)
 			strictEqualTypeSafe(currentPrice, forcedPrice, 'Price did not increase!')
 
 			strictEqualTypeSafe(canLiquidate(currentPrice, securityPoolUnderwritingLimitAttoEth, repDeposit, statoblastSecurityMultiplierBps), true, 'Should be able to liquidate now')
@@ -129,8 +129,8 @@ describe('Statoblast: fork migration', () => {
 				args: [receiverClient.account.address],
 			})
 
-			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 75n * 10n ** 16n, forcedPrice)
-			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 75n * 10n ** 16n, forcedPrice)
+			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const receiverVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)
@@ -149,7 +149,7 @@ describe('Statoblast: fork migration', () => {
 
 		// The receiver lets the operator liquidate the client vault up to 1 ETH per operation and 2 ETH in total.
 		const installTargetLiquidationApproval = async (receiverClient: WriteClient, operatorClient: WriteClient, nonce: bigint) => {
-			const registryAddress = await client.readContract({ address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'liquidationApprovalRegistry' })
+			const registryAddress = await client.readContract({ address: securityPoolAddresses.openOraclePriceCoordinator, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'liquidationApprovalRegistry' })
 			const approval = {
 				securityPool: securityPoolAddresses.securityPool,
 				receiverVault: receiverClient.account.address,
@@ -174,7 +174,7 @@ describe('Statoblast: fork migration', () => {
 
 			const receiverVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)
 			const operatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, operatorClient.account.address)
-			await queueDelegatedLiquidationAtForcedPrice(operatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, receiverClient.account.address, requestedDebtAttoEth, approvalId, forcedPrice)
+			await queueDelegatedLiquidationAtForcedPrice(operatorClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, receiverClient.account.address, requestedDebtAttoEth, approvalId, forcedPrice)
 			const reservedState = await client.readContract({
 				address: registryAddress,
 				abi: statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry.abi,
@@ -192,7 +192,7 @@ describe('Statoblast: fork migration', () => {
 				}),
 			)
 
-			await handleOracleReporting(operatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await handleOracleReporting(operatorClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
 			const receiverOpenInterestAfter = await client.readContract({
 				address: securityPoolAddresses.securityPool,
@@ -224,7 +224,7 @@ describe('Statoblast: fork migration', () => {
 			const cleanerClient = createWriteClient(mockWindow, TEST_ADDRESSES[3])
 			const requestedDebtAttoEth = 5n * 10n ** 17n
 			const validForSeconds = 60n
-			const coordinatorAddress = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+			const coordinatorAddress = securityPoolAddresses.openOraclePriceCoordinator
 			const { registryAddress, approval, approvalId } = await installTargetLiquidationApproval(receiverClient, operatorClient, 2n)
 			await queueDelegatedLiquidationAtForcedPrice(operatorClient, coordinatorAddress, client.account.address, receiverClient.account.address, requestedDebtAttoEth, approvalId, forcedPrice, validForSeconds)
 			const operationId = await getStagedOperationCounter(client, coordinatorAddress)
@@ -257,8 +257,8 @@ describe('Statoblast: fork migration', () => {
 				functionName: 'totalBadDebtAttoEth',
 			})
 
-			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 5n * 10n ** 17n, forcedPrice)
-			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 5n * 10n ** 17n, forcedPrice)
+			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const receiverVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)
@@ -279,8 +279,8 @@ describe('Statoblast: fork migration', () => {
 				args: [client.account.address],
 			})
 
-			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetOpenInterestBefore - 5n * 10n ** 17n, forcedPrice)
-			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, targetOpenInterestBefore - 5n * 10n ** 17n, forcedPrice)
+			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
 			const targetVaultAfterDustAttempt = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const receiverVaultAfterDustAttempt = await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)
@@ -292,8 +292,8 @@ describe('Statoblast: fork migration', () => {
 			const { receiverClient, forcedPrice } = await prepareMinimumDebtLiquidation()
 			const receiverVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)
 
-			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 75n * 10n ** 18n, forcedPrice)
-			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 75n * 10n ** 18n, forcedPrice)
+			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
 			strictEqualTypeSafe(await client.readContract({ address: securityPoolAddresses.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getVaultUnderwritingLimitAttoEth', args: [client.account.address] }), 0n, 'a full-target liquidation should permit the zero-debt boundary')
 			assert.ok((await getSecurityVault(client, securityPoolAddresses.securityPool, receiverClient.account.address)).underwritingLimitAttoEth > receiverVaultBefore.underwritingLimitAttoEth, 'the receiver should gain ownership when the target is fully liquidated')
@@ -302,8 +302,8 @@ describe('Statoblast: fork migration', () => {
 		test('incomplete liquidation retains commitments through fee decay without recording fictitious losses', async () => {
 			const { receiverClient, forcedPrice } = await prepareMinimumDebtLiquidation()
 			const underfundedPrice = forcedPrice * 10n
-			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n, underfundedPrice)
-			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, underfundedPrice)
+			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 30n * 10n ** 18n, underfundedPrice)
+			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, underfundedPrice)
 			const totalBadDebtAttoEth = await client.readContract({
 				address: securityPoolAddresses.securityPool,
 				abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -322,15 +322,15 @@ describe('Statoblast: fork migration', () => {
 			assert.ok(settlementCollateralAttoEth < initialCollateralAttoEth, 'retained commitments continue earning fees')
 			strictEqualTypeSafe((await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).underwritingLimitAttoEth, residualBefore, 'fee decay must not erase residual commitments')
 
-			await manipulatePriceOracleAndPerformOperation(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, receiverClient.account.address, 1n, underfundedPrice)
+			await manipulatePriceOracleAndPerformOperation(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, receiverClient.account.address, 1n, underfundedPrice)
 			await assert.rejects(depositToEscalationGame(receiverClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Pool backing insufficient/)
 		})
 
 		test('vault migration preserves retained commitments, backing and fees without writing off exposure', async () => {
 			const { receiverClient, forcedPrice } = await prepareMinimumDebtLiquidation()
 			const underfundedPrice = forcedPrice * 10n
-			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n, underfundedPrice)
-			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, underfundedPrice)
+			await queueLiquidationAtForcedPrice(receiverClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 30n * 10n ** 18n, underfundedPrice)
+			await handleOracleReporting(receiverClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, underfundedPrice)
 			const parentBackingAttoRep = await getVaultRepClaim(client.account.address)
 			await triggerExternalForkForSecurityPool(undefined, 'retained commitment migration source')
 			await updateVaultFees(client, securityPoolAddresses.securityPool, client.account.address)
@@ -383,12 +383,12 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = 75n * 10n ** 18n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			const targetVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const targetClaimBefore = await getVaultRepClaim(client.account.address)
 			const liquidationDebtAttoEth = 20n * 10n ** 18n
 
-			await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, liquidationDebtAttoEth), /Receiver is target/)
+			await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.openOraclePriceCoordinator, OperationType.Liquidation, client.account.address, liquidationDebtAttoEth), /Receiver is target/)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 			const targetClaimAfter = await getVaultRepClaim(client.account.address)
@@ -401,8 +401,8 @@ describe('Statoblast: fork migration', () => {
 		test('liquidation quote is invalidated by an additional REP deposit', async () => {
 			const securityPoolUnderwritingLimitAttoEth = 75n * 10n ** 18n
 			// Set the target's capacity ownership
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			assert.ok((await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)) > 0n, 'Price was not set!')
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			assert.ok((await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator)) > 0n, 'Price was not set!')
 			strictEqualTypeSafe(await getTotalUnderwritingLimitAttoEth(client, securityPoolAddresses.securityPool), securityPoolUnderwritingLimitAttoEth, 'capacity ownership')
 
 			// Create liquidator and deposit rep
@@ -426,7 +426,7 @@ describe('Statoblast: fork migration', () => {
 			// Queue liquidation (liquidator requests price to trigger liquidation)
 			const forcedPrice = PRICE_PRECISION * 10n
 			const liquidationDebtAttoEth = 20n * 10n ** 18n
-			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, liquidationDebtAttoEth, forcedPrice)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, liquidationDebtAttoEth, forcedPrice)
 
 			// Record liquidator's backingUnits before attack
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -444,7 +444,7 @@ describe('Statoblast: fork migration', () => {
 			const totalRepAfter = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 
 			// Trigger the queued liquidation by reporting the forced price
-			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedPrice)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedPrice)
 
 			// After liquidation, read final states
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -471,7 +471,7 @@ describe('Statoblast: fork migration', () => {
 
 			await approveToken(targetClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRepToVault(targetClient, securityPoolAddresses.securityPool, minimumRepDeposit)
-			await setVaultCapacityFixture(targetClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumUnderwritingLimitAttoEth, underwritingLimitAttoEthCreationPrice)
+			await setVaultCapacityFixture(targetClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, targetClient.account.address, minimumUnderwritingLimitAttoEth, underwritingLimitAttoEthCreationPrice)
 
 			await approveToken(liquidatorClient, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 			await depositRepToVault(liquidatorClient, securityPoolAddresses.securityPool, repDeposit * 2n, 2_000_000_000n)
@@ -481,9 +481,9 @@ describe('Statoblast: fork migration', () => {
 			const liquidatorVaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
 			const liquidatorClaimBefore = await getVaultRepClaim(liquidatorClient.account.address)
 
-			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, targetClient.account.address, minimumUnderwritingLimitAttoEth, liquidationPrice)
+			await queueLiquidationAtForcedPrice(liquidatorClient, securityPoolAddresses.openOraclePriceCoordinator, targetClient.account.address, minimumUnderwritingLimitAttoEth, liquidationPrice)
 			await depositRepToVault(targetClient, securityPoolAddresses.securityPool, extraRepAmount)
-			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationPrice)
+			await handleOracleReporting(liquidatorClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, liquidationPrice)
 
 			const targetVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, targetClient.account.address)
 			const liquidatorVaultAfter = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidatorClient.account.address)
@@ -502,7 +502,7 @@ describe('Statoblast: fork migration', () => {
 
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 			const lockedDeposit = 100n * 10n ** 18n
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)

@@ -3,7 +3,7 @@ import { type ContractDeploymentObservation, DatabaseConsistencyError, type LogS
 import { errorChainIncludes } from '../error-chain.ts'
 import { type Address, type Block, type Hash, type Hex, type PublicClient, parseAbi, parseAbiItem, zeroAddress } from '../ethereum.ts'
 import { deploymentReadBudget, isPermanentHistoricalCodeError, isProtocolActivitySource, isPrunedHistoricalStateError, type RpcProvider, requiresManifestHistoryCoverage, safeIndexerFailureReason } from '../indexer-runtime.ts'
-import { RotatingJsonLog } from '../logging.ts'
+import { createRotatingJsonLog } from '../logging.ts'
 import { createRpcRequestQueue, rpcQueueSaturationFrom } from '../rpc-request-queue.ts'
 import { bigintToSafeNumber } from '../time.ts'
 import type { ContractMetadata, ManifestContract, TokenMetadata } from '../types.ts'
@@ -133,7 +133,7 @@ export const chunks = <T>(items: readonly T[], size: number): T[][] => {
 }
 
 export const rpcRequestQueue = createRpcRequestQueue(RPC_CONCURRENCY, RPC_MAX_PENDING)
-export const rpcExchangeLog = new RotatingJsonLog(runtimeConfig.rpcLogPath)
+export const rpcExchangeLog = createRotatingJsonLog(runtimeConfig.rpcLogPath)
 
 const rpcLogAddressGroups = <T>(addresses: readonly T[]): readonly T[][] => chunks(addresses, 5)
 

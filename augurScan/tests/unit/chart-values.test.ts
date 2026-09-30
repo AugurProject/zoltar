@@ -59,7 +59,7 @@ test('keeps each Uniswap pool as a provenance-preserving sparse series on one va
 	const secondRow = model.rows[1]
 	if (firstRow === undefined || secondRow === undefined || model.latestObservation === undefined) throw new Error('Expected two chart rows')
 	expect(firstRow).toMatchObject({ market_id: '0xpool-a', uniswap_price_0: '18000000000000000000' })
-	expect(firstRow.uniswap_price_1).toBeUndefined()
+	expect(firstRow['uniswap_price_1']).toBeUndefined()
 	expect(secondRow).toMatchObject({ market_id: '0xpool-b', uniswap_price_1: '19000000000000000000' })
 	expect(model.sharedRange).toEqual([18, 19])
 	expect(model.latestObservation).toMatchObject({ market_id: '0xpool-b', rep_per_eth_1e18: '19000000000000000000' })
@@ -102,7 +102,7 @@ test('keeps incompatible Uniswap liquidity measures in provenance-labeled sparse
 		{ label: 'V3 · 0.3% · WETH · 0xv3 liquidity', unit: '√(REP × WETH)', decimals: 18 },
 	])
 	expect(model.rows[0]).toMatchObject({ market_id: '0xv2', uniswap_liquidity_0: '900' })
-	expect(model.rows[0]?.uniswap_liquidity_1).toBeUndefined()
+	expect(model.rows[0]?.['uniswap_liquidity_1']).toBeUndefined()
 	expect(model.rows[1]).toMatchObject({ market_id: '0xv3', uniswap_liquidity_1: '1200' })
 	const v3Row = model.rows[1]
 	if (v3Row === undefined) throw new Error('Expected a V3 liquidity row')

@@ -102,7 +102,7 @@ export function App() {
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
 	const { zoltarUniverse, zoltarUniverseError } = marketCreation
-	const { activeOpenOracleView, loadOracleReport, onViewPendingReport, openOracleRouteContentProps, priceOracleManager, setOpenOracleForm } = useOpenOracleRoute({
+	const { activeOpenOracleView, loadOracleReport, onViewPendingReport, openOracleRouteContentProps, openOraclePriceCoordinator, setOpenOracleForm } = useOpenOracleRoute({
 		accountState,
 		activeEnvironmentNonce,
 		canReadOnchainData,
@@ -130,7 +130,7 @@ export function App() {
 		setVaultView,
 		onViewPendingReport,
 		openSecurityPoolInUniverse,
-		priceOracleManager,
+		openOraclePriceCoordinator,
 		repPerEthPrice,
 		repPerEthSource,
 		repPerEthSourceUrl,

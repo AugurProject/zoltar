@@ -451,7 +451,7 @@ describe('contract deployment internals', () => {
 			},
 		})
 
-		await expect(oracleStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		await expect(oracleStep.deploy(client)).rejects.toThrow('Transaction was canceled in the wallet before confirmation.')
 		expect(onTransactionSubmitted).toHaveBeenCalledWith(replacementHash, 'pending', expect.any(String))
 	})
 
@@ -1113,7 +1113,7 @@ describe('contract deployment internals', () => {
 			},
 		})
 
-		await expect(proxyStep.deploy(client)).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		await expect(proxyStep.deploy(client)).rejects.toThrow('Transaction was canceled in the wallet before confirmation.')
 		expect(sendRawTransactionCalled).toBe(true)
 	})
 

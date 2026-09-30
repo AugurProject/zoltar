@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const migrateShares = 'Migrate shares'
 export const mintCompleteSets = 'Mint complete sets'
 export const redeemCompleteSets = 'Redeem complete sets'
@@ -13,10 +14,10 @@ export const childTargetsLockedReason = 'Child-universe targets unlock after thi
 export const formatActionUnavailableReason = (actionLabel: string) => `${actionLabel} is not available right now.`
 export const redeemCompleteSetsAmount = 'ETH to redeem'
 export const redeemCompleteSetsFeeDetail = 'The pool deducts accrued holding fees before redeeming, so you may receive slightly less ETH than shown. Max redeems every complete set you hold.'
-export const shareMigrationWalletRequiredReason = 'Connect a wallet before migrating shares.'
-export const completeSetMintWalletRequiredReason = 'Connect a wallet before minting complete sets.'
-export const completeSetBurnWalletRequiredReason = 'Connect a wallet before redeeming complete sets.'
-export const shareRedemptionWalletRequiredReason = 'Connect a wallet before redeeming shares.'
+export const shareMigrationWalletRequiredReason = commonCopy.formatConnectWalletBefore('migrating shares')
+export const completeSetMintWalletRequiredReason = commonCopy.formatConnectWalletBefore('minting complete sets')
+export const completeSetBurnWalletRequiredReason = commonCopy.formatConnectWalletBefore('redeeming complete sets')
+export const shareRedemptionWalletRequiredReason = commonCopy.formatConnectWalletBefore('redeeming shares')
 export const loadingWalletShareBalances = 'Loading wallet share balances.'
 export const shareMigrationPoolRequiredReason = 'Select a pool before migrating shares.'
 export const completeSetMintPoolRequiredReason = 'Select a pool before minting complete sets.'

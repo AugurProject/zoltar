@@ -3,7 +3,7 @@ import { isJsonArray } from './api-validation.ts'
 
 export type LiveRecord = { key: string; signature: string }
 export type ClassifiedLiveRecord = LiveRecord & { state: 'added' | 'changed' | 'unchanged' }
-export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor }
+export type Page<T, Cursor = string> = { items: T[]; nextCursor?: Cursor | undefined }
 export type RefreshOperation<T> = () => T | Promise<T>
 
 export interface SessionSnapshotStorage {
@@ -107,13 +107,13 @@ export interface NetworkFreshnessRecord {
 	start_block?: string | number | null
 	indexed_block?: string | number | null
 	observed_block?: string | number | null
-	indexed_timestamp?: string | null
+	indexed_timestamp?: string | null | undefined
 }
 
 export interface IndexerProgressSample {
 	indexedBlock: number
 	sampledAt: number
-	blocksPerSecond?: number
+	blocksPerSecond?: number | undefined
 }
 
 export interface ContractDeploymentRecord {
@@ -124,12 +124,12 @@ export interface ContractDeploymentRecord {
 
 export interface TransactionDialogSnapshot {
 	expandedKeys: string[]
-	anchorKey?: string
-	anchorTop?: number
-	focusKey?: string
+	anchorKey?: string | undefined
+	anchorTop?: number | undefined
+	focusKey?: string | undefined
 	focusIndex: number
-	outsideFocus?: string
-	scrollTop?: number
+	outsideFocus?: string | undefined
+	scrollTop?: number | undefined
 }
 
 export type HistoryInvalidationReason = 'chain-reorg' | 'manifest-reset' | 'start-boundary-advanced' | 'abi-redecode' | 'projection-rebuild'
@@ -196,8 +196,8 @@ interface ActivityDetailDrawerLike {
 
 export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: ActivityDetailDrawerLike): boolean => {
 	const rows = Array.from(feed.querySelectorAll('.log-row[data-live-key]'))
-	const rowKeys = rows.flatMap(row => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey]))
-	const anchorIndex = activityDetailAnchorIndex(rowKeys, drawer.dataset.triggerKey)
+	const rowKeys = rows.flatMap(row => (row.dataset['liveKey'] === undefined ? [] : [row.dataset['liveKey']]))
+	const anchorIndex = activityDetailAnchorIndex(rowKeys, drawer.dataset['triggerKey'])
 	const anchor = anchorIndex === undefined ? undefined : rows[anchorIndex]
 	if (anchor === undefined) return false
 	anchor.after(drawer)
@@ -207,9 +207,9 @@ export const placeActivityDetailDrawer = (feed: ActivityDetailFeedLike, drawer: 
 export interface ActivityDetailFocusSnapshot {
 	drawerFocused: boolean
 	focusIndex: number
-	focusKey?: string
-	focusKeyOccurrence?: number
-	focusTop?: number
+	focusKey?: string | undefined
+	focusKeyOccurrence?: number | undefined
+	focusTop?: number | undefined
 }
 
 interface ActivityDetailFocusableLike {
@@ -292,11 +292,11 @@ interface DisclosureContainerLike {
 }
 
 export const captureDisclosureState = (container: DisclosureContainerLike): Readonly<Record<string, boolean>> =>
-	Object.fromEntries(Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]')).flatMap(item => (item.dataset.disclosureKey === undefined ? [] : [[item.dataset.disclosureKey, item.open === true] as const])))
+	Object.fromEntries(Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]')).flatMap(item => (item.dataset['disclosureKey'] === undefined ? [] : [[item.dataset['disclosureKey'], item.open === true] as const])))
 
 export const restoreDisclosureState = (container: DisclosureContainerLike, state: Readonly<Record<string, boolean>>): void => {
 	for (const item of Array.from(container.querySelectorAll('.detail-disclosure[data-disclosure-key]'))) {
-		const key = item.dataset.disclosureKey
+		const key = item.dataset['disclosureKey']
 		if (key === undefined || state[key] === undefined) continue
 		item.open = state[key]
 	}
@@ -583,11 +583,11 @@ const snapshotReadStatusLabel = (readStatus: unknown) => {
 export const operationsDetailSummaryPresentation = (
 	kind: OperationsDetailKind,
 	state: {
-		readonly currentEvent?: JsonValue
-		readonly lifecycleState?: JsonValue
-		readonly protocolState?: JsonValue
-		readonly scannerSeverity?: JsonValue
-		readonly snapshotReadStatus?: JsonValue
+		readonly currentEvent?: JsonValue | undefined
+		readonly lifecycleState?: JsonValue | undefined
+		readonly protocolState?: JsonValue | undefined
+		readonly scannerSeverity?: JsonValue | undefined
+		readonly snapshotReadStatus?: JsonValue | undefined
 	},
 ): { readonly label: string; readonly value: string } => {
 	if (kind === 'pool' || kind === 'vault')
@@ -628,7 +628,7 @@ const operationsLoadDisposition = (activeContext: string, requestedContext: stri
 	return live || hasPaginationTarget ? 'queue' : 'join'
 }
 
-export type OperationsLoadState = { promise?: Promise<boolean>; context?: string }
+export type OperationsLoadState = { promise?: Promise<boolean> | undefined; context?: string | undefined }
 
 export const runSerializedOperationsLoad = async (state: OperationsLoadState, requestedContext: string, live: boolean, hasPaginationTarget: boolean, currentContext: () => string, supersede: () => void, run: () => Promise<boolean>): Promise<boolean> => {
 	while (state.promise !== undefined) {

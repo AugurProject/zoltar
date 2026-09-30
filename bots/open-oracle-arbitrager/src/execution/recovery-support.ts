@@ -18,8 +18,8 @@ export function dateFromBlockTimestamp(timestamp: bigint) {
 	return new Date(bigintToSafeNumber(milliseconds, 'Canonical block timestamp'))
 }
 
-export async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
-	const expenditures = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, receipts)
+export async function confirmedGasExpenditures(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, label: string, receipts: Parameters<typeof receiptGasExpendituresWithQuorum>[3]) {
+	const expenditures = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, receipts, config.rpcQuorum)
 	return expenditures.map(expenditure => ({
 		costEth: decimalWeth(expenditure.costAttoEth),
 		minedAt: expenditure.minedAt,
@@ -36,8 +36,8 @@ export function durableTransactionIntent(transaction: { input: Hex; to?: Address
 	}
 }
 
-export async function recoveredTransactionIntentMismatchWithQuorum(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, label: string, transactionHash: Hex, account: Address, nonce: string | undefined, expected: DurableTransactionIntent | undefined) {
-	const actual = await transactionIntentWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, transactionHash)
+export async function recoveredTransactionIntentMismatchWithQuorum(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, label: string, transactionHash: Hex, account: Address, nonce: string | undefined, expected: DurableTransactionIntent | undefined) {
+	const actual = await transactionIntentWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], label, transactionHash, config.rpcQuorum)
 	return recoveredTransactionIntentMismatch(expected, actual, account, nonce)
 }
 
@@ -130,7 +130,7 @@ async function canonicalBlockSnapshot<T>(client: ReadClient, endpoint: string, b
 	return { blockHash: blockAfter.hash, blockTimestamp: blockAfter.timestamp, value }
 }
 
-export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, account: Address) {
+export async function pendingNonceWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, account: Address) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	return settledQuorumValue(
 		'pending account nonce used for signing',
@@ -138,10 +138,11 @@ export async function pendingNonceWithQuorum(clients: readonly ReadClient[], con
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.getTransactionCount({ address: account, blockTag: 'pending' }),
 		})),
+		config.rpcQuorum,
 	)
 }
 
-export async function confirmedNonceWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, account: Address, blockNumber: bigint) {
+export async function confirmedNonceWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, account: Address, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	return settledQuorumValue(
 		`confirmed account nonce at block ${blockNumber.toString()}`,
@@ -149,6 +150,7 @@ export async function confirmedNonceWithQuorum(clients: readonly ReadClient[], c
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.getTransactionCount({ address: account, blockNumber }),
 		})),
+		config.rpcQuorum,
 	)
 }
 
@@ -160,6 +162,7 @@ export async function currentBlockNumberWithQuorum(clients: readonly ReadClient[
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.getBlockNumber(),
 		})),
+		config.rpcQuorum,
 	)
 }
 
@@ -206,7 +209,7 @@ async function storedReport(client: ReadClient, openOracle: Address, id: bigint,
 	return decodeStoredReport(rawGame, rawHelper, id)
 }
 
-type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coordinatorAddresses' | 'openOracle' | 'quorumRpcUrls'> & { network: Pick<Configuration['network'], 'multicall3'> }
+type CoordinatorReportConfiguration = Pick<Configuration, 'connectivity' | 'coordinatorAddresses' | 'openOracle' | 'quorumRpcUrls' | 'rpcQuorum'> & { network: Pick<Configuration['network'], 'multicall3'> }
 
 /** Reads every coordinator's pending report id in one batch, then every pending report's stored state in a second. */
 export async function pendingCoordinatorReports(client: BatchReader, config: Pick<CoordinatorReportConfiguration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber: bigint) {
@@ -245,6 +248,7 @@ export async function pendingCoordinatorReportsWithQuorum(clients: readonly Read
 			const snapshot = await canonicalBlockSnapshot(client, endpoint, blockNumber, 'pending coordinator report snapshot', () => pendingCoordinatorReports(client, config, blockNumber))
 			return { endpoint, value: { blockHash: snapshot.blockHash, reports: snapshot.value } }
 		}),
+		config.rpcQuorum,
 	).then(result => result.reports)
 }
 
@@ -258,7 +262,7 @@ async function disputeRecord(client: ReadClient, openOracle: Address, reportId: 
 	}
 }
 
-export async function replacementDisputeAmountsWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls'>, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
+export async function replacementDisputeAmountsWithQuorum(clients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls' | 'rpcQuorum'>, reportId: bigint, disputeIndex: bigint, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	return settledQuorumValue(
 		`replacement dispute ${disputeIndex.toString()} for report ${reportId.toString()} at block ${blockNumber.toString()}`,
@@ -267,6 +271,7 @@ export async function replacementDisputeAmountsWithQuorum(clients: readonly Read
 			const snapshot = await canonicalBlockSnapshot(client, endpoint, blockNumber, 'replacement dispute snapshot', () => disputeRecord(client, config.openOracle, reportId, disputeIndex, blockNumber))
 			return { endpoint, value: { blockHash: snapshot.blockHash, record: snapshot.value } }
 		}),
+		config.rpcQuorum,
 	)
 }
 
@@ -286,6 +291,7 @@ export async function storedReportWithQuorum(clients: readonly ReadClient[], con
 				},
 			}
 		}),
+		config.rpcQuorum,
 	)
 }
 
@@ -320,5 +326,6 @@ export async function lifecycleBalancesWithQuorum(clients: readonly ReadClient[]
 				},
 			}
 		}),
+		config.rpcQuorum,
 	)
 }

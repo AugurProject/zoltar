@@ -187,7 +187,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 		)
 
 		const authorizedUnderwritingLimitAttoEth = repDeposit / 5n
-		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, authorizedUnderwritingLimitAttoEth)
+		await setVaultCapacityFixture(client, mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator, client.account.address, authorizedUnderwritingLimitAttoEth)
 		assert.strictEqual(await getTotalUnderwritingLimitAttoEth(client, securityPool), authorizedUnderwritingLimitAttoEth)
 
 		const rawFactory = await client.readContract({
@@ -233,7 +233,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 			{ name: 'activateRecoveredCommitment', data: encodeFunctionData({ abi: poolAbi, functionName: 'activateRecoveredCommitment', args: [attacker.account.address, 1n] }) },
 			{ name: 'assignFinalizedAuctionFees', data: encodeFunctionData({ abi: poolAbi, functionName: 'assignFinalizedAuctionFees', args: [attacker.account.address, 1n, 0n] }) },
 			{ name: 'setTotalRepBackingUnits', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalRepBackingUnits', args: [1n] }) },
-			{ name: 'setTotalSharesAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setTotalSharesAttoShares', args: [1n] }) },
+			{ name: 'setShareTokenSupplyAttoShares', data: encodeFunctionData({ abi: poolAbi, functionName: 'setShareTokenSupplyAttoShares', args: [1n] }) },
 			{ name: 'setPoolFinancials', data: encodeFunctionData({ abi: poolAbi, functionName: 'setPoolFinancials', args: [0n, 0n, 0n, 0n] }) },
 			{ name: 'transferEth', data: encodeFunctionData({ abi: poolAbi, functionName: 'transferEth', args: [attacker.account.address, 0n] }) },
 			{ name: 'authorizeChildPool', data: encodeFunctionData({ abi: poolAbi, functionName: 'authorizeChildPool', args: [zeroAddress] }) },
@@ -248,7 +248,7 @@ describe('Statoblast: privileged authorization matrix', () => {
 	test('pool-only escalation deposit and withdrawal selectors reject direct callers', async () => {
 		const attacker = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPool, QuestionOutcome.Yes, repDeposit / 10n)
 		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPool)
 		const deposits = await getEscalationGameDeposits(client, escalationGame, QuestionOutcome.Yes)

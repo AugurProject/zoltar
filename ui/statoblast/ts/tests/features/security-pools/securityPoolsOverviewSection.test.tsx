@@ -152,7 +152,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolSummaryMetrics pool={pool} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const label = within(document.body).getByText('Pool-held REP per committed ETH')
-		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6 REP per ETH')
+		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6\u00a0REP per ETH')
 	})
 
 	test('renders standing ETH commitments separately from REP backing', async () => {
@@ -713,7 +713,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
-		expect(rowText).toContain('25.0% used')
+		expect(rowText).toContain('25% used')
 		expect(rowText).toContain('3.00 ETH remaining')
 	})
 

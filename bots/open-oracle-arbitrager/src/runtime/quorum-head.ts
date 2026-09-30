@@ -4,7 +4,7 @@ import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
-import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import type { RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 type ContextualRpcRead = <Value>(method: string, request: (requestClient: PublicClient<Transport, Chain>) => Promise<Value>, explicitRpcUrl: string) => Promise<Value>
 
@@ -12,7 +12,7 @@ type ContextualRpcRead = <Value>(method: string, request: (requestClient: Public
  * Agrees on the lowest head every available reader reports, then requires the configured quorum to
  * return the same block hash for it. The returned block is reused by the scan; it is not read again.
  */
-export async function selectQuorumHead<TClient>(readClients: readonly TClient[], endpoints: readonly string[], contextualRpcRead: ContextualRpcRead) {
+export async function selectQuorumHead<TClient>(readClients: readonly TClient[], endpoints: readonly string[], contextualRpcRead: ContextualRpcRead, quorumRequirement: RpcQuorumRequirement) {
 	const settledHeads = await Promise.allSettled(
 		readClients.map(async (_, index) => {
 			const rpcUrl = endpoints[index] ?? ''
@@ -24,7 +24,6 @@ export async function selectQuorumHead<TClient>(readClients: readonly TClient[],
 		}),
 	)
 	const availableHeads = availableSettledValues(settledHeads)
-	const quorumRequirement = rpcQuorumRequirement()
 	if (availableHeads.length < quorumRequirement) {
 		const failures = settledHeads.flatMap(result => (result.status === 'rejected' ? [errorMessage(result.reason)] : []))
 		throw new ConnectivityDegradedError(`Canonical head does not satisfy the configured RPC quorum requirement: ${failures.join('; ')}`)
@@ -65,12 +64,12 @@ export async function selectQuorumHead<TClient>(readClients: readonly TClient[],
  * Live mode starts on a read client only after the configured quorum agrees the endpoints serve the configured chain.
  * The first endpoint that answered becomes the scan client until the canonical head selects one.
  */
-export async function selectQuorumChainClient<TClient>(readClients: readonly TClient[], endpoints: readonly string[], network: Pick<NetworkConfiguration, 'chain' | 'name'>, contextualRpcRead: ContextualRpcRead) {
+export async function selectQuorumChainClient<TClient>(readClients: readonly TClient[], endpoints: readonly string[], network: Pick<NetworkConfiguration, 'chain' | 'name'>, contextualRpcRead: ContextualRpcRead, quorumRequirement: RpcQuorumRequirement) {
 	const chainReads = readClients.map(async (_, index) => {
 		const rpcUrl = endpoints[index] ?? ''
 		return { endpoint: endpointLabel(rpcUrl), index, value: await contextualRpcRead('eth_chainId', requestClient => requestClient.getChainId(), rpcUrl) }
 	})
-	const observedChainId = await settledQuorumValue('configured chain id', chainReads)
+	const observedChainId = await settledQuorumValue('configured chain id', chainReads, quorumRequirement)
 	if (observedChainId !== network.chain.id) throw new Error(`Read RPC quorum ${endpoints.map(endpointLabel).join(', ')} returned chain ${observedChainId.toString()} while calling eth_chainId; expected ${network.name} chain ${network.chain.id.toString()}`)
 	const available = (await Promise.allSettled(chainReads)).find(result => result.status === 'fulfilled')
 	const client = available === undefined ? undefined : readClients[available.value.index]

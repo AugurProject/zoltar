@@ -11,7 +11,7 @@ import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
 import { RequestPriceModal } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/RequestPriceModal.js'
-import { defaultUsePriceOracleManagerDependencies, usePriceOracleManager } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
+import { defaultUseOpenOraclePriceCoordinatorDependencies, useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
 import type { RequestPriceReview } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolOracleSections.js'
 import { addOpenOracleBountyBuffer } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 import { loadTradingPoolOracle } from '../protocol/poolOracle.js'
@@ -64,7 +64,7 @@ function PoolLiquidityWorkspace({ loadOracle = loadTradingPoolOracle, ...props }
 		lastRefresh.current = props.nowSeconds
 		void refreshOracle()
 	}, [loading, props.nowSeconds, refreshOracle])
-	const manager = usePriceOracleManager(
+	const manager = useOpenOraclePriceCoordinator(
 		{
 			...tray,
 			accountAddress: props.account,
@@ -74,7 +74,7 @@ function PoolLiquidityWorkspace({ loadOracle = loadTradingPoolOracle, ...props }
 			},
 		},
 		{
-			...defaultUsePriceOracleManagerDependencies,
+			...defaultUseOpenOraclePriceCoordinatorDependencies,
 			createWalletWriteClient: (account, callbacks) =>
 				createReviewedClient(
 					createWalletWriteClient(account, callbacks),

@@ -4,7 +4,8 @@ import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { getGenesisReputationTokenAddress } from '@zoltar/ui-zoltar-shared/protocol/activeProtocolAddresses.js'
-import { bigintToAddress, getEscalationSideLabel, getForkOutcomeKey, getMarketType, getMinBigintValue, getProtocolPageOffset, getQuestionIdHex, hasTimestamp, hasTimestampAndNumber, isBigintTriple, isStringArray, requireUniverseTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { bigintToAddress, getEscalationSideLabel, getForkOutcomeKey, getMarketType, getMinBigintValue, getProtocolPageOffset, hasTimestamp, hasTimestampAndNumber, isBigintTriple, isStringArray, requireUniverseTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 
 const questionData = {
@@ -63,7 +64,7 @@ describe('contracts helpers', () => {
 
 		expect(idA).toBe(idB)
 		expect(idDifferent).not.toBe(idA)
-		expect(getQuestionIdHex(idA)).toBe(`0x${idA.toString(16)}`)
+		expect(formatQuestionIdHex(idA)).toBe(`0x${idA.toString(16)}`)
 	})
 
 	test('mapping helpers cover all enumerations and default/unknown branches', () => {

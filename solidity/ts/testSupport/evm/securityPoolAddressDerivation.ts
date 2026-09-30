@@ -6,7 +6,7 @@ type SecurityPoolCoreAddresses = {
 	escalationGameFactory: Address
 	escalationGameProofVerifier: Address
 	openOracle: Address
-	priceOracleManagerAndOperatorQueuerFactory: Address
+	openOraclePriceCoordinatorFactory: Address
 	securityPoolFactory: Address
 	securityPoolForker: Address
 	shareTokenFactory: Address
@@ -18,13 +18,13 @@ type SecurityPoolCoreAddresses = {
 type SecurityPoolAddressConfig = {
 	getEscalationGameInitCode: (securityPool: Address, repToken: Address, proofVerifier: Address) => Hex
 	getInfraContracts: () => SecurityPoolCoreAddresses
-	getPriceOracleManagerAndOperatorQueuerInitCode: (openOracle: Address, repToken: Address, initialReportPriorityFeeAttoEthPerGas: bigint) => Hex
+	getOpenOraclePriceCoordinatorInitCode: (openOracle: Address, repToken: Address, initialReportPriorityFeeAttoEthPerGas: bigint) => Hex
 	getRepTokenAddress: (universeId: bigint) => Address
 	getSecurityPoolInitCode: (inputs: {
 		escalationGameFactory: Address
 		openOracle: Address
 		parent: Address
-		priceOracleManagerAndOperatorQueuer: Address
+		openOraclePriceCoordinator: Address
 		questionId: bigint
 		statoblastSecurityMultiplierBps: bigint
 		securityPoolFactory: Address
@@ -70,11 +70,11 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 		const securityPoolSaltWithMsgSender = getCallerScopedSalt(infraContracts.securityPoolFactory, securityPoolSalt)
 
 		const repToken = config.getRepTokenAddress(universeId)
-		const priceOracleManagerAndOperatorQueuer = getCreate2Address({
-			bytecode: config.getPriceOracleManagerAndOperatorQueuerInitCode(infraContracts.openOracle, repToken, initialReportPriorityFeeAttoEthPerGas),
+		const openOraclePriceCoordinator = getCreate2Address({
+			bytecode: config.getOpenOraclePriceCoordinatorInitCode(infraContracts.openOracle, repToken, initialReportPriorityFeeAttoEthPerGas),
 			// The factory creates the registry deployer first and the coordinator
 			// deployment worker second in its constructor.
-			from: getCreateAddress({ from: infraContracts.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }),
+			from: getCreateAddress({ from: infraContracts.openOraclePriceCoordinatorFactory, nonce: 2n }),
 			salt: securityPoolSaltWithMsgSender,
 		})
 		const shareToken = getCreate2Address({
@@ -95,7 +95,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 				escalationGameFactory: infraContracts.escalationGameFactory,
 				openOracle: infraContracts.openOracle,
 				parent,
-				priceOracleManagerAndOperatorQueuer,
+				openOraclePriceCoordinator,
 				questionId,
 				statoblastSecurityMultiplierBps,
 				securityPoolFactory: infraContracts.securityPoolFactory,
@@ -117,7 +117,7 @@ export function createSecurityPoolAddressHelper(config: SecurityPoolAddressConfi
 
 		return {
 			escalationGame,
-			priceOracleManagerAndOperatorQueuer,
+			openOraclePriceCoordinator,
 			securityPool,
 			shareToken,
 			truthAuction,

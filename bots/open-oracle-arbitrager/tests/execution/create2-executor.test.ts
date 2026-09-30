@@ -378,23 +378,19 @@ test('standalone deployment shares the operator signer lock and durable recovery
 	}
 })
 
-test('requires three distinct read RPC origins inside the deployment primitive under the explicit quorum policy', async () => {
+test('requires the caller quorum policy distinct read RPC origins inside the deployment primitive', async () => {
 	const common = {
 		chain: mainnet,
 		persistIntent: async () => undefined,
 		privateKey: `0x${'11'.repeat(32)}` as Hex,
+		rpcQuorum: 2 as const,
 		rpcUrls: ['https://submit.example'],
 		salt: `0x${'22'.repeat(32)}`,
 	}
-	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-	try {
-		process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-		await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
-		await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two', 'https://rpc-b.example'] })).rejects.toThrow('three independent read RPC origins')
-	} finally {
-		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-	}
+	expect(process.env['ZOLTAR_BOT_RPC_QUORUM']).toBeUndefined()
+	await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example', 'https://rpc-b.example'] })).rejects.toThrow('Executor deployment requires at least 3 read RPC endpoints with independent origins')
+	await expect(deployExecutorCreate2({ ...common, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two', 'https://rpc-b.example'] })).rejects.toThrow('Executor deployment requires at least 3 read RPC endpoints with independent origins')
+	await expect(deployExecutorCreate2({ ...common, rpcQuorum: 1, readRpcUrls: ['https://rpc-a.example/one', 'https://rpc-a.example/two'] })).rejects.toThrow('Executor deployment requires at least 1 read RPC endpoint with independent origins')
 })
 
 test('passes every effective public RPC from the dashboard deployment path', async () => {
@@ -428,6 +424,7 @@ async function runDeploymentScenario(options: {
 	primaryPreparationFails: boolean
 	primaryReceiptFails: boolean
 	receiptsUnavailable?: boolean
+	rpcQuorum?: 1 | 2
 	storedReceiptMissing?: boolean
 	tertiaryCodeLagsPolls?: number
 	tertiaryReceiptLagsPolls?: number
@@ -537,6 +534,7 @@ async function runDeploymentScenario(options: {
 			},
 			privateKey,
 			readRpcUrls: [primaryUrl, secondaryUrl, tertiaryUrl],
+			rpcQuorum: options.rpcQuorum ?? 1,
 			rpcUrls: [primaryUrl, secondaryUrl],
 			salt,
 		})
@@ -584,25 +582,14 @@ test('completes deployment once the receipt is included without waiting for conf
 	expect(Date.now() - startedAt).toBeLessThan(5_000)
 })
 
-async function withRpcQuorum<T>(requirement: '1' | '2', run: () => Promise<T>) {
-	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-	try {
-		process.env['ZOLTAR_BOT_RPC_QUORUM'] = requirement
-		return await run()
-	} finally {
-		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-	}
-}
-
 test('keeps polling under quorum 2 while a lagging reader is needed to see the included receipt', async () => {
-	const { expected, result, tertiaryReceiptPolls } = await withRpcQuorum('2', () => runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryReceiptLagsPolls: 2 }))
+	const { expected, result, tertiaryReceiptPolls } = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryReceiptLagsPolls: 2, rpcQuorum: 2 })
 	expect(result).toEqual(expected)
 	expect(tertiaryReceiptPolls).toBeGreaterThanOrEqual(3)
 })
 
 test('ignores a lagging reader that has neither the receipt nor the code once the quorum has both', async () => {
-	const { expected, result, tertiaryReceiptPolls } = await withRpcQuorum('2', () => runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: false, tertiaryReceiptLagsPolls: 2 }))
+	const { expected, result, tertiaryReceiptPolls } = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: false, tertiaryReceiptLagsPolls: 2, rpcQuorum: 2 })
 	expect(result).toEqual(expected)
 	expect(tertiaryReceiptPolls).toBe(1)
 })
@@ -613,7 +600,7 @@ test('keeps polling when a reader serves the success receipt before its code bac
 	const onlySecondaryConsistent = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryCodeLagsPolls: 2 })
 	expect(onlySecondaryConsistent.result).toEqual(onlySecondaryConsistent.expected)
 	expect(onlySecondaryConsistent.tertiaryReceiptPolls).toBe(1)
-	const quorum = await withRpcQuorum('2', () => runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryCodeLagsPolls: 2 }))
+	const quorum = await runDeploymentScenario({ primaryPreparationFails: false, primaryReceiptFails: true, tertiaryCodeLagsPolls: 2, rpcQuorum: 2 })
 	expect(quorum.result).toEqual(quorum.expected)
 	expect(quorum.tertiaryReceiptPolls).toBeGreaterThanOrEqual(3)
 })

@@ -1,4 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export {
 	initiallyDepositedLead,
 	worthNowLead,
@@ -43,7 +44,6 @@ export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
 export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH per REP from depth chart`
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security pool for ${outcomeLabel} universe does not exist.`
-export const forkUnavailablePlaceholder = '-'
 export const migration = 'Migration'
 export const forkReadiness = 'Fork readiness'
 export const notChosen = 'Not chosen'
@@ -107,7 +107,7 @@ export const winningBidBatchSettlementDetail = 'Select your winning bids to clai
 export const refundableBidBatchSettlementDetail = 'Select your refundable bids to get their ETH back.'
 export const mixedBidBatchSettlementDetail = 'Select bids to settle. Winning bids add REP backing units to your vault, with a matching share of the auctioned underwriting commitments. Refundable bids return their ETH.'
 export const submittingSettlementTransactionTruncated = 'Submitting settlement transaction…'
-export const forkActionWalletRequired = 'Connect a wallet before using fork and auction actions.'
+export const forkActionWalletRequired = commonCopy.formatConnectWalletBefore('using fork and auction actions')
 export const auctionEndedStatus = 'Truth auction has ended.'
 export const auctionEndsTooSoonToBid = 'Truth auction ends too soon to submit a bid.'
 export const finalizedSettlementDetail = 'The result is final.'

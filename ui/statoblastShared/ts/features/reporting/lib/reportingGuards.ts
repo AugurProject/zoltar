@@ -3,6 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type ReportingStatus = 'missing' | 'not-started' | 'active'
 
@@ -43,7 +44,7 @@ export function getReportingReportGuardMessage({
 	viewerWalletRepAllowanceAttoRep?: bigint | undefined
 	viewerWalletRepBalanceAttoRep?: bigint | undefined
 }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before reporting on a question.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('reporting on a question') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	if (selectedOutcome === undefined) return reportingCopy.reportOutcomeSelectionRequired
@@ -73,7 +74,7 @@ export function getReportingReportGuardMessage({
 }
 
 export function getReportingWithdrawGuardMessage({ accountAddress, isOnActiveAppChain, reportingStatus }: { accountAddress: Address | undefined; isOnActiveAppChain: boolean; reportingStatus: ReportingStatus }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before settling escalation deposits.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('settling escalation deposits') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (reportingStatus === 'missing') return 'Loading reporting details.'
 	return undefined

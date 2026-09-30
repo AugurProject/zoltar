@@ -2,6 +2,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
+import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getRemainingMintCapacity } from '../../markets/lib/trading.js'
@@ -9,8 +10,7 @@ import { getRemainingMintCapacity } from '../../markets/lib/trading.js'
 /** Share of capacity already used as open interest, in tenths of a percent; values above capacity stay visible. */
 function formatCapacityUsedPercent(minted: bigint, capacity: bigint) {
 	if (capacity <= 0n) return undefined
-	const tenths = (minted * 1000n) / capacity
-	return `${(tenths / 10n).toString()}.${(tenths % 10n).toString()}`
+	return formatTrimmedUnits((minted * 1000n) / capacity, 1)
 }
 
 export function PoolCapacitySummary({ capacity, minted, remainingCapacity, showUnavailableReason = true, showUsage = false }: { capacity: bigint | undefined; minted: bigint; remainingCapacity?: bigint | undefined; showUnavailableReason?: boolean; showUsage?: boolean }) {

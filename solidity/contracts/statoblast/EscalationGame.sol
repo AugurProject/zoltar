@@ -21,7 +21,7 @@ contract EscalationGame is EscalationGameSettlement {
 
 	function start(uint256 _startBondAttoRep, uint256 _nonDecisionThresholdAttoRep) external {
 		_initializeStartParams(_startBondAttoRep, _nonDecisionThresholdAttoRep);
-		activationTime = block.timestamp + activationDelay;
+		activationTime = block.timestamp + ACTIVATION_DELAY;
 		emit GameStarted(activationTime, startBondAttoRep, nonDecisionThresholdAttoRep);
 	}
 

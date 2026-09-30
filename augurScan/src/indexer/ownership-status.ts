@@ -31,7 +31,7 @@ export type IndexerOwnershipEvent =
 type IndexerOwnershipStatus = {
 	readonly networkId: string
 	readonly active: boolean
-	readonly backendPid?: number
+	readonly backendPid?: number | undefined
 	readonly failuresTotal: number
 	readonly reacquisitionsTotal: number
 	readonly consecutiveFailures: number

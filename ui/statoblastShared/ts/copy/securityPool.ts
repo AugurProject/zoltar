@@ -1,4 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export const createPoolDescriptionLead = 'Set up a '
 export const createPoolDescriptionTail = ' for one question. Vaults secure it with REP; traders mint its shares with ETH.'
@@ -164,10 +165,10 @@ export const claimingFees = 'Claiming fees…'
 export const missingVaultDepositDetail = 'This vault does not exist. Deposit REP to create it.'
 export const repBackingLabel = 'REP backing'
 export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0REP.`
-export const connectWalletBeforeClaimingFees = 'Connect a wallet before claiming fees.'
-export const connectWalletBeforeDepositingRep = 'Connect a wallet before depositing REP.'
-export const connectWalletBeforeRedeemingRep = 'Connect a wallet before redeeming REP.'
-export const connectWalletBeforeWithdrawingRep = 'Connect a wallet before withdrawing REP.'
+export const connectWalletBeforeClaimingFees = commonCopy.formatConnectWalletBefore('claiming fees')
+export const connectWalletBeforeDepositingRep = commonCopy.formatConnectWalletBefore('depositing REP')
+export const connectWalletBeforeRedeemingRep = commonCopy.formatConnectWalletBefore('redeeming REP')
+export const connectWalletBeforeWithdrawingRep = commonCopy.formatConnectWalletBefore('withdrawing REP')
 export const selectOwnVaultToClaimFees = 'Select your own vault to claim fees.'
 export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.'
 export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'

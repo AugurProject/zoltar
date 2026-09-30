@@ -27,7 +27,7 @@ interface SystemCatalogLoaderDeps {
 	systemStateRefreshGate: RefreshGate
 	setSystemControlsDisabled: (disabled: boolean) => void
 	renderStateStats: (options?: { live?: boolean }) => void
-	renderEntityList: (options?: { refreshSelected?: boolean; live?: boolean; selectedHistory?: EntityHistory; detailGateReserved?: boolean }) => Promise<boolean>
+	renderEntityList: (options?: { refreshSelected?: boolean; live?: boolean; selectedHistory?: EntityHistory | undefined; detailGateReserved?: boolean }) => Promise<boolean>
 	errorMessage: (error: unknown) => string
 	retryCanonicalViewOr: (fallback: () => Promise<boolean>) => Promise<boolean>
 }

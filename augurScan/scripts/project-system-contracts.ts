@@ -5,7 +5,7 @@ const kindAliases: Readonly<Record<string, string>> = {
 	ERC20Authorization: 'usdc',
 	EscalationGameProofVerifier: 'escalationProofVerifier',
 	OpenOraclePriceCoordinator: 'priceCoordinator',
-	PriceOracleManagerAndOperatorQueuerFactory: 'priceCoordinatorFactory',
+	OpenOraclePriceCoordinatorFactory: 'priceCoordinatorFactory',
 	TwoWayConstantProductFactory: 'ammFactory',
 	TwoWayConstantProductPair: 'ammPair',
 	UniformPriceDualCapBatchAuction: 'truthAuction',

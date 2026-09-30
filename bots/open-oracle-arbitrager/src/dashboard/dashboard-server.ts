@@ -1,6 +1,7 @@
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import type { DeploymentSettings } from '#config/deployment-settings'
-import { CONFIGURATION_REVISION_CONFLICT, type StoredCentralizedMarketSettings, type StoredRuntimeLimits } from '#config/settings-store'
+import { type StoredCentralizedMarketSettings, type StoredRuntimeLimits } from '#config/settings-store'
+import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durable-file'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'

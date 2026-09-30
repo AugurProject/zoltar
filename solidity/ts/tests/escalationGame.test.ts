@@ -11,6 +11,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { deployEscalationGame, depositOnOutcome, getActivationTime, getBalances, getEscalationGameDeposits, getQuestionResolution } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { ensureZoltarDeployed, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed, getInfraContractAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
+import { ensureDefined } from '../testSupport/simulator/utils/testUtils'
 import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_EscalationGameProofVerifier_EscalationGameProofVerifier,
@@ -2308,7 +2309,9 @@ describe('Escalation Game Test Suite', () => {
 	test('stateful local accounting model stays balanced across randomized deposits, exports, and claims', async () => {
 		const { escalationGameAddress, testSecurityPoolAddress } = await deployEscalationGameWithProofPool()
 		await startEscalation(escalationGameAddress, reportBond, nonDecisionThresholdAttoRep)
-		const vaults = [client.account.address, addressString(TEST_ADDRESSES[1]), addressString(TEST_ADDRESSES[2])]
+		const firstVault = client.account.address
+		const secondVault = addressString(TEST_ADDRESSES[1])
+		const vaults = [firstVault, secondVault, addressString(TEST_ADDRESSES[2])]
 		const deposits: LocalAccountingDeposit[] = []
 		const nextRandom = createDeterministicRng(0x5eedn)
 
@@ -2328,15 +2331,15 @@ describe('Escalation Game Test Suite', () => {
 		}
 
 		for (let depositIndex = 0; depositIndex < 18; depositIndex += 1) {
-			const vault = vaults[nextRandom() % vaults.length]
+			const vault = ensureDefined(vaults[nextRandom() % vaults.length], 'random vault index is out of range')
 			const amountAttoRep = BigInt((nextRandom() % 5) + 1) * reportBond
 			await depositOnOutcomeViaProofTestSecurityPool(testSecurityPoolAddress, vault, QuestionOutcome.Yes, amountAttoRep)
 			deposits.push({ vault, amountAttoRep, depositIndex: BigInt(depositIndex), carryActive: true, escrowed: true })
 			await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
 		}
-		await exportVault(vaults[0])
+		await exportVault(firstVault)
 		await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
-		await exportVault(vaults[1])
+		await exportVault(secondVault)
 		await assertLocalYesAccountingModel(escalationGameAddress, vaults, deposits)
 
 		const activationTime = await getActivationTime(client, escalationGameAddress)

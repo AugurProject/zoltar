@@ -11,6 +11,8 @@ services:
     environment:
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
+      # flock coordinates containers on this Docker host through the shared volume.
+      ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks
     ports:
       - 127.0.0.1:4173:4173
     healthcheck:
@@ -21,9 +23,13 @@ services:
       start_period: 10s
     volumes:
       - arbitrager-state:/app/bots/open-oracle-arbitrager/.state
+      # This fixed-name nested volume fences one signer across every shipped bot Compose project on the host.
+      - signer-locks:/app/bots/open-oracle-arbitrager/.state/process-locks
 
 volumes:
   arbitrager-state:
+  signer-locks:
+    name: zoltar-bot-signer-locks
 
 networks:
   default:

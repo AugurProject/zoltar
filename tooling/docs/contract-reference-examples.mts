@@ -37,7 +37,7 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Required support threshold',
 				blocks: [
 					paragraph(
-						`The contract waits \`activationDelay\` (${activationDay} days) after \`start()\` before the escalation clock begins. From day ${activationDay} the cumulative binding-capital requirement rises from the configured start bond \`S\` to the non-decision threshold \`T\` over the ${escalationDays}-day \`ESCALATION_TIME_LENGTH\`, reaching \`T\` on day ${finalDay}. The contract evaluates a fixed-point curve; this expression is its readable idealization.`,
+						`The contract waits \`ACTIVATION_DELAY\` (${activationDay} days) after \`start()\` before the escalation clock begins. From day ${activationDay} the cumulative binding-capital requirement rises from the configured start bond \`S\` to the non-decision threshold \`T\` over the ${escalationDays}-day \`ESCALATION_TIME_LENGTH\`, reaching \`T\` on day ${finalDay}. The contract evaluates a fixed-point curve; this expression is its readable idealization.`,
 					),
 					equation(
 						'eq-escalation-required-support',

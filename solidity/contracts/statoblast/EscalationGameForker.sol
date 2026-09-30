@@ -56,6 +56,7 @@ contract EscalationGameForker is SecurityPoolForkerVaultMigrationBase {
 				uint256 amountToWithdrawAttoRep,
 				uint256 sourcePrincipalAttoRep
 			) = _claimEscalationDeposit(escalationGame, depositIndex, outcomeIndex);
+			// Reasonless on purpose: a 'Wrong deposit vault' reason string pushes SecurityPoolForker initcode over the EIP-3860 limit.
 			if (depositor != vault) revert();
 			childEscalationGame.recordForkedEscrowForOutcome(depositor, outcomeIndex, sourcePrincipalAttoRep, amountToWithdrawAttoRep);
 			childEscalationGame.exportForkedEscrowByOutcome(depositor, depositor);

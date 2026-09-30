@@ -49,17 +49,6 @@ const depositRepToVaultEvent = {
 	type: 'event',
 } as const
 
-const vaultDepositTargetHealthFactorRecordedEvent = {
-	inputs: [
-		{ name: 'vault', type: 'address', indexed: true },
-		{ name: 'depositTargetHealthFactorBps', type: 'uint256' },
-		{ name: 'underwritingLimitAttoEth', type: 'uint256' },
-		{ name: 'resultingTotalUnderwritingLimitAttoEth', type: 'uint256' },
-	],
-	name: 'VaultDepositTargetHealthFactorRecorded',
-	type: 'event',
-} as const
-
 const MAX_UINT256 = 2n ** 256n - 1n
 
 describe('Statoblast: vault accounting', () => {
@@ -82,7 +71,7 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	const withdrawRepAcrossFreshOracleRounds = async (vaultClient: StatoblastVaultAccountingFixture['client'], amount: bigint) => {
-		await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, vaultClient.account.address, amount, reportedRepEthPrice)
+		await manipulatePriceOracleAndPerformOperation(vaultClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, vaultClient.account.address, amount, reportedRepEthPrice)
 	}
 
 	const getVaultCapacityBackingFactorsBps = async (vault: `0x${string}`) =>
@@ -117,9 +106,8 @@ describe('Statoblast: vault accounting', () => {
 			(conversionAmount * totalBackingUnits) / poolRepBalance,
 			'forker conversion should price REP against the live pool balance',
 		)
-		const blockBefore = await client.getBlockNumber()
 		await withdrawRepAcrossFreshOracleRounds(client, repDeposit)
-		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), reportedRepEthPrice, 'Price was not set!')
+		strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator), reportedRepEthPrice, 'Price was not set!')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 		approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
 		strictEqualTypeSafe(
@@ -135,13 +123,6 @@ describe('Statoblast: vault accounting', () => {
 		const factorsAfter = await getVaultCapacityBackingFactorsBps(client.account.address)
 		strictEqualTypeSafe(factorsAfter[0], 0n, 'fully withdrawn zero-capacity vault should report zero associated factor')
 		strictEqualTypeSafe(factorsAfter[1], 0n, 'fully withdrawn zero-capacity vault should report zero pool-held factor')
-		const preferenceLogs = await client.getLogs({
-			address: securityPoolAddresses.securityPool,
-			event: vaultDepositTargetHealthFactorRecordedEvent,
-			fromBlock: blockBefore + 1n,
-			toBlock: await client.getBlockNumber(),
-		})
-		strictEqualTypeSafe(preferenceLogs.length, 0, 'withdrawal must not emit a deposit preference event')
 	})
 
 	test('deposit events expose updated vault and REP backing units state', async () => {
@@ -160,13 +141,6 @@ describe('Statoblast: vault accounting', () => {
 			'RepDepositedToVault log missing from deposit transaction',
 		)
 		const depositArgs = ensureDefined(depositLog.args, 'RepDepositedToVault log args missing')
-		const preferenceLogs = await client.getLogs({
-			address: securityPoolAddresses.securityPool,
-			event: vaultDepositTargetHealthFactorRecordedEvent,
-			fromBlock: receipt.blockNumber,
-			toBlock: receipt.blockNumber,
-		})
-		strictEqualTypeSafe(preferenceLogs.length, 0, 'backing deposits must not advertise a commitment')
 		const vault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const totalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 
@@ -224,7 +198,7 @@ describe('Statoblast: vault accounting', () => {
 		await depositRepToVault(vaultA, securityPoolAddresses.securityPool, depositAmount * 2n, 40_000n)
 		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount * 2n, 40_000n)
 		await depositRepToVault(vaultB, securityPoolAddresses.securityPool, depositAmount, 40_000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		for (const vault of [vaultA, vaultB]) {
 			await vault.waitForTransactionReceipt({ hash: await vault.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setUnderwritingLimit', args: [(depositAmount * 3n) / 2n] }) })
 		}
@@ -234,26 +208,16 @@ describe('Statoblast: vault accounting', () => {
 		const vaultBState = await getSecurityVault(client, securityPoolAddresses.securityPool, vaultB.account.address)
 		strictEqualTypeSafe(vaultAState.repBackingUnits, vaultBState.repBackingUnits, 'reversed deposits should produce the same REP backing')
 		strictEqualTypeSafe(vaultAState.underwritingLimitAttoEth, vaultBState.underwritingLimitAttoEth, 'reversed deposits should produce the same capacity')
-		const depositTargetLogs = await client.getLogs({
-			address: securityPoolAddresses.securityPool,
-			event: vaultDepositTargetHealthFactorRecordedEvent,
-			fromBlock: 0n,
-			toBlock: await client.getBlockNumber(),
-		})
-		const vaultATargets = depositTargetLogs.filter(log => log.args?.vault?.toLowerCase() === vaultA.account.address.toLowerCase())
-		const vaultBTargets = depositTargetLogs.filter(log => log.args?.vault?.toLowerCase() === vaultB.account.address.toLowerCase())
 		const vaultAFactors = await getVaultCapacityBackingFactorsBps(vaultA.account.address)
 		const vaultBFactors = await getVaultCapacityBackingFactorsBps(vaultB.account.address)
 		strictEqualTypeSafe(vaultAFactors[0], vaultBFactors[0], 'reversed deposits should produce the same associated backing factor')
 		strictEqualTypeSafe(vaultAFactors[1], vaultBFactors[1], 'reversed deposits should produce the same pool-held backing factor')
 		strictEqualTypeSafe(vaultAFactors[0], 20_000n, 'associated REP per capacity should derive from aggregate backing and capacity')
 		strictEqualTypeSafe(vaultAFactors[1], 20_000n, 'pool-held REP per capacity should derive from aggregate backing and capacity')
-		strictEqualTypeSafe(vaultATargets.length, 0, 'vault A deposits do not change its commitment')
-		strictEqualTypeSafe(vaultBTargets.length, 0, 'vault B deposits do not change its commitment')
 		const vaultAOpenInterestAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getVaultOpenInterestAttoEth', args: [vaultA.account.address] })
 		const vaultBOpenInterestAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getVaultOpenInterestAttoEth', args: [vaultB.account.address] })
 		strictEqualTypeSafe(vaultAOpenInterestAttoEth, vaultBOpenInterestAttoEth, 'reversed deposits should receive identical open interest')
-		const lastPrice = await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		const lastPrice = await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator)
 		const healthResults = await Promise.all(
 			[vaultAState, vaultBState].map(
 				async vaultState =>
@@ -270,7 +234,6 @@ describe('Statoblast: vault accounting', () => {
 
 	test('zero-value deposits cannot mutate vault state or record deposit history', async () => {
 		const vaultBefore = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
-		const blockBefore = await client.getBlockNumber()
 		const vaultCountBefore = await getVaultCount(client, securityPoolAddresses.securityPool)
 		const totalRepBackingUnitsBefore = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 		await assert.rejects(depositRepToVault(client, securityPoolAddresses.securityPool, 0n, 30_000n), /Zero REP/)
@@ -282,8 +245,6 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(vaultAfter.feeIndex, vaultBefore.feeIndex, 'zero deposit must not change the vault fee index')
 		strictEqualTypeSafe(await getVaultCount(client, securityPoolAddresses.securityPool), vaultCountBefore, 'zero deposit must not register a vault')
 		strictEqualTypeSafe(await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool), totalRepBackingUnitsBefore, 'zero deposit must not change total backing units')
-		const preferenceLogs = await client.getLogs({ address: securityPoolAddresses.securityPool, event: vaultDepositTargetHealthFactorRecordedEvent, fromBlock: blockBefore + 1n, toBlock: await client.getBlockNumber() })
-		strictEqualTypeSafe(preferenceLogs.length, 0, 'zero deposit must not record a deposit target event')
 	})
 
 	test('non-round deposits preserve zero commitment and credit all backing', async () => {
@@ -366,7 +327,7 @@ describe('Statoblast: vault accounting', () => {
 			settlementCollateralAttoEth,
 			currentRetentionRate: storedCurrentRetentionRate,
 			parent,
-			priceOracleManagerAndOperatorQueuer: managerAddress,
+			openOraclePriceCoordinator: managerAddress,
 			questionId: storedQuestionId,
 			statoblastSecurityMultiplierBps: storedStatoblastSecurityMultiplierBps,
 			securityPool: securityPoolAddress,
@@ -379,7 +340,7 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(deploymentCount, 1n, 'factory should know about the origin deployment')
 		strictEqualTypeSafe(securityPoolAddress, expectedAddresses.securityPool, 'stored security pool address should match')
 		strictEqualTypeSafe(truthAuctionAddress, expectedAddresses.truthAuction, 'stored truth auction address should match')
-		strictEqualTypeSafe(managerAddress, expectedAddresses.priceOracleManagerAndOperatorQueuer, 'stored manager address should match')
+		strictEqualTypeSafe(managerAddress, expectedAddresses.openOraclePriceCoordinator, 'stored manager address should match')
 		strictEqualTypeSafe(shareTokenAddress, expectedAddresses.shareToken, 'stored share token address should match')
 		strictEqualTypeSafe(parent, addressString(0x0n), 'stored parent should be zero for origin deployment')
 		strictEqualTypeSafe(universeId, genesisUniverse, 'stored universe should match')
@@ -489,13 +450,13 @@ describe('Statoblast: vault accounting', () => {
 	})
 
 	test('withdrawal after question end releases escalation lock without changing backingUnits in single-sided case', async () => {
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-		assert.ok((await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)) > 0n, 'Price was not set!')
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
+		assert.ok((await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator)) > 0n, 'Price was not set!')
 		const totalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 		assert.ok(totalRepBackingUnits > 0n, 'totalRepBackingUnits was zero')
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		const vaultBeforeDeposit = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const walletRepBeforeDeposit = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
@@ -561,7 +522,7 @@ describe('Statoblast: vault accounting', () => {
 
 		// Resetting to endTime makes the next transaction execute at endTime + 1, the first valid second.
 		await mockWindow.setTime(endTime)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
@@ -576,8 +537,8 @@ describe('Statoblast: vault accounting', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
-		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
+		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
@@ -663,8 +624,8 @@ describe('Statoblast: vault accounting', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
-		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
+		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
@@ -695,11 +656,11 @@ describe('Statoblast: vault accounting', () => {
 
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
+		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, 0n)
 
 		const lockedDeposit = 100n * 10n ** 18n
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		const availableRepBeforeWithdrawal = await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool)
 		const aliceWalletRepBeforeWithdrawal = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
@@ -723,12 +684,12 @@ describe('Statoblast: vault accounting', () => {
 		await approveAndDepositRepToVault(escrowedVault, repDeposit, questionId)
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(escrowedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, escrowedVault.account.address, 0n)
+		await setVaultCapacityFixture(escrowedVault, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, escrowedVault.account.address, 0n)
 		const lockedDeposit = 100n * 10n ** 18n
 		await depositToEscalationGame(escrowedVault, securityPoolAddresses.securityPool, QuestionOutcome.Yes, lockedDeposit)
 		const vaultBeforeWithdrawAttempt = await getSecurityVault(escrowedVault, securityPoolAddresses.securityPool, escrowedVault.account.address)
 		const walletRepBeforeWithdrawAttempt = await getERC20Balance(escrowedVault, addressString(GENESIS_REPUTATION_TOKEN), escrowedVault.account.address)
-		await manipulatePriceOracleAndPerformOperation(escrowedVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, escrowedVault.account.address, repDeposit - lockedDeposit)
+		await manipulatePriceOracleAndPerformOperation(escrowedVault, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, escrowedVault.account.address, repDeposit - lockedDeposit)
 		const vaultAfterWithdrawAttempt = await getSecurityVault(escrowedVault, securityPoolAddresses.securityPool, escrowedVault.account.address)
 		const walletRepAfterWithdrawAttempt = await getERC20Balance(escrowedVault, addressString(GENESIS_REPUTATION_TOKEN), escrowedVault.account.address)
 		strictEqualTypeSafe(vaultBeforeWithdrawAttempt.disputeStakedAttoRep, lockedDeposit, 'test setup should create active escrow')
@@ -760,12 +721,12 @@ describe('Statoblast: vault accounting', () => {
 	test('depositToEscalationGame burns enough backingUnits after the pool share price appreciates', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		const benefactorClient = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
 		const vaultBeforeDonation = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const vaultRepBackingBeforeDonationAttoRep = await getVaultRepClaim(client.account.address)
 		await mockWindow.setTime(endTime + 10000n)
 		await transferRepToAddress(benefactorClient, securityPoolAddresses.securityPool, repDeposit)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escrowAmount = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
@@ -774,7 +735,6 @@ describe('Statoblast: vault accounting', () => {
 		const vaultRepBackingAfterDonationAttoRep = await getVaultRepClaim(client.account.address)
 		const totalRepBeforeEscrow = vaultRepBackingAfterDonationAttoRep + vaultBeforeEscrow.disputeStakedAttoRep
 		const factorsBeforeEscrow = await getVaultCapacityBackingFactorsBps(client.account.address)
-		const blockBeforeEscrow = await client.getBlockNumber()
 		strictEqualTypeSafe(vaultBeforeEscrow.repBackingUnits, vaultBeforeDonation.repBackingUnits, 'a direct pool-held REP donation must not mint REP backing units')
 		assert.ok(vaultRepBackingAfterDonationAttoRep > vaultRepBackingBeforeDonationAttoRep, 'unchanged REP backing units must convert to more vault REP backing after a pool-held REP donation')
 
@@ -789,8 +749,6 @@ describe('Statoblast: vault accounting', () => {
 		assert.ok(factorsAfterEscrow[1] < factorsBeforeEscrow[1], 'escrowing REP should lower the pool-held REP-per-capacity factor')
 		const associatedFactorDifference = factorsBeforeEscrow[0] > factorsAfterEscrow[0] ? factorsBeforeEscrow[0] - factorsAfterEscrow[0] : factorsAfterEscrow[0] - factorsBeforeEscrow[0]
 		assert.ok(associatedFactorDifference <= 1n, 'escrowing REP should preserve associated REP per capacity subject to backing-unit rounding')
-		const preferenceLogs = await client.getLogs({ address: securityPoolAddresses.securityPool, event: vaultDepositTargetHealthFactorRecordedEvent, fromBlock: blockBeforeEscrow + 1n, toBlock: await client.getBlockNumber() })
-		strictEqualTypeSafe(preferenceLogs.length, 0, 'escrowing REP must not record a deposit target event')
 	})
 
 	test('depositToEscalationGame rechecks the local bond against the post-escrow REP balance', async () => {
@@ -807,10 +765,10 @@ describe('Statoblast: vault accounting', () => {
 		const expectedRepAfterEscrow = ((vaultBeforeEscrow.repBackingUnits - backingUnitsToEscrow) * (totalRepBeforeEscrow - escrowAmount)) / totalRepBackingUnits
 		const targetUnderwritingLimitAttoEth = expectedRepAfterEscrow / 2n
 
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetUnderwritingLimitAttoEth)
-		await setVaultCapacityFixture(secondVault, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondVault.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, targetUnderwritingLimitAttoEth)
+		await setVaultCapacityFixture(secondVault, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, secondVault.account.address, 0n)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		assert.ok(vaultBeforeEscrow.repBackingUnits > 0n, 'target vault should already be funded')
 		assert.ok(totalRepBeforeEscrow - escrowAmount >= targetUnderwritingLimitAttoEth, 'the pool-wide bond should still be satisfied after escrow')
@@ -825,7 +783,7 @@ describe('Statoblast: vault accounting', () => {
 	test('oracle-staged collateral operations are rejected once escalation resolves', async () => {
 		await finalizeQuestionAsYesWithoutFork()
 
-		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, 1n), /question already resolved, so staged operations are unavailable/)
+		await assert.rejects(requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, client.account.address, 1n), /Escalation resolved/)
 	})
 
 	test('withdrawFromEscalationGame gives later safety-boundary deposits a pro-rata share of the binding-capital reward pool', async () => {
@@ -837,9 +795,9 @@ describe('Statoblast: vault accounting', () => {
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(firstWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, firstWinner.account.address, 0n)
-		await setVaultCapacityFixture(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondWinner.account.address, 0n)
-		await setVaultCapacityFixture(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, losingSide.account.address, 0n)
+		await setVaultCapacityFixture(firstWinner, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, firstWinner.account.address, 0n)
+		await setVaultCapacityFixture(secondWinner, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, secondWinner.account.address, 0n)
+		await setVaultCapacityFixture(losingSide, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, losingSide.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
@@ -909,9 +867,9 @@ describe('Statoblast: vault accounting', () => {
 		await approveAndDepositRepToVault(secondWinner, repDeposit, questionId)
 		await approveAndDepositRepToVault(losingSide, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(firstWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, firstWinner.account.address, 0n)
-		await setVaultCapacityFixture(secondWinner, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, secondWinner.account.address, 0n)
-		await setVaultCapacityFixture(losingSide, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, losingSide.account.address, 0n)
+		await setVaultCapacityFixture(firstWinner, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, firstWinner.account.address, 0n)
+		await setVaultCapacityFixture(secondWinner, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, secondWinner.account.address, 0n)
+		await setVaultCapacityFixture(losingSide, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, losingSide.account.address, 0n)
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const theoreticalRepSupply = await client.readContract({ address: repToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
@@ -974,8 +932,8 @@ describe('Statoblast: vault accounting', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
-		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
+		await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, 0n)
 		const escrowRepToken = await getRepToken(client, securityPoolAddresses.securityPool)
 		const theoreticalRepSupply = await client.readContract({ address: escrowRepToken, abi: ReputationToken_ReputationToken.abi, functionName: 'getTotalTheoreticalSupply' })
 		const escalationDepositUnit = theoreticalRepSupply / 10_000_000n > 10n ** 18n ? theoreticalRepSupply / 10_000_000n : 10n ** 18n
@@ -1023,7 +981,7 @@ describe('Statoblast: vault accounting', () => {
 	test('withdrawFromEscalationGame rejects wrong outcome after normal resolution', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
@@ -1034,7 +992,7 @@ describe('Statoblast: vault accounting', () => {
 	test('winning escalation settlement cannot be processed twice and unsettled deposit discovery updates accordingly', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
 
@@ -1054,7 +1012,7 @@ describe('Statoblast: vault accounting', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 		const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
@@ -1076,7 +1034,7 @@ describe('Statoblast: vault accounting', () => {
 		await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(attackerClient, genesisUniverse, otherQuestionId)
 
-		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /Invalid outcome/)
+		await assert.rejects(withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.None, [0n]), /No outcome/)
 	})
 
 	test('losing escalation deposits can be settled after resolution and stop counting as locked collateral', async () => {
@@ -1084,7 +1042,7 @@ describe('Statoblast: vault accounting', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		await approveAndDepositRepToVault(attackerClient, repDeposit, questionId)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 1n)
 		await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond)
@@ -1119,8 +1077,8 @@ describe('Statoblast: vault accounting', () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		for (const addresses of [securityPoolAddresses, secondSecurityPoolAddresses]) {
-			await setVaultCapacityFixture(client, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
-			await setVaultCapacityFixture(attackerClient, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, 0n)
+			await setVaultCapacityFixture(client, mockWindow, addresses.openOraclePriceCoordinator, client.account.address, 0n)
+			await setVaultCapacityFixture(attackerClient, mockWindow, addresses.openOraclePriceCoordinator, attackerClient.account.address, 0n)
 		}
 
 		const firstWinningDeposit = 2n * reportBond

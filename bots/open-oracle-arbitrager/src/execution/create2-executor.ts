@@ -7,7 +7,7 @@ import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilie
 import { readReceiptOrMissing } from '@zoltar/bot-shared/execution/receipt-quorum'
 import type { ExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { EXECUTOR_DEPLOYMENT_MESSAGES } from '#state/executor-deployment-recovery'
-import { configuredReadRpcEndpointMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredReadRpcEndpointMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { assertExecutorDeploymentActive, assertExecutorDeploymentEnvironment, assertExecutorDeploymentIntent, assertExecutorDeploymentReceipt, deterministicDeploymentProxy, executorCodeStatus, executorDeploymentPlan, submitExecutorDeploymentTransaction } from '#execution/executor-deployment-primitives'
 
 export async function assertStoredExecutorDeploymentIntent(intent: ExecutorDeploymentIntent, expectedChainId: number) {
@@ -22,8 +22,8 @@ export async function assertStoredExecutorDeploymentIntent(intent: ExecutorDeplo
  * served the receipt before importing the block, or a reorg between the two reads) and is also treated as lagging. A reverted
  * receipt is returned as is so the caller surfaces the revert immediately.
  */
-async function includedExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; transactionHash: Hash }) {
-	const requirement = rpcQuorumRequirement()
+async function includedExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; rpcQuorum: RpcQuorumRequirement; transactionHash: Hash }) {
+	const requirement = parameters.rpcQuorum
 	const settled = await Promise.allSettled(
 		parameters.clients.map(async ({ client, rpcUrl }) => {
 			const endpoint = endpointLabel(rpcUrl)
@@ -53,7 +53,10 @@ async function includedExecutorDeployment(parameters: { address: Address; client
  * Finality is not awaited, so the deployment checklist may be stale after a shallow reorg; arming live execution and
  * operator restarts re-authenticate the canonical deployments and refuse to arm until the executor is redeployed.
  */
-async function waitForExecutorDeployment(parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; isStopping?: (() => boolean) | undefined; transactionHash: Hash }, timeoutMilliseconds = 180_000) {
+async function waitForExecutorDeployment(
+	parameters: { address: Address; clients: readonly { client: ReturnType<typeof createPublicClient>; rpcUrl: string }[]; expectedRuntimeCodeHash: Hex; isStopping?: (() => boolean) | undefined; rpcQuorum: RpcQuorumRequirement; transactionHash: Hash },
+	timeoutMilliseconds = 180_000,
+) {
 	const deadline = Date.now() + timeoutMilliseconds
 	while (true) {
 		assertExecutorDeploymentActive(parameters.isStopping)
@@ -76,6 +79,7 @@ export async function deployExecutorCreate2(parameters: {
 	persistIntent?: ((intent: ExecutorDeploymentIntent) => Promise<void>) | undefined
 	privateKey: Hex
 	readRpcUrls?: readonly string[] | undefined
+	rpcQuorum: RpcQuorumRequirement
 	rpcUrls: readonly string[]
 	salt: unknown
 }) {
@@ -83,7 +87,8 @@ export async function deployExecutorCreate2(parameters: {
 	const expectedRuntimeCodeHash = keccak256(`0x${executorArtifact.evm.deployedBytecode.object}`)
 	const account = privateKeyToAccount(parameters.privateKey)
 	const readRpcUrls = parameters.readRpcUrls ?? parameters.rpcUrls
-	if (readRpcUrls.length < configuredReadRpcEndpointMinimum() || new Set(readRpcUrls.map(url => new URL(url).origin)).size !== readRpcUrls.length) throw new Error('Executor deployment requires three independent read RPC origins')
+	const minimumReadRpcUrls = configuredReadRpcEndpointMinimum(parameters.rpcQuorum)
+	if (readRpcUrls.length < minimumReadRpcUrls || new Set(readRpcUrls.map(url => new URL(url).origin)).size !== readRpcUrls.length) throw new Error(`Executor deployment requires at least ${minimumReadRpcUrls.toString()} read RPC ${minimumReadRpcUrls === 1 ? 'endpoint' : 'endpoints'} with independent origins`)
 	const readPool = createRpcEndpointPool(readRpcUrls)
 	const clients = readRpcUrls.map(rpcUrl => ({ client: createPublicClient({ chain: parameters.chain, transport: readPool.transportFor(rpcUrl) }), rpcUrl }))
 	const environment = await settledQuorumValue(
@@ -93,12 +98,13 @@ export async function deployExecutorCreate2(parameters: {
 			assertExecutorDeploymentEnvironment(chainId, parameters.chain.id, proxyCode)
 			return { endpoint: endpointLabel(rpcUrl), value: { chainId, code: executorCodeStatus(existingCode, expectedRuntimeCodeHash), proxyCode: proxyCode?.toLowerCase() } }
 		}),
+		parameters.rpcQuorum,
 	)
 	let intent = parameters.existingIntent
 	if (intent !== undefined) await assertExecutorDeploymentIntent(intent, account.address, parameters.chain.id, plan)
 	if (environment.code === 'verified' && parameters.existingIntent === undefined) return { address: plan.address, alreadyDeployed: true, transactionHash: undefined }
 	if (environment.code === 'verified' && parameters.existingIntent !== undefined) {
-		const receipt = await includedExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, transactionHash: parameters.existingIntent.transactionHash as Hash })
+		const receipt = await includedExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, rpcQuorum: parameters.rpcQuorum, transactionHash: parameters.existingIntent.transactionHash as Hash })
 		if (receipt === undefined) throw new ConnectivityDegradedError(EXECUTOR_DEPLOYMENT_MESSAGES.quorumReceiptMissing)
 		if (receipt.transactionHash.toLowerCase() !== parameters.existingIntent.transactionHash.toLowerCase()) throw new Error('Executor deployment receipt does not match the stored signed transaction')
 		assertExecutorDeploymentReceipt(receipt.status, receipt.transactionHash)
@@ -108,14 +114,17 @@ export async function deployExecutorCreate2(parameters: {
 		const nonce = await settledQuorumValue(
 			'executor deployment pending nonce',
 			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await readRpcPendingNonce(rpcUrl, account.address) })),
+			parameters.rpcQuorum,
 		)
 		const gas = await settledQuorumValue(
 			'executor deployment gas estimate',
 			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await estimateRpcTransactionGas(rpcUrl, { data: plan.calldata, from: account.address, to: deterministicDeploymentProxy }) })),
+			parameters.rpcQuorum,
 		)
 		const gasPrice = await settledQuorumValue(
 			'executor deployment gas price',
 			readRpcUrls.map(async rpcUrl => ({ endpoint: endpointLabel(rpcUrl), value: await readRpcGasPrice(rpcUrl) })),
+			parameters.rpcQuorum,
 		)
 		const signTransaction = account.signTransaction
 		if (signTransaction === undefined) throw new Error('Executor deployment requires a local transaction signer')
@@ -136,6 +145,6 @@ export async function deployExecutorCreate2(parameters: {
 		assertExecutorDeploymentActive(parameters.isStopping)
 		await submitExecutorDeploymentTransaction({ account: account.address, publicRpcUrls: parameters.rpcUrls, publicSubmit: sendRawTransactionToRpc, serializedTransaction: intent.serializedTransaction, transactionHash: intent.transactionHash })
 	}
-	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, ...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }), transactionHash: intent.transactionHash })
+	await waitForExecutorDeployment({ address: plan.address, clients, expectedRuntimeCodeHash, rpcQuorum: parameters.rpcQuorum, ...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }), transactionHash: intent.transactionHash })
 	return { address: plan.address, alreadyDeployed: false, transactionHash: intent.transactionHash as Hash }
 }

@@ -80,10 +80,6 @@ function isDeployedChildUniverseTuple(value: unknown): value is DeployedChildUni
 
 export const requireDeployedChildUniverseTupleArray = requireArrayOf(isDeployedChildUniverseTuple)
 
-export function getQuestionIdHex(questionId: bigint) {
-	return `0x${questionId.toString(16)}`
-}
-
 export function getForkOutcomeKey(outcome: bigint | number, parentSecurityPoolAddress: Address): ForkOutcomeKey {
 	if (parentSecurityPoolAddress === zeroAddress) return 'none'
 	return getReportingOutcomeKey(outcome)

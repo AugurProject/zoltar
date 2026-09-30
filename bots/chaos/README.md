@@ -157,7 +157,7 @@ For safe testnet redeployment, drain the old profile, review any residuals, pres
 
 ## Run with Docker
 
-The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume. Its fixed `zoltar-chaos-signer-locks` volume fences the same signer across Compose projects on one Docker host; it does not fence another host.
+The Compose service runs as a non-root user, binds the dashboard to `127.0.0.1:4193`, and persists `.state` in the private `chaos-state` volume. It sets `ZOLTAR_BOT_SIGNER_LOCK_ROOT=.state/process-locks` and mounts the fixed `zoltar-bot-signer-locks` volume there, which fences the same signer across chaos, liquidator, and OpenOracle arbitrager Compose projects on one Docker host; it does not fence another host. A direct Bun process uses `ZOLTAR_BOT_SIGNER_LOCK_ROOT` when it is set to a non-empty path, otherwise a `zoltar-bot-locks` directory under the system temporary directory. `SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the scan status log uses to report a scan as lagging; Mainnet and Sepolia default to `12000`.
 
 ```sh
 docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
@@ -191,7 +191,7 @@ docker compose start chaos
 
 After loading or remembering a signer, make changes only through the loopback-only dashboard. For a saved-signer live preflight, pause and stop the service, run the same one-off `doctor` command, then restart paused and complete step 6's readiness checks.
 
-Any manually created container must mount `zoltar-chaos-signer-locks` at `.state/process-locks`. For multi-host operation, use exactly one signer per host or add an external lease/fencing service. This section owns the container-specific ownership and fencing guidance; the [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) owns the underlying state-unit and launch-gate invariants.
+Any manually created container must mount `zoltar-bot-signer-locks` at `.state/process-locks`. For multi-host operation, use exactly one signer per host or add an external lease/fencing service. This section owns the container-specific ownership and fencing guidance; the [configuration and durable state reference](./OPERATOR_REFERENCE.md#configuration-and-durable-state) owns the underlying state-unit and launch-gate invariants.
 
 ## Coverage and dashboard fixture
 

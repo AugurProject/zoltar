@@ -16,6 +16,13 @@ const actionTenses = [
 	{ verb: 'Wrap', pending: 'Wrapping', completed: 'Wrapped' },
 	{ verb: 'Execute', pending: 'Executing', completed: 'Executed' },
 	{ verb: 'Queue', pending: 'Queuing', completed: 'Queued' },
+	{ verb: 'Fork', pending: 'Forking', completed: 'Forked' },
+	{ verb: 'Initiate', pending: 'Initiating', completed: 'Initiated' },
+	{ verb: 'Migrate', pending: 'Migrating', completed: 'Migrated' },
+	{ verb: 'Start', pending: 'Starting', completed: 'Started' },
+	{ verb: 'Submit', pending: 'Submitting', completed: 'Submitted' },
+	{ verb: 'Refund', pending: 'Refunding', completed: 'Refunded' },
+	{ verb: 'Finalize', pending: 'Finalizing', completed: 'Finalized' },
 ]
 
 export function formatActionTense(title: string, tense: 'pending' | 'completed') {

@@ -225,7 +225,7 @@ test('resumes an archived drain without changing its policies and replaces cance
 test('rejects archive traversal, a missing archive, mismatched signers, and mismatched deployment pins', async () => {
 	const { path, settings, stateFile, id } = await archivedFixture()
 	await expect(prepareArchivedRetirement('../operator', { acquireLocks: noLocks, path })).rejects.toThrow('Archive ID')
-	await expect(prepareArchivedRetirement('0'.repeat(64), { acquireLocks: noLocks, path })).rejects.toThrow('Missing chaos-bot configuration')
+	await expect(prepareArchivedRetirement('0'.repeat(64), { acquireLocks: noLocks, path })).rejects.toThrow(/Missing chaos-bot configuration.*install -m 600 config\/operator.example.json/)
 	const state = await loadDurableState(stateFile, settings.network.chainId)
 	state.signerAddress = privateKeyToAccount(`0x${'44'.repeat(32)}`).address
 	await saveDurableState(stateFile, state)

@@ -1,22 +1,20 @@
-import { contentRevision, durableFilesystem, parseJsonDocument, serializeWritesToPath, writeRevisionedFile, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { configurationRevisionConflict, contentRevision, durableFilesystem, parseJsonDocument, readOwnerFile, serializeWritesToPath, writeRevisionedFile, type OwnerFileHandle, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { assertProfileCandidates, networkProfilePath } from '@zoltar/bot-shared/config/profiles'
-import { signerCandidate } from '@zoltar/bot-shared/config/signer'
+import { PRESERVE_PRIVATE_KEY, signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { getAddress, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, nonemptyString, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { presetNetworkChainId, validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { resolve } from 'node:path'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
-import { readOwnerFile, type OwnerFileHandle } from '../state/owner-files.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
 import { assertSepoliaUniswapFactory, canonicalDeployment } from './canonical-deployment.ts'
 import { deploymentFactoryId, executionProfileId } from './execution-profile.ts'
 
-const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
-export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
 const PRESET_MAXIMUM_BLOCK_INTERVAL_SECONDS = 60
 const MAXIMUM_BLOCK_INTERVAL_SECONDS = 86_400
 
@@ -133,7 +131,7 @@ function customNetworkName(value: unknown) {
 
 function customNetworkChainId(value: unknown, label = 'network.chainId') {
 	const chainId = integer(value, label, 1, Number.MAX_SAFE_INTEGER)
-	if (chainId === 1 || chainId === 11_155_111) throw new Error(`${label} must not reuse the mainnet or sepolia preset chain ID`)
+	if (chainId === MAINNET_CHAIN_ID || chainId === SEPOLIA_CHAIN_ID) throw new Error(`${label} must not reuse the mainnet or sepolia preset chain ID`)
 	return chainId
 }
 
@@ -168,7 +166,7 @@ function parseNetwork(value: unknown): OperatorSettings['network'] {
 	const name = network['name']
 	if (name !== 'mainnet' && name !== 'sepolia') throw new Error('network.name must be mainnet or sepolia, or network.kind must explicitly be custom')
 	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
-	const canonicalChainId = name === 'mainnet' ? 1 : 11_155_111
+	const canonicalChainId = presetNetworkChainId(name)
 	if (chainId !== canonicalChainId) throw new Error('network.name and network.chainId must identify the same supported chain')
 	return {
 		chainId,
@@ -398,10 +396,8 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 	}
 }
 
-export function configurationRevisionConflict() {
-	const error = new Error('The chaos-bot configuration changed after this editor loaded. Reload it, review the newer values, and apply your change again.')
-	error.name = CONFIGURATION_REVISION_CONFLICT
-	return error
+export function chaosConfigurationRevisionConflict() {
+	return configurationRevisionConflict('chaos-bot configuration')
 }
 
 export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONFIG'] ?? defaultSettingsPath), filesystem: SettingsFilesystem = durableFilesystem) {
@@ -409,7 +405,7 @@ export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONF
 	try {
 		contents = await readOwnerFile(path, filesystem, 'Chaos-bot configuration')
 	} catch (error) {
-		if (isErrorCode(error, 'ENOENT')) throw new Error(`Missing chaos-bot configuration at ${path}. Copy config/operator.example.json there and edit it.`)
+		if (isErrorCode(error, 'ENOENT')) throw new Error(`Missing chaos-bot configuration at ${path}. Create it with \`install -m 600 config/operator.example.json ${path}\` and edit it.`)
 		throw error
 	}
 	const parsed = parseJsonDocument(contents, 'Chaos-bot configuration')
@@ -421,7 +417,7 @@ export async function loadSettings(path = resolve(process.env['ZOLTAR_CHAOS_CONF
 export async function saveSettings(path: string, settings: OperatorSettings, expectedRevision?: string, filesystem: SettingsFilesystem = durableFilesystem) {
 	const resolvedPath = resolve(path)
 	const contents = `${JSON.stringify(serializedSettings(settings), undefined, 2)}\n`
-	return await serializeWritesToPath(resolvedPath, () => writeRevisionedFile(resolvedPath, contents, { conflict: configurationRevisionConflict, expectedRevision, filesystem }))
+	return await serializeWritesToPath(resolvedPath, () => writeRevisionedFile(resolvedPath, contents, { conflict: chaosConfigurationRevisionConflict, expectedRevision, filesystem }))
 }
 
 function settingsProfilePathForNetwork(path: string, network: OperatorNetworkSettings) {
@@ -439,7 +435,7 @@ type SettingsProfileCandidate = {
 
 function presetProfileCandidate(expectedPreset: NetworkName, settings: OperatorSettings): SettingsProfileCandidate {
 	return {
-		expected: expectedPreset === 'mainnet' ? 1 : 11_155_111,
+		expected: presetNetworkChainId(expectedPreset),
 		expectedPreset,
 		settings,
 	}

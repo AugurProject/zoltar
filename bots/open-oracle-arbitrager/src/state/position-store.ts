@@ -1,8 +1,7 @@
-import { readFile } from 'node:fs/promises'
-import { writeFileAtomically, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
-import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
+import { readOwnerFileIfPresent, writeFileAtomically, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { acquireExecutionSignerLock as acquireSharedExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from '@zoltar/bot-shared/execution/process-lock'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
+import { hash32, record as validateRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseExecutionRecord, type ExecutionRecord } from '#state/execution-record'
 
 /** The position journal writer's filesystem; tests substitute one to observe the durable write order. */
@@ -153,17 +152,19 @@ function optionalIntegerField(record: Record<string, unknown>, key: string) {
 	return value
 }
 
+const isHexData = (value: unknown): value is Hex => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})*$/.test(value)
+
 function parseDurableTransactionIntent(value: unknown, label: string): DurableTransactionIntent | undefined {
 	if (value === undefined) return undefined
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`Position journal ${label} transaction intent is invalid`)
-	const record = value as Record<string, unknown>
+	const record = validateRecord(value, 'Position journal value', `Position journal ${label} transaction intent is invalid`)
 	const exactKeys = ['data', 'to', 'value']
 	if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error(`Position journal ${label} transaction intent fields are invalid`)
-	if (typeof record['data'] !== 'string' || !/^0x(?:[0-9a-fA-F]{2})*$/.test(record['data'])) throw new Error(`Position journal ${label} transaction calldata is invalid`)
+	const data = record['data']
+	if (!isHexData(data)) throw new Error(`Position journal ${label} transaction calldata is invalid`)
 	if (typeof record['to'] !== 'string') throw new Error(`Position journal ${label} transaction destination is invalid`)
 	if (typeof record['value'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['value'])) throw new Error(`Position journal ${label} transaction value is invalid`)
 	return {
-		data: record['data'] as Hex,
+		data,
 		to: getAddress(record['to']),
 		value: record['value'],
 	}
@@ -174,8 +175,7 @@ function parseExpiredTransactionAttempts(value: unknown): readonly ExpiredTransa
 	if (!Array.isArray(value)) throw new Error('Position journal expired transaction attempts are invalid')
 	const hashes = new Set<string>()
 	return value.map(candidate => {
-		if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) throw new Error('Position journal expired transaction attempt is invalid')
-		const record = candidate as Record<string, unknown>
+		const record = validateRecord(candidate, 'Position journal value', 'Position journal expired transaction attempt is invalid')
 		const exactKeys = ['kind', 'nonce', 'targetBlockNumber', 'transactionHash']
 		if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal expired transaction attempt fields are invalid')
 		if (record['kind'] !== 'entry' && record['kind'] !== 'lifecycle') throw new Error('Position journal expired transaction attempt kind is invalid')
@@ -189,15 +189,14 @@ function parseExpiredTransactionAttempts(value: unknown): readonly ExpiredTransa
 			kind: record['kind'],
 			nonce: record['nonce'],
 			targetBlockNumber: record['targetBlockNumber'],
-			transactionHash: record['transactionHash'] as Hex,
+			transactionHash: hash32(record['transactionHash'], 'Position journal expired transaction hash'),
 		}
 	})
 }
 
 function parseManualReconciliation(value: unknown): ManualReconciliation | undefined {
 	if (value === undefined) return undefined
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Position journal manual reconciliation is invalid')
-	const record = value as Record<string, unknown>
+	const record = validateRecord(value, 'Position journal value', 'Position journal manual reconciliation is invalid')
 	const exactKeys = ['evidence', 'externalCostEth', 'finalWalletToken', 'finalWalletWeth', 'note', 'pnlStatus', 'recordedAt', 'recordedBy']
 	if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal manual reconciliation fields are invalid')
 	if (typeof record['evidence'] !== 'string' || record['evidence'].trim() === '' || record['evidence'].length > 2_048) throw new Error('Position journal reconciliation evidence is invalid')
@@ -220,8 +219,7 @@ function parseManualReconciliation(value: unknown): ManualReconciliation | undef
 
 function parseExecutionIntent(value: unknown): ExecutionIntent | undefined {
 	if (value === undefined) return undefined
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Position journal execution intent is invalid')
-	const record = value as Record<string, unknown>
+	const record = validateRecord(value, 'Position journal value', 'Position journal execution intent is invalid')
 	const exactKeys = ['direction', 'estimatedNetProfitWeth', 'estimatedProfitBeforeGasEth', 'pool', 'poolFee', 'reportId', 'requiredToken', 'requiredWeth', 'token', 'tokenSymbol']
 	if (Object.keys(record).length !== exactKeys.length || exactKeys.some(key => !(key in record))) throw new Error('Position journal execution intent fields are invalid')
 	const parsed = parseExecutionRecord({
@@ -238,8 +236,7 @@ function parseExecutionIntent(value: unknown): ExecutionIntent | undefined {
 }
 
 function parsePosition(value: unknown): PositionRecord {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Position journal record must be an object')
-	const record = value as Record<string, unknown>
+	const record = validateRecord(value, 'Position journal value', 'Position journal record must be an object')
 	if (typeof record['account'] !== 'string') throw new Error('Position journal account is invalid')
 	const account = getAddress(record['account'])
 	if (typeof record['reportId'] !== 'string' || !/^(?:0|[1-9]\d*)$/.test(record['reportId'])) throw new Error('Position journal report id is invalid')
@@ -258,8 +255,7 @@ function parsePosition(value: unknown): PositionRecord {
 	if (!Array.isArray(gasExpenditures)) throw new Error('Position journal gas expenditures are invalid')
 	const gasTransactionHashes = new Set<string>()
 	const parsedGasExpenditures = gasExpenditures.map(value => {
-		if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Position journal gas expenditure is invalid')
-		const expenditure = value as Record<string, unknown>
+		const expenditure = validateRecord(value, 'Position journal value', 'Position journal gas expenditure is invalid')
 		if (Object.keys(expenditure).length !== 3 || !('costEth' in expenditure) || !('minedAt' in expenditure) || !('transactionHash' in expenditure)) throw new Error('Position journal gas expenditure fields are invalid')
 		const costEth = decimalField(expenditure, 'costEth')
 		if (typeof expenditure['minedAt'] !== 'string' || !Number.isFinite(Date.parse(expenditure['minedAt'])) || new Date(expenditure['minedAt']).toISOString() !== expenditure['minedAt']) {
@@ -272,7 +268,7 @@ function parsePosition(value: unknown): PositionRecord {
 		return {
 			costEth,
 			minedAt: expenditure['minedAt'],
-			transactionHash: expenditure['transactionHash'] as Hex,
+			transactionHash: hash32(expenditure['transactionHash'], 'Position journal gas expenditure transaction hash'),
 		}
 	})
 	for (const key of ['actualEntryGasCostEth', 'capitalAtRiskWeth', 'hedgeAmountToken', 'hedgeWeth', 'lifecycleGasCostEth', 'lockedToken', 'lockedWeth', 'withdrawnToken', 'withdrawnWeth']) {
@@ -388,8 +384,8 @@ function parsePosition(value: unknown): PositionRecord {
 		entrySubmissionMode: record['entrySubmissionMode'],
 		...(entryTransactionIntent === undefined ? {} : { entryTransactionIntent }),
 		entryTransactionNonce,
-		entryTransactionHash: record['entryTransactionHash'] as Hex,
-		entryTransactionHashes: entryTransactionHashes as Hex[],
+		entryTransactionHash: hash32(record['entryTransactionHash'], 'Position journal transaction hash'),
+		entryTransactionHashes: entryTransactionHashes.map(hash => hash32(hash, 'Position journal transaction hash')),
 		executionIntent,
 		...(expiredTransactionAttempts === undefined ? {} : { expiredTransactionAttempts }),
 		gasExpenditures: parsedGasExpenditures,
@@ -399,7 +395,7 @@ function parsePosition(value: unknown): PositionRecord {
 		hedgedProfitBeforeGasEth: record['hedgedProfitBeforeGasEth'],
 		lifecycleGasCostEth: decimalField(record, 'lifecycleGasCostEth'),
 		lifecycleKind: record['lifecycleKind'],
-		...(lifecycleReceiptBlockHash === undefined ? {} : { lifecycleReceiptBlockHash: lifecycleReceiptBlockHash as Hex }),
+		...(lifecycleReceiptBlockHash === undefined ? {} : { lifecycleReceiptBlockHash: hash32(lifecycleReceiptBlockHash, 'Position journal lifecycle receipt block hash') }),
 		...(lifecycleReceiptBlockNumber === undefined ? {} : { lifecycleReceiptBlockNumber }),
 		lifecycleReceiptRecovered: record['lifecycleReceiptRecovered'],
 		...(record['lifecycleSettlerRewardEth'] === undefined ? {} : { lifecycleSettlerRewardEth: record['lifecycleSettlerRewardEth'] }),
@@ -409,7 +405,7 @@ function parsePosition(value: unknown): PositionRecord {
 		lifecycleTokenDecimals: optionalIntegerField(record, 'lifecycleTokenDecimals'),
 		...(lifecycleTransactionIntent === undefined ? {} : { lifecycleTransactionIntent }),
 		lifecycleTransactionNonce,
-		lifecycleTransactionHashes: lifecycleTransactionHashes as Hex[],
+		lifecycleTransactionHashes: lifecycleTransactionHashes.map(hash => hash32(hash, 'Position journal lifecycle transaction hash')),
 		lifecycleUpdatedAt: record['lifecycleUpdatedAt'],
 		lifecycleWalletTokenBefore: optionalIntegerField(record, 'lifecycleWalletTokenBefore'),
 		lifecycleWalletWethBefore: optionalIntegerField(record, 'lifecycleWalletWethBefore'),
@@ -534,13 +530,8 @@ export function archivedUtcDayGasSpentWeth(archive: PositionJournalArchive, now 
 
 export async function loadPositionJournalState(path: string, expectedChainId: number): Promise<PositionJournalState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected position journal chain ID must be a positive integer')
-	let contents: string
-	try {
-		contents = await readFile(path, 'utf8')
-	} catch (error) {
-		if (isErrorCode(error, 'ENOENT')) return { archived: emptyPositionJournalArchive(), positions: [] }
-		throw error
-	}
+	const contents = await readOwnerFileIfPresent(path, 'Position journal')
+	if (contents === undefined) return { archived: emptyPositionJournalArchive(), positions: [] }
 	let parsed: unknown
 	try {
 		parsed = JSON.parse(contents)
@@ -548,8 +539,7 @@ export async function loadPositionJournalState(path: string, expectedChainId: nu
 		if (error instanceof SyntaxError) throw new Error(`Invalid position journal JSON: ${error.message}`)
 		throw error
 	}
-	if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Invalid position journal root')
-	const root = parsed as Record<string, unknown>
+	const root = validateRecord(parsed, 'Position journal value', 'Invalid position journal root')
 	if ((root['version'] !== 2 && root['version'] !== 3) || !Array.isArray(root['positions'])) throw new Error('Invalid position journal schema')
 	if (root['chainId'] !== expectedChainId) throw new Error(`Position journal belongs to chain ${String(root['chainId'])}, expected chain ${expectedChainId.toString()}`)
 	const positions = root['positions'].map(parsePosition)

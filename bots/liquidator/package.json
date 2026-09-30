@@ -18,7 +18,7 @@
 		"ensure-contract-artifacts": "bun ../../tooling/contracts/ensure-contract-artifacts.mts",
 		"format": "bun x @biomejs/biome format --write .",
 		"format:check": "bun x @biomejs/biome format .",
-		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests scripts config && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests scripts config && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
 		"run": "bun ./src/cli/run.ts",
 		"smoke:markets": "bun ./scripts/check-market-sources.mts",
 		"test": "bun run ensure-contract-artifacts && bun ../../tooling/testing/bun-test.mts ./tests",
@@ -28,6 +28,7 @@
 	"dependencies": {
 		"@zoltar/core-shared": "workspace:1.0.0",
 		"@zoltar/bot-shared": "workspace:1.0.0",
+		"@zoltar/statoblast-shared": "workspace:1.0.0",
 		"@zoltar/ui-core-shared": "workspace:1.0.0",
 		"preact": "10.26.4",
 		"ccxt": "4.5.70"

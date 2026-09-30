@@ -24,6 +24,7 @@ import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from 
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseReportingOperationsParameters = WriteOperationsParameters
 type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & {
@@ -184,7 +185,7 @@ export function useReportingOperations(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						reportingError,
-						'Connect a wallet before reporting on a question',
+						commonCopy.formatConnectWalletBefore('reporting on a question'),
 						createReportingTransactionIntent(actionName, transactionContext),
 					),
 					onRefreshError: (message, hash) => {

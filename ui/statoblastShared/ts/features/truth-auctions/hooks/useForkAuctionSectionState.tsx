@@ -235,7 +235,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		return truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared
 	})()
 	const settlementAvailableDisplay = (() => {
-		if (!context.hasSelectedAuctionChildPool) return forkAuctionCopy.forkUnavailablePlaceholder
+		if (!context.hasSelectedAuctionChildPool) return commonCopy.metricUnavailablePlaceholder
 		if (context.selectedAuctionContext?.claimingAvailable) return commonCopy.yes
 
 		return commonCopy.no

@@ -14,11 +14,8 @@ import example from '../../config/operator.example.json'
 import { createDeploymentRecoveryReconciliation } from '../../src/runtime/deployment-recovery.ts'
 
 const temporaryDirectories: string[] = []
-const quorumEnvironment = process.env['ZOLTAR_BOT_RPC_QUORUM']
 
 afterEach(async () => {
-	if (quorumEnvironment === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-	else process.env['ZOLTAR_BOT_RPC_QUORUM'] = quorumEnvironment
 	await Promise.all(temporaryDirectories.splice(0).map(directory => rm(directory, { force: true, recursive: true })))
 })
 

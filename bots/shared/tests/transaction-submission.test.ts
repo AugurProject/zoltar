@@ -1,6 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { keccak256, parseTransaction, privateKeyToAccount, type Address, type Hex } from '../src/ethereum.ts'
-import { assertSubmissionWindowOpen, maximumFeePerGas, mergeSubmissionFailures, prepareSignedTransaction, simulateSignedBundleEveryRelay, SubmissionFailure, submitSignedBundle, submitSignedTransaction, validateSubmissionSettings, type SubmissionSettings } from '../src/execution/transaction-submission.ts'
+import {
+	assertSubmissionWindowOpen,
+	maximumFeePerGas,
+	mergeSubmissionFailures,
+	prepareSignedTransaction,
+	simulateSignedBundleEveryRelay,
+	SubmissionFailure,
+	submitSignedBundle,
+	submitSignedTransaction,
+	transactionMaxBlockNumber,
+	validateSubmissionSettings,
+	type SubmissionSettings,
+} from '../src/execution/transaction-submission.ts'
 
 const servers: Bun.Server<unknown>[] = []
 const address = '0x0000000000000000000000000000000000000001' as Address
@@ -292,6 +304,12 @@ describe('signed transaction delivery', () => {
 			nonce: 7n,
 			to: address,
 		})
+	})
+
+	test('bounds the signed block horizon by the caller deadline', () => {
+		expect(transactionMaxBlockNumber(100n, undefined)).toBe(125n)
+		expect(transactionMaxBlockNumber(100n, 130n)).toBe(125n)
+		expect(transactionMaxBlockNumber(100n, 101n)).toBe(101n)
 	})
 
 	test('caps private inclusion at calldata validity and refuses an already-expired transaction', async () => {

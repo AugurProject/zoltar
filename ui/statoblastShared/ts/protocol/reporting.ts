@@ -1,7 +1,9 @@
 import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import { formatUnits, zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
@@ -473,8 +475,8 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
-		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(reviewAmountAttoRep, 18)),
-		reviewAmount: `${formatUnits(reviewAmountAttoRep, 18)} REP`,
+		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)),
+		reviewAmount: formatCurrencyBalanceWithUnit(reviewAmountAttoRep, commonCopy.rep),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
 	client.onTransactionPlan?.([
@@ -538,7 +540,7 @@ export async function approveReportingRep(client: WriteClient, securityPoolAddre
 export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[], claimAmountAttoRep?: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	let reviewTitle = transactionCopy.settleEscalationDeposits
-	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatUnits(claimAmountAttoRep, 18))
+	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatCurrencyBalance(claimAmountAttoRep))
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,

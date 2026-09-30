@@ -306,7 +306,7 @@ export const projects: readonly Project[] = [
 		id: 'liquidator',
 		path: 'bots/liquidator',
 		type: 'bot',
-		dependencies: ['shared-core', 'bot-shared', 'contracts', 'ui-core'],
+		dependencies: ['shared-core', 'shared-statoblast', 'bot-shared', 'contracts', 'ui-core'],
 		tasks: {
 			setup: packageInstallTask('bots/liquidator'),
 			test: packageTask('bots/liquidator', 'test'),
@@ -322,7 +322,7 @@ export const projects: readonly Project[] = [
 		id: 'augur-scan',
 		path: 'augurScan',
 		type: 'service',
-		dependencies: ['shared-core', 'contracts'],
+		dependencies: ['shared-core', 'shared-statoblast', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('augurScan'),
 			build: packageTask('augurScan', 'build', {

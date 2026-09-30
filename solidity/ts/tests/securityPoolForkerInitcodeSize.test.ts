@@ -9,9 +9,9 @@ const securityPoolForkerConstructorArgumentBytes = 32
 function getBytecodeBytes(kind: 'bytecode' | 'deployedBytecode') {
 	const artifacts = loadContractsJson(import.meta.dir)
 	const output = getContractOutput(artifacts, 'contracts/statoblast/SecurityPoolForker.sol', 'SecurityPoolForker')
-	const evm = getRecord(output.evm, 'SecurityPoolForker output is missing EVM bytecode')
+	const evm = getRecord(output['evm'], 'SecurityPoolForker output is missing EVM bytecode')
 	const bytecode = getRecord(evm[kind], `SecurityPoolForker output is missing ${kind}`)
-	return getString(bytecode.object, `SecurityPoolForker ${kind} is missing`).length / 2
+	return getString(bytecode['object'], `SecurityPoolForker ${kind} is missing`).length / 2
 }
 
 test('SecurityPoolForker initcode stays within the EIP-3860 limit', () => {

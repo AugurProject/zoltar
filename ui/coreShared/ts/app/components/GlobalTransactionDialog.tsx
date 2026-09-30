@@ -6,10 +6,7 @@ import { WarningSurface } from '../../components/WarningSurface.js'
 import type { GlobalTransactionPresentation } from '../../types/components.js'
 import { dismissGlobalTransaction, isGlobalTransactionDismissed } from '../../transactions/globalTransactionDismissal.js'
 import { transactionStepOutcome, transactionSteps } from '../../transactions/transactionSteps.js'
-
-function formatUniverseIdHex(universeId: bigint) {
-	return `0x${universeId.toString(16)}`
-}
+import { formatUniverseIdHex } from '../../lib/universeLabels.js'
 
 type GlobalTransactionDialogProps = {
 	activeUniverseId?: bigint | undefined

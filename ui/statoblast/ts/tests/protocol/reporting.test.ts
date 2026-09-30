@@ -262,8 +262,8 @@ describe('reporting protocol client', () => {
 		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
-		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006 REP')
-		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006 REP')
+		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006\u00a0REP')
+		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006\u00a0REP')
 
 		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()

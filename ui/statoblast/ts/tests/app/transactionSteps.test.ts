@@ -175,9 +175,9 @@ test('titles transaction status from the prepared transaction labels instead of 
 })
 
 for (const [functionName, title, args] of [
-	['depositToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
-	['depositWalletRepToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
-	['depositRepOnOutcome', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
+	['depositToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
+	['depositWalletRepToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
+	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
 	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
 	['report', 'Create oracle report', []],
@@ -736,7 +736,7 @@ test('describes a standalone unlimited approval as Max REP', async () => {
 	const sending = reviewed.sendTransaction({ to: account, data })
 	await waitForStarted()
 	try {
-		expect(transactionSteps.value?.steps[0]?.amount).toBe('Max REP')
+		expect(transactionSteps.value?.steps[0]?.amount).toBe('Max\u00a0REP')
 	} finally {
 		await sending
 	}
@@ -951,7 +951,7 @@ test('minting complete sets sends the transaction directly and tracks its receip
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'universeId') return 0n
-			if (request.functionName === 'priceOracleManagerAndOperatorQueuer') return account
+			if (request.functionName === 'openOraclePriceCoordinator') return account
 			if (request.functionName === 'lastSettlementTimestamp') return 1n
 			if (request.functionName === 'getCurrentMintingCapacityAttoEth') return 10n ** 18n
 			throw new Error(`Unexpected read: ${request.functionName}`)

@@ -30,20 +30,20 @@ export const createAccountDetailRoute = (deps: AccountDetailRouteDeps) => {
 		return {
 			loadedCount: activityDetailState.activeAccountTransactions.loaded.length,
 			expandedKeys: [...detailContent.querySelectorAll<HTMLElement>('.account-transaction-action[open]')].flatMap(action => {
-				const key = action.closest<HTMLElement>('.account-transaction[data-live-key]')?.dataset.liveKey
+				const key = action.closest<HTMLElement>('.account-transaction[data-live-key]')?.dataset['liveKey']
 				return key === undefined ? [] : [key]
 			}),
-			anchorKey: anchorCard?.dataset.liveKey,
+			anchorKey: anchorCard?.dataset['liveKey'],
 			anchorTop: anchorCard?.getBoundingClientRect().top,
-			focusKey: focusedCard?.dataset.liveKey,
+			focusKey: focusedCard?.dataset['liveKey'],
 			focusIndex: document.activeElement instanceof HTMLElement ? focusable.indexOf(document.activeElement) : -1,
-			outsideFocus: document.activeElement instanceof HTMLElement ? document.activeElement.dataset.liveFocus : undefined,
+			outsideFocus: document.activeElement instanceof HTMLElement ? document.activeElement.dataset['liveFocus'] : undefined,
 			scrollTop: dialog.scrollTop,
 		}
 	}
 
 	const restoreAccountDialogSnapshot = (snapshot: DialogSnapshot) => {
-		const availableKeys = new Set([...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')].flatMap(card => (card.dataset.liveKey === undefined ? [] : [card.dataset.liveKey])))
+		const availableKeys = new Set([...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')].flatMap(card => (card.dataset['liveKey'] === undefined ? [] : [card.dataset['liveKey']])))
 		const reconciled = reconcileTransactionDialogSnapshot(snapshot, availableKeys)
 		for (const key of reconciled.expandedKeys) {
 			if (key === undefined) continue

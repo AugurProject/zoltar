@@ -3,6 +3,7 @@ import type { DeploymentSettings, OperatorSettings } from '../config/settings.ts
 import type { ChaosReadClient } from '../monitoring/discovery-client.ts'
 import type { EcosystemSnapshot } from '../operations/types.ts'
 import type { RuntimeState } from '../state/operator-state.ts'
+import { requiredConnectivity } from '../execution/execution-quorum.ts'
 import { canonicalAnchor, chaosReadClients, createChaosReadPool, unavailableOperationCatalog } from './canonical-scan.ts'
 
 async function missingDeploymentRoots(client: Pick<ChaosReadClient, 'getCode'>, deployment: DeploymentSettings, blockNumber: bigint) {
@@ -21,11 +22,12 @@ async function missingDeploymentRoots(client: Pick<ChaosReadClient, 'getCode'>, 
 }
 
 export async function checkDeploymentAvailability(settings: OperatorSettings, pool: ReturnType<typeof createChaosReadPool>) {
+	const connectivity = requiredConnectivity(settings)
 	const anchor = await canonicalAnchor(settings, pool)
 	const missing = await settledQuorumValue(
 		'ecosystem deployment availability',
 		chaosReadClients(settings, pool).map(async ({ client, endpoint }) => ({ endpoint, value: await missingDeploymentRoots(client, settings.deployment, anchor.blockNumber) })),
-		settings.connectivity?.rpcQuorum,
+		connectivity.rpcQuorum,
 	)
 	const blocking = missing.some(root => root.address !== settings.deployment.tradingFactory && root.address !== settings.deployment.tradingRouter)
 	const notice = deploymentNotice(

@@ -121,11 +121,11 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	const feed = document.createElement('div')
 	const drawer = document.createElement('section')
 	drawer.className = 'event-detail-drawer'
-	drawer.dataset.triggerKey = 'second'
+	drawer.dataset['triggerKey'] = 'second'
 	for (const key of ['first', 'second', 'third']) {
 		const row = document.createElement('article')
 		row.className = 'log-row'
-		row.dataset.liveKey = key
+		row.dataset['liveKey'] = key
 		feed.append(row)
 	}
 	document.body.append(feed)
@@ -137,7 +137,7 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	for (const key of ['first', 'second', 'third']) {
 		const row = document.createElement('article')
 		row.className = 'log-row'
-		row.dataset.liveKey = key
+		row.dataset['liveKey'] = key
 		feed.append(row)
 	}
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeTrue()
@@ -148,7 +148,7 @@ test('places and reanchors the activity detail drawer after the clicked row acro
 	for (const key of ['first', 'third']) {
 		const row = document.createElement('article')
 		row.className = 'log-row'
-		row.dataset.liveKey = key
+		row.dataset['liveKey'] = key
 		feed.append(row)
 	}
 	expect(placeActivityDetailDrawer(feed, drawer)).toBeFalse()
@@ -222,11 +222,11 @@ test('restores disclosure open state across a detail rerender while keeping init
 	const firstPass = document.createElement('div')
 	const action = document.createElement('details')
 	action.className = 'detail-disclosure'
-	action.dataset.disclosureKey = 'transaction-action'
+	action.dataset['disclosureKey'] = 'transaction-action'
 	action.open = true
 	const receipt = document.createElement('details')
 	receipt.className = 'detail-disclosure'
-	receipt.dataset.disclosureKey = 'transaction-receipt'
+	receipt.dataset['disclosureKey'] = 'transaction-receipt'
 	firstPass.append(action, receipt)
 	content.append(firstPass)
 
@@ -234,10 +234,10 @@ test('restores disclosure open state across a detail rerender while keeping init
 	const secondPass = document.createElement('div')
 	const rerenderedAction = document.createElement('details')
 	rerenderedAction.className = 'detail-disclosure'
-	rerenderedAction.dataset.disclosureKey = 'transaction-action'
+	rerenderedAction.dataset['disclosureKey'] = 'transaction-action'
 	const rerenderedReceipt = document.createElement('details')
 	rerenderedReceipt.className = 'detail-disclosure'
-	rerenderedReceipt.dataset.disclosureKey = 'transaction-receipt'
+	rerenderedReceipt.dataset['disclosureKey'] = 'transaction-receipt'
 	secondPass.append(rerenderedAction, rerenderedReceipt)
 	restoreDisclosureState(secondPass, preservedState)
 	expect(rerenderedAction.open).toBeTrue()
@@ -992,7 +992,7 @@ test('commits a staged system snapshot only while its detail gate is reserved', 
 })
 
 test('collects a canonical snapshot to the prior visible depth without retaining missing records', async () => {
-	const pages = new Map<string | undefined, { items: Array<{ id: string }>; nextCursor?: string }>([
+	const pages = new Map<string | undefined, { items: Array<{ id: string }>; nextCursor?: string | undefined }>([
 		[undefined, { items: [{ id: 'new' }, { id: 'kept-3' }], nextCursor: 'page-2' }],
 		['page-2', { items: [{ id: 'kept-2' }, { id: 'kept-1' }], nextCursor: 'page-3' }],
 		['page-3', { items: [{ id: 'older' }], nextCursor: undefined }],
@@ -1377,7 +1377,7 @@ test('keeps a periodic route refresh independent from network-status failure', a
 
 test('serializes a reorg behind an in-flight refresh and uses current recovery state', async () => {
 	const releases: Array<(value: boolean) => void> = []
-	const calls: Array<{ count: number; force: boolean; recovery?: string }> = []
+	const calls: Array<{ count: number; force: boolean; recovery?: string | undefined }> = []
 	let active = 0
 	let maximumActive = 0
 	let recovery: { id: string } | undefined

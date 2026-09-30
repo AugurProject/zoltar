@@ -50,7 +50,8 @@ function canonicalContractsRow(snapshot: PublicOperatorSnapshot, deployment: Das
 }
 
 function readinessRows(snapshot: PublicOperatorSnapshot, configuration: GoLiveConfiguration): ReadinessRow[] {
-	const signer = snapshot.queuedWallet === null ? undefined : (snapshot.queuedWallet ?? snapshot.wallet)
+	let signer = snapshot.wallet
+	if (snapshot.queuedSigner !== undefined) signer = snapshot.queuedSigner.kind === 'apply' ? snapshot.queuedSigner.address : undefined
 	const requiredQuorumRpcs = configuration.rpcQuorum === 2 ? 2 : 0
 	const quorumRpcs = configuration.deployment.quorumRpcUrls.length
 	const venueEnabled = configuration.deployment.uniswapV3Enabled || configuration.deployment.uniswapV4Enabled || (configuration.deployment.uniswapV2Enabled && snapshot.network === 'mainnet')

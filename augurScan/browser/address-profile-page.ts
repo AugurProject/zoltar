@@ -31,7 +31,7 @@ export interface AddressProfileDeps {
 	readonly loadAddressProfile: (options?: LoadOptions) => Promise<boolean>
 }
 
-export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, portfolioFocusKind }: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' } = {}) => {
+export const renderAddressProfilePage = (deps: AddressProfileDeps, item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], { live = false, portfolioFocusKind }: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) => {
 	const { lookup: $, liveSnapshot, nativeSymbol, element, isDemo, setLiveRecord, number, protocolAddressLink, operationsPanel, operationRow, operationCounted, operationsHref, openAccountTransactions, internalEvidenceLink, time, decodedArgumentsTable, applyLiveChanges, loadAddressProfile } = deps
 	const content = $('#address-profile-content')
 	const previousSections = liveSnapshot(content, '[data-live-key]')

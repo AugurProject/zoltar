@@ -28,7 +28,7 @@ export function capSubmissionDeadline(timing: SubmissionTiming, operation: Submi
 }
 
 export async function loadOracleValidity(client: Pick<PublicClient, 'readContract' | 'getChainId'>, pool: LiveMarket['pool'], blockHash: Hash) {
-	const manager = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'priceOracleManagerAndOperatorQueuer', blockHash })
+	const manager = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: pool, functionName: 'openOraclePriceCoordinator', blockHash })
 	const [lastSettlementTimestamp, chainId] = await Promise.all([client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: manager, functionName: 'lastSettlementTimestamp', blockHash }), client.getChainId()])
 	return getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp, chainId)
 }

@@ -9,14 +9,14 @@ export function rpcQuorumRequirement(environment: Environment = process.env): Rp
 	throw new Error('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
 }
 
-export function configuredReadRpcEndpointMinimum(requirement = rpcQuorumRequirement()) {
+export function configuredReadRpcEndpointMinimum(requirement: RpcQuorumRequirement) {
 	return requirement === 1 ? 1 : 3
 }
 
-export function configuredQuorumRpcUrlMinimum(requirement = rpcQuorumRequirement()) {
+export function configuredQuorumRpcUrlMinimum(requirement: RpcQuorumRequirement) {
 	return configuredReadRpcEndpointMinimum(requirement) - 1
 }
 
-export function rpcQuorumDescription(requirement = rpcQuorumRequirement()) {
+export function rpcQuorumDescription(requirement: RpcQuorumRequirement) {
 	return requirement === 1 ? 'one RPC endpoint' : 'two independent RPC endpoints'
 }

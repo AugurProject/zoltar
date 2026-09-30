@@ -1,7 +1,7 @@
 import type { Hex } from '../ethereum.ts'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '../monitoring/read-quorum.ts'
 import { ConnectivityDegradedError } from '../monitoring/resilience.ts'
-import { rpcQuorumRequirement, type RpcQuorumRequirement } from '../monitoring/rpc-quorum-policy.ts'
+import type { RpcQuorumRequirement } from '../monitoring/rpc-quorum-policy.ts'
 
 export type CanonicalBlockReader = {
 	getBlock: (parameters: { blockNumber: bigint }) => Promise<{ hash?: Hex | null | undefined; number?: bigint | null | undefined }>
@@ -138,8 +138,8 @@ export async function confirmCanonicalReceiptFinality(
 	label: string,
 	receipt: { blockHash: Hex; blockNumber: bigint },
 	policy: CanonicalReceiptFinalityPolicy | bigint = { blockTag: 'finalized' },
-	knownMinimumHead?: bigint | undefined,
-	requirement = rpcQuorumRequirement(),
+	knownMinimumHead: bigint | undefined,
+	requirement: RpcQuorumRequirement,
 ) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	if (readers.length < requirement) throw new Error(`${label} requires at least ${requirement === 1 ? 'one block reader' : 'two independent block readers'}`)

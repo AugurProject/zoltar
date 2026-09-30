@@ -95,15 +95,15 @@ contract Zoltar {
 
 	function _forkUniverse(address owner, uint248 universeId, uint256 questionId) private {
 		Universe storage universe = universes[universeId];
-		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
+		require(address(universe.reputationToken) != address(0x0), 'Universe REP token missing');
 		require(address(universe.reputationToken).code.length != 0, 'Universe REP token address must contain code');
 		require(universeTheoreticalSupplies[universeId] != 0, 'Universe theoretical REP supply must be non-zero');
-		require(universe.forkTime == 0, 'Universe has forked already and cannot fork again');
+		require(universe.forkTime == 0, 'Universe already forked');
 		// Intended behavior: Zoltar treats questions as global protocol objects rather
 		// than binding them to a specific universe. Any ended question can force a fork
 		// in any unforked universe, and downstream protocols are expected to enforce any
 		// stricter universe/question relationship they require.
-		require(zoltarQuestionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist in ZoltarQuestionData');
+		require(zoltarQuestionData.questionCreatedTimestamp(questionId) > 0, 'Question does not exist');
 		uint256 endTime = zoltarQuestionData.getQuestionEndDate(questionId);
 		require(block.timestamp >= endTime, 'Question has not ended, so it cannot force a fork yet');
 		universes[universeId].forkTime = block.timestamp;
@@ -131,7 +131,7 @@ contract Zoltar {
 	function _burnRepFor(address owner, uint248 universeId, uint256 amountAttoRep) private {
 		require(amountAttoRep > 0, 'Burn amount zero');
 		Universe storage universe = universes[universeId];
-		require(address(universe.reputationToken) != address(0x0), 'Universe not initialized with a REP token');
+		require(address(universe.reputationToken) != address(0x0), 'Universe REP token missing');
 		require(universeTheoreticalSupplies[universeId] >= amountAttoRep, 'Burn exceeds theoretical supply');
 		_burnRep(universe.reputationToken, owner, amountAttoRep);
 		universeTheoreticalSupplies[universeId] -= amountAttoRep;
@@ -217,12 +217,12 @@ contract Zoltar {
 	}
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
-		splitRepInternal(universeId, amountAttoRep, outcomeIndexes);
+		require(amountAttoRep > 0, 'Split amount must be greater than zero');
+		require(outcomeIndexes.length > 0, 'Select at least one outcome universe');
+		_splitRep(universeId, amountAttoRep, outcomeIndexes);
 	}
 
 	function prepareAndSplitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes, uint256 preparationAttoRep) external {
-		require(amountAttoRep > 0, 'Split amount must be greater than zero');
-		require(outcomeIndexes.length > 0, 'Select at least one outcome universe');
 		if (preparationAttoRep > 0) addRepToMigrationBalance(universeId, preparationAttoRep);
 		splitMigrationRep(universeId, amountAttoRep, outcomeIndexes);
 	}
@@ -234,7 +234,7 @@ contract Zoltar {
 			amountsAttoRep[i] = migration.childMigrationRepAmountsAttoRep[childUniverseIds[i]];
 	}
 
-	function splitRepInternal(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) private {
+	function _splitRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) private {
 		uint256 questionId = universes[universeId].forkQuestionId;
 		// Fork migration intentionally duplicates the holder's migration balance across the
 		// selected child universes. For example, splitting 1 parent-universe REP into the

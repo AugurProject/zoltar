@@ -59,7 +59,7 @@ for (const change of [
 							return 1n
 						case 'escalationGame':
 							return change.startsWith('report') || (changed && change === 'mint escalation') ? address : zeroAddress
-						case 'priceOracleManagerAndOperatorQueuer':
+						case 'openOraclePriceCoordinator':
 							return address
 						case 'lastSettlementTimestamp':
 							return 1n

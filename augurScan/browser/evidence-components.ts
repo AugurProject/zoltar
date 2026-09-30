@@ -145,11 +145,11 @@ export const createEvidenceComponents = (deps: EvidenceComponentsDeps) => {
 			const rawValue = raw[entry.name]
 			const row = element('tr')
 			const nameCell = element('td', '', `#${number(entry.index)} · ${entry.name}`)
-			nameCell.dataset.label = '# / Name'
+			nameCell.dataset['label'] = '# / Name'
 			const typeCell = element('td', '', `${entry.type}${entry.indexed ? ' · indexed' : ''}`)
-			typeCell.dataset.label = 'Solidity type'
+			typeCell.dataset['label'] = 'Solidity type'
 			const displayCell = element('td')
-			displayCell.dataset.label = 'Value'
+			displayCell.dataset['label'] = 'Value'
 			displayCell.append(decodedValueNode(rawValue, display[entry.name], chainId))
 			row.append(nameCell, typeCell, displayCell)
 			body.append(row)

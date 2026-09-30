@@ -41,8 +41,8 @@ const ORACLE_SETTLEMENT_PARAMETERS = [
 	ORACLE_MIN_LIQUIDATION_PRICE_DISTANCE_BPS,
 ] as const
 
-/** ABI-encoded PriceOracleManagerAndOperatorQueuerFactory constructor arguments. */
-function encodePriceOracleManagerAndOperatorQueuerFactoryArguments(weth: Address): Hex {
+/** ABI-encoded OpenOraclePriceCoordinatorFactory constructor arguments. */
+function encodeOpenOraclePriceCoordinatorFactoryArguments(weth: Address): Hex {
 	return encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }, { type: 'uint32' }, { type: 'uint256' }, ...ORACLE_SETTLEMENT_PARAMETER_TYPES], [weth, ORACLE_REPORT_GAS, ORACLE_SETTLEMENT_GAS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ...ORACLE_SETTLEMENT_PARAMETERS])
 }
 
@@ -70,7 +70,7 @@ type StatoblastInfrastructureArtifacts = {
 	escalationGameFactory: ContractArtifact
 	multicall3: BytecodeArtifact
 	openOracle: BytecodeArtifact
-	priceOracleManagerAndOperatorQueuerFactory: BytecodeArtifact
+	openOraclePriceCoordinatorFactory: BytecodeArtifact
 	securityPoolFactory: ContractArtifact
 	securityPoolForker: ContractArtifact
 	securityPoolOperationsDelegate: BytecodeArtifact
@@ -82,7 +82,7 @@ type StatoblastInfrastructureArtifacts = {
 type SecurityPoolFactoryInputs = {
 	escalationGameFactory: Address
 	openOracle: Address
-	priceOracleManagerAndOperatorQueuerFactory: Address
+	openOraclePriceCoordinatorFactory: Address
 	securityPoolForker: Address
 	securityPoolOperationsDelegate: Address
 	shareTokenFactory: Address
@@ -105,7 +105,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 
 	const getShareTokenFactoryByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.shareTokenFactory.abi, bytecode: bytecodeOf(artifacts.shareTokenFactory), args: [zoltar] })
 	const getEscalationGameFactoryByteCode = (claimDelegate: Address) => encodeDeployData({ abi: artifacts.escalationGameFactory.abi, bytecode: bytecodeOf(artifacts.escalationGameFactory), args: [claimDelegate] })
-	const getPriceOracleManagerAndOperatorQueuerFactoryByteCode = (weth: Address) => concatHex([applyLibraries(artifacts.priceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object), encodePriceOracleManagerAndOperatorQueuerFactoryArguments(weth)])
+	const getOpenOraclePriceCoordinatorFactoryByteCode = (weth: Address) => concatHex([applyLibraries(artifacts.openOraclePriceCoordinatorFactory.evm.bytecode.object), encodeOpenOraclePriceCoordinatorFactoryArguments(weth)])
 	const getSecurityPoolForkerByteCode = (zoltar: Address) => encodeDeployData({ abi: artifacts.securityPoolForker.abi, bytecode: applyLibraries(artifacts.securityPoolForker.evm.bytecode.object), args: [zoltar] })
 	const getSecurityPoolOperationsDelegateByteCode = () => applyLibraries(artifacts.securityPoolOperationsDelegate.evm.bytecode.object)
 	const getSecurityPoolFactoryByteCode = (inputs: SecurityPoolFactoryInputs) =>
@@ -120,7 +120,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 				inputs.zoltar,
 				inputs.shareTokenFactory,
 				inputs.uniformPriceDualCapBatchAuctionFactory,
-				inputs.priceOracleManagerAndOperatorQueuerFactory,
+				inputs.openOraclePriceCoordinatorFactory,
 				DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth,
 				DEFAULT_PROTOCOL_CONFIG.minimumVaultRepDepositAttoRep,
 				inputs.securityPoolOperationsDelegate,
@@ -139,7 +139,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 			getZoltarQuestionDataAddress: zoltar.getZoltarQuestionDataAddress,
 			multicall3Bytecode: bytecodeOf(artifacts.multicall3),
 			openOracleBytecode: bytecodeOf(artifacts.openOracle),
-			priceOracleManagerAndOperatorQueuerFactoryBytecode: () => getPriceOracleManagerAndOperatorQueuerFactoryByteCode(weth),
+			openOraclePriceCoordinatorFactoryBytecode: () => getOpenOraclePriceCoordinatorFactoryByteCode(weth),
 			proxyDeployerAddress,
 			securityPoolUtilsBytecode: bytecodeOf(artifacts.securityPoolUtils),
 			securityPoolOperationsDelegateBytecode: getSecurityPoolOperationsDelegateByteCode(),
@@ -151,7 +151,7 @@ export function createStatoblastInitCodes(artifacts: StatoblastInfrastructureArt
 		applyLibraries,
 		createInfraContractAddresses,
 		getEscalationGameFactoryByteCode,
-		getPriceOracleManagerAndOperatorQueuerFactoryByteCode,
+		getOpenOraclePriceCoordinatorFactoryByteCode,
 		getSecurityPoolFactoryByteCode,
 		getSecurityPoolForkerByteCode,
 		getSecurityPoolOperationsDelegateByteCode,

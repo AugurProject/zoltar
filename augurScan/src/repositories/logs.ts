@@ -10,7 +10,7 @@ export type LogListQuery = {
 	readonly decoded: 'true' | 'false' | null
 	readonly canonical: CanonicalHistoryFilter
 	readonly limit: number
-	readonly cursor?: readonly JsonValue[]
+	readonly cursor?: readonly JsonValue[] | undefined
 }
 
 export const logListRows = async (sql: SQL, query: LogListQuery) => {

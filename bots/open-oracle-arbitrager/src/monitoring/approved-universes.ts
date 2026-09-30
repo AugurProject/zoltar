@@ -12,6 +12,7 @@ export async function loadApprovedUniverses(readers: readonly ReadClient[], conf
 			endpoint: endpoints[index] ?? '',
 			value: await loadUniverseTreeBatched(reader, canonicalZoltar(config.network.name), blockNumber, config.network.multicall3),
 		})),
+		config.rpcQuorum,
 	)
 	return { universes, approvedTokens: approvedUniverseRepTokens(universes, config.operatorSettings.approvedUniverses) }
 }

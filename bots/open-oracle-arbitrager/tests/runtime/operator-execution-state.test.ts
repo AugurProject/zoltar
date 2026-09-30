@@ -2,7 +2,7 @@ import { canonicalExecutorIdentity } from '#execution/executor-identity'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { canonicalSecurityPoolFactory, networkConfiguration } from '#config/network'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { copyFile, mkdtemp, rm } from 'node:fs/promises'
+import { chmod, copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { MarketConsensusEstimate, MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
@@ -27,6 +27,7 @@ async function exampleConfiguration() {
 	temporaryDirectories.push(directory)
 	const settingsFile = join(directory, 'operator.json')
 	await copyFile(new URL('../../config/operator.example.json', import.meta.url), settingsFile)
+	await chmod(settingsFile, 0o600)
 	return await loadConfiguration(settingsFile)
 }
 
@@ -303,24 +304,18 @@ test('live authentication tolerates a lagging endpoint once the quorum has verif
 	// Without a verifying endpoint the incomplete observation is what the operator rejects.
 	await expect(authenticateConfiguredDeployments([lagging, lagging], live, {})).rejects.toThrow('Canonical executor is not deployed')
 	await expect(authenticateConfiguredDeployments([lagging, verified], { ...live, executor: config.openOracle }, {})).rejects.toThrow('Executor must use the canonical derived address')
-	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-	process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-	try {
-		expect((await authenticateConfiguredDeployments([lagging, verified, verified], live, {})).executorDeployed).toBe(true)
-		await expect(authenticateConfiguredDeployments([lagging, lagging, verified], live, {})).rejects.toThrow('Canonical executor is not deployed')
-		const offline = createPublicClient({
-			chain: config.network.chain,
-			transport: custom({
-				request: async () => {
-					throw new Error('fetch failed')
-				},
-			}),
-		})
-		await expect(authenticateConfiguredDeployments([offline, offline, verified], live, {})).rejects.toThrow('Deployment authentication requires at least two independent RPC endpoints')
-	} finally {
-		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-	}
+	const liveQuorumTwo = { ...live, rpcQuorum: 2 as const }
+	expect((await authenticateConfiguredDeployments([lagging, verified, verified], liveQuorumTwo, {})).executorDeployed).toBe(true)
+	await expect(authenticateConfiguredDeployments([lagging, lagging, verified], liveQuorumTwo, {})).rejects.toThrow('Canonical executor is not deployed')
+	const offline = createPublicClient({
+		chain: config.network.chain,
+		transport: custom({
+			request: async () => {
+				throw new Error('fetch failed')
+			},
+		}),
+	})
+	await expect(authenticateConfiguredDeployments([offline, offline, verified], liveQuorumTwo, {})).rejects.toThrow('Deployment authentication requires at least two independent RPC endpoints')
 })
 
 for (const name of ['mainnet', 'sepolia'] as const)

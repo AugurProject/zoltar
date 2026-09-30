@@ -498,7 +498,7 @@ describe('OverviewPanels', () => {
 
 		const childUniverseId = 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdn
 		await renderOverviewPanels({ activeUniverseId: childUniverseId })
-		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x12345678…90abcd')
+		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value')?.textContent).toBe('Universe 0x123456…abcd')
 		expect(document.body.querySelector('.header-toolbar-controls .toolbar-field-value > span')?.getAttribute('title')).toBe(`Universe 0x${childUniverseId.toString(16)}`)
 		await cleanupRenderedComponent?.()
 

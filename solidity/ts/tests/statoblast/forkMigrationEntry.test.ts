@@ -123,7 +123,7 @@ describe('Statoblast: fork migration', () => {
 		const startYesEscalationAfterQuestionEnd = async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 			return await client.readContract({ abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', address: securityPoolAddresses.escalationGame, args: [] })
 		}
@@ -199,8 +199,8 @@ describe('Statoblast: fork migration', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, securityPoolUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, securityPoolUnderwritingLimitAttoEth)
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No])
 			await createChildUniverse(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes)
@@ -231,7 +231,7 @@ describe('Statoblast: fork migration', () => {
 				settlementCollateralAttoEth: childSettlementCollateralAttoEth,
 				currentRetentionRate: childCurrentRetentionRate,
 				parent: childParent,
-				priceOracleManagerAndOperatorQueuer: childManagerAddress,
+				openOraclePriceCoordinator: childManagerAddress,
 				questionId: childStoredQuestionId,
 				statoblastSecurityMultiplierBps: childStoredStatoblastSecurityMultiplierBps,
 				securityPool: childSecurityPoolAddress,
@@ -243,7 +243,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(deploymentCount > 1n, true, 'factory should track more than one deployment')
 			strictEqualTypeSafe(childSecurityPoolAddress, expectedChildAddresses.securityPool, 'child deployment should be queryable')
 			strictEqualTypeSafe(childTruthAuctionAddress, expectedChildAddresses.truthAuction, 'child truth auction should be queryable')
-			strictEqualTypeSafe(childManagerAddress, expectedChildAddresses.priceOracleManagerAndOperatorQueuer, 'child manager should be queryable')
+			strictEqualTypeSafe(childManagerAddress, expectedChildAddresses.openOraclePriceCoordinator, 'child manager should be queryable')
 			strictEqualTypeSafe(childShareTokenAddress, expectedChildAddresses.shareToken, 'child share token should be queryable')
 			strictEqualTypeSafe(childParent, securityPoolAddresses.securityPool, 'child parent should match the origin security pool')
 			strictEqualTypeSafe(childStoredUniverseId, childUniverseId, 'child universe id should match')
@@ -251,7 +251,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(childStoredStatoblastSecurityMultiplierBps, statoblastSecurityMultiplierBps, 'child multiplier should match')
 			strictEqualTypeSafe(childCurrentRetentionRate, MAX_RETENTION_RATE, 'child retention rate should match')
 			strictEqualTypeSafe(childSettlementCollateralAttoEth, 0n, 'child complete set collateral should default to zero during fork')
-			strictEqualTypeSafe(await getLastPrice(client, childManagerAddress), await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 'child manager should inherit the parent price')
+			strictEqualTypeSafe(await getLastPrice(client, childManagerAddress), await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator), 'child manager should inherit the parent price')
 		})
 
 		test('forkZoltarWithOwnEscalationGame auto-initiates the pool fork and ignores stray REP already sitting on the forker', async () => {
@@ -299,7 +299,7 @@ describe('Statoblast: fork migration', () => {
 
 		test('initiateSecurityPoolFork rejects an unauthorized pool before it can change canonical pool state', async () => {
 			const collateral = 5n * 10n ** 18n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
 			await createCompleteSet(client, securityPoolAddresses.securityPool, collateral)
 			await triggerExternalForkForSecurityPool(undefined, 'untrusted fork event emitter attack')
 
@@ -326,7 +326,7 @@ describe('Statoblast: fork migration', () => {
 		test('initiateSecurityPoolFork rejects a fake pool that borrows a canonical escalation game', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 
 			const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
@@ -542,7 +542,7 @@ describe('Statoblast: fork migration', () => {
 			await approveToken(victimClient, childRep, targetPool.securityPool)
 			await depositRepToVault(victimClient, targetPool.securityPool, victimDeposit)
 			await mockWindow.setTime(victimQuestionData.endTime + 1n)
-			await manipulatePriceOracle(victimClient, mockWindow, targetPool.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(victimClient, mockWindow, targetPool.openOraclePriceCoordinator)
 			await depositToEscalationGame(victimClient, targetPool.securityPool, QuestionOutcome.Yes, victimDeposit)
 			const targetGame = await getSecurityPoolsEscalationGame(client, targetPool.securityPool)
 			strictEqualTypeSafe(await getERC20Balance(client, childRep, targetGame), victimDeposit, 'canonical target game should begin with victim-funded child REP')

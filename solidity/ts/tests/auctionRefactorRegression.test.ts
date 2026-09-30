@@ -38,12 +38,12 @@ test('auction storage extraction preserves every host slot and node field positi
 	)
 	const nodes = layout[0]
 	if (nodes === undefined || !('value' in nodes.type)) throw new Error('Auction node mapping layout is missing')
-	const nodeType = getRecord(nodes.type.value, 'Auction node mapping value is invalid')
-	const members = getArray(nodeType.members, 'Auction node layout is missing members')
+	const nodeType = getRecord(nodes.type['value'], 'Auction node mapping value is invalid')
+	const members = getArray(nodeType['members'], 'Auction node layout is missing members')
 	assert.deepStrictEqual(
 		members.map((member, index) => {
 			const value = getRecord(member, `Invalid auction node member ${index.toString()}`)
-			return { label: getString(value.label, 'Auction node member label missing'), slot: getString(value.slot, 'Auction node member slot missing'), offset: value.offset }
+			return { label: getString(value['label'], 'Auction node member label missing'), slot: getString(value['slot'], 'Auction node member slot missing'), offset: value['offset'] }
 		}),
 		[
 			{ label: 'tick', slot: '0', offset: 0 },
@@ -60,9 +60,9 @@ test('auction storage extraction preserves every host slot and node field positi
 
 test('auction runtime stays within the EIP-170 limit', () => {
 	const auction = getContractOutput(loadContractsJson(import.meta.dir), auctionSource, auctionName)
-	const evm = getRecord(auction.evm, 'Auction output is missing EVM bytecode')
-	const deployedBytecode = getRecord(evm.deployedBytecode, 'Auction output is missing deployed bytecode')
-	const object = getString(deployedBytecode.object, 'Auction deployed bytecode object missing')
+	const evm = getRecord(auction['evm'], 'Auction output is missing EVM bytecode')
+	const deployedBytecode = getRecord(evm['deployedBytecode'], 'Auction output is missing deployed bytecode')
+	const object = getString(deployedBytecode['object'], 'Auction deployed bytecode object missing')
 	const deployedBytes = object.length / 2
 	assert.ok(deployedBytes <= eip170RuntimeCodeLimitBytes, `auction runtime bytecode exceeds EIP-170 ${eip170RuntimeCodeLimitBytes.toString()} bytes: ${deployedBytes.toString()}`)
 })
@@ -75,12 +75,12 @@ test('liquidation boundaries expose one typed request with one nested snapshot',
 	]
 	for (const [source, contract, functionName, expectedTopLevelComponents] of boundaries) {
 		const output = getContractOutput(artifacts, source, contract)
-		const abi = getArray(output.abi, `${contract} ABI missing`)
-		const entry = abi.map((item, index) => getRecord(item, `${contract} ABI entry ${index.toString()} invalid`)).find(item => item.type === 'function' && item.name === functionName)
+		const abi = getArray(output['abi'], `${contract} ABI missing`)
+		const entry = abi.map((item, index) => getRecord(item, `${contract} ABI entry ${index.toString()} invalid`)).find(item => item['type'] === 'function' && item['name'] === functionName)
 		if (entry === undefined) throw new Error(`${contract}.${functionName} ABI missing`)
-		const inputs = getArray(entry.inputs, `${contract}.${functionName} inputs missing`)
+		const inputs = getArray(entry['inputs'], `${contract}.${functionName} inputs missing`)
 		assert.strictEqual(inputs.length, 1, `${contract}.${functionName} should accept one typed request`)
 		const request = getRecord(inputs[0], `${contract}.${functionName} request input invalid`)
-		assert.strictEqual(getArray(request.components, `${contract}.${functionName} request components missing`).length, expectedTopLevelComponents)
+		assert.strictEqual(getArray(request['components'], `${contract}.${functionName} request components missing`).length, expectedTopLevelComponents)
 	}
 })

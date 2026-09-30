@@ -66,9 +66,8 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 	const arguments_ = process.argv.slice(2)
 	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${settingsFile} or use the operator UI.`)
 	const saved = await loadOperatorSettings(settingsFile)
-	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Copy config/operator.example.json there, edit it, and start the bot again.`)
+	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Create it with \`install -m 600 config/operator.example.json ${settingsFile}\`, edit it, and start the bot again.`)
 	await assertOperatorProfileIsolation(settingsFile, saved)
-	process.env['ZOLTAR_BOT_RPC_QUORUM'] = saved.rpcQuorum.toString()
 	const { deployment, network, quorumRpcUrls } = runnableOperatorSettings(settingsFile, saved)
 	return {
 		...saved.strategy,

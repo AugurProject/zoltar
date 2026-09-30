@@ -25,35 +25,35 @@ function storageEntrySummary(entry: { label: string; slot: string; offset: numbe
 		label: entry.label,
 		slot: entry.slot,
 		offset: entry.offset,
-		type: getString(entry.type.label, `Missing normalized type label for ${entry.label}`),
+		type: getString(entry.type['label'], `Missing normalized type label for ${entry.label}`),
 	}
 }
 
 function getStorageTypes(contractOutput: Record<string, unknown>): Record<string, unknown> {
-	const storageLayout = getRecord(contractOutput.storageLayout, 'EscalationGame output is missing storageLayout')
-	return getRecord(storageLayout.types, 'EscalationGame storageLayout is missing types')
+	const storageLayout = getRecord(contractOutput['storageLayout'], 'EscalationGame output is missing storageLayout')
+	return getRecord(storageLayout['types'], 'EscalationGame storageLayout is missing types')
 }
 
 function findStorageTypeByLabel(typeTable: Record<string, unknown>, typeLabel: string): Record<string, unknown> {
 	for (const typeDefinition of Object.values(typeTable)) {
 		const normalizedType = getRecord(typeDefinition, `Invalid storage type while looking for ${typeLabel}`)
-		if (normalizedType.label === typeLabel) return normalizedType
+		if (normalizedType['label'] === typeLabel) return normalizedType
 	}
 	throw new Error(`Storage layout missing type ${typeLabel}`)
 }
 
 function storageMemberSummary(typeTable: Record<string, unknown>, typeLabel: string) {
 	const typeDefinition = findStorageTypeByLabel(typeTable, typeLabel)
-	const members = getArray(typeDefinition.members, `Storage type ${typeLabel} is missing members`)
+	const members = getArray(typeDefinition['members'], `Storage type ${typeLabel} is missing members`)
 	return members.map((member, index) => {
 		const normalizedMember = getRecord(member, `Invalid ${typeLabel} storage member ${index}`)
-		const memberTypeId = getString(normalizedMember.type, `Missing ${typeLabel} storage member type ${index}`)
+		const memberTypeId = getString(normalizedMember['type'], `Missing ${typeLabel} storage member type ${index}`)
 		const memberType = getRecord(typeTable[memberTypeId], `Missing ${typeLabel} storage member type ${memberTypeId}`)
 		return {
-			label: getString(normalizedMember.label, `Missing ${typeLabel} storage member label ${index}`),
-			slot: getString(normalizedMember.slot, `Missing ${typeLabel} storage member slot ${index}`),
-			offset: getNumber(normalizedMember.offset, `Missing ${typeLabel} storage member offset ${index}`),
-			type: getString(memberType.label, `Missing ${typeLabel} storage member type label ${index}`),
+			label: getString(normalizedMember['label'], `Missing ${typeLabel} storage member label ${index}`),
+			slot: getString(normalizedMember['slot'], `Missing ${typeLabel} storage member slot ${index}`),
+			offset: getNumber(normalizedMember['offset'], `Missing ${typeLabel} storage member offset ${index}`),
+			type: getString(memberType['label'], `Missing ${typeLabel} storage member type label ${index}`),
 		}
 	})
 }
@@ -64,9 +64,9 @@ function getNumber(value: unknown, errorMessage: string): number {
 }
 
 function getBytecodeObject(contractOutput: Record<string, unknown>, sectionName: 'bytecode' | 'deployedBytecode'): string {
-	const evm = getRecord(contractOutput.evm, 'EscalationGame output is missing EVM bytecode')
+	const evm = getRecord(contractOutput['evm'], 'EscalationGame output is missing EVM bytecode')
 	const bytecodeSection = getRecord(evm[sectionName], `EscalationGame output is missing EVM ${sectionName}`)
-	return getString(bytecodeSection.object, `EscalationGame EVM ${sectionName} is missing object`)
+	return getString(bytecodeSection['object'], `EscalationGame EVM ${sectionName} is missing object`)
 }
 
 function normalizeHexBytecode(bytecode: string): string {
@@ -86,15 +86,15 @@ function stripSolidityMetadata(bytecode: string): string {
 
 function getExpectedEscalationGameBytecodeSnapshot(actualSnapshot: EscalationGameBytecodeSnapshot): EscalationGameBytecodeSnapshot {
 	const snapshotText = `${JSON.stringify(actualSnapshot, undefined, '\t')}\n`
-	if (process.env.UPDATE_ESCALATION_GAME_BYTECODE_SNAPSHOT === '1') {
+	if (process.env['UPDATE_ESCALATION_GAME_BYTECODE_SNAPSHOT'] === '1') {
 		writeFileSync(escalationGameBytecodeSnapshotPath, snapshotText)
 	}
 	const parsedSnapshot: unknown = JSON.parse(readFileSync(escalationGameBytecodeSnapshotPath, 'utf8'))
 	const snapshot = getRecord(parsedSnapshot, 'EscalationGame bytecode snapshot must be an object')
 	return {
-		creationBytes: getNumber(snapshot.creationBytes, 'EscalationGame bytecode snapshot missing creationBytes'),
-		deployedBytes: getNumber(snapshot.deployedBytes, 'EscalationGame bytecode snapshot missing deployedBytes'),
-		deployedBytecodeWithoutMetadataHash: getString(snapshot.deployedBytecodeWithoutMetadataHash, 'EscalationGame bytecode snapshot missing runtime hash') as Hex,
+		creationBytes: getNumber(snapshot['creationBytes'], 'EscalationGame bytecode snapshot missing creationBytes'),
+		deployedBytes: getNumber(snapshot['deployedBytes'], 'EscalationGame bytecode snapshot missing deployedBytes'),
+		deployedBytecodeWithoutMetadataHash: getString(snapshot['deployedBytecodeWithoutMetadataHash'], 'EscalationGame bytecode snapshot missing runtime hash') as Hex,
 	}
 }
 

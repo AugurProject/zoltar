@@ -591,7 +591,7 @@ export async function loadQueuedVaultOperationState(client: Pick<ReadClient, 'ge
 		const execution = getStagedOracleExecutionResult({ logs }, managerAddress, queued.operation, queued.operationId)
 		if (execution !== undefined) {
 			if (execution.success) return { status: 'executed', execution }
-			if (execution.errorMessage === 'staged operation expired') return { status: 'expired', execution }
+			if (execution.errorMessage === 'Staged operation expired') return { status: 'expired', execution }
 			if (execution.errorMessage === 'Backing target superseded') return { status: 'superseded', execution }
 			return { status: 'failed', execution }
 		}

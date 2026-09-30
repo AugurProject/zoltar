@@ -12,6 +12,7 @@ import { encodeDeployData, type Abi, type Address } from '@zoltar/core-shared/ev
 import { useStatoblastVaultAccountingFixture } from '../statoblast/fixture'
 import { writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { deployContract } from '../../testSupport/deployContract'
+import { ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 import { statoblast_SecurityPool_SecurityPool } from '../../types/contractArtifact'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
 
@@ -56,7 +57,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 
 	beforeEach(async () => {
 		account = addressString(TEST_ADDRESSES[0])
-		await setVaultCapacityFixture(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, fixture.client.account.address, fixture.repDeposit / 4n)
+		await setVaultCapacityFixture(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator, fixture.client.account.address, fixture.repDeposit / 4n)
 		factory = await deploy(factoryArtifact, [getInfraContractAddresses().securityPoolFactory, 30n])
 		router = await deploy(routerArtifact, [factory])
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: factoryArtifact.abi, address: factory, functionName: 'createPair', args: [fixture.securityPoolAddresses.securityPool] }))
@@ -162,7 +163,7 @@ describe('trading against authoritative Zoltar contracts', () => {
 		const redeemData = encodeReceiveBasedRedeemRequest({ shareToken: shareTokenAddress, pool: fixture.securityPoolAddresses.securityPool, pair, universeId, questionId: fixture.questionId }, redeemAmount, redeemEth, recipient, deadline)
 		await writeContractAndWait(fixture.client, () => fixture.client.writeContract({ abi: shareTokenAbi, address: shareTokenAddress, functionName: 'safeBatchTransferFrom', args: [account, router, ids, [redeemAmount, redeemAmount, redeemAmount], redeemData] }))
 		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(router, outcome)).toBe(0n)
-		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(account, outcome)).toBe(sharesBefore[Number(outcome)] - redeemAmount)
+		for (const outcome of [0n, 1n, 2n] as const) expect(await shareBalance(account, outcome)).toBe(ensureDefined(sharesBefore[Number(outcome)], 'missing share balance before redeem') - redeemAmount)
 		expect(await supplies()).toEqual(supplyBefore.map(supply => supply - redeemAmount))
 		expect((await fixture.client.getBalance({ address: recipient })) - recipientEthBefore).toBe(redeemEth)
 		expect(await fixture.client.getBalance({ address: router })).toBe(0n)

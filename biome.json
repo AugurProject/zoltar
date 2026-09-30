@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"includes": ["**", "!**/node_modules", "!**/vendor", "!**/dist", "!coverage", "!reth", "!testnetwork", "!docs/assets/js", "!shared/*/js", "!ui/*/js", "!solidity/artifacts", "!solidity/contracts", "!solidity/js", "!solidity/ts/testSupport/simulator/types/wire-types.js"]
+		"includes": ["**", "!**/node_modules", "!**/vendor", "!**/dist", "!coverage", "!reth", "!testnetwork", "!docs/assets/js", "!shared/*/js", "!ui/*/js", "!solidity/artifacts", "!solidity/contracts", "!solidity/js"]
 	},
 	"formatter": {
 		"enabled": true,

@@ -50,7 +50,7 @@ export type ReportInspection = EvaluatedOpportunity | SkippedReport
 
 export type ReadClient = PublicClient<Transport, Chain>
 export type WriteClient = WalletClient<Transport, Chain, Account>
-export type RecoveryConfiguration = Pick<Configuration, 'connectivity' | 'executor' | 'openOracle' | 'quorumRpcUrls'> & {
+export type RecoveryConfiguration = Pick<Configuration, 'connectivity' | 'executor' | 'openOracle' | 'quorumRpcUrls' | 'rpcQuorum'> & {
 	network: Pick<Configuration['network'], 'weth'>
 	submission: Pick<Configuration['submission'], 'mode'>
 }

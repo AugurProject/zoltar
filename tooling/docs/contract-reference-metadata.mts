@@ -49,7 +49,7 @@ export const contractPagesDirectory = 'docs/reference/contracts'
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = '30b203c0156f182a503595227512889c34de7795aff94109adf77c7182419bc4'
+export const expectedProductionSoliditySourceFingerprint = '5e2103b0de75591400022b129b4ea9c61c9c1e6c7fe5cafd6c4fc5e7378810bd'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -105,7 +105,7 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	{
 		name: 'DeploySecurityPool',
 		parameters:
-			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas,uint256 currentRetentionRate,uint256 settlementCollateralAttoEth',
+			'ISecurityPool indexed securityPool,UniformPriceDualCapBatchAuction truthAuction,OpenOraclePriceCoordinator openOraclePriceCoordinator,IShareToken shareToken,ISecurityPool indexed parent,uint248 indexed universeId,uint256 questionId,uint256 statoblastSecurityMultiplierBps,uint256 initialReportPriorityFeeAttoEthPerGas,uint256 currentRetentionRate,uint256 settlementCollateralAttoEth',
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',
 	},
 	{
@@ -262,7 +262,7 @@ export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
 	},
 ]
 
-export const referencedEventAbiFingerprint = '94be605112d124dcf4670e6b61b005d48db3d018da32d82fd6e006ab4476b7a6'
+export const referencedEventAbiFingerprint = '6ad8398e35b856a20565b49884ac37714a824e94d0e84714c1d388a0de9fe4ad'
 
 export const entrypointSignaturesBySource: Record<string, Record<string, string[]>> = {
 	'solidity/contracts/ERC20.sol': {
@@ -372,7 +372,7 @@ export const entrypointSignaturesBySource: Record<string, Record<string, string[
 		setPoolFinancials: ['external(uint256,uint256,uint256,uint256)'],
 		setStartingParams: ['external(uint256,uint256)'],
 		setSystemState: ['external(SystemState)'],
-		setTotalSharesAttoShares: ['external(uint256)'],
+		setShareTokenSupplyAttoShares: ['external(uint256)'],
 		transferEth: ['external(address payable,uint256)'],
 		updateSettlementCollateral: ['public()'],
 		updateRetentionRate: ['public()'],
@@ -434,7 +434,7 @@ export const stateChangingAbiFingerprintBySource: Record<string, string> = {
 	'solidity/contracts/statoblast/EscalationGameStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol': 'f9a9beff48fc7d1516b4db58430627a2be805c631b2328a4a8c84fab48a1689f',
 	'solidity/contracts/statoblast/LiquidationApprovalRegistry.sol': '986a20fc0e4cfe0898be8fc91c6b911b93ef0ae1086d4cb1142a93c66f315684',
-	'solidity/contracts/statoblast/SecurityPool.sol': 'd4a3581d8b6cfe40a5a50026237d0967ef28e9239f5f79cb56270a7061170e54',
+	'solidity/contracts/statoblast/SecurityPool.sol': '2e735eb81251d4f5b311abd2c720ce18a3d7d627357e1aede2af059c21125599',
 	'solidity/contracts/statoblast/SecurityPoolForker.sol': 'b885410984916de3e66b38b14532f58e495190f140342045780fba91c0cab6ab',
 	'solidity/contracts/statoblast/SecurityPoolForkerBase.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
 	'solidity/contracts/statoblast/SecurityPoolForkerStorage.sol': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -547,16 +547,15 @@ export const contractReferences: ContractReference[] = [
 					'Adds the supplied preparation amount to migration credit, then splits the requested REP into the supplied outcomes using the existing migration checks. Both steps revert together on failure. Callers compute any preparation shortfall from cumulative child migration amounts, rather than current child token holdings.',
 				declarations: [{ name: 'prepareAndSplitMigrationRep' }],
 				preconditions: 'Forked universe; positive split amount; nonempty valid outcomes; sufficient parent REP for the exact preparationAttoRep supplied and sufficient migration credit for every split. Outcome order is unrestricted. Genesis REP requires allowance for preparation; child REP needs no allowance.',
-				signals: '`MigrationRepAdded` when preparationAttoRep is positive; `DeployChild` and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
+				signals: '`MigrationRepAdded` when preparationAttoRep is positive; `DeployChild`, `TheoreticalSupplySet`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
 			},
 			{
 				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',
 				caller: 'Migration-balance holder',
-				effect:
-					'Mints `amount` of child REP into every selected branch, deploying missing children lazily. An empty outcome list returns after the universe-fork guard without outcome validation, deployment, minting, or events. A nonempty zero-amount call still validates every outcome, may deploy missing children, performs zero-value child REP mints, and records a zero split for every branch.',
+				effect: 'Mints `amountAttoRep` of child REP into every selected branch, deploying missing children lazily.',
 				declarations: [{ name: 'splitMigrationRep' }],
-				preconditions: "Universe forked. A nonempty list additionally requires every outcome to be well formed and the cumulative amount per child not to exceed the caller's migration balance.",
-				signals: '`TheoreticalSupplySet` and `DeployChild` when needed; child REP `Transfer` and `Mint`, then `MigrationRepSplit`, per selected branch, including at zero amount; no event for an empty list',
+				preconditions: "Universe forked; positive split amount; nonempty list of well-formed outcomes; the cumulative amount per child must not exceed the caller's migration balance.",
+				signals: '`DeployChild`, `TheoreticalSupplySet`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer` and `Mint`, then `MigrationRepSplit`, per selected branch',
 			},
 		],
 	},
@@ -664,7 +663,7 @@ export const contractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: 'dfa5b4220b8af292e9baab0368a41aa262a096468444fd5b7f2575908a5551e8',
+		compiledAbiFingerprint: 'dfb1fa56f97df8c86f07105cb6b8f9e55c08205c43dce3b216331397b0196d1e',
 		name: 'SecurityPoolFactory',
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional Truth Auction.',
 		readAbiFingerprint: 'ee2532194c63d917a4665729c7456b2905cf62bfd69555cb023d1c7e00566473',

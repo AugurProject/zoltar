@@ -17,8 +17,8 @@ interface ISecurityPoolForkerEvents {
 	/// @notice Parent-universe REP locked under the per-pool migration proxy.
 	event ParentRepLocked(ISecurityPool indexed parentPool, address indexed migrationProxy, uint256 poolHeldRepAmountAttoRep, uint256 disputeStakedRepAmountAttoRep, uint256 resultingLockedAttoRep);
 	/// @notice Final parent/child vault and collateral state after one vault migration. REP fields use attoREP,
-	/// settlement-collateral fields use attoETH, REP attribution fields use REP backing units, and capacity ownerships use
-	/// attoREP. The event is emitted even when `settlementCollateralTransferredAttoEth` is zero.
+	/// settlement-collateral and underwriting-limit fields use attoETH, and REP attribution fields use REP backing units.
+	/// The event is emitted even when `settlementCollateralTransferredAttoEth` is zero.
 	event VaultMigrationCheckpoint(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 outcomeIndex, uint256 migratedRepDeltaAttoRep, uint256 resultingChildMigratedRepTotalAttoRep, uint256 resultingParentRepBackingUnits, uint256 resultingParentUnderwritingLimitAttoEth, uint256 resultingChildRepBackingUnits, uint256 resultingChildUnderwritingLimitAttoEth, uint256 resultingParentTotalRepBackingUnits, uint256 resultingChildTotalRepBackingUnits, uint256 resultingParentTotalUnderwritingLimitAttoEth, uint256 resultingChildTotalUnderwritingLimitAttoEth, uint256 settlementCollateralTransferredAttoEth, uint256 cumulativeSettlementCollateralTransferredAttoEth);
 	/// @notice REP materialized into one child continuation; amounts use child attoREP.
 	event ChildDisputeStakedRepMaterialized(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed childGame, uint256 outcomeIndex, uint256 attoRepAmount, uint256 resultingDisputeStakedRepBalanceAttoRep);

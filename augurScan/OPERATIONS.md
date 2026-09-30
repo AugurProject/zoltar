@@ -18,6 +18,8 @@ The most important runtime settings are:
 - `MAINNET_RPC_URL` and `SEPOLIA_RPC_URL` provide RPC pools;
 - `MAINNET_START_BLOCK` and `SEPOLIA_START_BLOCK` set the lower bound for deployment discovery;
 - `LOG_SCAN_RANGE_SIZE` caps each inclusive `eth_getLogs` request;
+- `MAINNET_UNISWAP_V2_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V3_FACTORY_ADDRESS`, `MAINNET_UNISWAP_V4_POOL_MANAGER_ADDRESS`, and the matching `SEPOLIA_` variables override the Uniswap activity sources; an unset or empty value selects the network default, and `none` disables that source. The Uniswap V2 default comes from `config/networks.json`; the V3 and V4 defaults come from the shared Uniswap registry in `shared/core/ts/deployment/uniswapDeployments.ts`;
+- `SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the indexer's scan status log uses to report a scan as lagging; Mainnet and Sepolia default to 12000;
 - `POSTGRES_URL` connects directly to PostgreSQL or through a session-mode pooler;
 - `AUGURSCAN_ACCESS_USERNAME` and `AUGURSCAN_ACCESS_PASSWORD` enable HTTP Basic access control when both are set;
 - `API_RATE_LIMIT_PER_MINUTE` changes the default per-client API limit of 600 and also limits failed Basic-authentication attempts on protected non-API routes, while `0` disables both limits when a trusted upstream enforces them;

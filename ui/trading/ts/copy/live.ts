@@ -73,10 +73,6 @@ function securityPoolRefreshFailed(refreshError: string) {
 
 const forkedAt = 'Forked'
 
-function priorityFeePerGas(amount: string) {
-	return `${amount}\u00a0nanoETH per gas`
-}
-
 const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
 const universeDiscoveryFailedLead = 'Universe discovery failed'
 
@@ -186,7 +182,6 @@ export const liveCopy = {
 	securityPoolDetailsUnavailable,
 	securityPoolRefreshFailed,
 	forkedAt,
-	priorityFeePerGas,
 	securityPoolDiscoveryFailed,
 	securityPoolFactoryDiscoveryFailed,
 	discoveryFailureLead,

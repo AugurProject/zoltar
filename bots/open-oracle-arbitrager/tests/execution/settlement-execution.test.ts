@@ -163,6 +163,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			pollMilliseconds: 1_000,
 			positionFile,
 			quorumRpcUrls: [],
+			rpcQuorum: 1 as const,
 			riskLimits: { lifecycleGasReserveAttoWeth: 0n, maxConcurrentPositions: 1, maxDailyGasSpendAttoWeth: 10n ** 18n, maxPositionNotionalAttoWeth: 10n ** 18n, maxTotalLockedAttoWeth: 10n ** 18n },
 			settlement: { ...settlement, rewardWithdrawThresholdAttoEth },
 			submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }),
@@ -183,7 +184,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			blockNumber: block.number,
 			client,
 			maxFeePerGas: settlementMaxFeePerGas(block.baseFeePerGas ?? 0n, settlement),
-			config: { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, network, openOracle, pollMilliseconds: 1_000, quorumRpcUrls: [], settlement, submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }) },
+			config: { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, network, openOracle, pollMilliseconds: 1_000, quorumRpcUrls: [], rpcQuorum: 1 as const, settlement, submission: validateSubmissionSettings({ mode: 'public', relayUrls: [] }) },
 			isPaused: () => false,
 			persist: async record => {
 				records.push(record)
@@ -221,7 +222,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		const settleGasPaid = parseDecimalWeth(record.actualGasCostEth ?? '0')
 		expect(activity.at(-1)).toMatchObject({ estimatedNetProfitEth: decimalSignedEth(REWARD - signedSettlementGasLimit(plan.gas) * settlementContext.maxFeePerGas), trackedNetProfitEth: decimalSignedEth(REWARD - settleGasPaid) })
 		expect(await client.readContract({ abi: openOracleAbi, address: openOracle, functionName: 'storedGame', args: [report.helper.reportId] }).then(game => game[4])).not.toBe(0n)
-		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, await client.getBlockNumber())).toBe(REWARD)
+		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [], rpcQuorum: 1 as const }, account.address, await client.getBlockNumber())).toBe(REWARD)
 
 		await expect(executeSettlement(await context(records, activity), plan)).rejects.toThrow()
 		expect(records).toHaveLength(2)
@@ -234,7 +235,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		// The reward was earned by the settlement, so the withdrawal itself only nets its gas.
 		expect(activity.at(-1)).toMatchObject({ estimatedNetProfitEth: decimalSignedEth(-parseDecimalWeth(withdrawal.projectedGasCostEth)), status: 'confirmed', trackedNetProfitEth: decimalSignedEth(-gasPaid) })
 		expect((await client.getBalance({ address: account.address })) - balanceBefore).toBe(REWARD - gasPaid)
-		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, await client.getBlockNumber())).toBe(0n)
+		expect(await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [], rpcQuorum: 1 as const }, account.address, await client.getBlockNumber())).toBe(0n)
 	})
 
 	test('bounds the receipt wait by the signed horizon and leaves the attempt pending for reconciliation', async () => {
@@ -521,7 +522,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 		// The settle consumed its nonce more than a reorg window ago, so nonce-based recovery may judge it.
 		await node.anvilWindowEthereum.request({ method: 'anvil_mine', params: ['0x28'] })
 		const head = await client.getBlockNumber()
-		const config = { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, quorumRpcUrls: [] }
+		const config = { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, quorumRpcUrls: [], rpcQuorum: 1 as const }
 		const unrelatedIntent = { data: '0x' as Hex, to: account.address, value: '1' }
 		const futureNonce = (await client.getTransactionCount({ address: account.address, blockTag: 'pending' })).toString()
 		// The journaled outcome is verified canonical at depth and finalized; the interrupted duplicate resolves from the same receipt.
@@ -613,7 +614,7 @@ describe('third-party settlement execution against OpenOracle', () => {
 			await pastSettlementWindow()
 			const block = await headBlock()
 			// Earlier tests may have left rewards unclaimed; the threshold is set so only this test's settlement makes a withdrawal due.
-			const alreadyUnclaimed = await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [] }, account.address, block.number)
+			const alreadyUnclaimed = await unclaimedSettlementReward([client], { connectivity: { publicRpcUrls: [node.rpcUrl], readRpcUrl: node.rpcUrl }, openOracle, quorumRpcUrls: [], rpcQuorum: 1 as const }, account.address, block.number)
 			const stageConfig = stageConfiguration(node.rpcUrl, join(journalDirectory, 'positions.json'), alreadyUnclaimed + REWARD)
 			const state = { blockTimestamp: block.timestamp.toString(), operationLog: [] as OperationEntry[], paused: false, settlements: emptySettlementSnapshot() }
 			const journal = await createSettlementJournal(stageConfig, state)

@@ -718,7 +718,7 @@ describe('Drain & Retire planning', () => {
 			if (singleReaderSettings.connectivity === undefined) throw new Error('Expected RPC connectivity')
 			singleReaderSettings.connectivity.rpcQuorum = 2
 			singleReaderSettings.connectivity.quorumRpcUrls = [new URL('/secondary', server.url).href]
-			await expect(reset()).rejects.toThrow('two independent RPC readers')
+			await expect(reset()).rejects.toThrow('Retirement completion requires at least two independent RPC endpoints')
 			expect(singleReaderReset).toEqual(beforeSingleReaderReset)
 			singleReaderSettings.connectivity.rpcQuorum = 1
 			singleReaderSettings.connectivity.quorumRpcUrls = []

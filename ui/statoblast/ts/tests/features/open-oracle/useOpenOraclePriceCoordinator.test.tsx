@@ -4,21 +4,21 @@ import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import { usePriceOracleManager, type UsePriceOracleManagerDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
+import { useOpenOraclePriceCoordinator, type UseOpenOraclePriceCoordinatorDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h } from 'preact'
 import { act } from 'preact/test-utils'
 import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 type TestWriteClient = { kind: 'price-oracle-write-client' }
-type UsePriceOracleManagerState = ReturnType<typeof usePriceOracleManager>
+type UseOpenOraclePriceCoordinatorState = ReturnType<typeof useOpenOraclePriceCoordinator>
 
 const MANAGER_ADDRESS = getAddress('0x00000000000000000000000000000000000000a1')
 const POOL_ADDRESS = getAddress('0x00000000000000000000000000000000000000a2')
 const WALLET_ADDRESS = getAddress('0x00000000000000000000000000000000000000a3')
 const TRANSACTION_HASH = '0x00000000000000000000000000000000000000000000000000000000000000a4' as const
 
-describe('usePriceOracleManager', () => {
+describe('useOpenOraclePriceCoordinator', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
 	test.each([
@@ -46,7 +46,7 @@ describe('usePriceOracleManager', () => {
 				hash: TRANSACTION_HASH,
 			}
 		})
-		const dependencies: UsePriceOracleManagerDependencies<TestWriteClient> = {
+		const dependencies: UseOpenOraclePriceCoordinatorDependencies<TestWriteClient> = {
 			createConnectedReadClient: () => ({
 				getBalance: async () => 100n,
 			}),
@@ -76,9 +76,9 @@ describe('usePriceOracleManager', () => {
 			loadOracleManagerDetails,
 			requestOraclePrice,
 		}
-		let hookState: UsePriceOracleManagerState | undefined
+		let hookState: UseOpenOraclePriceCoordinatorState | undefined
 		function Harness() {
-			hookState = usePriceOracleManager(
+			hookState = useOpenOraclePriceCoordinator(
 				{
 					accountAddress: WALLET_ADDRESS,
 					onTransactionCanceled,

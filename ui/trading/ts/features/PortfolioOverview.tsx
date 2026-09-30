@@ -2,13 +2,13 @@ import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as portfolioCopy from '../copy/portfolio.js'
+import { formatRoundedUnits } from '../lib/format.js'
 import { getTradingRouteHref } from '../lib/routing.js'
 import type { PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
 
 function formatPortfolioEth(attoEth: bigint) {
-	return portfolioCopy.ethAmount(formatTrimmedUnits(attoEth, 18, 4))
+	return portfolioCopy.ethAmount(formatRoundedUnits(attoEth, 18, 4))
 }
 
 function valuationCaption(valuation: PortfolioValuation) {

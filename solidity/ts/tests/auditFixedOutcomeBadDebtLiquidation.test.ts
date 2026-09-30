@@ -27,12 +27,12 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 		const badDebtRecorder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 		await approveAndDepositRepToVault(attacker, repDeposit, questionId)
 
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, (repDeposit * 4n) / 10n)
 		await setUnderwritingLimit(attacker, securityPoolAddresses.securityPool, (repDeposit * 4n) / 10n)
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, PRICE_PRECISION)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, PRICE_PRECISION)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, (repDeposit * 7n) / 10n)
 
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
@@ -88,14 +88,14 @@ describe('Audit PoC: fixed-outcome child synthetic bad debt', () => {
 			true,
 			'the inherited fixed outcome must close collateralized operations even though the child stays operational for redemptions',
 		)
-		strictEqualTypeSafe(await getLastPrice(client, child.priceOracleManagerAndOperatorQueuer), PRICE_PRECISION, 'the fixed-outcome child should inherit the original REP price')
+		strictEqualTypeSafe(await getLastPrice(client, child.openOraclePriceCoordinator), PRICE_PRECISION, 'the fixed-outcome child should inherit the original REP price')
 		const ghostOpenInterest = await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: child.securityPool,
 			functionName: 'getVaultOpenInterestAttoEth',
 			args: [attacker.account.address],
 		})
-		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, attacker.account.address, ghostOpenInterest), /question already resolved/)
+		await assert.rejects(requestPriceIfNeededAndStageOperation(badDebtRecorder, child.openOraclePriceCoordinator, OperationType.Liquidation, attacker.account.address, ghostOpenInterest), /Escalation resolved/)
 		await approveToken(attacker, childRep, child.securityPool)
 		await assert.rejects(depositRepToVault(attacker, child.securityPool, repDeposit, 1_000_000n))
 

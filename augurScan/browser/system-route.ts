@@ -58,7 +58,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		if (systemRouteState.selectedKey !== nextEntityKey) systemRouteState.historyOffset = 0
 		systemRouteState.selectedKey = nextEntityKey
 		const targetHistoryOffset = historyTargetOffset ?? systemRouteState.historyOffset
-		for (const row of document.querySelectorAll<HTMLElement>('.entity-row')) row.setAttribute('aria-selected', String(row.dataset.key === systemRouteState.selectedKey))
+		for (const row of document.querySelectorAll<HTMLElement>('.entity-row')) row.setAttribute('aria-selected', String(row.dataset['key'] === systemRouteState.selectedKey))
 		const requestVersion = ++systemRouteState.detailRequestVersion
 		const detail = $('#state-detail')
 		const presentation = refreshPresentation({ live: quiet })
@@ -167,8 +167,8 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 			const [title, meta] = entityCopy(systemRouteState.activeType, item)
 			const row = setLiveRecord(element('button', 'entity-row'), entityKey(systemRouteState.activeType, item), item)
 			row.type = 'button'
-			row.dataset.key = entityKey(systemRouteState.activeType, item)
-			row.setAttribute('aria-pressed', String(row.dataset.key === systemRouteState.selectedKey))
+			row.dataset['key'] = entityKey(systemRouteState.activeType, item)
+			row.setAttribute('aria-pressed', String(row.dataset['key'] === systemRouteState.selectedKey))
 			row.append(element('span', 'entity-row-title', title), element('span', 'entity-row-meta', meta))
 			row.addEventListener('click', () => {
 				if (location.pathname === '/system') void selectEntity(item)
@@ -238,7 +238,7 @@ export const createSystemRoute = (deps: SystemRouteDeps) => {
 		systemRouteState.historyOffset = 0
 		$('#state-detail').setAttribute('aria-busy', 'false')
 		for (const tab of document.querySelectorAll<HTMLElement>('[data-state-tab]')) {
-			const selected = tab.dataset.stateTab === type
+			const selected = tab.dataset['stateTab'] === type
 			tab.setAttribute('aria-selected', String(selected))
 			tab.tabIndex = selected ? 0 : -1
 		}

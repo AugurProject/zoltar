@@ -378,7 +378,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 		uint256 invalidId = callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Invalid);
 		uint256 yesId = callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.Yes);
 		uint256 noId = callbackShareToken.getTokenId(universe, BinaryOutcomes.BinaryOutcome.No);
-		require(id == invalidId || id == yesId || id == noId, 'Unexpected share id');
+		require(id == invalidId || id == yesId || id == noId, 'Unexpected share ID');
 	}
 
 	event PositionExitedByTransfer(address indexed owner, address indexed pair, uint256 completeSetShares, uint256 longSharesUsed, uint256 longSharesRefunded, address payoutRecipient);

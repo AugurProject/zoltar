@@ -3,7 +3,9 @@ import { endpointLabel } from '#monitoring/connectivity'
 import type { OpportunityDecision } from '#state/opportunity-snapshot'
 import type { DurableTransactionIntent, ExecutionIntent, PositionRecord } from '#state/position-store'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
+import type { RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { readReceiptOrMissing } from '@zoltar/bot-shared/execution/receipt-quorum'
+import { transactionMaxBlockNumber } from '@zoltar/bot-shared/execution/transaction-submission'
 import { isSelfReport } from '#core/strategy'
 import type { StandardUniswapFee } from '#core/uniswap-v4'
 import type { Venue } from '#core/venue-strategy'
@@ -52,8 +54,8 @@ export function buildHedgeExecutionPayload(parameters: {
 	}
 }
 
-export function settledExecutionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly Promise<{ endpoint: string; value: T }>[]) {
-	return settledQuorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations)
+export function settledExecutionSnapshotWithQuorum<T>(blockNumber: bigint, observations: readonly Promise<{ endpoint: string; value: T }>[], requirement: RpcQuorumRequirement) {
+	return settledQuorumValue(`execution snapshot at block ${blockNumber.toString()}`, observations, requirement)
 }
 
 export function executionTokenAllowed(allowedTokens: readonly Address[], token: Address) {
@@ -92,6 +94,9 @@ function privateBundleReceiptStatus(receipt: Pick<TransactionReceipt, 'blockNumb
 
 /** Blocks after a target block at which an attempt's inclusion window is treated as settled against reorgs. */
 export const ATTEMPT_FINALITY_BLOCKS = 12n
+
+/** Depth the scanner re-reads below the head and the confirmation depth recovered lifecycle receipts must reach. */
+export const REORG_OVERLAP_BLOCKS = 12n
 
 export function attemptHasFinality(currentBlockNumber: bigint, targetBlockNumber: bigint) {
 	return currentBlockNumber >= targetBlockNumber + ATTEMPT_FINALITY_BLOCKS
@@ -242,7 +247,7 @@ type BlockHashReader = {
 	getBlock: (parameters: { blockNumber: bigint }) => Promise<{ hash?: Hex | null | undefined }>
 }
 
-export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashReader[], endpoints: readonly string[], label: string, blockNumber: bigint) {
+export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashReader[], endpoints: readonly string[], label: string, blockNumber: bigint, requirement: RpcQuorumRequirement) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	return settledQuorumValue(
 		`${label} canonical block ${blockNumber.toString()}`,
@@ -259,6 +264,7 @@ export async function canonicalBlockHashWithQuorum(readers: readonly BlockHashRe
 				throw rpcFailureWithContext(error, endpoint, 'eth_getBlockByNumber')
 			}
 		}),
+		requirement,
 	)
 }
 
@@ -273,7 +279,7 @@ type TransactionIntentReader = {
 	getTransaction: (parameters: { hash: Hex }) => Promise<Pick<BlockTransaction, 'from' | 'input' | 'nonce' | 'to' | 'value'>>
 }
 
-export async function transactionIntentWithQuorum(readers: readonly TransactionIntentReader[], endpoints: readonly string[], label: string, transactionHash: Hex) {
+export async function transactionIntentWithQuorum(readers: readonly TransactionIntentReader[], endpoints: readonly string[], label: string, transactionHash: Hex, requirement: RpcQuorumRequirement) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} transaction readers and endpoints differ`)
 	return settledQuorumValue(
 		`${label} transaction intent`,
@@ -290,10 +296,11 @@ export async function transactionIntentWithQuorum(readers: readonly TransactionI
 				},
 			}
 		}),
+		requirement,
 	)
 }
 
-export async function transactionHashBySenderNonceWithQuorum(readers: readonly SenderNonceBlockReader[], endpoints: readonly string[], label: string, parameters: { account: Address; fromBlockNumber: bigint; nonce: bigint; toBlockNumber: bigint }) {
+export async function transactionHashBySenderNonceWithQuorum(readers: readonly SenderNonceBlockReader[], endpoints: readonly string[], label: string, parameters: { account: Address; fromBlockNumber: bigint; nonce: bigint; toBlockNumber: bigint }, requirement: RpcQuorumRequirement) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	if (parameters.toBlockNumber < parameters.fromBlockNumber) throw new Error(`${label} replacement scan range is invalid`)
 	return settledQuorumValue(
@@ -324,6 +331,7 @@ export async function transactionHashBySenderNonceWithQuorum(readers: readonly S
 				value,
 			}
 		}),
+		requirement,
 	)
 }
 
@@ -360,7 +368,7 @@ function normalizedReceipt(label: string, receipt: TransactionReceipt) {
 	}
 }
 
-export async function receiptGasExpendituresWithQuorum(readers: readonly ReceiptBlockReader[], endpoints: readonly string[], label: string, receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'effectiveGasPrice' | 'gasUsed' | 'transactionHash'>[]) {
+export async function receiptGasExpendituresWithQuorum(readers: readonly ReceiptBlockReader[], endpoints: readonly string[], label: string, receipts: readonly Pick<TransactionReceipt, 'blockHash' | 'blockNumber' | 'effectiveGasPrice' | 'gasUsed' | 'transactionHash'>[], requirement: RpcQuorumRequirement) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} block readers and endpoints differ`)
 	return settledQuorumValue(
 		`${label} canonical receipt blocks`,
@@ -382,10 +390,11 @@ export async function receiptGasExpendituresWithQuorum(readers: readonly Receipt
 				}),
 			),
 		})),
+		requirement,
 	)
 }
 
-export async function transactionReceiptsWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
+export async function transactionReceiptsWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[], requirement: RpcQuorumRequirement) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
 	return settledQuorumValue(
 		`${label} receipts`,
@@ -396,10 +405,11 @@ export async function transactionReceiptsWithQuorum(readers: readonly Transactio
 				value: receipts.map(receipt => normalizedReceipt(label, receipt)),
 			}
 		}),
+		requirement,
 	)
 }
 
-export async function transactionReceiptsOrMissingWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[]) {
+export async function transactionReceiptsOrMissingWithQuorum(readers: readonly TransactionReceiptReader[], endpoints: readonly string[], label: string, transactionHashes: readonly Hex[], requirement: RpcQuorumRequirement) {
 	if (readers.length !== endpoints.length) throw new Error(`${label} receipt readers and endpoints differ`)
 	return settledQuorumValue(
 		`${label} optional receipts`,
@@ -412,13 +422,13 @@ export async function transactionReceiptsOrMissingWithQuorum(readers: readonly T
 				}),
 			),
 		})),
+		requirement,
 	)
 }
 
 export async function retryPrivateSubmissionWithinWindow<T>(parameters: { currentBlockNumber: bigint; lastValidBlockNumber: bigint | undefined; submit: (maxBlockNumber: bigint) => Promise<T> }) {
 	if (parameters.lastValidBlockNumber !== undefined && parameters.currentBlockNumber >= parameters.lastValidBlockNumber) return { attempted: false as const }
-	const defaultMaxBlockNumber = parameters.currentBlockNumber + 25n
-	const maxBlockNumber = parameters.lastValidBlockNumber === undefined || parameters.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : parameters.lastValidBlockNumber
+	const maxBlockNumber = transactionMaxBlockNumber(parameters.currentBlockNumber, parameters.lastValidBlockNumber)
 	return {
 		attempted: true as const,
 		maxBlockNumber,

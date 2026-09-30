@@ -650,7 +650,7 @@ function renderSignerStatus(snapshot: PublicOperatorSnapshot) {
 		privateKeyInput.setAttribute('aria-invalid', 'false')
 	}
 	const controls = signerControlState({
-		hasQueuedSigner: typeof snapshot.queuedWallet === 'string',
+		hasQueuedSigner: snapshot.queuedSigner?.kind === 'apply',
 		hasWallet: snapshot.wallet !== undefined,
 		privateKey: privateKeyInput.value,
 		requestPending: signerRequestPending,

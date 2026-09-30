@@ -139,7 +139,7 @@ export function publicOperatorSnapshot(snapshot: OperatorSnapshot): PublicOperat
 		})),
 		paused: snapshot.paused,
 		queuedSettings: snapshot.queuedSettings,
-		queuedWallet: snapshot.queuedWallet,
+		queuedSigner: snapshot.queuedSigner,
 		rpcEndpointHealth: (snapshot.rpcEndpointHealth ?? []).map(endpoint => ({
 			...endpoint,
 			error: endpoint.error === undefined ? undefined : publicOperatorFailure(endpoint.error),

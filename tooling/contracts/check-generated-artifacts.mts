@@ -44,7 +44,6 @@ const generatedReviewPaths = [
 	'ui/coreShared/ts/abis.ts',
 	'ui/coreShared/ts/contractArtifact.ts',
 	'ui/statoblastShared/ts/contractArtifact.ts',
-	'ui/coreShared/ts/deploymentArtifacts.ts',
 	'ui/trading/ts/generated',
 	'ui/zoltar/vendor',
 	'ui/statoblast/vendor',

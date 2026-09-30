@@ -3,10 +3,10 @@ import { literalContainsPattern } from './like-pattern.ts'
 
 export type TimelineFilters = {
 	readonly chainId: number
-	readonly entityType?: string
-	readonly event?: string
-	readonly address?: string
-	readonly query?: string
+	readonly entityType?: string | undefined
+	readonly event?: string | undefined
+	readonly address?: string | undefined
+	readonly query?: string | undefined
 	readonly fromBlock: string
 	readonly toBlock: string
 	readonly canonical: 'canonical' | 'orphaned' | 'all'

@@ -13,7 +13,7 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		require(!awaitingForkContinuation, 'Fork await');
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
-		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
+		require(pool.openOraclePriceCoordinator().isPriceValid(), 'Stale price');
 		pool.updateSettlementCollateral();
 		completeSetsToMintAttoShares = pool.attoEthToAttoShares(msg.value);
 		require(completeSetsToMintAttoShares > 0, 'Exchange rate undefined');
@@ -35,6 +35,6 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 
 	function _validateSettlementCollateral(ISecurityPool pool, uint256 nextSettlementCollateralAttoEth) private view {
 		require(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity');
-		require(SecurityPoolUtils.isVaultHealthy(pool.getTotalPoolHeldAttoRep(), 0, totalUnderwritingLimitAttoEth, pool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Pool backing insufficient');
+		require(SecurityPoolUtils.isVaultHealthy(pool.getTotalPoolHeldAttoRep(), 0, totalUnderwritingLimitAttoEth, pool.openOraclePriceCoordinator().lastPrice(), statoblastSecurityMultiplierBps), 'Pool backing insufficient');
 	}
 }

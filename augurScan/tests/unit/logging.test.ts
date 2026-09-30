@@ -7,7 +7,7 @@ import { runSerializedIndexerLeaseOperation } from '../../src/database.ts'
 import { databaseJsonText } from '../../src/database-json.ts'
 import { safeIndexerFailureReason } from '../../src/indexer-runtime.ts'
 import type { RpcFetchFn } from '../../src/ethereum.ts'
-import { createRpcLoggingFetch, jsonRpcErrorName, RotatingJsonLog } from '../../src/logging.ts'
+import { createRotatingJsonLog, createRpcLoggingFetch, jsonRpcErrorName } from '../../src/logging.ts'
 import { RpcRequestMethodError } from '../../src/rpc-request-queue.ts'
 
 const temporaryDirectories: string[] = []
@@ -26,7 +26,7 @@ const rpcLogPath = async (): Promise<string> => path.join(await temporaryDirecto
 
 const readLogLines = async (filename: string): Promise<string[]> => (await readFile(filename, 'utf8')).trim().split('\n')
 
-const createRethLoggingFetch = (filename: string, fetchFn: RpcFetchFn): RpcFetchFn => createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, new RotatingJsonLog(filename), fetchFn)
+const createRethLoggingFetch = (filename: string, fetchFn: RpcFetchFn): RpcFetchFn => createRpcLoggingFetch('http://reth:8545', '#1 http://reth:8545', filename, createRotatingJsonLog(filename), fetchFn)
 
 const postRpc = (loggingFetch: RpcFetchFn, id: number, method: string, params: readonly unknown[]) =>
 	loggingFetch('http://reth:8545', {
@@ -82,7 +82,7 @@ describe('AugurScan runtime logging', () => {
 			error: { code: -32603, message: 'upstream failed https://rpc.example/private-key\ninjected line', data: { trace: 'full' } },
 		})
 		await withSilencedConsole(async ({ consoleError }) => {
-			const loggingFetch = createRpcLoggingFetch('https://rpc.example/private-key', '#1 https://rpc.example', filename, new RotatingJsonLog(filename), async () => new Response(responseBody, { headers: { 'x-provider': 'example' }, status: 200 }))
+			const loggingFetch = createRpcLoggingFetch('https://rpc.example/private-key', '#1 https://rpc.example', filename, createRotatingJsonLog(filename), async () => new Response(responseBody, { headers: { 'x-provider': 'example' }, status: 200 }))
 			const requestBody = JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'eth_getCode', params: ['0x1234', '0x1'] })
 			await loggingFetch('https://rpc.example/private-key', { body: requestBody, method: 'POST' })
 
@@ -177,7 +177,7 @@ describe('AugurScan runtime logging', () => {
 
 	test('rotates the current RPC log before it exceeds its configured size', async () => {
 		const filename = await rpcLogPath()
-		const log = new RotatingJsonLog(filename, 80)
+		const log = createRotatingJsonLog(filename, 80)
 		await log.append({ payload: 'a'.repeat(40) })
 		await log.append({ payload: 'b'.repeat(40) })
 

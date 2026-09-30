@@ -5,8 +5,9 @@ import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
+import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -139,7 +140,7 @@ export function LiveLiquidityControls({
 						<div className='exchange-preview'>
 							<div>
 								<p className='detail'>{liquidityCopy.youProvide}</p>
-								<strong className='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : `${formatTrimmedUnits(quote.amount)} ${workflowCopy.eth}`}</strong>
+								<strong className='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : formatValueWithUnit(formatRoundedUnits(quote.amount), workflowCopy.eth)}</strong>
 							</div>
 							<span className='exchange-arrow' aria-hidden='true'>
 								→

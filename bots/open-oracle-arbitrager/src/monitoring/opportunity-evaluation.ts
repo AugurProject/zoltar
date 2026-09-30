@@ -67,7 +67,7 @@ export async function evaluate(client: BatchReader, config: EvaluationConfigurat
 
 export async function executionReadQuorum(
 	clients: readonly ReadClient[],
-	config: Pick<Configuration, 'network' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter' | 'connectivity' | 'quorumRpcUrls' | 'executor' | 'openOracle' | 'twapSeconds'>,
+	config: Pick<Configuration, 'network' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum' | 'executor' | 'openOracle' | 'twapSeconds'>,
 	report: OpenOracleStatePreimage,
 	pool: Pool,
 	hedgeVenue: Venue,
@@ -122,5 +122,5 @@ export async function executionReadQuorum(
 			},
 		}
 	})
-	return settledExecutionSnapshotWithQuorum(blockNumber, observations)
+	return settledExecutionSnapshotWithQuorum(blockNumber, observations, config.rpcQuorum)
 }

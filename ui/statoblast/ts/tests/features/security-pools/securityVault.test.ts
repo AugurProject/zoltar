@@ -221,7 +221,7 @@ void describe('security vault helpers', () => {
 			getVaultOpenInterestAttoEth: 0n,
 			minimumSecurityBondDebtAttoEth: 0n,
 			minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-			priceOracleManagerAndOperatorQueuer: getAddress('0x00000000000000000000000000000000000000d1'),
+			openOraclePriceCoordinator: getAddress('0x00000000000000000000000000000000000000d1'),
 			repToken: getAddress('0x00000000000000000000000000000000000000a2'),
 			securityVaults: [50n * 10n ** 18n, 0n, 0n, 0n],
 			settlementCollateralAttoEth: 0n,

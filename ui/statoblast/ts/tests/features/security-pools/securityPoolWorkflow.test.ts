@@ -406,7 +406,7 @@ void describe('selected pool oracle price display', () => {
 					lastOracleSettlementTimestamp: 0n,
 				}),
 			),
-		).toBe('-')
+		).toBe('—')
 	})
 
 	void test('keeps settled prices numeric, including zero', () => {
