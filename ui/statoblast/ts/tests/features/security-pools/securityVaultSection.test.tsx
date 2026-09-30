@@ -264,12 +264,12 @@ describe('SecurityVaultSection', () => {
 		expect(input.getAttribute('aria-invalid')).toBe('true')
 		expect(input.getAttribute('aria-describedby')?.split(' ')[0]).toBe(limitError.id)
 		expect(dialog.getByRole('button', { name: 'Set commitment limit' }).getAttribute('aria-describedby')).toBe(limitError.id)
-		fireEvent.input(input, { target: { value: '2' } })
+		fireEvent.input(input, { target: { value: '1' } })
 		expect(dialog.getByText('Current commitment')).toBeDefined()
 		expect(dialog.getByText('Resulting commitment')).toBeDefined()
-		expect(page.getByRole('dialog', { name: 'Set commitment limit' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/2(?:\.0+)?\s+ETH/)
+		expect(page.getByRole('dialog', { name: 'Set commitment limit' }).textContent?.replaceAll('\u00a0', ' ')).toMatch(/1(?:\.0+)?\s+ETH/)
 		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toBe('2')
+		expect(submitted).toBe('1')
 	})
 
 	test.each(['operational', 'ended'] as const)('closed admission keeps the commitment exit form available: %s', async lifecycleState => {
@@ -322,6 +322,10 @@ describe('SecurityVaultSection', () => {
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		expect(dialog.queryByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })).toBeNull()
 		expect(dialog.getByText('The question has resolved, so this change goes straight to the pool without an oracle price. Commitments can only be lowered now; set 0 ETH to unlock REP redemption.')).toBeDefined()
+		// Commitments can only be lowered here, so nothing offers or reports a higher maximum.
+		expect(dialog.queryByRole('button', { name: 'Max' })).toBeNull()
+		expect(dialog.queryByText('Maximum before liquidation')).toBeNull()
+		expectTransactionButtonDisabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit', 'Enter a commitment limit different from the current one.')
 		fireEvent.input(dialog.getByLabelText('Commitment limit'), { target: { value: '0' } })
 		expectTransactionButtonEnabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit')
 		fireEvent.click(dialog.getByRole('button', { name: 'Set commitment limit' }))
@@ -531,7 +535,10 @@ describe('SecurityVaultSection', () => {
 		fireEvent.click(launcher)
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const queries = within(dialog)
-		expect(dialog.textContent).toContain('Maximum before liquidation')
+		const maximumValue = queries.getByText('Maximum before liquidation').parentElement?.querySelector('.metric-field-value')?.textContent?.replaceAll('\u00a0', ' ')
+		// The maximum reads like the other ETH metrics instead of an 18-decimal fraction.
+		expect(maximumValue).toMatch(/^[\d ]+\.\d{2} ETH/)
+		expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'Enter a commitment limit different from the current one.')
 		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '3' } })
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		fireEvent.click(queries.getByRole('checkbox', { name: /I understand/ }))
@@ -591,6 +598,7 @@ describe('SecurityVaultSection', () => {
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const queries = within(dialog)
 		expect(queries.getByRole('button', { name: 'Fetch from Uniswap' })).not.toBeNull()
+		fireEvent.input(queries.getByLabelText('Commitment limit'), { target: { value: '1' } })
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 		const input = queries.getByLabelText('Open Oracle REP per ETH starting price')
 		for (const value of ['0', '-1', '1.0000000000000000001', 'invalid', (2n ** 256n).toString()]) {
@@ -600,7 +608,7 @@ describe('SecurityVaultSection', () => {
 		fireEvent.input(input, { target: { value: '12.5' } })
 		expectTransactionButtonEnabled(dialog, 'Set commitment limit')
 		fireEvent.click(queries.getByRole('button', { name: 'Set commitment limit' }))
-		expect(submitted).toEqual({ limit: '2', price: 125n * 10n ** 17n })
+		expect(submitted).toEqual({ limit: '1', price: 125n * 10n ** 17n })
 		fireEvent.input(input, { target: { value: '' } })
 		expectTransactionButtonDisabled(dialog, 'Set commitment limit')
 	})
@@ -622,6 +630,7 @@ describe('SecurityVaultSection', () => {
 	test('does not disable limit changes solely because dispute REP is committed', async () => {
 		const rendered = await renderIntoDocument(<SecurityVaultSection {...createSecurityVaultSectionProps({ securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 1n }) })} />)
 		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.input(within(document.body).getByLabelText('Commitment limit'), { target: { value: '1' } })
 		expectTransactionButtonEnabled(document.body, 'Set commitment limit')
 	})
 
