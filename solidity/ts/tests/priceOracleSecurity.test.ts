@@ -22,7 +22,7 @@ import {
 	ORACLE_TRACK_DISPUTES,
 	calculateOracleMinimumWethReportAttoEth,
 } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
-import { beforeEach, describe, test } from 'bun:test'
+import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { deployContract } from '../testSupport/deployContract'
 import { OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION, OPEN_ORACLE_FLAG_STORE_SETTLEMENT_ELIGIBILITY } from '../testSupport/openOracle/statePreimage'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
@@ -185,7 +185,7 @@ const getOpenOracleHeldBalance = async (client: WriteClient, holder: Address, to
 
 describe('Price Oracle Refund Security Tests', () => {
 	const DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS = 5n * 60n
-	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
+	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
 	const repDeposit = 10_000n * 10n ** 18n
@@ -255,7 +255,8 @@ describe('Price Oracle Refund Security Tests', () => {
 		})
 	}
 
-	beforeEach(async () => {
+	// Deploy the pool once and snapshot it; each test reverts to this baseline instead of redeploying.
+	beforeAll(async () => {
 		mockWindow = getAnvilWindowEthereum()
 		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 		await setupTestAccounts(mockWindow)
@@ -271,6 +272,12 @@ describe('Price Oracle Refund Security Tests', () => {
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		priceOracle = addresses.openOraclePriceCoordinator
 		securityPool = addresses.securityPool
+		await setBaselineSnapshot()
+	})
+
+	beforeEach(() => {
+		mockWindow = getAnvilWindowEthereum()
+		client = createWriteClient(mockWindow, TEST_ADDRESSES[0])
 	})
 
 	const queueStagedOperation = async (operation: OperationType, targetVault: Address, amount: bigint, validForSeconds: bigint, value = 0n) => await requestPriceIfNeededAndStageOperationWithValue(client, priceOracle, operation, targetVault, amount, validForSeconds, value)
