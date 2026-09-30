@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import * as copy from '../../../copy/reporting.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
@@ -99,11 +100,7 @@ export function ReportingOracleBlocker({
 					) : undefined}
 				</WarningSurface>
 			) : undefined}
-			{!blocked && updated && manager?.priceValidUntilTimestamp !== undefined ? (
-				<p className='notice success' role='status'>
-					{copy.priceUpdated(formatTimestamp(manager.priceValidUntilTimestamp))}
-				</p>
-			) : undefined}
+			{!blocked && updated && manager?.priceValidUntilTimestamp !== undefined ? <UserMessage tone='success' announcement='polite' detail={copy.priceUpdated(formatTimestamp(manager.priceValidUntilTimestamp))} /> : undefined}
 			<ErrorNotice message={oracle?.openOracleError} />
 			{blocked && ready && report === undefined && oracle?.openOracleError !== undefined ? (
 				<button type='button' className='secondary' onClick={() => oracle.onLoadOracleReport(pendingId.toString())}>

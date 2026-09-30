@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import type { ComponentChildren } from 'preact'
@@ -113,14 +114,10 @@ export function TruthAuctionBidsSection({ aggregatedAuctionBidCountForLoadedTick
 	return (
 		<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
 			{hasLoadedData && hasMoreAggregatedAuctionBids ? <p className='detail'>{forkAuctionCopy.formatShownBidCount(rows.length.toString(), aggregatedAuctionBidCountForLoadedTicks.toString())}</p> : undefined}
-			{loadingAggregatedAuctionBids ? (
-				<p className='detail'>
-					<LoadingText>{forkAuctionCopy.loadingAuctionBids}</LoadingText>
-				</p>
-			) : undefined}
+			{loadingAggregatedAuctionBids ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingAuctionBids} /> : undefined}
 			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryCurrentBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
-			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <p className='detail'>{forkAuctionCopy.auctionPriceLevelsEmpty}</p> : undefined}
-			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.loadedPriceBidsEmpty}</p> : undefined}
+			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.auctionPriceLevelsEmpty} /> : undefined}
+			{hasLoadedData && error === undefined && !loadingAggregatedAuctionBids && loadedTickCount > 0 && rows.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.loadedPriceBidsEmpty} /> : undefined}
 			<BidTable
 				columns={[priceColumn(renderPriceValue), { blockCellClassName: 'truth-auction-bid-row-address', label: forkAuctionCopy.bidder, render: row => <AddressValue address={row.bidder} copyable={false} /> }, bidAmountColumn(), statusColumn()]}
 				regionClassName='truth-auction-bid-table-scroll'
@@ -155,14 +152,10 @@ export function ViewerTruthAuctionBidsSection({
 	const checkedBidKeys = rows.flatMap(row => (row.settlementControl?.checked === true ? [row.settlementControl.bidKey] : []))
 	return (
 		<SectionBlock title={forkAuctionCopy.myBids} variant='embedded'>
-			{accountAddress === undefined ? <p className='detail'>{forkAuctionCopy.walletBidsConnectionRequired}</p> : undefined}
-			{accountAddress !== undefined && loadingTruthAuctionBook ? (
-				<p className='detail'>
-					<LoadingText>{forkAuctionCopy.loadingYourBids}</LoadingText>
-				</p>
-			) : undefined}
+			{accountAddress === undefined ? <UserMessage className='detail' detail={forkAuctionCopy.walletBidsConnectionRequired} /> : undefined}
+			{accountAddress !== undefined && loadingTruthAuctionBook ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingYourBids} /> : undefined}
 			<RetryableNotice disabled={retrying} message={error} onRetry={onRetry} retryAriaLabel={forkAuctionCopy.retryMyBids} retryLabel={retrying ? <LoadingText>{forkAuctionCopy.retryingAuctionBids}</LoadingText> : forkAuctionCopy.retryAuctionBids} />
-			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <p className='detail'>{forkAuctionCopy.walletBidsEmpty}</p> : undefined}
+			{accountAddress !== undefined && hasLoadedData && error === undefined && !loadingTruthAuctionBook && rows.length === 0 ? <UserMessage className='detail' detail={forkAuctionCopy.walletBidsEmpty} /> : undefined}
 			{!showSettlementActionColumn || selectableBidKeys.length === 0 ? undefined : (
 				<div className='actions'>
 					<button className='secondary' disabled={selectableBidKeys.every(bidKey => checkedBidKeys.includes(bidKey))} onClick={() => onSettlementBidSelectionReplace(selectableBidKeys)} type='button'>

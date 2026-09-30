@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useState } from 'preact/hooks'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
@@ -29,7 +30,7 @@ export function FirstRunRoleGuide() {
 				{firstRunRoles.map(role => (
 					<li className='first-run-role' key={role.id}>
 						<strong className='first-run-role-title'>{role.title}</strong>
-						<p className='detail'>{role.detail}</p>
+						<UserMessage className='detail' detail={role.detail} />
 						<a href={role.guideHref} target='_blank' rel='noreferrer'>
 							{role.guideLabel}
 						</a>

@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { Fragment } from 'preact'
@@ -422,7 +423,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			{!model.showSecurityPoolAddressInput && model.hasLoadedPoolContext ? undefined : (
 				<div className='form-grid'>
 					{!model.showSecurityPoolAddressInput ? undefined : <LookupFieldRow label={commonCopy.securityPoolAddress} value={model.forkAuctionForm.securityPoolAddress} onInput={securityPoolAddress => model.onForkAuctionFormChange({ securityPoolAddress })} placeholder={commonCopy.hexValuePlaceholder} />}
-					{model.hasLoadedPoolContext ? undefined : <p className='detail'>{forkAuctionCopy.forkWorkflowDescription}</p>}
+					{model.hasLoadedPoolContext ? undefined : <UserMessage className='detail' detail={forkAuctionCopy.forkWorkflowDescription} />}
 				</div>
 			)}
 			{forkWorkflowStageNavigator}

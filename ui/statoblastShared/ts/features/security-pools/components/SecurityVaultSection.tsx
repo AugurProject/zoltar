@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
@@ -151,7 +152,8 @@ export function SecurityVaultSection({
 	const executionRepPerEthPrice = hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined
 	const withdrawalPrice = getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice, estimateRepPerEthPrice: repPerEthPrice })
 	// After resolution the coordinator rejects staged operations, but the pool still accepts a direct commitment reduction.
-	const commitmentChangeIsDirect = poolState?.lifecycleState === 'ended'
+	const poolEnded = poolState?.lifecycleState === 'ended'
+	const commitmentChangeIsDirect = poolEnded
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const currentVaultIsHealthy =
 		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || repPerEthPrice === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
@@ -247,12 +249,7 @@ export function SecurityVaultSection({
 
 	const stagedOperationTimeoutField = <VaultOperationTimeoutField value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} disabled={!queueWithdrawRepEnabled} onChange={stagedOperationTimeoutMinutes => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes })} />
 	const vaultLoadNotice = (() => {
-		if (loadingSecurityVault)
-			return (
-				<p className='detail'>
-					<LoadingText>{securityPoolCopy.loadingVault}</LoadingText>
-				</p>
-			)
+		if (loadingSecurityVault) return <UserMessage className='detail' loading detail={securityPoolCopy.loadingVault} />
 		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: securityPoolCopy.invalidVaultAddressHint }} />
 		return undefined
 	})()
@@ -395,11 +392,7 @@ export function SecurityVaultSection({
 		effectiveRepExitMode === 'redeem' ? null : (
 			<>
 				<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
-				{withdrawEntireVaultNotice === undefined ? undefined : (
-					<p className='notice warning' role='status'>
-						{withdrawEntireVaultNotice}
-					</p>
-				)}
+				{withdrawEntireVaultNotice === undefined ? undefined : <UserMessage tone='warning' announcement='polite' detail={withdrawEntireVaultNotice} />}
 			</>
 		)
 	const repExitActionButton = (
@@ -418,7 +411,7 @@ export function SecurityVaultSection({
 			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 		/>
 	)
-	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
+	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, poolEnded, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
 			{currentSelectedVaultDetails !== undefined && !commitmentChangeIsDirect && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice) ? (
@@ -445,7 +438,7 @@ export function SecurityVaultSection({
 				walletRepBalanceError={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError}
 			/>
 			<OperationModal confirmSingleStepFromForm closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={closeVaultActionModal} title={depositRepActionLabel}>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
+				{currentSelectedVaultDetails === undefined ? <UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} /> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
@@ -467,7 +460,7 @@ export function SecurityVaultSection({
 				onClose={closeVaultActionModal}
 				title={repExitActionLabel}
 			>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
+				{currentSelectedVaultDetails === undefined ? <UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} /> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}

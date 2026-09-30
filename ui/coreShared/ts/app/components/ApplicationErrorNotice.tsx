@@ -1,3 +1,4 @@
+import { UserMessage } from '../../components/UserMessage.js'
 import { useRef, useState } from 'preact/hooks'
 import * as appCopy from '../../copy/app.js'
 import * as commonCopy from '../../copy/common.js'
@@ -25,18 +26,27 @@ export function ApplicationErrorNotice({ errorMessage, onRetry }: ApplicationErr
 
 	return (
 		<main>
-			<section className='notice error' role='alert'>
-				<h1>{appCopy.applicationErrorTitle}</h1>
-				<p>{errorMessage}</p>
-				<div className='actions'>
-					<button type='button' disabled={retryInProgress} onClick={retry}>
-						{retryInProgress ? commonCopy.retrying : commonCopy.retry}
-					</button>
-					<button type='button' className='secondary' onClick={() => window.location.reload()}>
-						{appCopy.reloadApplication}
-					</button>
-				</div>
-			</section>
+			<UserMessage
+				placement='page'
+				tone='error'
+				announcement='assertive'
+				detail={
+					<>
+						<h1>{appCopy.applicationErrorTitle}</h1>
+						<p>{errorMessage}</p>
+					</>
+				}
+				actions={
+					<>
+						<button type='button' disabled={retryInProgress} onClick={retry}>
+							{retryInProgress ? commonCopy.retrying : commonCopy.retry}
+						</button>
+						<button type='button' className='secondary' onClick={() => window.location.reload()}>
+							{appCopy.reloadApplication}
+						</button>
+					</>
+				}
+			/>
 		</main>
 	)
 }

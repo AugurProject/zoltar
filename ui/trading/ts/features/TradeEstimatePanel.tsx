@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatScaledPercentage, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
@@ -23,12 +24,7 @@ function formatImpactPercent(impactBps: bigint) {
 function ImpactNotice({ tier, impactBps, acknowledged, disabled, onAcknowledge }: { tier: PriceImpactTier; impactBps: bigint; acknowledged: boolean; disabled: boolean; onAcknowledge(value: boolean): void }) {
 	const percent = formatImpactPercent(impactBps)
 	if (tier === 'low') return null
-	if (tier === 'caution')
-		return (
-			<p className='trade-impact-notice trade-impact-notice--caution' role='status'>
-				{ticketCopy.priceImpactCaution(percent)}
-			</p>
-		)
+	if (tier === 'caution') return <UserMessage tone='warning' announcement='polite' className='trade-impact-notice trade-impact-notice--caution' detail={ticketCopy.priceImpactCaution(percent)} />
 	return (
 		<WarningSurface role='alert' surface='flat' variant='compact' className={`trade-impact-warning trade-impact-warning--${tier}`}>
 			<p>{tier === 'blocked' ? ticketCopy.priceImpactBlocked(percent) : ticketCopy.priceImpactWarning(percent)}</p>
@@ -98,15 +94,25 @@ export function TradeEstimatePanel({
 			/>
 			<ImpactNotice tier={impactTier} impactBps={estimate.impactBps} acknowledged={impactAcknowledged} disabled={disabled} onAcknowledge={onAcknowledgeImpact} />
 			{estimate.kind === 'entry' ? (
-				<p className='detail payout-note'>
-					<strong>{payoutCopy.conditionalPayout(formatCollateralEth(estimate.quote.totalLongShares, market), side)}</strong>
-					{' · '}
-					{payoutCopy.otherwiseZero}
-				</p>
+				<UserMessage
+					className='detail payout-note'
+					detail={
+						<>
+							<strong>{payoutCopy.conditionalPayout(formatCollateralEth(estimate.quote.totalLongShares, market), side)}</strong>
+							{' · '}
+							{payoutCopy.otherwiseZero}
+						</>
+					}
+				/>
 			) : null}
-			<p className='detail trade-estimate-note'>
-				{ticketCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}
-			</p>
+			<UserMessage
+				className='detail trade-estimate-note'
+				detail={
+					<>
+						{ticketCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}
+					</>
+				}
+			/>
 			<ReadOnlyDetailAccordion title={ticketCopy.moreDetails}>
 				<DataGrid dense>
 					{detailRows.map(row => (
