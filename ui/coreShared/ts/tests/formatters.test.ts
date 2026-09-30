@@ -113,6 +113,14 @@ void describe('formatting helpers', () => {
 	})
 
 	void describe('formatAmount precision detection', () => {
+		void test('rounds down at the displayed precision when asked, so a limit never reads above its exact value', () => {
+			expect(formatAmount(1_666_666_666_666_666_666_666n, { rounding: 'down' })).toEqual({ approximate: true, exact: '1 666.666666666666666666', text: '1 666.66' })
+			// Small values keep their extra significant digits instead of flooring to 0.00.
+			expect(formatAmount(4_266_666_666_666_667n, { rounding: 'down' }).text).toBe('0.0042')
+			expect(formatAmount(999_999_999_999_999_999n, { rounding: 'down' }).text).toBe('0.99')
+			expect(formatAmount(5n * 10n ** 18n, { rounding: 'down' })).toEqual({ approximate: false, exact: '5', text: '5.00' })
+		})
+
 		void test('does not mark exact values, including zero, as approximate', () => {
 			expect(formatAmount(0n)).toEqual({ approximate: false, exact: '0', text: '0.00' })
 			expect(formatAmount(2n * 10n ** 18n)).toEqual({ approximate: false, exact: '2', text: '2.00' })

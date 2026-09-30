@@ -153,7 +153,10 @@ export function formatTrimmedUnits(value: bigint, units: number = 18, maximumFra
 	return `${negative ? '-' : ''}${formatGroupedInteger(whole)}${fraction.length > 0 ? `.${fraction}` : ''}`
 }
 
-export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2) {
+/** `down` truncates toward zero, for figures such as limits that must never read above the exact value. */
+export type AmountRounding = 'nearest' | 'down'
+
+export function formatRoundedCurrencyBalance(value: bigint | undefined, units: number = 18, decimals: number = 2, rounding: AmountRounding = 'nearest') {
 	if (value === undefined) return '—'
 	assertNonNegativeInteger(units, 'Units')
 	assertInteger(decimals, 'Decimals')
@@ -167,7 +170,7 @@ export function formatRoundedCurrencyBalance(value: bigint | undefined, units: n
 
 	const scale = 10n ** BigInt(effectiveDecimals)
 	const base = 10n ** BigInt(units)
-	const rounded = (absoluteValue * scale + base / 2n) / base
+	const rounded = (absoluteValue * scale + (rounding === 'down' ? 0n : base / 2n)) / base
 	const integerPart = rounded / scale
 
 	if (effectiveDecimals === 0) return `${prefix}${formatGroupedInteger(integerPart)}`
@@ -205,7 +208,7 @@ export type FormattedAmount = {
 }
 
 /** Rounds a fixed-point amount for display and reports whether rounding lost precision. See the spec at the top of this file. */
-export function formatAmount(value: bigint, { decimals = 2, notation = 'standard', units = 18 }: { decimals?: number; notation?: AmountNotation; units?: number } = {}): FormattedAmount {
+export function formatAmount(value: bigint, { decimals = 2, notation = 'standard', rounding = 'nearest', units = 18 }: { decimals?: number; notation?: AmountNotation; rounding?: AmountRounding; units?: number } = {}): FormattedAmount {
 	assertNonNegativeInteger(units, 'Units')
 	assertNonNegativeInteger(decimals, 'Decimals')
 	const exact = formatCurrencyBalance(value, units)
@@ -216,12 +219,12 @@ export function formatAmount(value: bigint, { decimals = 2, notation = 'standard
 	const scale = 10n ** BigInt(effectiveDecimals)
 	// Decide on the rounded value so 999.996 reads `≈ 1k`, never `≈ 1 000.00`.
 	const roundsToCompactThreshold = (absoluteValue * scale + base / 2n) / base >= COMPACT_NOTATION_THRESHOLD_UNITS * scale
-	if (notation === 'compact' && roundsToCompactThreshold) {
+	if (notation === 'compact' && rounding === 'nearest' && roundsToCompactThreshold) {
 		const compact = formatCompactScaledValue(value, units, COMPACT_NOTATION_DECIMALS)
 		return { approximate: compact.approximate, exact, text: compact.text }
 	}
 
-	return { approximate: (absoluteValue * scale) % base !== 0n, exact, text: formatRoundedCurrencyBalance(value, units, decimals) }
+	return { approximate: (absoluteValue * scale) % base !== 0n, exact, text: formatRoundedCurrencyBalance(value, units, decimals, rounding) }
 }
 
 /** Upward-rounded approval labels with SI suffixes. Omit amounts beyond the suffix range instead of using scientific notation. */

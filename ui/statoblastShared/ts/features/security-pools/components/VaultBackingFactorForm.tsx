@@ -20,9 +20,6 @@ import { getVaultBackingFactorAdjustmentGuard, getMaximumHealthyCommitment } fro
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
-// Two decimals, matching the rounded ETH metrics beside it.
-const MAXIMUM_DISPLAY_STEP_ATTO_ETH = 10n ** 16n
-
 export function VaultBackingFactorForm({
 	details,
 	oracleManagerDetails,
@@ -78,8 +75,6 @@ export function VaultBackingFactorForm({
 	const maximumRepPerEthPrice = executionRepPerEthPrice ?? repPerEthPrice
 	// After resolution the commitment can only be lowered, so no healthy maximum is offered or reported.
 	const maximum = directExecution ? undefined : getMaximumHealthyCommitment(details, maximumRepPerEthPrice, minimumBps)
-	// The displayed maximum is rounded down to the shown cents so typing it back never crosses the healthy limit; Max still fills the exact value.
-	const displayedMaximum = maximum === undefined ? undefined : maximum - (maximum % MAXIMUM_DISPLAY_STEP_ATTO_ETH)
 	const riskKey = `${details?.securityPoolAddress}:${details?.vaultAddress}:${limitAttoEth}:${maximumRepPerEthPrice}:${maximum}`
 	const [acknowledgedRisk, setAcknowledgedRisk] = useState<string | undefined>(undefined)
 	const unsafe = maximum !== undefined && limitAttoEth !== undefined && limitAttoEth > maximum && (currentLimit === undefined || limitAttoEth > currentLimit)
@@ -117,7 +112,8 @@ export function VaultBackingFactorForm({
 				</MetricField>
 				{directExecution ? undefined : (
 					<MetricField label={securityPoolCopy.maximumHealthyCommitment}>
-						<CurrencyValue value={displayedMaximum} suffix={commonCopy.eth} />
+						{/* Rounded down so typing the shown figure back never crosses the healthy limit; Max still fills the exact value. */}
+						<CurrencyValue rounding='down' value={maximum} suffix={commonCopy.eth} />
 						{executionRepPerEthPrice === undefined ? <RepPriceStatusLabel /> : undefined}
 					</MetricField>
 				)}

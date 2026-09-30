@@ -533,7 +533,7 @@ describe('SecurityVaultSection', () => {
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		const maximumValue = dialog.getByText('Maximum before liquidation').parentElement?.querySelector('.metric-field-value')?.textContent?.replaceAll('\u00a0', ' ')
 		// 10 000 REP at 3 REP per ETH and a 2x multiplier allows 1 666.666… ETH; rounding up to 1 666.67 would show an unsafe figure.
-		expect(maximumValue).toBe('1 666.66 ETH')
+		expect(maximumValue).toBe('≈ 1 666.66 ETH')
 	})
 
 	test('requires explicit acknowledgement above the selected UI price commitment maximum', async () => {
