@@ -317,7 +317,8 @@ test('lint-ui-tsx-strings ignores comparison literals inside JSX expressions', (
 
 test('lint-ui-tsx-strings includes committed branch changes from origin/main', () => {
 	const changedFiles = getChangedUiTsxFiles(args => {
-		if (args.includes('origin/main...HEAD')) return 'ui/zoltar/ts/components/CommittedBranchFile.tsx\n'
+		if (args[0] === 'merge-base') return 'baseline'
+		if (args[0] === 'diff') return 'M\0ui/zoltar/ts/components/CommittedBranchFile.tsx\0'
 		return ''
 	})
 
@@ -326,7 +327,8 @@ test('lint-ui-tsx-strings includes committed branch changes from origin/main', (
 
 test('lint-ui-tsx-strings includes changed Trading components', () => {
 	const changedFiles = getChangedUiTsxFiles(args => {
-		if (args.includes('origin/main...HEAD')) return 'ui/trading/ts/features/LiveTrading.tsx\nui/trading/ts/tests/app/sharedIntegration.test.tsx\n'
+		if (args[0] === 'merge-base') return 'baseline'
+		if (args[0] === 'diff') return 'M\0ui/trading/ts/features/LiveTrading.tsx\0M\0ui/trading/ts/tests/app/sharedIntegration.test.tsx\0'
 		return ''
 	})
 

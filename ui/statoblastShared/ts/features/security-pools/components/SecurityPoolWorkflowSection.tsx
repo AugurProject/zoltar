@@ -1,9 +1,9 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ReportingOracleBlocker } from '../../reporting/components/ReportingOracleBlocker.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useState } from 'preact/hooks'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { RouteWorkflowPanel } from '@zoltar/ui-core-shared/components/RouteWorkflowPanel.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -36,12 +36,7 @@ type SecurityPoolWorkflowSectionProps = SecurityPoolWorkflowRouteContentProps & 
 }
 
 function SelectedVaultLoadNotice({ loading, missing }: { loading: boolean; missing: boolean }) {
-	if (loading)
-		return (
-			<p className='detail'>
-				<LoadingText>{securityPoolCopy.loadingVault}</LoadingText>
-			</p>
-		)
+	if (loading) return <UserMessage className='detail' loading detail={securityPoolCopy.loadingVault} />
 	if (missing) return <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: securityPoolCopy.invalidVaultAddressHint }} />
 	return undefined
 }
@@ -238,7 +233,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					<>
 						<SecurityPoolObjectHeader {...objectHeaderProps} actions={poolActions} lifecycle={poolLifecycle} oracleStatus={poolOracleStatus} />
 						<ErrorNotice message={securityPoolOverviewError} />
-						<SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined} />
+						<SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined && model.selectedPoolLifecycleState !== 'ended'} />
 					</>
 				)}
 			</div>

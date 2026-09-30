@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import type { ComponentChildren, RefObject } from 'preact'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
@@ -91,7 +92,7 @@ export function MarketOverview({ market, position }: { market: LiveMarket; posit
 	const liquidity = formatMarketLiquidity(market)
 	return (
 		<div className='market-overview'>
-			{yesTenths === undefined ? <p className='detail'>{marketsCopy.oddsUnavailable}</p> : <ProbabilityBar yesPercent={yesTenths / 10} />}
+			{yesTenths === undefined ? <UserMessage className='detail' detail={marketsCopy.oddsUnavailable} /> : <ProbabilityBar yesPercent={yesTenths / 10} />}
 			<DataGrid className='market-facts'>
 				<MetricField label={liveCopy.questionEnd}>
 					<TimestampValue timestamp={market.endTime} relative={false} />
@@ -103,7 +104,7 @@ export function MarketOverview({ market, position }: { market: LiveMarket; posit
 			<section className='market-description' aria-labelledby='market-description-heading'>
 				<h3 id='market-description-heading'>{marketsCopy.questionDescription}</h3>
 				{/* Rendered as plain text: the description is creator-supplied and never interpreted as markup. */}
-				{description === '' ? <p className='detail'>{marketsCopy.noQuestionDescription}</p> : <p className='market-description__text'>{description}</p>}
+				{description === '' ? <UserMessage className='detail' detail={marketsCopy.noQuestionDescription} /> : <p className='market-description__text'>{description}</p>}
 			</section>
 			<MarketContracts market={market} />
 		</div>

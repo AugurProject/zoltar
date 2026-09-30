@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import * as availabilityCopy from '../copy/availability.js'
 import type { ComponentChildren } from 'preact'
@@ -181,9 +182,14 @@ export function LivePortfolio({
 				</ul>
 			)}
 			{overview.rows.some(row => showsConditionalPayoutNote(row.entry)) ? (
-				<p className='detail payout-note'>
-					{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
-				</p>
+				<UserMessage
+					className='detail payout-note'
+					detail={
+						<>
+							{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
+						</>
+					}
+				/>
 			) : null}
 		</div>
 	)

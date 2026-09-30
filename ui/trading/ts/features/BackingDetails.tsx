@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { formatCollateralEth } from '../lib/shareValue.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -25,10 +26,15 @@ export function BackingDetails({ market }: { market: LiveMarket }) {
 					</>
 				)}
 			</DataGrid>
-			<p className='detail payout-note'>
-				{payoutCopy.holdingFeeNote}
-				{valuation === undefined || valuation.timestamp >= valuation.feeEndTime ? null : <> {payoutCopy.feeProjectionNote}</>}
-			</p>
+			<UserMessage
+				className='detail payout-note'
+				detail={
+					<>
+						{payoutCopy.holdingFeeNote}
+						{valuation === undefined || valuation.timestamp >= valuation.feeEndTime ? null : <> {payoutCopy.feeProjectionNote}</>}
+					</>
+				}
+			/>
 		</details>
 	)
 }

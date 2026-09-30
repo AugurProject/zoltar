@@ -1,3 +1,4 @@
+import { UserMessage } from './UserMessage.js'
 import * as commonCopy from '../copy/common.js'
 
 import { DataGrid } from '../components/DataGrid.js'
@@ -18,6 +19,7 @@ function getSafeSelectedTickValue(selectedTick: string) {
 export function ScalarOutcomePicker({ action, clampExactTickInput = true, details, disabled = false, isInvalid, label, onInvalidChange, onSelectedTickChange, selectedOutcomeLabel, selectedTick, selectedTickLabel, showMinMax = true }: ScalarOutcomePickerProps) {
 	const sliderLabelId = useId()
 	const scalarValueErrorId = useId()
+	const scalarValueHelpId = useId()
 	const rawSelectedTickValue = getSafeSelectedTickValue(selectedTick)
 	const selectedTickIsInRange = rawSelectedTickValue >= 0n && rawSelectedTickValue <= details.numTicks
 	const selectedTickValue = clampScalarTickIndex(rawSelectedTickValue, details.numTicks)
@@ -111,7 +113,7 @@ export function ScalarOutcomePicker({ action, clampExactTickInput = true, detail
 							<span className='scalar-value-input-row'>
 								<FormInput
 									aria-label={commonCopy.scalarValue}
-									aria-describedby={scalarValueError === undefined ? undefined : scalarValueErrorId}
+									aria-describedby={scalarValueError === undefined ? scalarValueHelpId : scalarValueErrorId}
 									disabled={disabled || isInvalid}
 									inputMode='decimal'
 									invalid={scalarValueError !== undefined}
@@ -124,12 +126,8 @@ export function ScalarOutcomePicker({ action, clampExactTickInput = true, detail
 								/>
 								{details.answerUnit === undefined || details.answerUnit === '' ? undefined : <span className='scalar-value-unit'>{details.answerUnit}</span>}
 							</span>
-							{scalarValueError === undefined ? <span className='field-help'>{commonCopy.scalarValueHelpText}</span> : undefined}
-							{scalarValueError === undefined ? undefined : (
-								<span className='field-error' id={scalarValueErrorId}>
-									{scalarValueError}
-								</span>
-							)}
+							{scalarValueError === undefined ? <UserMessage placement='field' as='span' id={scalarValueHelpId} detail={commonCopy.scalarValueHelpText} /> : undefined}
+							{scalarValueError === undefined ? undefined : <UserMessage placement='field' as='span' tone='error' id={scalarValueErrorId} detail={scalarValueError} />}
 						</span>
 					)}
 				</MetricField>

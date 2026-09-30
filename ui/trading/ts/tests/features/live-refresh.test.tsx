@@ -491,11 +491,11 @@ describe('live market refresh', () => {
 		expect(discoveries).toBeGreaterThan(discoveriesBeforeSubmit)
 		await typeAmount('0.0000000000000000001')
 		expect(actionFeedback()).toContain('Enter a share amount with at most 18 decimal places.')
-		expect(buttonByLabel('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-notice')?.id ?? null)
+		expect(buttonByLabel('Sell YES').getAttribute('aria-describedby')).toBe(document.querySelector('[role="tabpanel"] .tx-action-feedback .tx-action-notice')?.id ?? null)
 		expect(buttonByLabel('Sell YES').disabled).toBeTrue()
 		await typeAmount('9')
 		expect(actionFeedback()).toContain('Insufficient YES balance.')
-		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-notice')).toHaveLength(1)
+		expect(document.querySelectorAll('[role="tabpanel"] .tx-action-feedback .tx-action-notice')).toHaveLength(1)
 		expect(buttonByLabel('Sell YES').disabled).toBeTrue()
 
 		// Simulation failures stay beside the action instead of only at the top of the route.

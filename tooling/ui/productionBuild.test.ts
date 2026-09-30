@@ -457,16 +457,17 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		}
 		throw new Error(`Transaction review did not finish: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
+	// The tool counts as selected only once its tab is the active one; a dropped click must not pass as a selection.
+	const isPoolToolSelected = async (label: 'Price oracle' | 'Fork & migration') => (await driver.evaluate(`[...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"][aria-selected="true"]')].some(tab => tab.textContent?.trim() === ${JSON.stringify(label)})`)) === true
 	const selectPoolTool = async (label: 'Price oracle' | 'Fork & migration') => {
-		let selected = false
-		for (let attempt = 0; attempt < 600 && !selected; attempt += 1) {
-			selected =
-				(await driver.evaluate(
-					`(() => { const tab = [...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"]')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (tab instanceof HTMLElement) { tab.click(); return true } const trigger = document.querySelector('.pool-tools-trigger'); if (!(trigger instanceof HTMLButtonElement)) return false; if (trigger.getAttribute('aria-expanded') !== 'true') { trigger.click(); return false } const button = [...document.querySelectorAll('.pool-tools-options button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
-				)) === true
-			if (!selected) await Bun.sleep(50)
+		for (let attempt = 0; attempt < 600; attempt += 1) {
+			if (await isPoolToolSelected(label)) return
+			await driver.evaluate(
+				`(() => { const tab = [...document.querySelectorAll('.selected-pool-workspace-tabs [role="tab"]')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (tab instanceof HTMLElement) { tab.click(); return } const trigger = document.querySelector('.pool-tools-trigger'); if (!(trigger instanceof HTMLButtonElement)) return; if (trigger.getAttribute('aria-expanded') !== 'true') { trigger.click(); return } const button = [...document.querySelectorAll('.pool-tools-options button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (button instanceof HTMLButtonElement && !button.disabled) button.click() })()`,
+			)
+			await Bun.sleep(50)
 		}
-		if (!selected) throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
+		throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
 	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
 	const openSeededPool = async (kind: 'origin' | 'auction' = 'origin') => {
@@ -525,7 +526,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const reopened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 		expect(reopened).toBe(true)
 	}
-	return { completeTransactionReview, selectPoolTool, openSeededPool }
+	return { completeTransactionReview, isPoolToolSelected, selectPoolTool, openSeededPool }
 }
 
 function productionInteractionTest(scenario: ProductionWorkflowScenario, route: string, viewport: { height: number; width: number }, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -577,7 +578,7 @@ productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&sim
 })
 
 productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?simulate=1&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
-	const { completeTransactionReview, openSeededPool, selectPoolTool } = createWorkflowActions(driver)
+	const { completeTransactionReview, isPoolToolSelected, openSeededPool, selectPoolTool } = createWorkflowActions(driver)
 	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
 	await driver.waitForBodyWithoutText('Loading vault details…')
@@ -662,6 +663,8 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.waitForBodyWithoutText('Requested new price')
 	expect(await driver.evaluate("document.querySelector('[role=\"dialog\"]') === null && document.querySelector('.global-transaction-dialog') === null")).toBe(true)
 	await driver.clickButton('+10 min')
+	// The price was requested from the Price oracle tool, and advancing time must not move the view off it.
+	expect(await isPoolToolSelected('Price oracle')).toBe(true)
 	await driver.waitForBodyText('Pending request')
 	const pendingReportId = await driver.evaluate(
 		`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Report #')); if (!(button instanceof HTMLButtonElement)) return undefined; const reportId = button.textContent?.trim().slice('Report #'.length).trim(); button.click(); return reportId })()`,
@@ -683,7 +686,8 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 
 	const selectReportingOutcome = async (outcome: 'Yes' | 'No') => {
 		let selected = false
-		for (let attempt = 0; attempt < 100 && !selected; attempt += 1) {
+		// Outcome radios stay disabled while reporting details load, which can take well over five seconds on a loaded machine; use the shared body-wait budget.
+		for (let attempt = 0; attempt < 2400 && !selected; attempt += 1) {
 			selected =
 				(await driver.evaluate(
 					`(() => { const radio = [...document.querySelectorAll('[role="radio"]')].find(candidate => candidate.querySelector('.panel-label')?.textContent?.trim() === ${JSON.stringify(outcome)}); if (!(radio instanceof HTMLButtonElement) || radio.disabled) return false; radio.click(); return true })()`,

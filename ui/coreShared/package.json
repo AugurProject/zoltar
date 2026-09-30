@@ -1074,6 +1074,10 @@
 		"./tests/fixtures/userMessageShowcase.js": {
 			"bun": "./ts/tests/fixtures/userMessageShowcase.tsx",
 			"default": "./js/tests/fixtures/userMessageShowcase.js"
+		},
+		"./tests/app/appSettingsMenu.test.js": {
+			"bun": "./ts/tests/app/appSettingsMenu.test.tsx",
+			"default": "./js/tests/app/appSettingsMenu.test.js"
 		}
 	},
 	"version": "1.0.0"

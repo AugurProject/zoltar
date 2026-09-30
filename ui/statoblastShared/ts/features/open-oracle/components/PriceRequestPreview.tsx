@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useId, useEffect, useRef } from 'preact/hooks'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
@@ -59,11 +60,11 @@ export function PriceRequestPreview({
 	return (
 		<>
 			{/* The prompt row keeps its slot while empty so the dialog does not change height as the request state changes. */}
-			{failedPlan === undefined && onRetry === undefined ? <p className='detail price-request-estimate-prompt'>{visiblePrompt}</p> : undefined}
+			{failedPlan === undefined && onRetry === undefined ? <UserMessage className='detail price-request-estimate-prompt' detail={<>{visiblePrompt}</>} /> : undefined}
 			{failedPlan === undefined ? undefined : (
 				<div className='transaction-step-content'>
 					<TransactionFundingSummary funding={failedPlan.funding} totalAttoEth={failedPlan.totalAttoEth} outcome={failedPlan.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />
-					<p className='detail transaction-funding-note'>{copy.fundingDetail}</p>
+					<UserMessage className='detail transaction-funding-note' detail={<>{copy.fundingDetail}</>} />
 				</div>
 			)}
 			<div className='transaction-step-actions transaction-approval-editor price-request-preview'>

@@ -45,6 +45,8 @@ export type VaultMetricGridProps = {
 	layout?: 'grid' | 'preview'
 	disputeStakedAttoRep?: bigint | undefined
 	isCurrentlyHealthy?: boolean | undefined
+	/** After resolution liquidation is closed, so the health verdict and its price source are hidden. */
+	poolEnded?: boolean | undefined
 	poolHeldRepPerCapacityBps?: bigint | undefined
 	priceValidUntilTimestamp?: bigint | undefined
 	vaultAttoRepBacking: bigint | undefined

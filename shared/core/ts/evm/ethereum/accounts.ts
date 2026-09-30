@@ -81,15 +81,21 @@ export function privateKeyToAccount(privateKey: Hex) {
 	} satisfies Account
 }
 
+function deploymentAddressBytes(from: Address) {
+	const bytes = nobleHexToBytes(stripHexPrefix(from))
+	if (bytes.length !== 20) throw new Error('Deployment address must be 20 bytes')
+	return bytes
+}
+
 export function getCreateAddress(parameters: { from: Address; nonce: bigint }) {
-	const fromBytes = nobleHexToBytes(stripHexPrefix(parameters.from))
+	const fromBytes = deploymentAddressBytes(parameters.from)
 	const nonceBytes = parameters.nonce === 0n ? new Uint8Array([]) : bigintToBytes(parameters.nonce)
 	const encoded = rlpEncodeList([rlpEncodeBytes(fromBytes), rlpEncodeBytes(nonceBytes)])
 	return checksumAddressFromBytes(keccak_256(encoded).slice(-20))
 }
 
 export function getCreate2Address(parameters: { bytecode?: Hex | undefined; bytecodeHash?: Hex | undefined; from: Address; salt: Hex | Uint8Array }) {
-	const fromBytes = nobleHexToBytes(stripHexPrefix(parameters.from))
+	const fromBytes = deploymentAddressBytes(parameters.from)
 	const saltBytes = parameters.salt instanceof Uint8Array ? parameters.salt : hexToBytes(parameters.salt)
 	if (saltBytes.length !== 32) throw new Error('CREATE2 salt must be 32 bytes')
 	const bytecodeHashBytes = (() => {
@@ -98,6 +104,7 @@ export function getCreate2Address(parameters: { bytecode?: Hex | undefined; byte
 		return keccak_256(hexToBytes(parameters.bytecode))
 	})()
 	if (bytecodeHashBytes === undefined) throw new Error('CREATE2 address derivation requires bytecode or bytecodeHash')
+	if (bytecodeHashBytes.length !== 32) throw new Error('CREATE2 bytecode hash must be 32 bytes')
 	const encoded = concatBytes(Uint8Array.of(0xff), fromBytes, saltBytes, bytecodeHashBytes)
 	return checksumAddressFromBytes(keccak_256(encoded).slice(-20))
 }

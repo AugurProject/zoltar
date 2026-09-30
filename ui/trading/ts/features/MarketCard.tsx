@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
@@ -31,7 +32,7 @@ export function formatMarketLiquidity(market: LiveMarket) {
 
 function MarketCardOdds({ market, tradeable }: { market: LiveMarket; tradeable: boolean }) {
 	const odds = marketOddsPercent(market)
-	if (odds === undefined) return <p className='detail market-card__odds-note'>{marketsCopy.oddsUnavailable}</p>
+	if (odds === undefined) return <UserMessage className='detail market-card__odds-note' detail={marketsCopy.oddsUnavailable} />
 	return (
 		<div className='market-card__odds'>
 			<MarketOddsBar yesPercent={odds.yes} noPercent={odds.no} showValues={!tradeable} />

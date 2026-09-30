@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
@@ -158,9 +159,14 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 				if (operation === 'redeem-complete-set')
 					return (
 						<>
-							<p className='detail'>
-								{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets, market)}.
-							</p>
+							<UserMessage
+								className='detail'
+								detail={
+									<>
+										{settlementCopy.completeSetRedemptionPrefix} {settlementBalanceLabel(balanceState, availability.completeSets, market)}.
+									</>
+								}
+							/>
 							<FormField id={amountId} label={settlementCopy.completeSetValueToRedeem}>
 								<FormInput
 									id={amountId}
@@ -180,10 +186,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 							</FormField>
 						</>
 					)
-				if (operation === 'redeem-winning-shares') return <p className='detail'>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</p>
+				if (operation === 'redeem-winning-shares')
+					return <UserMessage className='detail' detail={<>{winningOutcome === undefined ? settlementCopy.winningRedemptionUnavailable : settlementCopy.winningRedemptionGuidance(winningOutcome, settlementBalanceLabel(balanceState, availability.winningBalance, market, winningOutcome))}</>} />
 				return (
 					<>
-						<p className='detail'>{settlementCopy.migrationGuidance}</p>
+						<UserMessage className='detail' detail={<>{settlementCopy.migrationGuidance}</>} />
 						<div className='field'>
 							<span>{settlementCopy.sourceShare}</span>
 							<EnumDropdown
@@ -201,9 +208,14 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 								}}
 							/>
 						</div>
-						<p className='detail'>
-							{settlementCopy.selectedSourceBalance} {settlementBalanceLabel(balanceState, sourceBalance, market, sourceOutcome)}
-						</p>
+						<UserMessage
+							className='detail'
+							detail={
+								<>
+									{settlementCopy.selectedSourceBalance} {settlementBalanceLabel(balanceState, sourceBalance, market, sourceOutcome)}
+								</>
+							}
+						/>
 						{forkContextState === 'loading' || forkContextState === 'idle' ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: settlementCopy.loadingForkDetails, detailIsLoading: true }} /> : null}
 						{forkContextState === 'error' ? (
 							<>
@@ -230,10 +242,10 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 				{quote?.operation === 'redeem-complete-set' ? (
 					<section className='trade-estimate' aria-label={settlementCopy.quoteHeading} aria-busy={transaction.quoteState === 'loading'}>
 						<TransactionReview variant='inline' primary={[{ label: settlementCopy.youReceive, value: `${formatTrimmedUnits(quote.expectedAttoEth)} ${settlementCopy.eth}` }]} details={[{ label: settlementCopy.minimumReceived, value: `${formatTrimmedUnits(quote.minimumAttoEth)} ${settlementCopy.eth}` }]} />
-						<p className='detail trade-estimate-note'>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</p>
+						<UserMessage className='detail trade-estimate-note' detail={<>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</>} />
 					</section>
 				) : null}
-				{quote?.operation === 'migrate-shares' ? <p className='detail'>{migrationSimulationSummary(quote.blockNumber, quote.sourceOutcome, BigInt(quote.targetOutcomeIndexes.length))}</p> : null}
+				{quote?.operation === 'migrate-shares' ? <UserMessage className='detail' detail={<>{migrationSimulationSummary(quote.blockNumber, quote.sourceOutcome, BigInt(quote.targetOutcomeIndexes.length))}</>} /> : null}
 			</QuotedTransactionPanel>
 		</div>
 	)

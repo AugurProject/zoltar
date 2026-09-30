@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -335,7 +336,7 @@ export function LiquidationModal({
 								<h4>{liquidationCopy.invalidLiquidationPair}</h4>
 							</div>
 						</div>
-						<p className='detail'>{sameVaultWarning}</p>
+						<UserMessage className='detail' detail={sameVaultWarning} />
 					</WarningSurface>
 				)}
 				{delegatedReceiver ? (
@@ -345,7 +346,7 @@ export function LiquidationModal({
 								<h4>{liquidationCopy.receiverLiabilityTitle}</h4>
 							</div>
 						</div>
-						<p className='detail'>{liquidationCopy.receiverLiabilityDetail}</p>
+						<UserMessage className='detail' detail={liquidationCopy.receiverLiabilityDetail} />
 					</WarningSurface>
 				) : null}
 				<div className='form-grid'>
@@ -353,11 +354,7 @@ export function LiquidationModal({
 						<span>{liquidationCopy.receiverVault}</span>
 						<FormInput value={liquidationReceiverVault} onInput={event => onLiquidationReceiverVaultChange(event.currentTarget.value)} />
 					</label>
-					{delegatedReceiver && loadingLiquidationReceiverVaultSummary ? (
-						<p className='detail' id='liquidation-receiver-loading-status' role='status'>
-							{liquidationCopy.loadingReceiverVault}
-						</p>
-					) : null}
+					{delegatedReceiver && loadingLiquidationReceiverVaultSummary ? <UserMessage className='detail' id='liquidation-receiver-loading-status' announcement='polite' detail={liquidationCopy.loadingReceiverVault} /> : null}
 					{delegatedReceiver && liquidationReceiverVaultSummaryError !== undefined ? (
 						<div className='actions'>
 							<button className='secondary' type='button' onClick={onLoadLiquidationReceiverVaultSummary} disabled={loadingLiquidationReceiverVaultSummary || !hasValidReceiverVault}>
@@ -370,13 +367,9 @@ export function LiquidationModal({
 							<label className='field'>
 								<span>{liquidationCopy.boundedApprovalId}</span>
 								<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
-								<small className='field-help'>{liquidationCopy.receiverOperatorEconomics}</small>
+								<UserMessage placement='field' as='span' detail={liquidationCopy.receiverOperatorEconomics} />
 							</label>
-							{loadingLiquidationApproval ? (
-								<p className='detail' role='status'>
-									{liquidationCopy.loadingBoundedApproval}
-								</p>
-							) : null}
+							{loadingLiquidationApproval ? <UserMessage className='detail' announcement='polite' detail={liquidationCopy.loadingBoundedApproval} /> : null}
 							{liquidationApprovalError === undefined ? null : (
 								<div className='actions'>
 									<button className='secondary' type='button' onClick={onLoadLiquidationApproval} disabled={!hasValidApprovalId}>
@@ -400,12 +393,8 @@ export function LiquidationModal({
 				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
-				{approvalClampedNotice === undefined ? null : (
-					<p className='notice warning' role='status'>
-						{approvalClampedNotice}
-					</p>
-				)}
-				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
+				{approvalClampedNotice === undefined ? null : <UserMessage tone='warning' announcement='polite' detail={approvalClampedNotice} />}
+				{liquidationExecutionMode === 'execute' ? null : <UserMessage className='detail' detail={liquidationTimeoutHelpText} />}
 				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={securityPoolOverviewActiveAction !== undefined} fieldId={initialPriceFieldId} /> : undefined}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (
 					<div className='actions'>
