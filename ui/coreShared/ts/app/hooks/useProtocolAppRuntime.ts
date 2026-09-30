@@ -5,7 +5,7 @@ import { shouldFollowWalletNetwork } from '../../lib/activeEnvironment.js'
 import { createSupportedNetworkChangeCoordinator } from '../lib/supportedNetworkChange.js'
 import { useTransactionTrayController } from './useTransactionTrayController.js'
 import { getInFlightTransactionCount } from '../../transactions/transactionTray.js'
-import { appBlockWatcher } from '../../lib/dataRefresh.js'
+import { invalidateAppData } from '../../lib/dataRefresh.js'
 
 type CommitGuard = () => boolean
 
@@ -13,8 +13,8 @@ export function useProtocolAppRuntime({ replaceEnvironment, onEnvironmentCommitt
 	const supportedNetworkChangeCoordinatorRef = useRef<ReturnType<typeof createSupportedNetworkChangeCoordinator>>()
 	const transactionTray = useTransactionTrayController({
 		onFinished: () => {
-			// A finished transaction mined a block: read the chain now so visible queries refresh once, without waiting for the next poll.
-			void appBlockWatcher.refresh()
+			// A user's transaction must retire reads started before it, even if a block poll is already in flight.
+			invalidateAppData()
 			return supportedNetworkChangeCoordinatorRef.current?.handleTransactionFinished()
 		},
 	})

@@ -1,3 +1,4 @@
+import { readOperationClient, runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { useEnvironmentRevision } from '@zoltar/ui-core-shared/app/hooks/useEnvironmentRevision.js'
 import { useRouteSignal } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { securityPoolAddressFromRoute } from '../features/liveTradingControllerHelpers.js'
@@ -83,7 +84,7 @@ async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDepl
 	const bootstrapConfiguration: DeploymentConfiguration = { chainId: core.chainId, chainName: core.chainName, factory: core.securityPoolFactory, feeBps: 30, router: core.securityPoolFactory, rpcUrl: core.defaultRpcUrl, securityPoolFactory: core.securityPoolFactory, zoltar: core.zoltar }
 	const client = createPublicClient(bootstrapConfiguration)
 	validateRpcChainId(await withTimeout(client.getChainId(), 15_000, 'Trading RPC chain verification timed out'), core.chainId)
-	return await withTimeout(resolveInstalledTradingDeployment(client, core, 30, core.defaultRpcUrl), 15_000, 'Trading deployment verification timed out')
+	return await runReadOperation(async operation => await resolveInstalledTradingDeployment(readOperationClient(client, operation), core, 30, core.defaultRpcUrl))
 }
 
 async function resolveLiveDeployment() {

@@ -102,7 +102,7 @@ export function LiveTrading({
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, refreshLocked, loadMarketPage } = discovery
+	const { discoveryRows, visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness, marketPage, nowSeconds, refresh, refreshFromControl, refreshLocked, loadMarketPage } = discovery
 	const { setMode, setSide } = position
 	const { workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -115,6 +115,8 @@ export function LiveTrading({
 	// Moving between addressed markets keeps the same page title, so focus the new market heading here instead of relying on the app heading.
 	const marketHeadingRef = useFocusOnKeyChange<HTMLHeadingElement>(selected?.pool, false)
 	const favoriteMarketIds = useFavorites('trading', 'market')
+	const listedPools = new Set(listedMarkets.map(market => market.pool))
+	const listedDiscoveryRows = discoveryRows?.filter(market => market === undefined || listedPools.has(market.pool))
 	const downloadedMarkets = useDownloadedEntities('trading', 'market', marketDownloadStore)
 	// The market list browses every downloaded market; discovered pages join the cache, other routes only refresh cached favorites.
 	const listsMarkets = tradingListKindFor(route) === 'markets'
@@ -124,7 +126,8 @@ export function LiveTrading({
 	const recordedMarkets = useRef(new Map<string, LiveMarket>())
 	const marketCacheUpdates = selectMarketCacheUpdates(listedMarkets, recordedMarkets.current, favoriteMarketIds.entries, listsMarkets)
 	useEffect(() => {
-		if (marketCacheUpdates.length === 0) return
+		// A workflow can revoke partial discovery; persist only the completed list.
+		if (discoveryState !== 'ready' || marketCacheUpdates.length === 0) return
 		for (const update of marketCacheUpdates) recordedMarkets.current.set(update.id, update.data)
 		downloadedMarkets.record(marketCacheUpdates)
 	})
@@ -204,6 +207,7 @@ export function LiveTrading({
 				<RouteHeader title={routePresentation.title} description={routePresentation.description} actions={walletAction} />
 				<ErrorNotice message={connectionMessage} />
 				<LiveMarketBrowser
+					discoveryRows={listedDiscoveryRows}
 					lookupRoute={route}
 					markets={listsMarkets ? selectBrowseMarkets(downloadedMarkets.entries, listedMarkets, selectedUniverseId) : listedMarkets}
 					favorites={favoriteMarketIds.entries}
