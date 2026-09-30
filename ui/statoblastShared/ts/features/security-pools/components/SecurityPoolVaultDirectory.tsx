@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
@@ -22,7 +23,7 @@ export function SecurityPoolVaultDirectory({ emptyState, pool, renderActions, re
 
 	return (
 		<div className='vault-position-list'>
-			{pool.vaultScanCapped === true ? <p className='status warning'>{securityPoolCopy.vaultRegistryScanCapped}</p> : null}
+			{pool.vaultScanCapped === true ? <UserMessage className='detail' tone='warning' detail={securityPoolCopy.vaultRegistryScanCapped} /> : null}
 			{loadedVaultCount > 0n && showingPartialDirectory ? <p className='detail'>{securityPoolCopy.formatVaultDirectorySummary(loadedVaultCount, pool.vaultCount)}</p> : null}
 			{pool.vaults.length === 0 ? emptyState : null}
 			{pool.vaults.map(vault => (

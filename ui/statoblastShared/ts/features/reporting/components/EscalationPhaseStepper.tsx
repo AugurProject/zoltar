@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getDisplayedLeadingEscalationOutcome, deriveReportingStage, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 import * as copy from '../../../copy/reporting.js'
@@ -37,9 +38,7 @@ export function EscalationPhaseStepper({ details, forkAlreadyTriggered, detailId
 				))}
 			</ol>
 			<p className='escalation-phase-mobile'>{copy.phaseProgress(index + 1, labels[index] ?? copy.phaseLabels[0] ?? '')}</p>
-			<p id={detailId} className='detail'>
-				{next}
-			</p>
+			<UserMessage id={detailId} className='detail' detail={next} />
 		</div>
 	)
 }

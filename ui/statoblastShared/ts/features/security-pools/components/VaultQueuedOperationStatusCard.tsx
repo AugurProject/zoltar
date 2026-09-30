@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
@@ -109,7 +110,7 @@ function VaultQueuedOperationStatusCard({
 						</MetricField>
 					)}
 				</MetricGrid>
-				<p className='detail'>{status === 'manual-queued' ? manualQueuedDescription : securityPoolCopy.queuedVaultAutomaticExecution}</p>
+				<UserMessage className='detail' detail={status === 'manual-queued' ? manualQueuedDescription : securityPoolCopy.queuedVaultAutomaticExecution} />
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={onViewStagedOperations}>
@@ -131,8 +132,8 @@ function VaultQueuedOperationStatusCard({
 					{status === 'failed' ? <Badge tone='blocked'>{commonCopy.failed}</Badge> : undefined}
 				</div>
 				{operationIdentifier}
-				<p className='detail'>{details[status]}</p>
-				{status === 'superseded' ? undefined : <p className='detail'>{commonCopy.stagedOperationRetryDetail}</p>}
+				<UserMessage className='detail' detail={details[status]} />
+				{status === 'superseded' ? undefined : <UserMessage className='detail' detail={commonCopy.stagedOperationRetryDetail} />}
 			</section>
 		)
 	}
@@ -146,14 +147,14 @@ function VaultQueuedOperationStatusCard({
 					<Badge tone='ok'>{commonCopy.executed}</Badge>
 				</div>
 				{operationIdentifier}
-				<p className='detail'>{successDescription}</p>
+				<UserMessage className='detail' detail={successDescription} />
 			</section>
 		)
 	const submittedOperationDetails =
 		queuedVaultOperation === undefined ? undefined : (
 			<>
 				{operationIdentifier}
-				<p className='detail'>{queuedVaultOperation.isPendingSlot ? securityPoolCopy.queuedVaultOperationAutomaticRefreshDetail : securityPoolCopy.queuedVaultOperationManualRefreshDetail}</p>
+				<UserMessage className='detail' detail={queuedVaultOperation.isPendingSlot ? securityPoolCopy.queuedVaultOperationAutomaticRefreshDetail : securityPoolCopy.queuedVaultOperationManualRefreshDetail} />
 				{onViewStagedOperations === undefined ? undefined : (
 					<div className='actions'>
 						<button className='secondary' type='button' onClick={onViewStagedOperations}>
@@ -171,7 +172,7 @@ function VaultQueuedOperationStatusCard({
 						<h4>{missingTitle}</h4>
 					</div>
 				</div>
-				<p className='detail'>{missingDescription}</p>
+				<UserMessage className='detail' detail={missingDescription} />
 				{submittedOperationDetails}
 			</WarningSurface>
 		)
@@ -183,7 +184,7 @@ function VaultQueuedOperationStatusCard({
 				</div>
 				<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>
 			</div>
-			<p className='detail'>{refreshingDescription}</p>
+			<UserMessage className='detail' detail={refreshingDescription} />
 			{submittedOperationDetails}
 		</section>
 	)

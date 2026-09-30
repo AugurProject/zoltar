@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -69,7 +70,7 @@ export function PoolActionCard({ currentTimestamp, currentView, items, onChange 
 		<section className='pool-action-card' aria-labelledby='pool-action-card-heading'>
 			<h3 id='pool-action-card-heading'>{copy.nextActions}</h3>
 			{visibleItems.length === 0 ? (
-				<p className='detail'>{copy.nothingToDoNow}</p>
+				<UserMessage className='detail' detail={copy.nothingToDoNow} />
 			) : (
 				<ul className='pool-action-list'>
 					{visibleItems.map(item => {

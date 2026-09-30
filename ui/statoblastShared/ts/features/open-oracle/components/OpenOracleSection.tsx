@@ -191,7 +191,7 @@ export function OpenOracleSection({
 					{showCreateSuccess ? undefined : (
 						<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
 							<UserMessage tone='warning' detail={openOracleCopy.standaloneOracleWarningDetail} />
-							<p className='detail'>{openOracleCopy.standaloneOracleIntroduction}</p>
+							<UserMessage className='detail' detail={openOracleCopy.standaloneOracleIntroduction} />
 							<TransactionObjectContext
 								className='mobile-workflow-context'
 								title={openOracleCopy.reportAtAGlance}
@@ -299,7 +299,7 @@ export function OpenOracleSection({
 								</SectionBlock>
 
 								<ReadOnlyDetailAccordion title={openOracleCopy.advancedDisputeAndTimingSettings}>
-									<p className='detail'>{openOracleCopy.advancedDisputeAndTimingSettingsDetail}</p>
+									<UserMessage className='detail' detail={openOracleCopy.advancedDisputeAndTimingSettingsDetail} />
 									<div className='field-row'>
 										<label className='field'>
 											<span>{openOracleCopy.disputeFeePercentage}</span>
@@ -389,7 +389,7 @@ export function OpenOracleSection({
 										</div>
 									</SectionBlock>
 									<h4>{openOracleCopy.parameterDetails}</h4>
-									<p className='detail'>{openOracleCopy.standaloneParameterDetails}</p>
+									<UserMessage className='detail' detail={openOracleCopy.standaloneParameterDetails} />
 								</ReadOnlyDetailAccordion>
 
 								<div className='actions'>

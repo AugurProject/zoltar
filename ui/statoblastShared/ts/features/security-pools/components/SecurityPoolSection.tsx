@@ -263,7 +263,7 @@ export function SecurityPoolSection({
 						</div>
 					}
 				>
-					{securityPoolResult.universeId === activeUniverseId ? undefined : <p className='detail'>{securityPoolCopy.formatBrowsePoolUniverseMismatch(createdPoolUniverseName)}</p>}
+					{securityPoolResult.universeId === activeUniverseId ? undefined : <UserMessage className='detail' detail={securityPoolCopy.formatBrowsePoolUniverseMismatch(createdPoolUniverseName)} />}
 					<Question
 						className='created-pool-summary'
 						question={createdQuestionDetails}
@@ -312,11 +312,7 @@ export function SecurityPoolSection({
 										<LookupFieldRow disabled={questionSourceLocked} label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
 										<UserMessage placement='field' detail={securityPoolCopy.questionIdFallbackHint} />
 									</div>
-									{loadingMarketDetails ? (
-										<p className='detail'>
-											<LoadingText>{securityPoolCopy.loadingQuestion}</LoadingText>
-										</p>
-									) : undefined}
+									{loadingMarketDetails ? <UserMessage className='detail' loading detail={securityPoolCopy.loadingQuestion} /> : undefined}
 									{marketDetails === undefined ? undefined : (
 										<div className='loaded-question-preview'>
 											<Question question={marketDetails} variant='preview' showIdentifier={false} />
@@ -340,9 +336,14 @@ export function SecurityPoolSection({
 									)}
 								</div>
 								{!duplicateOriginPoolExists ? undefined : (
-									<p className='detail'>
-										{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <SecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
-									</p>
+									<UserMessage
+										className='detail'
+										detail={
+											<>
+												{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <SecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
+											</>
+										}
+									/>
 								)}
 								{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <UserMessage tone='error' detail={securityPoolCopy.ineligibleQuestionDetail} /> : undefined}
 								{zoltarUniverseHasForked ? <UserMessage tone='error' detail={securityPoolCopy.poolCreationAfterForkReason} /> : undefined}
@@ -393,7 +394,7 @@ export function SecurityPoolSection({
 											) : undefined}
 											{existingQuestionCheck?.status === 'existing' ? (
 												<div className='detail'>
-													<p>{existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool}</p>
+													<UserMessage detail={existingQuestionCheck.poolAddress === undefined ? securityPoolCopy.questionAlreadyExists : securityPoolCopy.questionAlreadyHasPool} />
 													<dl className='existing-pool-identifiers'>
 														<div>
 															<dt>{commonCopy.questionId}</dt>
@@ -461,7 +462,7 @@ export function SecurityPoolSection({
 									)
 								}
 							>
-								<p className='detail'>{securityPoolCopy.questionCreatedPoolPending}</p>
+								<UserMessage className='detail' detail={securityPoolCopy.questionCreatedPoolPending} />
 								<ul className='status-list hashes'>
 									<li>
 										<span>{commonCopy.questionId}</span>
