@@ -49,19 +49,26 @@ describe('trading surface nesting', () => {
 		const rendered = await renderIntoDocument(<LiveTrading route={`market/${pool}`} configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .tx-action-button') !== null, 'market workspace')
-		expect(document.querySelectorAll('.sticky-object-context')).toHaveLength(1)
+		// The market question titles the page once, as the route heading, instead of repeating in an object header.
+		expect(document.querySelectorAll('.sticky-object-context')).toHaveLength(0)
+		expect(document.querySelector('.route-header h2')?.textContent).toBe('Nesting fixture market')
 		expect(document.querySelector('[role="tablist"]')).not.toBeNull()
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await act(async () => buttonByLabel('Connect wallet').click())
 		await waitForDom(() => document.body.textContent?.includes('1 YES') === true, 'wallet balances')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
+		// The wallet position sits in the reading column; the ticket shows the odds bar only to preview a trade.
+		expect(document.querySelector('.market-overview .market-holdings')?.textContent).toContain('1 YES')
+		expect(document.querySelector('.market-ticket .market-holdings')).toBeNull()
+		expect(document.querySelectorAll('.market-overview .probability')).toHaveLength(1)
+		expect(document.querySelector('.market-ticket .probability')).toBeNull()
 		await rendered.cleanup()
 		cleanupRendered = undefined
 
 		const list = await renderIntoDocument(<LiveTrading route='market' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = list.cleanup
 		await waitForDom(() => document.querySelector('.market-record') !== null, 'market list')
-		expect(document.querySelector('.open-pool-form')).not.toBeNull()
+		expect(document.querySelector('form.market-list-search')).not.toBeNull()
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await list.cleanup()
 		cleanupRendered = undefined
@@ -69,7 +76,7 @@ describe('trading surface nesting', () => {
 		const portfolio = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = portfolio.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => document.querySelector('.entity-card[data-portfolio-pool]') !== null && document.body.textContent?.includes('1 YES') === true, 'portfolio positions')
+		await waitForDom(() => document.querySelector('.portfolio-position-row[data-portfolio-pool]') !== null && document.body.textContent?.includes('1 YES') === true, 'portfolio positions')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await portfolio.cleanup()
 		cleanupRendered = undefined

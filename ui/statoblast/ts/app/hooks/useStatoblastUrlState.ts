@@ -106,7 +106,7 @@ export function useStatoblastUrlState() {
 	const setOpenOracleView = useCallback((view: string | undefined) => updateSearch(search => writeOpenOracleViewQueryParam(search, view)), [updateSearch])
 	const setSecurityPoolsView = useCallback(
 		(view: string | undefined) => {
-			if (view === 'open' || view === 'create' || view === 'universes' || view === 'browse') {
+			if (view === 'create' || view === 'universes' || view === 'browse') {
 				navigatePools({ view })
 				return
 			}

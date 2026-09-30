@@ -299,8 +299,8 @@ describe('live workflow safety boundary', () => {
 		await show('market')
 		await settleAsyncWorkflow()
 		await flush()
-		// The lookup route is list-first: the address form sits above the same rows the browse alias shows.
-		expect(document.querySelector('.open-pool-form')).not.toBeNull()
+		// The lookup route is list-first: the search that also opens a pool address sits above the same rows the browse alias shows.
+		expect(document.querySelector('form.market-list-search')).not.toBeNull()
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
 		const midConnectChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())

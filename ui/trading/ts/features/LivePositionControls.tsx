@@ -2,24 +2,19 @@ import { useId } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { BackingDetails } from './BackingDetails.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
-import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket, type ShareOutcome } from '../protocol/live.js'
-import { conditionalYesBps } from '@zoltar/trading-shared/trading/math'
+import { marketAcceptsNewRisk, type LiveBalances, type LiveMarket } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
 import * as ticketCopy from '../copy/tradeTicket.js'
-import * as appCopy from '../copy/app.js'
 import { positionControlsWorkflowLocked } from './liveTradingControllerHelpers.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
-import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { TradeEstimatePanel } from './TradeEstimatePanel.js'
 import { formatAmountInput, probabilityPercent, roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
@@ -59,18 +54,6 @@ export type TicketBalances = Readonly<{
 	balanceError: string | undefined
 	retry(): Promise<void>
 }>
-
-function currentYesPercent(market: LiveMarket) {
-	return market.yesReserve + market.noReserve === 0n ? 0 : probabilityPercent(conditionalYesBps(market.yesReserve, market.noReserve))
-}
-
-function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, balanceState: BalanceState) {
-	if (value !== undefined) return formatOutcomeQuantity(value, outcome)
-	if (balanceState === 'loading') return appCopy.loadingBalances
-	if (balanceState === 'error') return appCopy.unavailable
-	// The primary button already offers to connect; the holdings stay quiet until a wallet is known.
-	return ticketCopy.noBalance
-}
 
 function amountHint(model: TradeTicketModel, mode: TradeMode, side: 'YES' | 'NO', holdings: LiveBalances | undefined, walletEthAttoEth: bigint | undefined) {
 	if (mode === 'entry') return walletEthAttoEth === undefined ? undefined : ticketCopy.walletBalance(`${formatTrimmedUnits(walletEthAttoEth)} ${workflowCopy.eth}`)
@@ -130,25 +113,9 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
 	return (
-		<div className='position-controls' aria-busy={holdings.balanceState === 'loading' || revalidatingAfterReceipt}>
-			<ProbabilityBar yesPercent={estimate === undefined ? currentYesPercent(market) : probabilityPercent(estimate.quote.conditionalYesBpsAfter)} beforePercent={estimate === undefined ? undefined : probabilityPercent(estimate.quote.conditionalYesBpsBefore)} />
-			<BackingDetails market={market} />
-			<ul className='portfolio-holdings trade-holdings' aria-busy={holdings.balanceState === 'loading'}>
-				<li className={`portfolio-holding-yes ${side === 'YES' ? 'selected-holding' : ''}`} data-outcome='yes'>
-					<span className='holding-quantity'>{walletBalanceLabel(holdings.balances?.yes, workflowCopy.yes, holdings.balanceState)}</span>
-					<small className='payout-caption'>{workflowCopy.walletYes}</small>
-				</li>
-				<li className={`portfolio-holding-no ${side === 'NO' ? 'selected-holding' : ''}`} data-outcome='no'>
-					<span className='holding-quantity'>{walletBalanceLabel(holdings.balances?.no, workflowCopy.no, holdings.balanceState)}</span>
-					<small className='payout-caption'>{workflowCopy.walletNo}</small>
-				</li>
-				<li data-outcome='invalid'>
-					<span className='holding-quantity'>{walletBalanceLabel(holdings.balances?.invalid, 'INVALID', holdings.balanceState)}</span>
-					<small className='payout-caption'>{workflowCopy.walletInvalid}</small>
-				</li>
-			</ul>
-			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
-			{holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={workflowLocked} /> : null}
+		<div className='position-controls' aria-busy={revalidatingAfterReceipt}>
+			{/* The reading column shows the resting odds; the ticket adds the bar only to preview how this trade moves them. */}
+			{estimate === undefined ? null : <ProbabilityBar yesPercent={probabilityPercent(estimate.quote.conditionalYesBpsAfter)} beforePercent={probabilityPercent(estimate.quote.conditionalYesBpsBefore)} />}
 			<div className='trade-ticket-switchers'>
 				<ViewTabs
 					ariaLabel={ticketCopy.tradeDirection}
