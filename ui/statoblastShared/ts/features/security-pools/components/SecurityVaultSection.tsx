@@ -541,6 +541,13 @@ export function SecurityVaultSection({
 			walletRepBalanceError={walletRepBalanceError}
 		/>
 	)
+	const summarySection = showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} /> : undefined
+	const vaultActions = (
+		<>
+			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />
+			{actionSections}
+		</>
+	)
 	const sections = (
 		<>
 			{showLookupSection ? (
@@ -566,11 +573,17 @@ export function SecurityVaultSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} /> : undefined}
-
-			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />
-
-			{actionSections}
+			{compactLayout && modalFirst && summarySection !== undefined ? (
+				<div className='vault-detail-layout'>
+					{summarySection}
+					<div className='vault-detail-actions'>{vaultActions}</div>
+				</div>
+			) : (
+				<>
+					{summarySection}
+					{vaultActions}
+				</>
+			)}
 		</>
 	)
 	if (compactLayout) return sections
