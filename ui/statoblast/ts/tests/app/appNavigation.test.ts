@@ -21,8 +21,9 @@ test('lists pool views as paths without a Manage Pool peer and preserves the uni
 	const setSecurityPoolsView = mock(() => undefined)
 	const navigation = getRouteSecondaryNavigation({ activeOpenOracleView: 'browse', activeSecurityPoolsView: 'browse', route: 'pools', setOpenOracleView: () => undefined, setSecurityPoolsView })
 	if (navigation === undefined) throw new Error('Expected secondary navigation')
-	expect(navigation.options.map(option => option.value)).toEqual(['open', 'browse', 'create', 'universes'])
-	expect(navigation.options.map(option => option.href)).toEqual(['#/pools/open?universe=7', '#/pools?universe=7', '#/pools/create?universe=7', '#/pools/universes?universe=7'])
+	// Browse search opens a pasted pool address, so there is no separate Open pool view.
+	expect(navigation.options.map(option => option.value)).toEqual(['browse', 'create', 'universes'])
+	expect(navigation.options.map(option => option.href)).toEqual(['#/pools?universe=7', '#/pools/create?universe=7', '#/pools/universes?universe=7'])
 	navigation.onChange('create')
 	navigation.onChange('operate')
 	expect(setSecurityPoolsView).toHaveBeenCalledTimes(1)
@@ -59,10 +60,9 @@ test('uses the route and active view to isolate transaction presentation', () =>
 	expect(getRouteSecondaryNavigation({ ...views, route: 'not-found', setOpenOracleView: () => undefined, setSecurityPoolsView: () => undefined })).toBeUndefined()
 })
 
-test('lands on Browse pools by default, keeps Open pool routable, and rejects the removed portfolio route', () => {
+test('lands on Browse pools by default and rejects the removed portfolio route', () => {
 	expect(statoblastRouting.resolve('')).toBe('pools')
 	expect(statoblastRouting.getHash('pools')).toBe('#/pools')
-	expect(statoblastRouting.resolve('#/pools/open')).toBe('pools')
 	expect(statoblastRouting.resolve('#/pools/browse')).toBe('pools')
 	expect(statoblastRouting.resolve('#/portfolio')).toBe('not-found')
 })

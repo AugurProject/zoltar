@@ -202,6 +202,9 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 					selectedPoolSummaryPool: model.selectedPoolSummaryPool,
 					selectedPoolView,
 				}
+	const poolOracleStatus = model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />
+	const poolLifecycle = showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined
+	const poolActions = showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined
 	return (
 		<RouteWorkflowPanel showHeader={showHeader && objectHeaderProps === undefined} title={securityPoolCopy.selectedPool}>
 			<div className='pool-context'>
@@ -223,14 +226,21 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 						<PoolSelectionControl address={securityPoolAddress} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} poolLoaded={selectedPool !== undefined} />
 					</details>
 				</div>
-				{objectHeaderProps === undefined ? undefined : <SecurityPoolObjectHeader {...objectHeaderProps} />}
-				<ErrorNotice message={securityPoolOverviewError} />
-				{model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />}
-				{showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined}
-				<div className='pool-secondary-context'>
-					{showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined}
-					{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined} />}
-				</div>
+				{objectHeaderProps === undefined ? (
+					// Without a loaded summary there is no header to host them, so the oracle row, stage, and actions stand alone.
+					<>
+						<ErrorNotice message={securityPoolOverviewError} />
+						{poolOracleStatus}
+						{poolLifecycle}
+						{poolActions}
+					</>
+				) : (
+					<>
+						<SecurityPoolObjectHeader {...objectHeaderProps} actions={poolActions} lifecycle={poolLifecycle} oracleStatus={poolOracleStatus} />
+						<ErrorNotice message={securityPoolOverviewError} />
+						<SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined} />
+					</>
+				)}
 			</div>
 
 			{selectedPool === undefined || !model.selectedPoolUniverseMismatch ? undefined : <SecurityPoolUniverseMismatchNotice activeUniverseId={activeUniverseId} onReturnToCurrentUniverse={onReturnToCurrentUniverse} onSwitchToPoolUniverse={onSwitchToPoolUniverse} selectedPool={selectedPool} />}

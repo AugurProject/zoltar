@@ -1,9 +1,10 @@
-import type { RefObject } from 'preact'
+import type { ComponentChildren, RefObject } from 'preact'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { StickyObjectContext } from '@zoltar/ui-core-shared/components/StickyObjectContext.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
@@ -11,14 +12,15 @@ import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
 import { liveCopy } from '../copy/live.js'
+import { getTradingRouteHref } from '../lib/routing.js'
 import { marketsCopy } from '../copy/markets.js'
 import { marketYesTenths } from '../lib/marketListing.js'
 import type { LiveMarket } from '../protocol/live.js'
 import { formatMarketLiquidity } from './MarketCard.js'
 import { marketStatusLabel, marketStatusTone } from './marketStatus.js'
 
-/** Question, status, and the facts that decide a trade: when the question ends, how deep the pair is, and its fee. The market page moves the pool into its contracts disclosure. */
-export function MarketFacts({ market, nowSeconds, headingRef, showPool = true }: { market: LiveMarket; nowSeconds: bigint; headingRef: RefObject<HTMLHeadingElement>; showPool?: boolean }) {
+/** Question, status, pool, and the facts that decide a trade, for the states without the market page's reading column: an existing pair on the create route, a market that failed to load, and market creation. */
+export function MarketFacts({ market, nowSeconds, headingRef }: { market: LiveMarket; nowSeconds: bigint; headingRef: RefObject<HTMLHeadingElement> }) {
 	const liquidity = formatMarketLiquidity(market)
 	return (
 		<StickyObjectContext
@@ -33,7 +35,7 @@ export function MarketFacts({ market, nowSeconds, headingRef, showPool = true }:
 				</>
 			}
 			items={[
-				...(showPool ? [{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} /> }] : []),
+				{ label: liveCopy.securityPoolLabel, value: <SecurityPoolLink value={market.pool} /> },
 				...(market.loadError === undefined
 					? [{ label: liveCopy.questionEnd, value: <TimestampValue timestamp={market.endTime} relative={false} /> }, ...(liquidity === undefined ? [] : [{ label: marketsCopy.liquidity, value: liquidity }]), { label: liveCopy.ammFee, value: formatScaledPercentage(market.feeBps, 2) }]
 					: []),
@@ -59,16 +61,47 @@ export function MarketContracts({ market }: { market: LiveMarket }) {
 	)
 }
 
-/** The market page's reading column: question and facts, conditional odds, the question's own description, and contracts. */
-export function MarketOverview({ market, nowSeconds, headingRef }: { market: LiveMarket; nowSeconds: bigint; headingRef: RefObject<HTMLHeadingElement> }) {
+/** The market page's title row: back to the list, the question as the page title, and its favorite and status beside it. */
+export function MarketPageHeader({ market, nowSeconds, headingRef, actions }: { market: LiveMarket; nowSeconds: bigint; headingRef: RefObject<HTMLHeadingElement>; actions?: ComponentChildren }) {
+	return (
+		<RouteHeader
+			className='market-page-header'
+			eyebrow={
+				<a className='route-back-link' href={getTradingRouteHref('#/market')}>
+					<span aria-hidden='true'>←</span> {marketsCopy.allMarkets}
+				</a>
+			}
+			title={market.title}
+			titleRef={headingRef}
+			titleAside={
+				<>
+					<FavoriteToggle app='trading' entityLabel={market.title} id={market.pool} kind='market' />
+					<Badge tone={marketStatusTone(market, nowSeconds)}>{marketStatusLabel(market, nowSeconds)}</Badge>
+				</>
+			}
+			actions={actions}
+		/>
+	)
+}
+
+/** The market page's reading column: conditional odds, the facts that decide a trade, the wallet's position, the question's own description, and contracts. */
+export function MarketOverview({ market, position }: { market: LiveMarket; position: ComponentChildren }) {
 	const yesTenths = marketYesTenths(market)
 	const description = market.description.trim()
+	const liquidity = formatMarketLiquidity(market)
 	return (
 		<div className='market-overview'>
-			<MarketFacts market={market} nowSeconds={nowSeconds} headingRef={headingRef} showPool={false} />
 			{yesTenths === undefined ? <p className='detail'>{marketsCopy.oddsUnavailable}</p> : <ProbabilityBar yesPercent={yesTenths / 10} />}
+			<DataGrid className='market-facts'>
+				<MetricField label={liveCopy.questionEnd}>
+					<TimestampValue timestamp={market.endTime} relative={false} />
+				</MetricField>
+				{liquidity === undefined ? undefined : <MetricField label={marketsCopy.liquidity}>{liquidity}</MetricField>}
+				<MetricField label={liveCopy.ammFee}>{formatScaledPercentage(market.feeBps, 2)}</MetricField>
+			</DataGrid>
+			{position}
 			<section className='market-description' aria-labelledby='market-description-heading'>
-				<h4 id='market-description-heading'>{marketsCopy.questionDescription}</h4>
+				<h3 id='market-description-heading'>{marketsCopy.questionDescription}</h3>
 				{/* Rendered as plain text: the description is creator-supplied and never interpreted as markup. */}
 				{description === '' ? <p className='detail'>{marketsCopy.noQuestionDescription}</p> : <p className='market-description__text'>{description}</p>}
 			</section>

@@ -212,7 +212,8 @@
 	gap: var(--space-2);
 }
 
-/* Market list: filters and search over the downloaded markets, then a grid of market cards led by their odds. */
+/* Market list: search (which also opens a pasted pool address) beside sort, then the status filter beside the list's
+   count, freshness, and discovery, then a grid of market cards led by their odds. */
 .market-list-controls {
 	display: flex;
 	flex-wrap: wrap;
@@ -220,12 +221,30 @@
 	gap: var(--space-3);
 }
 .market-list-search {
+	display: flex;
 	flex: 1 1 16rem;
+	gap: var(--space-2);
 	min-width: 0;
 	margin: 0;
 }
-.market-list-controls > .market-list-filters {
+.market-list-search > .form-input-adorned,
+.market-list-search > input {
+	flex: 1 1 auto;
 	min-width: 0;
+}
+.market-list-subbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+}
+.market-list-subbar > .market-list-filters {
+	min-width: 0;
+}
+.market-list-subbar > .market-browse-bar {
+	flex: 1 1 auto;
+	justify-content: flex-end;
 }
 .market-list-sort {
 	display: flex;
@@ -245,13 +264,14 @@
 	grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr));
 	align-items: stretch;
 }
+/* A slot still waiting for its market holds a card-sized placeholder so the grid does not jump as rows arrive; a loaded
+   card sizes to its content and stretches only to match the other cards in its row. */
 .market-discovery-slot {
-	block-size: 28rem;
-	overflow: auto;
+	display: grid;
+	min-width: 0;
 }
-.market-discovery-slot > .entity-card,
 .market-discovery-slot > .skeleton-list {
-	min-block-size: 100%;
+	min-block-size: 20rem;
 }
 .market-card.entity-card {
 	grid-template-rows: auto 1fr auto;
@@ -364,14 +384,51 @@ button.outcome-button--no:hover:not(:disabled) {
 	gap: var(--space-5);
 	min-width: 0;
 }
+/* Question end, liquidity, and fee in one row under the odds, wide enough to keep the end date on one line. */
+.market-facts.data-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+.market-facts .timestamp-value {
+	white-space: nowrap;
+}
+.market-position,
 .market-description {
 	display: grid;
 	gap: var(--space-2);
+	padding-top: var(--space-4);
+	border-top: 1px solid var(--divider-subtle);
 }
-.market-description h4 {
+.market-position h3,
+.market-description h3 {
 	margin: 0;
 	color: var(--muted);
 	font-size: var(--font-label);
+}
+.portfolio-holdings.market-holdings {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	align-items: baseline;
+}
+.portfolio-holdings.market-holdings li {
+	font-size: 1.25rem;
+}
+@media (max-width: 40rem) {
+	/* Phones stack the three balances so a long quantity never breaks inside its value. */
+	.portfolio-holdings.market-holdings {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-2);
+	}
+	.portfolio-holdings.market-holdings li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-1) var(--space-3);
+		font-size: var(--font-body);
+	}
+	.portfolio-holdings.market-holdings .payout-caption {
+		margin-top: 0;
+	}
 }
 .market-description__text {
 	margin: 0;
@@ -396,12 +453,12 @@ button.outcome-button--no:hover:not(:disabled) {
 
 /* On phones the status chips take their own row and share it, so the four labels fit inside the page gutter. */
 @media (max-width: 40rem) {
-	.market-list-controls > .market-list-filters {
+	.market-list-subbar > .market-list-filters {
 		flex: 1 1 100%;
 		flex-wrap: nowrap;
 		width: 100%;
 	}
-	.market-list-controls .view-tabs.market-list-filters .view-tab {
+	.market-list-subbar .view-tabs.market-list-filters .view-tab {
 		flex: 1 1 auto;
 		min-width: 0;
 		padding-inline: var(--space-1);
@@ -410,14 +467,6 @@ button.outcome-button--no:hover:not(:disabled) {
 	.market-browse-bar > .discovery-control {
 		flex: 1 1 100%;
 	}
-}
-
-/* The market page's facts share the reading column in columns wide enough to keep the end date on one line. */
-.market-overview .sticky-object-context.context-strip .sticky-object-context-items {
-	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-}
-.market-overview .sticky-object-context-item .timestamp-value {
-	white-space: nowrap;
 }
 
 /* Keep in sync with COMPACT_TICKET_QUERY in MarketTicketSheet.tsx. */
@@ -559,28 +608,82 @@ button.outcome-button--no:hover:not(:disabled) {
 	gap: var(--space-3);
 	padding: 0 var(--space-3);
 }
-.portfolio-record .entity-card-copy h3 {
-	font-size: 1.25rem;
+/* Portfolio positions: one flat row per market (market, holdings, value, action) inside a single list surface, with the
+   position details disclosure spanning the row beneath. */
+.portfolio-position-list {
+	display: grid;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	border: 1px solid var(--divider-subtle);
+	border-radius: var(--radius-record);
+	background: var(--surface-record);
+}
+.portfolio-position-row {
+	display: grid;
+	grid-template-columns: minmax(12rem, 1.4fr) minmax(0, 2fr) minmax(9rem, 1fr) auto;
+	grid-template-areas: "market holdings value actions" "extra extra extra extra";
+	align-items: start;
+	gap: var(--space-2) var(--space-5);
+	padding: var(--space-4) var(--space-5);
+	min-width: 0;
+}
+.portfolio-position-row + .portfolio-position-row {
+	border-top: 1px solid var(--divider-subtle);
+}
+.portfolio-position-market {
+	grid-area: market;
+	display: grid;
+	justify-items: start;
+	gap: var(--space-1);
+	min-width: 0;
+}
+.portfolio-position-market h3 {
+	margin: 0;
+	font-size: var(--font-lg);
 	overflow-wrap: anywhere;
 }
 /* The title is the way into the market when no Sell or Redeem action applies, so it keeps a visible link cue. */
-.portfolio-record .entity-card-copy h3 a {
+.portfolio-position-market h3 a {
 	color: inherit;
 	text-decoration: underline;
 	text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
 	text-underline-offset: 0.2em;
 }
-.portfolio-record .entity-card-copy h3 a:hover {
+.portfolio-position-market h3 a:hover {
 	text-decoration-color: currentColor;
 }
-.portfolio-record .entity-card-body {
-	gap: var(--space-5);
+.portfolio-position-market .detail {
+	margin: 0;
+	font-size: var(--font-caption);
+	color: var(--text-secondary);
 }
-.portfolio-position-summary {
+.portfolio-position-row > .portfolio-holdings {
+	grid-area: holdings;
+}
+.portfolio-position-row > .portfolio-position-values {
+	grid-area: value;
+}
+.portfolio-position-actions {
+	grid-area: actions;
 	display: flex;
-	flex-direction: column;
-	gap: var(--space-5);
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}
+.portfolio-position-extra {
+	grid-area: extra;
+	display: grid;
+	gap: var(--space-3);
 	min-width: 0;
+}
+@media (max-width: 64rem) {
+	.portfolio-position-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas: "market actions" "holdings holdings" "value value" "extra extra";
+		gap: var(--space-3);
+		padding: var(--space-4);
+	}
 }
 .portfolio-position-value {
 	display: flex;
@@ -590,7 +693,7 @@ button.outcome-button--no:hover:not(:disabled) {
 	overflow-wrap: anywhere;
 }
 .portfolio-position-value strong {
-	font-size: clamp(1.5rem, 4vw, 2.25rem);
+	font-size: var(--font-lg);
 	font-weight: 600;
 	line-height: var(--line-height-snug);
 }
@@ -614,19 +717,6 @@ button.outcome-button--no:hover:not(:disabled) {
 }
 .portfolio-holding-no {
 	color: var(--outcome-no);
-}
-.portfolio-positions > .entity-card-list {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
-	align-items: start;
-}
-.portfolio-record .entity-card-body > .badge {
-	justify-self: start;
-}
-.portfolio-record .entity-card-header-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-2);
 }
 .portfolio-position-values {
 	display: flex;
@@ -691,17 +781,6 @@ button.outcome-button--no:hover:not(:disabled) {
 		grid-column: 1 / -1;
 		justify-self: start;
 	}
-}
-
-.trade-holdings {
-	align-items: baseline;
-}
-.trade-holdings li {
-	opacity: 0.8;
-}
-.trade-holdings .selected-holding {
-	font-size: 1.5rem;
-	opacity: 1;
 }
 
 .market-list-heading {

@@ -307,59 +307,62 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			{selectedPool === undefined ? undefined : (
-				<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
-					<div className='trading-holdings-stage'>
-						<div className='trading-holdings-hero'>
-							<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
-							<strong className='trading-holdings-value'>
-								<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} />
-								{displayMaxRedeemableCompleteSets === undefined ? undefined : (
-									<span className='trading-holdings-backing'>
-										(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
-									</span>
-								)}
-							</strong>
-							<p className='detail'>{tradingCopy.completeSetBalanceLimitDetail}</p>
+			{/* Holdings beside the share actions, the same details-and-actions split as the Vaults tab. */}
+			<div className={selectedPool === undefined ? 'trading-workspace-layout is-single' : 'trading-workspace-layout'}>
+				{selectedPool === undefined ? undefined : (
+					<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
+						<div className='trading-holdings-stage'>
+							<div className='trading-holdings-hero'>
+								<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
+								<strong className='trading-holdings-value'>
+									<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} />
+									{displayMaxRedeemableCompleteSets === undefined ? undefined : (
+										<span className='trading-holdings-backing'>
+											(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
+										</span>
+									)}
+								</strong>
+								<p className='detail'>{tradingCopy.completeSetBalanceLimitDetail}</p>
+							</div>
+							<div className='trading-holdings-layout'>
+								<RankedBarList
+									className='trading-share-distribution'
+									emptyMessage={tradingCopy.walletBalancesUnavailable}
+									items={[
+										{
+											key: 'yes',
+											label: commonCopy.yes,
+											valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
+											...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
+										},
+										{
+											key: 'no',
+											label: commonCopy.no,
+											valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
+											...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
+										},
+										{
+											key: 'invalid',
+											label: commonCopy.invalid,
+											valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
+											...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
+										},
+									]}
+								/>
+								<p className='detail'>{tradingCopy.shareBackingDetail}</p>
+							</div>
 						</div>
-						<div className='trading-holdings-layout'>
-							<RankedBarList
-								className='trading-share-distribution'
-								emptyMessage={tradingCopy.walletBalancesUnavailable}
-								items={[
-									{
-										key: 'yes',
-										label: commonCopy.yes,
-										valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
-										...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
-									},
-									{
-										key: 'no',
-										label: commonCopy.no,
-										valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
-										...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
-									},
-									{
-										key: 'invalid',
-										label: commonCopy.invalid,
-										valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
-										...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
-									},
-								]}
-							/>
-							<p className='detail'>{tradingCopy.shareBackingDetail}</p>
-						</div>
+					</SectionBlock>
+				)}
+
+				<SectionBlock title={tradingCopy.shares} variant='embedded'>
+					<div className='vault-action-launcher-grid'>
+						{tradingLaunchers.map(action => (
+							<ActionLauncherCard key={action.key} action={action} pending={action.key === 'redeem-shares' && tradingActiveAction === 'redeemShares'} pendingLabel={tradingCopy.redeemingShares} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
+						))}
 					</div>
 				</SectionBlock>
-			)}
-
-			<SectionBlock title={tradingCopy.shares} variant='embedded'>
-				<div className='vault-action-launcher-grid'>
-					{tradingLaunchers.map(action => (
-						<ActionLauncherCard key={action.key} action={action} pending={action.key === 'redeem-shares' && tradingActiveAction === 'redeemShares'} pendingLabel={tradingCopy.redeemingShares} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
-					))}
-				</div>
-			</SectionBlock>
+			</div>
 
 			<ErrorNotice message={tradingError} />
 

@@ -65,6 +65,39 @@
 	min-width: 0;
 }
 
+/* An object page's way back to the list it was opened from, in the route header's eyebrow slot. */
+.route-back-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	min-height: var(--touch-target-min);
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	text-decoration: none;
+}
+
+.route-back-link:hover {
+	color: var(--text);
+	text-decoration: underline;
+}
+
+.route-title-row.has-aside {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-3);
+	align-items: center;
+}
+
+.route-title-row > [tabindex="-1"] {
+	outline-offset: var(--space-1);
+}
+
+.route-title-aside {
+	display: flex;
+	gap: var(--space-2);
+	align-items: center;
+}
+
 .section-block-title-row > [tabindex="-1"] {
 	width: fit-content;
 	max-width: 100%;

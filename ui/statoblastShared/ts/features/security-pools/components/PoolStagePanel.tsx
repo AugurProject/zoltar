@@ -11,27 +11,33 @@ function getStepState(index: number, currentIndex: number) {
 	return index === currentIndex ? 'current' : 'upcoming'
 }
 
-/** Operational → Escalation → Fork / Migration → Truth auction → Settled, with the current stage marked for assistive technology. */
+/**
+ * Operational → Escalation → Fork / Migration → Truth auction → Settled as a compact segmented bar under the current
+ * stage's name. Each segment keeps its stage name for assistive technology and as a hover title, and the current one is
+ * marked with `aria-current`.
+ */
 export function PoolLifecycleStepper({ step }: { step: PoolLifecycleStep | undefined }) {
 	if (step === undefined) return undefined
 	const currentIndex = POOL_LIFECYCLE_STEPS.indexOf(step)
 	const currentLabel = copy.lifecycleStepLabels[step]
 	return (
 		<nav className='pool-lifecycle' aria-label={copy.poolStage}>
+			<p className='pool-lifecycle-summary' aria-hidden='true'>
+				<span className='pool-lifecycle-summary-label'>{copy.poolStage}</span>
+				<span className='pool-lifecycle-summary-value'>
+					<strong>{currentLabel}</strong> <span className='pool-lifecycle-position'>{copy.lifecycleStepPosition(currentIndex + 1, POOL_LIFECYCLE_STEPS.length)}</span>
+				</span>
+			</p>
 			<ol className='pool-lifecycle-steps'>
 				{POOL_LIFECYCLE_STEPS.map((candidate, index) => {
 					const state = getStepState(index, currentIndex)
 					return (
-						<li key={candidate} className={state} aria-current={state === 'current' ? 'step' : undefined}>
-							<span className='pool-lifecycle-marker' aria-hidden='true'>
-								{state === 'completed' ? '✓' : (index + 1).toString()}
-							</span>
-							<span className='pool-lifecycle-label'>{copy.lifecycleStepLabels[candidate]}</span>
+						<li key={candidate} className={state} aria-current={state === 'current' ? 'step' : undefined} title={copy.lifecycleStepLabels[candidate]}>
+							<span className='visually-hidden'>{copy.lifecycleStepLabels[candidate]}</span>
 						</li>
 					)
 				})}
 			</ol>
-			<p className='pool-lifecycle-mobile'>{copy.lifecycleStepProgress(currentIndex + 1, POOL_LIFECYCLE_STEPS.length, currentLabel)}</p>
 		</nav>
 	)
 }

@@ -1,3 +1,4 @@
+import type { ComponentChildren } from 'preact'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as statoblastAppCopy from '../../../copy/app.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -39,30 +40,40 @@ function getSummaryPool(props: SecurityPoolObjectHeaderProps) {
 	return { ...props.selectedPoolSummaryPool, lastOraclePrice: props.currentPoolOraclePrice ?? props.selectedPoolSummaryPool.lastOraclePrice, lastOracleSettlementTimestamp: props.currentPoolOracleSettlementTimestamp ?? props.selectedPoolSummaryPool.lastOracleSettlementTimestamp }
 }
 
-export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
-	const { currentTimestamp, freshness, marketDetails, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
+/**
+ * The pool's identity with its next actions beside it, then one strip of the figures that decide what can happen next:
+ * collateral in use against capacity, the Open Oracle price, and the lifecycle stage.
+ */
+export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps & { actions?: ComponentChildren; lifecycle?: ComponentChildren; oracleStatus?: ComponentChildren }) {
+	const { actions, currentTimestamp, freshness, lifecycle, marketDetails, oracleStatus, selectedPoolHasActualForkActivity, selectedPoolLifecycleState, selectedPoolQuestionOutcome } = props
 	const summaryPool = getSummaryPool(props)
 	const capacity = summaryPool.totalUnderwritingLimitAttoEth
 	const statusBadgeLabel = getSecurityPoolStatusBadgeLabel({ hasForkActivity: selectedPoolHasActualForkActivity, lifecycleState: selectedPoolLifecycleState, ...(selectedPoolQuestionOutcome === undefined ? {} : { questionOutcome: selectedPoolQuestionOutcome }) })
 	return (
 		<div className='selected-pool-object-header pool-overview-header'>
-			<div className='pool-object-identity'>
-				<div className='pool-object-title'>
-					<FavoriteToggle app='statoblast' entityLabel={getQuestionTitle(marketDetails)} id={summaryPool.securityPoolAddress} kind='pool' />
-					<h2>{getQuestionTitle(marketDetails)}</h2>
+			<div className='pool-overview-title-row'>
+				<div className='pool-object-identity'>
+					<div className='pool-object-title'>
+						<FavoriteToggle app='statoblast' entityLabel={getQuestionTitle(marketDetails)} id={summaryPool.securityPoolAddress} kind='pool' />
+						<h2>{getQuestionTitle(marketDetails)}</h2>
+					</div>
+					<div className='pool-object-meta'>
+						<Badge ariaLabel={statusBadgeLabel} tone={getSecurityPoolStatusBadgeTone(selectedPoolLifecycleState)}>
+							{statusBadgeLabel}
+						</Badge>
+						<p className='pool-deadline'>
+							<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.questionEnded : securityPoolCopy.questionEnds}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
+						</p>
+						{freshness === undefined ? undefined : <UpdatedAgo {...freshness} />}
+					</div>
 				</div>
-				<div className='pool-object-meta'>
-					<Badge ariaLabel={statusBadgeLabel} tone={getSecurityPoolStatusBadgeTone(selectedPoolLifecycleState)}>
-						{statusBadgeLabel}
-					</Badge>
-					<p className='pool-deadline'>
-						<span>{currentTimestamp !== undefined && currentTimestamp >= marketDetails.endTime ? securityPoolCopy.questionEnded : securityPoolCopy.questionEnds}</span> <TimestampValue timestamp={marketDetails.endTime} {...(currentTimestamp === undefined ? {} : { currentTimestamp })} />
-					</p>
-					{freshness === undefined ? undefined : <UpdatedAgo {...freshness} />}
-				</div>
+				{actions}
 			</div>
-
-			<PoolCapacitySummary showUnavailableReason={false} capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
+			<div className='pool-status-strip'>
+				<PoolCapacitySummary showUnavailableReason={false} capacity={capacity} minted={summaryPool.settlementCollateralAttoEth} />
+				{oracleStatus}
+				{lifecycle}
+			</div>
 		</div>
 	)
 }

@@ -9,7 +9,6 @@ import { formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, forma
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
-import { EntityCard } from '@zoltar/ui-core-shared/components/EntityCard.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -24,8 +23,46 @@ import * as portfolioCopy from '../copy/portfolio.js'
 import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
 import { PortfolioActionItems, PortfolioRowActions, PortfolioRowValue, PortfolioSummary } from './PortfolioOverview.js'
 
-function LivePortfolioBalanceMetrics({ market, balances, valuation }: { market: LiveMarket; balances: LiveBalances; valuation: PortfolioValuation }) {
+function PortfolioHoldings({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
+	return (
+		<ul className='portfolio-holdings'>
+			{balances.yes === 0n ? undefined : (
+				<li className='portfolio-holding-yes'>
+					<OutcomeHolding amount={balances.yes} outcome={portfolioCopy.yes} market={market} />
+				</li>
+			)}
+			{balances.no === 0n ? undefined : (
+				<li className='portfolio-holding-no'>
+					<OutcomeHolding amount={balances.no} outcome={portfolioCopy.no} market={market} />
+				</li>
+			)}
+			{balances.invalid === 0n ? undefined : (
+				<li>
+					<OutcomeHolding amount={balances.invalid} outcome={portfolioCopy.invalid} market={market} />
+				</li>
+			)}
+			{balances.lp === 0n ? undefined : <li>{formatLpQuantity(balances.lp, 4, 'down')}</li>}
+		</ul>
+	)
+}
+
+function PortfolioValues({ market, balances, valuation }: { market: LiveMarket; balances: LiveBalances; valuation: PortfolioValuation }) {
 	const availability = settlementAvailability(market, balances)
+	return (
+		<div className='portfolio-position-values'>
+			<PortfolioRowValue valuation={valuation} />
+			{availability.completeSets === 0n ? undefined : (
+				<div className='portfolio-position-value is-secondary'>
+					<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
+					<strong>{formatCompleteSetQuantity(availability.completeSets)}</strong>
+					<small className='payout-caption'>({market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable})</small>
+				</div>
+			)}
+		</div>
+	)
+}
+
+function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; balances: LiveBalances }) {
 	const { yes: yesClaim, no: noClaim } = lpReserveClaims(market, balances.lp)
 	let coveredSets = balances.invalid
 	if (yesClaim < coveredSets) coveredSets = yesClaim
@@ -33,62 +70,30 @@ function LivePortfolioBalanceMetrics({ market, balances, valuation }: { market: 
 	const maximumYesExit = maximumInsuredExit({ longOutcome: 'YES', longBalance: balances.yes, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	return (
-		<>
-			<div className='portfolio-position-summary'>
-				<div className='portfolio-position-values'>
-					<PortfolioRowValue valuation={valuation} />
-					{availability.completeSets === 0n ? undefined : (
-						<div className='portfolio-position-value is-secondary'>
-							<span className='metric-label'>{availability.canRedeemCompleteSets ? payoutCopy.redemptionValue : payoutCopy.backingValue}</span>
-							<strong>{formatCompleteSetQuantity(availability.completeSets)}</strong>
-							<small className='payout-caption'>({market.loadError === undefined ? formatCollateralEth(availability.completeSets, market) : payoutCopy.unavailable})</small>
-						</div>
-					)}
-				</div>
-				<ul className='portfolio-holdings'>
-					{balances.yes === 0n ? undefined : (
-						<li className='portfolio-holding-yes'>
-							<OutcomeHolding amount={balances.yes} outcome={portfolioCopy.yes} market={market} />
-						</li>
-					)}
-					{balances.no === 0n ? undefined : (
-						<li className='portfolio-holding-no'>
-							<OutcomeHolding amount={balances.no} outcome={portfolioCopy.no} market={market} />
-						</li>
-					)}
-					{balances.invalid === 0n ? undefined : (
-						<li>
-							<OutcomeHolding amount={balances.invalid} outcome={portfolioCopy.invalid} market={market} />
-						</li>
-					)}
-					{balances.lp === 0n ? undefined : <li>{formatLpQuantity(balances.lp, 4, 'down')}</li>}
-				</ul>
-			</div>
-			<ReadOnlyDetailAccordion title={portfolioCopy.positionDetails}>
-				<SecurityPoolLink value={market.pool} />
-				{balances.lp === 0n ? undefined : (
-					<WorkflowSubsection title={portfolioCopy.lpClaims}>
-						<DataGrid dense>
-							<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeQuantity(yesClaim, portfolioCopy.yes)}</MetricField>
-							<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeQuantity(noClaim, portfolioCopy.no)}</MetricField>
-							<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
-						</DataGrid>
-					</WorkflowSubsection>
-				)}
-				<WorkflowSubsection title={portfolioCopy.insuredExits}>
+		<ReadOnlyDetailAccordion title={portfolioCopy.positionDetails}>
+			<SecurityPoolLink value={market.pool} />
+			{balances.lp === 0n ? undefined : (
+				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
-						<MetricField label={portfolioCopy.maximumInsuredYesExit}>{formatCollateralEth(maximumYesExit, market, 'down')}</MetricField>
-						<MetricField label={portfolioCopy.maximumInsuredNoExit}>{formatCollateralEth(maximumNoExit, market, 'down')}</MetricField>
+						<MetricField label={portfolioCopy.lpYesClaim}>{formatOutcomeQuantity(yesClaim, portfolioCopy.yes)}</MetricField>
+						<MetricField label={portfolioCopy.lpNoClaim}>{formatOutcomeQuantity(noClaim, portfolioCopy.no)}</MetricField>
+						<MetricField label={portfolioCopy.claimCoveredByInvalid}>{formatCompleteSetQuantity(coveredSets)}</MetricField>
 					</DataGrid>
 				</WorkflowSubsection>
-			</ReadOnlyDetailAccordion>
-			{market.questionOutcome === 3 && market.loadError === undefined ? (
-				<p className='detail payout-note'>
-					{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
-				</p>
-			) : null}
-		</>
+			)}
+			<WorkflowSubsection title={portfolioCopy.insuredExits}>
+				<DataGrid dense>
+					<MetricField label={portfolioCopy.maximumInsuredYesExit}>{formatCollateralEth(maximumYesExit, market, 'down')}</MetricField>
+					<MetricField label={portfolioCopy.maximumInsuredNoExit}>{formatCollateralEth(maximumNoExit, market, 'down')}</MetricField>
+				</DataGrid>
+			</WorkflowSubsection>
+		</ReadOnlyDetailAccordion>
 	)
+}
+
+/** Unresolved markets price outcome shares at their current backing; the note applies to every such row, so it is said once under the list. */
+function showsConditionalPayoutNote(entry: PortfolioBalanceEntry) {
+	return entry.balances !== undefined && entry.market.questionOutcome === 3 && entry.market.loadError === undefined
 }
 
 function renderPortfolioStatus(entry: PortfolioBalanceEntry) {
@@ -140,29 +145,46 @@ export function LivePortfolio({
 			{showSummary ? <PortfolioSummary overview={overview} /> : null}
 			{showSummary ? <PortfolioActionItems items={overview.actionItems} nowSeconds={nowSeconds} /> : null}
 			{visibleEntries.length === 0 ? null : (
-				<div className='entity-card-list'>
-					{overview.rows.map(row => (
-						<EntityCard
-							surface='card'
-							className='portfolio-record'
-							headerActions={row.canSell || row.canRedeem ? <PortfolioRowActions row={row} /> : undefined}
-							key={row.entry.market.pool}
-							dataAttributes={{ 'data-portfolio-pool': row.entry.market.pool }}
-							title={<a href={getTradingRouteHref(`#/market/${row.entry.market.pool}`)}>{row.entry.market.title}</a>}
-						>
-							{renderPortfolioStatus(row.entry)}
-							{row.entry.market.loadError === undefined ? (
-								<p className='detail'>
-									{liveCopy.questionEnd}: <TimestampValue timestamp={row.entry.market.endTime} relative={false} />
-								</p>
-							) : undefined}
-							{row.entry.balances === undefined ? <SecurityPoolLink value={row.entry.market.pool} /> : undefined}
-							{row.entry.error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(row.entry.error)} retry={retryBalances} />}
-							{row.entry.balances === undefined ? null : <LivePortfolioBalanceMetrics market={row.entry.market} balances={row.entry.balances} valuation={row.valuation} />}
-						</EntityCard>
-					))}
-				</div>
+				<ul className='portfolio-position-list' aria-label={portfolioCopy.positions}>
+					{overview.rows.map(row => {
+						const { market, balances, error } = row.entry
+						return (
+							<li key={market.pool} className='portfolio-position-row' data-portfolio-pool={market.pool}>
+								<div className='portfolio-position-market'>
+									<h3>
+										<a href={getTradingRouteHref(`#/market/${market.pool}`)}>{market.title}</a>
+									</h3>
+									{renderPortfolioStatus(row.entry)}
+									{market.loadError === undefined ? (
+										<p className='detail'>
+											{liveCopy.questionEnd}: <TimestampValue timestamp={market.endTime} relative={false} />
+										</p>
+									) : undefined}
+									{balances === undefined ? <SecurityPoolLink value={market.pool} /> : undefined}
+								</div>
+								{balances === undefined ? null : <PortfolioHoldings market={market} balances={balances} />}
+								{balances === undefined ? null : <PortfolioValues market={market} balances={balances} valuation={row.valuation} />}
+								{row.canSell || row.canRedeem ? (
+									<div className='portfolio-position-actions'>
+										<PortfolioRowActions row={row} />
+									</div>
+								) : null}
+								{error === undefined && balances === undefined ? null : (
+									<div className='portfolio-position-extra'>
+										{error === undefined ? null : <BalanceLoadError message={portfolioCopy.poolBalancesUnavailable(error)} retry={retryBalances} />}
+										{balances === undefined ? null : <PortfolioPositionDetails market={market} balances={balances} />}
+									</div>
+								)}
+							</li>
+						)
+					})}
+				</ul>
 			)}
+			{overview.rows.some(row => showsConditionalPayoutNote(row.entry)) ? (
+				<p className='detail payout-note'>
+					{payoutCopy.conditionalNote} {payoutCopy.holdingFeeNote}
+				</p>
+			) : null}
 		</div>
 	)
 }

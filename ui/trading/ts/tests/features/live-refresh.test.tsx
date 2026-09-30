@@ -50,7 +50,7 @@ function actionFeedback() {
 }
 
 function walletHolding(label: string) {
-	return document.querySelector(`.trade-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
+	return document.querySelector(`.market-holdings [data-outcome="${label.replace('Wallet ', '').toLowerCase()}"] .holding-quantity`)?.textContent ?? ''
 }
 
 async function renderDiscoveryController(services: Parameters<typeof useLiveTradingController>[0]['services']) {
@@ -616,7 +616,8 @@ describe('live market refresh', () => {
 			await waitForDom(() => rendered.container.querySelectorAll('.market-record').length === 1, `${route} candidate list`)
 			expect(universes.length).toBeGreaterThan(0)
 			expect(pagedRoutes.at(-1)).toBe(listRoute)
-			expect(rendered.container.querySelector('form.open-pool-form')).not.toBeNull()
+			// The market list's search opens a pasted pool address; the security-pool list keeps its address form.
+			expect(rendered.container.querySelector(listRoute === 'markets' ? 'form.market-list-search' : 'form.open-pool-form')).not.toBeNull()
 			expect(rendered.container.querySelector(`.market-record a[href="#/${route === 'create-market' ? 'create-market' : 'market'}/${pool}"]`)).not.toBeNull()
 			// The primary row action follows the workflow the landing names: the trade landing leads with one-click outcome buttons.
 			if (route === 'market') {

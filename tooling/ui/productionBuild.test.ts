@@ -506,7 +506,7 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		const pool = pools.find(pool => pool.universeId === BigInt(universe) && (kind === 'origin' ? pool.parent === zeroAddress : pool.parent !== zeroAddress && pool.truthAuction !== zeroAddress))
 		if (pool === undefined) throw new Error(`Seeded ${kind} pool was not found`)
 		expect(await driver.evaluate("document.querySelector('.discovery-control') === null")).toBe(true)
-		await driver.setInputByLabel('Search pools', pool.securityPool)
+		await driver.setInputByLabel('Search or paste a pool address', pool.securityPool)
 		await driver.waitForButtonEnabled('Open pool at this address')
 		await driver.clickButton('Open pool at this address')
 		await driver.waitForBodyText('All pools')

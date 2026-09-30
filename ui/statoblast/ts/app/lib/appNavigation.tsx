@@ -1,6 +1,5 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
 import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -61,7 +60,6 @@ export function getRouteSecondaryNavigation({
 					value: activeSecurityPoolsView,
 					onChange: setSecurityPoolsView,
 					options: [
-						{ href: getPoolsViewHref('open'), label: securityPoolCopy.openPool, value: 'open' },
 						{ href: getPoolsViewHref('browse'), label: commonCopy.browsePools, value: 'browse' },
 						{ href: getPoolsViewHref('create'), label: commonCopy.createPool, value: 'create' },
 						{ href: getPoolsViewHref('universes'), label: commonCopy.universe, value: 'universes' },

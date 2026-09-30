@@ -1,0 +1,47 @@
+import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
+import { formatOutcomeQuantity } from '../lib/shareValue.js'
+import type { LiveMarket, ShareOutcome } from '../protocol/live.js'
+import * as appCopy from '../copy/app.js'
+import { marketsCopy } from '../copy/markets.js'
+import * as ticketCopy from '../copy/tradeTicket.js'
+import * as workflowCopy from '../copy/workflows.js'
+import type { BalanceState } from './live/liveTradingTypes.js'
+import { BackingDetails } from './BackingDetails.js'
+import { BalanceLoadError } from './LiveTradingTransactionUi.js'
+import type { TicketBalances, TicketWallet } from './LivePositionControls.js'
+
+function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, balanceState: BalanceState) {
+	if (value !== undefined) return formatOutcomeQuantity(value, outcome)
+	if (balanceState === 'loading') return appCopy.loadingBalances
+	if (balanceState === 'error') return appCopy.unavailable
+	// The ticket's primary button already offers to connect; the holdings stay quiet until a wallet is known.
+	return ticketCopy.noBalance
+}
+
+/**
+ * The wallet's YES, NO, and INVALID shares in this market, shown in the reading column so every ticket view keeps them in sight.
+ * `ownsBalanceError` is false while the open ticket view (liquidity or settlement) already reports a failed balance read with its retry.
+ */
+export function MarketPosition({ market, holdings, wallet, disabled, ownsBalanceError }: { market: LiveMarket; holdings: TicketBalances; wallet: Pick<TicketWallet, 'networkMismatchReason'>; disabled: boolean; ownsBalanceError: boolean }) {
+	const outcomes = [
+		{ outcome: 'yes', className: 'portfolio-holding-yes', value: holdings.balances?.yes, quantityOutcome: workflowCopy.yes, caption: workflowCopy.walletYes },
+		{ outcome: 'no', className: 'portfolio-holding-no', value: holdings.balances?.no, quantityOutcome: workflowCopy.no, caption: workflowCopy.walletNo },
+		{ outcome: 'invalid', className: undefined, value: holdings.balances?.invalid, quantityOutcome: 'INVALID' as const, caption: workflowCopy.walletInvalid },
+	] as const
+	return (
+		<section className='market-position' aria-labelledby='market-position-heading' aria-busy={holdings.balanceState === 'loading'}>
+			<h3 id='market-position-heading'>{marketsCopy.yourPosition}</h3>
+			<ul className='portfolio-holdings market-holdings'>
+				{outcomes.map(item => (
+					<li key={item.outcome} className={item.className} data-outcome={item.outcome}>
+						<span className='holding-quantity'>{walletBalanceLabel(item.value, item.quantityOutcome, holdings.balanceState)}</span>
+						<small className='payout-caption'>{item.caption}</small>
+					</li>
+				))}
+			</ul>
+			{holdings.balanceState === 'loading' && holdings.balances !== undefined ? <LoadingText>{appCopy.loadingBalances}</LoadingText> : undefined}
+			{ownsBalanceError && holdings.balanceState === 'error' && wallet.networkMismatchReason === undefined ? <BalanceLoadError message={workflowCopy.walletBalancesUnavailable(holdings.balanceError ?? workflowCopy.balanceRefreshFailed)} retry={holdings.retry} disabled={disabled} /> : null}
+			<BackingDetails market={market} />
+		</section>
+	)
+}
