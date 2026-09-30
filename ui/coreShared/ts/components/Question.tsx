@@ -141,7 +141,10 @@ export function Question({ abbreviateIdentifier = false, additionalMetrics, clas
 						{descriptionNode}
 					</div>
 				)}
-				<OutcomeChipRow items={outcomeItems} />
+				<div className='question-preview-outcomes'>
+					<span className='question-preview-meta-label'>{commonCopy.outcomes}</span>
+					<OutcomeChipRow items={outcomeItems} />
+				</div>
 				<div className='question-preview-timeline' role='list' aria-label={commonCopy.questionTimeline}>
 					<div className='question-preview-timeline-item' role='listitem'>
 						<span className='question-preview-timeline-label'>{commonCopy.created}</span>

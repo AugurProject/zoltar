@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
+import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultExecutePendingOperationGuardMessage, getVaultRedeemRepGuardMessage, getVaultRequestPriceGuardMessage, getVaultWithdrawGuardMessage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultGuards.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 
@@ -210,5 +210,30 @@ describe('security vault guards', () => {
 				walletBalanceAttoEth: 5n * ATTO_ETH_PER_ETH,
 			}),
 		).toBe('Need 7\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
+	})
+
+	test('blocks REP redemption until the commitment is exited', () => {
+		// SecurityPool.redeemRepFromVault requires underwritingLimitAttoEth == 0.
+		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: 0n, redeemableRepAmountAttoRep: 5n, underwritingLimitAttoEth: 1n })).toBe('Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.')
+		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: 0n, redeemableRepAmountAttoRep: 5n, underwritingLimitAttoEth: 0n })).toBeUndefined()
+		expect(getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: 1n, redeemableRepAmountAttoRep: 5n, underwritingLimitAttoEth: 1n })).toBe('Settle escalation deposits before redeeming REP.')
+	})
+
+	test('blocks a withdrawal when no price can bound the REP a commitment locks', () => {
+		expect(
+			getVaultWithdrawGuardMessage({
+				requiredCostAttoEth: undefined,
+				stagedOperationTimeoutMinutes: 5n,
+				withdrawAmount: 1n,
+				withdrawableRepAmountAttoRep: undefined,
+				walletBalanceAttoEth: 1n,
+			}),
+		).toBe('A REP price is needed to estimate how much REP your commitment keeps locked. Request a new oracle price or lower the commitment limit first.')
+	})
+
+	test('explains a deposit that the minimum rejects only through rounding or an existing low vault', () => {
+		const base = { approvalSatisfied: true, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: 10n * ATTO_ETH_PER_ETH, walletRepShortfallAttoRep: undefined }
+		expect(getVaultDepositGuardMessage({ ...base, depositAmount: 10n * ATTO_ETH_PER_ETH })).toBe('Pool rounding would credit this vault slightly less than the 10\u00a0REP minimum. Deposit a little more.')
+		expect(getVaultDepositGuardMessage({ ...base, currentVaultRepBackingAttoRep: 4n * ATTO_ETH_PER_ETH, depositAmount: ATTO_ETH_PER_ETH })).toBe('This vault must hold at least 10\u00a0REP after the deposit. Deposit more REP.')
 	})
 })

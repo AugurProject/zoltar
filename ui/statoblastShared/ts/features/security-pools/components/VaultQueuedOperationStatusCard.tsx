@@ -32,11 +32,14 @@ function getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, sec
 
 function getQueuedVaultOperationStatus({
 	currentPoolOracleManagerDetails,
+	directExecution = false,
 	loadingSecurityVault,
 	queuedVaultOperation,
 	securityVaultResult,
 }: {
 	currentPoolOracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
+	/** A direct pool call is mined when its result arrives; it never enters the oracle queue. */
+	directExecution?: boolean
 	loadingSecurityVault: boolean
 	queuedVaultOperation: ReturnType<typeof getQueuedVaultOperation>
 	securityVaultResult: SecurityVaultSectionProps['securityVaultResult']
@@ -44,6 +47,7 @@ function getQueuedVaultOperationStatus({
 	if (securityVaultResult?.action !== 'queueWithdrawRep' && securityVaultResult?.action !== 'setVaultUnderwritingLimit') return undefined
 	if (securityVaultResult.queuedOperationState !== undefined) return securityVaultResult.queuedOperationState.status
 	if (securityVaultResult.stagedExecution !== undefined) return securityVaultResult.stagedExecution.success ? 'executed' : 'failed'
+	if (directExecution && securityVaultResult.queuedOperation === undefined) return 'executed'
 	if (queuedVaultOperation !== undefined && (queuedVaultOperation.isConfirmedActive || currentPoolOracleManagerDetails === undefined)) return queuedVaultOperation.isPendingSlot ? 'queued' : 'manual-queued'
 	if (loadingSecurityVault || currentPoolOracleManagerDetails === undefined) return 'refreshing'
 	return 'missing'
@@ -192,7 +196,10 @@ export function VaultQueuedOperationStatusCards({
 	selectedVaultOwner,
 	loadingSecurityVault,
 	onViewStagedOperations,
+	directExecution = false,
 }: {
+	/** Commitment changes after resolution go straight to the pool instead of the oracle queue. */
+	directExecution?: boolean
 	results: readonly NonNullable<SecurityVaultSectionProps['securityVaultResult']>[]
 	operation: 'withdrawRep' | 'setVaultUnderwritingLimit'
 	oracleManagerDetails: SecurityVaultSectionProps['oracleManagerDetails']
@@ -233,7 +240,7 @@ export function VaultQueuedOperationStatusCards({
 				.filter(result => result.action === action)
 				.map(result => {
 					const queuedVaultOperation = getQueuedVaultOperation({ oracleManagerDetails, selectedVaultOwner, securityVaultResult: result })
-					const status = getQueuedVaultOperationStatus({ currentPoolOracleManagerDetails: oracleManagerDetails, loadingSecurityVault, queuedVaultOperation, securityVaultResult: result })
+					const status = getQueuedVaultOperationStatus({ currentPoolOracleManagerDetails: oracleManagerDetails, directExecution, loadingSecurityVault, queuedVaultOperation, securityVaultResult: result })
 					return (
 						<VaultQueuedOperationStatusCard
 							key={result.queuedOperation?.operationId.toString() ?? result.hash}

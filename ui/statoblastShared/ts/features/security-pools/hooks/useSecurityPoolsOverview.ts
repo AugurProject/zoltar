@@ -12,17 +12,17 @@ import { createErrorActionFeedback, createPendingActionFeedback, createSuccessAc
 import { createLiquidationFailurePresentation, createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../../transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
-import { parseAddressInput, parseBytes32Input, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
+import { parseAddressInput, parseBytes32Input } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { parseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import { useSecurityPoolBrowsePage } from './useSecurityPoolBrowsePage.js'
+import { useLiquidationReceiverVault } from './useLiquidationReceiverVault.js'
 import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
-import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { defaultUseSecurityPoolsOverviewDependencies, type SecurityPoolsOverviewProductionWriteClient, type UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
 export type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
@@ -43,15 +43,10 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const liquidationDebtEthAmount = useSignal('0')
 	const maximumLiquidationDebtAttoEth = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
-	const liquidationReceiverVault = useSignal('')
 	const liquidationApprovalId = useSignal(`0x${'00'.repeat(32)}`)
 	const liquidationApprovalDetails = useSignal<LiquidationApprovalDetails | undefined>(undefined)
 	const liquidationApprovalError = useSignal<string | undefined>(undefined)
 	const liquidationApprovalLoadingKey = useSignal<string | undefined>(undefined)
-	const liquidationReceiverVaultSummary = useSignal<SecurityPoolVaultSummary | undefined>(undefined)
-	const liquidationReceiverVaultSummaryError = useSignal<string | undefined>(undefined)
-	const liquidationReceiverVaultSummaryResolvedKey = useSignal<string | undefined>(undefined)
-	const liquidationReceiverVaultSummaryLoadingKey = useSignal<string | undefined>(undefined)
 	const liquidationTimeoutMinutes = useSignal(DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString())
 	const liquidationManagerAddress = useSignal<Address | undefined>(undefined)
 	const liquidationFundingPrice = useSignal<bigint | undefined>(undefined)
@@ -61,13 +56,19 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const liquidationFundingPreviewLoadingKey = useSignal<string | undefined>(undefined)
 	const liquidationFundingPreviewResolvedKey = useSignal<string | undefined>(undefined)
 	const liquidationSecurityPoolAddress = useSignal<Address | undefined>(undefined)
+	const receiver = useLiquidationReceiverVault({
+		accountAddress,
+		latestEnvironmentRefreshKey,
+		liquidationSecurityPoolAddress,
+		loadSecurityPoolVaultSummary: dependencies.loadSecurityPoolVaultSummary,
+		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
+	})
 	const liquidationModalOpen = useSignal(false)
 	const universeDirectoryPools = useSignal<ListedSecurityPool[] | undefined>(undefined)
 	const securityPoolsLoad = useLoadController()
 	const universeDirectoryLoad = useLoadController()
 	const liquidationFundingPreviewLoad = useLoadController()
 	const liquidationApprovalLoad = useLoadController()
-	const liquidationReceiverVaultSummaryLoad = useLoadController()
 	const securityPoolsLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const universeDirectoryLoadedEnvironmentRefreshKey = useSignal<number | undefined>(undefined)
 	const checkedSecurityPoolAddress = useSignal<string | undefined>(undefined)
@@ -85,16 +86,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const nextUniverseDirectoryLoad = useRequestGuard()
 	const nextLiquidationFundingPreviewLoad = useRequestGuard()
 	const nextLiquidationApprovalLoad = useRequestGuard()
-	const nextLiquidationReceiverVaultSummaryLoad = useRequestGuard()
-	const browsePage = useSecurityPoolBrowsePage({
-		accountAddress,
-		environmentRefreshKey,
-		loadSecurityPoolPage: dependencies.loadSecurityPoolPage,
-		setOverviewError: message => {
-			securityPoolOverviewError.value = message
-		},
-		waitForSecurityPoolReadBackend: dependencies.waitForSecurityPoolReadBackend,
-	})
 
 	const securityPoolsCommitVersion = useRef(0)
 	const getLineageQueryKey = (address: string | undefined) => (address === undefined ? undefined : `${environmentRefreshKey}:${address}:${accountAddress?.toLowerCase() ?? 'no-account'}`)
@@ -282,61 +273,10 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return result !== undefined && getCurrentLiquidationApprovalRequestKey() === requestKey
 	}
 
-	const getCurrentLiquidationReceiverVaultSummaryRequestKey = () => {
-		const securityPoolAddress = liquidationSecurityPoolAddress.value
-		if (securityPoolAddress === undefined) return undefined
-		const receiverVault = tryParseAddressInput(liquidationReceiverVault.value)
-		if (receiverVault === undefined) return undefined
-		return `${latestEnvironmentRefreshKey.current}:${securityPoolAddress.toLowerCase()}:${receiverVault.toLowerCase()}`
-	}
-
-	const loadLiquidationReceiverVaultSummary = async () => {
-		const securityPoolAddress = liquidationSecurityPoolAddress.value
-		if (securityPoolAddress === undefined) {
-			liquidationReceiverVaultSummaryError.value = 'Selected pool details are still loading.'
-			return false
-		}
-		let receiverVault: Address
-		try {
-			receiverVault = parseAddressInput(liquidationReceiverVault.value, 'Receiver vault')
-		} catch (error) {
-			liquidationReceiverVaultSummary.value = undefined
-			liquidationReceiverVaultSummaryError.value = getErrorMessage(error, 'Enter a valid receiver vault')
-			return false
-		}
-		const requestKey = `${latestEnvironmentRefreshKey.current}:${securityPoolAddress.toLowerCase()}:${receiverVault.toLowerCase()}`
-		const isCurrent = nextLiquidationReceiverVaultSummaryLoad()
-		const result = await liquidationReceiverVaultSummaryLoad.run({
-			isCurrent,
-			onStart: () => {
-				liquidationReceiverVaultSummary.value = undefined
-				liquidationReceiverVaultSummaryError.value = undefined
-				liquidationReceiverVaultSummaryResolvedKey.value = undefined
-				liquidationReceiverVaultSummaryLoadingKey.value = requestKey
-			},
-			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
-			load: async () => {
-				return await dependencies.loadSecurityPoolVaultSummary(securityPoolAddress, receiverVault)
-			},
-			onSuccess: summary => {
-				if (getCurrentLiquidationReceiverVaultSummaryRequestKey() !== requestKey) return
-				liquidationReceiverVaultSummary.value = summary
-				liquidationReceiverVaultSummaryResolvedKey.value = requestKey
-			},
-			onError: error => {
-				if (getCurrentLiquidationReceiverVaultSummaryRequestKey() !== requestKey) return
-				liquidationReceiverVaultSummaryError.value = getErrorMessage(error, 'Failed to load receiver vault')
-			},
-		})
-		if (liquidationReceiverVaultSummaryLoadingKey.value === requestKey) liquidationReceiverVaultSummaryLoadingKey.value = undefined
-		return result !== undefined && getCurrentLiquidationReceiverVaultSummaryRequestKey() === requestKey
-	}
-
 	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
 		nextLiquidationFundingPreviewLoad()
 		liquidationFundingPrice.value = undefined
 		nextLiquidationApprovalLoad()
-		nextLiquidationReceiverVaultSummaryLoad()
 		securityPoolOverviewError.value = undefined
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewFeedback.value = undefined
@@ -350,15 +290,11 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		maximumLiquidationDebtAttoEth.value = maxAmount
 		liquidationSecurityPoolAddress.value = securityPoolAddress
 		liquidationTargetVault.value = vaultAddress
-		liquidationReceiverVault.value = accountAddress ?? ''
+		receiver.changeReceiverVault(accountAddress ?? '')
 		liquidationApprovalId.value = `0x${'00'.repeat(32)}`
 		liquidationApprovalDetails.value = undefined
 		liquidationApprovalError.value = undefined
 		liquidationApprovalLoadingKey.value = undefined
-		liquidationReceiverVaultSummary.value = undefined
-		liquidationReceiverVaultSummaryError.value = undefined
-		liquidationReceiverVaultSummaryResolvedKey.value = undefined
-		liquidationReceiverVaultSummaryLoadingKey.value = undefined
 		liquidationTimeoutMinutes.value = DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES.toString()
 		liquidationModalOpen.value = true
 	}
@@ -367,7 +303,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		nextLiquidationFundingPreviewLoad()
 		liquidationFundingPrice.value = undefined
 		nextLiquidationApprovalLoad()
-		nextLiquidationReceiverVaultSummaryLoad()
+		receiver.resetSummary()
 		securityPoolLiquidationError.value = undefined
 		securityPoolOverviewFeedback.value = undefined
 		securityPoolOverviewResult.value = undefined
@@ -379,10 +315,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationApprovalDetails.value = undefined
 		liquidationApprovalError.value = undefined
 		liquidationApprovalLoadingKey.value = undefined
-		liquidationReceiverVaultSummary.value = undefined
-		liquidationReceiverVaultSummaryError.value = undefined
-		liquidationReceiverVaultSummaryResolvedKey.value = undefined
-		liquidationReceiverVaultSummaryLoadingKey.value = undefined
 		liquidationModalOpen.value = false
 	}
 
@@ -399,7 +331,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationDebtEthAmount.value === snapshot.amount &&
 		liquidationManagerAddress.value === snapshot.managerAddress &&
 		liquidationSecurityPoolAddress.value === snapshot.securityPoolAddress &&
-		liquidationReceiverVault.value === snapshot.receiverVault &&
+		receiver.receiverVault.value === snapshot.receiverVault &&
 		liquidationTargetVault.value === snapshot.targetVault &&
 		liquidationTimeoutMinutes.value === snapshot.timeoutMinutes
 
@@ -410,7 +342,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 			approvalId: liquidationApprovalId.value,
 			amount: liquidationDebtEthAmount.value,
 			managerAddress,
-			receiverVault: liquidationReceiverVault.value,
+			receiverVault: receiver.receiverVault.value,
 			securityPoolAddress,
 			targetVault: liquidationTargetVault.value,
 			timeoutMinutes: liquidationTimeoutMinutes.value,
@@ -512,14 +444,10 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const currentLiquidationFundingPreview = currentLiquidationFundingPreviewRequestKey !== undefined && liquidationFundingPreviewResolvedKey.value === currentLiquidationFundingPreviewRequestKey ? liquidationFundingPreview.value : undefined
 	const currentLiquidationFundingPreviewError = liquidationFundingPreviewErrorKey.value === currentLiquidationFundingPreviewRequestKey ? liquidationFundingPreviewError.value : undefined
 	const loadingCurrentLiquidationFundingPreview = currentLiquidationFundingPreviewRequestKey !== undefined && liquidationFundingPreviewLoadingKey.value === currentLiquidationFundingPreviewRequestKey && liquidationFundingPreviewLoad.isLoading.value
-	const currentLiquidationReceiverVaultSummaryRequestKey = getCurrentLiquidationReceiverVaultSummaryRequestKey()
-	const hasResolvedCurrentLiquidationReceiverVaultSummary = currentLiquidationReceiverVaultSummaryRequestKey !== undefined && liquidationReceiverVaultSummaryResolvedKey.value === currentLiquidationReceiverVaultSummaryRequestKey
 	const currentLiquidationApprovalRequestKey = getCurrentLiquidationApprovalRequestKey()
 	const loadingCurrentLiquidationApproval = currentLiquidationApprovalRequestKey !== undefined && liquidationApprovalLoadingKey.value === currentLiquidationApprovalRequestKey && liquidationApprovalLoad.isLoading.value
-	const loadingCurrentLiquidationReceiverVaultSummary = currentLiquidationReceiverVaultSummaryRequestKey !== undefined && liquidationReceiverVaultSummaryLoadingKey.value === currentLiquidationReceiverVaultSummaryRequestKey && liquidationReceiverVaultSummaryLoad.isLoading.value
 
 	return {
-		...browsePage,
 		liquidationDebtEthAmount: liquidationDebtEthAmount.value,
 		maximumLiquidationDebtAttoEth: maximumLiquidationDebtAttoEth.value,
 		liquidationManagerAddress: liquidationManagerAddress.value,
@@ -527,13 +455,13 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationFundingPreviewError: currentLiquidationFundingPreviewError,
 		liquidationModalOpen: liquidationModalOpen.value,
 		liquidationTargetVault: liquidationTargetVault.value,
-		liquidationReceiverVault: liquidationReceiverVault.value,
+		liquidationReceiverVault: receiver.receiverVault.value,
 		liquidationApprovalId: liquidationApprovalId.value,
 		liquidationApprovalDetails: liquidationApprovalDetails.value,
 		liquidationApprovalError: liquidationApprovalError.value,
-		liquidationReceiverVaultSummary: hasResolvedCurrentLiquidationReceiverVaultSummary ? liquidationReceiverVaultSummary.value : undefined,
-		liquidationReceiverVaultSummaryError: liquidationReceiverVaultSummaryError.value,
-		liquidationReceiverVaultSummaryResolved: hasResolvedCurrentLiquidationReceiverVaultSummary,
+		liquidationReceiverVaultSummary: receiver.summary,
+		liquidationReceiverVaultSummaryError: receiver.summaryError,
+		liquidationReceiverVaultSummaryResolved: receiver.resolved,
 		liquidationTimeoutMinutes: liquidationTimeoutMinutes.value,
 		checkedSecurityPoolAddress: checkedSecurityPoolAddress.value,
 		hasLoadedSecurityPools: securityPoolsLoadedEnvironmentRefreshKey.value === environmentRefreshKey,
@@ -544,11 +472,11 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		loadingUniverseDirectoryPools: universeDirectoryLoad.isLoading.value,
 		loadingLiquidationFundingPreview: loadingCurrentLiquidationFundingPreview,
 		loadingLiquidationApproval: loadingCurrentLiquidationApproval,
-		loadingLiquidationReceiverVaultSummary: loadingCurrentLiquidationReceiverVaultSummary,
+		loadingLiquidationReceiverVaultSummary: receiver.loading,
 		closeLiquidationModal,
 		loadLiquidationFundingPreview,
 		loadLiquidationApproval,
-		loadLiquidationReceiverVaultSummary,
+		loadLiquidationReceiverVaultSummary: receiver.loadReceiverVaultSummary,
 		openLiquidationModal,
 		queueLiquidation,
 		securityPoolOverviewActiveAction: securityPoolOverviewActiveAction.value,
@@ -570,14 +498,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		setLiquidationTargetVault: (value: string) => {
 			liquidationTargetVault.value = value
 		},
-		setLiquidationReceiverVault: (value: string) => {
-			nextLiquidationReceiverVaultSummaryLoad()
-			liquidationReceiverVault.value = value
-			liquidationReceiverVaultSummary.value = undefined
-			liquidationReceiverVaultSummaryError.value = undefined
-			liquidationReceiverVaultSummaryResolvedKey.value = undefined
-			liquidationReceiverVaultSummaryLoadingKey.value = undefined
-		},
+		setLiquidationReceiverVault: receiver.changeReceiverVault,
 		setLiquidationApprovalId: (value: string) => {
 			nextLiquidationApprovalLoad()
 			liquidationApprovalId.value = value

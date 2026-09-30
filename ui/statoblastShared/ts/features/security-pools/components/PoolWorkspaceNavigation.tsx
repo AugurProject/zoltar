@@ -1,5 +1,5 @@
-import { useRef } from 'preact/hooks'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
+import { useDisclosurePopover } from '@zoltar/ui-core-shared/hooks/useDisclosurePopover.js'
 import { getSelectedPoolViewLabel, type SelectedPoolView } from '../lib/securityPoolWorkflow.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as copy from '../../../copy/poolWorkspace.js'
@@ -21,43 +21,48 @@ function getPoolWorkspaceViews(view: SelectedPoolView, forkWorkflowPrimary: bool
 	}
 }
 
+/** Secondary pool tools in a popover anchored to a tab-styled trigger, so opening it never pushes the workspace down. */
+function PoolToolsMenu({ onChange, toolViews, view }: { onChange: (view: SelectedPoolView) => void; toolViews: readonly SelectedPoolView[]; view: SelectedPoolView }) {
+	const popover = useDisclosurePopover()
+	if (toolViews.length === 0) return undefined
+	return (
+		<div className='pool-tools-menu' ref={popover.containerRef}>
+			<button {...popover.triggerProps} aria-label={copy.moreTools} className='view-tab pool-tools-trigger' onClick={popover.toggle}>
+				{/* Phones show the short label so the three pool tabs and the trigger fit on one row. */}
+				<span className='pool-tools-label-long'>{copy.moreTools}</span>
+				<span className='pool-tools-label-short'>{copy.moreToolsShort}</span>
+				<span className='pool-tools-caret' aria-hidden='true' />
+			</button>
+			{popover.open ? (
+				<ul className='pool-tools-options' id={popover.panelId}>
+					{toolViews.map(value => (
+						<li key={value}>
+							<button
+								type='button'
+								className={value === view ? 'active' : undefined}
+								aria-current={value === view ? 'true' : undefined}
+								onClick={() => {
+									onChange(value)
+									popover.close()
+									popover.triggerRef.current?.focus()
+								}}
+							>
+								{getSelectedPoolViewLabel(value)}
+							</button>
+						</li>
+					))}
+				</ul>
+			) : undefined}
+		</div>
+	)
+}
+
 export function PoolWorkspaceNavigation({ forkWorkflowPrimary = false, view, onChange, panelId }: { forkWorkflowPrimary?: boolean; view: SelectedPoolView; onChange: (view: SelectedPoolView) => void; panelId: string }) {
-	const menu = useRef<HTMLDetailsElement>(null)
 	const { mainViews, toolViews } = getPoolWorkspaceViews(view, forkWorkflowPrimary)
 	return (
 		<div className='pool-workspace-navigation'>
 			<ViewTabs ariaLabel={securityPoolCopy.selectedPoolViews} className='selected-pool-workspace-tabs' semantics='tabs' size='compact' value={view} onChange={onChange} options={mainViews.map(value => ({ id: `selected-pool-view-${value}`, label: getSelectedPoolViewLabel(value), panelId, value }))} />
-			<details
-				className='pool-tools-disclosure'
-				ref={menu}
-				onKeyDown={event => {
-					if (event.key === 'Escape' && menu.current !== null) {
-						menu.current.open = false
-						menu.current.querySelector('summary')?.focus()
-					}
-				}}
-			>
-				<summary>{copy.moreTools}</summary>
-				<div className='pool-tools-options'>
-					{toolViews.map(value => (
-						<button
-							key={value}
-							type='button'
-							className='quiet'
-							aria-pressed={value === view}
-							onClick={() => {
-								onChange(value)
-								if (menu.current !== null) {
-									menu.current.open = false
-									menu.current.querySelector('summary')?.focus()
-								}
-							}}
-						>
-							{getSelectedPoolViewLabel(value)}
-						</button>
-					))}
-				</div>
-			</details>
+			<PoolToolsMenu onChange={onChange} toolViews={toolViews} view={view} />
 		</div>
 	)
 }

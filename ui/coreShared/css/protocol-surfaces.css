@@ -1167,6 +1167,31 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 	gap: 1rem;
 }
 
+/* The modal header already draws a rule, so a leading embedded section does not add a second one. */
+.operation-modal-body > .section-block.embedded:first-child {
+	padding-top: 0;
+	border-top: 0;
+}
+
+/* An opt-in custom approval amount stays collapsed behind a quiet disclosure that matches other secondary details. */
+.approval-amount-disclosure > summary {
+	width: fit-content;
+	padding: var(--space-2) 0;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.approval-amount-disclosure > summary:hover {
+	color: var(--text);
+}
+
+.approval-amount-disclosure[open] {
+	display: grid;
+	gap: var(--space-2);
+}
+
 /* The form stays in place, disabled, while its transaction steps are reviewed and sent below it, so nothing moves. */
 .operation-modal-body[inert],
 .operation-modal-body [inert] {

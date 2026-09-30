@@ -16,6 +16,8 @@ type TokenApprovalControlProps = {
 	compact?: boolean
 	/** Keeps a finished approval in place, disabled, labelled with its result instead of removing the control. */
 	completedLabel?: string | undefined
+	/** When set, the custom approval amount field sits collapsed behind a disclosure with this summary; the default approves exactly the required amount. */
+	customAmountDisclosureLabel?: string | undefined
 	showRequirementNotice?: boolean
 	renderActions?: (approval: { button: ComponentChildren; notice: string | undefined; noticeId: string }) => ComponentChildren
 	actionLabel: string
@@ -74,6 +76,7 @@ function resolveApprovalButtonLabel({
 export function TokenApprovalControl({
 	compact = false,
 	completedLabel,
+	customAmountDisclosureLabel,
 	showRequirementNotice = true,
 	renderActions,
 	guardMessageElementId,
@@ -183,6 +186,23 @@ export function TokenApprovalControl({
 			showDisabledReason={completedLabel === undefined && allowanceMessage === undefined && amountValidationMessage === undefined && (guardMessage === undefined || guardMessageElementId === undefined)}
 		/>
 	)
+	const amountField = (
+		<label className='field approval-amount-field'>
+			<span className='approval-amount-label'>{commonCopy.formatValueApprovalAmount(tokenSymbol)}</span>
+			<div className='field-inline approval-amount-controls'>
+				<FormInput
+					aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}
+					className='field-inline-input'
+					value={amountValue}
+					onInput={event => setDraftAmount(event.currentTarget.value)}
+					placeholder={amountPlaceholder}
+					title={completedLabel === undefined && recommendedAmount === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}
+					invalid={amountValidationMessage !== undefined}
+					disabled={controlsDisabled}
+				/>
+			</div>
+		</label>
+	)
 	return (
 		<div className='form-grid'>
 			<MetricGrid>
@@ -194,21 +214,14 @@ export function TokenApprovalControl({
 				</MetricField>
 			</MetricGrid>
 
-			<label className='field approval-amount-field'>
-				<span className='approval-amount-label'>{commonCopy.formatValueApprovalAmount(tokenSymbol)}</span>
-				<div className='field-inline approval-amount-controls'>
-					<FormInput
-						aria-describedby={amountValidationMessage === undefined ? undefined : amountValidationMessageId}
-						className='field-inline-input'
-						value={amountValue}
-						onInput={event => setDraftAmount(event.currentTarget.value)}
-						placeholder={amountPlaceholder}
-						title={completedLabel === undefined && recommendedAmount === undefined ? commonCopy.leaveBlankForRequiredTotal : undefined}
-						invalid={amountValidationMessage !== undefined}
-						disabled={controlsDisabled}
-					/>
-				</div>
-			</label>
+			{customAmountDisclosureLabel === undefined || completedLabel !== undefined ? (
+				amountField
+			) : (
+				<details className='approval-amount-disclosure'>
+					<summary>{customAmountDisclosureLabel}</summary>
+					{amountField}
+				</details>
+			)}
 			{renderActions !== undefined || amountValidationMessage === undefined ? undefined : (
 				<p className='field-error' id={amountValidationMessageId} role='alert'>
 					{amountValidationMessage}

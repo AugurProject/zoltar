@@ -32,6 +32,8 @@ export type OverviewRepPricesProps = {
 	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceLabel?: ComponentChildren
 	repPerEthSourceUrl: string | undefined
+	/** Why REP / ETH has no price when the reason is not a quote failure, such as a price that needs a selected pool. */
+	repPerEthUnavailableLabel?: ComponentChildren
 	repUsdcFailure: RepPriceFailure | undefined
 	repUsdcPrice: bigint | undefined
 	repUsdcSource: RepPriceSource | undefined
@@ -76,16 +78,20 @@ function omitPresentationActionHint(presentation: UserMessagePresentation) {
 	return presentationWithoutActionHint
 }
 
-function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
-	if (failure === undefined) return undefined
+function renderRepPriceUnavailable(label: ComponentChildren) {
 	return (
 		<span className='currency-value unavailable rep-price-failure' role='status'>
-			{failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity}
+			{label}
 		</span>
 	)
 }
 
-function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceLabel, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl }: OverviewRepPricesProps) {
+function renderRepPriceFailure(failure: RepPriceFailure | undefined) {
+	if (failure === undefined) return undefined
+	return renderRepPriceUnavailable(failure === 'rpc-error' ? appCopy.repPriceRequestFailed : appCopy.repPriceNoLiquidity)
+}
+
+function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceLabel, repPerEthSourceUrl, repPerEthUnavailableLabel, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl }: OverviewRepPricesProps) {
 	const activeNetworkProfile = getActiveNetworkProfile()
 	const isRepPricingUnavailable = activeNetworkProfile.repPricingMode === 'unavailable'
 	const repPricingUnavailableLabel = appCopy.formatRepPricingUnavailable(activeNetworkProfile.displayName)
@@ -107,7 +113,11 @@ function RepPriceGroup({ isLoading, isRefreshing, onRefresh, repPerEthFailure, r
 					</>
 				}
 			>
-				{isRepPricingUnavailable ? repPricingUnavailableLabel : (renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading && repPerEthPrice === undefined} notation='compact' />)}
+				{(() => {
+					if (isRepPricingUnavailable) return repPricingUnavailableLabel
+					if (repPerEthPrice === undefined && repPerEthUnavailableLabel !== undefined) return renderRepPriceUnavailable(repPerEthUnavailableLabel)
+					return renderRepPriceFailure(repPerEthPrice === undefined && !isLoading ? repPerEthFailure : undefined) ?? <CurrencyValue value={repPerEthPrice} loading={isLoading && repPerEthPrice === undefined} notation='compact' />
+				})()}
 			</MetricField>
 			<MetricField
 				label={

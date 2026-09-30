@@ -11,6 +11,7 @@ import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-sh
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
+import { PoolActionCard } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { createAccountState, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
@@ -25,11 +26,11 @@ const pendingReportManager = (pendingReportReadyAtTimestamp: bigint) => createOr
 const unpricedPool = () => createSelectedPool({ lastOraclePrice: undefined, lastOracleSettlementTimestamp: 0n })
 const pricedPool = () => createSelectedPool({ lastOraclePrice: 10n ** 18n, lastOracleSettlementTimestamp: 1n })
 
-test('opens a typed pool once its address is complete and never shows contents for a different address', async () => {
+test('shows a loaded pool address read-only and keeps typed entry for an address that has not resolved', async () => {
 	const pool = createSelectedPool()
 	const addressChanges: string[] = []
 	function Harness() {
-		const [address, setAddress] = useState(pool.securityPoolAddress.toString())
+		const [address, setAddress] = useState('0x1111111111111111111111111111111111111111')
 		return (
 			<SecurityPoolWorkflowSection
 				{...createSecurityPoolWorkflowProps({
@@ -44,20 +45,26 @@ test('opens a typed pool once its address is complete and never shows contents f
 		)
 	}
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
+	const switcher = document.querySelector<HTMLDetailsElement>('details.pool-switcher')
+	if (switcher === null) throw new Error('Expected the pool switcher')
+	expect(switcher.open).toBe(true)
 	const page = within(document.body)
-	expect(page.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
-	const input = page.getByRole('textbox', { name: 'Security pool address' })
 	expect(page.queryByRole('button', { name: 'Change pool' }) === null).toBe(true)
 	expect(page.queryByRole('button', { name: 'Open pool' }) === null).toBe(true)
-	// A partial address stays in the field without leaving the current pool page.
+	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
+	const input = page.getByRole('textbox', { name: 'Security pool address' })
+	// A partial address stays in the field without leaving the current page.
 	await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
 	expect(addressChanges).toEqual([])
-	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
-	await act(() => fireEvent.input(input, { target: { value: '0x1111111111111111111111111111111111111111' } }))
-	expect(addressChanges).toEqual(['0x1111111111111111111111111111111111111111'])
-	expect(document.querySelector('.pool-object-identity') === null).toBe(true)
 	await act(() => fireEvent.input(input, { target: { value: pool.securityPoolAddress } }))
+	expect(addressChanges).toEqual([pool.securityPoolAddress])
+	expect(switcher.open).toBe(false)
+	switcher.open = true
 	expect(document.querySelector('.pool-object-identity') !== null).toBe(true)
+	expect(page.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
+	expect(document.querySelector('.pool-address-display .address-value')?.getAttribute('title')).toBe(pool.securityPoolAddress)
+	expect(page.getByRole('button', { name: `Copy address ${pool.securityPoolAddress}` })).not.toBeNull()
+	expect(page.getByRole('button', { name: 'Refresh pool' }).hasAttribute('disabled')).toBe(false)
 })
 
 function NavigationHarness() {
@@ -82,8 +89,14 @@ test('keeps a directly opened advanced view visible and returns to the three pri
 	expect(page.getByRole('tab', { name: 'Staged operations' }).getAttribute('aria-selected')).toBe('true')
 	await act(() => fireEvent.click(page.getByRole('tab', { name: 'Vaults' })))
 	expect(page.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Vaults', 'Shares', 'Reporting'])
+	// Secondary tools stay out of the layout until the More tools popover opens.
+	expect(page.queryByRole('button', { name: 'Price oracle' })).toBeNull()
+	const moreTools = page.getByRole('button', { name: 'More tools' })
+	await act(() => fireEvent.click(moreTools))
+	expect(moreTools.getAttribute('aria-expanded')).toBe('true')
 	await act(() => fireEvent.click(page.getByRole('button', { name: 'Price oracle' })))
 	expect(page.getByRole('tab', { name: 'Price oracle' }).getAttribute('aria-selected')).toBe('true')
+	expect(page.queryByRole('button', { name: 'Staged operations' })).toBeNull()
 })
 
 test('surfaces actionable pool exceptions independently of the selected tab', async () => {
@@ -181,15 +194,36 @@ test('requests a new price straight from the pool oracle row', async () => {
 	expect(opened.length > 0).toBe(true)
 })
 
-test('shows the stage and offers only controls that leave the open tab', async () => {
+test('shows the stage, marks the open tab row, and offers controls that leave it', async () => {
 	const views: SelectedPoolView[] = []
 	await renderLoadedPool({ onSelectedPoolViewChange: view => views.push(view) })
 	const card = document.querySelector('.pool-action-card')
 	if (!(card instanceof HTMLElement)) throw new Error('Expected the action card')
 	expect(document.querySelector('.pool-lifecycle [aria-current="step"]')?.textContent).toContain('Operational')
 	expect(within(card).queryByRole('button', { name: 'Open vaults' })).toBeNull()
+	// The open tab's row keeps its control slot, marked as shown below, so rows do not shift between tabs.
+	expect(card.querySelectorAll('.pool-action-control')).toHaveLength(card.querySelectorAll('.pool-action-item').length)
+	expect(card.querySelector('.pool-action-current')?.textContent).toBe('Shown below')
 	await act(() => fireEvent.click(within(card).getByRole('button', { name: 'Open shares' })))
 	expect(views).toEqual(['trading'])
+})
+
+test('omits the open vault navigation hint while retaining reporting deadlines on the open reporting tab', async () => {
+	const items = [
+		{ id: 'manageVault', tab: 'vaults', tone: 'action' },
+		{ id: 'reportOrEscalate', tab: 'reporting', tone: 'attention', deadline: 1_060n },
+	] as const
+	const firstRender = await renderIntoDocument(<PoolActionCard currentTimestamp={1_000n} currentView='vaults' items={items} onChange={() => undefined} />)
+	setCleanup(firstRender.cleanup)
+	expect(document.body.textContent).not.toContain('Manage your vault')
+	expect(document.body.textContent).toContain('Report or escalate an outcome')
+	expect(document.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:17:40.000Z')
+	await firstRender.cleanup()
+	const secondRender = await renderIntoDocument(<PoolActionCard currentTimestamp={1_000n} currentView='reporting' items={items} onChange={() => undefined} />)
+	setCleanup(secondRender.cleanup)
+	expect(within(document.body).getByRole('button', { name: 'Open vaults' })).not.toBeNull()
+	expect(document.body.textContent).toContain('Report or escalate an outcome')
+	expect(document.body.textContent).toContain('in 1m')
 })
 
 test('shows known standing commitments independently of a missing price', async () => {
@@ -203,7 +237,7 @@ for (const timestamp of [undefined, 100000n]) {
 	test('keeps reference capacity consistent when chain time is ' + String(timestamp), async () => {
 		await renderPoolPage(pricedPool(), {}, timestamp)
 		expect(document.querySelector('.pool-overview-header')?.textContent).toContain('/ 5.00 ETH')
-		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Settlement collateral / standing commitments')
+		expect(document.querySelector('.pool-reference-details')?.textContent).not.toContain('Collateral in use / capacity')
 	})
 }
 test('keeps the pending report reachable while the pool universe differs', async () => {
@@ -227,7 +261,8 @@ test('shows the pending report countdown in selected pool price fields', async (
 	const shownOraclePrices = Array.from(document.querySelectorAll('.metric-label'))
 		.filter(label => label.textContent === 'Open Oracle price')
 		.map(label => label.nextElementSibling?.textContent?.trim())
-	expect(shownOraclePrices).toEqual(['Available in 54s', 'Available in 54s↻'])
+	// Pool details omit the price while the page's price row already shows it.
+	expect(shownOraclePrices).toEqual(['Available in 54s↻'])
 	await act(async () => await new Promise(resolve => setTimeout(resolve, 1100)))
 	expect(document.body.textContent).toContain('Available in 53s')
 })

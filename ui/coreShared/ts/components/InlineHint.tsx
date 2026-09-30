@@ -1,5 +1,5 @@
 import * as commonCopy from '../copy/common.js'
-import { LoadingAwareText } from './LoadingText.js'
+import { UserMessage } from './UserMessage.js'
 
 type InlineHintProps = {
 	ariaLabel?: string
@@ -10,10 +10,5 @@ type InlineHintProps = {
 }
 
 export function InlineHint({ ariaLabel = commonCopy.moreInfo, id, loading = false, message, role = 'note' }: InlineHintProps) {
-	const liveAttributes = role === 'alert' ? { 'aria-atomic': 'true' as const, 'aria-live': 'assertive' as const } : {}
-	return (
-		<div {...liveAttributes} aria-label={ariaLabel} className={`tx-action-notice${role === 'alert' ? ' error' : ''}`} id={id} role={role}>
-			<LoadingAwareText loading={loading}>{message}</LoadingAwareText>
-		</div>
-	)
+	return <UserMessage ariaLabel={ariaLabel} id={id} loading={loading} detail={message} tone={role === 'alert' ? 'error' : 'neutral'} announcement={role === 'alert' ? 'assertive' : undefined} />
 }

@@ -1058,6 +1058,18 @@
 		"./tests/components/universeLink.test.js": {
 			"bun": "./ts/tests/components/universeLink.test.tsx",
 			"default": "./js/tests/components/universeLink.test.js"
+		},
+		"./components/UserMessage.js": {
+			"bun": "./ts/components/UserMessage.tsx",
+			"default": "./js/components/UserMessage.js"
+		},
+		"./tests/userMessage.test.js": {
+			"bun": "./ts/tests/userMessage.test.tsx",
+			"default": "./js/tests/userMessage.test.js"
+		},
+		"./tests/fixtures/userMessageShowcase.js": {
+			"bun": "./ts/tests/fixtures/userMessageShowcase.tsx",
+			"default": "./js/tests/fixtures/userMessageShowcase.js"
 		}
 	},
 	"version": "1.0.0"

@@ -24,7 +24,7 @@ test('fetches an explicit starting price and preserves manual edits over late qu
 	const rendered = await renderIntoDocument(<PriceHarness fetchPrice={async () => await quote.promise} />)
 	try {
 		const page = within(document.body)
-		const input = page.getByRole('textbox', { name: 'Open Oracle REP / ETH starting price' })
+		const input = page.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })
 		const submit = page.getByRole('button', { name: 'Submit' })
 		expect(submit.hasAttribute('disabled')).toBe(true)
 		await act(async () => {

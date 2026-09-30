@@ -16,12 +16,6 @@ import { FirstRunRoleGuide } from './FirstRunRoleGuide.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
 
-function shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails }: { currentSecurityPoolAddress: string; nextSecurityPoolAddress?: string | undefined; nextView: SecurityPoolsView; selectedPoolHasLoadedDetails: boolean }) {
-	if (nextView !== 'operate') return false
-	const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? currentSecurityPoolAddress
-	return resolvedSecurityPoolAddress.trim() !== '' && !selectedPoolHasLoadedDetails
-}
-
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	if (view === 'open') return { description: undefined, title: securityPoolCopy.openPool }
 	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
@@ -50,48 +44,44 @@ function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
 	return { description: undefined, title: statoblastAppCopy.poolPageTitle }
 }
 
-export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveUniverseChange, onActiveViewChange, onLoadUniverseDirectoryPools, overview, securityPoolUniverseDirectoryError, selectedPoolRepPrice, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
+export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDirectoryPools, onActiveViewChange, onLoadUniverseDirectoryPools, onOpenSecurityPool, overview, securityPoolUniverseDirectoryError, selectedPoolRepPrice, universeDirectoryPools, workflow, zoltarUniverse }: SecurityPoolsSectionProps) {
 	const view = activeView
 	const routeHeader = getSecurityPoolsRouteHeader(view)
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
 
-	const openView = (nextView: SecurityPoolsView, nextSecurityPoolAddress?: string) => {
-		onActiveViewChange(nextView)
-		const resolvedSecurityPoolAddress = nextSecurityPoolAddress ?? workflow.securityPoolAddress
-		const selectedPool = overview.securityPools.find(pool => sameCaseInsensitiveText(pool.securityPoolAddress, resolvedSecurityPoolAddress))
-		const selectedPoolHasLoadedDetails = selectedPool !== undefined && selectedPool.hasLoadedVaults !== false
-		if (!shouldRefreshSelectedPoolDataOnViewOpen({ currentSecurityPoolAddress: workflow.securityPoolAddress, nextSecurityPoolAddress, nextView, selectedPoolHasLoadedDetails })) return
-		workflow.onRefreshSelectedPoolData(resolvedSecurityPoolAddress)
-	}
-
 	return (
-		<div className='route-view-flow'>
-			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
-			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
-			{/* The role guide follows the address entry so the landing's primary action stays first on narrow screens. */}
-			{view === 'open' ? <FirstRunRoleGuide /> : undefined}
-			{view === 'browse' ? (
-				<SecurityPoolsOverviewSection
-					{...overview}
-					onSelectSecurityPool={(securityPoolAddress, universeId) => {
-						onActiveUniverseChange?.(universeId)
-						workflow.onSecurityPoolAddressChange(securityPoolAddress)
-						openView('operate', securityPoolAddress)
-					}}
+		<div className={`route-view-flow${view === 'open' ? ' pool-entry-route' : ''}`}>
+			{view === 'operate' && hasSelectedPool ? undefined : (
+				<RouteHeader
+					actions={
+						view === 'browse' ? (
+							<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
+								{commonCopy.createPool}
+							</button>
+						) : undefined
+					}
+					description={routeHeader.description}
+					eyebrow={statoblastAppCopy.pools}
+					title={routeHeader.title}
 				/>
+			)}
+			{view === 'open' ? (
+				<div className='pool-entry-layout'>
+					<PoolEntrySection onBrowsePools={() => onActiveViewChange('browse')} onCreatePool={() => onActiveViewChange('create')} onOpenPool={workflow.onSecurityPoolAddressChange} />
+					<FirstRunRoleGuide />
+				</div>
 			) : undefined}
+			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
+			{view === 'browse' ? <SecurityPoolsOverviewSection {...overview} onSelectSecurityPool={onOpenSecurityPool} /> : undefined}
 
 			{view === 'create' ? (
 				<SecurityPoolSection
 					{...createPool}
 					activeUniverseId={overview.activeUniverseId}
-					onReturnToBrowse={() => openView('browse')}
+					onReturnToBrowse={() => onActiveViewChange('browse')}
 					showHeader={false}
-					onOpenCreatedPool={(securityPoolAddress, universeId) => {
-						onActiveUniverseChange?.(universeId)
-						workflow.onSecurityPoolAddressChange(securityPoolAddress)
-						openView('operate', securityPoolAddress)
-					}}
+					// Like Browse, one navigation moves both the universe and the pool, so Back returns to the create view.
+					onOpenCreatedPool={onOpenSecurityPool}
 				/>
 			) : undefined}
 

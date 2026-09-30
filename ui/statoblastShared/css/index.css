@@ -1,5 +1,61 @@
 /* Statoblast feature styles: truth auction, escalation and reporting visualisations, security pool workspace, vaults, liquidation, staged operations, and the open oracle. Loaded after ui/coreShared/css/index.css by the pages that render these features. */
 
+:root[data-product="statoblast"] {
+	--content-max: 80rem;
+}
+
+.pool-entry-route {
+	width: 100%;
+	max-width: 70rem;
+	margin-inline: auto;
+}
+
+.pool-entry-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+	align-items: start;
+	gap: var(--space-5);
+}
+
+.pool-entry-layout:not(:has(.first-run-role-guide)) {
+	grid-template-columns: minmax(0, 1fr);
+	max-width: var(--form-max);
+}
+
+.pool-entry-primary > .section-block-body {
+	display: grid;
+	gap: var(--space-5);
+}
+
+.pool-entry-primary .detail {
+	margin: 0;
+	font-size: var(--font-caption);
+}
+
+.pool-entry-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+
+.pool-entry-links > button {
+	min-height: var(--touch-target-min);
+}
+
+.pool-entry-layout .first-run-roles {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.pool-entry-layout .first-run-role-guide h3 {
+	font-size: var(--font-lg);
+}
+
+@media (max-width: 64rem) {
+	.pool-entry-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .app-settings-price-oracle {
 	margin-top: var(--space-4);
 	padding-top: var(--space-4);
@@ -53,38 +109,6 @@
 .fork-workflow-outcome-link:hover,
 .fork-workflow-outcome-link:focus-visible {
 	color: var(--accent);
-}
-
-.oracle-price-value {
-	display: inline-flex;
-	flex-direction: column;
-	align-items: flex-start;
-	gap: var(--space-1);
-	font-family: var(--font-family-mono);
-	font-size: var(--font-value);
-	font-weight: 600;
-	font-variant-numeric: tabular-nums;
-	line-height: var(--line-height-tight);
-	color: var(--value);
-}
-
-.oracle-price-validity {
-	font-family: var(--font-family-sans);
-	font-size: var(--font-caption);
-	font-weight: 500;
-	letter-spacing: normal;
-}
-
-.oracle-price-validity.success {
-	color: var(--success);
-}
-
-.oracle-price-validity.danger {
-	color: var(--danger);
-}
-
-.oracle-price-validity.warning {
-	color: var(--warning);
 }
 
 .comparison-record-list {
@@ -1697,8 +1721,6 @@
 
 .security-pool-strip,
 .security-pool-strip-stats,
-.vault-preview-strip-head,
-.vault-preview-side-metrics,
 .vault-detail-hero,
 .vault-detail-hero-secondary,
 .vault-detail-health,
@@ -1710,10 +1732,8 @@
 
 .security-pool-strip-stats span,
 .security-pool-strip-price span,
-.vault-preview-capacity-ownership span,
-.vault-preview-side-metrics span,
 .vault-detail-hero span,
-.trading-holdings-hero span,
+.trading-holdings-hero > span,
 .trading-share-callouts span {
 	font-size: var(--font-label);
 	color: var(--muted);
@@ -1721,8 +1741,6 @@
 
 .security-pool-strip-stats strong,
 .security-pool-strip-price strong,
-.vault-preview-capacity-ownership strong,
-.vault-preview-side-metrics strong,
 .vault-detail-hero strong,
 .trading-holdings-hero strong,
 .trading-share-callouts strong {
@@ -1731,8 +1749,6 @@
 }
 
 .security-pool-strip-stats > div,
-.vault-preview-capacity-ownership,
-.vault-preview-side-metrics > div,
 .vault-detail-hero-secondary > div,
 .trading-share-callouts > div {
 	display: grid;
@@ -1784,8 +1800,34 @@
 .security-pool-strip-price,
 .trading-holdings-hero {
 	display: grid;
-	gap: var(--space-2);
+	gap: var(--space-1);
 	padding: 0 0 var(--space-1);
+}
+
+/* The set count and its ETH value share one baseline; the value in parentheses is secondary but uses the same metric face. */
+.trading-holdings-value {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--space-2);
+	font-family: var(--font-family-mono);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--value);
+}
+
+.trading-holdings-value .currency-value {
+	font-size: inherit;
+	color: inherit;
+}
+
+.trading-holdings-backing {
+	font-size: var(--font-value);
+	color: var(--text-secondary);
+}
+
+.trading-holdings-hero .detail {
+	margin: 0;
 }
 
 .security-pool-card-progress {
@@ -1907,28 +1949,7 @@
 }
 
 .vault-preview-strip {
-	display: grid;
-	gap: var(--space-4);
-}
-
-.vault-preview-strip-head {
-	grid-template-columns: minmax(11rem, 1fr);
 	align-items: start;
-}
-
-.vault-preview-meter {
-	min-width: 0;
-}
-
-.vault-preview-side-metrics {
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.vault-preview-meta {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 0.8rem;
-	align-items: end;
 }
 
 .vault-position-list {
@@ -2031,7 +2052,6 @@
 	align-items: start;
 }
 
-.vault-preview-meta .metric-field,
 .vault-detail-meta .metric-field {
 	min-width: 0;
 }
@@ -2108,9 +2128,7 @@
 	}
 
 	.security-pool-strip-stats,
-	.vault-preview-strip-head,
-	.vault-detail-hero,
-	.vault-preview-side-metrics {
+	.vault-detail-hero {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
@@ -2554,6 +2572,11 @@
 	}
 }
 
+/* Creating a pool pairs a wider question form with its sticky draft preview instead of capping both at the single-column form width. */
+.security-pool-create-question .question-create-form {
+	max-width: 72rem;
+}
+
 .pool-question-source {
 	display: flex;
 	flex-wrap: wrap;
@@ -2590,10 +2613,7 @@
 
 @media (max-width: 40rem) {
 	.security-pool-card-progress,
-	.vault-preview-meta,
 	.security-pool-strip-stats,
-	.vault-preview-strip-head,
-	.vault-preview-side-metrics,
 	.vault-detail-hero,
 	.vault-detail-hero-secondary,
 	.vault-detail-health,
@@ -2606,10 +2626,10 @@
 /* Pool browsing and the selected workspace share a quiet summary hierarchy. */
 .pool-directory-row {
 	display: grid;
-	grid-template-columns: minmax(0, 1.3fr) minmax(16rem, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) 17.5rem auto;
 	align-items: center;
-	gap: var(--space-5);
-	padding: var(--space-5) 0;
+	gap: var(--space-3) var(--space-5);
+	padding: var(--space-4) 0;
 	border-bottom: 1px solid var(--border-default);
 }
 
@@ -2623,7 +2643,7 @@
 
 .pool-directory-identity h3 {
 	font-family: var(--font-family-sans);
-	font-size: 1.125rem;
+	font-size: var(--font-lg);
 	line-height: var(--line-height-snug);
 	margin: 0;
 	overflow-wrap: anywhere;
@@ -2704,11 +2724,19 @@ span.rep-price-status.stale,
 	margin: 0;
 }
 
-.pool-directory-heading,
 .pool-object-title {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
+	min-width: 0;
+}
+
+.pool-directory-heading {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2);
+	width: 100%;
 	min-width: 0;
 }
 
@@ -2739,7 +2767,7 @@ span.rep-price-status.stale,
 
 /* Browse rows lead with open interest against capacity: a taller meter with larger numbers and the used share. */
 .pool-capacity-summary.is-prominent .progress-meter-value {
-	font-size: 1.25rem;
+	font-size: var(--font-lg);
 }
 
 .pool-capacity-summary.is-prominent .progress-meter-track {
@@ -2760,7 +2788,11 @@ span.rep-price-status.stale,
 
 @media (max-width: 64rem) {
 	.pool-browse-toolbar {
-		grid-template-columns: minmax(0, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.pool-browse-toolbar > .field:first-child {
+		grid-column: 1 / -1;
 	}
 }
 
@@ -2775,7 +2807,7 @@ span.rep-price-status.stale,
 
 .pool-object-identity h2 {
 	margin: 0;
-	font-size: var(--font-h2);
+	font-size: var(--font-title);
 	overflow-wrap: anywhere;
 }
 
@@ -2788,16 +2820,15 @@ span.rep-price-status.stale,
 }
 
 .pool-overview-header > .pool-capacity-summary {
-	grid-column: 1 / -1;
-	width: min(100%, 26rem);
+	width: 100%;
 }
 
 .pool-overview-header {
 	display: grid;
 	min-width: 0;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: start;
-	gap: var(--space-4);
+	grid-template-columns: minmax(0, 1fr) 20rem;
+	align-items: center;
+	gap: var(--space-5);
 }
 
 .vault-risk-summary:empty {
@@ -2809,7 +2840,7 @@ span.rep-price-status.stale,
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2) var(--space-4);
-	width: fit-content;
+	width: 100%;
 	max-width: 100%;
 	padding: var(--space-2) var(--space-3);
 	border-inline-start: 2px solid var(--border-default);
@@ -2870,18 +2901,119 @@ span.rep-price-status.stale,
 .pool-workspace-navigation {
 	display: flex;
 	min-width: 0;
-	align-items: start;
+	align-items: flex-end;
 	justify-content: flex-start;
 	gap: var(--space-3);
 	border-bottom: 1px solid var(--border-default);
-	padding-bottom: var(--space-2);
 }
 
-.pool-tools-disclosure {
+/* "More tools" is a tab-styled trigger for a popover, so the secondary views line up with the primary tabs and never push the workspace down. */
+.pool-tools-menu {
+	position: relative;
+	flex: none;
+}
+
+.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
+	flex: 0 1 auto;
+	padding-bottom: 0;
+}
+
+.pool-tools-trigger.view-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	padding: 0.75rem 0.5rem;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	letter-spacing: 0;
+	white-space: nowrap;
+}
+
+.pool-tools-trigger.view-tab:hover,
+.pool-tools-trigger.view-tab[aria-expanded="true"] {
+	background: transparent;
+	border-bottom-color: var(--border-active);
+	color: var(--text);
+}
+
+.pool-tools-label-short {
+	display: none;
+}
+
+@media (max-width: 40rem) {
+	.pool-tools-label-long {
+		display: none;
+	}
+
+	.pool-tools-label-short {
+		display: inline;
+	}
+}
+
+.pool-tools-caret {
 	flex-shrink: 0;
+	width: 0.4rem;
+	height: 0.4rem;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: translateY(-0.1rem) rotate(45deg);
 }
 
-.pool-tools-disclosure summary,
+.pool-tools-trigger[aria-expanded="true"] .pool-tools-caret {
+	transform: translateY(0.1rem) rotate(225deg);
+}
+
+.pool-tools-options {
+	position: absolute;
+	z-index: var(--z-dropdown);
+	top: calc(100% + 0.4rem);
+	left: 0;
+	display: grid;
+	min-width: 12rem;
+	margin: 0;
+	padding: var(--space-1);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-overlay);
+	background: var(--surface-modal-opaque);
+	box-shadow: var(--shadow-overlay);
+	list-style: none;
+}
+
+.pool-tools-options button {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	min-height: var(--touch-target-min);
+	padding: 0 var(--space-3);
+	border: 0;
+	border-radius: var(--radius-control);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-secondary);
+	font-size: var(--font-caption);
+	font-weight: 600;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.pool-tools-options button:hover {
+	background: var(--interactive-bg-hover);
+	color: var(--text);
+}
+
+.pool-tools-options button.active {
+	background: var(--accent-soft);
+	box-shadow: inset 2px 0 0 var(--accent);
+	color: var(--text);
+	font-weight: 700;
+}
+
 .vault-more-actions summary,
 .vault-backing-details summary {
 	cursor: pointer;
@@ -2890,31 +3022,29 @@ span.rep-price-status.stale,
 	color: var(--text-secondary);
 }
 
-.pool-tools-options {
-	display: grid;
-	gap: var(--space-1);
-	padding-bottom: var(--space-2);
-}
-
 .pool-context {
 	display: grid;
 	gap: var(--space-3);
 }
 
-.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
+.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] {
 	border-bottom: 0;
 }
 
+/* Equal-width launcher columns; each launcher stacks its own button, description, and blocker. */
 .vault-primary-actions {
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	align-items: start;
-	gap: var(--space-3);
+	gap: var(--space-4);
 }
 
 .vault-primary-actions > * {
-	flex: 0 1 15rem;
 	min-width: 0;
+}
+
+.vault-primary-actions .tx-action-button {
+	width: 100%;
 }
 
 .vault-health-status {
@@ -2939,7 +3069,7 @@ span.rep-price-status.stale,
 }
 
 .vault-workspace .vault-detail-hero strong {
-	font-size: 1.5rem;
+	font-size: var(--font-title);
 }
 
 .vault-backing-details[open] {
@@ -2959,19 +3089,23 @@ span.rep-price-status.stale,
 	}
 
 	.pool-workspace-navigation {
-		flex-wrap: wrap;
+		gap: var(--space-2);
 	}
 
-	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs {
-		max-width: 100%;
+	/* Tighter tabs keep all three pool tabs and the tools trigger on one row at phone widths. */
+	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] {
+		gap: var(--space-1);
 	}
 
+	.pool-workspace-navigation .selected-pool-workspace-tabs.view-tabs[data-orientation="horizontal"] .view-tab,
+	.pool-tools-trigger.view-tab {
+		padding-inline: 0.45rem;
+	}
+
+	/* The trigger sits at the right edge on narrow screens, so the menu opens toward the content. */
 	.pool-tools-options {
-		justify-items: start;
-	}
-
-	.vault-primary-actions > * {
-		flex: 1 1 10rem;
+		right: 0;
+		left: auto;
 	}
 }
 
@@ -3001,6 +3135,31 @@ span.rep-price-status.stale,
 .vault-workspace {
 	grid-template-columns: minmax(0, 1fr);
 	min-width: 0;
+	margin-top: 0;
+}
+
+.vault-detail-layout {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+	gap: var(--space-5);
+	min-width: 0;
+}
+
+.vault-detail-layout > .entity-card.flat {
+	padding: 0;
+}
+
+.vault-detail-actions {
+	display: grid;
+	gap: var(--space-3);
+	min-width: 0;
+	padding-inline-start: var(--space-5);
+	border-inline-start: 1px solid var(--border-default);
+}
+
+.vault-detail-actions > .section-block {
+	margin: 0;
 }
 
 .vault-workspace-toolbar {
@@ -3020,6 +3179,16 @@ span.rep-price-status.stale,
 }
 
 @media (max-width: 64rem) {
+	.vault-detail-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.vault-detail-actions {
+		padding: var(--space-4) 0 0;
+		border-inline-start: 0;
+		border-top: 1px solid var(--border-default);
+	}
+
 	.vault-workspace-toolbar {
 		align-items: center;
 	}
@@ -3042,13 +3211,37 @@ span.rep-price-status.stale,
 .pool-directory-details {
 	grid-column: 1 / -1;
 }
+
+.pool-directory-details > details > summary {
+	min-height: var(--touch-target-min);
+	font-size: var(--font-label);
+}
+/* Button, description, then any blocker, stacked per column: equal-height buttons keep the columns aligned, and each blocker stays directly under its own description. */
 .vault-action-launcher {
-	display: grid;
-	gap: var(--space-2);
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+	padding-bottom: var(--space-2);
+}
+.vault-action-launcher > .tx-action {
+	display: contents;
+}
+.vault-action-launcher .tx-action-row {
+	order: 0;
 }
 .vault-action-launcher > .detail {
+	order: 1;
 	margin: 0;
 	font-size: 0.8125rem;
+}
+.vault-action-launcher .tx-action-feedback {
+	order: 2;
+	min-block-size: 0;
+}
+.vault-action-launcher .tx-action-notice {
+	font-size: 0.8125rem;
+	color: var(--muted);
 }
 .staged-operation-card {
 	display: grid;
@@ -3125,16 +3318,40 @@ span.rep-price-status.stale,
 	border: 0;
 }
 
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group,
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions .tx-action-group:has(.tx-action-feedback:empty) {
-	gap: var(--space-2);
+/* Fixed columns keep the pool parameters in even rows instead of orphaning the last one; labels and values stay top-aligned across a row. */
+.pool-reference-details .selected-pool-context-grid {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 0 var(--space-4);
 }
 
-.request-price-fields {
-	display: grid;
-	gap: var(--space-4);
+.pool-reference-details .selected-pool-context-grid > div {
+	align-content: start;
 }
 
+.pool-reference-details .question-preview-meta {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+/* The question ID takes the full row instead of shrinking to its text, which the negative hover-padding offset leaves one character short. */
+.pool-reference-details .question-preview-meta .copy-value-wrap {
+	display: flex;
+}
+
+/* A copyable address keeps its touch-target height, but a button centres its content, so start the text on the same line as the neighbouring metric values. */
+.pool-reference-details .selected-pool-context-grid .address-value.copyable {
+	display: flex;
+	align-items: flex-start;
+}
+
+@media (max-width: 64rem) {
+	.pool-reference-details .selected-pool-context-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.pool-reference-details .selected-pool-context-grid > :last-child:nth-child(odd) {
+		grid-column: 1 / -1;
+	}
+}
 .security-pool-link.existing-pool-action {
 	display: inline-flex;
 	align-items: center;
@@ -3207,115 +3424,6 @@ span.rep-price-status.stale,
 	}
 }
 
-.price-request-estimate-prompt {
-	margin: 0;
-}
-
-.request-price-fields .lookup-field-controls.has-action {
-	grid-template-columns: minmax(0, 1fr) auto;
-	column-gap: var(--space-3);
-	row-gap: var(--space-1);
-}
-
-.request-price-fetch {
-	inline-size: 12.5rem;
-	min-inline-size: 12.5rem;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid {
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions {
-	display: grid;
-	grid-column: 1;
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .form-grid > .actions > .tx-action {
-	width: 100%;
-	max-width: none;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
-	min-block-size: 4rem;
-}
-
-.price-request-preview .tx-action-group > .actions {
-	margin-block-start: 0;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final > .tx-action-feedback {
-	grid-column: 1 / -1;
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-close > button {
-	min-inline-size: 6.5rem;
-	min-block-size: 2.75rem;
-}
-
-.operation-modal-body:has(> .request-price-fields) {
-	gap: var(--space-2);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-step-actions {
-	padding-top: var(--space-2);
-}
-
-.operation-modal-body:has(> .request-price-fields) .transaction-inline-final-status .global-transaction-notice {
-	width: 100%;
-	max-height: none;
-}
-
-@media (max-width: 40rem) {
-	.request-price-fields .lookup-field-controls.has-action {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.request-price-fields .lookup-field-controls.has-action > .actions {
-		grid-column: 1;
-		grid-row: 2;
-	}
-
-	.request-price-fetch {
-		inline-size: 100%;
-		min-inline-size: 0;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .workflow-metric-grid > div {
-		display: grid;
-		justify-content: start;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action:has(.approval-amount-field) .tx-action-button {
-		min-block-size: 3.625rem;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-plan-action-final .tx-action-button {
-		min-block-size: 3.625rem;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-costs > div {
-		column-gap: var(--space-1);
-	}
-}
-
-@media (max-height: 40rem) {
-	.operation-modal-body:has(> .request-price-fields) {
-		display: flex;
-		flex-direction: column;
-		overflow: auto;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) > * {
-		flex-shrink: 0;
-	}
-
-	.operation-modal-body:has(> .request-price-fields) .transaction-step-content {
-		overflow: visible;
-	}
-}
-
 .pool-selection-control .lookup-field-controls {
 	grid-template-columns: minmax(0, 1fr) auto;
 }
@@ -3325,6 +3433,7 @@ span.rep-price-status.stale,
 }
 /* Reserve the busy label width so the address input does not shrink while a refresh runs. */
 .pool-selection-control .lookup-field-controls > .actions {
+	justify-content: flex-start;
 	min-inline-size: 11.75rem;
 }
 @media (max-width: 40rem) {
@@ -3344,15 +3453,87 @@ span.rep-price-status.stale,
 	}
 }
 
-/* Pool page: toolbar, lifecycle stepper, and the "What you can do now" rows. The rows are flat so the pool panel keeps a single card level. */
+/* Pool page: toolbar, lifecycle stepper, and next actions. Flat rows keep the pool panel at a single card level. */
 .pool-page-toolbar {
 	display: grid;
-	justify-items: start;
-	gap: var(--space-1);
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
 }
 
-.pool-page-toolbar .pool-selection-control {
+.pool-switcher {
+	min-width: 0;
+	justify-self: end;
+}
+
+.pool-switcher > summary {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-height: var(--touch-target-min);
+	cursor: pointer;
+	color: var(--text-secondary);
+	font-size: var(--font-label);
+}
+
+.pool-switcher > summary::after {
+	content: "▾";
+}
+
+.pool-switcher[open] {
+	grid-column: 1 / -1;
 	justify-self: stretch;
+}
+
+.pool-switcher[open] > summary::after {
+	content: "▴";
+}
+
+/* A loaded pool's address reads as a value: monospace, truncated on narrow screens, with its copy and refresh actions beside it. */
+.pool-address-display {
+	display: grid;
+	gap: var(--space-1);
+	min-width: 0;
+}
+
+.pool-address-display-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	min-width: 0;
+}
+
+.pool-address-display-value {
+	flex: 0 1 auto;
+	min-width: 0;
+	font-family: var(--font-family-mono);
+	font-size: 0.9rem;
+	color: var(--value);
+}
+
+.pool-address-display-actions {
+	display: flex;
+	flex: none;
+	gap: var(--space-2);
+}
+
+.pool-address-display-actions button {
+	min-height: 2.5rem;
+	padding: 0.45rem 0.9rem;
+	font-size: var(--font-caption);
+}
+
+@media (max-width: 40rem) {
+	.pool-address-display-row {
+		flex-wrap: nowrap;
+		gap: var(--space-2);
+	}
+
+	.pool-address-display-value {
+		flex: 1 1 auto;
+		font-size: var(--font-label);
+	}
 }
 
 .pool-back-link {
@@ -3436,20 +3617,50 @@ span.rep-price-status.stale,
 	font-weight: 600;
 }
 
-.pool-action-card {
+.pool-secondary-context {
 	display: grid;
-	gap: var(--space-2);
-	padding: var(--space-3) 0 0;
-	border-top: 1px solid var(--border-default);
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: var(--space-3) var(--space-4);
+}
+
+.pool-secondary-context:has(.pool-reference-details details[open]) {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.pool-secondary-context > .pool-reference-details:last-child {
+	justify-self: end;
+}
+
+.pool-secondary-context:has(details[open]) > .pool-reference-details {
+	justify-self: stretch;
+}
+
+.pool-reference-details > details > summary {
+	min-height: var(--touch-target-min);
+	font-size: var(--font-label);
+}
+
+.pool-action-card {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-4);
+	padding: var(--space-2) 0;
 }
 
 .pool-action-card h3 {
 	margin: 0;
-	font-size: var(--font-h3-section);
+	color: var(--muted);
+	font-size: var(--font-label);
+	font-weight: 500;
 }
 
 .pool-action-list {
-	display: grid;
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	gap: var(--space-3) var(--space-4);
 	margin: 0;
 	padding: 0;
 	list-style: none;
@@ -3461,12 +3672,8 @@ span.rep-price-status.stale,
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2) var(--space-4);
-	padding: var(--space-2) 0 var(--space-2) var(--space-3);
+	padding: 0 0 0 var(--space-3);
 	border-left: 3px solid var(--accent-medium);
-}
-
-.pool-action-item + .pool-action-item {
-	margin-top: var(--space-2);
 }
 
 .pool-action-item.attention {
@@ -3479,7 +3686,7 @@ span.rep-price-status.stale,
 
 .pool-action-copy {
 	display: flex;
-	flex: 1 1 18rem;
+	flex: 1 1 auto;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-1) var(--space-3);
@@ -3511,10 +3718,53 @@ span.rep-price-status.stale,
 }
 
 .pool-action-control {
+	display: flex;
 	flex: none;
+	align-items: center;
+	min-height: 2.75rem;
+}
+
+/* The open tab's row names where its work is instead of offering a control that would do nothing. */
+.pool-action-current {
+	display: inline-flex;
+	align-items: center;
+	min-height: 2.75rem;
+	padding: 0 var(--space-3);
+	border: 1px dashed var(--divider-subtle);
+	border-radius: var(--radius-control);
+	color: var(--muted);
+	font-size: var(--font-caption);
+	font-weight: 600;
 }
 
 @media (max-width: 40rem) {
+	.pool-directory-heading {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.pool-directory-heading > .badge {
+		grid-column: 2;
+		justify-self: start;
+	}
+
+	.vault-primary-actions {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.pool-workspace-navigation {
+		flex-wrap: nowrap;
+		gap: var(--space-2);
+	}
+
+	.pool-workspace-navigation .view-tab {
+		padding-inline: var(--space-2);
+		font-size: var(--font-label);
+	}
+
+	.pool-secondary-context {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
 	.pool-lifecycle-steps {
 		display: none;
 	}
@@ -3523,12 +3773,30 @@ span.rep-price-status.stale,
 		display: block;
 	}
 
-	.pool-action-control {
-		flex-basis: 100%;
+	.pool-action-item {
+		gap: var(--space-2);
+	}
+
+	.pool-action-label,
+	.pool-action-control > button {
+		font-size: var(--font-label);
+	}
+
+	.pool-action-control > button {
+		padding-inline: var(--space-2);
 	}
 }
 
 /* First-run role guide on the pool directory: flat role columns divided by rules, stacked on narrow screens. */
+.first-run-role-guide > .section-block-header {
+	align-items: center;
+}
+
+.first-run-role-guide .section-block-actions {
+	display: flex;
+	align-items: center;
+}
+
 .first-run-roles {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3549,6 +3817,7 @@ span.rep-price-status.stale,
 
 .first-run-role .detail {
 	margin: 0;
+	font-size: var(--font-label);
 }
 
 @media (max-width: 64rem) {
@@ -3560,7 +3829,7 @@ span.rep-price-status.stale,
 	/* Keep Dismiss beside the title so the guide stays short above the pool list on narrow screens. */
 	.first-run-role-guide > .section-block-header {
 		flex-direction: row;
-		align-items: start;
+		align-items: center;
 		justify-content: space-between;
 	}
 
@@ -3568,4 +3837,20 @@ span.rep-price-status.stale,
 		gap: var(--space-1);
 		padding-top: var(--space-2);
 	}
+}
+
+/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. */
+:is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *) {
+	margin-inline-start: -0.25rem;
+}
+
+/* Inline warnings (a clamped liquidation, a withdrawal that empties the vault, a lifecycle blocker) share one quiet warning treatment. */
+.notice.warning {
+	margin: 0;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--warning-border);
+	border-left-width: 3px;
+	background: var(--notice-warning-gradient);
+	color: var(--text);
+	font-size: 0.875rem;
 }

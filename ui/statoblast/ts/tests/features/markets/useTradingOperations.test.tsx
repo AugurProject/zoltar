@@ -287,6 +287,30 @@ describe('useTradingOperations', () => {
 		expect(submittedRedeemAmount).toBe(firstMintShareAmount)
 	})
 
+	test('redeems the exact share balance when the ETH amount is the redeemable maximum', async () => {
+		let submittedRedeemAmount: bigint | undefined
+		const redeemCompleteSetInSecurityPool = mock(async (_accountAddress: Address, _callbacks: unknown, securityPoolAddress: Address, amount: bigint) => {
+			submittedRedeemAmount = amount
+			return { action: 'redeemCompleteSet' as const, hash: zeroHash, securityPoolAddress, universeId: 1n }
+		})
+		const hook = await renderTradingHook(
+			createMintDependencies({
+				loadSecurityPoolMintCapacity: mock(async () => createMintCapacity({ settlementCollateralAttoEth: 7n, shareTokenSupplyAttoShares: 100n })),
+				loadTradingDetails: mock(async () => createTradingDetails({ maxRedeemableCompleteSetsAttoShares: 99n, shareBalances: { invalidAttoShares: 99n, noAttoShares: 99n, yesAttoShares: 99n } })),
+				redeemCompleteSetInSecurityPool,
+			}),
+		)
+
+		// 99 shares are worth 6 attoETH, which converts back to only 86 shares.
+		await hook.setForm({ redeemAmount: '0.000000000000000006' })
+		await act(async () => {
+			await hook.state().redeemCompleteSet()
+		})
+
+		expect(hook.onTransactionFailed.mock.calls).toEqual([])
+		expect(submittedRedeemAmount).toBe(99n)
+	})
+
 	test('createCompleteSet ignores a stale post-success refresh after the selected pool changes', async () => {
 		const poolA = getAddress('0x00000000000000000000000000000000000000c1')
 		const poolB = getAddress('0x00000000000000000000000000000000000000d1')

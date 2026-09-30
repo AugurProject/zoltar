@@ -1,4 +1,4 @@
-import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
+import { RequestPriceModal } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/RequestPriceModal.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
@@ -15,8 +15,9 @@ import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
-import { shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
+import { getUniverseDirectoryContextKey, isUniverseDirectoryLoadedForContext, shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
 import type { ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
@@ -29,8 +30,14 @@ export function useSecurityPoolsRoute({
 	currentTimestamp,
 	deploymentStatuses,
 	marketCreation,
+	poolBrowseState,
+	setPoolBrowseState,
+	vaultView,
+	setVaultAddress,
+	setVaultView,
 	onViewPendingReport,
 	inlineOracle,
+	openSecurityPoolInUniverse,
 	priceOracleManager,
 	repPerEthPrice,
 	repPerEthSource,
@@ -40,7 +47,6 @@ export function useSecurityPoolsRoute({
 	securityPoolsView,
 	selectedPoolRefreshNonce,
 	selectedPoolView,
-	setActiveUniverseId,
 	setSecurityPoolAddress,
 	setSecurityPoolQuestionId,
 	setSecurityPoolsView,
@@ -57,9 +63,15 @@ export function useSecurityPoolsRoute({
 	canReadOnchainData: boolean
 	currentTimestamp: bigint | undefined
 	deploymentStatuses: Parameters<typeof useSecurityPoolCreation>[0]['deploymentStatuses']
+	poolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['browseState']>
+	setPoolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['onBrowseStateChange']>
+	vaultView: SecurityPoolsSectionProps['workflow']['controlledVaultView']
+	setVaultView: NonNullable<SecurityPoolsSectionProps['workflow']['onVaultViewChange']>
+	setVaultAddress: (address: string | undefined) => void
 	marketCreation: ReturnType<typeof useMarketCreation>
 	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
 	onViewPendingReport: (reportId: bigint) => void
+	openSecurityPoolInUniverse: (universeId: bigint, securityPoolAddress: string) => void
 	priceOracleManager: ReturnType<typeof usePriceOracleManager>
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: SecurityPoolsSectionProps['createPool']['repPerEthSource']
@@ -69,7 +81,6 @@ export function useSecurityPoolsRoute({
 	securityPoolsView: string
 	selectedPoolRefreshNonce: number
 	selectedPoolView: SecurityPoolsSectionProps['workflow']['selectedPoolView']
-	setActiveUniverseId: (universeId: bigint) => void
 	setSecurityPoolAddress: (securityPoolAddress: string) => void
 	setSecurityPoolQuestionId: (questionId: string) => void
 	setSecurityPoolsView: (view: SecurityPoolsView) => void
@@ -163,11 +174,7 @@ export function useSecurityPoolsRoute({
 		loadingLiquidationFundingPreview,
 		loadingLiquidationApproval,
 		loadingLiquidationReceiverVaultSummary,
-		loadingSecurityPoolPage,
 		loadingUniverseDirectoryPools,
-		loadBrowseSecurityPoolPage,
-		refreshBrowseSecurityPoolPage,
-		securityPoolPageFreshness,
 		loadUniverseDirectoryPools,
 		loadSecurityPools,
 		loadLiquidationFundingPreview,
@@ -179,7 +186,6 @@ export function useSecurityPoolsRoute({
 		securityPoolOverviewError,
 		securityPoolLiquidationError,
 		securityPoolOverviewResult,
-		securityPoolPage,
 		securityPools,
 		securityPoolUniverseDirectoryError,
 		universeDirectoryPools,
@@ -227,7 +233,14 @@ export function useSecurityPoolsRoute({
 		withdrawAuctionRefund,
 	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const lastUniverseDirectoryAutoLoadContextKeyRef = useRef<string | undefined>(undefined)
-	const universeDirectoryContextKey = `${activeEnvironmentNonce}:${walletScopedAccountAddress ?? ''}:${activeUniverseId.toString()}`
+	const universeDirectoryContextKey = getUniverseDirectoryContextKey({ accountAddress: walletScopedAccountAddress, environmentNonce: activeEnvironmentNonce, universeId: activeUniverseId })
+	// The overview hook keys its loaded directory on the environment only; the figures are per account and universe, so the route keys them on the full context.
+	const [loadedUniverseDirectoryContextKey, setLoadedUniverseDirectoryContextKey] = useState<string | undefined>(undefined)
+	const universeDirectoryLoadedForContext = isUniverseDirectoryLoadedForContext({ currentContextKey: universeDirectoryContextKey, hasLoadedUniverseDirectoryPools, loadedContextKey: loadedUniverseDirectoryContextKey })
+	const loadUniverseDirectoryPoolsForContext = async () => {
+		const requestedContextKey = universeDirectoryContextKey
+		if (await loadUniverseDirectoryPools()) setLoadedUniverseDirectoryContextKey(requestedContextKey)
+	}
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
@@ -258,7 +271,7 @@ export function useSecurityPoolsRoute({
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
-		if (!nextSecurityPoolAddress.startsWith('0x') || nextSecurityPoolAddress.length !== 42) return
+		if (!isHexAddressInput(nextSecurityPoolAddress)) return
 		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
 	}
@@ -301,7 +314,7 @@ export function useSecurityPoolsRoute({
 				activeSecurityPoolsView,
 				canReadOnchainData,
 				currentContextKey: universeDirectoryContextKey,
-				hasLoadedUniverseDirectoryPools,
+				hasLoadedUniverseDirectoryPools: universeDirectoryLoadedForContext,
 				lastAutoLoadContextKey: lastUniverseDirectoryAutoLoadContextKeyRef.current,
 				loadingUniverseDirectoryPools,
 				securityPoolUniverseDirectoryError,
@@ -309,11 +322,15 @@ export function useSecurityPoolsRoute({
 		)
 			return
 		lastUniverseDirectoryAutoLoadContextKeyRef.current = universeDirectoryContextKey
-		void loadUniverseDirectoryPools()
-	}, [activeSecurityPoolsView, canReadOnchainData, hasLoadedUniverseDirectoryPools, loadingUniverseDirectoryPools, securityPoolUniverseDirectoryError, universeDirectoryContextKey])
+		void loadUniverseDirectoryPoolsForContext()
+	}, [activeSecurityPoolsView, canReadOnchainData, universeDirectoryLoadedForContext, loadingUniverseDirectoryPools, securityPoolUniverseDirectoryError, universeDirectoryContextKey])
+	// One navigation moves both the universe and the pool; the route effect loads a pool that is not listed yet, so only a listed pool is refreshed here.
+	const openPoolInUniverse = (universeId: bigint, poolAddress: string) => {
+		openSecurityPoolInUniverse(universeId, poolAddress)
+		if (securityPools.some(pool => pool.securityPoolAddress.toLowerCase() === poolAddress.toLowerCase())) refreshSelectedPoolData(poolAddress)
+	}
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
-		onActiveUniverseChange: setActiveUniverseId,
 		loadingUniverseDirectoryPools,
 		createPool: {
 			accountState,
@@ -353,26 +370,22 @@ export function useSecurityPoolsRoute({
 			repPerEthSourceUrl: uiRepPerEthSourceUrl,
 		},
 		onActiveViewChange: view => setSecurityPoolsView(view),
-		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPools(),
+		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPoolsForContext(),
+		onOpenSecurityPool: (poolAddress, universeId) => openPoolInUniverse(universeId, poolAddress),
 		overview: {
-			accountState,
+			browseState: poolBrowseState,
+			onBrowseStateChange: setPoolBrowseState,
 			activeUniverseId,
 			currentTimestamp,
-			environmentRefreshKey: activeEnvironmentNonce,
-			loadingSecurityPoolPage,
-			onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void loadBrowseSecurityPoolPage(pageIndex, pageSize, requestKey),
-			onRefreshSecurityPoolPage: () => void refreshBrowseSecurityPoolPage(),
-			onCreateSecurityPool: () => setSecurityPoolsView('create'),
-			securityPoolPage,
-			securityPoolPageFreshness,
-			securityPoolOverviewError,
 			securityPools,
 		},
 		securityPools,
 		securityPoolUniverseDirectoryError,
 		selectedPoolRepPrice,
-		universeDirectoryPools,
+		universeDirectoryPools: universeDirectoryLoadedForContext ? universeDirectoryPools : undefined,
 		workflow: {
+			controlledVaultView: vaultView,
+			onVaultViewChange: setVaultView,
 			accountState,
 			activeUniverseId,
 			checkedSecurityPoolAddress,
@@ -436,11 +449,7 @@ export function useSecurityPoolsRoute({
 			onLoadLiquidationFundingPreview: (managerAddress: Address, proposedRepPerEthPrice?: bigint) => void loadLiquidationFundingPreview(managerAddress, proposedRepPerEthPrice),
 			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
 			onReturnToCurrentUniverse: () => setSecurityPoolsView('browse'),
-			onSwitchToPoolUniverse: (universeId, selectedSecurityPoolAddress) => {
-				setActiveUniverseId(universeId)
-				setSecurityPoolAddress(selectedSecurityPoolAddress)
-				refreshSelectedPoolData(selectedSecurityPoolAddress)
-			},
+			onSwitchToPoolUniverse: openPoolInUniverse,
 			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress, proposedRepPerEthPrice),
 			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, universeId),
 			loadingPoolOracleManager,
@@ -501,7 +510,10 @@ export function useSecurityPoolsRoute({
 				},
 				onRedeemFees: () => void redeemFees(),
 				onRedeemRepFromVault: () => void redeemRepFromVault(),
-				onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
+				onSecurityVaultFormChange: update => {
+					if (update.selectedVaultOwner !== undefined && (update.selectedVaultOwner.trim() === '' || isHexAddressInput(update.selectedVaultOwner))) setVaultAddress(update.selectedVaultOwner)
+					setSecurityVaultForm(current => ({ ...current, ...update }))
+				},
 				onWithdrawRep: proposedRepPerEthPrice => void withdrawRep(proposedRepPerEthPrice),
 				securityVaultActiveAction,
 				securityVaultDetails,
@@ -550,15 +562,12 @@ export function useSecurityPoolsRoute({
 		securityPoolResult,
 		securityPoolsRouteContentProps,
 		selectedPool,
+		selectedPoolRepPrice,
 		setForkAuctionForm,
 		setSecurityPoolForm,
 		setSecurityVaultForm,
 		setTradingForm,
 		tradingResult,
-		uiRepPerEthPrice,
-		uiRepPerEthSource,
-		uiRepPerEthSourceUrl,
-		uiUsesOpenOraclePrice,
 		updateReportingForm,
 	}
 }

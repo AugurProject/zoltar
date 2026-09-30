@@ -6,8 +6,8 @@ import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.
 import { getPoolMintingCapacityAttoEth, getRemainingMintCapacity } from '../../markets/lib/trading.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from './securityPoolState.js'
 
-export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
-export type PoolStateFilter = 'all' | SecurityPoolLifecycleState
+import type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
+export type { PoolSortKey, PoolStateFilter } from '../../../types/app.js'
 
 export type PoolBrowseRow = Readonly<{
 	capacity: bigint
