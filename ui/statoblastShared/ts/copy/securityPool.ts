@@ -265,7 +265,7 @@ export function universeVaultCount(count: bigint) {
 	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
 }
 
-export const manualRepPerEth = 'Open Oracle REP / ETH starting price'
+export const manualRepPerEth = 'Open Oracle REP per ETH starting price'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
 
 export const currentProportionalObligation = 'Current proportional obligation'

@@ -23,8 +23,8 @@ export const poolMigrationCapacityEmpty = 'No REP backing or underwriting commit
 export const notStarted = 'Not started'
 export const walletUnresolvedDepositsEmpty = 'No unresolved parent escalation deposits remain for the connected wallet.'
 export const open = 'Open'
-export const priceEthPerRep = 'Price (ETH / REP)'
-export const depthChartPriceAxis = 'Price (ETH / REP), highest to lowest'
+export const priceEthPerRep = 'Price (ETH per REP)'
+export const depthChartPriceAxis = 'Price (ETH per REP), highest to lowest'
 export const repPurchasedAttoRep = 'REP purchased'
 export const startingTruthAuction = 'Starting truth auction…'
 export const startTruthAuction = 'Start truth auction'
@@ -33,7 +33,7 @@ export const submitBid = 'Submit bid'
 export const submitBidTitle = 'Submit bid'
 export const unresolvedDepositDetailsUnavailable = 'Unresolved escalation deposit details are unavailable for this pool right now.'
 export const formatCheckingPoolRepMigratedToChildUniverse = (outcomeLabel: CopyTemplateValue) => `Checking whether pool-held REP has already been migrated for the ${outcomeLabel} child universe.`
-export const formatEthPerRepValue = (price: CopyTemplateValue) => `${price}\u00a0ETH / REP`
+export const formatEthPerRepValue = (price: CopyTemplateValue) => `${price}\u00a0ETH per REP`
 export const attoEthRaised = 'ETH raised'
 export const attoRepSold = 'REP sold'
 export const minBid = 'Min bid'
@@ -41,14 +41,14 @@ export const winningThreshold = 'Winning threshold'
 export const reservePrice = 'Reserve price'
 export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
-export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH / REP from depth chart`
+export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH per REP from depth chart`
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security pool for ${outcomeLabel} universe does not exist.`
 export const forkUnavailablePlaceholder = '-'
 export const migration = 'Migration'
 export const forkReadiness = 'Fork readiness'
 export const notChosen = 'Not chosen'
 export const systemIsForking = 'System is forking'
-export const ethRep = 'ETH / REP'
+export const ethRep = 'ETH per REP'
 export const pendingRefund = 'Pending refund'
 export const refundWithdrawal = 'Refund withdrawal'
 export const withdrawRefund = 'Withdraw refund'
@@ -127,7 +127,7 @@ export const formatPoolMigrationRequiredForVault = (outcomeLabel: CopyTemplateVa
 export const vaultMigrationCompleteReason = 'Vault migration is already complete for this wallet.'
 export const combinedUnresolvedMigrationDetail = 'Optionally clear unresolved parent escalation-deposit accounting while migrating remaining REP backing units and underwriting commitments.'
 export const bidPrice = 'Bid price'
-export const bidPriceUnit = 'ETH / REP'
+export const bidPriceUnit = 'ETH per REP'
 export const submittingBidTruncated = 'Submitting bid…'
 export const truthAuctionAddress = 'Truth auction address'
 export const started = 'Started'
@@ -236,9 +236,9 @@ export const ethRefundSuffix = 'ETH refund'
 export const selectAllBids = 'Select all'
 export const clearBidSelection = 'Clear selection'
 export const currentClearingPriceLead = 'Current clearing price: '
-export const formatUseMinimumWinningPrice = (price: CopyTemplateValue) => `Use lowest winning price (${price}\u00a0ETH / REP)`
+export const formatUseMinimumWinningPrice = (price: CopyTemplateValue) => `Use lowest winning price (${price}\u00a0ETH per REP)`
 export const formatRepPerEthValue = (price: CopyTemplateValue) => `(≈\u00a0${price}\u00a0REP per ETH)`
-export const formatBidBelowClearingWarning = (price: CopyTemplateValue) => `This price is below the current clearing price, so the bid would lose and only be refunded. Bid above ${price}\u00a0ETH / REP to win.`
+export const formatBidBelowClearingWarning = (price: CopyTemplateValue) => `This price is below the current clearing price, so the bid would lose and only be refunded. Bid above ${price}\u00a0ETH per REP to win.`
 export const bidAtClearingWarning = 'This price equals the clearing price. Earlier bids at this price fill first, so this bid may fill only partly or not at all. Bid higher to win in full.'
 export const truthAuctionOpenProgressDetail = 'The ETH target has not been reached, so there is no clearing price yet. Once it is reached, a single clearing price decides which bids win.'
 export const truthAuctionClearingProgressDetail = 'Higher bids now raise the clearing price, so less REP is sold.'

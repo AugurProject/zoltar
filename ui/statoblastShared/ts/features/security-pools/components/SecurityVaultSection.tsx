@@ -181,10 +181,7 @@ export function SecurityVaultSection({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		withdrawableRepAmountAttoRep,
 	})
-	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount, minimumVaultRepDepositAttoRep, {
-		totalPoolHeldAttoRep: selectedPoolTotalPoolHeldAttoRep,
-		totalRepBackingUnits: currentSelectedVaultDetails?.totalRepBackingUnits,
-	})
+	const isDepositBelowMinimum = isSecurityVaultDepositBelowMinimum(currentSelectedVaultDetails, depositAmount, minimumVaultRepDepositAttoRep)
 	const hasClaimableFees = currentSelectedVaultDetails !== undefined && currentSelectedVaultDetails.claimableFeesAttoEth > 0n
 	const hasSufficientDepositAllowance = selectedVaultIsOwnedByAccount && depositAmount !== undefined && depositAmount > 0n && approvalRequirement.hasSufficientApproval
 	const hasInsufficientRepBalance = walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n

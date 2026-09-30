@@ -182,6 +182,8 @@ export type SecurityVaultDetails = {
 	minimumVaultRepDepositAttoRep?: bigint
 	openInterestAttoEth?: bigint
 	poolHeldRepPerCapacityBps?: bigint
+	/** Pool-held REP read in the same block as the vault, so it pairs with totalRepBackingUnits for unit conversions. */
+	totalPoolHeldRepBalanceAttoRep: bigint
 	totalRepBackingUnits: bigint
 	vaultAttoRepBacking: bigint
 	repToken: Address

@@ -202,7 +202,6 @@ export type SecurityPoolsSectionProps = {
 	activeView: SecurityPoolsView
 	createPool: SecurityPoolRouteContentProps
 	loadingUniverseDirectoryPools?: boolean | undefined
-	onActiveUniverseChange?: (universeId: bigint) => void
 	onActiveViewChange: (view: SecurityPoolsView) => void
 	onLoadUniverseDirectoryPools?: (() => void) | undefined
 	/** Opens a Browse pools row in its universe with one history entry and one pool load. */

@@ -90,6 +90,9 @@ describe('Security vault integration', () => {
 		expect(updatedVaultDetails.vaultAddress).toBe(walletAddress)
 		expect(updatedVaultDetails.securityPoolAddress).toBe(securityPoolAddress)
 		expect(updatedVaultDetails.vaultAttoRepBacking).toBe(depositAmount)
+		// The deposit check converts through these pool totals, so they come from the vault read itself.
+		expect(updatedVaultDetails.totalPoolHeldRepBalanceAttoRep).toBe(endPoolRepBalance)
+		expect(updatedVaultDetails.totalRepBackingUnits).toBe(vault.repBackingUnits)
 		expect(updatedVaultDetails.settlementCollateralAttoEth).toBe(0n)
 		await manipulatePriceOracle(client, mockWindow, updatedVaultDetails.managerAddress, 10n ** 18n)
 		const adjustment = await queueOracleManagerOperation(uiWriteClient, updatedVaultDetails.managerAddress, 'setVaultUnderwritingLimit', walletAddress, depositAmount / 2n, 300n)

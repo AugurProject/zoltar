@@ -201,12 +201,12 @@ describe('SecurityPoolsOverviewSection', () => {
 		).toContain(pool.securityPoolAddress)
 	})
 
-	test('labels the pool backing per ETH commitment with REP/ETH units', async () => {
+	test('labels the pool backing per ETH commitment with REP per ETH units', async () => {
 		const pool = createSecurityPool({ totalPoolHeldAttoRep: 60n * 10n ** 18n, totalUnderwritingLimitAttoEth: 10n * 10n ** 18n })
 		const renderedComponent = await renderIntoDocument(<SecurityPoolSummaryMetrics pool={pool} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const label = within(document.body).getByText('Pool-held REP per committed ETH')
-		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6 REP/ETH')
+		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6 REP per ETH')
 	})
 
 	test('renders standing ETH commitments separately from REP backing', async () => {

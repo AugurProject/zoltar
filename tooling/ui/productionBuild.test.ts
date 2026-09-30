@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import * as liquidationCopy from '../../ui/statoblastShared/ts/copy/liquidation.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
@@ -782,4 +783,135 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	const finalizedBody = await driver.waitForTransactionStatus('Confirmed', 'Finalize truth auction')
 	expect(finalizedBody).toContain('Truth auction')
 	expect(finalizedBody).toContain('Finalize truth auction')
+})
+
+function parseDisplayedAttoAmount(value: unknown, unit: string) {
+	if (typeof value !== 'string' || !value.endsWith(` ${unit}`)) throw new Error(`Expected an exact ${unit} amount, got ${String(value)}`)
+	const [whole = '', fraction = ''] = value
+		.slice(0, -unit.length - 1)
+		.replaceAll(' ', '')
+		.split('.')
+	if (!/^[0-9]+$/.test(whole) || !/^[0-9]{0,18}$/.test(fraction)) throw new Error(`Expected an exact ${unit} amount, got ${value}`)
+	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+}
+
+async function readTechnicalTransactionRow(driver: ProductionBrowserDriver, label: 'Contract' | 'Function') {
+	return await driver.evaluate(`[...document.querySelectorAll('.global-transaction-dialog .global-transaction-notice-row')].find(row => row.querySelector('dt')?.textContent?.trim() === ${JSON.stringify(label)})?.querySelector('dd')?.textContent?.trim()`)
+}
+
+async function readButtonDisabledReason(driver: ProductionBrowserDriver, label: string) {
+	return await driver.evaluate(
+		`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim() === ${JSON.stringify(label)}); if (!(button instanceof HTMLButtonElement)) return undefined; const ids = button.getAttribute('aria-describedby')?.split(' ') ?? []; return JSON.stringify({ disabled: button.disabled, reason: ids.map(id => document.getElementById(id)?.textContent?.trim() ?? '').join(' ') }) })()`,
+	)
+}
+
+productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&simScenario=ended-pool-commitment', { height: 900, width: 1440 }, async driver => {
+	const { discoverPools } = createWorkflowActions(driver)
+	const readWalletRepAttoRep = async () => {
+		const accountMenu = 'Account menu 0x000000…0000A1'
+		await driver.clickButton(accountMenu)
+		await driver.waitForBodyText('REP/ETH')
+		const balance = await driver.evaluate(`document.querySelector('[data-wallet-asset="REP"] button')?.getAttribute('title')`)
+		await driver.clickButton(accountMenu)
+		return parseDisplayedAttoAmount(balance, 'REP')
+	}
+	await discoverPools()
+	await driver.waitForBodyText('Will this resolve? (ended pool)')
+	const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+	expect(poolOpened).toBe(true)
+	await driver.waitForBodyText('FINALIZED AS YES')
+	await driver.waitForButtonEnabled('Open vaults')
+	await driver.clickButton('Open vaults')
+	await driver.waitForBodyWithoutText('Loading vault details…')
+	await driver.waitForButtonEnabled('Set commitment limit')
+	const walletRepBeforeRedemption = await readWalletRepAttoRep()
+
+	// With a commitment above 0, the ended pool blocks redemption and explains the exit path.
+	const blockedBody = await driver.waitForBodyText('Set your commitment limit to 0 ETH before redeeming REP.')
+	expect(blockedBody).toContain('Commitment limit\n80.00 ETH')
+	expect(blockedBody).toContain('Vault REP backing\n10 000.00 REP')
+	expect(JSON.parse(String(await readButtonDisabledReason(driver, 'Redeem REP')))).toEqual({ disabled: true, reason: 'Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.' })
+
+	// The resolved question makes the price coordinator reject staged operations, so the change goes straight to the pool.
+	await driver.clickButton('Set commitment limit')
+	await driver.waitForBodyText('The question has resolved, so this change goes straight to the pool without an oracle price.')
+	await driver.setInputByLabel('Commitment limit', '0')
+	await driver.waitForBodyText('Resulting commitment\n0 ETH')
+	await driver.clickButton('Set commitment limit', 1)
+	await driver.waitForTransactionStatus('Confirmed', 'Set commitment limit')
+	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('setUnderwritingLimit')
+	expect(await readTechnicalTransactionRow(driver, 'Contract')).toStartWith('Security Pool (')
+	await driver.waitForBodyText('Commitment limit changed')
+	const exitedBody = await driver.waitForBodyText('Commitment limit\n0 ETH')
+	expect(exitedBody).not.toContain('Queued')
+	await driver.clickButton('Dismiss')
+
+	await driver.waitForButtonEnabled('Redeem REP')
+	await driver.clickButton('Redeem REP')
+	await driver.waitForTransactionStatus('Confirmed', 'Redeem REP')
+	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('redeemRepFromVault')
+	await driver.clickButton('Dismiss')
+	const redeemedBody = await driver.waitForBodyText('No redeemable REP is available for this vault.')
+	expect(redeemedBody).not.toContain('Vault REP backing\n10 000.00 REP')
+	expect(await readWalletRepAttoRep()).toBe(walletRepBeforeRedemption + 10_000n * 10n ** 18n)
+})
+
+productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?simulate=1&simScenario=liquidation-distance', { height: 900, width: 1440 }, async driver => {
+	const { discoverPools } = createWorkflowActions(driver)
+	const readVaultCommitment = async (vaultAddress: string) =>
+		await driver.evaluate(
+			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-title-copy')?.textContent?.toLowerCase().includes(${JSON.stringify(vaultAddress.toLowerCase())})); return [...(row?.querySelectorAll('.vault-preview-strip > div') ?? [])].find(metric => metric.querySelector('.metric-label')?.textContent?.trim() === 'Commitment limit')?.querySelector('.currency-value')?.getAttribute('title') })()`,
+		)
+	const openLiquidationReview = async (targetVault: string) => {
+		const opened = await driver.evaluate(
+			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-title-copy')?.textContent?.toLowerCase().includes(${JSON.stringify(targetVault.toLowerCase())})); const button = [...(row?.querySelectorAll('.vault-more-actions button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Liquidate vault'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
+		)
+		expect(opened).toBe(true)
+		await driver.waitForBodyText('Commitment to transfer')
+		// A valid settled price selects direct execution, so the review checks the protocol distance at that price.
+		await driver.waitForBodyWithoutText(liquidationCopy.refreshingPriceValidity)
+		await driver.waitForBodyText(liquidationCopy.executeVaultLiquidation)
+		const modalBody = String(await driver.evaluate(`document.querySelector('[role="dialog"]')?.innerText`))
+		expect(modalBody.toLowerCase()).toContain(targetVault.toLowerCase())
+		expect(modalBody).toMatch(/4\.00\sREP\sper\sETH/)
+	}
+	const nearTargetVault = '0x00000000000000000000000000000000000000b2'
+	const farTargetVault = '0x00000000000000000000000000000000000000c3'
+	await discoverPools()
+	await driver.waitForBodyText('Will this resolve? (liquidation distance)')
+	const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+	expect(poolOpened).toBe(true)
+	await driver.waitForButtonEnabled('Vaults')
+	await driver.clickButton('Vaults')
+	await driver.waitForButtonEnabled('All vaults')
+	await driver.clickButton('All vaults')
+	await driver.waitForBodyText(nearTargetVault)
+	expect(await readVaultCommitment(nearTargetVault)).toBe('128 ETH')
+	expect(await readVaultCommitment(farTargetVault)).toBe('160 ETH')
+
+	// Undercollateralized, but its 3.906 REP/ETH threshold is only 2.3% below the 4 REP/ETH price.
+	await openLiquidationReview(nearTargetVault)
+	await driver.setInputByLabel('Commitment to transfer', '10')
+	await driver.waitForBodyText(liquidationCopy.formatLiquidationDistanceTooLowReason('10%'))
+	expect(JSON.parse(String(await readButtonDisabledReason(driver, 'Execute vault liquidation')))).toEqual({ disabled: true, reason: liquidationCopy.formatLiquidationDistanceTooLowReason('10%') })
+	expect(await driver.evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent?.trim() === 'Max')?.disabled`)).toBe(true)
+	await driver.clickButton('Cancel')
+	await driver.waitForBodyWithoutText('Commitment to transfer')
+
+	// Its 3.125 REP/ETH threshold is 21.9% below the price, past the minimum distance.
+	await openLiquidationReview(farTargetVault)
+	await driver.waitForButtonEnabled('Max')
+	await driver.clickButton('Max')
+	await driver.waitForButtonEnabled('Execute vault liquidation')
+	expect(await driver.evaluate('document.body.innerText')).not.toContain(liquidationCopy.formatLiquidationDistanceTooLowReason('10%'))
+	await driver.clickButton('Execute vault liquidation')
+	await driver.waitForTransactionStatus('Confirmed', 'Liquidation executed')
+	await driver.clickButton('Dismiss')
+	let commitments: unknown[] = []
+	for (let attempt = 0; attempt < 600; attempt += 1) {
+		commitments = await Promise.all([readVaultCommitment(farTargetVault), readVaultCommitment(nearTargetVault), readVaultCommitment('0x00000000000000000000000000000000000000a1')])
+		if (commitments[0] === '0 ETH') break
+		await Bun.sleep(50)
+	}
+	expect(commitments).toEqual(['0 ETH', '128 ETH', '240 ETH'])
 })

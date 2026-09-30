@@ -202,10 +202,11 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(document.body).getByRole('button', { name: 'Discover pools' })).not.toBeNull()
 	})
 
-	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {
+	void test('opens a created pool through the single pool navigation and returns to browse without a refresh', async () => {
 		const createdPoolAddress = getAddress('0x00000000000000000000000000000000000000a4')
 		const activeViewChanges: string[] = []
 		const refreshCalls: string[] = []
+		const openedPools: Array<[string, bigint]> = []
 
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -214,6 +215,9 @@ void describe('SecurityPoolsSection', () => {
 					activeView: 'create',
 					onActiveViewChange: activeView => {
 						activeViewChanges.push(activeView)
+					},
+					onOpenSecurityPool: (securityPoolAddress, universeId) => {
+						openedPools.push([securityPoolAddress, universeId])
 					},
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
@@ -239,12 +243,13 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: /^Open pool:/ }))
-		expect(activeViewChanges).toEqual(['operate'])
-		expect(refreshCalls).toEqual([createdPoolAddress])
+		expect(openedPools).toEqual([[createdPoolAddress, 1n]])
+		expect(activeViewChanges).toEqual([])
+		expect(refreshCalls).toEqual([])
 
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to browse' }))
-		expect(activeViewChanges).toEqual(['operate', 'browse'])
-		expect(refreshCalls).toEqual([createdPoolAddress])
+		expect(activeViewChanges).toEqual(['browse'])
+		expect(refreshCalls).toEqual([])
 	})
 
 	void test('Create another pool button is wired in create mode', async () => {

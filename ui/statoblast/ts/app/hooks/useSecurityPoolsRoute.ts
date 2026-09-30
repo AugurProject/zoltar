@@ -42,7 +42,6 @@ export function useSecurityPoolsRoute({
 	securityPoolsView,
 	selectedPoolRefreshNonce,
 	selectedPoolView,
-	setActiveUniverseId,
 	setSecurityPoolAddress,
 	setSecurityPoolQuestionId,
 	setSecurityPoolsView,
@@ -72,7 +71,6 @@ export function useSecurityPoolsRoute({
 	securityPoolsView: string
 	selectedPoolRefreshNonce: number
 	selectedPoolView: SecurityPoolsSectionProps['workflow']['selectedPoolView']
-	setActiveUniverseId: (universeId: bigint) => void
 	setSecurityPoolAddress: (securityPoolAddress: string) => void
 	setSecurityPoolQuestionId: (questionId: string) => void
 	setSecurityPoolsView: (view: SecurityPoolsView) => void
@@ -328,7 +326,6 @@ export function useSecurityPoolsRoute({
 	}
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
-		onActiveUniverseChange: setActiveUniverseId,
 		loadingUniverseDirectoryPools,
 		createPool: {
 			accountState,

@@ -46,24 +46,27 @@ export function doesLoadedSecurityVaultMatchSelection({ accountAddress, security
 	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultOwner)
 }
 
+/** The vault read supplies the backing and both pool totals from one block, so the unit conversion never mixes reads. */
+type SecurityVaultDepositState = Pick<SecurityVaultDetails, 'totalPoolHeldRepBalanceAttoRep' | 'totalRepBackingUnits' | 'vaultAttoRepBacking'>
+
 /**
  * Mirrors how a deposit is credited: REP converts to backing units with a floor, and the vault minimum is checked after
  * converting those units back to REP against the post-deposit pool. The round trip can lose attoREP whenever the pool's
  * REP per backing unit is not exact, so a deposit of exactly the minimum can still fall short.
  */
-function getCreditedVaultDepositAttoRep(depositAmount: bigint, pool: { totalPoolHeldAttoRep: bigint | undefined; totalRepBackingUnits: bigint | undefined } | undefined) {
-	const totalPoolHeldAttoRep = pool?.totalPoolHeldAttoRep
-	const totalRepBackingUnits = pool?.totalRepBackingUnits
+function getCreditedVaultDepositAttoRep(depositAmount: bigint, vault: SecurityVaultDepositState | undefined) {
+	const totalPoolHeldAttoRep = vault?.totalPoolHeldRepBalanceAttoRep
+	const totalRepBackingUnits = vault?.totalRepBackingUnits
 	if (depositAmount <= 0n || totalPoolHeldAttoRep === undefined || totalRepBackingUnits === undefined) return depositAmount
 	if (totalRepBackingUnits === 0n || totalPoolHeldAttoRep === 0n) return depositAmount
 	const creditedBackingUnits = (depositAmount * totalRepBackingUnits) / totalPoolHeldAttoRep
 	return (creditedBackingUnits * (totalPoolHeldAttoRep + depositAmount)) / (totalRepBackingUnits + creditedBackingUnits)
 }
 
-export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep: bigint | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, pool?: { totalPoolHeldAttoRep: bigint | undefined; totalRepBackingUnits: bigint | undefined } | undefined) {
+export function isSecurityVaultDepositBelowMinimum(vault: SecurityVaultDepositState | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP) {
 	if (depositAmount === undefined || depositAmount <= 0n) return false
 	// The contract checks the whole vault after every deposit, so an existing vault below the minimum must also reach it.
-	return (currentVaultRepBackingAttoRep ?? 0n) + getCreditedVaultDepositAttoRep(depositAmount, pool) < minimumVaultRepDepositAttoRep
+	return (vault?.vaultAttoRepBacking ?? 0n) + getCreditedVaultDepositAttoRep(depositAmount, vault) < minimumVaultRepDepositAttoRep
 }
 
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {

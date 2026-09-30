@@ -399,7 +399,7 @@ function formatTruthAuctionValidationPrice(price: bigint) {
 }
 
 const TRUTH_AUCTION_MAX_PRICE_INPUT = formatTruthAuctionValidationPrice(TRUTH_AUCTION_MAX_PRICE)
-const TRUTH_AUCTION_PRICE_RANGE_MESSAGE = `Bid price must be between ${formatTruthAuctionValidationPrice(TRUTH_AUCTION_MIN_PRICE)} and ${TRUTH_AUCTION_MAX_PRICE_INPUT} ETH / REP.`
+const TRUTH_AUCTION_PRICE_RANGE_MESSAGE = `Bid price must be between ${formatTruthAuctionValidationPrice(TRUTH_AUCTION_MIN_PRICE)} and ${TRUTH_AUCTION_MAX_PRICE_INPUT} ETH per REP.`
 const truthAuctionMaxPriceParts = TRUTH_AUCTION_MAX_PRICE_INPUT.split('.')
 const TRUTH_AUCTION_MAX_PRICE_WHOLE = truthAuctionMaxPriceParts[0] ?? '0'
 const rawTruthAuctionMaxPriceFraction = truthAuctionMaxPriceParts[1] ?? ''

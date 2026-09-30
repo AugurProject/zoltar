@@ -128,7 +128,6 @@ export function App() {
 		securityPoolsView,
 		selectedPoolRefreshNonce,
 		selectedPoolView,
-		setActiveUniverseId,
 		setSecurityPoolAddress,
 		setSecurityPoolQuestionId,
 		setSecurityPoolsView,

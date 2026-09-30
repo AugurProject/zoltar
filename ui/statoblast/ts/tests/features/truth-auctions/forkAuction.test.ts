@@ -198,7 +198,7 @@ void describe('fork auction helpers', () => {
 		expect(smallestSupportedPositiveTick).not.toBeUndefined()
 		expect(getTruthAuctionTickAtPrice(maxSupportedPrice)).toBe(TRUTH_AUCTION_MAX_TICK)
 		expect(getTruthAuctionTickAtPrice(maxSupportedPrice + 1n)).toBeUndefined()
-		const rangeMessage = `Bid price must be between ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(findTruthAuctionMinSupportedTick()))} and ${formatCurrencyInputBalance(maxSupportedPrice)} ETH / REP.`
+		const rangeMessage = `Bid price must be between ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(findTruthAuctionMinSupportedTick()))} and ${formatCurrencyInputBalance(maxSupportedPrice)} ETH per REP.`
 		expect(getTruthAuctionBidPriceValidationMessage((maxSupportedPrice + 1n).toString())).toBe(rangeMessage)
 		expect(getTruthAuctionBidPriceValidationMessage('9'.repeat(2_048))).toBe(rangeMessage)
 		expect(getTruthAuctionBidPreview('9'.repeat(2_048))).toBeUndefined()
@@ -886,11 +886,11 @@ void describe('fork auction helpers', () => {
 		expect(rowsViewModel.rows.map(row => row.statusLabel)).toEqual(['Refunded', 'Winning', 'Winning'])
 		expect(rowsViewModel.rows[0]?.settlementControl?.disabled).toBe(true)
 		expect(rowsViewModel.rows[1]?.settlementControl).toEqual({
-			ariaLabel: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
+			ariaLabel: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH per REP',
 			bidKey: winningBidKey,
 			checked: true,
 			disabled: false,
-			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
+			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH per REP',
 		})
 		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
 		expect(rowsViewModel.rows[0]?.estimate).toBeUndefined()

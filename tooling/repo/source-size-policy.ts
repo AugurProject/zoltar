@@ -35,7 +35,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
-		['ui/statoblastShared/ts/protocol/securityPools.ts', 725],
+		['ui/statoblastShared/ts/protocol/securityPools.ts', 723],
 		['ui/coreShared/ts/app/hooks/useOnchainState.ts', 609],
 	]),
 	...allowances('The AugurScan browser bundle and its live-update module still need feature-level decomposition.', [

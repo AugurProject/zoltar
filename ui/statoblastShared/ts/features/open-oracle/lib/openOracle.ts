@@ -14,6 +14,10 @@ import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/fo
 import type { TokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
 import { getOpenOracleCreateParameterValidation } from '../../../protocol/openOracleValidation.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 const OPEN_ORACLE_DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
 type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
@@ -420,6 +424,15 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 export function formatOpenOracleMultiplier(multiplier: bigint | undefined) {
 	if (multiplier === undefined) return '—'
 	return formatMultiplier(multiplier, 2)
+}
+
+/** Price directions name the deployment's canonical WETH as ETH so pool-coordinator reports read REP per ETH like the rest of Statoblast. */
+function getOpenOraclePriceTokenLabel(tokenAddress: string, tokenSymbol: string) {
+	return sameAddress(tokenAddress, getWethAddress()) ? commonCopy.eth : tokenSymbol
+}
+
+export function formatOpenOracleReportPriceUnit(report: Pick<OpenOracleReportSummary, 'token1' | 'token1Symbol' | 'token2' | 'token2Symbol'>) {
+	return openOracleCopy.formatReportPriceUnit(getOpenOraclePriceTokenLabel(report.token1, report.token1Symbol), getOpenOraclePriceTokenLabel(report.token2, report.token2Symbol))
 }
 
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {

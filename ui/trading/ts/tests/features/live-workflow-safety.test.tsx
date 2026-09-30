@@ -245,7 +245,7 @@ describe('live workflow safety boundary', () => {
 		cleanupRendered = rendered.cleanup
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'initial market details')
 		for (const phrase of forbiddenLiveCopy) expect(document.body.textContent?.toLowerCase()).not.toContain(phrase.toLowerCase())
-		expect(document.body.textContent).not.toContain('2 nETH / gas')
+		expect(document.body.textContent).not.toContain('2\u00a0nanoETH per gas')
 		expect(document.body.textContent).toContain('Invalid timestamp')
 		expect(document.body.textContent).not.toContain('Invalid timestamp UTC')
 		expect(document.body.textContent).not.toContain('Refresh')

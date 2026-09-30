@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
+import { zeroHash } from '@zoltar/core-shared/evm/ethereum'
 import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
@@ -82,19 +83,17 @@ describe('opening a pool from Browse pools', () => {
 		resetRoutingForTesting()
 	})
 
-	/** Renders Browse pools wired to the real URL state and counts history pushes and component-triggered pool loads after the first render. */
-	async function renderBrowse(url: string, pool: ListedSecurityPool) {
+	/** Renders the pools route wired to the real URL state and counts history pushes and component-triggered pool loads after the first render. */
+	async function renderPools(url: string, pool: ListedSecurityPool | undefined, createPool = createCreatePoolProps()) {
 		cleanupDom = installDomEnvironment(url).cleanup
-		seedDownloadedPool(pool)
+		if (pool !== undefined) seedDownloadedPool(pool)
 		const selectedPoolLoads: Array<string | undefined> = []
-		const createPool = createCreatePoolProps()
 		function Harness() {
 			const urlState = useStatoblastUrlState()
 			return (
 				<SecurityPoolsSection
 					activeView={urlState.securityPoolsView}
 					createPool={createPool}
-					onActiveUniverseChange={urlState.setActiveUniverseId}
 					onActiveViewChange={urlState.setSecurityPoolsView}
 					onOpenSecurityPool={(securityPoolAddress, universeId) => urlState.openSecurityPoolInUniverse(universeId, securityPoolAddress)}
 					overview={createOverviewProps(urlState.activeUniverseId)}
@@ -124,7 +123,7 @@ describe('opening a pool from Browse pools', () => {
 	}
 
 	test('opens a listed pool with one history entry and leaves the single pool load to the route', async () => {
-		const counts = await renderBrowse('http://localhost/#/pools?universe=11', createSelectedPool({ hasLoadedVaults: false, securityPoolAddress: POOL_ADDRESS, universeId: 11n }))
+		const counts = await renderPools('http://localhost/#/pools?universe=11', createSelectedPool({ hasLoadedVaults: false, securityPoolAddress: POOL_ADDRESS, universeId: 11n }))
 		await act(() => {
 			fireEvent.click(within(document.body).getByRole('link', { name: new RegExp(`^Open pool: .*${POOL_ADDRESS}`) }))
 		})
@@ -134,7 +133,7 @@ describe('opening a pool from Browse pools', () => {
 	})
 
 	test('opens a pasted pool from another universe with one history entry that Back undoes', async () => {
-		const counts = await renderBrowse('http://localhost/#/pools?universe=1', createSelectedPool({ hasLoadedVaults: false, securityPoolAddress: POOL_ADDRESS, universeId: 11n }))
+		const counts = await renderPools('http://localhost/#/pools?universe=1', createSelectedPool({ hasLoadedVaults: false, securityPoolAddress: POOL_ADDRESS, universeId: 11n }))
 		const search = within(document.body).getByLabelText('Search downloaded pools')
 		if (!(search instanceof window.HTMLInputElement)) throw new Error('Expected the pool search input')
 		search.value = POOL_ADDRESS
@@ -152,5 +151,26 @@ describe('opening a pool from Browse pools', () => {
 			window.dispatchEvent(new Event('popstate'))
 		})
 		expect(window.location.hash).toBe('#/pools?universe=1')
+	})
+
+	test('opens a newly created pool from another universe with one history entry and leaves the pool load to the route', async () => {
+		const createPool: SecurityPoolRouteContentProps = {
+			...createCreatePoolProps(),
+			securityPoolResult: {
+				deployPoolHash: zeroHash,
+				initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
+				questionId: '0x01',
+				securityPoolAddress: POOL_ADDRESS,
+				statoblastSecurityMultiplierBps: 20_000n,
+				universeId: 11n,
+			},
+		}
+		const counts = await renderPools('http://localhost/#/pools/create?universe=1', undefined, createPool)
+		await act(() => {
+			fireEvent.click(within(document.body).getByRole('button', { name: /^Open pool:/ }))
+		})
+		expect(counts.pushes).toBe(1)
+		expect(window.location.hash).toBe(`#/pools/${POOL_ADDRESS}?universe=11`)
+		expect(counts.selectedPoolLoads).toEqual([])
 	})
 })
