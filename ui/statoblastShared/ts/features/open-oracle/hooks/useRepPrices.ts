@@ -28,22 +28,20 @@ declare global {
 function getRepPriceQuoter(): RepPriceQuoter {
 	return globalThis.__zoltarRepPriceQuoterOverride__ ?? { getRepAddress, isRepPricingEnabled, quoteBestExactInputWithSource, quoteBestV3ExactInputWithSource, quoteRepForUsdcV4WithSource }
 }
-import type { RepPriceFailure } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
+import type { RepPriceFailure, RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
 const ATTO_REP = 10n ** 18n
 const REP_PRICE_CACHE_TTL_MILLISECONDS = 30_000
 
-type PriceSource = 'v4' | 'v3' | 'mock'
-
 type RepPrices = {
 	repPerEthPrice: bigint | undefined // REP in attoETH-style token units received for 1 ETH
 	repPerEthFailure: RepPriceFailure | undefined
-	repPerEthSource: PriceSource | undefined
+	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 	repUsdcPrice: bigint | undefined // USDC in 1e6 units received for 1 REP
 	repUsdcFailure: RepPriceFailure | undefined
-	repUsdcSource: PriceSource | undefined
+	repUsdcSource: RepPriceSource | undefined
 	repUsdcSourceUrl: string | undefined
 	isLoadingRepPrices: boolean
 	isRefreshingRepPrices: boolean
@@ -53,11 +51,11 @@ type RepPrices = {
 type CachedRepPrices = {
 	repPerEthCachedAtMs: number | undefined
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: PriceSource | undefined
+	repPerEthSource: RepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 	repUsdcCachedAtMs: number | undefined
 	repUsdcPrice: bigint | undefined
-	repUsdcSource: PriceSource | undefined
+	repUsdcSource: RepPriceSource | undefined
 	repUsdcSourceUrl: string | undefined
 }
 
@@ -102,7 +100,7 @@ export function resetRepPriceCacheForTesting() {
 	repPriceRefreshGenerationByBackend.clear()
 }
 
-async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadClient']>): Promise<{ price: bigint; source: PriceSource; sourceUrl: string | undefined }> {
+async function fetchRepPerEthPrice(client: ReturnType<ChainBackend['createReadClient']>): Promise<{ price: bigint; source: RepPriceSource; sourceUrl: string | undefined }> {
 	const quoter = getRepPriceQuoter()
 	const repAddress = quoter.getRepAddress()
 	try {
@@ -214,11 +212,11 @@ export function useRepPrices({ enabled = true }: UseRepPricesOptions = {}): RepP
 	const displayedBackend = useRef(backend)
 	const repPerEthPrice = useSignal<bigint | undefined>(cachedRepPrices?.repPerEthPrice)
 	const repPerEthFailure = useSignal<RepPriceFailure | undefined>(undefined)
-	const repPerEthSource = useSignal<PriceSource | undefined>(cachedRepPrices?.repPerEthSource)
+	const repPerEthSource = useSignal<RepPriceSource | undefined>(cachedRepPrices?.repPerEthSource)
 	const repPerEthSourceUrl = useSignal<string | undefined>(cachedRepPrices?.repPerEthSourceUrl)
 	const repUsdcPrice = useSignal<bigint | undefined>(cachedRepPrices?.repUsdcPrice)
 	const repUsdcFailure = useSignal<RepPriceFailure | undefined>(undefined)
-	const repUsdcSource = useSignal<PriceSource | undefined>(cachedRepPrices?.repUsdcSource)
+	const repUsdcSource = useSignal<RepPriceSource | undefined>(cachedRepPrices?.repUsdcSource)
 	const repUsdcSourceUrl = useSignal<string | undefined>(cachedRepPrices?.repUsdcSourceUrl)
 	const repPricesLoad = useLoadController()
 	const nextRepPricesLoad = useRequestGuard()

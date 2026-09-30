@@ -2,7 +2,7 @@ import { useSignal } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import type { QueuedVaultOperationState, SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { QueuedVaultOperationState, SecurityVaultActionResult } from '../../../types/contracts.js'
 
 type TrackedOperation = { managerAddress: Address; selectionKey: string; result: SecurityVaultActionResult }
 type Parameters = {

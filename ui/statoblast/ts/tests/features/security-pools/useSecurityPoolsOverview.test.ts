@@ -10,7 +10,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import { createCoordinatorFundingRequirement, createSecurityPoolPageFromLoadedPools, createSecurityPoolsOverviewDependencies, renderSecurityPoolsOverviewHook, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'
 import { createSelectedPool } from './workflow/builders.js'

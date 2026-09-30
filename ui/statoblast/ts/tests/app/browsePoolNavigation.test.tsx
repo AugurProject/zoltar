@@ -10,7 +10,7 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { resetRoutingForTesting } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { getLocalEntityScope } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { resetLocalEntityStoreForTesting, setEntityFavorite } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'

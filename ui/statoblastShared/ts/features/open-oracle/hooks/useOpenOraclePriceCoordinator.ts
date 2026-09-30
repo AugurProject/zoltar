@@ -14,7 +14,7 @@ import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TransactionLifecycleParameters, WriteOperationContext } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleActionResult, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, OracleManagerDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseOpenOraclePriceCoordinatorParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext

@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { applyReportingFormUpdate } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingForm.js'
-import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ReportingFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 function createReportingFormState(): ReportingFormState {
 	return {

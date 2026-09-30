@@ -14,7 +14,8 @@ import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, ReadClient, StagedOracleExecutionResult, StagedOracleQueuedResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, QueuedVaultOperationState, SecurityVaultActionResult, OracleManagerDetails, OracleQueueOperation, StagedOracleExecutionResult, StagedOracleQueuedResult } from '../types/contracts.js'
 import { requireStagedOperationTupleArray } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
@@ -167,8 +168,8 @@ export async function loadOracleManagerDetails(client: ReadClient, managerAddres
 	const resolvedOracleAddress = openOracleAddress ?? getInfraContractAddresses().openOracle
 	let callbackStateHash: Hex | undefined
 	let exactToken1Report: bigint | undefined
-	let pendingOperation: import('@zoltar/ui-core-shared/types/contracts.js').StagedOracleOperation | undefined
-	let stagedOperations: import('@zoltar/ui-core-shared/types/contracts.js').StagedOracleOperation[] = []
+	let pendingOperation: import('../types/contracts.js').StagedOracleOperation | undefined
+	let stagedOperations: import('../types/contracts.js').StagedOracleOperation[] = []
 	let token1: Address | undefined
 	let token2: Address | undefined
 	let pendingReportReadyAtTimestamp: bigint | undefined

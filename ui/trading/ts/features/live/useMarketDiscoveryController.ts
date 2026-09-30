@@ -215,7 +215,7 @@ export function useMarketDiscoveryController({
 	useEffect(() => {
 		// Navigation is never blocked; running trades keep their workflow state while the new route loads its own data.
 		transaction.resetUnlocked()
-		wallet.setWalletConnectionFeedback(current => (current?.route === route ? current : undefined))
+		wallet.dispatch({ type: 'routeChanged', route })
 		if (previousRoute.current !== route) {
 			// Results only carry over between routes that discover the same thing, such as the trade and liquidity views of one pool.
 			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) {

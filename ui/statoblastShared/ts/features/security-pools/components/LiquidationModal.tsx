@@ -40,7 +40,7 @@ import {
 import { useModalFocusIsolation } from '@zoltar/ui-core-shared/hooks/useModalFocusIsolation.js'
 import { ModalFrame } from '@zoltar/ui-core-shared/components/ModalFrame.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
-import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { UiPriceOracle } from '../lib/uiPriceOracle.js'
 import { LiquidationApprovalSummary, LiquidationContextSummary, QueuedLiquidationStatusCard } from './LiquidationModalSections.js'

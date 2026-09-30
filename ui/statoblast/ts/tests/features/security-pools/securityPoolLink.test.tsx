@@ -5,18 +5,18 @@ import { installLinkNavigationLifecycle } from '@zoltar/ui-core-shared/tests/tes
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import { SecurityPoolLink } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolLink.js'
+import { StatoblastSecurityPoolLink } from '@zoltar/ui-statoblast-shared/features/security-pools/components/StatoblastSecurityPoolLink.js'
 import { getSecurityPoolLinkHref } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolNavigation.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 
 installTestRouting()
-describe('SecurityPoolLink', () => {
+describe('StatoblastSecurityPoolLink', () => {
 	const { trackCleanup } = installLinkNavigationLifecycle()
 
 	test('renders the shared address value and follows normal left-click navigation', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000f1')
-		const renderedComponent = await renderIntoDocument(<SecurityPoolLink securityPoolAddress={securityPoolAddress} selectedPoolView='fork-workflow' universeId={11n} />)
+		const renderedComponent = await renderIntoDocument(<StatoblastSecurityPoolLink securityPoolAddress={securityPoolAddress} selectedPoolView='fork-workflow' universeId={11n} />)
 		trackCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)
@@ -40,7 +40,7 @@ describe('SecurityPoolLink', () => {
 
 	test('renders custom children and keeps modified clicks on the link href', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000f2')
-		const renderedComponent = await renderIntoDocument(<SecurityPoolLink securityPoolAddress={securityPoolAddress}>Parent pool</SecurityPoolLink>)
+		const renderedComponent = await renderIntoDocument(<StatoblastSecurityPoolLink securityPoolAddress={securityPoolAddress}>Parent pool</StatoblastSecurityPoolLink>)
 		trackCleanup(renderedComponent.cleanup)
 
 		const documentQueries = within(document.body)

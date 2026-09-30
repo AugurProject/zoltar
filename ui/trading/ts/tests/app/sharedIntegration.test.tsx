@@ -4,7 +4,7 @@ import { act } from 'preact/test-utils'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO, registerTradingSimulationScenario, withDefaultTradingSimulationScenario } from '../../simulation/index.js'
 import { getRegisteredSimulationScenarios, getSimulationScenarioDescription, getSimulationScenarioLabel } from '@zoltar/ui-core-shared/simulation/scenarios.js'
 import * as appCopy from '../../copy/app.js'
-import { SecurityPoolLink } from '../../components/SecurityPoolLink.js'
+import { TradingSecurityPoolLink } from '../../components/TradingSecurityPoolLink.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
@@ -57,7 +57,7 @@ test('Trading installs shared routing for simulation scenario navigation', () =>
 })
 
 test('Trading production links preserve the active simulation route query', async () => {
-	const productionSources = ['app/App.tsx', 'components/SecurityPoolLink.tsx', 'features/LiveMarketBrowser.tsx', 'features/LiveSecurityPoolDetails.tsx', 'features/LiveTrading.tsx']
+	const productionSources = ['app/App.tsx', 'components/TradingSecurityPoolLink.tsx', 'features/LiveMarketBrowser.tsx', 'features/LiveSecurityPoolDetails.tsx', 'features/LiveTrading.tsx']
 	for (const source of productionSources) {
 		const contents = await readFile(join(import.meta.dir, '../..', source), 'utf8')
 		expect(contents).not.toMatch(/href=['"]#\//)
@@ -234,7 +234,7 @@ test('Trading reports a failed environment on the deployment route', async () =>
 test('Trading address links use the coreShared address value', async () => {
 	const dom = installDomEnvironment()
 	const address = '0x00000000000000000000000000000000000000a1'
-	const rendered = await renderIntoDocument(<SecurityPoolLink value={address} />)
+	const rendered = await renderIntoDocument(<TradingSecurityPoolLink value={address} />)
 	expect(rendered.container.querySelector('a.security-pool-link .address-value')?.getAttribute('title')).toBe(address)
 	expect(rendered.container.querySelector('a.security-pool-link')?.getAttribute('href')).toBe(`#/security-pool/${address}`)
 	// The address is the link's only label and a direct child, so the shared rest-state underline rule applies to it.

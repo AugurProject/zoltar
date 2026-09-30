@@ -6,7 +6,8 @@ import { deriveHasForkActivity, getForkAuctionStageView, type ForkAuctionStageVi
 import type { LoadableValueState } from '@zoltar/ui-core-shared/lib/loadState.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
-import type { ListedSecurityPool, OracleManagerDetails, ReportingDetails, ReportingOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, ReportingDetails, TruthAuctionMetrics } from '../../../types/contracts.js'
 
 const FORK_WORKFLOW_SELECTION_STAGES = ['fork-triggered', 'migration', 'auction', 'settlement'] as const
 export type ForkWorkflowSelectionStage = (typeof FORK_WORKFLOW_SELECTION_STAGES)[number]

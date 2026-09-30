@@ -7,7 +7,9 @@
 - `transactions/` owns transaction guards, presentation, receipts, and workflow state.
 - `wallet/` owns providers, clients, chain identity, networks, and wallet assets.
 - `navigation/` owns route and URL-state helpers.
-- `protocol/` owns small cross-product contract actions and calculations.
+- `app/` owns the reusable application shell: frame, header, notices, routing hooks, and on-chain runtime composition.
+- `copy/` owns cross-product user-facing text (see `copy/README.md`).
+- `types/` owns cross-product contract and component types; Statoblast product types live in `ui/statoblastShared/ts/types`.
 - `simulation/` owns browser-local execution infrastructure.
 - `hooks/` owns runtime-neutral Preact hooks.
 - `tests/testUtils/` owns shared test-only helpers.

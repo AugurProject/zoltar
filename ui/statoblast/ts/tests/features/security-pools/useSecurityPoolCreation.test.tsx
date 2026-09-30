@@ -10,7 +10,8 @@ import { installModuleMocks } from '@zoltar/ui-core-shared/tests/testUtils/modul
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
-import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityPoolCreationResult } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 
@@ -771,8 +772,8 @@ describe('useSecurityPoolCreation', () => {
 
 			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
 			expect(requireState(state).securityPoolError).toBe('Action canceled in wallet.')
-			const reviewSignal = requireState(state).securityPoolReviewSignal
-			expect(requireState(state).securityPoolReviewSignal).toBeUndefined()
+			const reviewSignal = requireState(state).securityPoolReviewAbortSignal
+			expect(requireState(state).securityPoolReviewAbortSignal).toBeUndefined()
 			expect(embeddedTransactionSteps.value).toBeUndefined()
 			expect(reviewSignal).toBeUndefined()
 		} finally {
@@ -844,7 +845,7 @@ describe('useSecurityPoolCreation', () => {
 		expect(embeddedDuringWrite).toBe(reviewSignalDuringWrite)
 		expect(reviewSignalDuringWrite?.aborted).toBe(true)
 		expect(embeddedTransactionSteps.value).toBeUndefined()
-		expect(requireState(state).securityPoolReviewSignal).toBeUndefined()
+		expect(requireState(state).securityPoolReviewAbortSignal).toBeUndefined()
 		expect(requestedRows.map(rows => rows.map(row => row.label))).toEqual([['Question', 'Security multiplier', 'Initial report priority fee']])
 		expect(requestedRows[0]?.[0]?.value).toBe('Batched question')
 		expect(createSecurityPool.mock.calls[0]?.[2]).toMatchObject({ title: 'Batched question' })

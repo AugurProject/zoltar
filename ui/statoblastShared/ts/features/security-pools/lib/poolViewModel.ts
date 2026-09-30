@@ -8,7 +8,7 @@ import { resolveRequestedLoadableValueState } from '@zoltar/ui-core-shared/lib/l
 import { getPoolRegistryPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getActiveAppChainWalletBlocker } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import type { ForkAuctionDetails, ReportingDetails, SecurityPoolVaultSummary, SecurityVaultDetails, TradingShareBalances } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ReportingDetails, SecurityPoolVaultSummary, SecurityVaultDetails, TradingShareBalances } from '../../../types/contracts.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { getReportingLockedUntilMessage, hasReportingOpened } from '../../reporting/lib/reporting.js'
 import { addOpenOracleBountyBuffer } from '../../open-oracle/lib/openOracle.js'

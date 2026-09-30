@@ -6,7 +6,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
-import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 type UseLiquidationReceiverVaultParameters = {
 	accountAddress: Address | undefined

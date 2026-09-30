@@ -12,7 +12,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { FavoriteToggle } from '@zoltar/ui-core-shared/components/FavoriteToggle.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getSecurityPoolLinkHref } from '../lib/securityPoolNavigation.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'

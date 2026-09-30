@@ -1,7 +1,7 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import type { ForkAuctionDetails, ListedSecurityPool, OracleQueueOperation } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool, OracleQueueOperation } from '../../../types/contracts.js'
 
 export function buildSelectedPoolSummaryPool({ forkAuctionDetails, selectedPool }: { forkAuctionDetails: ForkAuctionDetails | undefined; selectedPool: ListedSecurityPool | undefined }) {
 	if (selectedPool === undefined) return undefined

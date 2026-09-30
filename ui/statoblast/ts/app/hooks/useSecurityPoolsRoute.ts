@@ -2,8 +2,9 @@ import { RequestPriceModal } from '@zoltar/ui-statoblast-shared/features/open-or
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
-import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
-import { useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
+import type { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
+import type { useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
+import type { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
@@ -11,109 +12,64 @@ import { useSecurityVaultOperations } from '@zoltar/ui-statoblast-shared/feature
 import { useTradingOperations } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useTradingOperations.js'
 import { applyReportingFormUpdate } from '@zoltar/ui-statoblast-shared/features/reporting/lib/reportingForm.js'
 import { getCurrentPoolOracleManagerDetails } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
-import { resolveRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
+import { resolveRepPrice, type UiPriceOracle } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/poolBrowse.js'
 import { getUniverseDirectoryContextKey, isUniverseDirectoryLoadedForContext, shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
+import { createSecurityPoolsRouteFormSync } from '../lib/routeFormSync.js'
+import { buildForkAuctionSectionProps, buildLiquidationSectionProps, buildReportingSectionProps, buildSecurityVaultSectionProps, buildTradingSectionProps } from '../lib/securityPoolsRouteSections.js'
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
-import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
-import type { ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { useStatoblastUrlState } from './useStatoblastUrlState.js'
+import type { AccountState, ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { RepPerEthPriceProps, SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
+import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 
-export function useSecurityPoolsRoute({
-	accountState,
-	activeEnvironmentNonce,
-	activeUniverseId,
-	canReadOnchainData,
-	currentTimestamp,
-	deploymentStatuses,
-	marketCreation,
-	poolBrowseState,
-	setPoolBrowseState,
-	vaultView,
-	setVaultAddress,
-	setVaultView,
-	onViewPendingReport,
-	inlineOracle,
-	openSecurityPoolInUniverse,
-	openOraclePriceCoordinator,
-	repPerEthPrice,
-	repPerEthSource,
-	repPerEthSourceUrl,
-	route,
-	securityPoolAddress,
-	securityPoolsView,
-	selectedPoolRefreshNonce,
-	selectedPoolView,
-	setSecurityPoolAddress,
-	setSecurityPoolQuestionId,
-	setSecurityPoolsView,
-	setSelectedPoolRefreshNonce,
-	setSelectedPoolView,
-	uiPriceOracle,
-	walletBootstrapComplete,
-	walletScopedAccountAddress,
-	walletScopedHookConfig,
-}: {
-	accountState: SecurityPoolsSectionProps['createPool']['accountState']
+/** App-shell values every Security Pools section reads, grouped like the Zoltar workspace. */
+type SecurityPoolsRouteContext = {
+	accountState: AccountState
 	activeEnvironmentNonce: number
 	activeUniverseId: bigint
 	canReadOnchainData: boolean
 	currentTimestamp: bigint | undefined
 	deploymentStatuses: Parameters<typeof useSecurityPoolCreation>[0]['deploymentStatuses']
-	poolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['browseState']>
-	setPoolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['onBrowseStateChange']>
-	vaultView: SecurityPoolsSectionProps['workflow']['controlledVaultView']
-	setVaultView: NonNullable<SecurityPoolsSectionProps['workflow']['onVaultViewChange']>
-	setVaultAddress: (address: string | undefined) => void
-	marketCreation: ReturnType<typeof useMarketCreation>
-	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
-	onViewPendingReport: (reportId: bigint) => void
-	openSecurityPoolInUniverse: (universeId: bigint, securityPoolAddress: string) => void
-	openOraclePriceCoordinator: ReturnType<typeof useOpenOraclePriceCoordinator>
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: SecurityPoolsSectionProps['createPool']['repPerEthSource']
-	repPerEthSourceUrl: string | undefined
 	route: string
-	securityPoolAddress: string
-	securityPoolsView: string
-	selectedPoolRefreshNonce: number
-	selectedPoolView: SecurityPoolsSectionProps['workflow']['selectedPoolView']
-	setSecurityPoolAddress: (securityPoolAddress: string) => void
-	setSecurityPoolQuestionId: (questionId: string) => void
-	setSecurityPoolsView: (view: SecurityPoolsView) => void
-	setSelectedPoolRefreshNonce: (updateNonce: (currentNonce: number) => number) => void
-	setSelectedPoolView: SecurityPoolsSectionProps['workflow']['onSelectedPoolViewChange']
-	uiPriceOracle: ReturnType<typeof readUiPriceOracle>
+	uiPriceOracle: UiPriceOracle
 	walletBootstrapComplete: boolean
 	walletScopedAccountAddress: Address | undefined
 	walletScopedHookConfig: WriteOperationsParameters
-}) {
+}
+
+type SecurityPoolsUrlState = Pick<
+	ReturnType<typeof useStatoblastUrlState>,
+	'openSecurityPoolInUniverse' | 'poolBrowseState' | 'securityPoolAddress' | 'securityPoolsView' | 'selectedPoolView' | 'setPoolBrowseState' | 'setSecurityPoolAddress' | 'setSecurityPoolQuestionId' | 'setSecurityPoolsView' | 'setSelectedPoolView' | 'setVaultAddress' | 'setVaultView' | 'vaultView'
+>
+
+type SecurityPoolsRouteParameters = {
+	context: SecurityPoolsRouteContext
+	marketCreation: ReturnType<typeof useMarketCreation>
+	openOracle: {
+		inlineOracle?: OpenOracleSectionProps
+		onViewPendingReport: (reportId: bigint) => void
+		priceCoordinator: ReturnType<typeof useOpenOraclePriceCoordinator>
+	}
+	/** The Uniswap-backed REP price; the selected pool's oracle price replaces it when the price setting prefers the pool oracle. */
+	repPrices: Pick<ReturnType<typeof useRepPrices>, 'repPerEthPrice' | 'repPerEthSource' | 'repPerEthSourceUrl'>
+	selectedPoolRefresh: { nonce: number; setNonce: (updateNonce: (currentNonce: number) => number) => void }
+	urlState: SecurityPoolsUrlState
+}
+
+const SECURITY_POOLS_VIEWS: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+
+export function useSecurityPoolsRoute({ context, marketCreation, openOracle, repPrices, selectedPoolRefresh, urlState }: SecurityPoolsRouteParameters) {
+	const { accountState, activeEnvironmentNonce, activeUniverseId, canReadOnchainData, currentTimestamp, deploymentStatuses, route, uiPriceOracle, walletBootstrapComplete, walletScopedAccountAddress, walletScopedHookConfig } = context
+	const { securityPoolAddress, securityPoolsView, setSecurityPoolsView } = urlState
+	const { priceCoordinator } = openOracle
 	const [questionAndPoolCreating, setQuestionAndPoolCreating] = useState(false)
 	const { createMarket, loadZoltarForkAccess, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarUniverse } = marketCreation
-	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = openOraclePriceCoordinator
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
-	const {
-		checkingDuplicateOriginPool,
-		duplicateOriginPoolAddress,
-		createPool,
-		dismissSecurityPoolReview,
-		duplicateOriginPoolExists,
-		existingQuestionCheck,
-		retryExistingQuestionCheck,
-		loadingMarketDetails,
-		marketDetails,
-		poolCreationMarketDetails,
-		resetSecurityPoolCreation,
-		securityPoolCreating,
-		securityPoolError,
-		securityPoolForm,
-		securityPoolResult,
-		securityPoolReviewSignal,
-		setSecurityPoolForm,
-	} = useSecurityPoolCreation({
+	const poolCreation = useSecurityPoolCreation({
 		...walletScopedHookConfig,
 		activeUniverseId,
 		deploymentStatuses,
@@ -121,117 +77,29 @@ export function useSecurityPoolsRoute({
 		newQuestionForm: marketForm,
 		zoltarUniverseHasForked,
 	})
-	const {
-		adjustBackingFactor,
-		approveRep,
-		depositRepToVault,
-		loadSecurityVault,
-		loadingSecurityVault,
-		redeemFees,
-		redeemRepFromVault,
-		securityVaultActiveAction,
-		securityVaultDetails,
-		securityVaultError,
-		securityVaultForm,
-		securityVaultMissing,
-		securityVaultRepApproval,
-		walletRepBalanceAttoRep,
-		walletRepBalanceError,
-		walletRepBalanceLoading,
-		securityVaultQueuedOperations,
-		securityVaultResult,
-		setSecurityVaultForm,
-		withdrawRep,
-	} = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
-	const { loadingReportingDetails, loadReporting, onApproveReportingRep, onReportOutcome, reportingActiveAction, reportingDetails, reportingError, reportingForm, reportingResult, setReportingForm, withdrawEscalation } = useReportingOperations({
+	const { createPool, marketDetails, securityPoolForm, securityPoolResult, setSecurityPoolForm } = poolCreation
+	const vault = useSecurityVaultOperations({ ...walletScopedHookConfig, enabled: route === 'pools' && canReadOnchainData, selectedSecurityPoolAddress: securityPoolAddress })
+	const reporting = useReportingOperations({
 		...walletScopedHookConfig,
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
 	const updateReportingForm = (update: Partial<ReportingFormState>) => {
-		setReportingForm((current: ReportingFormState) => applyReportingFormUpdate(current, update))
+		reporting.setReportingForm((current: ReportingFormState) => applyReportingFormUpdate(current, update))
 	}
-	const {
-		checkedSecurityPoolAddress,
-		closeLiquidationModal,
-		hasLoadedUniverseDirectoryPools,
-		liquidationDebtEthAmount,
-		maximumLiquidationDebtAttoEth,
-		liquidationManagerAddress,
-		liquidationFundingPreview,
-		liquidationFundingPreviewError,
-		liquidationModalOpen,
-		liquidationSecurityPoolAddress,
-		liquidationTargetVault,
-		liquidationReceiverVault,
-		liquidationApprovalId,
-		liquidationApprovalDetails,
-		liquidationApprovalError,
-		liquidationReceiverVaultSummary,
-		liquidationReceiverVaultSummaryError,
-		liquidationReceiverVaultSummaryResolved,
-		liquidationTimeoutMinutes,
-		loadingSecurityPools,
-		loadingLiquidationFundingPreview,
-		loadingLiquidationApproval,
-		loadingLiquidationReceiverVaultSummary,
-		loadingUniverseDirectoryPools,
-		loadUniverseDirectoryPools,
-		loadSecurityPools,
-		loadLiquidationFundingPreview,
-		loadLiquidationApproval,
-		loadLiquidationReceiverVaultSummary,
-		openLiquidationModal,
-		queueLiquidation,
-		securityPoolOverviewActiveAction,
-		securityPoolOverviewError,
-		securityPoolLiquidationError,
-		securityPoolOverviewResult,
-		securityPools,
-		securityPoolUniverseDirectoryError,
-		universeDirectoryPools,
-		setLiquidationAmount,
-		setLiquidationReceiverVault,
-		setLiquidationApprovalId,
-		setLiquidationTimeoutMinutes,
-		refreshSecurityPools,
-		securityPoolsFreshness,
-	} = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
+	const overview = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
+	const { checkedSecurityPoolAddress, hasLoadedUniverseDirectoryPools, loadingUniverseDirectoryPools, loadSecurityPools, loadUniverseDirectoryPools, refreshSecurityPools, securityPools, securityPoolUniverseDirectoryError } = overview
 	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
 	useBlockRefresh(() => void refreshSecurityPools(), route === 'pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const openedPoolSummary = useMemo(() => (selectedPool === undefined ? undefined : toCachedSecurityPool(selectedPool)), [selectedPool])
 	useRememberOpenedEntity('statoblast', 'pool', securityPoolDownloadStore, selectedPool?.securityPoolAddress, openedPoolSummary)
-	const { createCompleteSet, loadingTradingDetails, loadingTradingForkUniverse, migrateShares, redeemCompleteSet, redeemShares, setTradingForm, tradingActiveAction, tradingDetails, tradingError, tradingForm, tradingForkUniverse, tradingResult } = useTradingOperations({
+	const trading = useTradingOperations({
 		...walletScopedHookConfig,
 		deploymentStatuses,
 		enabled: route === 'pools' && canReadOnchainData && selectedPool !== undefined,
 		selectedSecurityPoolAddress: securityPoolAddress,
 	})
-	const {
-		claimAuctionProceeds,
-		createChildUniverse,
-		finalizeTruthAuction,
-		forkAuctionActiveAction,
-		forkAuctionDetails,
-		forkAuctionError,
-		forkAuctionForm,
-		forkAuctionResult,
-		forkUniverse,
-		forkWithOwnEscalation,
-		initiateFork,
-		loadForkAuction,
-		loadingForkAuctionDetails,
-		claimParentEscalation,
-		migrateUnresolvedEscalation,
-		migrateRepToZoltar,
-		migrateVault,
-		refundLosingBids,
-		setForkAuctionForm,
-		settleForkedEscalation,
-		startTruthAuction,
-		submitBid,
-		withdrawAuctionRefund,
-	} = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
+	const forkAuction = useForkAuctionOperations({ ...walletScopedHookConfig, selectedSecurityPoolAddress: securityPoolAddress })
 	const lastUniverseDirectoryAutoLoadContextKeyRef = useRef<string | undefined>(undefined)
 	const universeDirectoryContextKey = getUniverseDirectoryContextKey({ accountAddress: walletScopedAccountAddress, environmentNonce: activeEnvironmentNonce, universeId: activeUniverseId })
 	// The overview hook keys its loaded directory on the environment only; the figures are per account and universe, so the route keys them on the full context.
@@ -243,23 +111,25 @@ export function useSecurityPoolsRoute({
 	}
 	const lastSecurityVaultRepRefreshHash = useRef<string | undefined>(undefined)
 	const lastStagedVaultRepRefreshHash = useRef<string | undefined>(undefined)
-	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
+	const selectedPoolOracleManagerDetails = getCurrentPoolOracleManagerDetails({ poolOracleManagerDetails: priceCoordinator.poolOracleManagerDetails, selectedPoolManagerAddress: selectedPool?.managerAddress })
 	const selectedPoolRepPrice = resolveRepPrice({
 		now: currentTimestamp,
 		oracleManager: selectedPoolOracleManagerDetails === undefined ? undefined : { isPriceValid: selectedPoolOracleManagerDetails.isPriceValid, price: selectedPoolOracleManagerDetails.lastPrice, settlementTimestamp: selectedPoolOracleManagerDetails.lastSettlementTimestamp },
 		poolOracle: selectedPool === undefined ? undefined : { price: selectedPool.lastOraclePrice, settlementTimestamp: selectedPool.lastOracleSettlementTimestamp },
 		setting: uiPriceOracle,
-		uniswapPrice: repPerEthPrice,
+		uniswapPrice: repPrices.repPerEthPrice,
 	})
-	const uiRepPerEthPrice = selectedPoolRepPrice.price
-	const uiUsesOpenOraclePrice = selectedPoolRepPrice.source === 'open-oracle'
 	const uiRepPerEthSource = (() => {
-		if (uiRepPerEthPrice === undefined) return undefined
-		if (uiUsesOpenOraclePrice) return 'open-oracle' as const
-		return repPerEthSource
+		if (selectedPoolRepPrice.price === undefined) return undefined
+		if (selectedPoolRepPrice.source === 'open-oracle') return 'open-oracle' as const
+		return repPrices.repPerEthSource
 	})()
-	const uiRepPerEthSourceUrl = uiRepPerEthSource === 'open-oracle' ? undefined : repPerEthSourceUrl
-	const securityPoolsViews: readonly SecurityPoolsView[] = ['browse', 'create', 'operate', 'universes']
+	// One REP price feeds every section, so vault health, withdrawable REP, trading, and liquidation figures agree.
+	const uiRepPrice: RepPerEthPriceProps = {
+		repPerEthPrice: selectedPoolRepPrice.price,
+		repPerEthSource: uiRepPerEthSource,
+		repPerEthSourceUrl: uiRepPerEthSource === 'open-oracle' ? undefined : repPrices.repPerEthSourceUrl,
+	}
 	const derivedSecurityPoolsView = resolveFirstMatchingValue<SecurityPoolsView>(
 		[
 			[securityPoolAddress !== '', 'operate'],
@@ -267,14 +137,15 @@ export function useSecurityPoolsRoute({
 		],
 		'browse',
 	)
-	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, securityPoolsViews)
+	const activeSecurityPoolsView = resolveEnumValue<SecurityPoolsView>(securityPoolsView, derivedSecurityPoolsView, SECURITY_POOLS_VIEWS)
 	const refreshSelectedPoolData = (requestedSecurityPoolAddress?: string) => {
 		const nextSecurityPoolAddress = requestedSecurityPoolAddress ?? securityPoolAddress
 		if (!walletBootstrapComplete) return
 		if (!isHexAddressInput(nextSecurityPoolAddress)) return
-		setSelectedPoolRefreshNonce(currentNonce => currentNonce + 1)
+		selectedPoolRefresh.setNonce(currentNonce => currentNonce + 1)
 		void loadSecurityPools(nextSecurityPoolAddress)
 	}
+	const { securityVaultResult } = vault
 	useEffect(() => {
 		const securityVaultRepRefreshHash =
 			securityVaultResult?.action === 'setVaultUnderwritingLimit' || securityVaultResult?.action === 'depositRepToVault' || securityVaultResult?.action === 'redeemRepFromVault' || (securityVaultResult?.action === 'queueWithdrawRep' && securityVaultResult.stagedExecution?.success === true)
@@ -288,6 +159,7 @@ export function useSecurityPoolsRoute({
 		lastSecurityVaultRepRefreshHash.current = securityVaultRepRefreshHash
 		void loadZoltarForkAccess()
 	}, [loadZoltarForkAccess, securityVaultResult])
+	const { poolPriceOracleResult } = priceCoordinator
 	useEffect(() => {
 		const stagedVaultRepRefreshHash = poolPriceOracleResult?.action === 'executeStagedOperation' && poolPriceOracleResult.stagedExecution?.success === true && poolPriceOracleResult.stagedExecution.operation === 'withdrawRep' ? poolPriceOracleResult.hash : undefined
 		if (stagedVaultRepRefreshHash === undefined) {
@@ -326,38 +198,28 @@ export function useSecurityPoolsRoute({
 	}, [activeSecurityPoolsView, canReadOnchainData, universeDirectoryLoadedForContext, loadingUniverseDirectoryPools, securityPoolUniverseDirectoryError, universeDirectoryContextKey])
 	// One navigation moves both the universe and the pool; the route effect loads a pool that is not listed yet, so only a listed pool is refreshed here.
 	const openPoolInUniverse = (universeId: bigint, poolAddress: string) => {
-		openSecurityPoolInUniverse(universeId, poolAddress)
+		urlState.openSecurityPoolInUniverse(universeId, poolAddress)
 		if (securityPools.some(pool => pool.securityPoolAddress.toLowerCase() === poolAddress.toLowerCase())) refreshSelectedPoolData(poolAddress)
 	}
+	const pricedSection = { accountState, ...uiRepPrice }
 	const securityPoolsRouteContentProps: SecurityPoolsSectionProps = {
 		activeView: activeSecurityPoolsView,
 		loadingUniverseDirectoryPools,
 		createPool: {
-			accountState,
-			checkingDuplicateOriginPool,
-			duplicateOriginPoolAddress,
+			...poolCreation,
+			...pricedSection,
 			questionAndPoolCreating,
-			duplicateOriginPoolExists,
-			existingQuestionCheck,
-			onRetryExistingQuestionCheck: retryExistingQuestionCheck,
+			onRetryExistingQuestionCheck: poolCreation.retryExistingQuestionCheck,
 			onCreateQuestionAndSecurityPool: () => void createQuestionAndSecurityPool(),
-			poolCreationMarketDetails,
 			onCreateSecurityPool: questionIdOverride => void createPool(questionIdOverride),
-			loadingMarketDetails,
-			marketDetails,
-			onResetSecurityPoolCreation: resetSecurityPoolCreation,
+			onResetSecurityPoolCreation: poolCreation.resetSecurityPoolCreation,
 			onSecurityPoolFormChange: update => {
 				setSecurityPoolForm(current => ({ ...current, ...update }))
-				if (update.marketId !== undefined) setSecurityPoolQuestionId(update.marketId)
+				if (update.marketId !== undefined) urlState.setSecurityPoolQuestionId(update.marketId)
 			},
 			zoltarUniverseHasForked,
 			securityPools,
-			securityPoolCreating,
-			securityPoolError,
-			securityPoolForm,
-			securityPoolResult,
-			securityPoolReviewSignal,
-			onDismissSecurityPoolReview: dismissSecurityPoolReview,
+			onDismissSecurityPoolReview: poolCreation.dismissSecurityPoolReview,
 			marketCreating,
 			marketError,
 			marketForm,
@@ -365,16 +227,13 @@ export function useSecurityPoolsRoute({
 			onCreateMarket: () => void createMarket(),
 			onMarketFormChange: update => setMarketForm(current => ({ ...current, ...update })),
 			onResetMarket: resetMarket,
-			repPerEthPrice: uiRepPerEthPrice,
-			repPerEthSource: uiRepPerEthSource,
-			repPerEthSourceUrl: uiRepPerEthSourceUrl,
 		},
-		onActiveViewChange: view => setSecurityPoolsView(view),
+		onActiveViewChange: setSecurityPoolsView,
 		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPoolsForContext(),
 		onOpenSecurityPool: (poolAddress, universeId) => openPoolInUniverse(universeId, poolAddress),
 		overview: {
-			browseState: poolBrowseState,
-			onBrowseStateChange: setPoolBrowseState,
+			browseState: urlState.poolBrowseState,
+			onBrowseStateChange: urlState.setPoolBrowseState,
 			activeUniverseId,
 			currentTimestamp,
 			securityPools,
@@ -382,192 +241,53 @@ export function useSecurityPoolsRoute({
 		securityPools,
 		securityPoolUniverseDirectoryError,
 		selectedPoolRepPrice,
-		universeDirectoryPools: universeDirectoryLoadedForContext ? universeDirectoryPools : undefined,
+		universeDirectoryPools: universeDirectoryLoadedForContext ? overview.universeDirectoryPools : undefined,
 		workflow: {
-			controlledVaultView: vaultView,
-			onVaultViewChange: setVaultView,
+			...buildLiquidationSectionProps(overview, priceCoordinator),
+			...uiRepPrice,
+			controlledVaultView: urlState.vaultView,
+			onVaultViewChange: urlState.setVaultView,
 			accountState,
 			activeUniverseId,
-			checkedSecurityPoolAddress,
-			closeLiquidationModal: () => closeLiquidationModal(),
 			onBrowsePools: () => setSecurityPoolsView('browse'),
 			onCreatePool: () => setSecurityPoolsView('create'),
-			forkAuction: {
-				accountState,
-				forkAuctionActiveAction,
-				forkAuctionDetails,
-				forkAuctionError,
-				forkAuctionForm,
-				forkAuctionResult,
-				loadingForkAuctionDetails,
-				onClaimAuctionProceeds: (securityPoolAddressOverride, selectedClaimBids, selectedRefundBids, universeIdOverride) => void claimAuctionProceeds(securityPoolAddressOverride, selectedClaimBids, selectedRefundBids, universeIdOverride),
-				onCreateChildUniverse: () => void createChildUniverse(forkAuctionForm.selectedOutcome),
-				onFinalizeTruthAuction: (securityPoolAddressOverride, universeIdOverride) => void finalizeTruthAuction(securityPoolAddressOverride, universeIdOverride),
-				onForkAuctionFormChange: update => setForkAuctionForm(current => ({ ...current, ...update })),
-				onForkUniverse: () => void forkUniverse(),
-				onForkWithOwnEscalation: () => void forkWithOwnEscalation(),
-				onInitiateFork: () => void initiateFork(),
-				onLoadForkAuction: securityPoolAddressOverride => void loadForkAuction(securityPoolAddressOverride),
-				onClaimParentEscalationDeposits: (outcome, depositIndexes) =>
-					void claimParentEscalation({
-						outcome,
-						...(depositIndexes === undefined ? {} : { depositIndexes }),
-					}),
-				onMigrateUnresolvedEscalation: selectedChildOutcome => void migrateUnresolvedEscalation(selectedChildOutcome),
-				onMigrateRepToZoltar: outcomes => void migrateRepToZoltar(outcomes),
-				onMigrateVault: () => void migrateVault(),
-				onRefundLosingBids: (securityPoolAddressOverride, selectedBids, universeIdOverride) => void refundLosingBids(securityPoolAddressOverride, selectedBids, universeIdOverride),
-				onWithdrawAuctionRefund: (securityPoolAddressOverride, universeIdOverride) => void withdrawAuctionRefund(securityPoolAddressOverride, universeIdOverride),
-				onStartTruthAuction: (securityPoolAddressOverride, universeIdOverride) => void startTruthAuction(securityPoolAddressOverride, universeIdOverride),
-				onSubmitBid: (securityPoolAddressOverride, universeIdOverride) => void submitBid(securityPoolAddressOverride, universeIdOverride),
-				onWithdrawForkedEscalation: (outcome, parentDepositIndexes) => void settleForkedEscalation(outcome, parentDepositIndexes),
-			},
-			liquidationDebtEthAmount,
-			maximumLiquidationDebtAttoEth,
-			liquidationManagerAddress,
-			liquidationFundingPreview,
-			liquidationFundingPreviewError,
-			liquidationModalOpen,
-			liquidationSecurityPoolAddress,
-			liquidationTargetVault,
-			liquidationReceiverVault,
-			liquidationApprovalId,
-			liquidationApprovalDetails,
-			liquidationApprovalError,
-			liquidationReceiverVaultSummary,
-			liquidationReceiverVaultSummaryError,
-			liquidationReceiverVaultSummaryResolved,
-			liquidationTimeoutMinutes,
-			loadingLiquidationApproval,
-			loadingLiquidationReceiverVaultSummary,
-			onLiquidationAmountChange: setLiquidationAmount,
-			onLiquidationReceiverVaultChange: setLiquidationReceiverVault,
-			onLiquidationApprovalIdChange: setLiquidationApprovalId,
-			onLoadLiquidationApproval: () => void loadLiquidationApproval(),
-			onLoadLiquidationReceiverVaultSummary: () => void loadLiquidationReceiverVaultSummary(),
-			onLiquidationTimeoutMinutesChange: setLiquidationTimeoutMinutes,
-			onLoadLiquidationFundingPreview: (managerAddress: Address, proposedRepPerEthPrice?: bigint) => void loadLiquidationFundingPreview(managerAddress, proposedRepPerEthPrice),
-			onOpenLiquidationModal: (managerAddress: Address, selectedSecurityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => openLiquidationModal(managerAddress, selectedSecurityPoolAddress, vaultAddress, maxAmount),
+			forkAuction: buildForkAuctionSectionProps(forkAuction, { accountState }),
 			onReturnToCurrentUniverse: () => setSecurityPoolsView('browse'),
 			onSwitchToPoolUniverse: openPoolInUniverse,
-			onQueueLiquidation: (managerAddress: Address, selectedSecurityPoolAddress: Address, proposedRepPerEthPrice?: bigint) => void queueLiquidation(managerAddress, selectedSecurityPoolAddress, proposedRepPerEthPrice),
-			onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void executePendingPoolOperation(managerAddress, operationId, securityPoolAddress, universeId),
-			loadingPoolOracleManager,
-			loadingLiquidationFundingPreview,
-			loadingSecurityPools,
-			onLoadPoolOracleManager: (managerAddress: Address) => void loadPoolOracleManager(managerAddress),
 			RequestPriceModal,
-			onRequestPoolPrice: (managerAddress: Address, securityPoolAddress: Address, reviewedRequestValueAttoEth: bigint, universeId: bigint, proposedRepPerEthPrice?: bigint, signal?: AbortSignal) =>
-				requestPoolPrice(managerAddress, securityPoolAddress, reviewedRequestValueAttoEth, universeId, proposedRepPerEthPrice, signal),
 			onRefreshSelectedPoolData: refreshSelectedPoolData,
-			securityPoolsFreshness,
-			onSelectedPoolViewChange: setSelectedPoolView,
-			onViewPendingReport,
-			...(inlineOracle === undefined ? {} : { inlineOracle }),
-			securityPoolOverviewActiveAction,
-			securityPoolOverviewError,
-			securityPoolLiquidationError,
-			securityPoolOverviewResult,
-			poolOracleActiveAction,
-			poolOracleManagerDetails,
-			poolOracleManagerError,
-			poolOracleManagerErrorAddress,
-			poolPriceOracleResult,
+			onSelectedPoolViewChange: urlState.setSelectedPoolView,
+			onViewPendingReport: openOracle.onViewPendingReport,
+			...(openOracle.inlineOracle === undefined ? {} : { inlineOracle: openOracle.inlineOracle }),
 			uiPriceOracle,
-			selectedPoolRefreshNonce,
+			selectedPoolRefreshNonce: selectedPoolRefresh.nonce,
 			universeForkTime: zoltarUniverse?.forkTime,
-			selectedPoolView,
-			onSecurityPoolAddressChange: value => {
-				setSecurityPoolAddress(value)
-			},
-			repPerEthPrice: uiRepPerEthPrice,
-			repPerEthSource: uiRepPerEthSource,
-			repPerEthSourceUrl: uiRepPerEthSourceUrl,
-			reporting: {
-				accountState,
-				loadingReportingDetails,
-				onApproveReportingRep: () => void onApproveReportingRep(),
-				onLoadReporting: () => void loadReporting(),
-				onReportOutcome: () => void onReportOutcome(),
-				onReportingFormChange: update => updateReportingForm(update),
-				onWithdrawEscalation: (outcome, depositIndexes) => void withdrawEscalation(outcome, depositIndexes),
-				reportingActiveAction,
-				reportingDetails,
-				reportingError,
-				reportingForm,
-				reportingResult,
-			},
+			selectedPoolView: urlState.selectedPoolView,
+			onSecurityPoolAddressChange: value => urlState.setSecurityPoolAddress(value),
+			reporting: buildReportingSectionProps(reporting, { accountState }, updateReportingForm),
 			securityPoolAddress,
 			securityPools,
-			securityVault: {
-				accountState,
-				loadingSecurityVault,
-				onApproveRep: amount => void approveRep(amount),
-				onSetVaultUnderwritingLimit: (factor, proposedRepPerEthPrice) => void adjustBackingFactor(factor, proposedRepPerEthPrice),
-				onDepositRepToVault: () => void depositRepToVault(),
-				onLoadSecurityVault: (vaultAddress?: string) => {
-					void loadSecurityVault(vaultAddress)
-				},
-				onRedeemFees: () => void redeemFees(),
-				onRedeemRepFromVault: () => void redeemRepFromVault(),
-				onSecurityVaultFormChange: update => {
-					if (update.selectedVaultOwner !== undefined && (update.selectedVaultOwner.trim() === '' || isHexAddressInput(update.selectedVaultOwner))) setVaultAddress(update.selectedVaultOwner)
-					setSecurityVaultForm(current => ({ ...current, ...update }))
-				},
-				onWithdrawRep: proposedRepPerEthPrice => void withdrawRep(proposedRepPerEthPrice),
-				securityVaultActiveAction,
-				securityVaultDetails,
-				securityVaultError,
-				securityVaultForm,
-				securityVaultMissing,
-				securityVaultRepApproval,
-				walletRepBalanceAttoRep,
-				walletRepBalanceError,
-				walletRepBalanceLoading,
-				securityVaultQueuedOperations,
-				securityVaultResult,
-				selectedPoolStatoblastSecurityMultiplierBps: selectedPool?.statoblastSecurityMultiplierBps,
-				repPerEthPrice: uiRepPerEthPrice,
-				repPerEthSource: uiRepPerEthSource,
-				repPerEthSourceUrl: uiRepPerEthSourceUrl,
-				securityPoolVaults: selectedPool?.vaults,
-			},
-			trading: {
-				accountState,
-				loadingTradingForkUniverse,
-				loadingTradingDetails,
-				onCreateCompleteSet: () => void createCompleteSet(),
-				onMigrateShares: () => void migrateShares(),
-				onRedeemCompleteSet: () => void redeemCompleteSet(),
-				onRedeemShares: () => void redeemShares(),
-				onTradingFormChange: update => setTradingForm(current => ({ ...current, ...update })),
-				repPerEthPrice: uiRepPerEthPrice,
-				repPerEthSource: uiRepPerEthSource,
-				repPerEthSourceUrl: uiRepPerEthSourceUrl,
-				selectedPool,
-				tradingActiveAction,
-				tradingDetails,
-				tradingError,
-				tradingForm,
-				tradingForkUniverse,
-				tradingResult,
-			},
+			securityVault: buildSecurityVaultSectionProps(vault, pricedSection, selectedPool, urlState.setVaultAddress),
+			trading: buildTradingSectionProps(trading, pricedSection, selectedPool),
 		},
 		zoltarUniverse,
 	}
+	const formSync = createSecurityPoolsRouteFormSync({
+		setForkAuctionForm: forkAuction.setForkAuctionForm,
+		setSecurityPoolForm,
+		setSecurityVaultForm: vault.setSecurityVaultForm,
+		setTradingForm: trading.setTradingForm,
+		updateReportingForm,
+	})
 	return {
 		activeSecurityPoolsView,
+		formSync,
 		loadSecurityPools,
-		resetSecurityPoolCreation,
+		resetSecurityPoolCreation: poolCreation.resetSecurityPoolCreation,
 		securityPoolResult,
 		securityPoolsRouteContentProps,
 		selectedPool,
 		selectedPoolRepPrice,
-		setForkAuctionForm,
-		setSecurityPoolForm,
-		setSecurityVaultForm,
-		setTradingForm,
-		tradingResult,
-		updateReportingForm,
+		tradingResult: trading.tradingResult,
 	}
 }

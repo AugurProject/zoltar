@@ -6,7 +6,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isOracleManagerPriceUsable } from './securityVault.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
-import type { LiquidationApprovalDetails, OracleManagerDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, OracleManagerDetails, SecurityPoolOverviewActionResult } from '../../../types/contracts.js'
 
 export const ZERO_LIQUIDATION_APPROVAL_ID = `0x${'00'.repeat(32)}`
 

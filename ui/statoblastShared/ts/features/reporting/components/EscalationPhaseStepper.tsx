@@ -2,7 +2,7 @@ import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getDisplayedLeadingEscalationOutcome, deriveReportingStage, getReportingOutcomeLabel } from '../lib/reporting.js'
 import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 import * as copy from '../../../copy/reporting.js'
-import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails } from '../../../types/contracts.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getEscalationPhase } from '../lib/reportingDomain.js'
 

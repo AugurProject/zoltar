@@ -4,7 +4,8 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { UniverseBrowser } from '@zoltar/ui-core-shared/components/UniverseBrowser.js'
-import type { ListedSecurityPool, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 
 type UniversePoolDirectorySectionProps = {
 	activeUniverseId: bigint

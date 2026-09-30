@@ -8,7 +8,8 @@ import { PaginationControls } from '@zoltar/ui-core-shared/components/Pagination
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
 import { getImportedEscalationDepositClaimAmount } from '../lib/reportingDomain.js'
-import type { ActiveReportingDetails, EscalationSide, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide } from '../../../types/contracts.js'
 
 const IMPORTED_FORK_SETTLEMENT_PAGE_SIZE = 25
 

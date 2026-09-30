@@ -1,18 +1,9 @@
 import { getUnresolvedEscalationMigrationSubmissionGuard } from '../../../protocol/forkMigrationTiming.js'
 import { usePendingAuctionRefund } from './usePendingAuctionRefund.js'
-import { ForkAuctionOutcomePoolNotice } from '../components/ForkAuctionActionSections.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
-import { Fragment } from 'preact'
 import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
-import { ForkAuctionMigrationBalances } from '../components/ForkAuctionMigrationStage.js'
-import { createForkAuctionActionRenderer, ForkAuctionEndedNotice } from '../components/ForkAuctionActionSections.js'
-import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getTimeRemaining } from '../lib/forkAuction.js'
 import { buildTruthAuctionDepthPoints, formatTruthAuctionTickPriceInput, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionLiveBidGuidance, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
@@ -28,25 +19,15 @@ import { useTruthAuctionBookData } from './useTruthAuctionBookData.js'
 import { useTruthAuctionSettlementActionState } from './useTruthAuctionSettlementActionState.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
-import {
-	clampPercentage,
-	getFinalizeTruthAuctionGuardMessage,
-	getMigrationStateBadge,
-	getMigrationWindowClosedGuardMessage,
-	getStartTruthAuctionGuardMessage,
-	getTruthAuctionBypassReason,
-	getTruthAuctionStateBadge,
-	getTruthAuctionWindow,
-	renderTimestamp,
-	renderTruthAuctionPriceValue,
-} from '../components/ForkAuctionPresentation.js'
+import { clampPercentage, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, getTruthAuctionWindow } from '../components/ForkAuctionPresentation.js'
 import { useForkAuctionContext } from './useForkAuctionContext.js'
 
+/** A metric shown either as literal text or as a timestamp the section renders. */
+export type ForkAuctionTimeDisplay = { kind: 'text'; text: string } | { kind: 'timestamp'; timestamp: bigint }
+
+/** The fork auction section's view model: plain values and callbacks; ForkAuctionSection renders them. */
 export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const context = useForkAuctionContext(props)
-	const renderSelectedOutcomeChildPoolNotice = () => (
-		<ForkAuctionOutcomePoolNotice error={context.selectedAuctionChildPoolRecoveryError} loading={context.loadingSelectedAuctionChildPoolRecovery} onRetry={context.retrySelectedAuctionChildPoolRecovery} outcomeLabel={context.selectedOutcomeLabel} poolAvailable={context.selectedAuctionChildPool !== undefined} />
-	)
 	usePendingAuctionRefund(context)
 	const selectedAuctionContextError = context.selectedAuctionError
 	const optimisticTruthAuctionStartedAt =
@@ -91,28 +72,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		yes: [],
 		no: [],
 	})
-	function renderSelectedOutcomeChildPoolLink() {
-		if (context.selectedAuctionChildPool === undefined) return undefined
-
-		return (
-			<SecurityPoolLink className='fork-workflow-outcome-link' securityPoolAddress={context.selectedAuctionChildPool.securityPoolAddress} universeId={context.selectedAuctionChildPool.universeId}>
-				{forkAuctionCopy.childPool}
-			</SecurityPoolLink>
-		)
-	}
-	const migrationBalancesContent = (
-		<ForkAuctionMigrationBalances
-			accountConnected={context.accountState.address !== undefined}
-			connectedWalletVaultSummary={context.connectedWalletVaultSummary}
-			effectiveDisputeStakedAttoRep={effectiveDisputeStakedAttoRep}
-			onSelectedOutcomeChange={selectedOutcome => context.onForkAuctionFormChange({ selectedOutcome })}
-			renderSelectedOutcomeChildPoolLink={renderSelectedOutcomeChildPoolLink}
-			renderSelectedOutcomeChildPoolNotice={renderSelectedOutcomeChildPoolNotice}
-			selectedOutcome={context.forkAuctionForm.selectedOutcome}
-			selectedOutcomeMigrationChildPool={context.selectedOutcomeMigrationChildPool}
-			selectedOutcomeMigrationChildVault={context.selectedOutcomeMigrationChildVault}
-		/>
-	)
 	const hasWalletVaultMigrationBalance = context.connectedWalletVaultSummary !== undefined && (context.connectedWalletVaultSummary.vaultAttoRepBacking > 0n || context.connectedWalletVaultSummary.underwritingLimitAttoEth > 0n)
 	const hasWalletParentEscalationClaimBalance = effectiveDisputeStakedAttoRep !== undefined && effectiveDisputeStakedAttoRep > 0n
 	const migrateVaultBalanceGuardMessage = context.connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance ? forkAuctionCopy.poolMigrationCapacityEmpty : undefined
@@ -185,23 +144,18 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		truthAuction: truthAuctionStatus,
 		truthAuctionStartedAt: effectiveTruthAuctionStartedAt ?? 0n,
 	})
-	const startedDisplay = (() => {
-		if (hasStartedTruthAuction) {
-			return renderTimestamp({
-				displayTimestamp: effectiveTruthAuctionStartedAt,
-				fallbackText: forkAuctionCopy.notStarted,
-			})
-		}
-		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruncated
+	const startedDisplay = ((): ForkAuctionTimeDisplay => {
+		if (hasStartedTruthAuction && effectiveTruthAuctionStartedAt !== undefined) return { kind: 'timestamp', timestamp: effectiveTruthAuctionStartedAt }
+		if (isStartTruthAuctionInProgress) return { kind: 'text', text: forkAuctionCopy.startingTruncated }
 		if (effectiveTruthAuctionStartedAt === undefined || effectiveTruthAuctionStartedAt === 0n) {
-			if (startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n) return forkAuctionCopy.formatStartsInValue(formatDuration(startTruthAuctionCountdown))
-			return forkAuctionCopy.notStarted
+			if (startTruthAuctionCountdown !== undefined && startTruthAuctionCountdown > 0n) return { kind: 'text', text: forkAuctionCopy.formatStartsInValue(formatDuration(startTruthAuctionCountdown)) }
+			return { kind: 'text', text: forkAuctionCopy.notStarted }
 		}
-		return forkAuctionCopy.notStarted
+		return { kind: 'text', text: forkAuctionCopy.notStarted }
 	})()
-	const endsDisplay = (() => {
-		if (auctionWindow === undefined) return isStartTruthAuctionInProgress ? forkAuctionCopy.pendingConfirmation : forkAuctionCopy.notStarted
-		return <TimestampValue {...(context.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: context.effectiveCurrentTimestamp })} timestamp={auctionWindow.endsAt} />
+	const endsDisplay = ((): ForkAuctionTimeDisplay => {
+		if (auctionWindow === undefined) return { kind: 'text', text: isStartTruthAuctionInProgress ? forkAuctionCopy.pendingConfirmation : forkAuctionCopy.notStarted }
+		return { kind: 'timestamp', timestamp: auctionWindow.endsAt }
 	})()
 	const hasStartedSelectedTruthAuctionTimeline = hasStartedTruthAuction || truthAuctionStatus !== undefined || context.selectedStage === 'auction' || context.selectedStage === 'settlement' || context.currentWorkflowStage === 'auction' || context.currentWorkflowStage === 'settlement'
 	const activeTickSummaries = truthAuctionBookData.tickSummaries
@@ -222,18 +176,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		context.onForkAuctionFormChange({ submitBidPrice: formatTruthAuctionTickPriceInput(tick) })
 	}
 	const maxTickAttoEth = truthAuctionDepthPoints.reduce((maximumEth, point) => (point.currentTotalBidAttoEth > maximumEth ? point.currentTotalBidAttoEth : maximumEth), 0n)
-	const ethRaisedCapDisplay =
-		truthAuctionStatus === undefined ? (
-			truthAuctionFallback
-		) : (
-			<Fragment>
-				<CurrencyValue value={displayedEthRaisedAttoEth} suffix={commonCopy.eth} /> / <CurrencyValue value={truthAuctionStatus.attoEthRaiseCap} suffix={commonCopy.eth} />
-			</Fragment>
-		)
-	const clearingPriceDisplay = (() => {
-		if (truthAuctionStatus === undefined) return truthAuctionFallback
-		return truthAuctionStatus.hitCap ? renderTruthAuctionPriceValue(truthAuctionStatus.clearingPrice) : forkAuctionCopy.notYetCleared
-	})()
 	const settlementAvailableDisplay = (() => {
 		if (!context.hasSelectedAuctionChildPool) return commonCopy.metricUnavailablePlaceholder
 		if (context.selectedAuctionContext?.claimingAvailable) return commonCopy.yes
@@ -319,11 +261,11 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 			}),
 		universeHasForked: context.previewPool?.universeHasForked === true,
 	})
-	const renderStageActionButton = createForkAuctionActionRenderer({
+	const stageActionContext = {
 		activeAction: context.forkAuctionActiveAction,
 		forkPoolState,
 		walletGuard,
-	})
+	}
 	const truthAuctionBidGuardMessage = (() => {
 		if (isTruthAuctionDetailsLoading) return undefined
 		if (!hasStartedTruthAuction) return forkAuctionCopy.truthAuctionNotStartedReason
@@ -346,18 +288,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		truthAuction: truthAuctionStatus,
 		truthAuctionEndsAt,
 	})
-	const finalizeTruthAuctionAction = renderStageActionButton({
-		action: 'finalizeTruthAuction',
-		availability: createActionAvailability(finalizeTruthAuctionGuardMessage),
-		forceEnabled: context.hasSelectedAuctionChildPool,
-		idleLabel: forkAuctionCopy.finalizeTruthAuction,
-		onClick: onFinalizeTruthAuctionForSelectedAuction,
-		pendingLabel: forkAuctionCopy.finalizingTruthAuctionTruncated,
-		tone: 'primary',
-	})
 	const openSettlementStage = context.onSelectedStageViewChange === undefined || context.selectedStage === 'settlement' ? undefined : () => context.onSelectedStageViewChange?.('settlement')
-	const truthAuctionEndedNotice =
-		truthAuctionStatus === undefined ? undefined : <ForkAuctionEndedNotice actionButton={finalizeTruthAuctionAction} currentTimestamp={context.effectiveCurrentTimestamp} finalized={truthAuctionStatus.finalized} onOpenSettlement={openSettlementStage} truthAuctionEndsAt={truthAuctionEndsAt} />
 	const startTruthAuctionReadyInText = (() => {
 		if (startTruthAuctionCountdown === undefined) return undefined
 		if (startTruthAuctionCountdown === 0n) return undefined
@@ -430,7 +361,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		effectiveTruthAuctionStartedAt,
 		migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt,
 	})
-	const migrationStatusBadge = <Badge tone={migrationStateBadge.tone}>{migrationStateBadge.label}</Badge>
 	const onStartTruthAuctionSubmit = () => {
 		beginStartTruthAuctionProgress()
 		context.onStartTruthAuction(context.selectedAuctionPoolAddress, context.selectedAuctionUniverseId)
@@ -438,7 +368,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const onSubmitBidForSelectedAuction = () => {
 		context.onSubmitBid(context.selectedAuctionPoolAddress, context.selectedAuctionUniverseId)
 	}
-	function onFinalizeTruthAuctionForSelectedAuction() {
+	const onFinalizeTruthAuctionForSelectedAuction = () => {
 		context.onFinalizeTruthAuction(context.selectedAuctionPoolAddress, context.selectedAuctionUniverseId)
 	}
 	const settlementActionAvailabilityMessage = getTruthAuctionSettlementActionAvailabilityMessage({
@@ -478,8 +408,12 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	}
 	return {
 		...context,
-		renderSelectedOutcomeChildPoolNotice,
-		renderStageActionButton,
+		effectiveDisputeStakedAttoRep,
+		finalizeTruthAuctionGuardMessage,
+		onFinalizeTruthAuctionForSelectedAuction,
+		openSettlementStage,
+		stageActionContext,
+		truthAuctionEndsAt,
 		submitBidGuardMessage,
 		onSubmitBidForSelectedAuction,
 		isTruthAuctionDetailsLoading,
@@ -492,19 +426,16 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		truthAuctionStateBadge,
 		startedDisplay,
 		endsDisplay,
-		ethRaisedCapDisplay,
 		truthAuctionStatus,
 		truthAuctionFallback,
 		displayedRepSoldAttoRep,
-		clearingPriceDisplay,
 		settlementAvailableDisplay,
-		renderSelectedOutcomeChildPoolLink,
 		shouldShowTruthAuctionVisualization,
 		displayedEthRaisedAttoEth,
 		ethRaisedProgress,
 		repSoldProgress,
 		winningThresholdPrice,
-		migrationStatusBadge,
+		migrationStateBadge,
 		hasMoreTickSummaries,
 		loadingTruthAuctionBook,
 		maxTickAttoEth,
@@ -568,7 +499,6 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		migratePoolToUniverseGuardMessage,
 		migrateUnresolvedEscalationGuardMessage,
 		migrateVaultGuardMessage,
-		migrationBalancesContent,
 		onClaimSelectedParentEscalationDeposits,
 		onMigrateSelectedOutcomeRepToZoltar,
 		onMigrateUnresolvedEscalationSubmit,
@@ -578,6 +508,5 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		selectedParentEscalationClaimDepositIndexes,
 		childSecurityPools,
 		hasStartedTruthAuction,
-		truthAuctionEndedNotice,
 	}
 }

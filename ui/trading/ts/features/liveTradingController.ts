@@ -89,10 +89,7 @@ export function useLiveTradingController({
 		session: walletSession,
 		portfolio: portfolioQueries,
 		transaction: transactionWorkflow,
-		connectionRequests,
-		balanceRequests,
-		portfolioBalanceRequests,
-		walletSummaryRequests,
+		requests: { balance: balanceRequests, connection: connectionRequests, portfolioBalance: portfolioBalanceRequests, walletSummary: walletSummaryRequests },
 		refresh,
 	})
 	// An explicit invalidation (a simulation control) changed balances without this session's own receipt, so the wallet summary re-reads too.

@@ -1,6 +1,7 @@
 import { type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
-import type { ReadClient, SecurityVaultActionResult, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultActionResult } from '../types/contracts.js'
 import { writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 
 export async function depositRepToVaultToSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) {

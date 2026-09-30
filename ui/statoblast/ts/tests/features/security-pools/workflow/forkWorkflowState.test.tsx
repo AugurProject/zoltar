@@ -8,7 +8,7 @@ import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/tes
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { act } from 'preact/test-utils'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { createActiveReportingDetails, createEscalationSides, createFinalizedTruthAuction, createForkAuctionDetails, createForkAuctionProps, createMarketDetails, createReportingForm, createReportingProps, createSecurityPoolWorkflowProps, createSelectedPool } from './builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './testDom.js'
 

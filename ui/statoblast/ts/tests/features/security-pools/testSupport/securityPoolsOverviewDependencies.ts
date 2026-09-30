@@ -5,7 +5,7 @@ import { zeroAddress, zeroHash, type Address } from '@zoltar/core-shared/evm/eth
 import { requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { useSecurityPoolsOverview, type UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
-import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolPage } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails, SecurityPoolPage } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 
 // Builds the page shape loadSecurityPoolPage returns from an in-memory pool list.

@@ -19,7 +19,7 @@ import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { parseDeploymentSetupInput, type DeploymentConfiguration } from '../protocol/config.js'
 import { loadCoreDeployments } from '../protocol/coreDeployments.js'
 import { deployTradingStep, deploymentConfigurationForPlan, getTradingDeploymentPlan, isTradingDeploymentComplete, loadTradingDeploymentStatus, nextTradingDeploymentStep, type CoreDeployment, type TradingDeploymentPlan, type TradingDeploymentStep } from '../protocol/deployment.js'
-import { createWalletContextSubscription, getInjectedEthereum, type InjectedEthereum } from '../protocol/injected.js'
+import { createWalletContextSubscription, getActiveInjectedProvider, type InjectedEthereum } from '../protocol/injected.js'
 import { readInjectedChainIdNumber, requestInjectedAccount, requireInjectedAccount, switchInjectedChain } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 import { createTradingWalletClient, publicErrorMessage, validateRpcChainId, waitForActiveEnvironmentReady } from '../protocol/live.js'
 import { RouteHeader } from '@zoltar/ui-core-shared/components/RouteHeader.js'
@@ -46,14 +46,14 @@ function createDeploymentReadClient(rpcUrl: string, backend: Pick<ChainBackend, 
 const defaultServices: TradingDeploymentSetupServices = {
 	createPublicClient: createDeploymentReadClient,
 	connectWallet: async () => {
-		const provider = getInjectedEthereum()
+		const provider = getActiveInjectedProvider()
 		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
 		const account = await requestInjectedAccount(provider)
 		return { account, chainId: await readInjectedChainIdNumber(provider), provider }
 	},
-	getWalletProvider: getInjectedEthereum,
+	getWalletProvider: getActiveInjectedProvider,
 	deployStep: async (publicClient, plan, step, onSubmitted) => {
-		const provider = getInjectedEthereum()
+		const provider = getActiveInjectedProvider()
 		if (provider === undefined) throw new Error(deploymentCopy.noInjectedWallet)
 		let currentChainId = await readInjectedChainIdNumber(provider)
 		if (currentChainId !== plan.core.chainId) {
@@ -65,9 +65,9 @@ const defaultServices: TradingDeploymentSetupServices = {
 		const walletClient = createTradingWalletClient(provider, account)
 		await deployTradingStep(walletClient, publicClient, plan, step, onSubmitted, async () => {
 			validateRpcChainId(await publicClient.getChainId(), plan.core.chainId)
-			if (getInjectedEthereum() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedBeforeDeployment)
+			if (getActiveInjectedProvider() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedBeforeDeployment)
 		})
-		if (getInjectedEthereum() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedDuringDeployment)
+		if (getActiveInjectedProvider() !== provider || (await readInjectedChainIdNumber(provider)) !== plan.core.chainId || (await requestInjectedAccount(provider)) !== account) throw new Error(deploymentCopy.walletContextChangedDuringDeployment)
 	},
 	loadCoreDeployments,
 }

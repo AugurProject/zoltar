@@ -12,7 +12,8 @@ import { useRef } from 'preact/hooks'
 import type { RefObject } from 'preact'
 import { getEscalationDepositClaimAmount, isPoolQuestionFinalized } from '../lib/reportingDomain.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
-import type { ActiveReportingDetails, EscalationSide, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails, EscalationSide, ReportingDetails } from '../../../types/contracts.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 
 function getWithdrawDepositClaimLabel(details: ReportingDetails | undefined, selectedOutcome: ReportingOutcomeKey) {

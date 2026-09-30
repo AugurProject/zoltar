@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, deriveSecurityPoolReportingStage } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import { createActiveReportingDetails as createWorkflowActiveReportingDetails, createEscalationSides, createMarketDetails } from './workflow/builders.js'
 
