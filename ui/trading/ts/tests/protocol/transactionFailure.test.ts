@@ -9,6 +9,7 @@ function revertError(reason: string) {
 
 describe('transaction failure explanations', () => {
 	test.each([
+		['Stale price', 'The pool’s REP/ETH oracle price is stale.'],
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
 		['Deadline expired', 'The transaction expired before it was mined.'],

@@ -103,12 +103,16 @@ function createInjectedTransport(ethereum: InjectedEthereum, rpcUrl: string, ret
 	const rpc = http(rpcUrl)
 	return custom(
 		{
-			request: parameters => {
-				const selector = Array.isArray(parameters.params) ? parameters.params[1] : undefined
-				// MetaMask middleware can treat EIP-1898 objects as strings. Keep the hash and
-				// requireCanonical check intact by sending pinned calls directly to the chain RPC.
-				if (parameters.method === 'eth_call' && typeof selector === 'object' && selector !== null && 'blockHash' in selector) return requestRpc(rpc, parameters)
-				return requestWalletRpc(ethereum, parameters)
+			request: async parameters => {
+				try {
+					return await requestWalletRpc(ethereum, parameters)
+				} catch (error) {
+					const selector = Array.isArray(parameters.params) ? parameters.params[1] : undefined
+					// Some wallet failures obscure a contract revert. Retry only this observed
+					// internal error, preserving the exact call and canonical block selector.
+					if (parameters.method === 'eth_call' && typeof selector === 'object' && selector !== null && 'blockHash' in selector && hasErrorCode(error) && error.code === -32603 && hasErrorMessage(error) && error.message.endsWith('.slice is not a function')) return await requestRpc(rpc, parameters)
+					throw error
+				}
 			},
 		},
 		{ retryCount },

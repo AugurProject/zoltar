@@ -583,6 +583,10 @@
 		"./features/security-pools/components/OracleInitialPriceFields.js": {
 			"bun": "./ts/features/security-pools/components/OracleInitialPriceFields.tsx",
 			"default": "./js/features/security-pools/components/OracleInitialPriceFields.js"
+		},
+		"./features/open-oracle/components/RequestPriceModal.js": {
+			"bun": "./ts/features/open-oracle/components/RequestPriceModal.tsx",
+			"default": "./js/features/open-oracle/components/RequestPriceModal.js"
 		}
 	},
 	"version": "1.0.0"

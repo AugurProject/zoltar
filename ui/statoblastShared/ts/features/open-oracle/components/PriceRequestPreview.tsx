@@ -5,7 +5,7 @@ import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/component
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
-import * as priceRequestCopy from '@zoltar/ui-statoblast-shared/copy/priceRequest.js'
+import * as priceRequestCopy from '../../../copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
 
 export type FailedPricePlan = {
