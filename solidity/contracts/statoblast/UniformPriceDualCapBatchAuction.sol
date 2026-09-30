@@ -8,7 +8,6 @@ import {
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { Constants } from '../Constants.sol';
 import { UniformPriceDualCapBatchAuctionStorage } from './UniformPriceDualCapBatchAuctionStorage.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 // Gas bound: finalize() descends AVL aggregate paths and never scans bids. The
 // tick range admits at most 1,048,577 distinct price levels, so an AVL tree over
@@ -84,7 +83,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 
 		maxAttoRepBeingSold = uint88(_maxAttoRepBeingSold);
 		attoEthRaiseCap = uint128(_attoEthRaiseCap);
-		underfundedThreshold = Math.mulDiv(_attoEthRaiseCap, SecurityPoolUtils.PRICE_PRECISION, _maxAttoRepBeingSold, Math.Rounding.Ceil);
+		underfundedThreshold = Math.mulDiv(_attoEthRaiseCap, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, _maxAttoRepBeingSold, Math.Rounding.Ceil);
 		require(block.timestamp <= type(uint48).max, 'Auction timestamp too high');
 		auctionStarted = uint48(block.timestamp);
 		minBidSizeAttoEth = uint128(_attoEthRaiseCap / MIN_BID_SIZE_DIVISOR);
@@ -161,7 +160,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			uint256 fundedClearingPrice = tickToPrice(foundTick);
 			finalRepPurchasedAttoRep =
 				fundedClearingPrice > 0
-					? (accumulatedBidAttoEth * SecurityPoolUtils.PRICE_PRECISION) / fundedClearingPrice
+					? (accumulatedBidAttoEth * UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION) /
+						fundedClearingPrice
 					: 0;
 			return (foundTick, 0, finalRepPurchasedAttoRep, accumulatedBidAttoEth);
 		}
@@ -265,7 +265,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		}
 		if (tick < clearingTick) return (0, 0, bidAmountAttoEth, BidSettlementStatus.Losing);
 		if (tick > clearingTick) {
-			attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidAmountAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
+			attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidAmountAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
 			return (bidAmountAttoEth, attoRepFilled, 0, BidSettlementStatus.Winning);
 		}
 		uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
@@ -278,7 +278,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
 		}
 		if (bidUsedAttoEth > bidAmountAttoEth) bidUsedAttoEth = bidAmountAttoEth;
-		attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
+		attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
 		refundAttoEth = bidAmountAttoEth - bidUsedAttoEth;
 		if (bidUsedAttoEth == 0) {
 			status = BidSettlementStatus.Losing;
@@ -295,7 +295,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		uint256 cumulativeRepBeforeAttoRep =
 			underfunded
 				? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
-				: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
+				: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
 		return
 			UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
 	}
