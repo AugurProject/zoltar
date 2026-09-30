@@ -221,23 +221,6 @@ void describe('trading helpers', () => {
 		).toBe('Switch to Sepolia.')
 	})
 
-	void test("blocks minting when the pool's REP price is stale", () => {
-		expect(
-			getTradingMintGuardMessage({
-				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 1n,
-				ethBalanceAttoEth: 10n,
-				hasSelectedPool: true,
-				isOnActiveAppChain: true,
-				isPriceValid: false,
-				mintAmountInput: '1',
-				shareTokenSupplyAttoShares: 1n,
-				totalPoolHeldAttoRep: 10n,
-				mintingCapacityAttoEth: 10n,
-			}),
-		).toBe('Request a new price in Price oracle before minting.')
-	})
-
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
 		expect(
 			getTradingMintGuardMessage({

@@ -73,7 +73,6 @@ function createMintCapacity(overrides: Partial<MintCapacity> = {}): MintCapacity
 		shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH,
 		totalPoolHeldAttoRep: 20n * ATTO_ETH_PER_ETH,
 		totalUnderwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH,
-		isPriceValid: true,
 		...overrides,
 	}
 }

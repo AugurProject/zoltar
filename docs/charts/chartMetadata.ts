@@ -16,7 +16,7 @@ export const quantitativeChartMetadata = {
 	},
 	'fig-statoblast-retention-utilization': {
 		ariaDescription: 'The annualized open-interest fee rises from about ten percent at zero utilization to about fifty percent at the eighty-percent utilization dip, then remains at that level as the per-second retention rate stays at its minimum.',
-		ariaLabel: 'Annualized open-interest fee across live ETH minting-capacity utilization',
+		ariaLabel: 'Annualized open-interest fee across minting-capacity utilization',
 		height: 420,
 		width: 900,
 	},

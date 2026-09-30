@@ -51,7 +51,7 @@
 							</tr>
 							<tr>
 								<td>Complete-set capacity</td>
-								<td>Minting requires tracked collateral plus the deposit not to exceed total standing ETH commitments, a fresh price, no escalation game, and enough pool-held REP to back the entire standing commitment total under both protocol backing constraints. Minting checks the aggregate directly without an on-chain vault scan or separate confirmation. Sold auction commitments earn fees from finalization; unassigned positions must still pass their full-limit health check before minting. Child finalization installs funded liabilities even when backing is unhealthy, preserving redemption. Recapitalization and authorized takeover can restore full-limit backing; liquidation never writes off a residual commitment. Prior fees and unclaimed auction entitlements remain reserved.</td>
+								<td>Minting requires tracked collateral plus the deposit not to exceed total standing ETH commitments and no escalation game. It reads no oracle price and checks no REP backing: vaults already answer for their full standing limits through health checks and liquidation, so minting within those limits adds no REP exposure. Minters are therefore not protected from minting into a pool whose REP currently fails to back its limits. Sold auction commitments earn fees from finalization. Child finalization installs funded liabilities even when backing is unhealthy, preserving redemption. Recapitalization and authorized takeover can restore full-limit backing; liquidation never writes off a residual commitment. Prior fees and unclaimed auction entitlements remain reserved.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.createCompleteSet</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.createCompleteSet</code></a
@@ -74,7 +74,7 @@
 							</tr>
 							<tr>
 								<td>Retention-rate updates</td>
-								<td>Retention-rate updates no-op when the pool is not <code>Operational</code>; otherwise utilization divides tracked collateral by live ETH minting capacity derived from total standing ETH commitments. Unclaimed sold auction ownership therefore already affects utilization and fee accrual. A later claim changes only its vault assignment, not fee eligibility, total ownership, live capacity, or retention solely because of that claim.</td>
+								<td>Retention-rate updates no-op when the pool is not <code>Operational</code>; otherwise utilization divides tracked collateral by total standing ETH commitments, independent of price and backing. No commitments or an escalation game select the maximum retention rate. Unclaimed sold auction ownership therefore already affects utilization and fee accrual. A later claim changes only its vault assignment, not fee eligibility, total ownership, minting capacity, or retention solely because of that claim.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>

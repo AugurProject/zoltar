@@ -1,7 +1,7 @@
 import { type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
@@ -20,11 +20,10 @@ type SecurityPoolMintCapacity = {
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
-	isPriceValid: boolean
 	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp, escalationGame] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, currentRetentionRate, feeEndTimestamp, escalationGame] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -51,12 +50,6 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'priceOracleManagerAndOperatorQueuer',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'currentRetentionRate',
 			address: securityPoolAddress,
 			args: [],
@@ -69,8 +62,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
 	])
-	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]), client.getBlock()])
-	const [isPriceValid] = priceValidity
+	const currentBlock = await client.getBlock()
 	return {
 		currentRetentionRate,
 		currentTimestamp: currentBlock.timestamp,
@@ -83,7 +75,6 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep,
 		totalUnderwritingLimitAttoEth: poolAccountingSnapshot.totalUnderwritingLimitAttoEth,
-		isPriceValid,
 		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
 }

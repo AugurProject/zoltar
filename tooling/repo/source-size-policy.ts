@@ -16,7 +16,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Chaos: extract dashboard features, operation handlers, and persistence responsibilities into focused modules.', [
 		['bots/chaos/src/dashboard/dashboard.ts', 1692],
 		['bots/chaos/src/monitoring/discovery.ts', 1019],
-		['bots/chaos/src/operations/trading.ts', 1720],
+		['bots/chaos/src/operations/trading.ts', 1704],
 		['bots/chaos/src/state/operator-state.ts', 1114],
 		['bots/chaos/src/runtime/operator.ts', 870],
 		['bots/chaos/src/monitoring/topology-cache.ts', 953],
@@ -51,7 +51,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 		['tooling/ui/dev-server.ts', 1116],
 		['tooling/docs/check-docs-examples.mts', 1076],
 		['tooling/testing/coverage-report.mts', 931],
-		['tooling/docs/check-docs-reference-values.mts', 831],
+		['tooling/docs/check-docs-reference-values.mts', 826],
 		['tooling/ui/watch.mts', 781],
 		['tooling/contracts/deploy-testnet.mts', 674],
 		['tooling/docs/generate-contract-interaction-reference.mts', 634],
@@ -64,7 +64,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('The arbitrage executor contract bundles routing, settlement, and recovery paths that belong in libraries.', [['bots/open-oracle-arbitrager/contracts/OpenOracleArbitrageExecutor.sol', 771]]),
 	...allowances('SecurityPool delegate extraction is ongoing and bytecode-sensitive.', [
-		['solidity/contracts/statoblast/SecurityPool.sol', 738],
+		['solidity/contracts/statoblast/SecurityPool.sol', 736],
 		['solidity/contracts/statoblast/SecurityPoolForker.sol', 677],
 		['solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol', 643],
 	]),

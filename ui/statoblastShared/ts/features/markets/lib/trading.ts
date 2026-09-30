@@ -202,12 +202,6 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 }
 
-export function getTradingOraclePriceGuardMessage(oraclePriceUsable: boolean | undefined) {
-	if (oraclePriceUsable === undefined) return tradingCopy.loadingOraclePrice
-	if (!oraclePriceUsable) return tradingCopy.staleOraclePrice
-	return undefined
-}
-
 export function getTradingMintGuardMessage({
 	accountAddress,
 	settlementCollateralAttoEth,
@@ -215,7 +209,6 @@ export function getTradingMintGuardMessage({
 	mintingCapacityAttoEth,
 	hasSelectedPool,
 	isOnActiveAppChain,
-	isPriceValid,
 	mintAmountInput,
 	shareTokenSupplyAttoShares,
 	totalPoolHeldAttoRep,
@@ -226,7 +219,6 @@ export function getTradingMintGuardMessage({
 	mintingCapacityAttoEth: bigint | undefined
 	hasSelectedPool: boolean
 	isOnActiveAppChain: boolean
-	isPriceValid?: boolean
 	mintAmountInput: string
 	shareTokenSupplyAttoShares: bigint | undefined
 	totalPoolHeldAttoRep: bigint | undefined
@@ -234,7 +226,6 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (isPriceValid === false) return tradingCopy.staleOraclePrice
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'

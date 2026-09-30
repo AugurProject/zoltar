@@ -49,12 +49,11 @@ function liquidityQuote(amount: bigint) {
 
 type Controller = ReturnType<typeof useLiquidityWorkflowController>
 
-type ProbeProps = Readonly<{ oracleBlocker?: string | undefined; walletClient: Parameters<typeof useLiquidityWorkflowController>[0]['walletClient']; services: LiveLiquidityServices; onController: (controller: Controller) => void; onLockChange: (locked: boolean) => void; market: LiveMarket }>
+type ProbeProps = Readonly<{ walletClient: Parameters<typeof useLiquidityWorkflowController>[0]['walletClient']; services: LiveLiquidityServices; onController: (controller: Controller) => void; onLockChange: (locked: boolean) => void; market: LiveMarket }>
 
 // One stable component type so re-rendering with a new market object updates the hook instead of remounting it.
-function Probe({ oracleBlocker, walletClient, services, onController, onLockChange, market: probeMarket }: ProbeProps) {
+function Probe({ walletClient, services, onController, onLockChange, market: probeMarket }: ProbeProps) {
 	const controller = useLiquidityWorkflowController({
-		oracleBlocker,
 		configuration,
 		market: probeMarket,
 		balanceState: 'ready',
@@ -95,68 +94,6 @@ async function settleQuote() {
 
 describe('liquidity workflow controller state', () => {
 	installDomTestLifecycle()
-
-	test('blocks stale oracle deposits and re-quotes unchanged inputs after a price refresh', async () => {
-		let current: Controller | undefined
-		let simulations = 0
-		let sends = 0
-		const services: LiveLiquidityServices = {
-			publicErrorMessage: () => 'Failed',
-			simulateLiquidity: async (_client, _configuration, _market, _account, operation, amount) => {
-				simulations += 1
-				return { ...liquidityQuote(amount), operation }
-			},
-			submitFreshLiquidity: async () => {
-				sends += 1
-				return transactionHash
-			},
-		}
-		const walletClient = createWalletClient({
-			account,
-			transport: custom({
-				request: async () => {
-					throw new Error('Unexpected wallet request')
-				},
-			}),
-		})
-		const props = {
-			walletClient,
-			services,
-			onController: (value: Controller) => {
-				current = value
-			},
-			onLockChange: () => undefined,
-			market,
-		}
-		const rendered = await renderIntoDocument(<Probe {...props} oracleBlocker='Oracle price is stale' />)
-		try {
-			await act(() => current?.updateAmount('0.1'))
-			await settleQuote()
-			expect(simulations).toBe(0)
-			await act(async () => {
-				await current?.submit()
-			})
-			expect(sends).toBe(0)
-			await act(() => render(<Probe {...props} />, rendered.container))
-			await settleQuote()
-			expect(simulations).toBe(1)
-			expect(current?.transaction.quoteState).toBe('ready')
-			await act(() => render(<Probe {...props} oracleBlocker='Oracle price is stale' />, rendered.container))
-			await flush()
-			await act(async () => {
-				await current?.submit()
-			})
-			expect(sends).toBe(0)
-			expect(current?.transaction.quote).toBeUndefined()
-			await act(() => current?.selectOperation('remove'))
-			await act(() => current?.updateAmount('0.1'))
-			await settleQuote()
-			expect(current?.transaction.quote?.operation).toBe('remove')
-			expect(simulations).toBe(2)
-		} finally {
-			await rendered.cleanup()
-		}
-	})
 
 	test('retries a failed quote without changing the amount or sending a transaction', async () => {
 		let current: Controller | undefined

@@ -31,7 +31,7 @@ export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProducti
 	requestOraclePrice: (client: TWriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, reviewedRequestValueAttoEth: bigint) => Promise<OpenOracleActionResult>
 }
 
-export const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencies = {
+const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencies = {
 	createConnectedReadClient,
 	createWalletWriteClient,
 	executeOracleManagerStagedOperation: async (client, managerAddress, operationId) => await executeOracleManagerStagedOperation(client, managerAddress, operationId),

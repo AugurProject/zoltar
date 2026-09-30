@@ -496,9 +496,9 @@ describe('Statoblast: fork migration', () => {
 				const collateral = await getSettlementCollateralAttoEth(client, child.securityPool)
 				strictEqualTypeSafe(collateral + (await getTotalAccruedFees(client, child.securityPool)), await getETHBalance(client, child.securityPool), 'installed collateral and fees must match actual funding')
 				if (scenario === 'partial-empty') strictEqualTypeSafe(collateral, migratedCollateral, 'an empty auction must preserve all received ETH')
-				let mintRejection = /Pool backing insufficient/
+				let mintRejection = /Over capacity/
 				if (scenario === 'fixed') mintRejection = /Settlement unavailable/
-				await assert.rejects(createCompleteSet(client, child.securityPool, 1n), mintRejection)
+				await assert.rejects(createCompleteSet(client, child.securityPool, capacity), mintRejection)
 				for (const outcome of [QuestionOutcome.Invalid, QuestionOutcome.Yes, QuestionOutcome.No]) await migrateShares(client, securityPoolAddresses.shareToken, genesisUniverse, outcome, [QuestionOutcome.Yes])
 				if (scenario === 'fixed') await redeemShares(client, child.securityPool)
 				else await redeemCompleteSet(client, child.securityPool, shares)

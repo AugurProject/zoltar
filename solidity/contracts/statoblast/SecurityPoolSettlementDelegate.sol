@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 
 import { SecurityPoolStorage } from './SecurityPoolStorage.sol';
-import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 import { ISecurityPool } from './interfaces/ISecurityPool.sol';
 
 abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
@@ -13,28 +12,23 @@ abstract contract SecurityPoolSettlementDelegate is SecurityPoolStorage {
 		require(!awaitingForkContinuation, 'Fork await');
 		require(address(escalationGame) == address(0), 'Escalation mint closed');
 		if (msg.value == 0 || pool.isEscalationResolved()) revert('Settlement unavailable');
-		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
 		pool.updateSettlementCollateral();
 		completeSetsToMintAttoShares = pool.attoEthToAttoShares(msg.value);
 		require(completeSetsToMintAttoShares > 0, 'Exchange rate undefined');
+		// Vaults already answer for their full standing commitments, so minting
+		// within them adds no REP exposure and needs no oracle price.
 		uint256 nextSettlementCollateralAttoEth = settlementCollateralAttoEth + msg.value;
-		_validateSettlementCollateral(pool, nextSettlementCollateralAttoEth);
-		SecurityPoolUtils.requireUnassignedPositionHealthy(pool, pool.securityPoolForker(), nextSettlementCollateralAttoEth);
+		require(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity');
 		shareTokenSupplyAttoShares += completeSetsToMintAttoShares;
 		settlementCollateralAttoEth = nextSettlementCollateralAttoEth;
 		emit CompleteSetCreated(msg.sender, msg.value, completeSetsToMintAttoShares, shareTokenSupplyAttoShares, settlementCollateralAttoEth);
 	}
 
 	function setFundedSettlementCollateral(uint256 inheritedCollateralAttoEth) external {
-		// Inherited share liabilities need funded ETH, even when current REP
-		// solvency prevents new minting. Activation opens redemption and recovery.
+		// Inherited share liabilities need funded ETH, even when they exceed the
+		// child's standing commitments. Activation opens redemption and recovery.
 		uint256 feeLiabilitiesAttoEth = totalClaimableVaultFeesAttoEth + unallocatedAccruedFeesAttoEth;
 		require(feeLiabilitiesAttoEth <= address(this).balance && inheritedCollateralAttoEth <= address(this).balance - feeLiabilitiesAttoEth, 'Collateral unfunded');
 		settlementCollateralAttoEth = inheritedCollateralAttoEth;
-	}
-
-	function _validateSettlementCollateral(ISecurityPool pool, uint256 nextSettlementCollateralAttoEth) private view {
-		require(nextSettlementCollateralAttoEth <= totalUnderwritingLimitAttoEth, 'Over capacity');
-		require(SecurityPoolUtils.isVaultHealthy(pool.getTotalPoolHeldAttoRep(), 0, totalUnderwritingLimitAttoEth, pool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Pool backing insufficient');
 	}
 }

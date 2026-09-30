@@ -222,7 +222,6 @@ export function useTradingOperations(
 							settlementCollateralAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? latestMintCapacity.settlementCollateralAttoEth,
 							ethBalanceAttoEth: walletBalanceAttoEth,
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
-							isPriceValid: latestMintCapacity.isPriceValid,
 							hasSelectedPool: true,
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,

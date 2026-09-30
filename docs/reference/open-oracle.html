@@ -16,7 +16,7 @@
 			<section id="openoracle-role">
 				<h2>Why Statoblast uses OpenOracle</h2>
 
-				<p>Statoblast needs a REP/ETH price to enforce backing for standing ETH commitments. Price-gated operations include REP withdrawals, liquidations, and certain Escalation Game deposits. A stale or easily manipulated price could allow an unsafe withdrawal or make a healthy vault appear liquidatable. A price change affects backing health without changing authorized limits. See <a href="./invariants.html#bal-03">aggregate backing requirements</a> for the mint-safety checks.</p>
+				<p>Statoblast needs a REP/ETH price to enforce backing for standing ETH commitments. Price-gated operations include REP withdrawals, liquidations, and certain Escalation Game deposits. A stale or easily manipulated price could allow an unsafe withdrawal or make a healthy vault appear liquidatable. A price change affects backing health without changing authorized limits. Minting reads no price; see <a href="./invariants.html#bal-03">collateral capacity and backing</a>.</p>
 
 				<p>Statoblast therefore uses <a href="https://docs.openoracle.org">OpenOracle</a> to obtain a fresh, economically contestable REP/ETH price. OpenOracle does not prove a price by consulting a trusted source. Instead, a reporter posts a WETH/REP position, and other participants can replace an inaccurate report through an economically motivated correction trade.</p>
 
