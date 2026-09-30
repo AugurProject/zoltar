@@ -325,6 +325,8 @@ describe('SecurityVaultSection', () => {
 		// Commitments can only be lowered here, so nothing offers or reports a higher maximum.
 		expect(dialog.queryByRole('button', { name: 'Max' })).toBeNull()
 		expect(dialog.queryByText('Maximum before liquidation')).toBeNull()
+		// After resolution the backing ratio no longer limits anything the owner can do, so it is not shown.
+		expect(dialog.queryByText('Minimum backing ratio')).toBeNull()
 		expectTransactionButtonDisabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit', 'Enter a commitment limit different from the current one.')
 		fireEvent.input(dialog.getByLabelText('Commitment limit'), { target: { value: '0' } })
 		expectTransactionButtonEnabled(page.getByRole('dialog', { name: 'Set commitment limit' }), 'Set commitment limit')
@@ -511,6 +513,27 @@ describe('SecurityVaultSection', () => {
 		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
 		expect(dialog.getByText(message)).not.toBeNull()
 		if (fresh || full) expect(dialog.queryByRole('textbox', { name: 'Open Oracle REP per ETH starting price' })).toBeNull()
+	})
+
+	test('rounds the displayed commitment maximum down so its figure never exceeds the true maximum', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						modalFirst: true,
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						selectedPoolStatoblastSecurityMultiplierBps: 20_000n,
+						securityVaultDetails: createSecurityVaultDetails({ statoblastSecurityMultiplierBps: 20_000n, vaultAttoRepBacking: 10_000n * 10n ** 18n, disputeStakedAttoRep: 0n, settlementCollateralAttoEth: 0n }),
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
+		const dialog = within(page.getByRole('dialog', { name: 'Set commitment limit' }))
+		const maximumValue = dialog.getByText('Maximum before liquidation').parentElement?.querySelector('.metric-field-value')?.textContent?.replaceAll('\u00a0', ' ')
+		// 10 000 REP at 3 REP per ETH and a 2x multiplier allows 1 666.666… ETH; rounding up to 1 666.67 would show an unsafe figure.
+		expect(maximumValue).toBe('1 666.66 ETH')
 	})
 
 	test('requires explicit acknowledgement above the selected UI price commitment maximum', async () => {
