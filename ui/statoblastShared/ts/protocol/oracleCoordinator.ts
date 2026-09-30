@@ -5,7 +5,8 @@ import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, ty
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
-import { resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
+import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
 import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer } from './openOracleMath.js'
 import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
@@ -308,6 +309,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 			args: [],
 		}),
 	])
+	const timing = rawIsPriceValid ? await Promise.all([client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', args: [] }), client.getBlock()]) : undefined
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationCostAttoEth, 'queued operation ETH cost')
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceCostAttoEth, 'request price ETH cost')
 	const managerDetails: OracleManagerDetails = {
@@ -315,7 +317,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		exactToken1Report: undefined,
 		isPriceValid: rawIsPriceValid,
 		lastPrice,
-		lastSettlementTimestamp: 0n,
+		lastSettlementTimestamp: timing?.[0] ?? 0n,
 		managerAddress,
 		openOracleAddress: getInfraContractAddresses().openOracle,
 		pendingOperation: undefined,
@@ -323,12 +325,14 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		pendingSettlementOperationIds: [...pendingSettlementOperationIds],
 		pendingSettlementQueueCapacity,
 		pendingReportId,
-		priceValidUntilTimestamp: undefined,
+		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(timing?.[0]),
 		queuedOperationCostAttoEth: normalizedQueuedOperationEthCost,
 		requestPriceCostAttoEth: normalizedRequestPriceEthCost,
 		token1: undefined,
 		token2: undefined,
 	}
+	const timingGuard = getOracleOperationTimingGuard(managerDetails, timing?.[1].timestamp)
+	if (timingGuard !== undefined) throw new Error(timingGuard)
 	const funding = resolveOracleOperationEthFunding({
 		managerDetails,
 	})
@@ -515,6 +519,8 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
+	const refreshedValue = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	if (refreshedValue > queueOperationValueAttoEth) throw new Error(securityPoolCopy.oracleOperationFundingChanged)
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, 'liquidation')
 	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation')
@@ -537,6 +543,8 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
+	const refreshedValue = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	if (refreshedValue > queueOperationValueAttoEth) throw new Error(securityPoolCopy.oracleOperationFundingChanged)
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, operation)
 	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, operation, queuedOperation?.operationId)

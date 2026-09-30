@@ -4,7 +4,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -21,6 +21,10 @@ import { act } from 'preact/test-utils'
 import { createOracleManagerDetails } from './workflow/builders.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
+
+function renderIntoDocument(component: Parameters<typeof renderWithoutTimestamp>[0]) {
+	return renderWithoutTimestamp(<ChainTimestampContext.Provider value={1n}>{component}</ChainTimestampContext.Provider>)
+}
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	const underwritingLimitAttoEth = overrides.underwritingLimitAttoEth ?? 2n * 10n ** 18n

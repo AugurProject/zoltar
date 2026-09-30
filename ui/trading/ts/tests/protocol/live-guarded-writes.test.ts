@@ -61,6 +61,7 @@ function blockTwoWalletClient(handle: (method: string, params: unknown) => Promi
 		account,
 		transport: custom({
 			async request({ method, params }) {
+				if (method === 'eth_chainId') return '0x1'
 				if (method === 'eth_blockNumber') return '0x2'
 				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
 				if (method === 'eth_call' && Array.isArray(params)) {

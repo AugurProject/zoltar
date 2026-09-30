@@ -1,3 +1,4 @@
+import { submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, maximumInsuredExit, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
@@ -176,6 +177,7 @@ export type TradeTicketInputs = Readonly<{
 	networkMismatchReason: string | undefined
 	walletEthAttoEth: bigint | undefined
 	marketClosed: boolean
+	nowSeconds: bigint
 	/** The price impact the user accepted, if any; it covers only estimates at or below that impact. */
 	acknowledgedImpactBps: bigint | undefined
 	workflowLocked: boolean
@@ -202,6 +204,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const availability: ActionAvailability = createActionAvailability(
 		inputs.networkMismatchReason,
 		inputs.marketClosed ? availabilityCopy.marketClosedReason : undefined,
+		submissionWindowBlocker(market, mode, inputs.nowSeconds),
 		balanceReason,
 		parsed.value === undefined || parsed.value === 0n ? (parsed.error ?? availabilityCopy.amountRequiredReason) : undefined,
 		inputs.amountSettling ? ticketCopy.updatingEstimate : undefined,

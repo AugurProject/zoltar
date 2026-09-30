@@ -24,7 +24,7 @@ import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
@@ -216,15 +216,18 @@ export function SecurityVaultSection({
 		managerDetails: oracleManagerDetails,
 		priceUsable: hasValidOraclePrice,
 	})
-	const withdrawRepGuardMessage = getVaultWithdrawGuardMessage({
-		bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
-		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
-		requiredCostAttoEth: withdrawRepFunding?.costAttoEth,
-		stagedOperationTimeoutMinutes,
-		withdrawAmount,
-		withdrawableRepAmountAttoRep: maximumWithdrawableAttoRep,
-		walletBalanceAttoEth: accountState.ethBalanceAttoEth,
-	})
+	const oracleOperationTimingGuard = getOracleOperationTimingGuard(oracleManagerDetails, currentTimestamp, hasValidOraclePrice)
+	const withdrawRepGuardMessage =
+		oracleOperationTimingGuard ??
+		getVaultWithdrawGuardMessage({
+			bufferRequiredEthCost: withdrawRepFunding?.includeBuffer === true,
+			disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
+			requiredCostAttoEth: withdrawRepFunding?.costAttoEth,
+			stagedOperationTimeoutMinutes,
+			withdrawAmount,
+			withdrawableRepAmountAttoRep: maximumWithdrawableAttoRep,
+			walletBalanceAttoEth: accountState.ethBalanceAttoEth,
+		})
 	const redeemRepFromVaultGuardMessage = getVaultRedeemRepGuardMessage({
 		disputeStakedAttoRep: currentSelectedVaultDetails?.disputeStakedAttoRep,
 		redeemableRepAmountAttoRep,
@@ -304,7 +307,7 @@ export function SecurityVaultSection({
 	// A direct change sends no oracle request, so it needs no request funding.
 	const adjustmentFundingBlocker = commitmentChangeIsDirect
 		? undefined
-		: getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth })
+		: (oracleOperationTimingGuard ?? getOracleRequestEthGuardMessage({ actionLabel: securityPoolCopy.queueTargetChangeFundingAction, includeBuffer: withdrawRepFunding?.includeBuffer === true, requiredCostAttoEth: withdrawRepFunding?.costAttoEth, walletBalanceAttoEth: accountState.ethBalanceAttoEth }))
 	const adjustmentForm = (
 		<VaultBackingFactorForm
 			repPerEthPrice={repPerEthPrice}

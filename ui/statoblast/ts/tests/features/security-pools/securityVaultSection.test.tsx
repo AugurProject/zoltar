@@ -9,7 +9,7 @@ import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -91,10 +91,14 @@ function createSecurityVaultSectionProps(overrides: Partial<SecurityVaultSection
 	}
 }
 
+function renderIntoDocument(component: Parameters<typeof renderWithoutTimestamp>[0]) {
+	return renderWithoutTimestamp(<ChainTimestampContext.Provider value={1n}>{component}</ChainTimestampContext.Provider>)
+}
+
 function createOracleManagerDetails(overrides: Partial<NonNullable<SecurityVaultSectionProps['oracleManagerDetails']>> = {}): NonNullable<SecurityVaultSectionProps['oracleManagerDetails']> {
 	return createBaseOracleManagerDetails({
 		lastPrice: 3n * 10n ** 18n,
-		priceValidUntilTimestamp: 10n,
+		priceValidUntilTimestamp: 1000n,
 		queuedOperationCostAttoEth: 0n,
 		requestPriceCostAttoEth: 0n,
 		token1: undefined,
@@ -450,7 +454,7 @@ describe('SecurityVaultSection', () => {
 		let openedOracle = false
 		cleanupRenderedComponent = (
 			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={signal(2n)}>
+				<ChainTimestampContext.Provider value={2n}>
 					<SecurityVaultSection
 						{...createSecurityVaultSectionProps({
 							modalFirst: true,
@@ -487,7 +491,7 @@ describe('SecurityVaultSection', () => {
 	] as const)('shows the expected commitment execution mode: fresh=%s, full=%s, replacing=%s', async (fresh, full, replacing, message) => {
 		cleanupRenderedComponent = (
 			await renderIntoDocument(
-				<ChainTimestampContext.Provider value={signal(2n)}>
+				<ChainTimestampContext.Provider value={2n}>
 					<SecurityVaultSection
 						{...createSecurityVaultSectionProps({
 							modalFirst: true,
@@ -658,7 +662,7 @@ describe('SecurityVaultSection', () => {
 						modalFirst: true,
 						repPerEthPrice: displayPrice * 10n ** 18n,
 						repPerEthSource: timestamp === 10n ? 'open-oracle' : 'v3',
-						oracleManagerDetails: createOracleManagerDetails({ lastPrice: coordinatorPrice * 10n ** 18n }),
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: coordinatorPrice * 10n ** 18n, isPriceValid: timestamp !== 10n, priceValidUntilTimestamp: timestamp === 10n ? 10n : 1000n }),
 						securityVaultDetails: createSecurityVaultDetails({
 							targetBackingFactorBps: 20_000n,
 							vaultAttoRepBacking: 12n * 10n ** 18n,
@@ -1580,6 +1584,29 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Settle escalation deposits before withdrawing REP.')
 	})
 
+	test('blocks commitment queueing near expiry but allows direct resolved commitment exits', async () => {
+		for (const ended of [false, true]) {
+			const rendered = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={999n}>
+					<SecurityVaultSection
+						{...createSecurityVaultSectionProps({
+							modalFirst: true,
+							securityVaultDetails: createSecurityVaultDetails({ settlementCollateralAttoEth: 0n, disputeStakedAttoRep: 0n }),
+							oracleManagerDetails: createOracleManagerDetails(),
+							poolState: ended ? createEndedPoolState() : undefined,
+						})}
+					/>
+				</ChainTimestampContext.Provider>,
+			)
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Set commitment limit' }))
+			const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
+			fireEvent.input(within(dialog).getByRole('textbox', { name: 'Commitment limit' }), { target: { value: '1' } })
+			if (ended) expectTransactionButtonEnabled(dialog, 'Set commitment limit')
+			else expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'The oracle price expires too soon. Retry after it expires and review report funding.')
+			await rendered.cleanup()
+		}
+	})
+
 	test('requires fresh-report funding for vault actions at the exact oracle-price expiry boundary', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={10n}>
@@ -1608,7 +1635,7 @@ describe('SecurityVaultSection', () => {
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Need 1.2\u00a0more\u00a0ETH in this wallet to queue this REP withdrawal.')
 	})
 
-	test('does not require fresh-report funding immediately before oracle-price expiry', async () => {
+	test('blocks withdrawal immediately before oracle-price expiry', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={9n}>
 				<SecurityVaultSection
@@ -1635,7 +1662,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonEnabled(document.body, 'Withdraw REP')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'The oracle price expires too soon. Retry after it expires and review report funding.')
 	})
 
 	test('does not infer immediate withdrawal execution from an expired raw validity flag', async () => {

@@ -1,3 +1,4 @@
+import { getTruthAuctionBidTimingGuardMessage, getTruthAuctionEndsAt } from './truthAuctionTiming.js'
 import { type Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -22,6 +23,14 @@ export async function startTruthAuctionForSecurityPool(client: WriteClient, secu
 }
 export async function submitTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
 	return await executeForkAuctionAction('submitBid', securityPoolAddress, universeId, async () => {
+		const [auctionStarted, finalized, currentBlock] = await Promise.all([
+			client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'auctionStarted' }),
+			client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'finalized' }),
+			client.getBlock(),
+		])
+		if (finalized) throw new Error('Truth auction is already finalized.')
+		const timingGuardMessage = getTruthAuctionBidTimingGuardMessage(currentBlock.timestamp, getTruthAuctionEndsAt(auctionStarted))
+		if (timingGuardMessage !== undefined) throw new Error(timingGuardMessage)
 		const callParams = {
 			address: truthAuctionAddress,
 			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,

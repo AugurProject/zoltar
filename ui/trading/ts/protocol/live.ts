@@ -1,3 +1,4 @@
+import { loadOracleValidity, submissionDeadline, requireFreshSubmissionWindow } from './submissionWindow.js'
 import { createRegistryIndex, readIncrementalRegistry, type RegistryIndex } from '@zoltar/ui-core-shared/lib/incrementalRegistry.js'
 import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { estimateMintCheckpoint } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
@@ -30,6 +31,8 @@ const router = tradingContracts['contracts/trading/TwoWayConstantProductRouter.s
 async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address) {
 	const block = await client.getBlock()
 	const blockNumber = block.number
+	if (block.hash === null || block.hash === undefined) throw new Error('Latest block identity is unavailable')
+	const oracleValidUntilTimestamp = await loadOracleValidity(client, pool, block.hash)
 	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame] = await Promise.all([
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
@@ -49,6 +52,7 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 	const projected = checkpoint(block.timestamp + 30n * 24n * 60n * 60n)
 	if (current === undefined || projected === undefined) throw new Error('Pool fee accounting unavailable')
 	return {
+		oracleValidUntilTimestamp,
 		questionData,
 		zoltar,
 		parent,
@@ -228,6 +232,7 @@ export async function loadLiveMarket(client: PublicClient, configuration: Deploy
 		shareTokenSupplyAttoShares,
 		settlementCollateralAttoEth,
 		valuation: poolSettings.valuation,
+		oracleValidUntilTimestamp: poolSettings.oracleValidUntilTimestamp,
 		currentRetentionRate,
 		totalUnderwritingLimitAttoEth,
 		feeEligibleUnderwritingLimitAttoEth,
@@ -433,7 +438,12 @@ async function simulateEntryWithExpiry(client: WalletClient, configuration: Depl
 		blockHash,
 		deadline,
 		result: simulation,
-	} = await simulateWithDeadline(client, expiry, async (block, deadline) => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash }))
+	} = await simulateWithDeadline(
+		client,
+		expiry,
+		async (block, deadline) => await client.simulateContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, side === 'YES' ? 1 : 2, 0n, account, deadline], value: amount, blockHash: block.blockHash }),
+		(block, deadline) => submissionDeadline(client, market, 'entry', block, deadline),
+	)
 	return { blockNumber, blockHash, result: simulation.result, amount, side, market, deadline, slippageBps, minimumLongShares: minimumAfterSlippage(simulation.result.totalLongShares, slippageBps) }
 }
 
@@ -447,7 +457,10 @@ export async function submitFreshEntry(client: WalletClient, configuration: Depl
 	const pairAddress = quote.market.pair
 	if (pairAddress === undefined) throw new Error('Pair disappeared from the simulated market')
 	const minimumLongShares = retainApprovedMinimum(quote.minimumLongShares, refreshed.result.totalLongShares, 'long shares')
-	return await guardedWrite(async () => await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount }))
+	return await guardedWrite(async () => {
+		await requireFreshSubmissionWindow(client, quote.market, 'entry', quote.deadline)
+		return await client.writeContract({ abi: router.abi, address: configuration.router, functionName: 'enterPosition', account, args: [pairAddress, quote.side === 'YES' ? 1 : 2, minimumLongShares, account, quote.deadline], value: quote.amount })
+	})
 }
 
 async function simulateExitWithExpiry(client: WalletClient, configuration: DeploymentConfiguration, market: LiveMarket, account: Address, side: 'YES' | 'NO', completeSets: bigint, expiry: TransactionExpiry, slippageBps: bigint) {
@@ -459,24 +472,29 @@ async function simulateExitWithExpiry(client: WalletClient, configuration: Deplo
 		blockHash,
 		deadline,
 		result: { simulation, longBalance, maximumLongShares },
-	} = await simulateWithDeadline(client, expiry, async (block, deadline) => {
-		const quote = await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'quoteExactOutput', account, args: [side === 'YES', completeSets], blockHash: block.blockHash })
-		const longSharesSwapped = quote.result[0]
-		const totalLongShares = completeSets + longSharesSwapped
-		const scope = shareBalanceScope(market)
-		const longTokenId = side === 'YES' ? scope.yesTokenId : scope.noTokenId
-		const longBalance = await client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, longTokenId], blockHash: block.blockHash })
-		if (totalLongShares > longBalance) throw new Error(`Insufficient ${side} balance for this exit`)
-		const feeMarket = await loadTransactionFeeMarket(client, market, block.blockHash, block.blockTimestamp)
-		const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
-		const slippageMaximum = maximumAfterSlippage(totalLongShares, slippageBps)
-		const maximumLongShares = slippageMaximum < longBalance ? slippageMaximum : longBalance
-		const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
-		const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline)
-		const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data], blockHash: block.blockHash })
-		void simulation
-		return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, longBalance, maximumLongShares }
-	})
+	} = await simulateWithDeadline(
+		client,
+		expiry,
+		async (block, deadline) => {
+			const quote = await client.simulateContract({ abi: pair.abi, address: pairAddress, functionName: 'quoteExactOutput', account, args: [side === 'YES', completeSets], blockHash: block.blockHash })
+			const longSharesSwapped = quote.result[0]
+			const totalLongShares = completeSets + longSharesSwapped
+			const scope = shareBalanceScope(market)
+			const longTokenId = side === 'YES' ? scope.yesTokenId : scope.noTokenId
+			const longBalance = await client.readContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'balanceOf', args: [account, longTokenId], blockHash: block.blockHash })
+			if (totalLongShares > longBalance) throw new Error(`Insufficient ${side} balance for this exit`)
+			const feeMarket = await loadTransactionFeeMarket(client, market, block.blockHash, block.blockTimestamp)
+			const estimatedEthOut = feeMarket.shareTokenSupplyAttoShares === 0n ? 0n : (completeSets * feeMarket.settlementCollateralAttoEth) / feeMarket.shareTokenSupplyAttoShares
+			const slippageMaximum = maximumAfterSlippage(totalLongShares, slippageBps)
+			const maximumLongShares = slippageMaximum < longBalance ? slippageMaximum : longBalance
+			const minimumEth = minimumAfterSlippage(estimatedEthOut, slippageBps)
+			const transfer = receiveBasedExitArguments(market, side, completeSets, maximumLongShares, minimumEth, account, deadline)
+			const simulation = await client.simulateContract({ abi: shareTokenAbi, address: market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data], blockHash: block.blockHash })
+			void simulation
+			return { simulation: { result: { completeSetShares: completeSets, longSharesSwapped, totalLongShares, invalidInsurance: completeSets, ethOut: estimatedEthOut, feeAmount: quote.result[1] } }, longBalance, maximumLongShares }
+		},
+		(block, deadline) => submissionDeadline(client, market, 'exit', block, deadline),
+	)
 	return {
 		blockNumber,
 		blockHash,
@@ -509,5 +527,8 @@ export async function submitFreshExit(client: WalletClient, configuration: Deplo
 	const feeBlocker = sellHoldingFeeBlocker(feeMarket, quote.completeSets, minimumEth, quote.deadline)
 	if (feeBlocker !== undefined) throw new Error(feeBlocker)
 	const transfer = receiveBasedExitArguments(quote.market, quote.side, quote.completeSets, maximumLongShares, minimumEth, account, quote.deadline)
-	return await guardedWrite(async () => await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data] }))
+	return await guardedWrite(async () => {
+		await requireFreshSubmissionWindow(client, quote.market, 'exit', quote.deadline)
+		return await client.writeContract({ abi: shareTokenAbi, address: quote.market.shareToken, functionName: 'safeBatchTransferFrom', account, args: [account, shareOperationRouter(configuration), transfer.ids, transfer.amounts, transfer.data] })
+	})
 }

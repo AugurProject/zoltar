@@ -27,11 +27,27 @@ const ready: TradeTicketInputs = {
 	networkMismatchReason: undefined,
 	walletEthAttoEth: 5n * eth,
 	marketClosed: false,
+	nowSeconds: 1n,
 	acknowledgedImpactBps: undefined,
 	workflowLocked: false,
 }
 
 describe('trade ticket estimate', () => {
+	test('blocks last-second and60-second market/oracle windows, allowing61seconds', () => {
+		for (const remaining of [1n, 60n, 61n]) {
+			const endingMarket = { ...market, endTime: 100n + remaining, oracleValidUntilTimestamp: 1000n }
+			const ending = tradeTicketModel({ ...ready, market: endingMarket, ...{ nowSeconds: 100n } })
+			expect(ending.availability.disabled).toBe(remaining <= 60n)
+		}
+	})
+	test('blocks oracle windows at1and60seconds, allowing61seconds', () => {
+		for (const remaining of [1n, 60n, 61n]) {
+			const expiringMarket = { ...market, oracleValidUntilTimestamp: 100n + remaining }
+			const expiring = tradeTicketModel({ ...ready, market: expiringMarket, ...{ nowSeconds: 100n } })
+			expect(expiring.availability.disabled).toBe(remaining <= 60n)
+		}
+	})
+
 	test('blocks a sell whose approved ETH minimum cannot cover holding fees through validity', () => {
 		const feeMarket = {
 			...market,

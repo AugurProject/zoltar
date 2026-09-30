@@ -108,6 +108,7 @@ export const mixedBidBatchSettlementDetail = 'Select bids to settle. Winning bid
 export const submittingSettlementTransactionTruncated = 'Submitting settlement transaction…'
 export const forkActionWalletRequired = 'Connect a wallet before using fork and auction actions.'
 export const auctionEndedStatus = 'Truth auction has ended.'
+export const auctionEndsTooSoonToBid = 'Truth auction ends too soon to submit a bid.'
 export const finalizedSettlementDetail = 'The result is final.'
 export const openSettlement = 'Open settlement'
 export const truthAuctionFinalizationRequiredDetail = 'Finalize it to lock in the clearing price. Bids can be settled afterwards.'

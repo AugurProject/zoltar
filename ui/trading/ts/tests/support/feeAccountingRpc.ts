@@ -5,6 +5,9 @@ import type { LiveMarket } from '../../protocol/liveMarket.js'
 export function feeAccountingRpcResult(data: Hex, market: LiveMarket, timestamp: bigint) {
 	const uint256 = { type: 'uint256' } as const
 	const selector = (signature: string) => keccak256(stringToHex(signature)).slice(0, 10)
+	if (data === selector('questionData()') || data === selector('priceOracleManagerAndOperatorQueuer()')) return encodeAbiParameters([{ type: 'address' }], [market.pool])
+	if (data.slice(0, 10) === selector('getQuestionEndDate(uint256)')) return encodeAbiParameters([uint256], [market.endTime])
+	if (data === selector('lastSettlementTimestamp()')) return encodeAbiParameters([uint256], [market.oracleValidUntilTimestamp === undefined ? 0n : market.oracleValidUntilTimestamp - 300n])
 	if (data === selector('shareTokenSupplyAttoShares()')) return encodeAbiParameters([uint256], [market.shareTokenSupplyAttoShares])
 	if (data === selector('getFeeEpochEndTime()')) return encodeAbiParameters([uint256], [market.valuation?.feeEndTime ?? market.endTime])
 	if (data !== selector('getPoolAccountingSnapshot()')) return undefined

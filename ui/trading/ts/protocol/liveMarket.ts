@@ -14,6 +14,7 @@ export type LiveMarket = Readonly<{
 	title: string
 	description: string
 	endTime: bigint
+	oracleValidUntilTimestamp?: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	systemState: number

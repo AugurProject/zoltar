@@ -105,7 +105,7 @@ export function TradeEstimatePanel({
 				</p>
 			) : null}
 			<p className='detail trade-estimate-note'>
-				{ticketCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}
+				{ticketCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, estimate.kind === 'entry' ? 'question-or-oracle' : 'question')}
 			</p>
 			<ReadOnlyDetailAccordion title={ticketCopy.moreDetails}>
 				<DataGrid dense>

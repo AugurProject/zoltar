@@ -1830,6 +1830,18 @@ describe('ForkAuctionSection', () => {
 		expect(formChanges).toContainEqual({ submitBidPrice: formatTruthAuctionTickPriceInput(10n) })
 	})
 
+	test('keeps the auction open while blocking bids within the inclusion reserve', async () => {
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveClearingAuctionProps({ currentTimestamp: 604_800n })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		const submitBid = documentQueries.getByRole('button', { name: 'Submit bid' })
+		expect(submitBid.hasAttribute('disabled')).toBe(true)
+		expect(documentQueries.getByText('Truth auction ends too soon to submit a bid.')).not.toBeNull()
+		expect(documentQueries.getByRole('heading', { name: 'Submit bid' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Finalize truth auction' })).toBeNull()
+		expect(documentQueries.queryByText('Ended')).toBeNull()
+	})
+
 	test('replaces the bid form with the finalize step once bidding has ended', async () => {
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveClearingAuctionProps({ currentTimestamp: 604_900n })))
 		cleanupRenderedComponent = renderedComponent.cleanup

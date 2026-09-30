@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
+import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
 import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createOracleManagerDetails as createBaseOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
@@ -137,4 +137,12 @@ describe('oracle request ETH funding', () => {
 			}),
 		).toBeUndefined()
 	})
+})
+
+test('fresh-price coordinator routes require known timing and a full submission window', () => {
+	const details = createOracleManagerDetails({ isPriceValid: true, priceValidUntilTimestamp: 100n })
+	for (const timestamp of [undefined, 40n, 99n, 100n, 101n]) expect(getOracleOperationTimingGuard(details, timestamp)).toBeDefined()
+	expect(getOracleOperationTimingGuard(details, 39n)).toBeUndefined()
+	expect(getOracleOperationTimingGuard({ ...details, priceValidUntilTimestamp: undefined }, 1n)).toBeDefined()
+	expect(getOracleOperationTimingGuard({ ...details, isPriceValid: false }, undefined)).toBeUndefined()
 })
