@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import * as url from 'node:url'
 import { pathExists } from '../repo/fs.mts'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
@@ -223,7 +224,7 @@ async function loadComputedManifest(manifestId: ManifestId): Promise<DeploymentM
 			],
 		}
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error)
+		const message = errorMessage(error)
 		throw new Error(`Unable to compute ${manifestId} deployment manifest. Run bun run generate before this check. ${message}`)
 	}
 }
