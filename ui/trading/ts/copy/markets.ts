@@ -11,6 +11,7 @@ function outcomeOdds(outcome: string, percent: number) {
 }
 
 export const marketsCopy = {
+	sortRegistry: 'Registry order',
 	yes,
 	no,
 	outcomeOdds,

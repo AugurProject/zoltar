@@ -81,12 +81,11 @@ async function loadOriginUniverseId(client: PublicClient, parent: Address, curre
 	return originUniverseId
 }
 
-export async function mapWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>, onProgress?: (results: Output[]) => void) {
+export async function mapWithConcurrency<Input, Output>(items: readonly Input[], maximumConcurrency: number, mapper: (item: Input, index: number) => Promise<Output>, onProgress?: (results: (Output | undefined)[]) => void) {
 	if (!Number.isInteger(maximumConcurrency) || maximumConcurrency <= 0) throw new Error('Async concurrency limit must be a positive integer')
 	const queue = items.map((item, index) => ({ item, index }))
 	const results: Output[] = []
-	const completed = new Set<number>()
-	let contiguousCount = 0
+	const progress: (Output | undefined)[] = Array.from({ length: items.length }, () => undefined)
 	let nextQueueIndex = 0
 	async function worker() {
 		while (true) {
@@ -94,10 +93,8 @@ export async function mapWithConcurrency<Input, Output>(items: readonly Input[],
 			if (job === undefined) return
 			nextQueueIndex += 1
 			results[job.index] = await mapper(job.item, job.index)
-			completed.add(job.index)
-			const previousCount = contiguousCount
-			while (completed.has(contiguousCount)) contiguousCount += 1
-			if (contiguousCount > previousCount) onProgress?.(results.slice(0, contiguousCount))
+			progress[job.index] = results[job.index]
+			onProgress?.(progress.slice())
 		}
 	}
 	const workerCount = Math.min(maximumConcurrency, queue.length)
@@ -111,7 +108,7 @@ type MarketDiscoveryResult = ReturnType<typeof marketDiscoveryPage> & {
 	universeIds: bigint[]
 	selectedUniverseId: bigint | undefined
 }
-export type MarketDiscoveryProgress = (result: MarketDiscoveryResult) => void
+export type MarketDiscoveryProgress = (result: Omit<MarketDiscoveryResult, 'markets'> & { markets: (LiveMarket | undefined)[] }) => void
 
 async function loadDiscoveredMarket(client: PublicClient, configuration: DeploymentConfiguration, deployment: SecurityPoolDeployment) {
 	try {

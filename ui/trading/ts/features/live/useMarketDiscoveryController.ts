@@ -18,6 +18,8 @@ import type { useWalletSession } from './useWalletSession.js'
 import type { UniverseDiscoveryScope } from '../../lib/universeSelection.js'
 import type { LiveTradingControllerServices, LiveTradingRouteContext } from './liveTradingTypes.js'
 
+type RefreshOptions = Readonly<{ background?: boolean; navigation?: boolean; ownerMarket?: Address; explicit?: boolean }>
+
 type RequestGuard = ReturnType<typeof createLatestRequestGuard>
 
 function discoveryScope(route: string) {
@@ -60,7 +62,8 @@ export function useMarketDiscoveryController({
 	const previousWalletSummaryRetryNonce = useRef(walletSummaryRetryNonce)
 	// A background discovery slower than the block interval is left to finish instead of being restarted on each block.
 	const backgroundDiscovery = useRef<RequestIdentity>()
-	const partialSnapshot = useRef<{ markets: typeof market.markets; page: typeof market.marketPage }>()
+	const foregroundDiscovery = useRef<{ request: RequestIdentity; args: [DeploymentConfiguration, bigint, WorkflowOwner | undefined, RefreshOptions] }>()
+	const partialSnapshot = useRef<{ markets: typeof market.markets; page: typeof market.marketPage; rows: typeof market.discoveryRows }>()
 
 	async function discover(nextConfiguration: DeploymentConfiguration, requestedStart: bigint, isCurrent: () => boolean, operation: ReadOperation, onProgress: MarketDiscoveryProgress) {
 		const client = readOperationClient(services.createTradingPublicClient(nextConfiguration), operation)
@@ -90,7 +93,7 @@ export function useMarketDiscoveryController({
 	const positionLockOnScreen = () => routePoolRef.current !== undefined && transaction.isPositionLocked(routePoolRef.current)
 	const refreshHeldByWorkflow = () => transaction.liquidityWorkflowLockedRef.current || positionLockOnScreen()
 
-	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: Readonly<{ background?: boolean; navigation?: boolean; ownerMarket?: Address; explicit?: boolean }> = {}) {
+	async function refresh(nextConfiguration = configuration, requestedStart = market.marketPage.start, owner: WorkflowOwner | undefined = undefined, options: RefreshOptions = {}) {
 		if (nextConfiguration === undefined) return
 		const background = options.background === true
 		// A trade's own refresh passes its market's lock; landing on another market's route, it waits like any other refresh.
@@ -101,6 +104,7 @@ export function useMarketDiscoveryController({
 		if (owner === 'position' && !ownerMarketOnScreen() && refreshHeldByWorkflow()) return
 		if (background && options.explicit !== true && (market.discoveryState === 'loading' || (backgroundDiscovery.current !== undefined && discoveryRequests.isCurrent(backgroundDiscovery.current)))) return
 		const request = discoveryRequests.begin()
+		if (!background) foregroundDiscovery.current = { request, args: [nextConfiguration, requestedStart, owner, options] }
 		// The scope is fixed when the request begins; a request that lands after the URL or route moved on still answers only its own question.
 		// It records the application's request (the `universe` parameter), not the resolved universe discovery is asked for.
 		const scope: UniverseDiscoveryScope = { requestedUniverseId: urlUniverseId, addressedPool: routePool?.toLowerCase() }
@@ -127,16 +131,19 @@ export function useMarketDiscoveryController({
 			if (snapshot === undefined) return
 			market.setMarkets(snapshot.markets)
 			market.setMarketPage(snapshot.page)
+			market.setDiscoveryRows(snapshot.rows)
 			partialSnapshot.current = undefined
 		}
 		try {
 			let acceptingProgress = true
 			// Partial first loads can fill an empty view; refreshes keep every prior row until the full result arrives.
-			const publishProgress = market.markets.length === 0
+			const publishProgress = market.markets.length === 0 || partialSnapshot.current !== undefined
 			const onProgress: MarketDiscoveryProgress = discovered => {
 				if (!publishProgress || !acceptingProgress || background || !discoveryRequests.isCurrent(request) || !commitAllowed()) return
-				partialSnapshot.current ??= { markets: previousMarkets, page: previousPage }
-				market.setMarkets(discovered.markets)
+				partialSnapshot.current ??= { markets: previousMarkets, page: previousPage, rows: market.discoveryRows }
+				const rows = discovered.markets.map((row, index) => row ?? (discovered.start === market.marketPage.start ? market.discoveryRows?.[index] : undefined))
+				market.setMarkets(rows.filter(item => item !== undefined))
+				market.setDiscoveryRows(rows)
 				onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
 				market.setMarketPage({ start: discovered.start, total: discovered.total, previousStart: discovered.previousStart, nextStart: discovered.nextStart })
 			}
@@ -149,6 +156,7 @@ export function useMarketDiscoveryController({
 				market.setDiscoveryState('ready')
 				return
 			}
+			market.setDiscoveryRows(partialSnapshot.current !== undefined || (market.discoveryRows !== undefined && requestedStart === market.marketPage.start) ? discovered.markets : undefined)
 			partialSnapshot.current = undefined
 			market.setMarkets(discovered.markets)
 			onUniversesChange(discovered.universeIds, discovered.selectedUniverseId, scope)
@@ -176,6 +184,7 @@ export function useMarketDiscoveryController({
 				portfolio.setBalanceError('Market refresh failed before wallet balances could be revalidated')
 			}
 		} finally {
+			if (foregroundDiscovery.current?.request === request) foregroundDiscovery.current = undefined
 			if (backgroundDiscovery.current === request) {
 				backgroundDiscovery.current = undefined
 				market.setFreshness(current => (current.refreshing ? { ...current, refreshing: false } : current))
@@ -211,6 +220,7 @@ export function useMarketDiscoveryController({
 			// Results only carry over between routes that discover the same thing, such as the trade and liquidity views of one pool.
 			if (discoveryScope(previousRoute.current) !== discoveryScope(route)) {
 				partialSnapshot.current = undefined
+				market.setDiscoveryRows(undefined)
 				market.setMarkets([])
 			}
 			void refresh(configuration, 0n, undefined, { navigation: true })
@@ -226,6 +236,11 @@ export function useMarketDiscoveryController({
 	// Each new block, and each explicit invalidation such as a simulation control, re-reads the visible markets in place.
 	const blockRefreshActive = configuration !== undefined && (routePool !== undefined || route === 'portfolio' || tradingListKindFor(route) !== undefined)
 	useBlockRefresh(event => {
+		const foreground = foregroundDiscovery.current
+		if (event.reason === 'invalidate' && foreground !== undefined && discoveryRequests.isCurrent(foreground.request)) {
+			void refreshRef.current(...foreground.args)
+			return
+		}
 		if (refreshHeldByWorkflow()) return
 		void refreshRef.current(undefined, undefined, undefined, { background: true, explicit: event.reason === 'invalidate' })
 	}, blockRefreshActive)

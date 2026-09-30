@@ -306,11 +306,11 @@ describe('standalone trading UI model', () => {
 		expect(results).toEqual([0, 10, 20, 30, 40])
 	})
 
-	test('publishes only contiguous completed rows when reads finish out of order', async () => {
+	test('publishes fixed positions with gaps when reads finish out of order', async () => {
 		const first = createDeferred<number>()
 		const second = createDeferred<number>()
 		const third = createDeferred<number>()
-		const progress: number[][] = []
+		const progress: (number | undefined)[][] = []
 		const pending = mapWithConcurrency(
 			[first, second, third],
 			3,
@@ -319,14 +319,18 @@ describe('standalone trading UI model', () => {
 		)
 		second.resolve(20)
 		await Bun.sleep(0)
-		expect(progress).toEqual([])
+		expect(progress).toEqual([[undefined, 20, undefined]])
 		first.resolve(10)
 		await Bun.sleep(0)
-		expect(progress).toEqual([[10, 20]])
+		expect(progress).toEqual([
+			[undefined, 20, undefined],
+			[10, 20, undefined],
+		])
 		third.resolve(30)
 		expect(await pending).toEqual([10, 20, 30])
 		expect(progress).toEqual([
-			[10, 20],
+			[undefined, 20, undefined],
+			[10, 20, undefined],
 			[10, 20, 30],
 		])
 	})
@@ -341,7 +345,10 @@ describe('standalone trading UI model', () => {
 				rows => progress.push(rows),
 			),
 		).toEqual([undefined, 1])
-		expect(progress).toEqual([[undefined], [undefined, 1]])
+		expect(progress).toEqual([
+			[undefined, undefined],
+			[undefined, 1],
+		])
 	})
 
 	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {

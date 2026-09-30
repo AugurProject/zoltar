@@ -154,3 +154,42 @@ test('search spans every discovered page, and Discover reads the next page into 
 		dom.cleanup()
 	}
 })
+
+test('limits the registry-order label to the positional first-load presentation', async () => {
+	const dom = installDomEnvironment('http://localhost/#/market')
+	const first = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Registry first', endTime: FIXTURE_NOW + 30n * FIXTURE_DAY })
+	const second = liveMarketFixture({ pool: fixtureAddress('02'), title: 'Registry second', endTime: FIXTURE_NOW + FIXTURE_DAY })
+	const view = (loaded: boolean) => (
+		<LiveMarketBrowser
+			lookupRoute='market'
+			markets={loaded ? [second, first] : []}
+			discoveryRows={loaded ? [first, second] : undefined}
+			pageMarketCount={loaded ? 2 : 0}
+			discoveryState={loaded ? 'ready' : 'loading'}
+			discoveryError={undefined}
+			freshness={{ refreshing: false, updatedAt: undefined }}
+			marketPage={page}
+			workflowLocked={false}
+			nowSeconds={FIXTURE_NOW}
+			retry={() => undefined}
+			loadMarketPage={() => undefined}
+		/>
+	)
+	const rendered = await renderIntoDocument(view(false))
+	try {
+		await act(() => render(view(true), rendered.container))
+		expect(cardTitles(rendered.container)).toEqual(['Registry first', 'Registry second'])
+		const sort = () => rendered.container.querySelector<HTMLButtonElement>('.enum-dropdown-trigger')
+		expect(sort()?.textContent).toBe('Registry order')
+		await act(() => sort()?.click())
+		const closing = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(option => option.textContent === 'Closing soon')
+		if (closing === undefined) throw new Error('Closing-soon option missing')
+		await act(() => closing.click())
+		expect(cardTitles(rendered.container)).toEqual(['Registry second', 'Registry first'])
+		await act(() => sort()?.click())
+		expect(Array.from(rendered.container.querySelectorAll('[role="option"]')).map(option => option.textContent)).not.toContain('Registry order')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})

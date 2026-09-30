@@ -183,6 +183,10 @@
 			"bun": "./ts/tests/app/useOnchainState.integration.test.tsx",
 			"default": "./js/tests/app/useOnchainState.integration.test.js"
 		},
+		"./tests/app/useProtocolAppRuntime.test.js": {
+			"bun": "./ts/tests/app/useProtocolAppRuntime.test.tsx",
+			"default": "./js/tests/app/useProtocolAppRuntime.test.js"
+		},
 		"./tests/app/useTransactionTrayController.test.js": {
 			"bun": "./ts/tests/app/useTransactionTrayController.test.tsx",
 			"default": "./js/tests/app/useTransactionTrayController.test.js"
