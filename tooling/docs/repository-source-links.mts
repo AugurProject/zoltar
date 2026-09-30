@@ -11,8 +11,12 @@ export type RepositorySourceTarget = { readonly kind: 'directory' | 'file'; read
 
 /** Repository path and expected entry kind for a GitHub file (`/blob/main/`) or directory (`/tree/main/`) link. */
 export function repositorySourceTarget(href: string): RepositorySourceTarget | undefined {
-	const [prefix, kind] = href.startsWith(repositorySourceUrlPrefix) ? [repositorySourceUrlPrefix, 'file' as const] : href.startsWith(repositoryDirectoryUrlPrefix) ? [repositoryDirectoryUrlPrefix, 'directory' as const] : [undefined, undefined]
-	if (prefix === undefined) return undefined
+	if (href.startsWith(repositorySourceUrlPrefix)) return repositoryTarget(href, repositorySourceUrlPrefix, 'file')
+	if (href.startsWith(repositoryDirectoryUrlPrefix)) return repositoryTarget(href, repositoryDirectoryUrlPrefix, 'directory')
+	return undefined
+}
+
+function repositoryTarget(href: string, prefix: string, kind: RepositorySourceTarget['kind']): RepositorySourceTarget | undefined {
 	const hashIndex = href.indexOf('#')
 	const repositoryPath = decodeURIComponent(hashIndex === -1 ? href.slice(prefix.length) : href.slice(prefix.length, hashIndex))
 	return repositoryPath.length === 0 ? undefined : { kind, path: repositoryPath }

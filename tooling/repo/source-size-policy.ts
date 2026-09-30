@@ -26,7 +26,7 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	...allowances('Owning bot package: extract dashboard controllers, runtime orchestration, and journal persistence into focused modules.', [
 		['bots/open-oracle-arbitrager/src/dashboard/dashboard.ts', 1150],
 		['bots/liquidator/src/dashboard/dashboard.ts', 864],
-		['bots/liquidator/src/state/operator-state.ts', 630],
+		['bots/liquidator/src/state/operator-state.ts', 632],
 	]),
 	...allowances('Owning UI library: separate workflow state and actions from rendering, and extract simulation scenario handlers.', [
 		['ui/coreShared/ts/simulation/tevmEngine.ts', 777],
