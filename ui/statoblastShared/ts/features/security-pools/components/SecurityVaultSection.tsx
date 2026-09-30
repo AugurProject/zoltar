@@ -151,7 +151,8 @@ export function SecurityVaultSection({
 	const executionRepPerEthPrice = hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined
 	const withdrawalPrice = getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice, estimateRepPerEthPrice: repPerEthPrice })
 	// After resolution the coordinator rejects staged operations, but the pool still accepts a direct commitment reduction.
-	const commitmentChangeIsDirect = poolState?.lifecycleState === 'ended'
+	const poolEnded = poolState?.lifecycleState === 'ended'
+	const commitmentChangeIsDirect = poolEnded
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const currentVaultIsHealthy =
 		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || repPerEthPrice === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
@@ -421,7 +422,7 @@ export function SecurityVaultSection({
 			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 		/>
 	)
-	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
+	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, poolEnded, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
 			{currentSelectedVaultDetails !== undefined && !commitmentChangeIsDirect && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice) ? (

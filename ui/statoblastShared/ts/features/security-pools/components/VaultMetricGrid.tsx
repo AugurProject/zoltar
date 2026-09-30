@@ -59,6 +59,7 @@ export function VaultMetricGrid({
 	layout = 'grid',
 	disputeStakedAttoRep,
 	isCurrentlyHealthy,
+	poolEnded = false,
 	poolHeldRepPerCapacityBps: _poolHeldRepPerCapacityBps,
 	priceValidUntilTimestamp,
 	vaultAttoRepBacking,
@@ -89,10 +90,12 @@ export function VaultMetricGrid({
 
 	return (
 		<div className={['vault-detail-stage', className].filter(Boolean).join(' ')}>
-			<div className='vault-health-status'>
-				<p className={`vault-health ${associatedRepToneClass ?? ''}`}>{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}</p>
-				<RepPriceStatusLabel />
-			</div>
+			{poolEnded ? undefined : (
+				<div className='vault-health-status'>
+					<p className={`vault-health ${associatedRepToneClass ?? ''}`}>{associatedRepStatusLabel ?? workspaceCopy.healthUnknown}</p>
+					<RepPriceStatusLabel />
+				</div>
+			)}
 			<div className='vault-detail-hero'>
 				<div className='vault-detail-hero-primary'>
 					<span>{securityPoolCopy.exposureSupported}</span>
