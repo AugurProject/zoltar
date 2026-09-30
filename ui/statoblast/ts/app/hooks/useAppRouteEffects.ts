@@ -5,27 +5,29 @@ import { isHexAddressInput, normalizeAddress } from '@zoltar/ui-core-shared/lib/
 import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 
+/** Copies route state (URL pool, question, vault owner, and oracle report) into the form states that mirror it. */
+export type RouteFormSync = {
+	setOpenOracleReportId: (reportId: string) => void
+	setSecurityPoolAddress: (securityPoolAddress: string) => void
+	setSecurityPoolQuestionId: (questionId: string) => void
+	setSelectedVaultOwner: (selectedVaultOwner: string) => void
+}
+
 type Props = {
 	accountAddress: Address | undefined
 	applicationDeploymentMissing: boolean
 	activeEnvironmentNonce: number
 	environmentReady: boolean
+	formSync: RouteFormSync
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
-	navigate: (route: 'deploy' | 'open-oracle' | 'pools') => void
+	navigate: (route: Exclude<Route, 'not-found'>) => void
 	resetSecurityPoolCreation: () => void
 	route: Route
 	securityPoolAddress: string
 	securityPoolQuestionId: string
 	securityPoolResultHash: string | undefined
 	selectedPoolSecurityPoolAddress: string | undefined
-	setForkAuctionFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setOpenOracleFormReportId: (reportId: string) => void
-	setReportingFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setSecurityVaultFormSelectedVaultOwner: (selectedVaultOwner: string) => void
-	setSecurityVaultFormSecurityPoolAddress: (securityPoolAddress: string) => void
-	setSecurityPoolFormMarketId: (marketId: string) => void
-	setTradingFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	tradingResultHash: string | undefined
 	urlVaultAddress?: string | undefined
 	urlOpenOracleReportId: string
@@ -54,6 +56,7 @@ export function useAppRouteEffects({
 	applicationDeploymentMissing,
 	activeEnvironmentNonce,
 	environmentReady,
+	formSync,
 	loadOracleReport,
 	loadSecurityPools,
 	navigate,
@@ -63,13 +66,6 @@ export function useAppRouteEffects({
 	securityPoolQuestionId,
 	securityPoolResultHash,
 	selectedPoolSecurityPoolAddress,
-	setForkAuctionFormSecurityPoolAddress,
-	setOpenOracleFormReportId,
-	setReportingFormSecurityPoolAddress,
-	setSecurityVaultFormSelectedVaultOwner,
-	setSecurityVaultFormSecurityPoolAddress,
-	setSecurityPoolFormMarketId,
-	setTradingFormSecurityPoolAddress,
 	tradingResultHash,
 	urlOpenOracleReportId,
 	urlVaultAddress,
@@ -86,7 +82,8 @@ export function useAppRouteEffects({
 	const lastHandledTradingResultHash = useRef<string | undefined>(undefined)
 
 	loadSecurityPoolsRef.current = loadSecurityPools
-	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady, isOpenOracleRoute: route === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId })
+	const { setOpenOracleReportId, setSecurityPoolAddress, setSecurityPoolQuestionId, setSelectedVaultOwner } = formSync
+	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady, isOpenOracleRoute: route === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId: setOpenOracleReportId })
 	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
 
 	useEffect(() => {
@@ -97,16 +94,13 @@ export function useAppRouteEffects({
 		if (lastSyncedSecurityPoolQuestionId.current === securityPoolQuestionId) return
 		lastSyncedSecurityPoolQuestionId.current = securityPoolQuestionId
 		resetSecurityPoolCreation()
-		setSecurityPoolFormMarketId(securityPoolQuestionId)
-	}, [resetSecurityPoolCreation, route, securityPoolQuestionId, setSecurityPoolFormMarketId])
+		setSecurityPoolQuestionId(securityPoolQuestionId)
+	}, [resetSecurityPoolCreation, route, securityPoolQuestionId, setSecurityPoolQuestionId])
 
 	useEffect(() => {
 		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return
-		setSecurityVaultFormSecurityPoolAddress(securityPoolAddress)
-		setTradingFormSecurityPoolAddress(securityPoolAddress)
-		setForkAuctionFormSecurityPoolAddress(securityPoolAddress)
-		setReportingFormSecurityPoolAddress(securityPoolAddress)
-	}, [route, securityPoolAddress, setForkAuctionFormSecurityPoolAddress, setReportingFormSecurityPoolAddress, setSecurityVaultFormSecurityPoolAddress, setTradingFormSecurityPoolAddress])
+		setSecurityPoolAddress(securityPoolAddress)
+	}, [route, securityPoolAddress, setSecurityPoolAddress])
 
 	useEffect(() => {
 		const nextSelectedVaultOwner = getSelectedVaultOwnerForRoutePoolChange({
@@ -115,9 +109,9 @@ export function useAppRouteEffects({
 			route,
 			securityPoolAddress,
 		})
-		if (route === 'pools' && urlVaultAddress !== undefined && (lastUrlVaultAddress.current !== urlVaultAddress || nextSelectedVaultOwner !== undefined)) setSecurityVaultFormSelectedVaultOwner(urlVaultAddress)
-		else if (route === 'pools' && urlVaultAddress === undefined && (lastUrlVaultAddress.current !== undefined || lastVaultAccountAddress.current !== accountAddress)) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner ?? accountAddress?.toString() ?? '')
-		else if (nextSelectedVaultOwner !== undefined) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner)
+		if (route === 'pools' && urlVaultAddress !== undefined && (lastUrlVaultAddress.current !== urlVaultAddress || nextSelectedVaultOwner !== undefined)) setSelectedVaultOwner(urlVaultAddress)
+		else if (route === 'pools' && urlVaultAddress === undefined && (lastUrlVaultAddress.current !== undefined || lastVaultAccountAddress.current !== accountAddress)) setSelectedVaultOwner(nextSelectedVaultOwner ?? accountAddress?.toString() ?? '')
+		else if (nextSelectedVaultOwner !== undefined) setSelectedVaultOwner(nextSelectedVaultOwner)
 		lastUrlVaultAddress.current = urlVaultAddress
 		lastVaultAccountAddress.current = accountAddress
 		if (route !== 'pools') {
@@ -125,7 +119,7 @@ export function useAppRouteEffects({
 			return
 		}
 		lastSelectedSecurityPoolAddress.current = normalizeAddress(securityPoolAddress) ?? ''
-	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultOwner, urlVaultAddress])
+	}, [accountAddress, route, securityPoolAddress, setSelectedVaultOwner, urlVaultAddress])
 
 	useEffect(() => {
 		const previousEnvironmentNonce = lastSelectedPoolEnvironmentNonce.current

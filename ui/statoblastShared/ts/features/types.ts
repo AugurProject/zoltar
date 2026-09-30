@@ -34,7 +34,7 @@ export type VaultMetricGridProps = {
 	claimableFeesAttoEth: bigint | undefined
 } & RepPerEthPriceProps
 
-type RepPerEthPriceProps = {
+export type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: UiRepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
@@ -187,7 +187,7 @@ export type SecurityPoolsSectionProps = {
 	zoltarUniverse: ZoltarUniverseSummary | undefined
 }
 
-type SecurityVaultRouteContentProps = {
+export type SecurityVaultRouteContentProps = {
 	accountState: AccountState
 	loadingSecurityVault: boolean
 	onApproveRep: (amount?: bigint) => void
@@ -231,7 +231,7 @@ export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	showHeader?: boolean
 }
 
-type TradingRouteContentProps = {
+export type TradingRouteContentProps = {
 	accountState: AccountState
 	loadingTradingForkUniverse: boolean
 	loadingTradingDetails: boolean
@@ -263,7 +263,7 @@ export type SettlementSelectedBid = {
 	bidIndex: bigint
 }
 
-type ForkAuctionRouteContentProps = {
+export type ForkAuctionRouteContentProps = {
 	accountState: AccountState
 	forkAuctionDetails: ForkAuctionDetails | undefined
 	forkAuctionActiveAction: ForkAuctionActionResult['action'] | undefined
