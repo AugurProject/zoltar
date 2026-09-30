@@ -1,4 +1,4 @@
-import type { SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultActionResult } from '../../../types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 

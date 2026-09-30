@@ -14,7 +14,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { getTradingRouteHref } from '../lib/routing.js'
-import { SecurityPoolLink } from '../components/SecurityPoolLink.js'
+import { TradingSecurityPoolLink } from '../components/TradingSecurityPoolLink.js'
 import type { LiveBalances, LiveMarket } from '../protocol/live.js'
 import { maximumInsuredExit } from '@zoltar/trading-shared/trading/positions'
 import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingTypes.js'
@@ -72,7 +72,7 @@ function PortfolioPositionDetails({ market, balances }: { market: LiveMarket; ba
 	const maximumNoExit = maximumInsuredExit({ longOutcome: 'NO', longBalance: balances.no, invalidBalance: balances.invalid, yesReserve: market.yesReserve, noReserve: market.noReserve, feeBps: market.feeBps })
 	return (
 		<ReadOnlyDetailAccordion title={portfolioCopy.positionDetails}>
-			<SecurityPoolLink value={market.pool} />
+			<TradingSecurityPoolLink value={market.pool} />
 			{balances.lp === 0n ? undefined : (
 				<WorkflowSubsection title={portfolioCopy.lpClaims}>
 					<DataGrid dense>
@@ -161,7 +161,7 @@ export function LivePortfolio({
 											{liveCopy.questionEnd}: <TimestampValue timestamp={market.endTime} relative={false} />
 										</p>
 									) : undefined}
-									{balances === undefined ? <SecurityPoolLink value={market.pool} /> : undefined}
+									{balances === undefined ? <TradingSecurityPoolLink value={market.pool} /> : undefined}
 								</div>
 								{balances === undefined ? null : <PortfolioHoldings market={market} balances={balances} />}
 								{balances === undefined ? null : <PortfolioValues market={market} balances={balances} valuation={row.valuation} />}

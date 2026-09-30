@@ -75,6 +75,18 @@ test('rejects test imports that bypass mirrored ownership', () => {
 	}
 })
 
+test('keeps Statoblast product types out of the generic UI packages', () => {
+	const sourceText = ['export type ListedSecurityPool = { vaultCount: bigint }', 'interface ReportingFormState { reportAmount: string }', 'export type MarketDetails = { questionId: string }'].join('\n')
+	for (const packageId of ['coreShared', 'zoltarShared']) {
+		const findings = findUiLayerBoundaryViolations(`ui/${packageId}/ts/types/contracts.ts`, sourceText)
+		expect(findings.map(finding => [finding.rule, finding.specifier])).toEqual([
+			['statoblast-product-type-outside-statoblast-shared', 'ListedSecurityPool'],
+			['statoblast-product-type-outside-statoblast-shared', 'ReportingFormState'],
+		])
+	}
+	expect(findUiLayerBoundaryViolations('ui/statoblastShared/ts/types/contracts.ts', sourceText)).toEqual([])
+})
+
 test('exports manifest guard requires existing source targets and explicit tsx entries', () => {
 	const sourceFiles = ['ts/components/Widget.tsx', 'ts/lib/helpers.ts']
 	expect(

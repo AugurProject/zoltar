@@ -1,5 +1,7 @@
-import type { AccountState, OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { MarketDetails, OpenOracleActionResult, OpenOracleReportDetails, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances, ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { OpenOracleCreateFormState, OpenOracleFormState, ReportingFormState } from '../types/app.js'
+import type { MarketDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleReportSummaryPage, OpenOracleWithdrawableBalances, ReportingActionResult, ReportingDetails } from '../types/contracts.js'
 import type { ActionAvailability } from '@zoltar/ui-core-shared/types/components.js'
 import type { OpenOracleCreateContractFieldErrors, OpenOracleDisputeSubmissionDetails } from './open-oracle/lib/openOracle.js'
 

@@ -7,7 +7,7 @@ import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.
 import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { installFakeEnvironmentLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import type { LiquidationApprovalDetails, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, OracleManagerDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { UseSecurityPoolsOverviewDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
 import type { GlobalTransactionPresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
 import { type CoordinatorFundingRequirement, createCoordinatorFundingRequirement, createSecurityPoolsOverviewDependencies, renderSecurityPoolsOverviewHook, type TestSecurityPoolsOverviewWriteClient } from './testSupport/securityPoolsOverviewDependencies.js'

@@ -15,10 +15,10 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { TransactionStatusCard } from '@zoltar/ui-core-shared/components/TransactionStatusCard.js'
 import { getLiquidationExecutionFailureDetail } from '../lib/liquidation.js'
 import { formatHealthFactorBps, getApprovalStatus, type QueuedLiquidationOperationView, type QueuedLiquidationStatus } from '../lib/liquidationModalGuards.js'
-import { getRepPriceSourceCopy, renderRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
+import { getUiRepPriceSourceCopy, renderUiRepPriceSourceLabel, type UiRepPriceSource } from '../lib/repPriceSource.js'
 import { RepPriceStatusLabel } from './RepPriceStatusLabel.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
-import type { LiquidationApprovalDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, ListedSecurityPool, OracleManagerDetails, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 export function QueuedLiquidationStatusCard({
 	onViewInStagedOperations,
@@ -104,7 +104,7 @@ export function LiquidationContextSummary({
 	trimmedLiquidationReceiverVault: string
 	trimmedLiquidationTargetVault: string
 }) {
-	const repPriceSourceCopy = getRepPriceSourceCopy(repPerEthSource)
+	const repPriceSourceCopy = getUiRepPriceSourceCopy(repPerEthSource)
 	return (
 		<div className='decision-summary'>
 			<div className='exchange-preview'>
@@ -147,7 +147,7 @@ export function LiquidationContextSummary({
 					<MetricField
 						label={
 							<span>
-								{repPriceSourceCopy.quotedRepPerEthLabel} {renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
+								{repPriceSourceCopy.quotedRepPerEthLabel} {renderUiRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)}
 							</span>
 						}
 					>

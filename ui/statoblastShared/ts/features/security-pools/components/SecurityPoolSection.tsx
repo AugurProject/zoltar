@@ -38,7 +38,7 @@ import { getActiveAppChainWalletBlocker, withWalletBlocker } from '@zoltar/ui-co
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as transactionReviewCopy from '@zoltar/ui-core-shared/copy/transactionReview.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import { SecurityPoolLink } from './SecurityPoolLink.js'
+import { StatoblastSecurityPoolLink } from './StatoblastSecurityPoolLink.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 
 const MULTIPLIER_ERROR_ID = 'security-pool-security-multiplier-error'
@@ -72,7 +72,7 @@ export function SecurityPoolSection({
 	securityPoolError,
 	securityPoolForm,
 	securityPoolResult,
-	securityPoolReviewSignal,
+	securityPoolReviewAbortSignal,
 	showHeader = true,
 	questionAndPoolCreating = false,
 	poolCreationMarketDetails: carriedPoolCreationMarketDetails,
@@ -92,7 +92,7 @@ export function SecurityPoolSection({
 	const createdPoolUniverseName = useUniverseName(securityPoolResult?.universeId ?? activeUniverseId)
 	const visibleSecurityPoolError = suppressPresentedTransactionError(securityPoolError, transactionPresentation, transactionCopy.securityPoolCreation)
 	const reviewWorkflow = transactionSteps.value
-	const ownsTransactionReview = securityPoolReviewSignal !== undefined && !securityPoolReviewSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
+	const ownsTransactionReview = securityPoolReviewAbortSignal !== undefined && !securityPoolReviewAbortSignal.aborted && reviewWorkflow?.reviewSignal === securityPoolReviewAbortSignal && reviewWorkflow.steps[reviewWorkflow.activeIndex] !== undefined
 	useEffect(() => {
 		if (ownsTransactionReview && reviewWorkflow?.steps[reviewWorkflow.activeIndex]?.phase === 'failed') (onDismissSecurityPoolReview ?? reviewWorkflow.cancel)()
 	}, [ownsTransactionReview, reviewWorkflow, onDismissSecurityPoolReview])
@@ -162,9 +162,9 @@ export function SecurityPoolSection({
 		if (inlineTransactionReview !== undefined) return inlineTransactionReview
 		if (existingQuestionCheck?.status === 'existing' && existingQuestionCheck.poolAddress !== undefined) {
 			return (
-				<SecurityPoolLink className='primary existing-pool-action' securityPoolAddress={existingQuestionCheck.poolAddress}>
+				<StatoblastSecurityPoolLink className='primary existing-pool-action' securityPoolAddress={existingQuestionCheck.poolAddress}>
 					{securityPoolCopy.openExistingPool}
-				</SecurityPoolLink>
+				</StatoblastSecurityPoolLink>
 			)
 		}
 		return undefined
@@ -340,7 +340,7 @@ export function SecurityPoolSection({
 										className='detail'
 										detail={
 											<>
-												{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <SecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
+												{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <StatoblastSecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
 											</>
 										}
 									/>

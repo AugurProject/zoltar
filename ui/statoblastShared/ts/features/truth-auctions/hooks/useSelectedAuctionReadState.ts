@@ -8,7 +8,8 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { getCurrentSelectedPoolForkAuctionDetails, shouldReloadSelectedPoolDetails, type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
-import type { ListedSecurityPool, ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 
 export type ForkOutcomeMigrationSeedStatus = Awaited<ReturnType<typeof loadForkOutcomeMigrationSeedStatus>>
 

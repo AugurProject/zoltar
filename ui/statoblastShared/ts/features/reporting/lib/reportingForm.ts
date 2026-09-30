@@ -1,6 +1,22 @@
 import { sameCaseInsensitiveText } from '@zoltar/ui-core-shared/lib/caseInsensitive.js'
-import { getDefaultReportingWithdrawDepositIndexesByOutcome } from '@zoltar/ui-zoltar-shared/lib/formDefaults.js'
-import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome } from '../../../types/app.js'
+
+export function getDefaultReportingWithdrawDepositIndexesByOutcome(): ReportingWithdrawDepositIndexesByOutcome {
+	return {
+		invalid: [],
+		yes: [],
+		no: [],
+	}
+}
+
+export function getDefaultReportingFormState(): ReportingFormState {
+	return {
+		reportAmount: '',
+		securityPoolAddress: '',
+		selectedOutcome: undefined,
+		selectedWithdrawDepositIndexesByOutcome: getDefaultReportingWithdrawDepositIndexesByOutcome(),
+	}
+}
 
 export function applyReportingFormUpdate(current: ReportingFormState, update: Partial<ReportingFormState>): ReportingFormState {
 	const securityPoolAddressChanged = update.securityPoolAddress !== undefined && !sameCaseInsensitiveText(current.securityPoolAddress, update.securityPoolAddress)

@@ -8,7 +8,7 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
+import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
@@ -16,7 +16,8 @@ import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '../../../types/contracts.js'
 
 export { clampPercentage, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, isFullReadClient } from './ForkAuctionPresentationState.js'
 
@@ -327,9 +328,9 @@ function renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurity
 								<span>
 									<AddressValue address={pool.securityPoolAddress} />
 								</span>
-								<SecurityPoolLink securityPoolAddress={pool.securityPoolAddress} universeId={pool.universeId}>
+								<StatoblastSecurityPoolLink securityPoolAddress={pool.securityPoolAddress} universeId={pool.universeId}>
 									{forkAuctionCopy.openSecurityPool}
-								</SecurityPoolLink>
+								</StatoblastSecurityPoolLink>
 							</div>
 						</article>
 					))}

@@ -11,7 +11,7 @@ import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import type { MetricGridVariant } from '../../types.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 
 type SecurityPoolSummaryMetricsProps = {
 	children?: ComponentChildren

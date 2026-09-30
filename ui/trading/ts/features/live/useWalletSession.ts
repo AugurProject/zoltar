@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import { formatNetworkRequiredReason } from '../../copy/availability.js'
 import type { DeploymentConfiguration } from '../../protocol/config.js'
-import { getInjectedEthereum, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../../protocol/injected.js'
+import { getActiveInjectedProvider, subscribeToWalletContextChanges, type InjectedEthereum, type WalletContextChangeEvent } from '../../protocol/injected.js'
 import { publicErrorMessage, type LiveMarket } from '../../protocol/live.js'
 import { walletSummaryAvailability, walletSummaryRefreshState, type WorkflowOwner } from '../liveTradingControllerHelpers.js'
 import type { GuardedWalletWrite } from '../../protocol/tradeQuote.js'
@@ -118,7 +118,7 @@ export function useWalletSessionController({
 			subscriptionCleanup.current = undefined
 			// Keep watching the wallet chain so a later switch back clears the network reason without a reconnect,
 			// including when the connect attempt itself rejected the chain before a session provider was recorded.
-			const observedProvider = session.walletProvider ?? getInjectedEthereum()
+			const observedProvider = session.walletProvider ?? getActiveInjectedProvider()
 			if (observedProvider !== undefined) {
 				subscriptionCleanup.current = subscribeToWalletContextChanges(observedProvider, changedEvent => {
 					if (changedEvent !== 'chainChanged') return
@@ -161,7 +161,7 @@ export function useWalletSessionController({
 	const executeWithCurrentWalletContext = useCallback(
 		async <T>(expectedAccount: Address, networkFailure: string, accountFailure: string, action: () => Promise<T>): Promise<T> => {
 			const expectedRevision = walletContextRevision.current
-			const provider = getInjectedEthereum()
+			const provider = getActiveInjectedProvider()
 			if (provider === undefined || provider !== session.walletProvider) {
 				const detail = provider === undefined ? 'No injected wallet was found; reconnect before continuing' : 'Wallet provider changed; reconnect before continuing'
 				if (provider === undefined) session.setWalletChainId(undefined)
@@ -169,7 +169,7 @@ export function useWalletSessionController({
 				throw new Error(detail)
 			}
 			const requireCurrent = () => {
-				if (!mounted.current || walletContextRevision.current !== expectedRevision || getInjectedEthereum() !== provider || session.accountRef.current !== expectedAccount) {
+				if (!mounted.current || walletContextRevision.current !== expectedRevision || getActiveInjectedProvider() !== provider || session.accountRef.current !== expectedAccount) {
 					const detail = 'Wallet context changed; reconnect before continuing'
 					invalidateIdentity(detail)
 					throw new Error(detail)
@@ -235,7 +235,7 @@ export function useWalletSessionController({
 
 	async function establish(provider: InjectedEthereum, expectedContext: string, requestIsCurrent: () => boolean, eventName?: WalletContextChangeEvent, restoreExisting = false) {
 		const requireCurrent = () => {
-			if (!mounted.current || !requestIsCurrent() || getInjectedEthereum() !== provider) return false
+			if (!mounted.current || !requestIsCurrent() || getActiveInjectedProvider() !== provider) return false
 			if (renderContextKeyRef.current !== expectedContext) {
 				connectHandler.current()
 				return false
@@ -301,7 +301,7 @@ export function useWalletSessionController({
 		const request = connectionRequests.begin()
 		const expectedContext = renderContextKey
 		try {
-			const provider = getInjectedEthereum()
+			const provider = getActiveInjectedProvider()
 			if (provider === undefined) {
 				session.setWalletChainId(undefined)
 				throw new Error('No injected wallet was found')

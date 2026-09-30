@@ -19,7 +19,8 @@ import { getUniverseDirectoryContextKey, isUniverseDirectoryLoadedForContext, sh
 import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { readUiPriceOracle } from '../UiPriceOracleSettings.js'
-import type { ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ReportingFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { SecurityPoolsSectionProps, SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
 
 export function useSecurityPoolsRoute({
@@ -111,7 +112,7 @@ export function useSecurityPoolsRoute({
 		securityPoolError,
 		securityPoolForm,
 		securityPoolResult,
-		securityPoolReviewSignal,
+		securityPoolReviewAbortSignal,
 		setSecurityPoolForm,
 	} = useSecurityPoolCreation({
 		...walletScopedHookConfig,
@@ -356,7 +357,7 @@ export function useSecurityPoolsRoute({
 			securityPoolError,
 			securityPoolForm,
 			securityPoolResult,
-			securityPoolReviewSignal,
+			securityPoolReviewAbortSignal,
 			onDismissSecurityPoolReview: dismissSecurityPoolReview,
 			marketCreating,
 			marketError,

@@ -5,7 +5,7 @@ import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from 
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }

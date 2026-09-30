@@ -1,5 +1,5 @@
 import { getWalletVaultFundingQuote } from '@zoltar/statoblast-shared/escalationGame/walletVaultFunding'
-import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails } from '../types/contracts.js'
 
 export function getReportingContributionFunding(details: ReportingDetails | undefined, selectedFunding: 'vault' | 'wallet' | undefined): 'vault' | 'wallet' {
 	return selectedFunding ?? details?.contributionFunding ?? 'vault'

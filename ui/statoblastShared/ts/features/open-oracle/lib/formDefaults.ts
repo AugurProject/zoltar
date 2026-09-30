@@ -1,4 +1,4 @@
-import type { OpenOracleCreateFormState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { OpenOracleCreateFormState, OpenOracleFormState } from '../../../types/app.js'
 
 const DEFAULT_OPEN_ORACLE_DISPUTE_DELAY_SECONDS = '3600'
 const DEFAULT_OPEN_ORACLE_SETTLEMENT_DELAY_SECONDS = '86400'

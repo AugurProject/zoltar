@@ -15,7 +15,7 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionPrepared, markTransactionRequested, markTransactionSubmitted } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useForkAuctionOperations, type UseForkAuctionOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { getTruthAuctionTickAtPrice } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
 import type { SettlementSelectedBid, TransactionIntent } from '@zoltar/ui-zoltar-shared/features/types.js'

@@ -3,7 +3,7 @@
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { getDownloadedStorageKey, resetLocalEntityStoreForTesting, serializeStoredValue, type LocalEntityScope } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
-import type { OpenOracleReportDetails, OpenOracleReportSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails, OpenOracleReportSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { filterOpenOracleReports, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, toCachedOpenOracleReportSummary } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
 import { describe, expect, test } from 'bun:test'
 

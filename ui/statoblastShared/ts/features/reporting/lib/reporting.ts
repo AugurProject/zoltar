@@ -1,4 +1,5 @@
-import type { EscalationSide, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { EscalationSide, ReportingDetails } from '../../../types/contracts.js'
 import { getEscalationPhase, getStrictLeadingEscalationOutcome, isPoolQuestionFinalized } from './reportingDomain.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatTimestampWithRelative } from '@zoltar/ui-core-shared/lib/formatters.js'

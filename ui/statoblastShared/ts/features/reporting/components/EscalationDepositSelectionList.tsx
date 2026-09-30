@@ -3,7 +3,7 @@ import * as forkAuctionCopy from '../../../copy/reportingEscalation.js'
 import type { ComponentChildren } from 'preact'
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { formatPaginationSummary, getHasNextPaginationPage, getPaginationPageCount, resolvePaginationPageIndex } from '@zoltar/ui-core-shared/lib/pagination.js'
-import type { EscalationDeposit } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { EscalationDeposit } from '../../../types/contracts.js'
 import { PaginationControls } from '@zoltar/ui-core-shared/components/PaginationControls.js'
 
 const ESCALATION_DEPOSIT_SELECTION_PAGE_SIZE = 25

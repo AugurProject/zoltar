@@ -5,7 +5,7 @@ import { createRangeProgressReporter, deploySimulationAppContracts, reportBootst
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../protocol/truthAuctionMath.js'
 import { advanceSimulationTime, getSimulationChainTimestamp } from '@zoltar/ui-core-shared/simulation/clock.js'
 import type { ReadClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../types/contracts.js'
 import {
 	CAPACITY_OWNERSHIP_ATTO_REP,
 	DAY_IN_SECONDS,

@@ -8,7 +8,7 @@ import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
+import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { ForkAuctionMigrationBalances } from '../components/ForkAuctionMigrationStage.js'
 import { createForkAuctionActionRenderer, ForkAuctionEndedNotice } from '../components/ForkAuctionActionSections.js'
@@ -95,9 +95,9 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		if (context.selectedAuctionChildPool === undefined) return undefined
 
 		return (
-			<SecurityPoolLink className='fork-workflow-outcome-link' securityPoolAddress={context.selectedAuctionChildPool.securityPoolAddress} universeId={context.selectedAuctionChildPool.universeId}>
+			<StatoblastSecurityPoolLink className='fork-workflow-outcome-link' securityPoolAddress={context.selectedAuctionChildPool.securityPoolAddress} universeId={context.selectedAuctionChildPool.universeId}>
 				{forkAuctionCopy.childPool}
-			</SecurityPoolLink>
+			</StatoblastSecurityPoolLink>
 		)
 	}
 	const migrationBalancesContent = (

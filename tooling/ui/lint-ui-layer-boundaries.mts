@@ -11,9 +11,59 @@ export type UiLayerBoundaryFinding = {
 	column: number
 	file: string
 	line: number
-	rule: 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary' | 'cross-package-private-subpath'
+	rule: 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary' | 'cross-package-private-subpath' | 'statoblast-product-type-outside-statoblast-shared'
 	specifier: string
 }
+
+// Statoblast product types live in ui/statoblastShared/ts/types; the generic UI packages must not declare them again.
+const statoblastProductTypeNames = new Set([
+	'ActiveReportingDetails',
+	'CarriedDepositProof',
+	'EscalationDeposit',
+	'EscalationSide',
+	'ForkAuctionAction',
+	'ForkAuctionActionResult',
+	'ForkAuctionDetails',
+	'ImportedEscalationDeposit',
+	'LiquidationApprovalDetails',
+	'LiquidationFundingPreview',
+	'ListedSecurityPool',
+	'OpenOracleActionResult',
+	'OpenOracleCreateFormState',
+	'OpenOracleFormState',
+	'OpenOracleReportDetails',
+	'OpenOracleReportSummary',
+	'OpenOracleReportSummaryPage',
+	'OpenOracleWithdrawableBalances',
+	'OracleManagerDetails',
+	'OracleQueueOperation',
+	'QueuedVaultOperationState',
+	'ReportingActionResult',
+	'ReportingDetails',
+	'ReportingFormState',
+	'ReportingSettlementState',
+	'ReportingWithdrawDepositIndexesByOutcome',
+	'SecurityPoolCreationResult',
+	'SecurityPoolOverviewActionResult',
+	'SecurityPoolPage',
+	'SecurityPoolVaultSummary',
+	'SecurityVaultActionResult',
+	'SecurityVaultDetails',
+	'StagedOracleExecutionResult',
+	'StagedOracleOperation',
+	'StagedOracleQueuedResult',
+	'TradingActionResult',
+	'TradingDetails',
+	'TradingShareBalances',
+	'TruthAuctionBidderBidPage',
+	'TruthAuctionBidView',
+	'TruthAuctionMetrics',
+	'TruthAuctionSettlementMode',
+	'TruthAuctionTickBidPage',
+	'TruthAuctionTickPage',
+	'TruthAuctionTickSummary',
+])
+const genericUiPackagePattern = /^ui\/(?:coreShared|zoltarShared)\/ts\//
 
 function isWithin(candidatePath: string, directoryPath: string) {
 	return candidatePath === directoryPath || candidatePath.startsWith(`${directoryPath}/`)
@@ -109,7 +159,12 @@ export function findUiLayerBoundaryViolations(sourcePath: string, sourceText: st
 		})
 	}
 
+	const declaresGenericUiTypes = genericUiPackagePattern.test(sourcePath)
 	const visit = (node: ts.Node): void => {
+		if (declaresGenericUiTypes && (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) && statoblastProductTypeNames.has(node.name.text)) {
+			const position = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile))
+			findings.push({ column: position.character + 1, file: sourcePath, line: position.line + 1, rule: 'statoblast-product-type-outside-statoblast-shared', specifier: node.name.text })
+		}
 		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined && ts.isStringLiteralLike(node.moduleSpecifier)) recordSpecifier(node.moduleSpecifier)
 		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
 			const [specifier] = node.arguments

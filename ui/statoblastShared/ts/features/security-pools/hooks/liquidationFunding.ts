@@ -1,5 +1,5 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import type { LiquidationFundingPreview } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationFundingPreview } from '../../../types/contracts.js'
 import type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
 export async function resolveLiquidationFunding<TWriteClient>(dependencies: UseSecurityPoolsOverviewDependencies<TWriteClient>, writeClient: TWriteClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint): Promise<LiquidationFundingPreview> {

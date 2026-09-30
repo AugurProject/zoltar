@@ -1,32 +1,10 @@
-import type { PoolBrowseState, SelectedVaultView } from '../types/app.js'
+import type { PoolBrowseState, SelectedVaultView, AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState, ReportingFormState } from '../types/app.js'
 import type { ComponentType } from 'preact'
 import type { RequestPriceModalProps } from './security-pools/components/SecurityPoolOracleSections.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import type { DataFreshness } from '@zoltar/ui-core-shared/lib/freshness.js'
-import type { AccountState, ForkAuctionFormState, MarketFormState, SecurityPoolFormState, SecurityVaultFormState, TradingFormState } from '../types/app.js'
-import type { ReportingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type {
-	ForkAuctionActionResult,
-	ForkAuctionDetails,
-	LiquidationApprovalDetails,
-	LiquidationFundingPreview,
-	ListedSecurityPool,
-	MarketCreationResult,
-	MarketDetails,
-	OpenOracleActionResult,
-	OracleManagerDetails,
-	ReadClient,
-	ReportingDetails,
-	ReportingOutcomeKey,
-	SecurityPoolCreationResult,
-	SecurityPoolOverviewActionResult,
-	SecurityPoolVaultSummary,
-	SecurityVaultActionResult,
-	SecurityVaultDetails,
-	TradingActionResult,
-	TradingDetails,
-	ZoltarUniverseSummary,
-} from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketCreationResult, MarketDetails, ReadClient, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, OpenOracleActionResult, OracleManagerDetails, ReportingDetails, SecurityPoolCreationResult, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary, SecurityVaultActionResult, SecurityVaultDetails, TradingActionResult, TradingDetails } from '../types/contracts.js'
 import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
 import type { SecurityPoolLifecycleState } from './security-pools/lib/securityPoolState.js'
 import type { ForkAuctionStageView } from './truth-auctions/lib/forkAuction.js'
@@ -34,6 +12,7 @@ import type { SecurityPoolStateModel } from './security-pools/lib/securityPoolSt
 import type { ForkWorkflowSelectionStage } from './security-pools/lib/securityPoolWorkflow.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { ReportingRouteContentProps } from './oracleTypes.js'
+import type { UiRepPriceSource } from './security-pools/lib/repPriceSource.js'
 
 export type * from '@zoltar/ui-core-shared/types/components.js'
 
@@ -57,7 +36,7 @@ export type VaultMetricGridProps = {
 
 type RepPerEthPriceProps = {
 	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
+	repPerEthSource: UiRepPriceSource | undefined
 	repPerEthSourceUrl: string | undefined
 }
 
@@ -86,7 +65,7 @@ type SecurityPoolRouteContentProps = {
 	securityPoolForm: SecurityPoolFormState
 	securityPoolResult: SecurityPoolCreationResult | undefined
 	/** Identifies the transaction review that the Create Pool card renders inline instead of the global review modal. */
-	securityPoolReviewSignal?: AbortSignal | undefined
+	securityPoolReviewAbortSignal?: AbortSignal | undefined
 	onDismissSecurityPoolReview?: () => void
 	marketCreating: boolean
 	marketError: string | undefined
@@ -152,7 +131,8 @@ type SecurityPoolsOverviewRouteContentProps = {
 
 export type SecurityPoolsOverviewSectionProps = SecurityPoolsOverviewRouteContentProps
 
-export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps & {
+export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
+	RepPerEthPriceProps & {
 	controlledVaultView?: SelectedVaultView | undefined
 	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	RequestPriceModal?: ComponentType<RequestPriceModalProps>
@@ -184,9 +164,6 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	securityPoolAddress: string
 	onSecurityPoolAddressChange: (value: string) => void
 	reporting: ReportingRouteContentProps
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
-	repPerEthSourceUrl: string | undefined
 	securityPools: ListedSecurityPool[]
 	securityVault: SecurityVaultRouteContentProps
 	trading: TradingRouteContentProps
@@ -233,11 +210,8 @@ type SecurityVaultRouteContentProps = {
 	securityVaultQueuedOperations?: readonly SecurityVaultActionResult[]
 	securityVaultResult: SecurityVaultActionResult | undefined
 	selectedPoolStatoblastSecurityMultiplierBps: bigint | undefined
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
-	repPerEthSourceUrl: string | undefined
 	securityPoolVaults?: SecurityPoolVaultSummary[] | undefined
-}
+} & RepPerEthPriceProps
 
 export type SecurityVaultSectionProps = SecurityVaultRouteContentProps & {
 	compactLayout?: boolean
@@ -266,9 +240,6 @@ type TradingRouteContentProps = {
 	onRedeemCompleteSet: () => void
 	onRedeemShares: () => void
 	onTradingFormChange: (update: Partial<TradingFormState>) => void
-	repPerEthPrice: bigint | undefined
-	repPerEthSource: 'v4' | 'v3' | 'mock' | 'open-oracle' | undefined
-	repPerEthSourceUrl: string | undefined
 	selectedPool: ListedSecurityPool | undefined
 	tradingActiveAction: TradingActionResult['action'] | undefined
 	tradingDetails: TradingDetails | undefined
@@ -276,7 +247,7 @@ type TradingRouteContentProps = {
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 	tradingForm: TradingFormState
 	tradingResult: TradingActionResult | undefined
-}
+} & RepPerEthPriceProps
 
 export type TradingSectionProps = TradingRouteContentProps & {
 	oracleManagerDetails?: OracleManagerDetails | undefined

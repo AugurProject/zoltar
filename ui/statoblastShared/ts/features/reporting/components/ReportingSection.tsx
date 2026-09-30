@@ -39,7 +39,8 @@ import { getEffectiveReportingDetails, getEscalationGameStartTimestamp, getRepor
 import { ReportingSettlementSection } from './ReportingSettlementSection.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import type { ReportingSectionProps } from '../../oracleTypes.js'
-import type { EscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { EscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
 function formatKnownAmount(amount: bigint | undefined) {
 	return amount === undefined ? commonCopy.metricUnavailablePlaceholder : formatCurrencyBalance(amount)
 }

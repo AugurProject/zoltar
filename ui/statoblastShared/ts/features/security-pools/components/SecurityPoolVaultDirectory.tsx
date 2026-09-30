@@ -3,7 +3,7 @@ import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { VaultMetricGrid } from './VaultMetricGrid.js'
-import type { ListedSecurityPool, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 type SecurityPoolVaultDirectoryProps = {
 	emptyState: ComponentChildren
