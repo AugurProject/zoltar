@@ -1244,7 +1244,7 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 					.getByRole('button', { name: /^Request new price/ })
 					.hasAttribute('disabled'),
 			).toBe(false)
-			expect(form.textContent).toContain('2 REP')
+			expect(form.textContent).toContain('2\u00a0REP')
 		}
 	} finally {
 		await rendered.cleanup()
