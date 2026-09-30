@@ -220,13 +220,10 @@ export function useTradingOperations(
 							totalFeesOwedRemainder: latestMintCapacity.totalFeesOwedRemainder,
 						})
 						const guardMessage = getTradingMintGuardMessage({
-							currentTimestamp: latestMintCapacity.currentTimestamp,
-							priceValidUntilTimestamp: latestMintCapacity.priceValidUntilTimestamp,
 							accountAddress: walletAddress,
 							settlementCollateralAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? latestMintCapacity.settlementCollateralAttoEth,
 							ethBalanceAttoEth: walletBalanceAttoEth,
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
-							isPriceValid: latestMintCapacity.isPriceValid,
 							hasSelectedPool: true,
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,

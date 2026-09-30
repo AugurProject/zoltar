@@ -5,9 +5,6 @@ import { mainnet } from '@zoltar/core-shared/evm/ethereum'
 import type { AnvilWindowEthereum } from '../AnvilWindowEthereum'
 
 const DEFAULT_HTTP = 'https://ethereum.dark.florist'
-const anvilWindowByClient = new WeakMap<object, AnvilWindowEthereum>()
-
-const isAnvilWindowEthereum = (ethereum: EIP1193Provider | AnvilWindowEthereum): ethereum is AnvilWindowEthereum => 'addStateOverrides' in ethereum && typeof ethereum.addStateOverrides === 'function'
 
 const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum) => {
 	if (ethereum === undefined) return createPublicClient({ transport: http(DEFAULT_HTTP) })
@@ -16,12 +13,8 @@ const createReadClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEth
 
 export const createWriteClient = (ethereum: EIP1193Provider | undefined | AnvilWindowEthereum, accountAddress: bigint, chain: Chain = mainnet) => {
 	if (ethereum === undefined) throw new Error('no window.ethereum injected')
-	const client = createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), chain }).extend(publicActions)
-	if (isAnvilWindowEthereum(ethereum)) anvilWindowByClient.set(client, ethereum)
-	return client
+	return createWalletClient({ account: addressString(accountAddress), transport: custom(ethereum), chain }).extend(publicActions)
 }
-
-export const getClientAnvilWindow = (client: object) => anvilWindowByClient.get(client)
 
 export type WriteClient = ReturnType<typeof createWriteClient>
 export type ReadClient = ReturnType<typeof createReadClient> | ReturnType<typeof createWriteClient>

@@ -90,12 +90,17 @@ describe('security regression coverage', () => {
 		return contractAddress
 	}
 
-	test('complete-set minting rejects an expired cached REP price', async () => {
+	test('complete-set minting within standing commitments does not require a fresh REP price', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 30n * 10n ** 18n)
+		const limitAttoEth = 30n * 10n ** 18n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, limitAttoEth)
 		await mockWindow.advanceTime(5n * 60n)
 
-		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, 1n, true), /Stale price/)
+		const mintingCapacityAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getCurrentMintingCapacityAttoEth', args: [] })
+		assert.strictEqual(mintingCapacityAttoEth, limitAttoEth, 'an expired price must not close minting capacity')
+		await createCompleteSet(client, securityPoolAddresses.securityPool, limitAttoEth)
+		assert.strictEqual(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), limitAttoEth, 'minting should fill the standing commitments')
+		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, limitAttoEth), /Over capacity/)
 	})
 
 	test('nested complete-set checkpoints fold in callback log order', async () => {

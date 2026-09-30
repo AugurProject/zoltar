@@ -15,7 +15,6 @@ export function liveMarketFixture(overrides: Partial<LiveMarket> = {}): LiveMark
 		title: 'Fixture market',
 		description: '',
 		endTime: 2n ** 255n,
-		oracleValidUntilTimestamp: 2n ** 255n,
 		statoblastSecurityMultiplierBps: 20_000n,
 		initialReportPriorityFeeAttoEthPerGas: 0n,
 		systemState: 0,

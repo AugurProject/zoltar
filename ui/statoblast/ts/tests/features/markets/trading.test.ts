@@ -227,48 +227,6 @@ void describe('trading helpers', () => {
 		).toBe('Switch to Sepolia.')
 	})
 
-	void test('requires known oracle timing and more than a minute of validity before minting', () => {
-		const ready = {
-			accountAddress: '0x1234567890123456789012345678901234567890' as const,
-			currentTimestamp: 100n,
-			priceValidUntilTimestamp: 161n,
-			settlementCollateralAttoEth: 0n,
-			ethBalanceAttoEth: 10n ** 18n,
-			hasSelectedPool: true,
-			isOnActiveAppChain: true,
-			isPriceValid: true,
-			mintAmountInput: '1',
-			shareTokenSupplyAttoShares: 0n,
-			totalPoolHeldAttoRep: 0n,
-			mintingCapacityAttoEth: 10n ** 18n,
-		}
-		expect(getTradingMintGuardMessage(ready)).toBeUndefined()
-		expect(getTradingMintGuardMessage({ ...ready, priceValidUntilTimestamp: 160n })).toContain('expires too soon')
-		expect(getTradingMintGuardMessage({ ...ready, priceValidUntilTimestamp: 101n })).toContain('expires too soon')
-		expect(getTradingMintGuardMessage({ ...ready, priceValidUntilTimestamp: 100n })).toContain('expires too soon')
-		expect(getTradingMintGuardMessage({ ...ready, priceValidUntilTimestamp: undefined })).toBe('Loading price oracle details.')
-		expect(getTradingMintGuardMessage({ ...ready, currentTimestamp: undefined })).toBe('Loading price oracle details.')
-	})
-
-	void test("blocks minting when the pool's REP price is stale", () => {
-		expect(
-			getTradingMintGuardMessage({
-				currentTimestamp: 100n,
-				priceValidUntilTimestamp: 400n,
-				accountAddress: '0x1234567890123456789012345678901234567890',
-				settlementCollateralAttoEth: 1n,
-				ethBalanceAttoEth: 10n,
-				hasSelectedPool: true,
-				isOnActiveAppChain: true,
-				isPriceValid: false,
-				mintAmountInput: '1',
-				shareTokenSupplyAttoShares: 1n,
-				totalPoolHeldAttoRep: 10n,
-				mintingCapacityAttoEth: 10n,
-			}),
-		).toBe('Request a new price in Price oracle before minting.')
-	})
-
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
 		expect(
 			getTradingMintGuardMessage({

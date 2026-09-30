@@ -1,9 +1,9 @@
-import { statoblast_EscalationGame_EscalationGame, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
+import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../../../../types/contractArtifact'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { SystemState } from '../../types/statoblastTypes'
 import { QuestionOutcome } from '../../types/types'
 import { HIGH_GAS_SIMULATOR_WRITE_GAS } from '../constants'
-import { getClientAnvilWindow, ReadClient, WriteClient, writeContractAndWait } from '../clients'
+import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { requireAddress, requireArray, requireBigInt, requireBoolean } from '../utilities'
 
 const getAwaitingForkContinuationAbi = [
@@ -75,8 +75,7 @@ export const depositRepToVault = async (client: WriteClient, securityPoolAddress
 		}),
 	)
 
-export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint, preserveStalePriceForTest = false) => {
-	if (!preserveStalePriceForTest) await prepareTestMintPrice(client, securityPoolAddress)
+export const createCompleteSet = async (client: WriteClient, securityPoolAddress: Address, settlementCollateralAttoEth: bigint) => {
 	return await writeContractAndWait(client, () =>
 		client.writeContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
@@ -372,59 +371,6 @@ export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAd
 		}),
 		'Total REP balance',
 	)
-
-async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Address) {
-	const openOraclePriceCoordinator = requireAddress(
-		await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPoolAddress,
-			functionName: 'openOraclePriceCoordinator',
-			args: [],
-		}),
-		'Price coordinator',
-	)
-	const isPriceValid = requireBoolean(
-		await client.readContract({
-			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			address: openOraclePriceCoordinator,
-			functionName: 'isPriceValid',
-			args: [],
-		}),
-		'Oracle price validity',
-	)
-	if (!isPriceValid) {
-		const mockWindow = getClientAnvilWindow(client)
-		if (mockWindow === undefined) throw new Error('Test complete-set mint requires a fresh oracle price')
-		const currentTimestamp = await mockWindow.getTime()
-		const lastPrice = requireBigInt(
-			await client.readContract({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				address: openOraclePriceCoordinator,
-				functionName: 'lastPrice',
-				args: [],
-			}),
-			'Cached oracle price',
-		)
-		await mockWindow.addStateOverrides({
-			[openOraclePriceCoordinator]: {
-				stateDiff: {
-					[`0x${3n.toString(16).padStart(64, '0')}`]: currentTimestamp,
-					...(lastPrice === 0n ? { [`0x${4n.toString(16).padStart(64, '0')}`]: 10n ** 18n } : {}),
-				},
-			},
-		})
-		const refreshedPriceIsValid = requireBoolean(
-			await client.readContract({
-				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				address: openOraclePriceCoordinator,
-				functionName: 'isPriceValid',
-				args: [],
-			}),
-			'Refreshed oracle price validity',
-		)
-		if (!refreshedPriceIsValid) throw new Error('Test oracle timestamp override did not refresh the cached price')
-	}
-}
 
 export async function setUnderwritingLimit(client: WriteClient, securityPool: Address, limitAttoEth: bigint) {
 	return await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'setUnderwritingLimit', args: [limitAttoEth] }))

@@ -36,12 +36,11 @@ describe('favorite markets', () => {
 				feeAccounting: { settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, currentRetentionRate: 10n ** 18n, lastUpdatedFeeAccumulator: 2n, feeIndexRemainder: 1n, totalFeesOwedRemainder: 0n },
 			}
 			const market = createMarket(1, { originUniverseId: 7n, tradingStatus: undefined, valuation })
-			const withoutCheckpoint = createMarket(2, { oracleValidUntilTimestamp: undefined, valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })
+			const withoutCheckpoint = createMarket(2, { valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })
 			const items = [
 				{ data: market, fetchedAt: 1, id: market.pool },
 				{ data: withoutCheckpoint, fetchedAt: 1, id: withoutCheckpoint.pool },
 				{ data: { ...market, pool: 'not an address' }, fetchedAt: 1, id: 'broken' },
-				{ data: { ...market, oracleValidUntilTimestamp: 'invalid' }, fetchedAt: 1, id: 'broken-time' },
 				{ data: { ...market, valuation: { ...valuation, feeAccounting: { ...valuation.feeAccounting, feeIndexRemainder: 'invalid' } } }, fetchedAt: 1, id: 'broken-accounting' },
 			]
 			window.localStorage.setItem(getDownloadedStorageKey(scope), serializeStoredValue({ items, version: 1 }))

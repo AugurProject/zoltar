@@ -70,41 +70,37 @@ function createAdvancingChain() {
 const write = async <T>(send: () => Promise<T>) => await send()
 
 describe('submitting a quote after the chain advances', () => {
-	test('guards both cutoffs for entry, initialization, and addition with pinned fresh timing', async () => {
-		for (const cutoff of ['question', 'oracle'] as const) {
-			for (const remaining of [1n, 60n, 61n]) {
-				for (const operation of ['entry', 'initialize', 'add'] as const) {
-					const { chain, client } = createAdvancingChain()
-					chain.head = 1000n
-					chain.feeMarket = { ...market, ...(cutoff === 'question' ? { endTime: chain.head + remaining } : { oracleValidUntilTimestamp: chain.head + remaining }) }
-					const pending = operation === 'entry' ? simulateEntry(client, configuration, market, account, 'YES', 10n) : simulateLiquidity(client, configuration, market, account, operation, 10n)
-					if (remaining <= 60n) await expect(pending).rejects.toThrow('60 seconds')
-					else expect((await pending).deadline).toBe(chain.head + remaining - 1n)
-					expect(chain.sends).toHaveLength(0)
-				}
+	test('guards the question cutoff for entry, initialization, and addition with pinned fresh timing', async () => {
+		for (const remaining of [1n, 60n, 61n]) {
+			for (const operation of ['entry', 'initialize', 'add'] as const) {
+				const { chain, client } = createAdvancingChain()
+				chain.head = 1000n
+				chain.feeMarket = { ...market, endTime: chain.head + remaining }
+				const pending = operation === 'entry' ? simulateEntry(client, configuration, market, account, 'YES', 10n) : simulateLiquidity(client, configuration, market, account, operation, 10n)
+				if (remaining <= 60n) await expect(pending).rejects.toThrow('60 seconds')
+				else expect((await pending).deadline).toBe(chain.head + remaining - 1n)
+				expect(chain.sends).toHaveLength(0)
 			}
 		}
 	})
-	test('rechecks each cutoff inside the final wallet guard without sending or loosening the deadline', async () => {
-		for (const cutoff of ['question', 'oracle'] as const) {
-			const { chain, client } = createAdvancingChain()
-			chain.head = 1000n
-			chain.feeMarket = { ...market, ...(cutoff === 'question' ? { endTime: chain.head + 61n } : { oracleValidUntilTimestamp: chain.head + 61n }) }
-			const quote = await simulateEntry(client, configuration, market, account, 'YES', 10n)
-			expect(quote.deadline).toBe(1060n)
-			await expect(
-				submitFreshEntry(client, configuration, account, quote, async send => {
-					chain.head += 1n
-					return await send()
-				}),
-			).rejects.toThrow('60 seconds')
-			expect(chain.sends).toHaveLength(0)
-		}
+	test('rechecks the question cutoff inside the final wallet guard without sending or loosening the deadline', async () => {
+		const { chain, client } = createAdvancingChain()
+		chain.head = 1000n
+		chain.feeMarket = { ...market, endTime: chain.head + 61n }
+		const quote = await simulateEntry(client, configuration, market, account, 'YES', 10n)
+		expect(quote.deadline).toBe(1060n)
+		await expect(
+			submitFreshEntry(client, configuration, account, quote, async send => {
+				chain.head += 1n
+				return await send()
+			}),
+		).rejects.toThrow('60 seconds')
+		expect(chain.sends).toHaveLength(0)
 	})
 
-	test('keeps liquidity removal available through close and stale oracle timing', async () => {
+	test('keeps liquidity removal available after question close', async () => {
 		const { chain, client } = createAdvancingChain()
-		chain.feeMarket = { ...market, endTime: 1n, oracleValidUntilTimestamp: undefined }
+		chain.feeMarket = { ...market, endTime: 1n }
 		const quote = await simulateLiquidity(client, configuration, chain.feeMarket, account, 'remove', 1n)
 		expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
 		expect(chain.sends).toHaveLength(1)

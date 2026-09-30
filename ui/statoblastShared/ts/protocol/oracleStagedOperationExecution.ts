@@ -3,7 +3,7 @@ import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { type WriteContractClient, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
-import { getOracleManagerPriceValidUntilTimestamp, hasOracleMintSubmissionWindow } from './oracleTiming.js'
+import { getOracleManagerPriceValidUntilTimestamp, hasOraclePriceSubmissionWindow } from './oracleTiming.js'
 
 export async function writeStagedOperationAndWaitForReceipt(client: WriteContractClient & Partial<Pick<ReadClient, 'readContract' | 'getBlock'>>, managerAddress: Address, operationId: bigint) {
 	const callParams = {
@@ -43,7 +43,7 @@ export async function writeStagedOperationAndWaitForReceipt(client: WriteContrac
 				}
 				const block = await getBlock()
 				if (block.timestamp > operation.queuedAt + settlementTime + operation.validForSeconds) throw new Error('This staged operation has expired. Review a new operation.')
-				if (hasOracleMintSubmissionWindow(block.timestamp, getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)) !== true) throw new Error(securityPoolCopy.oracleOperationPriceExpiresTooSoon)
+				if (hasOraclePriceSubmissionWindow(block.timestamp, getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)) !== true) throw new Error(securityPoolCopy.oracleOperationPriceExpiresTooSoon)
 			},
 		},
 	])

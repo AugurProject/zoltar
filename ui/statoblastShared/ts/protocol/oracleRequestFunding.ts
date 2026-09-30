@@ -1,4 +1,4 @@
-import { hasOracleMintSubmissionWindow } from './oracleTiming.js'
+import { hasOraclePriceSubmissionWindow } from './oracleTiming.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
 import type { OracleManagerDetails } from '../types/contracts.js'
 
@@ -32,7 +32,7 @@ export function resolveOracleOperationEthFunding({ managerDetails, priceUsable }
 // Only the free, fresh-price route depends on this price surviving inclusion.
 export function getOracleOperationTimingGuard(managerDetails: OracleManagerDetails | undefined, currentTimestamp: bigint | undefined, priceUsable?: boolean) {
 	if (managerDetails === undefined || (priceUsable ?? managerDetails.isPriceValid) !== true) return undefined
-	const hasWindow = hasOracleMintSubmissionWindow(currentTimestamp, managerDetails.priceValidUntilTimestamp)
+	const hasWindow = hasOraclePriceSubmissionWindow(currentTimestamp, managerDetails.priceValidUntilTimestamp)
 	if (hasWindow === undefined) return securityPoolCopy.oracleOperationTimingUnavailable
 	if (hasWindow === false) return securityPoolCopy.oracleOperationPriceExpiresTooSoon
 	return undefined

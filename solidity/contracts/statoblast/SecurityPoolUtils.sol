@@ -130,40 +130,10 @@ library SecurityPoolUtils {
 		return securityPool.getPoolAccountingSnapshot().badDebtGeneration;
 	}
 
-	/// @notice Maximum fully backed limit supported by pool-held REP with no dispute stake.
-	function calculateBackingSupportedLimitAttoEth(uint256 backingAttoRep, uint256 repEthPrice, uint256 securityMultiplierBps) external pure returns (uint256) {
-		if (repEthPrice == 0 || securityMultiplierBps < BPS_DENOMINATOR) return 0;
-		uint256 requiredMultiplierBps = Math.max(securityMultiplierBps, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS);
-		uint256 supportedBaseAttoRep = Math.mulDiv(backingAttoRep, BPS_DENOMINATOR, requiredMultiplierBps);
-		return Math.mulDiv(supportedBaseAttoRep, PRICE_PRECISION, repEthPrice);
-	}
-
 	function calculateVaultOpenInterestAttoEth(uint256 activeOpenInterestAttoEth, uint256 vaultUnderwritingLimitAttoEth, uint256 totalUnderwritingLimitAttoEth) external pure returns (uint256) {
 		if (totalUnderwritingLimitAttoEth == 0 || vaultUnderwritingLimitAttoEth == 0) return 0;
 		return
 			Math.mulDiv(activeOpenInterestAttoEth, vaultUnderwritingLimitAttoEth, totalUnderwritingLimitAttoEth, Math.Rounding.Ceil);
-	}
-
-	function calculateUnassignedPositionHealth(ISecurityPool securityPool, uint256 settlementCollateralAttoEth, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 badDebtAttoEth) private view returns (uint256 openInterestAttoEth, bool healthy) {
-		if (underwritingLimitAttoEth == 0) return (0, true);
-		uint256 grossOpenInterestAttoEth = Math.mulDiv(settlementCollateralAttoEth, underwritingLimitAttoEth, securityPool.totalUnderwritingLimitAttoEth(), Math.Rounding.Ceil);
-		openInterestAttoEth = grossOpenInterestAttoEth > badDebtAttoEth ? grossOpenInterestAttoEth - badDebtAttoEth : 0;
-		healthy = isVaultHealthyAtFactor(securityPool.backingUnitsToAttoRep(repBackingUnits), 0, underwritingLimitAttoEth, securityPool.openOraclePriceCoordinator().lastPrice(), securityPool.statoblastSecurityMultiplierBps(), BPS_DENOMINATOR);
-	}
-
-	function _isUnassignedPositionHealthy(ISecurityPool securityPool, address securityPoolForker, uint256 settlementCollateralAttoEth) private view returns (bool) {
-		uint256 repBackingUnits;
-		uint256 underwritingLimitAttoEth;
-		uint256 badDebtAttoEth;
-		uint256 debtGeneration;
-		(repBackingUnits, underwritingLimitAttoEth, badDebtAttoEth, debtGeneration, ) = ISecurityPoolForker(securityPoolForker).getUnassignedPosition(securityPool);
-		if (debtGeneration != securityPool.getPoolAccountingSnapshot().badDebtGeneration) badDebtAttoEth = 0;
-		(, bool healthy) = calculateUnassignedPositionHealth(securityPool, settlementCollateralAttoEth, repBackingUnits, underwritingLimitAttoEth, badDebtAttoEth);
-		return healthy;
-	}
-
-	function requireUnassignedPositionHealthy(ISecurityPool securityPool, address securityPoolForker, uint256 settlementCollateralAttoEth) external view {
-		require(_isUnassignedPositionHealthy(securityPool, securityPoolForker, settlementCollateralAttoEth), 'Unassigned position unhealthy');
 	}
 
 	function calculateBundledLiquidationTransfer(uint256 targetBackingUnits, uint256 targetUnderwritingLimitAttoEth, uint256 targetOpenInterestAttoEth, uint256 requestedDebtAttoEth, uint256 repEthPrice, uint256 currentPoolHeldAttoRepBalance, uint256 currentTotalRepBackingUnits, uint256 minimumRemainingAttoRep)

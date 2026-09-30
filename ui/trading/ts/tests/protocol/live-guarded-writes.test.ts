@@ -162,18 +162,18 @@ describe('live guarded transaction writes', () => {
 		}
 	})
 
-	test('never opens the wallet when liquidity revalidation reverts with a stale oracle price', async () => {
+	test('never opens the wallet when liquidity revalidation reverts because the pool is over capacity', async () => {
 		for (const scenario of [
 			{ operation: 'initialize', market: { ...market, pair: undefined } },
 			{ operation: 'initialize', market },
 			{ operation: 'add', market },
 		] as const) {
-			let stale = false
+			let overCapacity = false
 			let sends = 0
 			let signatures = 0
 			const client = blockTwoWalletClient(async method => {
 				if (method === 'eth_call') {
-					if (stale) throw new Error('execution reverted: Stale price')
+					if (overCapacity) throw new Error('execution reverted: Over capacity')
 					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
 				}
 				if (method === 'eth_sendTransaction') {
@@ -183,13 +183,13 @@ describe('live guarded transaction writes', () => {
 				throw new Error(`Unexpected RPC method ${method}`)
 			})
 			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n)
-			stale = true
+			overCapacity = true
 			await expect(
 				submitFreshLiquidity(client, configuration, account, quote, async write => {
 					signatures += 1
 					return await write()
 				}),
-			).rejects.toThrow('Stale price')
+			).rejects.toThrow('Over capacity')
 			expect(signatures).toBe(0)
 			expect(sends).toBe(0)
 		}
