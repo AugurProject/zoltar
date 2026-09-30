@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { TransactionScopeProvider } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { createTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
@@ -189,7 +190,7 @@ export function OpenOracleSection({
 					)}
 					{showCreateSuccess ? undefined : (
 						<SectionBlock title={openOracleCopy.openOracleGame} variant='plain'>
-							<p className='notice warning'>{openOracleCopy.standaloneOracleWarningDetail}</p>
+							<UserMessage tone='warning' detail={openOracleCopy.standaloneOracleWarningDetail} />
 							<p className='detail'>{openOracleCopy.standaloneOracleIntroduction}</p>
 							<TransactionObjectContext
 								className='mobile-workflow-context'

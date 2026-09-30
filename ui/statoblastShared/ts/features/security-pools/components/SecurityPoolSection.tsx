@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
@@ -309,7 +310,7 @@ export function SecurityPoolSection({
 								<div className='form-grid'>
 									<div className='field'>
 										<LookupFieldRow disabled={questionSourceLocked} label={commonCopy.questionId} value={securityPoolForm.marketId} onInput={marketId => onSecurityPoolFormChange({ marketId })} placeholder={commonCopy.hexValuePlaceholder} />
-										<p className='field-help'>{securityPoolCopy.questionIdFallbackHint}</p>
+										<UserMessage placement='field' detail={securityPoolCopy.questionIdFallbackHint} />
 									</div>
 									{loadingMarketDetails ? (
 										<p className='detail'>
@@ -343,8 +344,8 @@ export function SecurityPoolSection({
 										{securityPoolCopy.duplicatePoolDetail} {duplicateOriginPoolAddress === undefined ? undefined : <SecurityPoolLink securityPoolAddress={duplicateOriginPoolAddress} />}
 									</p>
 								)}
-								{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <p className='notice error'>{securityPoolCopy.ineligibleQuestionDetail}</p> : undefined}
-								{zoltarUniverseHasForked ? <p className='notice error'>{securityPoolCopy.poolCreationAfterForkReason}</p> : undefined}
+								{marketDetails !== undefined && marketDetails.marketType !== 'binary' ? <UserMessage tone='error' detail={securityPoolCopy.ineligibleQuestionDetail} /> : undefined}
+								{zoltarUniverseHasForked ? <UserMessage tone='error' detail={securityPoolCopy.poolCreationAfterForkReason} /> : undefined}
 							</SectionBlock>
 						) : undefined}
 

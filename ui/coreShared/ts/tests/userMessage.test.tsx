@@ -23,6 +23,19 @@ describe('UserMessage', () => {
 		expect(within(rendered.container).getByRole('button', { name: 'Submit trade' }).hasAttribute('disabled')).toBe(true)
 	})
 
+	test('renders field guidance as phrasing content inside a label without an announcement', async () => {
+		const rendered = await renderIntoDocument(
+			<label>
+				<select aria-label='Oracle' aria-describedby='oracle-help' />
+				<UserMessage placement='field' as='span' id='oracle-help' detail='Choose the price source.' />
+			</label>,
+		)
+		cleanup = rendered.cleanup
+		expect(rendered.container.querySelector('label p, label div')).toBeNull()
+		expect(within(rendered.container).getByText('Choose the price source.').tagName).toBe('SPAN')
+		expect(rendered.container.querySelector('[aria-live]')).toBeNull()
+	})
+
 	test('keeps explanatory guidance quiet regardless of tone or placement', async () => {
 		const rendered = await renderIntoDocument(
 			<>

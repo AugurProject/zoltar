@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -370,7 +371,7 @@ export function LiquidationModal({
 							<label className='field'>
 								<span>{liquidationCopy.boundedApprovalId}</span>
 								<FormInput value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
-								<small className='field-help'>{liquidationCopy.receiverOperatorEconomics}</small>
+								<UserMessage placement='field' as='span' detail={liquidationCopy.receiverOperatorEconomics} />
 							</label>
 							{loadingLiquidationApproval ? (
 								<p className='detail' role='status'>
@@ -400,11 +401,7 @@ export function LiquidationModal({
 				{delegatedReceiver ? <ErrorNotice message={liquidationReceiverVaultSummaryError} /> : null}
 				{delegatedReceiver ? <ErrorNotice message={liquidationApprovalError} /> : null}
 				{!delegatedReceiver || liquidationApprovalDetails === undefined ? null : <LiquidationApprovalSummary approvalNonceInvalidated={approvalNonceInvalidated} currentTimestamp={currentTimestamp} liquidationApprovalDetails={liquidationApprovalDetails} />}
-				{approvalClampedNotice === undefined ? null : (
-					<p className='notice warning' role='status'>
-						{approvalClampedNotice}
-					</p>
-				)}
+				{approvalClampedNotice === undefined ? null : <UserMessage tone='warning' announcement='polite' detail={approvalClampedNotice} />}
 				{liquidationExecutionMode === 'execute' ? null : <p className='detail'>{liquidationTimeoutHelpText}</p>}
 				{needsInitialPrice ? <OracleInitialPriceFields managerAddress={liquidationManagerAddress} value={initialPrice} onChange={changeInitialPrice} disabled={securityPoolOverviewActiveAction !== undefined} fieldId={initialPriceFieldId} /> : undefined}
 				{liquidationExecutionMode !== 'queue' || liquidationFundingPreviewError === undefined || initialPriceError !== undefined ? null : (

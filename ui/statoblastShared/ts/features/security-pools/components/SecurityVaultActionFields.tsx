@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import type { ComponentChildren } from 'preact'
@@ -225,11 +226,7 @@ export function VaultActionLaunchers({
 		<>
 			<SectionBlock title={securityPoolCopy.vaultActions} variant='plain'>
 				{showMissingVaultNotice ? <StateHint presentation={{ key: 'not_found', badgeLabel: securityPoolCopy.vaultMissing, badgeTone: 'muted', detail: securityPoolCopy.missingVaultDepositDetail }} /> : undefined}
-				{vaultLifecycleBlocker === undefined ? undefined : (
-					<p className='notice warning' id={vaultLifecycleBlockerId}>
-						{vaultLifecycleBlocker}
-					</p>
-				)}
+				{vaultLifecycleBlocker === undefined ? undefined : <UserMessage tone='warning' id={vaultLifecycleBlockerId} detail={vaultLifecycleBlocker} />}
 				{showSharedRefreshVaultBlocker ? (
 					<p className='detail' id={refreshVaultActionsDescriptionId}>
 						{vaultActionsLoadBlocker}

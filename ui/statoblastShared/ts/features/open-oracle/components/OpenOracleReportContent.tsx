@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { ComponentChildren } from 'preact'
@@ -51,11 +52,7 @@ export function getOpenOracleCreateFieldErrorId(field: OpenOracleCreateField) {
 function renderOpenOracleFieldError(id: string, message: string | undefined) {
 	return (
 		<div aria-live='polite' className='field-error-live-region'>
-			{message === undefined ? undefined : (
-				<p className='field-error' id={id}>
-					{message}
-				</p>
-			)}
+			{message === undefined ? undefined : <UserMessage placement='field' tone='error' id={id} detail={message} />}
 		</div>
 	)
 }

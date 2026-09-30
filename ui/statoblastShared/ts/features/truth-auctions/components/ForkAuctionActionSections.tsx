@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import type { ComponentChildren } from 'preact'
 import { AmountField } from '@zoltar/ui-core-shared/components/AmountField.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -59,21 +60,14 @@ export function ForkAuctionOutcomePoolNotice({ error, loading, onRetry, outcomeL
 export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finalized, onOpenSettlement, truthAuctionEndsAt }: { actionButton: ComponentChildren; currentTimestamp: bigint | undefined; finalized: boolean; onOpenSettlement: (() => void) | undefined; truthAuctionEndsAt: bigint | undefined }) {
 	const hasEndedByTime = truthAuctionEndsAt !== undefined && currentTimestamp !== undefined && currentTimestamp >= truthAuctionEndsAt
 	if (!finalized && !hasEndedByTime) return undefined
-	return (
-		<div className='notice success'>
-			<p>
-				<strong>{forkAuctionCopy.auctionEndedStatus}</strong> {finalized ? forkAuctionCopy.finalizedSettlementDetail : forkAuctionCopy.truthAuctionFinalizationRequiredDetail}
-			</p>
-			{finalized ? undefined : <div className='actions'>{actionButton}</div>}
-			{!finalized || onOpenSettlement === undefined ? undefined : (
-				<div className='actions'>
-					<button className='primary' onClick={onOpenSettlement} type='button'>
-						{forkAuctionCopy.openSettlement}
-					</button>
-				</div>
-			)}
-		</div>
-	)
+	let actions = finalized ? undefined : actionButton
+	if (finalized && onOpenSettlement !== undefined)
+		actions = (
+			<button className='primary' onClick={onOpenSettlement} type='button'>
+				{forkAuctionCopy.openSettlement}
+			</button>
+		)
+	return <UserMessage placement='page' tone='success' title={forkAuctionCopy.auctionEndedStatus} detail={finalized ? forkAuctionCopy.finalizedSettlementDetail : forkAuctionCopy.truthAuctionFinalizationRequiredDetail} actions={actions} />
 }
 
 export function ForkAuctionStartSection({ actionButton, bypassReason, readyInText }: { actionButton: ComponentChildren; bypassReason: string | undefined; readyInText: string | undefined }) {

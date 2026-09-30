@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
 import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
@@ -395,11 +396,7 @@ export function SecurityVaultSection({
 		effectiveRepExitMode === 'redeem' ? null : (
 			<>
 				<VaultRepWithdrawAmountField disabled={!queueWithdrawRepEnabled} maximumWithdrawableAttoRep={maximumWithdrawableAttoRep} onChange={repWithdrawAmount => onSecurityVaultFormChange({ repWithdrawAmount })} repTokenSymbol={repTokenSymbol} value={normalizedSecurityVaultForm.repWithdrawAmount} />
-				{withdrawEntireVaultNotice === undefined ? undefined : (
-					<p className='notice warning' role='status'>
-						{withdrawEntireVaultNotice}
-					</p>
-				)}
+				{withdrawEntireVaultNotice === undefined ? undefined : <UserMessage tone='warning' announcement='polite' detail={withdrawEntireVaultNotice} />}
 			</>
 		)
 	const repExitActionButton = (
