@@ -1,3 +1,4 @@
+import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as availabilityCopy from '../copy/availability.js'
@@ -62,6 +63,7 @@ export function LiveLiquidityControls({
 		networkMismatchReason,
 		balanceState,
 		operation,
+		submissionBlocker: submissionWindowBlocker(market, operation, nowSeconds),
 		marketClosed: quote === undefined ? closedForAdding : !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds),
 		requestedAmount: parsed,
 		walletEthAttoEth,
@@ -174,7 +176,7 @@ export function LiveLiquidityControls({
 								<MetricField label={liquidityCopy.quoteBlock}>{quote.blockNumber.toString()}</MetricField>
 							</DataGrid>
 						</ReadOnlyDetailAccordion>
-						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)} />
+						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question-or-oracle')} />
 					</section>
 				)}
 			</QuotedTransactionPanel>

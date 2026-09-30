@@ -4,6 +4,8 @@ import { shareTokenAbi } from '../../protocol/authorization.js'
 import { simulateEntry, simulateExit, simulateLiquidity, simulateSettlement, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
+import type { LiveMarket } from '../../protocol/liveMarket.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -31,11 +33,12 @@ function transactionOf(params: unknown) {
 
 // A chain whose head advances on demand; `longSharesOut` lets a test move the price between blocks.
 function createAdvancingChain() {
-	const chain = { head: 2n, longSharesOut: 10n, sends: [] as Hex[], simulatedBlocks: [] as unknown[] }
+	const chain: { head: bigint; feeMarket: LiveMarket; longSharesOut: bigint; sends: Hex[]; simulatedBlocks: unknown[] } = { head: 2n, feeMarket: market, longSharesOut: 10n, sends: [], simulatedBlocks: [] }
 	const client = createWalletClient({
 		account,
 		transport: custom({
 			async request({ method, params }) {
+				if (method === 'eth_chainId') return '0x1'
 				if (method === 'eth_blockNumber') return `0x${chain.head.toString(16)}`
 				if (method === 'eth_getBlockByNumber') return { hash: blockHashAt(chain.head), number: `0x${chain.head.toString(16)}`, parentHash: blockHashAt(chain.head - 1n), timestamp: `0x${chain.head.toString(16)}`, transactions: [] }
 				if (method === 'eth_sendTransaction') {
@@ -52,10 +55,11 @@ function createAdvancingChain() {
 					if (decoded.functionName === 'safeBatchTransferFrom') return '0x'
 					throw new Error(`Unexpected share token simulation ${decoded.functionName}`)
 				}
-				if (transaction.to === pool.toLowerCase()) return '0x'
+				if (transaction.to === pool.toLowerCase()) return feeAccountingRpcResult(transaction.data, chain.feeMarket, chain.head) ?? '0x'
 				const decoded = decodeFunctionData({ abi: routerAbi, data: transaction.data })
 				if (decoded.functionName === 'enterPosition') return encodeAbiParameters([{ type: 'tuple', components: [uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[10n, 10n, 1n, 2n, chain.longSharesOut, 10n, 1n, 5_000n, 5_001n]])
-				if (decoded.functionName === 'addLiquidityWithEth') return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
+				if (decoded.functionName === 'addLiquidityWithEth' || decoded.functionName === 'initializeWithEth' || decoded.functionName === 'createPairAndInitializeWithEth')
+					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
 				throw new Error(`Unexpected simulation ${decoded.functionName}`)
 			},
 		}),
@@ -66,6 +70,81 @@ function createAdvancingChain() {
 const write = async <T>(send: () => Promise<T>) => await send()
 
 describe('submitting a quote after the chain advances', () => {
+	test('guards both cutoffs for entry, initialization, and addition with pinned fresh timing', async () => {
+		for (const cutoff of ['question', 'oracle'] as const) {
+			for (const remaining of [1n, 60n, 61n]) {
+				for (const operation of ['entry', 'initialize', 'add'] as const) {
+					const { chain, client } = createAdvancingChain()
+					chain.head = 1000n
+					chain.feeMarket = { ...market, ...(cutoff === 'question' ? { endTime: chain.head + remaining } : { oracleValidUntilTimestamp: chain.head + remaining }) }
+					const pending = operation === 'entry' ? simulateEntry(client, configuration, market, account, 'YES', 10n) : simulateLiquidity(client, configuration, market, account, operation, 10n)
+					if (remaining <= 60n) await expect(pending).rejects.toThrow('60 seconds')
+					else expect((await pending).deadline).toBe(chain.head + remaining - 1n)
+					expect(chain.sends).toHaveLength(0)
+				}
+			}
+		}
+	})
+	test('rechecks each cutoff inside the final wallet guard without sending or loosening the deadline', async () => {
+		for (const cutoff of ['question', 'oracle'] as const) {
+			const { chain, client } = createAdvancingChain()
+			chain.head = 1000n
+			chain.feeMarket = { ...market, ...(cutoff === 'question' ? { endTime: chain.head + 61n } : { oracleValidUntilTimestamp: chain.head + 61n }) }
+			const quote = await simulateEntry(client, configuration, market, account, 'YES', 10n)
+			expect(quote.deadline).toBe(1060n)
+			await expect(
+				submitFreshEntry(client, configuration, account, quote, async send => {
+					chain.head += 1n
+					return await send()
+				}),
+			).rejects.toThrow('60 seconds')
+			expect(chain.sends).toHaveLength(0)
+		}
+	})
+
+	test('keeps liquidity removal available through close and stale oracle timing', async () => {
+		const { chain, client } = createAdvancingChain()
+		chain.feeMarket = { ...market, endTime: 1n, oracleValidUntilTimestamp: undefined }
+		const quote = await simulateLiquidity(client, configuration, chain.feeMarket, account, 'remove', 1n)
+		expect(await submitFreshLiquidity(client, configuration, account, quote, write)).toBe(transactionHash)
+		expect(chain.sends).toHaveLength(1)
+	})
+	test('does not offer an add-liquidity quote whose deposit caps cannot cover holding fees', async () => {
+		const { chain, client } = createAdvancingChain()
+		const feeMarket = {
+			...market,
+			currentRetentionRate: 999_000_000_000_000_000n,
+			valuation: {
+				timestamp: 2n,
+				feeEndTime: 1_000n,
+				projectedCollateralAttoEth: 100n,
+				feeAccounting: {
+					settlementCollateralAttoEth: 100n,
+					totalUnderwritingLimitAttoEth: 100n,
+					feeEligibleUnderwritingLimitAttoEth: 100n,
+					currentRetentionRate: 999_000_000_000_000_000n,
+					lastUpdatedFeeAccumulator: 2n,
+					feeIndexRemainder: 0n,
+					totalFeesOwedRemainder: 0n,
+				},
+			},
+		}
+		chain.feeMarket = feeMarket
+		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, 7n, 0n)).rejects.toThrow('Holding fees')
+		expect(chain.sends).toHaveLength(0)
+	})
+
+	test('reloads fee accounting after the user changes pool state and refuses unsafe approved bounds', async () => {
+		for (const operation of ['sell', 'add'] as const) {
+			const { chain, client } = createAdvancingChain()
+			const quote = operation === 'sell' ? { kind: 'sell' as const, value: await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 0n) } : { kind: 'add' as const, value: await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 7n, 0n) }
+			chain.feeMarket = { ...market, currentRetentionRate: 999_000_000_000_000_000n }
+			const send = quote.kind === 'sell' ? submitFreshExit(client, configuration, account, quote.value, write) : submitFreshLiquidity(client, configuration, account, quote.value, write)
+			await expect(send).rejects.toThrow('Holding fees')
+			expect(chain.sends).toHaveLength(0)
+		}
+	})
+
 	test('entry, exit, liquidity, and settlement revalidate at the new block and submit', async () => {
 		const { chain, client } = createAdvancingChain()
 		const entry = await simulateEntry(client, configuration, market, account, 'YES', 10n, 7n, 500n)

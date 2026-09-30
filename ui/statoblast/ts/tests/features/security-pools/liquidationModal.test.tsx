@@ -4,7 +4,7 @@ import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/mark
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
-import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
@@ -21,6 +21,10 @@ import { act } from 'preact/test-utils'
 import { createOracleManagerDetails } from './workflow/builders.js'
 
 const ATTO_ETH_PER_ETH = 10n ** 18n
+
+function renderIntoDocument(component: Parameters<typeof renderWithoutTimestamp>[0]) {
+	return renderWithoutTimestamp(<ChainTimestampContext.Provider value={1n}>{component}</ChainTimestampContext.Provider>)
+}
 
 function createTargetVaultSummary(overrides: Partial<SecurityPoolVaultSummary> = {}): SecurityPoolVaultSummary {
 	const underwritingLimitAttoEth = overrides.underwritingLimitAttoEth ?? 2n * 10n ** 18n
@@ -1043,7 +1047,12 @@ describe('LiquidationModal', () => {
 		document.body.appendChild(container)
 
 		await act(() => {
-			render(<LiquidationExecutionHarness />, container)
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<LiquidationExecutionHarness />
+				</ChainTimestampContext.Provider>,
+				container,
+			)
 		})
 
 		const documentQueries = within(document.body)
@@ -1125,7 +1134,12 @@ describe('LiquidationModal', () => {
 		document.body.appendChild(container)
 
 		await act(() => {
-			render(<LiquidationErrorHarness />, container)
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<LiquidationErrorHarness />
+				</ChainTimestampContext.Provider>,
+				container,
+			)
 		})
 
 		const documentQueries = within(document.body)
@@ -1721,6 +1735,21 @@ describe('LiquidationModal', () => {
 		expect(document.body.textContent?.includes('(expired 1m ago)')).toBe(true)
 	})
 
+	test('blocks direct liquidation when a usable price has only 30 seconds left', async () => {
+		const onQueueLiquidation = mock(() => undefined)
+		const renderedComponent = await renderLiquidationModalAt(970n, {
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 3n * ATTO_ETH_PER_ETH, priceValidUntilTimestamp: 1000n }),
+			callerVaultSummary: createTargetVaultSummary({ vaultAttoRepBacking: 100n * ATTO_ETH_PER_ETH, vaultAddress: defaultCallerVaultAddress }),
+			onQueueLiquidation,
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const button = within(document.body).getByRole('button', { name: 'Execute vault liquidation' })
+		expect(button.hasAttribute('disabled')).toBe(true)
+		expect(document.body.textContent).toContain('expires too soon')
+		fireEvent.click(button)
+		expect(onQueueLiquidation).not.toHaveBeenCalled()
+	})
+
 	test('queues liquidation when the loaded validity flag reaches its shared expiry boundary', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={1000n}>
@@ -2263,7 +2292,12 @@ describe('LiquidationModal', () => {
 		document.body.appendChild(container)
 
 		await act(() => {
-			render(<LiquidationSimulationHarness />, container)
+			render(
+				<ChainTimestampContext.Provider value={1n}>
+					<LiquidationSimulationHarness />
+				</ChainTimestampContext.Provider>,
+				container,
+			)
 		})
 
 		const documentQueries = within(document.body)

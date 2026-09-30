@@ -67,6 +67,8 @@ function createChildUniverse(parentUniverseId: bigint, outcomeIndex: bigint, out
 
 function createMintCapacity(overrides: Partial<MintCapacity> = {}): MintCapacity {
 	return {
+		currentTimestamp: 100n,
+		priceValidUntilTimestamp: 400n,
 		settlementCollateralAttoEth: ATTO_ETH_PER_ETH,
 		feeEligibleUnderwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH,
 		mintingCapacityAttoEth: 2n * ATTO_ETH_PER_ETH,
@@ -207,6 +209,15 @@ describe('useTradingOperations', () => {
 
 		expect(hook.onTransactionFailed).toHaveBeenCalledWith(expectedMessage, expect.objectContaining({ kind: 'error' }))
 		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+	})
+
+	test.each([399n, 340n])('blocks a still-fresh mint without a safe inclusion window at %s', async currentTimestamp => {
+		const createCompleteSetInSecurityPool = mock(async () => ({ action: 'createCompleteSet' as const, hash: zeroHash, securityPoolAddress: SECURITY_POOL_ADDRESS, universeId: 1n }))
+		const hook = await renderTradingHook(createMintDependencies({ createCompleteSetInSecurityPool, loadSecurityPoolMintCapacity: mock(async () => ({ ...createMintCapacity(), currentTimestamp, priceValidUntilTimestamp: 400n })) }))
+		await hook.setForm({ completeSetAmount: '1' })
+		await act(async () => await hook.state().createCompleteSet())
+		expect(createCompleteSetInSecurityPool).not.toHaveBeenCalled()
+		expect(hook.onTransactionFailed).toHaveBeenCalledWith('The oracle price expires too soon. Mint after a new price settles', expect.objectContaining({ kind: 'error' }))
 	})
 
 	test('allows the checkpoint-adjusted maximum mint amount through submit-time validation', async () => {

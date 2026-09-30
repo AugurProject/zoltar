@@ -901,6 +901,23 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleSelectedReportActionMode(createOpenOracleLifecycleReport({ currentTime: 161n, isDistributed: true }))).toBe('read-only')
 	})
 
+	test('reserves submission time or blocks without opening settlement early', () => {
+		for (const timeType of [true, false]) {
+			const reserve = timeType ? 60n : 2n
+			for (const remaining of [0n, 1n, reserve, reserve + 1n]) {
+				const report = createOpenOracleLifecycleReport({
+					timeType,
+					reportTimestamp: 100n,
+					settlementTime: 1_200n,
+					currentTime: timeType ? 1_300n - remaining : 0n,
+					currentBlockNumber: timeType ? 0n : 1_300n - remaining,
+				})
+				expect(getOpenOracleDisputeAvailability(report).canAct).toBe(remaining > reserve)
+				expect(getOpenOracleSettleAvailability(report).canAct).toBe(remaining === 0n)
+			}
+		}
+	})
+
 	test('dispute and settle availability follow time-based report lifecycle', () => {
 		const beforeDisputeDelay = createOpenOracleLifecycleReport({ currentTime: 109n })
 		expect(getOpenOracleDisputeAvailability(beforeDisputeDelay)).toEqual({
@@ -912,14 +929,14 @@ describe('Open Oracle helpers', () => {
 			message: 'This report can be settled in less than a minute if no disputes occur.',
 		})
 
-		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 159n })
+		const insideDisputeWindow = createOpenOracleLifecycleReport({ currentTime: 159n, settlementTime: 120n })
 		expect(getOpenOracleDisputeAvailability(insideDisputeWindow)).toEqual({
 			canAct: true,
 			message: undefined,
 		})
 		expect(getOpenOracleSettleAvailability(insideDisputeWindow)).toEqual({
 			canAct: false,
-			message: 'This report can be settled in less than a minute if no disputes occur.',
+			message: 'This report can be settled in 1m if no disputes occur.',
 		})
 
 		const exactSettlementBoundary = createOpenOracleLifecycleReport({ currentTime: 160n })
@@ -946,7 +963,9 @@ describe('Open Oracle helpers', () => {
 
 	test('dispute and settle availability use current block number for block-based reports', () => {
 		const cases = [
-			{ currentBlockNumber: 159n, disputeCanAct: true, settleCanAct: false },
+			{ currentBlockNumber: 157n, disputeCanAct: true, settleCanAct: false },
+			{ currentBlockNumber: 158n, disputeCanAct: false, settleCanAct: false },
+			{ currentBlockNumber: 159n, disputeCanAct: false, settleCanAct: false },
 			{ currentBlockNumber: 160n, disputeCanAct: false, settleCanAct: true },
 			{ currentBlockNumber: 161n, disputeCanAct: false, settleCanAct: true },
 		]

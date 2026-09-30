@@ -101,6 +101,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 		networkMismatchReason: wallet.networkMismatchReason,
 		walletEthAttoEth: wallet.walletEthAttoEth,
 		marketClosed: closed,
+		nowSeconds,
 		acknowledgedImpactBps: ticket.acknowledgedImpactBps,
 		workflowLocked,
 	})

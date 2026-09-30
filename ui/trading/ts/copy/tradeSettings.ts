@@ -16,6 +16,9 @@ export function minutesLabel(minutes: bigint) {
 }
 
 /** The protection summary shown next to a quote, with the Settings menu as the one place to change it. */
-export function protectionSummary(slippagePercent: string, minutes: bigint) {
-	return `Slippage ${slippagePercent}% · valid ${minutes.toString()} min · change in Settings`
+export function protectionSummary(slippagePercent: string, minutes: bigint, cutoff?: 'question' | 'question-or-oracle') {
+	let cutoffNote = ''
+	if (cutoff === 'question') cutoffNote = ' · ends sooner at question close'
+	if (cutoff === 'question-or-oracle') cutoffNote = ' · ends sooner at question close or oracle expiry'
+	return `Slippage ${slippagePercent}% · valid up to ${minutes.toString()} min${cutoffNote} · change in Settings`
 }

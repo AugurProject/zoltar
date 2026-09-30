@@ -259,6 +259,24 @@ function requireButton(element: HTMLElement) {
 describe('ReportingSection', () => {
 	let cleanupRenderedComponent: (() => Promise<void>) | undefined
 
+	test.each([0n, 1n, 60n, 61n])('reserves report submission time without resolving early (%s)', async remaining => {
+		const rendered = await renderIntoDocument(
+			h(
+				ReportingSection,
+				createProps({
+					currentTimestamp: 1000n - remaining,
+					reportingDetails: createReportingDetails({ currentTime: 1000n - remaining, escalationEndTime: 1000n, viewerWalletRepAllowanceAttoRep: rep(10n), viewerWalletRepBalanceAttoRep: rep(10n) }),
+					reportingForm: createReportingForm({ selectedOutcome: 'yes', reportAmount: '5', contributionFunding: 'wallet' }),
+				}),
+			),
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const button = within(document.body).getByRole('button', { name: /Report Yes/ })
+		if (remaining > 60n) expectTransactionButtonEnabled(document.body, button.textContent ?? '')
+		else expectTransactionButtonDisabled(document.body, button.textContent ?? '', 'The response window ends too soon. Wait for the result before settling deposits.')
+		expect(within(document.body).queryByText('Resolved as Yes.')).toBeNull()
+	})
+
 	test('describes reporting timing with question terminology', () => {
 		const message = getReportingLockedUntilMessage(100n, 50n)
 

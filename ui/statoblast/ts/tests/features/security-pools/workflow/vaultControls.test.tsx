@@ -225,6 +225,7 @@ describe('SecurityPoolWorkflowSection: vault controls', () => {
 
 	test('caps REP withdrawals to the multiplier-adjusted oracle-backed amount', async () => {
 		await renderVaultsView({
+			chainTimestamp: 1n,
 			poolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true, lastPrice: 3n * 10n ** 18n }),
 			pool: { managerAddress: zeroAddress, totalPoolHeldAttoRep: 20_000n * 10n ** 18n, totalUnderwritingLimitAttoEth: 2_500n * 10n ** 18n },
 			vault: {

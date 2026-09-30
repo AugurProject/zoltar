@@ -1,3 +1,8 @@
+import { createWalletClient, custom, publicActions } from '@zoltar/core-shared/evm/ethereum'
+import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
+import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { isTransactionReviewCancellation, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { reportOutcomeWithWalletViaVault } from '@zoltar/ui-statoblast-shared/protocol/reportingWalletFunding.js'
 /// <reference types="bun-types" />
@@ -156,6 +161,7 @@ describe('reporting protocol client', () => {
 		}
 		if (failure === 'report' || failure === 'cancel' || failure === 'quote') {
 			await expect(result).rejects.toThrow('Your REP was deposited into your vault')
+			await expect(result).rejects.toThrow('Use Pool vault REP to retry without another wallet deposit.')
 			await result.catch(error => expect(isTransactionReviewCancellation(error)).toBe(false))
 		} else expect((await result).action).toBe('reportOutcome')
 		expect(funded).toBe(true)
@@ -176,12 +182,14 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'forkContinuation') return false
 					if (request.functionName === 'repToken') return repTokenAddress
 					throw new Error(`Unexpected readContract function: ${request.functionName}`)
 				},
 			),
 		)
+		client.getBlock = async () => createBlockWithTimestamp(1n)
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await approveReportingRep(client, securityPoolAddress, 'yes', 7n)
 		expect(previews[0]?.functionName).toBe('approve')
@@ -198,12 +206,14 @@ describe('reporting protocol client', () => {
 				async request => {
 					if (request.functionName === 'universeId') return 9n
 					if (request.functionName === 'escalationGame') return gameAddress
+					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'forkContinuation') return false
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
 			),
 		)
 		const previews: TransactionRequestPreview[] = []
+		client.getBlock = async () => createBlockWithTimestamp(1n)
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await reportOutcomeInSecurityPool(client, securityPoolAddress, 'yes', 7n, 7n, 'vault')
 		expect(previews[0]?.functionName).toBe('depositToEscalationGame')
@@ -221,6 +231,7 @@ describe('reporting protocol client', () => {
 					if (request.functionName === 'escalationGame') return escalationGameAddress
 					if (request.functionName === 'forkResumedAt') return 100n
 					if (request.functionName === 'forkElapsedAtStart') return 0n
+					if (request.functionName === 'getEscalationGameEndDate') return 1000n
 					if (request.functionName === 'forkContinuation') return true
 					throw new Error(`Unexpected read: ${request.functionName}`)
 				},
@@ -240,6 +251,7 @@ describe('reporting protocol client', () => {
 			async request => {
 				if (request.functionName === 'universeId') return 9n
 				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
 				if (request.functionName === 'forkContinuation') return false
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
@@ -247,6 +259,7 @@ describe('reporting protocol client', () => {
 
 		const previews: TransactionRequestPreview[] = []
 		const writeClient = asWriteClient(client)
+		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
 		writeClient.onTransactionPrepared = preview => previews.push(preview)
 		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
 		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006 REP')
@@ -276,12 +289,13 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'escalationGame') return escalationGameAddress
 				if (request.functionName === 'forkResumedAt') return 100n
 				if (request.functionName === 'forkElapsedAtStart') return 0n
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
 				if (request.functionName === 'forkContinuation') return true
 				throw new Error(`Unexpected readContract function: ${request.functionName}`)
 			},
 		)
 
-		await reportOutcomeInSecurityPool(asWriteClient(client), securityPoolAddress, 'no', 11n)
+		await reportOutcomeInSecurityPool({ ...asWriteClient(client), getBlock: async () => createBlockWithTimestamp(1n) }, securityPoolAddress, 'no', 11n)
 
 		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()
@@ -1072,12 +1086,13 @@ describe('reporting protocol client', () => {
 	test('migrateVaultWithUnresolvedEscalation helper encodes the selected child outcome correctly', async () => {
 		let capturedData: Hex | undefined
 		let capturedTo: Address | null | undefined
-		const client = createMockWriteClient(request => {
+		const writer = createMockWriteClient(request => {
 			capturedData = request.data
 			capturedTo = request.to
 		})
 
-		const result = await migrateVaultWithUnresolvedEscalation(asWriteClient(client), securityPoolAddress, vaultAddress, 9n, 'no')
+		const client = { ...asWriteClient(writer), getBlock: async () => createBlockWithTimestamp(1n), readContract: createReadContractStub(() => [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, true, 0n, 1n]) }
+		const result = await migrateVaultWithUnresolvedEscalation(client, securityPoolAddress, vaultAddress, 9n, 'no')
 
 		expect(capturedTo).toBeDefined()
 		expect(capturedData).toBeDefined()
@@ -1189,3 +1204,154 @@ describe('reporting protocol client', () => {
 		})
 	})
 })
+
+for (const remaining of [0n, 1n, 60n, 61n]) {
+	test(`reserves reporting submission time before the escalation cutoff (${remaining})`, async () => {
+		let sends = 0
+		const writer = createMockWriteClient(
+			() => {
+				sends += 1
+			},
+			async request => {
+				if (request.functionName === 'universeId') return 0n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				throw new Error(`Unexpected read: ${request.functionName}`)
+			},
+		)
+		const client = { ...asWriteClient(writer), getBlock: async () => createBlockWithTimestamp(1000n - remaining) }
+		const result = reportOutcomeInSecurityPool(client, securityPoolAddress, 'no', 2n)
+		if (remaining > 60n) {
+			await expect(result).resolves.toHaveProperty('action', 'reportOutcome')
+			expect(sends).toBe(1)
+		} else {
+			await expect(result).rejects.toThrow('response window ends too soon')
+			expect(sends).toBe(0)
+		}
+	})
+}
+
+for (const advanceDuring of ['initial', 'deposit', 'preview'] as const) {
+	for (const remaining of [0n, 1n, 60n, 61n]) {
+		test(`wallet continuation guards submission time (${advanceDuring}, ${remaining})`, async () => {
+			const reader = createActiveReportingClient(() => [])
+			let timestamp = advanceDuring === 'initial' ? 150n - remaining : 88n
+			let funded = false
+			let submitted = 0
+			const writer = createMockWriteClient(() => {
+				submitted += 1
+				if (submitted === 1 && advanceDuring === 'deposit') timestamp = 150n - remaining
+			})
+			const client = {
+				...asWriteClient(writer),
+				...reader,
+				getBlock: async () => createBlockWithTimestamp(timestamp),
+				account: { address: vaultAddress, type: 'json-rpc' as const },
+				readContract: createReadContractStub(async request => {
+					if (request.functionName === 'forkResumedAt') return 1n
+					if (request.functionName === 'forkElapsedAtStart') return 0n
+					if (request.functionName === 'forkContinuation') return true
+					if (request.functionName === 'previewDepositOnOutcome') {
+						if (funded && advanceDuring === 'preview') timestamp = 150n - remaining
+						return [7n, 10n]
+					}
+					if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
+					if (request.functionName === 'minimumVaultRepDepositAttoRep') return 10n
+					if (request.functionName === 'securityVaults') return [funded ? 17n : 0n, 0n, 0n, 0n]
+					if (request.functionName === 'backingUnitsToAttoRep') return 17n
+					if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
+					if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
+					if (request.functionName === 'repToken') return repTokenAddress
+					if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
+					if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
+					if (request.functionName === 'hasReachedNonDecision') return false
+					return await reader.readContract(request)
+				}),
+			}
+			const result = reportOutcomeWithWalletViaVault(client, securityPoolAddress, 'no', 7n, 17n, () => {
+				funded = true
+			})
+			if (remaining > 60n) {
+				await expect(result).resolves.toHaveProperty('action', 'reportOutcome')
+				expect(submitted).toBe(2)
+			} else {
+				if (advanceDuring !== 'initial') {
+					await expect(result).rejects.toThrow('Your REP was deposited into your vault, but the report did not complete')
+					await expect(result).rejects.toThrow('Use Pool vault REP to retry without another wallet deposit.')
+				}
+				await expect(result).rejects.toThrow('response window ends too soon')
+				expect(submitted).toBe(advanceDuring === 'initial' ? 0 : 1)
+			}
+			expect(funded).toBe(remaining > 60n || advanceDuring !== 'initial')
+		})
+	}
+}
+
+for (const delayedStep of [0, 1]) {
+	test(`wallet continuation refreshes after reviewing step ${delayedStep}`, async () => {
+		const reader = createActiveReportingClient(() => [])
+		let timestamp = 88n
+		let funded = false
+		let submitted = 0
+		const writer = createMockWriteClient(() => {
+			submitted += 1
+		})
+		const client = {
+			...asWriteClient(writer),
+			...reader,
+			getBlock: async () => createBlockWithTimestamp(timestamp),
+			account: { address: vaultAddress, type: 'json-rpc' as const },
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'forkResumedAt') return 1n
+				if (request.functionName === 'forkElapsedAtStart') return 0n
+				if (request.functionName === 'forkContinuation') return true
+				if (request.functionName === 'previewDepositOnOutcome') {
+					return [7n, 10n]
+				}
+				if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
+				if (request.functionName === 'minimumVaultRepDepositAttoRep') return 10n
+				if (request.functionName === 'securityVaults') return [funded ? 17n : 0n, 0n, 0n, 0n]
+				if (request.functionName === 'backingUnitsToAttoRep') return 17n
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
+				if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				return await reader.readContract(request)
+			}),
+		}
+		const wallet = createWalletClient({
+			account: vaultAddress,
+			chain: MAINNET_NETWORK_PROFILE.chain,
+			transport: custom({
+				request: async () => {
+					throw new Error('Unexpected RPC')
+				},
+			}),
+		}).extend(publicActions)
+		const scope = new AbortController()
+		const unregister = registerTransactionPreparationScope(scope.signal)
+		const reviewed = createReviewedClient({ ...wallet, ...client, account: wallet.account }, undefined, scope.signal)
+		try {
+			const action = reportOutcomeWithWalletViaVault(reviewed, securityPoolAddress, 'no', 7n, 17n, () => {
+				funded = true
+			}).catch(error => error)
+			for (let index = 0; index <= delayedStep; index += 1) {
+				for (let attempt = 0; attempt < 100 && (transactionSteps.value?.activeIndex !== index || transactionSteps.value?.steps[index]?.phase !== 'review'); attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
+				expect(transactionSteps.value?.steps[index]?.phase).toBe('review')
+				if (index === delayedStep) timestamp = 91n
+				transactionSteps.value?.confirm()
+			}
+			const result = await action
+			expect(result).toBeInstanceOf(Error)
+			expect(submitted).toBe(delayedStep)
+			if (delayedStep === 1) expect(String(result)).toContain('Use Pool vault REP to retry without another wallet deposit.')
+		} finally {
+			scope.abort()
+			unregister()
+			transactionSteps.value?.cancel()
+		}
+	})
+}

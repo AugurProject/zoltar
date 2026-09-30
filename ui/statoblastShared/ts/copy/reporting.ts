@@ -171,3 +171,5 @@ export const depositTriggersFork = 'This deposit reaches the non-decision thresh
 export const depositDeadlinePreview = (deadline: string, extension: string, unchanged: boolean) => `After this deposit, check back before ${deadline}. ${unchanged ? 'This deposit does not extend the timer.' : `Timer extended by ${extension}.`} Other reports can change this deadline.`
 
 export const dismissReminderUpdate = 'Dismiss'
+
+export const responseWindowEndsTooSoon = 'The response window ends too soon. Wait for the result before settling deposits.'

@@ -27,11 +27,86 @@ const ready: TradeTicketInputs = {
 	networkMismatchReason: undefined,
 	walletEthAttoEth: 5n * eth,
 	marketClosed: false,
+	nowSeconds: 1n,
 	acknowledgedImpactBps: undefined,
 	workflowLocked: false,
 }
 
+function feeTicketMarket(timestamp: bigint, currentRetentionRate: bigint, feeEndTime: bigint) {
+	return {
+		...market,
+		currentRetentionRate,
+		valuation: {
+			timestamp,
+			feeEndTime,
+			projectedCollateralAttoEth: eth,
+			feeAccounting: {
+				settlementCollateralAttoEth: eth,
+				totalUnderwritingLimitAttoEth: eth,
+				feeEligibleUnderwritingLimitAttoEth: eth,
+				currentRetentionRate,
+				lastUpdatedFeeAccumulator: timestamp,
+				feeIndexRemainder: 0n,
+				totalFeesOwedRemainder: 0n,
+			},
+		},
+	}
+}
+
 describe('trade ticket estimate', () => {
+	test('blocks last-second and60-second market/oracle windows, allowing61seconds', () => {
+		for (const remaining of [1n, 60n, 61n]) {
+			const endingMarket = { ...market, endTime: 100n + remaining, oracleValidUntilTimestamp: 1000n }
+			const ending = tradeTicketModel({ ...ready, market: endingMarket, ...{ nowSeconds: 100n } })
+			expect(ending.availability.disabled).toBe(remaining <= 60n)
+		}
+	})
+	test('blocks oracle windows at1and60seconds, allowing61seconds', () => {
+		for (const remaining of [1n, 60n, 61n]) {
+			const expiringMarket = { ...market, oracleValidUntilTimestamp: 100n + remaining }
+			const expiring = tradeTicketModel({ ...ready, market: expiringMarket, ...{ nowSeconds: 100n } })
+			expect(expiring.availability.disabled).toBe(remaining <= 60n)
+		}
+	})
+
+	test('blocks a sell whose approved ETH minimum cannot cover holding fees through validity', () => {
+		const feeMarket = {
+			...market,
+			currentRetentionRate: 999_999_996_843_524_738n,
+			valuation: {
+				timestamp: 2n,
+				feeEndTime: 1_000_000n,
+				projectedCollateralAttoEth: eth,
+				feeAccounting: {
+					settlementCollateralAttoEth: eth,
+					totalUnderwritingLimitAttoEth: eth,
+					feeEligibleUnderwritingLimitAttoEth: eth,
+					currentRetentionRate: 999_999_996_843_524_738n,
+					lastUpdatedFeeAccumulator: 2n,
+					feeIndexRemainder: 0n,
+					totalFeesOwedRemainder: 0n,
+				},
+			},
+		}
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', settings: { slippageBps: 0n, validityMinutes: 20n } })
+		expect(result.availability.disabled).toBe(true)
+		expect(result.availability.reason).toContain('Holding fees')
+		const protectedResult = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01' })
+		expect(protectedResult.availability.disabled).toBe(false)
+	})
+
+	test('covers holding fees through validity measured from the current ticket clock', () => {
+		const feeMarket = feeTicketMarket(2n, 999_999_000_000_000_000n, 20_000n)
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', nowSeconds: 10_000n })
+		expect(result.availability.reason).toBe(availabilityCopy.holdingFeesBoundsReason)
+	})
+
+	test('caps sell fee coverage before the question closes', () => {
+		const feeMarket = { ...feeTicketMarket(100n, 999_990_000_000_000_000n, 20_000n), endTime: 200n }
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', nowSeconds: 100n })
+		expect(result.availability.disabled).toBe(false)
+	})
+
 	test('prices a buy locally with the router math and the slippage minimum', () => {
 		const estimate = ticketEstimateFor(market, 'entry', '1')
 		if (estimate.kind !== 'entry') throw new Error('Expected a buy estimate')
