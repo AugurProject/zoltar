@@ -33,10 +33,10 @@ export { loadErc20Balance } from '@zoltar/ui-zoltar-shared/protocol/deployment.j
 
 export const EXPECTED_SEPOLIA_STATOBLAST_DEPLOYMENT_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xe50ff77af4d4627c3dc75e7d5bd50c6faf3af9d8f7b86a01a58fb39e1118c1c4',
+	escalationGameFactory: '0xac6e28e67a7ad6485cf574bea9f56422ea766045c309c8ca2bfb8c1d362ee3f2',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0xcb71986ddaed0db3744d6ff8baab1051d4408a9c515f19cfd6e6ea5d7481f247',
-	securityPoolFactory: '0x2c06ff531d5bb6954ea673a81dd22cc51441a5a713e022a9d2ceb1e18cd47adb',
+	openOraclePriceCoordinatorFactory: '0x19fe27962b84f149e46a4ccb34ee19bf31f95d99229fcefc98875e5ca808bd3b',
+	securityPoolFactory: '0x96a5d591205e48cfb7aec373585b5f38e89a3d5e556c4a401ff47f3ab23e866c',
 	securityPoolOperationsDelegate: '0x9b62c424da66f72290e60f6a940782ac68a18f41ddb31b6264c771bc332c7bb4',
 	securityPoolForker: '0x01b1ea2ea0aca290aa56ede3692d7e9909aba5d386d3406d1e2ae9d4f890e4b4',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
@@ -74,10 +74,10 @@ export function assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes(
 
 const EXPECTED_MAINNET_RUNTIME_CODE_HASHES: Readonly<Partial<Record<DeploymentStepId, Hash>>> = {
 	escalationGameClaimDelegate: '0xed5d44482ceeac7091409ffd63a592fabad32aca961274fc2e077f369864f229',
-	escalationGameFactory: '0xe50ff77af4d4627c3dc75e7d5bd50c6faf3af9d8f7b86a01a58fb39e1118c1c4',
+	escalationGameFactory: '0xac6e28e67a7ad6485cf574bea9f56422ea766045c309c8ca2bfb8c1d362ee3f2',
 	openOracle: '0x994db45e5c25cab071f7f8cfecbe28badd177f9015fd8efe58f17dbf18aab408',
-	openOraclePriceCoordinatorFactory: '0x9882b8a09a4e3c2fa03b35176b00e98436ac4a6ccdc0186de142c3004f613276',
-	securityPoolFactory: '0x4cb841c16ff7449a1b0284293afacc98b4c6c1a897b59b64d082d2f6286c7a04',
+	openOraclePriceCoordinatorFactory: '0xf2f46702caaf783f47b24a558228fb4fdb268080392e48afac654a36ba095a8b',
+	securityPoolFactory: '0x8aaac88add2698fae1c5b90095f6b478d908939d5f9662344f8e3df4bb5f5aeb',
 	securityPoolOperationsDelegate: '0x9b62c424da66f72290e60f6a940782ac68a18f41ddb31b6264c771bc332c7bb4',
 	securityPoolForker: '0x0bf50602aa0493d118a7769eca3d4d3d33a1f7d39b7622f081b0ed26756f2da1',
 	securityPoolUtils: '0xe16f02b9482acbfbbe0000d61e30fcf511cf5e3b297c827c41dc628e81d9d5c4',
