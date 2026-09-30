@@ -2,7 +2,7 @@ import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import type { CanonicalUintString } from '../core/units.ts'
 import type { OracleRequestFundingSnapshot } from './types.ts'
 
-const BPS_DENOMINATOR = 10_000n
+export const BPS_DENOMINATOR = 10_000n
 const OPEN_INTEREST_DIVIDER = 100n
 const OPEN_ORACLE_PERCENTAGE_PRECISION = 10_000_000n
 const PRICE_PRECISION = 10n ** 18n
