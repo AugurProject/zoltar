@@ -176,6 +176,29 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 describe('useForkAuctionOperations', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
+	for (const remaining of [0n, 1n, 60n, 61n]) {
+		test(`unresolved migration rechecks the loaded deadline before calling the writer (${remaining})`, async () => {
+			const onTransactionFailed = mock(() => undefined)
+			const migrateVaultWithUnresolvedEscalation = mock(async () => createForkAuctionResult('migrateUnresolvedEscalation'))
+			const dependencies = createForkAuctionOperationsDependencies({ loadForkAuctionDetails: async () => createForkAuctionDetails({ currentTime: 1000n, migrationEndsAt: 1000n + remaining }), migrateVaultWithUnresolvedEscalation })
+			let hookState: UseForkAuctionOperationsState | undefined
+			const Harness = createHarness(
+				dependencies,
+				state => {
+					hookState = state
+				},
+				onTransactionFailed,
+			)
+			const rendered = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(rendered.cleanup)
+			await act(async () => {
+				await requireHookState(hookState).migrateUnresolvedEscalation('yes')
+			})
+			expect(migrateVaultWithUnresolvedEscalation).toHaveBeenCalledTimes(remaining > 60n ? 1 : 0)
+			expect(onTransactionFailed).toHaveBeenCalledTimes(remaining > 60n ? 0 : 1)
+		})
+	}
+
 	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const)
 		for (const outcome of ['failure', 'cancel'] as const) {
 			test(`${action} returns to idle after ${outcome} without duplicate errors`, async () => {

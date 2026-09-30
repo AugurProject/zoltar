@@ -1,9 +1,11 @@
+import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
@@ -554,3 +556,75 @@ describe('openOracle protocol client', () => {
 		await expect(loadLiquidationApproval(approvalReadClient, coordinatorAddress, approvalId)).resolves.toEqual({ registryAddress, ...approvalState, minimumValidNonce: 9n })
 	})
 })
+
+for (const change of ['settlement preimage', 'settled report', 'withdraw balance', 'create ETH', 'settlement unchanged', 'withdraw unchanged', 'create unchanged'] as const) {
+	test(`refreshes OpenOracle ${change} after application review`, async () => {
+		const preimage = createOpenOraclePreimage()
+		let changed = false
+		let submitted = 0
+		const writer = createMockWriteClient(
+			() => {
+				submitted += 1
+			},
+			async request => {
+				if (request.functionName === 'tokenHolder') return changed && change === 'withdraw balance' ? 1n : 1000n
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 1000n
+				if (request.functionName === 'symbol') return 'REP'
+				if (request.functionName === 'decimals') return 18
+				return readStoredOracleFixture(request.functionName, preimage)
+			},
+		)
+		const wallet = createWalletClient({
+			account: initialReporter,
+			chain: SEPOLIA_NETWORK_PROFILE.chain,
+			transport: custom({
+				request: async () => {
+					throw new Error('Unexpected RPC')
+				},
+			}),
+		}).extend(publicActions)
+		const scope = new AbortController()
+		const unregister = registerTransactionPreparationScope(scope.signal)
+		const reviewed = createReviewedClient({ ...wallet, ...asWriteClient(writer), account: wallet.account, getBlock: async () => createBlockWithTimestamp(1000n), getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n) }, undefined, scope.signal)
+		try {
+			const execute = () => {
+				if (change.startsWith('withdraw')) return withdrawOpenOracleBalance(reviewed, getOpenOracleAddress(), token1Address, 7n, initialReporter)
+				if (change.startsWith('create'))
+					return createOpenOracleReportInstance(reviewed, {
+						disputeDelay: 0,
+						escalationHalt: 1000n,
+						exactToken1Report: 1n,
+						initialToken2Amount: 1n,
+						ethValueAttoEth: 1n,
+						feePercentage: 0,
+						multiplier: 100,
+						protocolFee: 0,
+						settlementTime: 1000,
+						settlerRewardAttoEth: 1n,
+						token1Address,
+						token2Address,
+					})
+				return settleOracleReport(reviewed, getOpenOracleAddress(), 1n)
+			}
+			const action = execute().catch(error => error)
+			for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
+			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
+			changed = true
+			if (change === 'settlement preimage') preimage.game.currentAmount1 = 101n
+			if (change === 'settled report') preimage.game.settlementTimestamp = 1000n
+			transactionSteps.value?.confirm()
+			const result = await action
+			if (change.endsWith('unchanged')) {
+				expect(result).toHaveProperty('hash')
+				expect(submitted).toBe(1)
+			} else {
+				expect(result).toBeInstanceOf(Error)
+				expect(submitted).toBe(0)
+			}
+		} finally {
+			scope.abort()
+			unregister()
+			transactionSteps.value?.cancel()
+		}
+	})
+}

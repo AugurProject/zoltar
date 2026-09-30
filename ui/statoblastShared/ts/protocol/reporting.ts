@@ -469,14 +469,50 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		if (timingGuard !== undefined) throw new Error(timingGuard)
 	}
 
-	const hash = await writeContractAndWait(client, () => ({
+	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
 		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(reviewAmountAttoRep, 18)),
 		reviewAmount: `${formatUnits(reviewAmountAttoRep, 18)} REP`,
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
-	}))
+	}
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: securityPoolAddress,
+			refreshFundingRequirements: async () => {
+				if (!useWalletFunding) return undefined
+				const tokenAddress = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken' })
+				return [{ tokenAddress, amount: reviewAmountAttoRep }]
+			},
+			validateBeforeSubmit: async () => {
+				const [currentGame, systemState] = await Promise.all([
+					client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' }),
+					client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState' }),
+				])
+				if (currentGame !== escalationGameAddress || getSecurityPoolSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the pool again.')
+				if (!useWalletFunding) {
+					const [backingUnits] = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', args: [client.account.address] })
+					const backing = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [backingUnits] })
+					if (backing < reviewAmountAttoRep) throw new Error('Vault REP backing changed. Review the report again.')
+				}
+				if (currentGame !== zeroAddress) {
+					const [continuation, endTime, acceptedDeposit] = await Promise.all([
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkContinuation' }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
+					])
+					if (useWalletFunding && continuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
+					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
+					const block = await client.getBlock()
+					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
+					if (timingGuard !== undefined) throw new Error(timingGuard)
+				}
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'reportOutcome',
 		hash,

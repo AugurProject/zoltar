@@ -32,6 +32,27 @@ const ready: TradeTicketInputs = {
 	workflowLocked: false,
 }
 
+function feeTicketMarket(timestamp: bigint, currentRetentionRate: bigint, feeEndTime: bigint) {
+	return {
+		...market,
+		currentRetentionRate,
+		valuation: {
+			timestamp,
+			feeEndTime,
+			projectedCollateralAttoEth: eth,
+			feeAccounting: {
+				settlementCollateralAttoEth: eth,
+				totalUnderwritingLimitAttoEth: eth,
+				feeEligibleUnderwritingLimitAttoEth: eth,
+				currentRetentionRate,
+				lastUpdatedFeeAccumulator: timestamp,
+				feeIndexRemainder: 0n,
+				totalFeesOwedRemainder: 0n,
+			},
+		},
+	}
+}
+
 describe('trade ticket estimate', () => {
 	test('blocks last-second and60-second market/oracle windows, allowing61seconds', () => {
 		for (const remaining of [1n, 60n, 61n]) {
@@ -72,6 +93,18 @@ describe('trade ticket estimate', () => {
 		expect(result.availability.reason).toContain('Holding fees')
 		const protectedResult = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01' })
 		expect(protectedResult.availability.disabled).toBe(false)
+	})
+
+	test('covers holding fees through validity measured from the current ticket clock', () => {
+		const feeMarket = feeTicketMarket(2n, 999_999_000_000_000_000n, 20_000n)
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', nowSeconds: 10_000n })
+		expect(result.availability.reason).toBe(availabilityCopy.holdingFeesBoundsReason)
+	})
+
+	test('caps sell fee coverage before the question closes', () => {
+		const feeMarket = { ...feeTicketMarket(100n, 999_990_000_000_000_000n, 20_000n), endTime: 200n }
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', nowSeconds: 100n })
+		expect(result.availability.disabled).toBe(false)
 	})
 
 	test('prices a buy locally with the router math and the slippage minimum', () => {

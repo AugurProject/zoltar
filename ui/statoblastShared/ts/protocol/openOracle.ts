@@ -371,6 +371,9 @@ export async function createOpenOracleReportInstance(
 		contractAddress: getOpenOracleAddress(),
 		value: parameters.ethValueAttoEth,
 		tokenFunding: fundingOrder.map(funding => ({ tokenAddress: funding.token, amount: funding.required })),
+		validateBeforeSubmit: async () => {
+			if ((await client.getBalance({ address: client.account.address })) < parameters.ethValueAttoEth) throw new Error('Insufficient ETH for the report bounty. Gas is additional.')
+		},
 	})
 	const callParams = {
 		address: getOpenOracleAddress(),
@@ -450,13 +453,32 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 		token2: availableBalance(rawToken2),
 	}
 }
-export async function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, token: Address, amount: bigint, recipient: Address): Promise<OpenOracleActionResult> {
-	const hash = await writeContractAndWait(client, () => ({
+export async function withdrawOpenOracleBalance<TReceipt extends Pick<TransactionReceipt, 'status'>>(
+	client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'readContract'> & Pick<WriteClient, 'account'>>,
+	openOracleAddress: Address,
+	token: Address,
+	amount: bigint,
+	recipient: Address,
+): Promise<OpenOracleActionResult> {
+	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'withdrawTo',
 		args: [token, amount, recipient],
-	}))
+	}
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: openOracleAddress,
+			validateBeforeSubmit: async () => {
+				const { readContract, account } = client
+				if (readContract === undefined || account === undefined) throw new Error('OpenOracle withdrawal requires a readable wallet client.')
+				const balance = await readContract({ address: openOracleAddress, abi: statoblast_openOracle_OpenOracle_OpenOracle.abi, functionName: 'tokenHolder', args: [account.address, token] })
+				if (amount <= 0n || balance <= amount) throw new Error('The withdrawable balance changed. Review the withdrawal again.')
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'withdrawBalance',
 		hash,
@@ -464,20 +486,38 @@ export async function withdrawOpenOracleBalance<TReceipt extends Pick<Transactio
 }
 export async function settleOracleReport(client: WriteClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleActionResult>
 export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt>, openOracleAddress: Address, reportId: bigint, preimage: OpenOracleStatePreimage): Promise<OpenOracleActionResult>
-export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'readContract'> & Pick<WriteClient, 'account'>>, openOracleAddress: Address, reportId: bigint, preimage?: OpenOracleStatePreimage) {
+export async function settleOracleReport<TReceipt extends Pick<TransactionReceipt, 'status'>>(client: WriteContractClient<TReceipt> & Partial<Pick<ReadClient, 'readContract' | 'getBlock'> & Pick<WriteClient, 'account'>>, openOracleAddress: Address, reportId: bigint, preimage?: OpenOracleStatePreimage) {
 	let resolvedPreimage = preimage
 	if (resolvedPreimage === undefined) {
 		const { readContract } = client
 		if (readContract === undefined) throw new Error('OpenOracle settlement requires a client that can read stored report state')
 		resolvedPreimage = (await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)).latest
 	}
-	const hash = await writeContractAndWait(client, () => ({
+	const reviewedStateHash = hashOpenOracleStatePreimage(resolvedPreimage)
+	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
 		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game),
 		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
-	}))
+	}
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: openOracleAddress,
+			validateBeforeSubmit: async () => {
+				const { readContract, getBlock } = client
+				if (readContract === undefined || getBlock === undefined) throw new Error('OpenOracle settlement requires a readable wallet client.')
+				const current = await loadOpenOracleStoredState({ readContract }, openOracleAddress, reportId)
+				if (current.settled) throw new Error('This report is already settled.')
+				if (current.stateHash.toLowerCase() !== reviewedStateHash.toLowerCase()) throw new Error('This report changed on-chain. Review the latest settlement state again.')
+				const block = await getBlock()
+				const clock = hasOpenOracleFlag(current.latest.game, OPEN_ORACLE_FLAG_TIME_TYPE) ? block.timestamp : block.number
+				if (clock === undefined || clock < current.latest.game.reportTimestamp + current.latest.game.settlementTime) throw new Error('This report is not ready to settle. Refresh its settlement time.')
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'settle',
 		hash,
@@ -489,12 +529,23 @@ export async function disputeOracleReport(client: WriteClient, openOracleAddress
 	if (currentStateHash.toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
 	const derivedTokenToSwap = getOpenOracleDisputeSwapToken(state.latest.game, newAmount1, newAmount2)
 	if (derivedTokenToSwap.toLowerCase() !== tokenToSwap.toLowerCase()) throw new Error('The dispute price direction does not match the selected swap token.')
-	const hash = await writeContractAndWait(client, () => ({
+	const callParams = {
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'dispute',
 		args: [reportId, newAmount1, newAmount2, client.account.address, false, false, getOpenOracleGameTuple(state.latest.game), getOpenOracleHelperTuple(state.latest.helper), [0n, 0n, 0n, 0n]],
-	}))
+	}
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: openOracleAddress,
+			validateBeforeSubmit: async () => {
+				const currentState = await requireOpenOracleDisputeSubmissionWindow(client, openOracleAddress, reportId)
+				if (hashOpenOracleStatePreimage(currentState.latest).toLowerCase() !== stateHash.toLowerCase()) throw new Error('This report changed on-chain while the dispute was being prepared. Retry to use the latest state.')
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'dispute',
 		hash,

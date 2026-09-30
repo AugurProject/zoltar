@@ -133,8 +133,6 @@ export async function submitFreshSettlement(client: WalletClient, configuration:
 	if (quote.operation === 'redeem-complete-set') {
 		if (refreshed.operation !== 'redeem-complete-set') throw new Error('Settlement operation changed during revalidation')
 		const minimumEth = retainApprovedMinimum(quote.minimumAttoEth, refreshed.expectedAttoEth, 'ETH output')
-		const feeBlocker = sellHoldingFeeBlocker(refreshed.market, quote.amount, minimumEth, quote.deadline)
-		if (feeBlocker !== undefined) throw new Error(feeBlocker)
 		const invalidTokenId = quote.market.universeId << 8n
 		const data = encodeReceiveBasedRedeemRequest(quote.market, quote.amount, minimumEth, account, quote.deadline)
 		return await guardedWrite(async () => {

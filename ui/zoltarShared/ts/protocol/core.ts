@@ -41,6 +41,7 @@ type ContractCallClient = {
 export type WriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<WriteClient, 'sendTransaction'> &
 	ContractCallClient & {
 		chain?: WriteClient['chain']
+		onTransactionPlan?: WriteClient['onTransactionPlan']
 		onTransactionPrepared?: ((preview: TransactionRequestPreview) => void) | undefined
 		onTransactionSubmitted?: ((hash: Hash) => void) | undefined
 		requiresWalletConfirmation?: boolean | undefined

@@ -32,8 +32,8 @@ async function loadLiveSecurityPoolSettings(client: PublicClient, pool: Address)
 	const block = await client.getBlock()
 	const blockNumber = block.number
 	if (block.hash === null || block.hash === undefined) throw new Error('Latest block identity is unavailable')
-	const oracleValidUntilTimestamp = await loadOracleValidity(client, pool, block.hash)
-	const [questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame] = await Promise.all([
+	const [oracleValidUntilTimestamp, questionData, zoltar, parent, shareTokenSupplyAttoShares, mintingCapacityCeilingAttoEth, accounting, feeEndTime, systemState, awaitingForkContinuation, vaultCount, forker, escalationGame] = await Promise.all([
+		loadOracleValidity(client, pool, block.hash),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'questionData' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'zoltar' }),
 		client.readContract({ abi: securityPoolAbi, address: pool, blockNumber, functionName: 'parent' }),

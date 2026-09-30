@@ -61,6 +61,7 @@ export function TradingSection({
 	poolState,
 	tradingDetails,
 	selectedPool,
+	oracleManagerDetails,
 	oraclePriceUsable,
 	tradingActiveAction,
 	tradingError,
@@ -117,7 +118,7 @@ export function TradingSection({
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
-	const priceValidUntilTimestamp = getOracleManagerPriceValidUntilTimestamp(selectedPool?.lastOracleSettlementTimestamp)
+	const priceValidUntilTimestamp = getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp)
 	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable, currentTimestamp, priceValidUntilTimestamp)
 	const mintGuardMessage =
 		oraclePriceGuardMessage ??

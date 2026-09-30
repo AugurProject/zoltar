@@ -38,24 +38,33 @@ export async function reportOutcomeWithWalletViaVault(client: WriteClient, secur
 		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(actualReportAmount, 18)),
 		reviewAmount: `${formatUnits(actualReportAmount, 18)} REP`,
 	} as const
+	const validateBeforeSubmit = async (depositing: boolean) => {
+		const latest = await loadReportingDetails(client, securityPoolAddress, client.account.address)
+		if (latest.status !== 'active' || !latest.forkContinuation || latest.systemState !== 'operational' || latest.escalationGameAddress !== details.escalationGameAddress || latest.universeId !== details.universeId) throw new Error('The pool state changed.')
+		const [acceptedAmount] = await client.readContract({ address: latest.escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), reportAmount] })
+		if (acceptedAmount !== actualReportAmount) throw new Error('The report amount changed.')
+		if (depositing) {
+			if (getReportingWalletFundingQuote(latest, actualReportAmount)?.depositAmount !== depositAmount) throw new Error('The required vault deposit changed. Review the amount again.')
+			if ((latest.viewerWalletRepBalanceAttoRep ?? 0n) < depositAmount || (latest.viewerWalletRepAllowanceAttoRep ?? 0n) < depositAmount) throw new Error('Check your wallet REP balance and approval before reporting.')
+			const currentTarget = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps' })
+			if (currentTarget !== target) throw new Error('The pool commitment target changed. Review the deposit again.')
+		} else if ((latest.viewerPoolHeldVaultRepBackingAttoRep ?? 0n) < actualReportAmount) throw new Error('Vault REP backing changed. Review the report again.')
+		const block = await client.getBlock()
+		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: latest.escalationEndTime })
+		if (timingGuard !== undefined) throw new Error(timingGuard)
+	}
 	client.onTransactionPlan?.([
-		{ ...deposit, contractAddress: securityPoolAddress },
-		{ ...report, contractAddress: securityPoolAddress },
+		{ ...deposit, contractAddress: securityPoolAddress, validateBeforeSubmit: async () => await validateBeforeSubmit(true) },
+		{ ...report, contractAddress: securityPoolAddress, validateBeforeSubmit: async () => await validateBeforeSubmit(false) },
 	])
 	await writeContractAndWait(client, () => deposit)
 	onVaultFunded()
 	try {
-		const latest = await loadReportingDetails(client, securityPoolAddress, client.account.address)
-		if (latest.status !== 'active' || !latest.forkContinuation || latest.systemState !== 'operational') throw new Error('The pool state changed.')
-		const [acceptedAmount] = await client.readContract({ address: latest.escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), reportAmount] })
-		if (acceptedAmount !== actualReportAmount) throw new Error('The report amount changed.')
-		const block = await client.getBlock()
-		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: latest.escalationEndTime })
-		if (timingGuard !== undefined) throw new Error(timingGuard)
+		await validateBeforeSubmit(false)
 		const hash = await writeContractAndWait(client, () => report)
 		return { action: 'reportOutcome', hash, outcome, securityPoolAddress, universeId: details.universeId } satisfies ReportingActionResult
 	} catch (error) {
 		// Keep partial completion visible even when the remaining review was canceled.
-		throw new Error(`Your REP was deposited into your vault, but the report did not complete. ${getErrorMessage(error, 'Review the report before retrying.')}`)
+		throw new Error(`Your REP was deposited into your vault, but the report did not complete. Use Pool vault REP to retry without another wallet deposit. ${getErrorMessage(error, 'Review the report before retrying.')}`)
 	}
 }

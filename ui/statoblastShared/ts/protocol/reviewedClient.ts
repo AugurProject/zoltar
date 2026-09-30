@@ -9,7 +9,6 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
-import { requireOpenOracleDisputeSubmissionWindow } from './openOracleDisputeTiming.js'
 
 async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
@@ -135,6 +134,14 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
+				const gasPrice = await client.getGasPrice()
+				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
+				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
+				await validate()
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				controller.assertActive()
+			}
 			const currentFunding = await expected.refreshFundingRequirements?.()
 			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
 				const spender = expected.contractAddress
@@ -148,21 +155,9 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
-			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
-				const gasPrice = await client.getGasPrice()
-				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
-				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
-				await validate()
-				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-				controller.assertActive()
-			}
-			if (transaction.functionName === 'dispute') {
-				const reportId = transaction.args?.[0]
-				if (transaction.contractAddress === undefined || typeof reportId !== 'bigint') throw new Error('Missing oracle dispute details. Review the action again.')
-				await requireOpenOracleDisputeSubmissionWindow(client, transaction.contractAddress, reportId)
-				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-				controller.assertActive()
-			}
+			await expected.validateBeforeSubmit?.()
+			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs)
 			controller.submitted(hash)

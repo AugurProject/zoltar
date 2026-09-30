@@ -23,14 +23,17 @@ export async function startTruthAuctionForSecurityPool(client: WriteClient, secu
 }
 export async function submitTruthAuctionBid(client: WriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) {
 	return await executeForkAuctionAction('submitBid', securityPoolAddress, universeId, async () => {
-		const [auctionStarted, finalized, currentBlock] = await Promise.all([
-			client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'auctionStarted' }),
-			client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'finalized' }),
-			client.getBlock(),
-		])
-		if (finalized) throw new Error('Truth auction is already finalized.')
-		const timingGuardMessage = getTruthAuctionBidTimingGuardMessage(currentBlock.timestamp, getTruthAuctionEndsAt(auctionStarted))
-		if (timingGuardMessage !== undefined) throw new Error(timingGuardMessage)
+		const validateBeforeSubmit = async () => {
+			const [auctionStarted, finalized, currentBlock] = await Promise.all([
+				client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'auctionStarted' }),
+				client.readContract({ address: truthAuctionAddress, abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi, functionName: 'finalized' }),
+				client.getBlock(),
+			])
+			if (finalized) throw new Error('Truth auction is already finalized.')
+			const timingGuardMessage = getTruthAuctionBidTimingGuardMessage(currentBlock.timestamp, getTruthAuctionEndsAt(auctionStarted))
+			if (timingGuardMessage !== undefined) throw new Error(timingGuardMessage)
+		}
+		await validateBeforeSubmit()
 		const callParams = {
 			address: truthAuctionAddress,
 			abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
@@ -38,6 +41,16 @@ export async function submitTruthAuctionBid(client: WriteClient, securityPoolAdd
 			args: [tick],
 			value: amount,
 		}
+		client.onTransactionPlan?.([
+			{
+				...callParams,
+				contractAddress: truthAuctionAddress,
+				validateBeforeSubmit: async () => {
+					if ((await client.getBalance({ address: client.account.address })) < amount) throw new Error('Insufficient ETH balance for this bid. Gas is additional.')
+					await validateBeforeSubmit()
+				},
+			},
+		])
 		return await writeContractAndWait(client, () => callParams)
 	})
 }

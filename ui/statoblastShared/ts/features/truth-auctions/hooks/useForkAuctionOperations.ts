@@ -1,3 +1,4 @@
+import { getUnresolvedEscalationMigrationSubmissionGuard } from '../../../protocol/forkMigrationTiming.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { useSignal } from '@preact/signals'
@@ -307,6 +308,8 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			'migrateUnresolvedEscalation',
 			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
+				const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: details.currentTime, migrationEndsAt: details.migrationEndsAt })
+				if (timingGuard !== undefined) throw new Error(timingGuard)
 				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
 			},
 			'Failed to clear unresolved parent escalation-deposit accounting',

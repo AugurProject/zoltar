@@ -1,4 +1,4 @@
-import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { deriveHasForkActivity } from './forkActivity.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
@@ -15,7 +15,7 @@ import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
 
 import { TRUTH_AUCTION_TIME_LENGTH } from './truthAuctionTiming.js'
 
-const MIGRATION_TIME_LENGTH = 4838400n
+import { FORK_MIGRATION_DURATION_SECONDS, getUnresolvedEscalationMigrationSubmissionGuard } from './forkMigrationTiming.js'
 type AuctionClearingTuple = readonly [boolean, bigint, bigint, bigint]
 export async function loadForkOutcomeMigrationSeedStatus(
 	client: Pick<ReadClient, 'readContract'>,
@@ -157,7 +157,7 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 		systemState,
 		truthAuctionStartedAt,
 	})
-	const migrationEndsAt = forkActivationTime === 0n ? undefined : forkActivationTime + MIGRATION_TIME_LENGTH
+	const migrationEndsAt = forkActivationTime === 0n ? undefined : forkActivationTime + FORK_MIGRATION_DURATION_SECONDS
 	let truthAuction: TruthAuctionMetrics | undefined
 	if (truthAuctionAddress !== zeroAddress && truthAuctionStartedAt > 0n) {
 		const [computeClearingResult, attoEthRaiseCap, attoEthRaised, finalized, maxAttoRepBeingSold, minBidSizeAttoEth, totalAttoRepPurchased, underfunded, underfundedThreshold, underfundedWinningAttoEth, storedClearingTick] = await readRequiredMulticall(client, [
@@ -377,19 +377,36 @@ export async function claimParentEscalationDeposits(client: WriteClient, securit
 }
 export async function migrateVaultWithUnresolvedEscalation(client: WriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
 	const outcomeIndex = getReportingOutcomeValue(outcome)
-	return await executeForkAuctionAction(
-		'migrateUnresolvedEscalation',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'migrateVaultWithUnresolvedEscalation',
-				args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
-			})),
-	)
+	return await executeForkAuctionAction('migrateUnresolvedEscalation', securityPoolAddress, universeId, async () => {
+		const forker = getInfraContractAddresses().securityPoolForker
+		const validateTiming = async () => {
+			const forkData = requireForkDataView(await client.readContract({ address: forker, abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, functionName: 'forkData', args: [securityPoolAddress] }))
+			const block = await client.getBlock()
+			const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: block.timestamp, migrationEndsAt: forkData.forkActivationTime === 0n ? undefined : forkData.forkActivationTime + FORK_MIGRATION_DURATION_SECONDS })
+			if (timingGuard !== undefined) throw new Error(timingGuard)
+		}
+		await validateTiming()
+		const callParams = {
+			address: forker,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'migrateVaultWithUnresolvedEscalation',
+			args: [securityPoolAddress, vaultAddress, BigInt(outcomeIndex)],
+		}
+		client.onTransactionPlan?.([
+			{
+				...callParams,
+				contractAddress: forker,
+				validateBeforeSubmit: async () => {
+					await validateTiming()
+					await client.estimateGas({ account: client.account, to: forker, data: encodeFunctionData(callParams) })
+					await validateTiming()
+				},
+			},
+		])
+		return await writeContractAndWait(client, () => callParams)
+	})
 }
+
 export async function forkUniverseDirectly(client: WriteClient, universeId: bigint, questionId: bigint, securityPoolAddress: Address) {
 	const hash = await writeContractAndWait(client, () => ({
 		address: getInfraContractAddresses().zoltar,

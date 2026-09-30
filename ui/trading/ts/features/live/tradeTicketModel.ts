@@ -1,4 +1,4 @@
-import { submissionWindowBlocker } from '../../protocol/submissionWindow.js'
+import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, maximumInsuredExit, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
@@ -211,7 +211,7 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 		problem,
 		insufficient,
 		shortfall === undefined ? undefined : ticketCopy.invalidCoverageReason,
-		estimate?.kind === 'exit' ? sellHoldingFeeBlocker(market, estimate.quote.completeSetShares, estimate.minimumAttoEth, (market.valuation?.timestamp ?? 0n) + settings.validityMinutes * 60n) : undefined,
+		estimate?.kind === 'exit' ? sellHoldingFeeBlocker(market, estimate.quote.completeSetShares, estimate.minimumAttoEth, capSubmissionDeadline(market, mode, inputs.nowSeconds + settings.validityMinutes * 60n)) : undefined,
 		impactTier === 'blocked' ? ticketCopy.priceImpactBlockedReason : undefined,
 		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,

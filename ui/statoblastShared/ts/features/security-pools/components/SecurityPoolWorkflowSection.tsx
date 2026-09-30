@@ -280,7 +280,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 							/>
 						) : undefined}
 
-						{view === 'trading' ? <SelectedPoolTradingPanel currentPoolOraclePriceUsable={model.currentPoolOraclePriceUsable} poolState={selectedPoolStateModel} selectedPool={loadedSelectedPool} trading={trading} /> : undefined}
+						{view === 'trading' ? <SelectedPoolTradingPanel currentPoolOracleManagerDetails={currentPoolOracleManagerDetails} currentPoolOraclePriceUsable={model.currentPoolOraclePriceUsable} poolState={selectedPoolStateModel} selectedPool={loadedSelectedPool} trading={trading} /> : undefined}
 
 						{view === 'reporting' ? (
 							<SelectedPoolReportingPanel

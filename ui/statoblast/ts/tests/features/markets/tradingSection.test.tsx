@@ -1,3 +1,4 @@
+import { createOracleManagerDetails } from '../security-pools/workflow/builders.js'
 import { evaluateSecurityPoolState } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolState.js'
 import { createMarketDetails } from '@zoltar/ui-core-shared/tests/testUtils/marketFixtures.js'
 /// <reference types="bun-types" />
@@ -271,6 +272,32 @@ void describe('TradingSection', () => {
 			cleanupRenderedComponent = undefined
 		},
 	})
+
+	for (const [summarySettlement, liveSettlement, disabled] of [
+		[1n, 1000n, false],
+		[1000n, 1n, true],
+	] as const) {
+		test(`uses live oracle settlement for mint timing (${summarySettlement}, ${liveSettlement})`, async () => {
+			const props = createTradingSectionProps({ selectedPool: createSelectedPool({ lastOracleSettlementTimestamp: summarySettlement }), oracleManagerDetails: createOracleManagerDetails({ lastSettlementTimestamp: liveSettlement }) })
+			const rendered = await renderIntoDocument(
+				<ChainTimestampContext.Provider value={1n}>
+					<TradingSection {...props} />
+				</ChainTimestampContext.Provider>,
+			)
+			cleanupRenderedComponent = rendered.cleanup
+			fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+			await act(() =>
+				render(
+					<ChainTimestampContext.Provider value={3541n}>
+						<TradingSection {...props} />
+					</ChainTimestampContext.Provider>,
+					rendered.container,
+				),
+			)
+			const dialog = within(document.body).getByRole('dialog')
+			expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(disabled)
+		})
+	}
 
 	test('blocks an open mint form when oracle validity falls to the inclusion reserve', async () => {
 		const onCreateCompleteSet = mock(() => undefined)
