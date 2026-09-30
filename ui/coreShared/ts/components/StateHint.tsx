@@ -1,5 +1,5 @@
 import type { ComponentChildren } from 'preact'
-import { LoadingAwareText } from './LoadingText.js'
+import { UserMessage, type UserMessageTone } from './UserMessage.js'
 import type { UserMessagePresentation } from '../lib/userCopy.js'
 
 type StateHintProps = {
@@ -14,21 +14,9 @@ type StateHintProps = {
 export function StateHint({ actions, announcement, className = '', id, presentation, title }: StateHintProps) {
 	const hasVisibleCopy = title !== undefined || presentation.detail !== undefined || presentation.actionHint !== undefined || actions !== undefined
 	const fallbackTitle = hasVisibleCopy ? undefined : presentation.badgeLabel
-	let announcementRole: 'alert' | 'status' | undefined
-	if (announcement === 'assertive') announcementRole = 'alert'
-	if (announcement === 'polite') announcementRole = 'status'
-
-	return (
-		<div id={id} aria-atomic={announcement === undefined ? undefined : 'true'} aria-live={announcement} className={`state-hint ${className}`.trim()} role={announcementRole}>
-			{title === undefined ? undefined : <h3>{title}</h3>}
-			{fallbackTitle === undefined ? undefined : <h3>{fallbackTitle}</h3>}
-			{presentation.detail === undefined ? undefined : (
-				<p className='detail'>
-					<LoadingAwareText loading={presentation.detailIsLoading === true}>{presentation.detail}</LoadingAwareText>
-				</p>
-			)}
-			{presentation.actionHint === undefined ? undefined : <p className='detail'>{presentation.actionHint}</p>}
-			{actions === undefined ? undefined : <div className='actions state-hint-actions'>{actions}</div>}
-		</div>
-	)
+	let tone: UserMessageTone = 'neutral'
+	if (presentation.badgeTone === 'warning' || presentation.badgeTone === 'blocked') tone = 'warning'
+	if (presentation.badgeTone === 'ok') tone = 'success'
+	if (presentation.badgeTone === 'danger' || presentation.key === 'load_failed') tone = 'error'
+	return <UserMessage tone={tone} id={id} announcement={announcement} className={className} placement='section' title={title ?? fallbackTitle} detail={presentation.detail} loading={presentation.detailIsLoading === true} actionHint={presentation.actionHint} actions={actions} />
 }

@@ -50,11 +50,11 @@ export function PoolDirectoryRow({
 			<div className='pool-directory-identity'>
 				<div className='pool-directory-heading'>
 					<FavoriteToggle app='statoblast' entityLabel={title} id={pool.securityPoolAddress} kind='pool' />
+					<h3>{title}</h3>
 					<Badge ariaLabel={status} tone={getSecurityPoolStatusBadgeTone(lifecycleState)}>
 						{status}
 					</Badge>
 				</div>
-				<h3>{title}</h3>
 				<div className='pool-directory-meta'>
 					<AddressValue address={pool.securityPoolAddress} responsiveAbbreviation />
 					<span>

@@ -25,9 +25,9 @@ describe('UI Docker packaging', () => {
 				if (instruction.keyword !== 'RUN') continue
 				const app = /production\.mts (zoltar|statoblast|trading)/u.exec(instruction.value)?.[1]
 				if (app === undefined) continue
-				// Every app loads the Zoltar feature sheet; Statoblast adds its own and Trading adds its app sheet.
+				// Trading and Statoblast both consume the shared oracle stylesheet.
 				const packages = ['zoltarShared']
-				if (app === 'statoblast') packages.push('statoblastShared')
+				if (app === 'statoblast' || app === 'trading') packages.push('statoblastShared')
 				if (app === 'trading') packages.push('trading')
 				for (const sharedPackage of packages) {
 					expect(copies).toContain(`./ui/${sharedPackage}/css/ /source/ui/${sharedPackage}/css/`)
