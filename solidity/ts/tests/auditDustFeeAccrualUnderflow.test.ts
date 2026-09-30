@@ -51,7 +51,7 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 		securityPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
 		const minimumVaultRepDepositAttoRep = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'minimumVaultRepDepositAttoRep' })
 		await approveAndDepositRepToVault(client, minimumVaultRepDepositAttoRep, questionId)
-		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPool, minimumVaultRepDepositAttoRep / 2n)
 		await setBaselineSnapshot()
 	})

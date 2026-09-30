@@ -26,14 +26,14 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 	const { feed, activityDetailState, canonicalState, element, number, api, syncCanonicalDialogStatus, clearDetailUrl, errorMessage, detailCard, evidenceDetailCard, addressDetailCard, decodedArgumentsTable } = deps
 	const eventDrawers = () => [...document.querySelectorAll<HTMLElement>('.event-detail-drawer')]
 
-	const eventDrawerFor = (key: string) => eventDrawers().find(drawer => drawer.dataset.triggerKey === key)
+	const eventDrawerFor = (key: string) => eventDrawers().find(drawer => drawer.dataset['triggerKey'] === key)
 
 	const drawerRequests = new WeakMap<HTMLElement, number>()
 
 	const drawerLogs = new WeakMap<HTMLElement, ActivityRecord | LogReference>()
 
 	const updateLogDisclosures = () => {
-		for (const row of feed.querySelectorAll<HTMLElement>('.log-row')) row.querySelector('.event-name')?.setAttribute('aria-expanded', String(eventDrawerFor(row.dataset.liveKey ?? '') !== undefined))
+		for (const row of feed.querySelectorAll<HTMLElement>('.log-row')) row.querySelector('.event-name')?.setAttribute('aria-expanded', String(eventDrawerFor(row.dataset['liveKey'] ?? '') !== undefined))
 	}
 
 	const removeEventDrawers = () => {
@@ -43,7 +43,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 
 	const closeEventDrawer = ({ clearUrl = true, restoreFocus = false, key }: { clearUrl?: boolean; restoreFocus?: boolean; key?: string } = {}) => {
 		const drawer = key === undefined ? eventDrawers().at(-1) : eventDrawerFor(key)
-		const triggerKey = drawer?.dataset.triggerKey
+		const triggerKey = drawer?.dataset['triggerKey']
 		if (key === undefined) {
 			activityDetailState.detailContextVersion++
 			activityDetailState.detailRequestVersion++
@@ -60,7 +60,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 		if (clearUrl && (key === undefined || new URL(location.href).searchParams.get('log') === key)) clearDetailUrl()
 		if (restoreFocus && triggerKey)
 			[...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')]
-				.find(row => row.dataset.liveKey === triggerKey)
+				.find(row => row.dataset['liveKey'] === triggerKey)
 				?.querySelector<HTMLElement>('button')
 				?.focus({ preventScroll: true })
 	}
@@ -93,7 +93,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 
 	const collapsibleDetailCard = (title: string, disclosureKey: string, ...content: Node[]): HTMLDetailsElement => {
 		const card = element('details', 'detail-card detail-disclosure wide')
-		card.dataset.disclosureKey = disclosureKey
+		card.dataset['disclosureKey'] = disclosureKey
 		card.append(element('summary', '', title), ...content)
 		return card
 	}
@@ -138,7 +138,7 @@ export const createEventDetailRoute = (deps: EventDetailRouteDeps) => {
 			canonicalStatus.setAttribute('aria-live', 'polite')
 			drawer.append(canonicalStatus, drawerContent)
 		}
-		drawer.dataset.triggerKey = logKeyFor(log)
+		drawer.dataset['triggerKey'] = logKeyFor(log)
 		updateLogDisclosures()
 		placeEventDrawer(drawer)
 		syncCanonicalDialogStatus()

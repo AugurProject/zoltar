@@ -11,7 +11,6 @@ import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 library SecurityPoolUtils {
 	event VaultBadDebtMigrated(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 migratedBadDebtAttoEth, uint256 resultingParentTotalBadDebtAttoEth, uint256 resultingChildTotalBadDebtAttoEth);
 	uint256 constant MIGRATION_TIME = 8 weeks;
-	uint256 constant AUCTION_TIME = 1 weeks;
 
 	// fees
 	uint256 constant PRICE_PRECISION = 1e18;

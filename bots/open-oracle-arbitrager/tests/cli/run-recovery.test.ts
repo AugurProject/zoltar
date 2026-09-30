@@ -33,12 +33,14 @@ const recoveryConfiguration = {
 	network: { weth },
 	openOracle: getAddress('0x0000000000000000000000000000000000000006'),
 	quorumRpcUrls: ['https://secondary.example'],
+	rpcQuorum: 1 as const,
 	submission: { mode: 'private' as const },
 }
 
 const resilientRecoveryConfiguration = {
 	...recoveryConfiguration,
 	quorumRpcUrls: ['https://secondary.example', 'https://offline.example'],
+	rpcQuorum: 1 as const,
 }
 
 describe('execution lock lifecycle', () => {
@@ -562,16 +564,10 @@ describe('atomic lifecycle crash recovery', () => {
 	})
 
 	test('classifies fewer than two available finality descendants as degraded connectivity', async () => {
-		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-		process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
 		const position = withdrawingPosition()
-		try {
-			const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), recoveryConfiguration, position, 100n)
-			await expect(finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [1]), recoveryConfiguration, provisional, 112n)).rejects.toBeInstanceOf(ConnectivityDegradedError)
-		} finally {
-			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-		}
+		const quorumTwoConfiguration = { ...recoveryConfiguration, rpcQuorum: 2 as const }
+		const provisional = await recoverPendingLifecycleWithQuorum(lifecycleReceiptClients(), quorumTwoConfiguration, position, 100n)
+		await expect(finalizeLifecycleAfterFinalityWithQuorum(lifecycleReceiptClients(100n, undefined, 0n, [1]), quorumTwoConfiguration, provisional, 112n)).rejects.toBeInstanceOf(ConnectivityDegradedError)
 	})
 
 	test('finalizes successful lifecycle evidence when two readers agree and a third is offline', async () => {

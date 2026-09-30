@@ -52,7 +52,7 @@ export const createNetworkRoute = (deps: NetworkRouteDeps) => {
 		const selected = selectedChainId()
 		globalNetworkFilter.replaceChildren(...items.map((network: { name: string; chain_id: string }) => new Option(network.name, network.chain_id)))
 		globalNetworkFilter.value = [...globalNetworkFilter.options].some(option => option.value === selected) ? selected : String(items[0]?.chain_id ?? '')
-		globalNetworkFilter.dataset.restored = 'true'
+		globalNetworkFilter.dataset['restored'] = 'true'
 		syncNetworkUrl()
 		updateNetworkLabels()
 	}

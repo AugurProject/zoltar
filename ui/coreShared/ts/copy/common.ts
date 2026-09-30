@@ -6,6 +6,8 @@ export const amount = 'Amount'
 export const approvingRep = 'Approving REP…'
 export const cancel = 'Cancel'
 export const walletConnectionRequired = 'Connect wallet to continue.'
+export const formatConnectWalletBefore = (action: string) => `Connect a wallet before ${action}.`
+export const invalidQuestionId = 'Enter a valid hexadecimal question ID.'
 export const copied = 'Copied'
 export const copiedAddress = 'Copied address'
 export const copyFailed = 'Copy failed — select the value and copy it manually.'

@@ -54,7 +54,7 @@ const createPoolRead = ({
 const createDeployment = (securityPool: Address, { parent = zeroAddress, universeId = 1n }: { parent?: Address; universeId?: bigint } = {}) => ({
 	initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 	parent,
-	priceOracleManagerAndOperatorQueuer: zeroAddress,
+	openOraclePriceCoordinator: zeroAddress,
 	questionId: 1n,
 	statoblastSecurityMultiplierBps: 20_000n,
 	securityPool,

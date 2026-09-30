@@ -132,7 +132,11 @@ const shuffle = <T>(values: readonly T[], seed: bigint): T[] => {
 	}
 	for (let index = result.length - 1; index > 0; index -= 1) {
 		const swapIndex = Number.parseInt((next() % BigInt(index + 1)).toString(), 10)
-		;[result[index], result[swapIndex]] = [result[swapIndex], result[index]]
+		const current = result[index]
+		const swapped = result[swapIndex]
+		if (current === undefined || swapped === undefined) throw new Error('shuffle index is out of range')
+		result[index] = swapped
+		result[swapIndex] = current
 	}
 	return result
 }
@@ -233,7 +237,7 @@ describe('Statoblast invariant harness', () => {
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await setVaultCapacityFixture(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createClient(2)
 		await createCompleteSet(openInterestHolder, context.securityPool, openInterestAmount)
@@ -416,19 +420,19 @@ describe('Statoblast invariant harness', () => {
 				[
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 3n),
+						execute: async () => await setVaultCapacityFixture(client, mockWindow, firstPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 3n),
 					},
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(actorA, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, actorA.account.address, repDeposit / 5n),
+						execute: async () => await setVaultCapacityFixture(actorA, mockWindow, firstPoolAddresses.openOraclePriceCoordinator, actorA.account.address, repDeposit / 5n),
 					},
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(client, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n),
+						execute: async () => await setVaultCapacityFixture(client, mockWindow, secondPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n),
 					},
 					{
 						name: 'capacity ownership',
-						execute: async () => await setVaultCapacityFixture(actorB, mockWindow, secondPoolAddresses.priceOracleManagerAndOperatorQueuer, actorB.account.address, repDeposit / 6n),
+						execute: async () => await setVaultCapacityFixture(actorB, mockWindow, secondPoolAddresses.openOraclePriceCoordinator, actorB.account.address, repDeposit / 6n),
 					},
 				],
 				seed ^ 0xa110aacen,
@@ -457,7 +461,7 @@ describe('Statoblast invariant harness', () => {
 			}
 
 			await runAction('advance target question to reporting', async () => await mockWindow.setTime(context.questionEndDate + 1n))
-			await runAction('refresh first-pool price for escalation', async () => await setVaultCapacityFixture(client, mockWindow, firstPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 3n))
+			await runAction('refresh first-pool price for escalation', async () => await setVaultCapacityFixture(client, mockWindow, firstPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 3n))
 			const escalationActions = shuffle(
 				[
 					{ name: 'actor A escrows first-pool REP on yes', execute: async () => await depositToEscalationGame(actorA, firstPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit / 10n) },
@@ -603,7 +607,7 @@ describe('Statoblast invariant harness', () => {
 				randomState = (randomState * 6364136223846793005n + 1442695040888963407n) & ((1n << 64n) - 1n)
 				return randomState
 			}
-			const failWithTrace = (error: unknown): never => {
+			function failWithTrace(error: unknown): never {
 				const message = error instanceof Error ? error.message : String(error)
 				throw new Error(`Adversarial invariant seed ${seed.toString()} failed after ${trace.join(' -> ')}: ${message}`, { cause: error })
 			}
@@ -751,7 +755,7 @@ describe('Statoblast invariant harness', () => {
 				{
 					name: 'capacity ownership',
 					enabled: () => completed.has('actor A deposits first pool'),
-					execute: async () => await setVaultCapacityFixture(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 75n * 10n ** 18n),
+					execute: async () => await setVaultCapacityFixture(actorA, mockWindow, firstPool.openOraclePriceCoordinator, actorA.account.address, 75n * 10n ** 18n),
 				},
 				{
 					name: 'actor B opens first-pool interest',
@@ -761,14 +765,14 @@ describe('Statoblast invariant harness', () => {
 				{
 					name: 'actor C withdraws before fork',
 					enabled: () => completed.has('actor C deposits withdrawable REP'),
-					execute: async () => await manipulatePriceOracleAndPerformOperation(actorC, mockWindow, secondPool.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, actorC.account.address, repDeposit),
+					execute: async () => await manipulatePriceOracleAndPerformOperation(actorC, mockWindow, secondPool.openOraclePriceCoordinator, OperationType.WithdrawRep, actorC.account.address, repDeposit),
 				},
 				{
 					name: 'receiver-target alias is rejected atomically',
 					enabled: () => completed.has('actor B opens first-pool interest'),
 					execute: async () => {
 						const before = await readModelSnapshot()
-						await assert.rejects(queueLiquidationAtForcedPrice(actorA, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 10n * 10n ** 18n, 10n * 10n ** 18n), /Receiver is target/)
+						await assert.rejects(queueLiquidationAtForcedPrice(actorA, firstPool.openOraclePriceCoordinator, actorA.account.address, 10n * 10n ** 18n, 10n * 10n ** 18n), /Receiver is target/)
 						assert.deepStrictEqual(await readModelSnapshot(), before, 'rejected receiver-target alias should preserve the complete accounting model')
 					},
 				},
@@ -776,8 +780,8 @@ describe('Statoblast invariant harness', () => {
 					name: 'actor B liquidates actor A',
 					enabled: () => completed.has('receiver-target alias is rejected atomically') && completed.has('actor B deposits first pool'),
 					execute: async () => {
-						await queueLiquidationAtForcedPrice(actorB, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, 25n * 10n ** 18n, 10n * 10n ** 18n)
-						await handleOracleReporting(actorB, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, 10n * 10n ** 18n)
+						await queueLiquidationAtForcedPrice(actorB, firstPool.openOraclePriceCoordinator, actorA.account.address, 25n * 10n ** 18n, 10n * 10n ** 18n)
+						await handleOracleReporting(actorB, mockWindow, firstPool.openOraclePriceCoordinator, 10n * 10n ** 18n)
 					},
 				},
 				{
@@ -804,7 +808,7 @@ describe('Statoblast invariant harness', () => {
 					enabled: () => completed.has('advance into reporting'),
 					execute: async () => {
 						const actorAVault = await getSecurityVault(client, firstPool.securityPool, actorA.account.address)
-						await setVaultCapacityFixture(actorA, mockWindow, firstPool.priceOracleManagerAndOperatorQueuer, actorA.account.address, actorAVault.underwritingLimitAttoEth)
+						await setVaultCapacityFixture(actorA, mockWindow, firstPool.openOraclePriceCoordinator, actorA.account.address, actorAVault.underwritingLimitAttoEth)
 					},
 				},
 				{
@@ -956,7 +960,7 @@ describe('Statoblast invariant harness', () => {
 	})
 
 	test('positive-value mint fuzzing always returns shares and preserves unsolicited ETH surplus', async () => {
-		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
+		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator
 		await setVaultCapacityFixture(client, mockWindow, priceOracle, client.account.address, repDeposit / 4n)
 		const forcedSurplus = 17n * 10n ** 18n + 3n
 		await mockWindow.setBalance(context.securityPool, (await getETHBalance(client, context.securityPool)) + forcedSurplus)
@@ -986,7 +990,7 @@ describe('Statoblast invariant harness', () => {
 	] as const)('LIFE-02 fixed-point: stateful $path-fork progress survives forced balances, empty auctions, and repeated calls', async ({ path, seed }) => {
 		const parentAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps)
 		const underwritingLimitAttoEth = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
+		await setVaultCapacityFixture(client, mockWindow, parentAddresses.openOraclePriceCoordinator, client.account.address, underwritingLimitAttoEth)
 		const shareHolder = createClient(2)
 		const mintAmount = (seed % (5n * 10n ** 18n)) + 1n * 10n ** 18n
 		await createCompleteSet(shareHolder, context.securityPool, mintAmount)
@@ -996,7 +1000,7 @@ describe('Statoblast invariant harness', () => {
 			const forkThresholdAttoRep = ((await getZoltarForkThreshold(client, genesisUniverse)) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(context.questionEndDate + 1n)
-			await manipulatePriceOracle(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, parentAddresses.openOraclePriceCoordinator)
 			await triggerOwnGameFork(client, context.securityPool)
 		} else {
 			await triggerExternalForkForSecurityPool(undefined, 'stateful lifecycle fork source')
@@ -1072,7 +1076,7 @@ describe('Statoblast invariant harness', () => {
 		await approveAndDepositRepToVault(attackerClient, repDeposit, context.questionId)
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(context.questionEndDate + 1n)
-		const coordinator = getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
+		const coordinator = getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator
 		await manipulatePriceOracle(client, mockWindow, coordinator)
 		await triggerOwnGameFork(client, context.securityPool)
 
@@ -1148,7 +1152,7 @@ describe('Statoblast invariant harness', () => {
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(context.questionEndDate + 10n)
-		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator)
 		await triggerOwnGameFork(client, context.securityPool)
 
 		const migrationProxyAddress = await getMigrationProxyAddress(client, context.securityPool)
@@ -1176,9 +1180,9 @@ describe('Statoblast invariant harness', () => {
 				args: [],
 			})
 
-		await setVaultCapacityFixture(client, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
+		await setVaultCapacityFixture(client, mockWindow, parentAddresses.openOraclePriceCoordinator, client.account.address, underwritingLimitAttoEth)
 		await approveAndDepositRepToVault(unmigratedUnderwritingLimitAttoEthHolder, repDeposit, context.questionId)
-		await setVaultCapacityFixture(unmigratedUnderwritingLimitAttoEthHolder, mockWindow, parentAddresses.priceOracleManagerAndOperatorQueuer, unmigratedUnderwritingLimitAttoEthHolder.account.address, underwritingLimitAttoEth)
+		await setVaultCapacityFixture(unmigratedUnderwritingLimitAttoEthHolder, mockWindow, parentAddresses.openOraclePriceCoordinator, unmigratedUnderwritingLimitAttoEthHolder.account.address, underwritingLimitAttoEth)
 		await createCompleteSet(openInterestHolder, context.securityPool, 10n * 10n ** 18n)
 		const operationalAccounting = await readAccounting(context.securityPool)
 		const operationalVault = await getSecurityVault(client, context.securityPool, client.account.address)
@@ -1391,7 +1395,7 @@ describe('Statoblast invariant harness', () => {
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, getRepTokenAddress(genesisUniverse))) / 20n
 		await depositRepToVault(client, context.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(context.questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator)
 		await triggerOwnGameFork(client, context.securityPool)
 		await migrateRepToZoltar(client, context.securityPool, [QuestionOutcome.Yes])
 		await migrateVault(client, context.securityPool, QuestionOutcome.Yes)
@@ -1431,7 +1435,7 @@ describe('Statoblast invariant harness', () => {
 	})
 
 	test('oracle-staged operations cannot be overwritten or executed twice', async () => {
-		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
+		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator
 		const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracle)
 		const queuedOperationCostAttoEth = await getQueuedOperationCostAttoEth(client, priceOracle)
 		const withdrawalAmountsAttoRep = [repDeposit / 4n, repDeposit / 5n, repDeposit / 6n, repDeposit / 7n, repDeposit / 8n]
@@ -1515,7 +1519,7 @@ describe('Statoblast invariant harness', () => {
 		await approveAndDepositRepToVault(vaultB, repDeposit, context.questionId)
 		await approveAndDepositRepToVault(vaultC, repDeposit, context.questionId)
 
-		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer
+		const priceOracle = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator
 		await setVaultCapacityFixture(vaultA, mockWindow, priceOracle, vaultA.account.address, repDeposit / 20n)
 		const vaultBBeforeExit = await getSecurityVault(client, context.securityPool, vaultB.account.address)
 		const vaultBRepClaim = await backingUnitsToAttoRep(client, context.securityPool, vaultBBeforeExit.repBackingUnits)
@@ -1551,7 +1555,7 @@ describe('Statoblast invariant harness', () => {
 		const winningCapacityOwnershipBeforeClaim = (await getSecurityVault(client, context.securityPool, winningVault.account.address)).underwritingLimitAttoEth
 		assert.ok(winningRep >= forkThresholdAttoRep, 'the winning vault should fund the own-fork threshold')
 		assert.ok(losingRep >= forkThresholdAttoRep, 'the losing vault should fund the opposing own-fork threshold')
-		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0n), genesisUniverse, context.questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator)
 		await depositToEscalationGame(winningVault, context.securityPool, QuestionOutcome.Yes, winningRep / 2n)
 		const winningRepRemaining = await backingUnitsToAttoRep(client, context.securityPool, (await getSecurityVault(client, context.securityPool, winningVault.account.address)).repBackingUnits)
 		await depositToEscalationGame(winningVault, context.securityPool, QuestionOutcome.Yes, winningRepRemaining)

@@ -8,7 +8,7 @@ import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { createCompleteSet, getSettlementCollateralAttoEth, getSecurityVault, getSystemState, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
-import { strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
+import { ensureDefined, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'
 import { describe, test } from 'bun:test'
 import { useStatoblastTruthAuctionFixture } from './fixture'
 
@@ -39,7 +39,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 
 		const underwritingLimitAttoEthPerVault = repDeposit / 2n
 		for (const vaultClient of vaultClients) {
-			await setVaultCapacityFixture(vaultClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, vaultClient.account.address, underwritingLimitAttoEthPerVault)
+			await setVaultCapacityFixture(vaultClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, vaultClient.account.address, underwritingLimitAttoEthPerVault)
 		}
 
 		const totalVaultRep = repDeposit * BigInt(vaultClients.length)
@@ -72,7 +72,7 @@ describe('Truth-auction REP donation rounding regression', () => {
 		const migratedAttoRep = await getMigratedAttoRep(client, yesSecurityPool.securityPool)
 		strictEqualTypeSafe(migratedAttoRep, parentForkData.auctionableAttoRepAtFork, 'migrating the complete backingUnits denominator should reconcile every fork-time REP unit')
 
-		const honestVault = await getSecurityVault(client, yesSecurityPool.securityPool, vaultClients[0].account.address)
+		const honestVault = await getSecurityVault(client, yesSecurityPool.securityPool, ensureDefined(vaultClients[0], 'missing honest vault client').account.address)
 		const honestRep = await backingUnitsToAttoRep(client, yesSecurityPool.securityPool, honestVault.repBackingUnits)
 		strictEqualTypeSafe(honestRep, repDeposit, 'the migrated vault should retain its full 1,000 REP claim')
 		strictEqualTypeSafe(honestVault.underwritingLimitAttoEth, underwritingLimitAttoEthPerVault, 'the migrated vault should retain its capacity ownership')

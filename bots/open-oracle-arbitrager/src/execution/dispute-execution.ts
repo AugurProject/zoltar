@@ -2,7 +2,7 @@ import { type Configuration } from '#config/configuration'
 import { openOracleArbitrageExecutorAbi } from '#contracts/abi'
 import type { Pool, ReadClient, WriteClient } from '#core/operator-types'
 import { expectedWithdrawalToken2, hedgedProfitBeforeGasWeth } from '#core/position-accounting'
-import { positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
+import { plannedGasPriceAttoEth, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth } from '#core/safety-controls'
 import {
 	calculateFee,
 	calculateNextAmount1,
@@ -109,7 +109,7 @@ export async function executeDispute(
 		quorumReportStateHash: executionSnapshot.stateHash,
 	})
 	if (pool.venue === 'uniswap-v3' && (executionSnapshot.v3State === undefined || !spotTwapDeviationWithinLimit(executionSnapshot.v3State.spotTick, executionSnapshot.v3State.twapTick, config.maxSpotTwapTicks))) throw new Error('Selected V3 pool failed the final spot/TWAP check')
-	const gasPrice = executionSnapshot.baseFeePerGas * 2n + 2n * 10n ** 9n
+	const gasPrice = plannedGasPriceAttoEth(executionSnapshot.baseFeePerGas)
 	const lifecycleGasReserveAttoWeth = projectedLifecycleGasReserveAttoWeth({
 		callbackGasLimit: BigInt(game.callbackGasLimit),
 		configuredReserveAttoWeth: config.riskLimits.lifecycleGasReserveAttoWeth,
@@ -296,7 +296,7 @@ export async function executeDispute(
 			entryTransactionHashes: [observedReceipt.transactionHash],
 		}
 		await persistPosition(receiptPosition)
-		const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `public entry ${reportId}`, [observedReceipt.transactionHash])
+		const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `public entry ${reportId}`, [observedReceipt.transactionHash], config.rpcQuorum)
 		const receipt = receipts[0]
 		if (receipt === undefined) throw new Error('Public dispute receipt quorum is missing')
 		actualGasCost = receiptGasCost(receipt)
@@ -416,7 +416,7 @@ export async function executeDispute(
 				isPaused,
 				async () => {
 					if ((await currentBlockNumberWithQuorum(readClients, config, 'execution submission head')) !== quoteBlockNumber) throw new Error('Bundle quote expired before submission')
-					const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'execution submission', quoteBlockNumber)
+					const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'execution submission', quoteBlockNumber, config.rpcQuorum)
 					if (canonicalHash.toLowerCase() !== executionSnapshot.blockHash.toLowerCase()) throw new Error('Bundle canonical parent changed before submission')
 					if (!finalMarketPriceAllowsExecution() || !(await marketEvidenceStillCanonical())) throw new Error('Market consensus expired or no longer confirms the price before transaction submission')
 				},

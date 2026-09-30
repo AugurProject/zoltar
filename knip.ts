@@ -136,7 +136,7 @@ const config = (options => {
 					...productionOnly(['src/indexer-process.ts!']),
 					'browser/app.ts!',
 					'tests/**/*.ts',
-					'scripts/{build-browser,build-metadata,prepare-tests,check-import-boundaries,check-project-metadata,dev,report-abi-coverage,serve-demo,snapshot-dependency-abis,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!',
+					'scripts/{build-browser,build-metadata,prepare-tests,check-import-boundaries,check-project-metadata,dev,report-abi-coverage,serve-demo,snapshot-project-metadata,verify-compose-source,verify-export-page}.ts!',
 					'browser/live-app.ts!',
 				],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
@@ -155,7 +155,7 @@ const config = (options => {
 				paths: { ...sharedPackagePaths },
 			},
 			'bots/chaos': {
-				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/{dashboard,formatting,retirement-dashboard}.ts!'],
+				entry: ['src/cli/*.ts!', 'scripts/*.mts!', 'tests/**/*.ts', 'src/dashboard/{dashboard,retirement-dashboard}.ts!'],
 				project: ['**/*.{js,cjs,mjs,jsx,ts,cts,mts,tsx}!'],
 				paths: { ...sharedPackagePaths },
 			},

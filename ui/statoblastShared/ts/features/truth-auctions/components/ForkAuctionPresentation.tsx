@@ -150,25 +150,15 @@ export function renderTruthAuctionSettlementSelectionSummary({
 	)
 }
 
-export function getForkOnlyFallbackText(hasPreviewForkActivity: boolean) {
-	return hasPreviewForkActivity ? commonCopy.metricUnavailablePlaceholder : forkAuctionCopy.forkUnavailablePlaceholder
-}
-
 export function getForkTypeLabel(forkOwnSecurityPool: boolean) {
 	return forkOwnSecurityPool ? forkAuctionCopy.ownEscalationFork : forkAuctionCopy.parentZoltarFork
 }
 
 export function getPreviewForkTypeLabel({ hasPreviewForkActivity, isSyntheticForkTriggerPreview, previewPool }: { hasPreviewForkActivity: boolean; isSyntheticForkTriggerPreview: boolean; previewPool: ListedSecurityPool | undefined }) {
 	if (previewPool === undefined) return commonCopy.metricUnavailablePlaceholder
-	if (!hasPreviewForkActivity) return forkAuctionCopy.forkUnavailablePlaceholder
+	if (!hasPreviewForkActivity) return commonCopy.metricUnavailablePlaceholder
 	if (isSyntheticForkTriggerPreview) return forkAuctionCopy.notChosen
 	return getForkTypeLabel(previewPool.forkOwnSecurityPool)
-}
-export function getPreviewMigrationSummary(previewPool: ListedSecurityPool | undefined, hasPreviewForkActivity: boolean) {
-	if (previewPool === undefined) return commonCopy.metricUnavailablePlaceholder
-	if (!hasPreviewForkActivity) return forkAuctionCopy.forkUnavailablePlaceholder
-	if (previewPool.truthAuctionStartedAt > 0n) return commonCopy.metricUnavailablePlaceholder
-	return commonCopy.metricUnavailablePlaceholder
 }
 export function getForkWorkflowStageAheadMessage(stage: ForkWorkflowSelectionStage, currentStage: ForkWorkflowSelectionStage) {
 	if (getForkWorkflowStageOrder(stage) <= getForkWorkflowStageOrder(currentStage)) return undefined

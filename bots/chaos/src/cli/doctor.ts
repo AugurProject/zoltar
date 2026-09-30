@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
-import { assertDurableDeploymentFactory, assertSepoliaDurableFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
+import { assertDurableDeploymentFactory, assertDurableStateFactories, assertSepoliaDurableFactory } from '../config/deployment-state.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { migrateEmptyBootstrapState } from '../state/bootstrap-migration.ts'
 import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed-contracts'
@@ -332,7 +332,6 @@ async function acquireDoctorLocks(settings: OperatorSettings) {
 			chainId: settings.network.chainId,
 			execute: settings.runtime.execute,
 			privateKey: settings.privateKey,
-			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
 			stateFile: settings.runtime.stateFile,
 		},
 		CHAOS_PROCESS_LOCK_OPTIONS,
@@ -457,7 +456,7 @@ async function runChaosDoctorWithLoaded(loaded: LoadedDoctorSettings, dependenci
 	try {
 		const configuredSigner = loaded.settings.privateKey === undefined ? undefined : privateKeyToAccount(loaded.settings.privateKey).address
 		const storedState = await dependencies.loadState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
-		loaded = { ...loaded, settings: restoreDeploymentForDurableState(loaded.settings, storedState, loaded.needsDeploymentPin) }
+		assertDurableStateFactories(loaded.settings, storedState)
 		const durableState = migrateEmptyBootstrapState(storedState, loaded.settings)
 		const durableScope = assertDoctorDurableStateScope(loaded.settings, durableState, configuredSigner)
 		const companionState = await dependencies.validateCompanionState(loaded.settings)

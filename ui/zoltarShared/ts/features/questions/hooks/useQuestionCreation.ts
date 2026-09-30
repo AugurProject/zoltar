@@ -16,6 +16,7 @@ import type { MarketFormState, TransactionLifecycleParameters, WriteOperationCon
 import type { DeploymentStatus, MarketCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { useZoltarOperations } from '../../universes/hooks/useZoltarOperations.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export type UseQuestionCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -195,7 +196,7 @@ export function useQuestionCreation(
 			await runWriteAction(
 				{
 					accountAddress,
-					missingWalletMessage: 'Connect a wallet before creating a question',
+					missingWalletMessage: commonCopy.formatConnectWalletBefore('creating a question'),
 					onRefreshError: (message, hash) => {
 						questionFeedback.value = { storageKey: submittedQuestionActionScopeKey, value: createWarningActionFeedback('createMarket', 'Question created', message, hash) }
 						const result = getValueForStorageKey(questionResult.value, submittedQuestionActionScopeKey)

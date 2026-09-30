@@ -1,6 +1,5 @@
-import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { formatQuestionIdHex, normalizeQuestionId, parseQuestionIdInput } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { withReadTimeout } from '@zoltar/ui-core-shared/lib/promise.js'
-import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useSignal } from '@preact/signals'
@@ -25,6 +24,7 @@ import { tryParseInitialReportPriorityFeeInput } from '../lib/priorityFee.js'
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { MarketFormState, SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -39,14 +39,6 @@ function resolveSecurityPoolQuestionLookupInput(marketIdInput: string) {
 	const marketId = marketIdInput.trim()
 	if (marketId === '') return undefined
 	return normalizeQuestionId(marketId)
-}
-
-function parseQuestionIdInput(marketId: string) {
-	const trimmedMarketId = marketId.trim()
-	if (trimmedMarketId === '') throw new Error('Question ID is required')
-	const normalized = normalizeQuestionId(trimmedMarketId)
-	if (normalized === undefined) throw new Error('Enter a valid hexadecimal question ID.')
-	return BigInt(normalized)
 }
 
 export function useSecurityPoolCreation({
@@ -158,13 +150,13 @@ export function useSecurityPoolCreation({
 					existingQuestionCheck.value = { status: 'available' }
 					return
 				}
-				existingQuestionCheck.value = { status: 'existing', questionId: getQuestionIdHex(questionId), poolAddress: undefined }
+				existingQuestionCheck.value = { status: 'existing', questionId: formatQuestionIdHex(questionId), poolAddress: undefined }
 				const multiplier = tryParseStatoblastSecurityMultiplierBpsInput(securityPoolForm.value.statoblastSecurityMultiplierBps)
 				const fee = tryParseInitialReportPriorityFeeInput(securityPoolForm.value.initialReportPriorityFeeNanoEth)
 				if (multiplier === undefined || fee === undefined) return
 				try {
 					const poolAddress = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, multiplier, fee))
-					if (isCurrent()) existingQuestionCheck.value = { status: 'existing', questionId: getQuestionIdHex(questionId), poolAddress }
+					if (isCurrent()) existingQuestionCheck.value = { status: 'existing', questionId: formatQuestionIdHex(questionId), poolAddress }
 				} catch (error) {
 					if (!isRecoverableContractReadError(error)) throw error
 					// The question lookup already confirmed that the existing-question path is available.
@@ -240,7 +232,7 @@ export function useSecurityPoolCreation({
 			await runWriteAction(
 				{
 					accountAddress,
-					missingWalletMessage: 'Connect a wallet before creating a security pool',
+					missingWalletMessage: commonCopy.formatConnectWalletBefore('creating a security pool'),
 					reviewSignal: review.signal,
 					onRefreshError: (message, hash) => {
 						securityPoolCreationFeedback.value = createWarningActionFeedback('createSecurityPool', 'Security pool created', message, hash)
@@ -273,7 +265,7 @@ export function useSecurityPoolCreation({
 
 					if (newQuestionForm !== undefined && newQuestionForm.marketType !== 'binary') throw new Error('Security pools require a binary question')
 					const newQuestion = newQuestionForm === undefined ? undefined : createMarketParameters(newQuestionForm)
-					const parameters = createSecurityPoolParameters(newQuestion === undefined ? submittedSecurityPoolForm : { ...submittedSecurityPoolForm, marketId: getQuestionIdHex(getQuestionId(newQuestion.questionData, newQuestion.outcomeLabels)) })
+					const parameters = createSecurityPoolParameters(newQuestion === undefined ? submittedSecurityPoolForm : { ...submittedSecurityPoolForm, marketId: formatQuestionIdHex(getQuestionId(newQuestion.questionData, newQuestion.outcomeLabels)) })
 					capturedQuestionId = parameters.questionId
 					if (newQuestion !== undefined && (await loadMarketDetails(createConnectedReadClient(), parameters.questionId)).exists) {
 						let poolAddress: Address | undefined
@@ -283,14 +275,14 @@ export function useSecurityPoolCreation({
 							if (!isRecoverableContractReadError(error)) throw error
 							// The question is already known to exist even if the pool lookup fails.
 						}
-						existingQuestionCheck.value = { status: 'existing', questionId: getQuestionIdHex(parameters.questionId), poolAddress }
+						existingQuestionCheck.value = { status: 'existing', questionId: formatQuestionIdHex(parameters.questionId), poolAddress }
 						throw new Error('This question already exists. Use its question ID to create a pool instead.')
 					}
 					let details: MarketDetails
 					if (newQuestion === undefined) {
-						details = marketDetails.value?.questionId === getQuestionIdHex(parameters.questionId) ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
+						details = marketDetails.value?.questionId === formatQuestionIdHex(parameters.questionId) ? marketDetails.value : await loadMarketDetails(createConnectedReadClient(), parameters.questionId)
 					} else {
-						details = { ...newQuestion.questionData, marketType: 'binary', outcomeLabels: newQuestion.outcomeLabels, questionId: getQuestionIdHex(parameters.questionId), exists: true, createdAt: 0n }
+						details = { ...newQuestion.questionData, marketType: 'binary', outcomeLabels: newQuestion.outcomeLabels, questionId: formatQuestionIdHex(parameters.questionId), exists: true, createdAt: 0n }
 					}
 					if (!details.exists) throw new Error('No market found for that ID')
 					const block = await createConnectedReadClient().getBlock()

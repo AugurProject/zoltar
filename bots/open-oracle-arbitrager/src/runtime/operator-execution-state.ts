@@ -96,7 +96,6 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 	}
 	if (pending.rpcQuorum !== undefined) {
 		config.rpcQuorum = pending.rpcQuorum
-		process.env['ZOLTAR_BOT_RPC_QUORUM'] = pending.rpcQuorum.toString()
 		pending.rpcQuorum = undefined
 	}
 	if (pending.strategy !== undefined) {
@@ -135,7 +134,7 @@ export async function applyQueuedSigner<TWallet>(parameters: {
 	config.privateKey = pending.privateKey
 	const wallet = parameters.createWallet()
 	fixedState.wallet = parameters.walletAddress(wallet)
-	fixedState.queuedWallet = undefined
+	fixedState.queuedSigner = undefined
 	clearWalletDerivedState(state)
 	pending.signerUpdate = false
 	if (previousSignerLock !== undefined && previousSignerLock !== nextSignerLock && lockManager !== undefined) await lockManager.release(previousSignerLock)

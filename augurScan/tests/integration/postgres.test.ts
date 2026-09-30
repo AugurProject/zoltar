@@ -20,7 +20,7 @@ import {
 	scannerDatabaseOptions,
 } from '../../src/database.ts'
 import { getAddress, keccak256, stringToHex, zeroAddress } from '../../src/ethereum.ts'
-import { LiveBus } from '../../src/live.ts'
+import { createLiveBus } from '../../src/live.ts'
 import { decodeAction } from '../../src/metadata.ts'
 import { initializeSchema } from '../../src/schema.ts'
 import { CURRENT_SCHEMA_VERSION, UNSUPPORTED_SCHEMA_MESSAGE } from '../../src/schema-policy.ts'
@@ -111,7 +111,7 @@ const priceHistoryLogs = (hash: ReturnType<typeof blockHash>): readonly StoredLo
 		universeId: '0',
 		questionId: '42',
 		truthAuction: rediscoveredAddress,
-		priceOracleManagerAndOperatorQueuer: promotedAddress,
+		openOraclePriceCoordinator: promotedAddress,
 		shareToken: wethAddress,
 		statoblastSecurityMultiplierBps: '15000',
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n.toString(),
@@ -2324,7 +2324,7 @@ postgresTest(
 			expect(await database.eventsAfter(0)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'replay-window-expired', refreshRequired: true } }])
 			expect(await database.eventsAfter(2)).toEqual([{ id: 1, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }])
 			const requestedLiveCursors: number[] = []
-			const liveBus = new LiveBus({
+			const liveBus = createLiveBus({
 				latestEventId: async () => await database.latestEventId(),
 				eventsAfter: async id => {
 					requestedLiveCursors.push(id)
@@ -4601,13 +4601,13 @@ postgresTest('returns the originating transaction action on every log row', asyn
 		expect(response?.status).toBe(200)
 		const payload = await response?.json()
 		if (!isRecord(payload) || !Array.isArray(payload['items'])) throw new Error('Log action response has no items')
-		expect(payload.items).toHaveLength(2)
-		for (const row of payload.items) {
+		expect(payload['items']).toHaveLength(2)
+		for (const row of payload['items']) {
 			if (!isRecord(row)) throw new Error('Log action response contains an invalid row')
-			expect(row.function_name).toBe('deploy')
-			expect(row.action_summary).toBe('Deploy Known deployment via Proxy Deployer')
-			expect(row.to_address).toBe(proxy.address.toLowerCase())
-			expect(row.contract_label).toBe('Known deployment')
+			expect(row['function_name']).toBe('deploy')
+			expect(row['action_summary']).toBe('Deploy Known deployment via Proxy Deployer')
+			expect(row['to_address']).toBe(proxy.address.toLowerCase())
+			expect(row['contract_label']).toBe('Known deployment')
 		}
 	} finally {
 		await lease?.release()

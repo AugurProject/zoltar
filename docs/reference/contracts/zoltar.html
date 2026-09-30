@@ -66,14 +66,14 @@
 							<td>Parent REP holder</td>
 							<td>Forked universe; positive split amount; nonempty valid outcomes; sufficient parent REP for the exact preparationAttoRep supplied and sufficient migration credit for every split. Outcome order is unrestricted. Genesis REP requires allowance for preparation; child REP needs no allowance.</td>
 							<td>Adds the supplied preparation amount to migration credit, then splits the requested REP into the supplied outcomes using the existing migration checks. Both steps revert together on failure. Callers compute any preparation shortfall from cumulative child migration amounts, rather than current child token holdings.</td>
-							<td><code>MigrationRepAdded</code> when preparationAttoRep is positive; <code>DeployChild</code> and <code>ChildReputationTokenInitialized</code> when children are deployed; child REP <code>Transfer</code>, <code>Mint</code>, and <code>MigrationRepSplit</code> for each destination</td>
+							<td><code>MigrationRepAdded</code> when preparationAttoRep is positive; <code>DeployChild</code>, <code>TheoreticalSupplySet</code>, and <code>ChildReputationTokenInitialized</code> when children are deployed; child REP <code>Transfer</code>, <code>Mint</code>, and <code>MigrationRepSplit</code> for each destination</td>
 						</tr>
 						<tr>
 							<td><code>splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)</code></td>
 							<td>Migration-balance holder</td>
-							<td>Universe forked. A nonempty list additionally requires every outcome to be well formed and the cumulative amount per child not to exceed the caller's migration balance.</td>
-							<td>Mints <code>amount</code> of child REP into every selected branch, deploying missing children lazily. An empty outcome list returns after the universe-fork guard without outcome validation, deployment, minting, or events. A nonempty zero-amount call still validates every outcome, may deploy missing children, performs zero-value child REP mints, and records a zero split for every branch.</td>
-							<td><code>TheoreticalSupplySet</code> and <code>DeployChild</code> when needed; child REP <code>Transfer</code> and <code>Mint</code>, then <code>MigrationRepSplit</code>, per selected branch, including at zero amount; no event for an empty list</td>
+							<td>Universe forked; positive split amount; nonempty list of well-formed outcomes; the cumulative amount per child must not exceed the caller's migration balance.</td>
+							<td>Mints <code>amountAttoRep</code> of child REP into every selected branch, deploying missing children lazily.</td>
+							<td><code>DeployChild</code>, <code>TheoreticalSupplySet</code>, and <code>ChildReputationTokenInitialized</code> when children are deployed; child REP <code>Transfer</code> and <code>Mint</code>, then <code>MigrationRepSplit</code>, per selected branch</td>
 						</tr>
 					</tbody>
 				</table>

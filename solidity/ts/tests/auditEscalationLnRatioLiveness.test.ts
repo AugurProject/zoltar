@@ -23,7 +23,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 	test('a funded game with a power-of-two threshold ratio resolves and releases its assets', async () => {
 		const { client, genesisUniverse, mockWindow, questionData, securityPoolAddresses } = fixture
 		const underwritingLimitAttoEth = 25n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, 1n * 10n ** 18n)
 		assert.ok((await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)) > 0n, 'PoC pool must hold redeemable ETH collateral')
 
@@ -39,7 +39,7 @@ describe('Audit PoC: escalation logarithm precision liveness', () => {
 		})
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, reportedRepEthPrice)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond + 2n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, reportBond + 1n)
 

@@ -10,7 +10,10 @@
 			"@zoltar/zoltar-shared/*": ["shared/zoltar/ts/*"],
 			"@zoltar/open-oracle-shared/*": ["shared/openOracle/ts/*"],
 			"@zoltar/statoblast-shared/*": ["shared/statoblast/ts/*"],
-			"@zoltar/trading-shared/*": ["shared/trading/ts/*"]
+			"@zoltar/trading-shared/*": ["shared/trading/ts/*"],
+			"@zoltar/ui-core-shared/*": ["ui/coreShared/ts/*"],
+			"@zoltar/ui-zoltar-shared/*": ["ui/zoltarShared/ts/*"],
+			"@zoltar/ui-statoblast-shared/*": ["ui/statoblastShared/ts/*"]
 		},
 		"sourceMap": true,
 		"inlineSources": true,
@@ -23,5 +26,5 @@
 		"tsBuildInfoFile": "./.tsbuildinfo",
 		"noEmit": true
 	},
-	"include": ["shared/*/ts/**/*.ts", "ui/coreShared/ts/**/*.ts", "ui/coreShared/ts/**/*.tsx", "ui/zoltar/ts/**/*.ts", "ui/zoltar/ts/**/*.tsx", "ui/statoblast/ts/**/*.ts", "ui/statoblast/ts/**/*.tsx"]
+	"include": ["shared/*/ts/**/*.ts", "ui/*/ts/**/*.ts", "ui/*/ts/**/*.tsx"]
 }

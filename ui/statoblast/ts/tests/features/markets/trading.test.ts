@@ -180,6 +180,8 @@ void describe('trading helpers', () => {
 	void test('blocks minting until a pool is loaded and the wallet is connected on Sepolia', () => {
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: undefined,
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n,
@@ -194,6 +196,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n,
@@ -208,6 +212,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n,
@@ -224,6 +230,8 @@ void describe('trading helpers', () => {
 	void test('surfaces the local mint block reasons before the transaction is sent', () => {
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: undefined,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -238,6 +246,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 10n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -252,6 +262,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -266,6 +278,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -280,6 +294,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -294,6 +310,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 8n * 10n ** 17n,
 				ethBalanceAttoEth: 10n ** 18n,
@@ -308,6 +326,8 @@ void describe('trading helpers', () => {
 
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 5n * 10n ** 17n,
@@ -324,6 +344,8 @@ void describe('trading helpers', () => {
 	void test('blocks minting when migrated complete-set shares have no collateral exchange rate', () => {
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 0n,
 				ethBalanceAttoEth: 2n * 10n ** 18n,
@@ -340,6 +362,8 @@ void describe('trading helpers', () => {
 	void test('allows minting when the pool has capacity and the wallet has enough ETH', () => {
 		expect(
 			getTradingMintGuardMessage({
+				currentTimestamp: 100n,
+				priceValidUntilTimestamp: 400n,
 				accountAddress: '0x1234567890123456789012345678901234567890',
 				settlementCollateralAttoEth: 4n * 10n ** 17n,
 				ethBalanceAttoEth: 2n * 10n ** 18n,

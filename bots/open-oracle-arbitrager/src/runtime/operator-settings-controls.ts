@@ -1,7 +1,7 @@
 import { mutableStrategy, runnableOperatorSettings, type Configuration } from '#config/configuration'
-import { configurationRevisionConflict, loadOperatorSettingsWithRevision, parseRuntimeLimitsRequest, parseStoredCentralizedMarkets, serializeRuntimeLimits, serializeStoredCentralizedMarkets, type PersistedOperatorSettings } from '#config/settings-store'
+import { loadOperatorSettingsWithRevision, operatorConfigurationRevisionConflict, parseRuntimeLimitsRequest, parseStoredCentralizedMarkets, serializeRuntimeLimits, serializeStoredCentralizedMarkets, type PersistedOperatorSettings } from '#config/settings-store'
 import { persistSignerSettingsWithProvisionalLock, type ExecutionLockManager } from '#execution/execution-locks'
-import { recordOperation, strategySettings, type OperatorSnapshotFixedState, type OperatorState, type QueuedSettingsSection } from '#state/operator-state'
+import { queuedSignerChange, recordOperation, strategySettings, type OperatorSnapshotFixedState, type OperatorState, type QueuedSettingsSection } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { parseSettlementSettings, settlementSettings } from '#state/settlement-store'
 import type { ExclusiveProcessLock } from '#state/position-store'
@@ -104,7 +104,7 @@ export function createOperatorSettingsControls(context: OperatorSettingsContext)
 		updateCentralizedMarkets: (value: unknown) =>
 			queueSettingsUpdate(async () => {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
-				if (latest === undefined) throw configurationRevisionConflict()
+				if (latest === undefined) throw operatorConfigurationRevisionConflict()
 				const next = parseStoredCentralizedMarkets(value, latest.settings.deployment.rep, latest.settings.network)
 				await persistSettings({ ...latest.settings, centralizedMarkets: next }, latest.revision)
 				pending.centralizedMarkets = next
@@ -123,7 +123,7 @@ export function createOperatorSettingsControls(context: OperatorSettingsContext)
 				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 1 || !('execute' in value) || typeof value.execute !== 'boolean') throw new Error('Execution mode updates require execute')
 				const execute = value.execute
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
-				if (latest === undefined) throw configurationRevisionConflict()
+				if (latest === undefined) throw operatorConfigurationRevisionConflict()
 				if (!execute) {
 					await persistSettings({ ...latest.settings, runtime: { ...latest.settings.runtime, execute } }, latest.revision)
 					pending.execute = false
@@ -169,7 +169,7 @@ export function createOperatorSettingsControls(context: OperatorSettingsContext)
 						pending.privateKey = privateKey
 						pending.signerLock = acquiredSignerLock
 						pending.signerUpdate = true
-						fixedState.queuedWallet = signerAddress
+						fixedState.queuedSigner = queuedSignerChange(signerAddress)
 					}
 					pending.execute = true
 					pending.paused = true

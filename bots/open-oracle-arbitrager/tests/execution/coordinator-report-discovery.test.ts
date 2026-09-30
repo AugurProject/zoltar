@@ -179,18 +179,18 @@ describe('configured coordinator report discovery', () => {
 			}
 		}
 		const client = (reportId: bigint, unavailable = false, reorg = false, missingBlockHash = false) => createPublicClient({ chain: mainnet, transport: custom(provider(reportId, unavailable, reorg, missingBlockHash)) })
-		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], network, openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'] }
+		const config = { connectivity: { publicRpcUrls: ['https://public.example'], readRpcUrl: 'https://primary.example' }, coordinatorAddresses: [activeCoordinator], network, openOracle, quorumRpcUrls: ['https://secondary.example', 'https://tertiary.example'], rpcQuorum: 1 as const }
 
 		const reports = await pendingCoordinatorReportsWithQuorum([client(7n), client(7n), client(7n, true)], config, 100n)
 
 		expect(reports.map(report => report.helper.reportId)).toEqual([7n])
 		expect(methods).not.toContain('eth_getLogs')
-		const replacement = await replacementDisputeAmountsWithQuorum([client(7n), client(7n)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'] }, 7n, 2n, 100n)
+		const replacement = await replacementDisputeAmountsWithQuorum([client(7n), client(7n)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'], rpcQuorum: 1 as const }, 7n, 2n, 100n)
 		expect(replacement.record).toEqual({ amount1: 1_400n, amount2: 2_300n, reportTimestamp: 95n })
-		await expect(pendingCoordinatorReportsWithQuorum([client(7n), client(8n)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('RPC disagreement')
-		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, false, true)], { ...config, quorumRpcUrls: [] }, 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: RPC returned a mined block without a hash')
-		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, true), client(7n, false, true)], { ...config, quorumRpcUrls: ['https://secondary.example'] }, 100n)).rejects.toThrow('changed during pending coordinator report snapshot')
-		await expect(replacementDisputeAmountsWithQuorum([client(7n, false, true), client(7n, false, true)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'] }, 7n, 2n, 100n)).rejects.toThrow('changed during replacement dispute snapshot')
+		await expect(pendingCoordinatorReportsWithQuorum([client(7n), client(8n)], { ...config, quorumRpcUrls: ['https://secondary.example'], rpcQuorum: 1 as const }, 100n)).rejects.toThrow('RPC disagreement')
+		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, false, true)], { ...config, quorumRpcUrls: [], rpcQuorum: 1 as const }, 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: RPC returned a mined block without a hash')
+		await expect(pendingCoordinatorReportsWithQuorum([client(7n, false, true), client(7n, false, true)], { ...config, quorumRpcUrls: ['https://secondary.example'], rpcQuorum: 1 as const }, 100n)).rejects.toThrow('changed during pending coordinator report snapshot')
+		await expect(replacementDisputeAmountsWithQuorum([client(7n, false, true), client(7n, false, true)], { connectivity: config.connectivity, openOracle, quorumRpcUrls: ['https://secondary.example'], rpcQuorum: 1 as const }, 7n, 2n, 100n)).rejects.toThrow('changed during replacement dispute snapshot')
 	})
 
 	test('replaces stale cached reports with the coordinator snapshot', () => {

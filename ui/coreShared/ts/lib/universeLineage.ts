@@ -1,5 +1,5 @@
 import * as universeCopy from '../copy/universes.js'
-import { formatUniverseIdHex } from './universeLabels.js'
+import { formatShortUniverseId } from './universeLabels.js'
 
 /** One generation of a universe's ancestry: the universe and the fork outcome that created it (genesis has none). */
 export type UniverseLineageStep = Readonly<{
@@ -15,13 +15,6 @@ export type UniverseLineageSource = Readonly<{
 }>
 
 const LINEAGE_SEPARATOR = ' › '
-
-/** Short, stable hex name for a universe whose fork outcome is unknown. */
-export function formatShortUniverseId(universeId: bigint) {
-	const universeIdHex = formatUniverseIdHex(universeId)
-	if (universeIdHex.length <= 14) return universeIdHex
-	return `${universeIdHex.slice(0, 8)}…${universeIdHex.slice(-4)}`
-}
 
 /** Names one lineage generation: Genesis, the fork outcome, or the short universe ID when the outcome is unknown. */
 export function formatUniverseStepName(step: UniverseLineageStep) {

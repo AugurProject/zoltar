@@ -19,6 +19,7 @@ import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { requireWallet } from '@zoltar/ui-core-shared/wallet/requireWalletConnection.js'
 import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { assertActiveWallet } from '@zoltar/ui-core-shared/wallet/assertActiveWallet.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import type { TransactionLifecycleParameters } from '../../../types/app.js'
@@ -325,7 +326,7 @@ export function useZoltarUniverse(
 		zoltarQuestionLookupId.value = normalizedQuestionId
 		zoltarQuestionLookupError.value = undefined
 		if (normalizedQuestionId === undefined) {
-			zoltarQuestionLookupError.value = 'Enter a valid hexadecimal question ID'
+			zoltarQuestionLookupError.value = commonCopy.invalidQuestionId
 			return
 		}
 

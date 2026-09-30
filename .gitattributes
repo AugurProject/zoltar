@@ -1,19 +1,17 @@
 # Generated outputs should stay untracked. These attributes keep accidental
 # tracked diffs out of normal review views.
-/shared/js/** linguist-generated=true
+/shared/*/js/** linguist-generated=true
 /solidity/artifacts/** linguist-generated=true
 /solidity/ts/types/contractArtifact.ts linguist-generated=true
-/ui/js/** linguist-generated=true
-/ui/ts/abis.ts linguist-generated=true
-/ui/ts/contractArtifact.ts linguist-generated=true
-/ui/ts/deploymentArtifacts.ts linguist-generated=true
-/ui/ts/deploymentsArtifacts.ts linguist-generated=true
+/ui/*/js/** linguist-generated=true
+/ui/*/dist/** linguist-generated=true
+/ui/coreShared/ts/abis.ts linguist-generated=true
+/ui/coreShared/ts/contractArtifact.ts linguist-generated=true
+/ui/statoblastShared/ts/contractArtifact.ts linguist-generated=true
+/ui/trading/ts/generated/** linguist-generated=true
 
 # Bundled UI dependencies are build outputs, not source.
-/ui/vendor/** linguist-vendored=true
-
-# This vendored deployment input has a pinned canonical-text digest.
-/scripts/artifacts/uniswap-deployment.json text eol=lf
+/ui/*/vendor/** linguist-vendored=true
 
 # Third-party Solidity sources are intentionally vendored for compilation.
 /solidity/contracts/statoblast/openOracle/openzeppelin/** linguist-vendored=true

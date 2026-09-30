@@ -54,7 +54,7 @@ runs:
 
     - name: Setup Foundry / Anvil
       if: inputs.foundry == 'true' && inputs.profile != 'root'
-      uses: foundry-rs/foundry-toolchain@v1
+      uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
       with:
         version: ${{ env.FOUNDRY_VERSION }}
 
@@ -64,7 +64,7 @@ runs:
       run: bun ./tooling/repo/query-projects.mts --github-output
 
     - name: Cache Bun dependencies
-      uses: actions/cache@v5
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ~/.bun/install/cache
         key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}
@@ -75,7 +75,7 @@ runs:
 
     - name: Download prepared build inputs
       if: inputs.build-inputs != ''
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
       with:
         name: ${{ inputs.build-inputs }}
         path: .
@@ -83,7 +83,7 @@ runs:
     - name: Cache contract build inputs
       if: inputs.profile == 'full' && inputs.build-inputs == ''
       id: contract-cache
-      uses: actions/cache@v5
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ steps.projects.outputs.component_artifact_outputs }}
         key: ${{ runner.os }}-generated-contracts-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ steps.projects.outputs.contract_cache_key }}
@@ -93,7 +93,7 @@ runs:
     - name: Cache generated project outputs
       if: inputs.profile != 'root' && inputs.build-inputs == ''
       id: generated-cache
-      uses: actions/cache@v5
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ${{ inputs.profile == 'contracts' && steps.projects.outputs.component_artifact_outputs || steps.projects.outputs.full_only_cache_paths }}
         key: ${{ runner.os }}-generated-${{ inputs.profile }}-${{ env.BUN_VERSION }}-${{ env.FOUNDRY_VERSION }}-${{ inputs.profile == 'contracts' && steps.projects.outputs.contract_cache_key || steps.projects.outputs.generated_cache_key }}

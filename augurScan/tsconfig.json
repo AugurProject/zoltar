@@ -1,14 +1,12 @@
 {
+	"extends": "../shared/tsconfig.strict.json",
 	"compilerOptions": {
-		"target": "ES2023",
+		"target": "ESNext",
 		"module": "ESNext",
 		"moduleResolution": "Bundler",
-		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"types": ["bun-types"],
-		"strict": true,
 		"skipLibCheck": true,
-		"noUncheckedIndexedAccess": true,
-		"noImplicitOverride": true,
 		"allowImportingTsExtensions": true,
 		"noEmit": true
 	},

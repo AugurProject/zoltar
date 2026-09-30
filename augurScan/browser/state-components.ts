@@ -34,7 +34,7 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 		return numeric !== undefined && numeric !== null && String(numeric).trim() !== '' && Number.isFinite(Number(numeric))
 	}
 
-	const lineChart = <T extends { timestamp: string }>(rows: T[], definitions: ChartDefinition<T>[], { sharedRange, axisUnit = '', zeroBaseline = false }: { sharedRange?: readonly [number, number]; axisUnit?: string; zeroBaseline?: boolean } = {}) => {
+	const lineChart = <T extends { timestamp: string }>(rows: T[], definitions: ChartDefinition<T>[], { sharedRange, axisUnit = '', zeroBaseline = false }: { sharedRange?: readonly [number, number] | undefined; axisUnit?: string | undefined; zeroBaseline?: boolean } = {}) => {
 		const series = definitions.flatMap((definition, index) =>
 			rows.flatMap(row => {
 				const raw = row[definition.key]
@@ -78,8 +78,8 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			legendItems = [],
 			emptyMessage = 'No checkpoints match this view.',
 		}: {
-			sharedRange?: readonly [number, number]
-			axisUnit?: string
+			sharedRange?: readonly [number, number] | undefined
+			axisUnit?: string | undefined
 			zeroBaseline?: boolean
 			legendItems?: Array<{ label: string; className?: string }>
 			emptyMessage?: string

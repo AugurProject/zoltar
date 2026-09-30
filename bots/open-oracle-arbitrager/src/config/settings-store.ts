@@ -7,19 +7,16 @@ import { validateConnectivitySettings, validateIndependentReadRpcUrls, type Conn
 import { decimalWeth, parseDecimalWeth, type MutableStrategy, type StrategySettings } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { parseSettlementSettings, settlementJournalPath, settlementSettings, type MutableSettlement, type SettlementSettings } from '#state/settlement-store'
-import { contentRevision, parseJsonDocument, readFileIfPresent, writeRevisionedFile, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { configurationRevisionConflict, contentRevision, parseJsonDocument, readOwnerFileIfPresent, writeRevisionedFile, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { assertProfileCandidates, chainSpecificPath, networkProfilePath, storedNetworkProfileCandidates, switchNetworkProfile, type ProfileCandidate } from '@zoltar/bot-shared/config/profiles'
-import { signerCandidate } from '@zoltar/bot-shared/config/signer'
+import { PRESERVE_PRIVATE_KEY, signerCandidate } from '@zoltar/bot-shared/config/signer'
 import { getAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { integer as validateInteger, record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-
-const PRESERVE_PRIVATE_KEY = '__PRESERVE_SAVED_PRIVATE_KEY__'
-export const CONFIGURATION_REVISION_CONFLICT = 'ConfigurationRevisionConflict'
 
 type RuntimeSettings = {
 	execute: boolean
@@ -264,7 +261,7 @@ export function parseOperatorSettings(value: unknown, preservedPrivateKey?: Hex)
 	updateStrategyFromRequest(strategy, record['strategy'])
 	const privateKeyValue = record['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : record['privateKey']
 	const candidate = signerCandidate(privateKeyValue ?? null)
-	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : 1
+	const rpcQuorum = Object.hasOwn(record, 'rpcQuorum') ? record['rpcQuorum'] : rpcQuorumRequirement()
 	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('Operator rpcQuorum must be 1 or 2')
 	if (!Array.isArray(record['tokenAddresses']) || record['tokenAddresses'].some(address => typeof address !== 'string')) throw new Error('Operator tokenAddresses must be an array of addresses')
 	const network = record['network'] === 'sepolia' ? 'sepolia' : 'mainnet'
@@ -397,23 +394,21 @@ export async function switchOperatorNetworkProfile(path: string, network: Networ
 	})
 }
 
-export async function loadOperatorSettingsWithRevision(path: string, filesystem?: RevisionedFileFilesystem): Promise<{ revision: string; settings: PersistedOperatorSettings } | undefined> {
-	const contents = await readFileIfPresent(path, filesystem)
+export async function loadOperatorSettingsWithRevision(path: string): Promise<{ revision: string; settings: PersistedOperatorSettings } | undefined> {
+	const contents = await readOwnerFileIfPresent(path, 'Operator configuration')
 	if (contents === undefined) return undefined
 	return { revision: contentRevision(contents), settings: parseOperatorSettings(parseJsonDocument(contents, 'Operator configuration')) }
 }
 
-export async function loadOperatorSettings(path: string, filesystem?: RevisionedFileFilesystem): Promise<PersistedOperatorSettings | undefined> {
-	return (await loadOperatorSettingsWithRevision(path, filesystem))?.settings
+export async function loadOperatorSettings(path: string): Promise<PersistedOperatorSettings | undefined> {
+	return (await loadOperatorSettingsWithRevision(path))?.settings
 }
 
-export function configurationRevisionConflict() {
-	const error = new Error('The operator configuration changed after this editor loaded. Reload it, review the newer values, and apply your change again.')
-	error.name = CONFIGURATION_REVISION_CONFLICT
-	return error
+export function operatorConfigurationRevisionConflict() {
+	return configurationRevisionConflict('operator configuration')
 }
 
 export async function saveOperatorSettings(path: string, settings: PersistedOperatorSettings, filesystem?: RevisionedFileFilesystem, expectedRevision?: string) {
 	const contents = `${JSON.stringify(serializeOperatorSettings(settings), undefined, 2)}\n`
-	return await writeRevisionedFile(path, contents, { conflict: configurationRevisionConflict, expectedRevision, filesystem })
+	return await writeRevisionedFile(path, contents, { conflict: operatorConfigurationRevisionConflict, expectedRevision, filesystem })
 }

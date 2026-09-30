@@ -288,6 +288,6 @@ export type SeedNetworkOptions = {
 	readonly lease?: IndexerLease
 	readonly resetCanonicalHistoryOnManifestChange?: boolean
 	readonly preserveStoredStart?: boolean
-	readonly sourceReplayPlan?: SourceReplayPlan
-	readonly appliedSourceHashes?: EvidenceProvenance
+	readonly sourceReplayPlan?: SourceReplayPlan | undefined
+	readonly appliedSourceHashes?: EvidenceProvenance | undefined
 }

@@ -1,4 +1,5 @@
 import { canonicalExecutorIdentity } from '#execution/executor-identity'
+import { REORG_OVERLAP_BLOCKS } from '#execution/execution-orchestration'
 import { canonicalSecurityPoolFactory } from '#config/network'
 import { requiredDeploymentRoles, type DeploymentRole } from '#config/deployment-roles'
 import { rpcFailureWithContext, type Address, type Hex, type TransactionLog } from '@zoltar/bot-shared/ethereum'
@@ -10,13 +11,12 @@ import { applyLogs, logBlockNumber, reportId, type ActiveReport } from '#monitor
 import { compactFinalityWindow, ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { ReadClient } from '#core/operator-types'
 import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { rpcQuorumDescription, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { rpcQuorumDescription } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { OperatorState } from '#state/operator-state'
 
 const MAX_UNTRUSTED_DRY_RUN_REPORTS = 256
-const REORG_OVERLAP_BLOCKS = 12n
 
 export async function loadCoordinatorPolicies(client: ReadClient, config: Pick<Configuration, 'coordinatorAddresses' | 'network' | 'openOracle'>, blockNumber?: bigint) {
 	return Promise.all(
@@ -122,7 +122,7 @@ async function inspectCanonicalDeployments(clients: readonly ReadClient[], confi
 	const primary = clients[0]
 	if (primary === undefined) throw new Error('Canonical deployment inspection requires a read RPC client')
 	if (!config.execute) return (await observe(primary, 0)).value
-	const requirement = rpcQuorumRequirement()
+	const requirement = config.rpcQuorum
 	const settled = await Promise.allSettled(clients.map(observe))
 	const available = availableSettledValues(settled)
 	const verified = available.filter(observation => canonicalDeploymentFailure(observation.value) === undefined)
@@ -141,7 +141,7 @@ async function inspectCanonicalDeployments(clients: readonly ReadClient[], confi
  */
 export async function verifyCanonicalExecutorDeployed(clients: readonly ReadClient[], config: Configuration) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const requirement = rpcQuorumRequirement()
+	const requirement = config.rpcQuorum
 	const settled = await Promise.allSettled(
 		clients.map(async (client, index) => {
 			const endpoint = endpointLabel(endpoints[index] ?? '')

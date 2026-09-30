@@ -11,7 +11,7 @@ import { executorDeploymentPlan } from '#execution/executor-deployment-primitive
 import { acquireExecutorDeploymentIntentLock, clearExecutorDeploymentIntent, executorDeploymentIntentPath, loadExecutorDeploymentIntentForChain, saveExecutorDeploymentIntent } from '#execution/executor-deployment-store'
 import { acquireExecutionSignerLock } from '#state/position-store'
 import { resolve } from 'node:path'
-import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 
 function option(name: string) {
 	const prefix = `--${name}=`
@@ -51,8 +51,7 @@ const settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? def
 const activeSettings = await loadOperatorSettings(settingsFile)
 const selectedSettings = activeSettings?.network === networkName ? activeSettings : await loadOperatorSettings(networkProfilePath(settingsFile, networkName))
 if (selectedSettings !== undefined && selectedSettings.network !== networkName) throw new Error(`The ${networkName} profile contains ${selectedSettings.network} settings`)
-const rpcQuorum = selectedSettings?.rpcQuorum ?? 1
-process.env['ZOLTAR_BOT_RPC_QUORUM'] = rpcQuorum.toString()
+const rpcQuorum = selectedSettings?.rpcQuorum ?? rpcQuorumRequirement()
 if (quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(rpcQuorum)) throw new Error('Executor deployment does not satisfy the saved RPC agreement requirement')
 const account = privateKeyToAccount(privateKeyValue as Hex)
 if (option('salt') !== undefined) throw new Error('Executor uses a fixed canonical salt; omit --salt')
@@ -70,6 +69,7 @@ try {
 		persistIntent: intent => saveExecutorDeploymentIntent(intentPath, intent),
 		privateKey: privateKeyValue as Hex,
 		readRpcUrls: [rpcUrl, ...quorumRpcUrls],
+		rpcQuorum,
 		rpcUrls: [rpcUrl],
 		salt,
 	})

@@ -15,7 +15,7 @@ import { getOpenOracleGameTuple, getOpenOracleHelperTuple, type OpenOracleStateP
 
 const ETH_SENTINEL: Address = zeroAddress
 
-type SettlementExecutionConfiguration = Pick<Configuration, 'connectivity' | 'openOracle' | 'pollMilliseconds' | 'quorumRpcUrls' | 'settlement' | 'submission'> & { network: Pick<Configuration['network'], 'chain'> }
+type SettlementExecutionConfiguration = Pick<Configuration, 'connectivity' | 'openOracle' | 'pollMilliseconds' | 'quorumRpcUrls' | 'rpcQuorum' | 'settlement' | 'submission'> & { network: Pick<Configuration['network'], 'chain'> }
 
 export type SettlementExecutionContext = {
 	blockNumber: bigint
@@ -42,7 +42,7 @@ export type SettlementPlan = {
 }
 
 /** Reads the ETH the wallet has accrued inside OpenOracle through the read quorum; one attoETH stays behind as the contract's balance sentinel. */
-export async function unclaimedSettlementReward(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls'>, account: Address, blockNumber: bigint) {
+export async function unclaimedSettlementReward(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'openOracle' | 'quorumRpcUrls' | 'rpcQuorum'>, account: Address, blockNumber: bigint) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
 	const balance = await settledQuorumValue(
 		'unclaimed settlement reward',
@@ -50,6 +50,7 @@ export async function unclaimedSettlementReward(readClients: readonly ReadClient
 			endpoint: endpointLabel(endpoints[index] ?? ''),
 			value: await client.readContract({ address: config.openOracle, abi: openOracleAbi, functionName: 'tokenHolder', args: [account, ETH_SENTINEL], blockNumber }),
 		})),
+		config.rpcQuorum,
 	)
 	return balance > 1n ? balance - 1n : 0n
 }
@@ -157,16 +158,16 @@ async function signAndSubmit(context: SettlementExecutionContext, call: Settleme
 }
 
 /** Status, gas, and mined time come from quorum-confirmed receipts and canonical blocks, like the position ledger. */
-async function receiptOutcome(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, transactionHash: Hex) {
+async function receiptOutcome(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, transactionHash: Hex) {
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
-	const [receipt] = await transactionReceiptsWithQuorum(readClients, endpoints, 'settlement journal', [transactionHash])
+	const [receipt] = await transactionReceiptsWithQuorum(readClients, endpoints, 'settlement journal', [transactionHash], config.rpcQuorum)
 	if (receipt === undefined) throw new Error(`Settlement receipt ${transactionHash} was not returned by the read quorum`)
 	return receiptExpenditure(readClients, config, receipt)
 }
 
 /** Gas and mined time come from the canonical receipt block through the same quorum read the position ledger uses. */
-async function receiptExpenditure(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, receipt: Parameters<typeof receiptGasExpendituresWithQuorum>[3][number] & { status: 'reverted' | 'success' }) {
-	const [expenditure] = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'settlement journal', [receipt])
+async function receiptExpenditure(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, receipt: Parameters<typeof receiptGasExpendituresWithQuorum>[3][number] & { status: 'reverted' | 'success' }) {
+	const [expenditure] = await receiptGasExpendituresWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'settlement journal', [receipt], config.rpcQuorum)
 	if (expenditure === undefined) throw new Error(`Settlement receipt ${receipt.transactionHash} produced no gas expenditure`)
 	return { actualGasCostEth: decimalWeth(expenditure.costAttoEth), minedAt: expenditure.minedAt, receiptBlock: { hash: receipt.blockHash, number: receipt.blockNumber.toString() }, status: receipt.status === 'success' ? ('confirmed' as const) : ('reverted' as const) }
 }
@@ -251,7 +252,7 @@ export async function executeRewardWithdrawal(context: SettlementExecutionContex
  * have been down while the reorg happened. Adopted outcomes precede the hash they retire so a partial write never loses
  * the receipt.
  */
-export async function reconcilePendingSettlements(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls'>, records: readonly SettlementRecord[], blockNumber: bigint) {
+export async function reconcilePendingSettlements(readClients: readonly ReadClient[], config: Pick<Configuration, 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>, records: readonly SettlementRecord[], blockNumber: bigint) {
 	const unresolved = records.filter(record => settlementAttemptIsUnresolved(record, blockNumber))
 	if (unresolved.length === 0) return []
 	const endpoints = [config.connectivity.readRpcUrl, ...config.quorumRpcUrls]
@@ -260,6 +261,7 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 		endpoints,
 		'settlement journal recovery',
 		unresolved.map(record => record.transactionHash),
+		config.rpcQuorum,
 	)
 	const resolved: SettlementRecord[] = []
 	const finalityBlockNumber = blockNumber > ATTEMPT_FINALITY_BLOCKS ? blockNumber - ATTEMPT_FINALITY_BLOCKS : 0n
@@ -292,7 +294,7 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 		}
 		if (record.status === 'expired') {
 			// The replacement that retired this hash must itself reach finality; if it was orphaned the original is live again.
-			const [replacement] = record.replacedBy === undefined ? [undefined] : await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `settlement journal recovery ${record.transactionHash} replacement`, [record.replacedBy])
+			const [replacement] = record.replacedBy === undefined ? [undefined] : await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `settlement journal recovery ${record.transactionHash} replacement`, [record.replacedBy], config.rpcQuorum)
 			if (replacement !== undefined) {
 				if (receiptFinality(replacement)) resolved.push({ ...record, finalized: true, updatedAt })
 				continue
@@ -307,12 +309,18 @@ export async function reconcilePendingSettlements(readClients: readonly ReadClie
 			continue
 		}
 		const submissionBlockNumber = BigInt(record.submissionBlockNumber)
-		const consumingHash = await transactionHashBySenderNonceWithQuorum(readClients, endpoints, `settlement journal recovery ${record.transactionHash}`, {
-			account: record.account,
-			fromBlockNumber: submissionBlockNumber < finalityBlockNumber ? submissionBlockNumber : finalityBlockNumber,
-			nonce,
-			toBlockNumber: finalityBlockNumber,
-		})
+		const consumingHash = await transactionHashBySenderNonceWithQuorum(
+			readClients,
+			endpoints,
+			`settlement journal recovery ${record.transactionHash}`,
+			{
+				account: record.account,
+				fromBlockNumber: submissionBlockNumber < finalityBlockNumber ? submissionBlockNumber : finalityBlockNumber,
+				nonce,
+				toBlockNumber: finalityBlockNumber,
+			},
+			config.rpcQuorum,
+		)
 		// The consumption was observed at finality depth, so the retirement is final; the consumer's own record is verified separately.
 		const retired: SettlementRecord = { ...record, finalized: true, replacedBy: consumingHash, status: 'expired', updatedAt }
 		// A consumer the journal already knows (the bot's own re-send at the same nonce) keeps its own record.

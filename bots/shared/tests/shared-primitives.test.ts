@@ -249,16 +249,24 @@ describe('shared bot primitives', () => {
 
 	test('requires independent quorum observations to agree', () => {
 		expect(
-			quorumValue('head', [
-				{ endpoint: 'https://one.example', value: { hash: '0x01', number: 1n } },
-				{ endpoint: 'https://two.example', value: { hash: '0x01', number: 1n } },
-			]),
+			quorumValue(
+				'head',
+				[
+					{ endpoint: 'https://one.example', value: { hash: '0x01', number: 1n } },
+					{ endpoint: 'https://two.example', value: { hash: '0x01', number: 1n } },
+				],
+				2,
+			),
 		).toEqual({ hash: '0x01', number: 1n })
 		expect(() =>
-			quorumValue('head', [
-				{ endpoint: 'https://one.example', value: 1n },
-				{ endpoint: 'https://two.example', value: 2n },
-			]),
+			quorumValue(
+				'head',
+				[
+					{ endpoint: 'https://one.example', value: 1n },
+					{ endpoint: 'https://two.example', value: 2n },
+				],
+				2,
+			),
 		).toThrow('RPC disagreement')
 	})
 
@@ -443,8 +451,8 @@ describe('shared bot primitives', () => {
 				throw error
 			},
 		}
-		await expect(confirmCanonicalReceiptFinality([healthy, healthy, malformedHead], ['one', 'two', 'three'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('Malformed block-number response')
-		await expect(confirmCanonicalReceiptFinality([healthy, healthy, missingDescendant], ['one', 'two', 'three'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n)).rejects.toThrow('Requested canonical block is missing')
+		await expect(confirmCanonicalReceiptFinality([healthy, healthy, malformedHead], ['one', 'two', 'three'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).rejects.toThrow('Malformed block-number response')
+		await expect(confirmCanonicalReceiptFinality([healthy, healthy, missingDescendant], ['one', 'two', 'three'], 'test receipt', { blockHash: receiptHash, blockNumber: 100n }, 12n, undefined, 2)).rejects.toThrow('Requested canonical block is missing')
 	})
 
 	test('serializes signer operations', () => {
@@ -647,6 +655,7 @@ describe('shared bot primitives', () => {
 			const value = await settledQuorumValue(
 				'chain ID',
 				urls.map(async url => ({ endpoint: url, value: await createPublicClient({ transport: pool.transportFor(url) }).getChainId() })),
+				2,
 			)
 			expect(value).toBe(1)
 			expect(pool.snapshot()[0]).toMatchObject({ consecutiveFailures: 1, status: 'degraded' })

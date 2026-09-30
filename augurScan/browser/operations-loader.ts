@@ -87,12 +87,12 @@ export const createOperationsLoader = (deps: OperationsLoaderDeps) => {
 					if (requestVersion !== operationsState.requestVersion) return false
 					if (preserveRenderedContent) {
 						status.className = 'system-status'
-						status.dataset.errorDetail = error instanceof Error ? error.message : 'Unknown operations refresh failure'
+						status.dataset['errorDetail'] = error instanceof Error ? error.message : 'Unknown operations refresh failure'
 						renderRetryStatus(status, 'Could not refresh protocol operations. Existing evidence remains visible.', () => loadOperations({ live: true }))
 						content.setAttribute('aria-busy', 'false')
 						return false
 					}
-					status.dataset.errorDetail = error instanceof Error ? error.message : 'Unknown operations request failure'
+					status.dataset['errorDetail'] = error instanceof Error ? error.message : 'Unknown operations request failure'
 					renderRetryStatus(status, 'Could not load protocol operations.', loadOperations)
 					content.replaceChildren()
 					content.setAttribute('aria-busy', 'false')

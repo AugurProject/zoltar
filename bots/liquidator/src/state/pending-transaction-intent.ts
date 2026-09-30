@@ -1,7 +1,10 @@
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Hex } from '@zoltar/bot-shared/ethereum'
+import { isHash32 } from '@zoltar/bot-shared/infrastructure/json-validation'
 import type { PendingTransactionIntent } from './operator-state.ts'
 
 type ReceiptExpectation = PendingTransactionIntent['receiptExpectation']
+
+const isSerializedTransaction = (value: unknown): value is Hex => typeof value === 'string' && /^0x(?:[0-9a-fA-F]{2})+$/.test(value)
 
 function parseStagedOperation(value: unknown): 0 | 1 {
 	if (value === 0 || value === 1) return value
@@ -44,18 +47,18 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 	const sender = Reflect.get(intent, 'sender')
 	const serializedTransaction = Reflect.get(intent, 'serializedTransaction')
 	const submissionBlock = Reflect.get(intent, 'submissionBlock')
-	if (typeof hash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(hash) || typeof serializedTransaction !== 'string' || !/^0x(?:[0-9a-fA-F]{2})+$/.test(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
-	if (keccak256(serializedTransaction as Hex).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
+	if (!isHash32(hash) || !isSerializedTransaction(serializedTransaction)) throw new Error('Pending transaction intent has invalid transaction hex')
+	if (keccak256(serializedTransaction).toLowerCase() !== hash.toLowerCase()) throw new Error('Pending transaction intent hash does not match its serialized transaction')
 	if (typeof label !== 'string' || (kind !== 'deployment' && kind !== 'deposit' && kind !== 'fees' && kind !== 'liquidation' && kind !== 'migration' && kind !== 'withdrawal')) throw new Error('Pending transaction intent has invalid metadata')
 	if (mode !== 'private' && mode !== 'public') throw new Error('Pending transaction intent has invalid mode')
 	if (typeof nonce !== 'string' || typeof maxBlockNumber !== 'string' || typeof submissionBlock !== 'string') throw new Error('Pending transaction intent has invalid numeric metadata')
 	if (typeof sender !== 'string') throw new Error('Pending transaction intent is missing sender')
 	const parsedNonce = BigInt(nonce)
-	const parsedTransaction = parseTransaction(serializedTransaction as Hex)
+	const parsedTransaction = parseTransaction(serializedTransaction)
 	if (parsedTransaction.chainId !== BigInt(expectedChainId)) throw new Error(`Pending transaction intent belongs to chain ${parsedTransaction.chainId?.toString() ?? 'unknown'}, expected chain ${expectedChainId.toString()}`)
 	if (parsedTransaction.nonce !== parsedNonce) throw new Error('Pending transaction intent nonce does not match its serialized transaction')
 	const normalizedSender = getAddress(sender)
-	const recoveredSender = await recoverTransactionAddress({ serializedTransaction: serializedTransaction as Hex })
+	const recoveredSender = await recoverTransactionAddress({ serializedTransaction })
 	if (recoveredSender.toLowerCase() !== normalizedSender.toLowerCase()) throw new Error('Pending transaction intent sender does not match its serialized transaction')
 	if (typeof rawExpectation !== 'object' || rawExpectation === null || Array.isArray(rawExpectation)) throw new Error('Pending transaction intent is missing receipt expectation')
 	const receiptExpectation = parseReceiptExpectation(rawExpectation)
@@ -63,7 +66,7 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 	return {
 		lastValidBlockNumber: lastValidBlockNumber === undefined ? undefined : BigInt(lastValidBlockNumber),
 		reconciliationReason,
-		hash: hash as Hex,
+		hash,
 		kind,
 		label,
 		maxBlockNumber: BigInt(maxBlockNumber),
@@ -72,7 +75,7 @@ export async function parsePendingTransactionIntent(intent: unknown, expectedCha
 		receiptExpectation,
 		requiresMarketEvidence,
 		sender: normalizedSender,
-		serializedTransaction: serializedTransaction as Hex,
+		serializedTransaction,
 		submissionBlock: BigInt(submissionBlock),
 	}
 }

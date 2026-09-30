@@ -36,7 +36,7 @@ import { useStatoblastForkMigrationFixture } from './statoblast/fixture'
 describe('Child-pool fee epoch regression', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	beforeEach(async () => {
-		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator)
 		await setUnderwritingLimit(fixture.client, fixture.securityPoolAddresses.securityPool, fixture.repDeposit / 4n)
 	})
 	const { setupFinalizedTruthAuctionWithMixedBids, setupOwnForkWithEscrow, statoblastSecurityMultiplierBps, triggerExternalForkForSecurityPool } = fixture

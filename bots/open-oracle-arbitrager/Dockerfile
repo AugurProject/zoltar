@@ -54,7 +54,8 @@ COPY bots/open-oracle-arbitrager/scripts/check-market-fixture.mts ./bots/open-or
 COPY bots/shared/scripts/docker-entrypoint.sh ./bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh
 COPY bots/open-oracle-arbitrager/src/ ./bots/open-oracle-arbitrager/src/
 RUN chmod 0755 bots/open-oracle-arbitrager/scripts/docker-entrypoint.sh \
-	&& install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state
+	&& install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state \
+	&& install -d -m 0700 -o bun -g bun bots/open-oracle-arbitrager/.state/process-locks
 
 USER bun
 WORKDIR /app/bots/open-oracle-arbitrager

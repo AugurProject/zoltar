@@ -56,8 +56,8 @@ async function assertEscalationRulesMatchContracts(): Promise<void> {
 	const escalationGameStorage = await readFile('solidity/contracts/statoblast/EscalationGameStorage.sol', 'utf8')
 	assert.equal(solidityConstant(escalationGameTypes, 'EXCESS_REWARD_WINDOW_DIVISOR', 'EscalationGameTypes.sol'), escalationRules.excessRewardWindowDivisor)
 	assert.equal(solidityConstant(escalationGameTypes, 'ESCALATION_TIME_LENGTH', 'EscalationGameTypes.sol'), escalationTimeLengthSeconds)
-	const activationDelay = escalationGameStorage.match(/activationDelay = (\d+) days;/)
-	assert.ok(activationDelay?.[1] !== undefined, 'EscalationGameStorage.sol must define activationDelay in days')
+	const activationDelay = escalationGameStorage.match(/ACTIVATION_DELAY = (\d+) days;/)
+	assert.ok(activationDelay?.[1] !== undefined, 'EscalationGameStorage.sol must define ACTIVATION_DELAY in days')
 	assert.equal(BigInt(activationDelay[1]), escalationRules.activationDays)
 	const directWithdrawal = solidityFunction(proofVerifier, 'computeWinningWithdrawal', 'EscalationGameProofVerifier.sol')
 	assert.match(

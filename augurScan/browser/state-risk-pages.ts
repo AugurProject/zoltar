@@ -152,14 +152,14 @@ export const renderPoolDetailPage = async (deps: StateRiskDeps, poolItem: PoolRe
 	const systemStates = ['Operational', 'Pool forked', 'Fork migration', 'Fork truth auction']
 	const currentState = poolItem.current_state ?? {}
 	currentGrid.append(
-		staticField('System state', currentState.systemState === undefined ? 'No lifecycle event yet' : (systemStates[Number(currentState.systemState)] ?? `State ${currentState.systemState}`)),
-		staticField('Awaiting fork continuation', yesNoCheckpoint(currentState.awaitingForkContinuation)),
-		staticField('Total REP backing units', currentState.totalRepBackingUnits === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.totalRepBackingUnits), 18, '')),
-		staticField('Share-token supply', currentState.shareTokenSupplyAttoShares === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState.shareTokenSupplyAttoShares), 18, 'shares')),
+		staticField('System state', currentState['systemState'] === undefined ? 'No lifecycle event yet' : (systemStates[Number(currentState['systemState'])] ?? `State ${currentState['systemState']}`)),
+		staticField('Awaiting fork continuation', yesNoCheckpoint(currentState['awaitingForkContinuation'])),
+		staticField('Total REP backing units', currentState['totalRepBackingUnits'] === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState['totalRepBackingUnits']), 18, '')),
+		staticField('Share-token supply', currentState['shareTokenSupplyAttoShares'] === undefined ? 'No checkpoint' : exactUnit(chartNumericValue(currentState['shareTokenSupplyAttoShares']), 18, 'shares')),
 		staticField('Fee-eligible commitments', exactUnit(poolItem.fee_eligible_capacity_ownership_atto_rep, 18, 'ETH')),
 		staticField('Unallocated accrued fees', exactUnit(poolItem.unallocated_accrued_fees_atto_eth, 18, poolNativeSymbol)),
 		staticField('Annual open-interest fee', annualFeeText(poolItem.current_retention_rate)),
-		typeof currentState.escalationGame === 'string' && currentState.escalationGame !== '' ? staticAddressField('Escalation game', currentState.escalationGame, poolItem.chain_id) : staticField('Escalation game', 'Not set'),
+		typeof currentState['escalationGame'] === 'string' && currentState['escalationGame'] !== '' ? staticAddressField('Escalation game', currentState['escalationGame'], poolItem.chain_id) : staticField('Escalation game', 'Not set'),
 	)
 	currentCard.append(currentGrid)
 	fragment.append(currentCard)

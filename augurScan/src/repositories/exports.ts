@@ -13,7 +13,7 @@ export type HistoricalExportQuery = {
 	readonly snapshotBlock: string
 	readonly snapshotInvalidationId: string
 	readonly limit: number
-	readonly lastKey?: readonly string[]
+	readonly lastKey?: readonly string[] | undefined
 }
 
 const ZERO_HASH = `0x${'0'.repeat(64)}`

@@ -69,8 +69,8 @@ describe('Statoblast: fork migration', () => {
 			const burnAmount = zoltarForkThreshold / 5n
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
-			await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attackerClient.account.address, securityPoolUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(attackerClient, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attackerClient.account.address, securityPoolUnderwritingLimitAttoEth)
 
 			const repBalanceInGenesisPool = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 			assert.ok(repBalanceInGenesisPool > 0n, 'genesis pool should contain rep before the fork')
@@ -315,7 +315,7 @@ describe('Statoblast: fork migration', () => {
 			assert.notEqual(scalarQuestionId, questionId, 'the universe fork question must be unrelated to the SecurityPool binary question')
 
 			await createQuestion(client, scalarForkQuestion, [])
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 			await forkUniverse(client, genesisUniverse, scalarQuestionId)
@@ -404,7 +404,7 @@ describe('Statoblast: fork migration', () => {
 			const scalarQuestionId = getQuestionId(scalarForkQuestion, [])
 
 			await createQuestion(client, scalarForkQuestion, [])
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, repDeposit / 4n)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, repDeposit / 4n)
 			await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, openInterestAmount)
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 			await forkUniverse(client, genesisUniverse, scalarQuestionId)
@@ -436,8 +436,8 @@ describe('Statoblast: fork migration', () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
 			const startBalance = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
-			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, client.account.address, repDeposit)
-			strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), 1n * PRICE_PRECISION, 'Price was not set!')
+			await manipulatePriceOracleAndPerformOperation(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, client.account.address, repDeposit)
+			strictEqualTypeSafe(await getLastPrice(client, securityPoolAddresses.openOraclePriceCoordinator), 1n * PRICE_PRECISION, 'Price was not set!')
 			approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool), 0n, 100n, 'Did not empty security pool of rep')
 			approximatelyEqual(await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address), startBalance + repDeposit, 100n, 'Did not get rep back')
 

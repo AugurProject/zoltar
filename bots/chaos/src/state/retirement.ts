@@ -129,21 +129,21 @@ function timestamp(value: unknown, label: string) {
 function parsePolicies(value: unknown): RetirementPolicies {
 	const policies = record(value, 'retirement.policies')
 	exactKeys(policies, ['exitAfterCompletion', 'exitUnmatchedShares', 'maximumExitLossBps', 'migrateExistingClaims', 'sweepAssets', 'unwrapWeth'], [], 'retirement.policies')
-	for (const key of ['exitAfterCompletion', 'exitUnmatchedShares', 'migrateExistingClaims', 'sweepAssets', 'unwrapWeth'] as const) {
-		if (typeof policies[key] !== 'boolean') throw new Error(`retirement.policies.${key} must be a boolean`)
+	const policy = (key: 'exitAfterCompletion' | 'exitUnmatchedShares' | 'migrateExistingClaims' | 'sweepAssets' | 'unwrapWeth') => {
+		const value = policies[key]
+		if (typeof value !== 'boolean') throw new Error(`retirement.policies.${key} must be a boolean`)
+		return value
 	}
+	const exitAfterCompletion = policy('exitAfterCompletion')
+	const exitUnmatchedShares = policy('exitUnmatchedShares')
+	const migrateExistingClaims = policy('migrateExistingClaims')
+	const sweepAssets = policy('sweepAssets')
+	const unwrapWeth = policy('unwrapWeth')
 	const maximumExitLossBps = policies['maximumExitLossBps']
 	if (typeof maximumExitLossBps !== 'number' || !Number.isSafeInteger(maximumExitLossBps) || maximumExitLossBps < 0 || maximumExitLossBps > 10_000) {
 		throw new Error('retirement.policies.maximumExitLossBps must be an integer from 0 through 10000')
 	}
-	return {
-		exitAfterCompletion: policies['exitAfterCompletion'] as boolean,
-		exitUnmatchedShares: policies['exitUnmatchedShares'] as boolean,
-		maximumExitLossBps,
-		migrateExistingClaims: policies['migrateExistingClaims'] as boolean,
-		sweepAssets: policies['sweepAssets'] as boolean,
-		unwrapWeth: policies['unwrapWeth'] as boolean,
-	}
+	return { exitAfterCompletion, exitUnmatchedShares, maximumExitLossBps, migrateExistingClaims, sweepAssets, unwrapWeth }
 }
 
 function parsePosition(value: unknown, index: number): DurableV3Position {

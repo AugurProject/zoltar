@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { adjustedNetProfitWeth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, type RiskLimits } from '#core/safety-controls'
+import { adjustedNetProfitWeth, plannedGasPriceAttoEth, positionConsumesRisk, positionRiskLimitMismatch, projectedLifecycleGasReserveAttoWeth, type RiskLimits } from '#core/safety-controls'
+import { MAX_PRIORITY_FEE_PER_GAS, maximumFeePerGas } from '@zoltar/bot-shared/execution/transaction-submission'
 
 const DEFAULT_RISK_LIMITS: RiskLimits = {
 	lifecycleGasReserveAttoWeth: 10n ** 16n,
@@ -113,5 +114,12 @@ describe('execution risk controls', () => {
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 5n * 10n ** 15n + 1n }, limits, minedDay)).toContain('UTC-day gas spend')
 		expect(positionRiskLimitMismatch({ capitalAtRiskAttoWeth: 0n, positions, projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toBeUndefined()
 		expect(positionRiskLimitMismatch({ archivedDailyGasSpentAttoWeth: 1n, capitalAtRiskAttoWeth: 0n, positions: [], projectedGasCostAttoWeth: 20n * 10n ** 15n }, limits, recoveryDay)).toContain('UTC-day gas spend')
+	})
+
+	test('plans gas at twice the base fee plus the shared priority fee, covering the signed one-block dispute ceiling', () => {
+		for (const baseFeePerGas of [1n, 7n, 10n ** 9n, 37n * 10n ** 9n]) {
+			expect(plannedGasPriceAttoEth(baseFeePerGas)).toBe(baseFeePerGas * 2n + MAX_PRIORITY_FEE_PER_GAS)
+			expect(plannedGasPriceAttoEth(baseFeePerGas)).toBeGreaterThanOrEqual(maximumFeePerGas(baseFeePerGas, 1n))
+		}
 	})
 })

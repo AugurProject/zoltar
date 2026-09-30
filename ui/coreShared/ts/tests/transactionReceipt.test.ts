@@ -38,7 +38,7 @@ describe('submitted transaction receipts', () => {
 		const onTransactionReplaced = mock(() => undefined)
 		const onKnownReceipt = mock(() => undefined)
 
-		await expect(waitForSubmittedTransactionReceipt(replacementClient('cancelled'), originalHash, { onKnownReceipt, onTransactionReplaced })).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		await expect(waitForSubmittedTransactionReceipt(replacementClient('cancelled'), originalHash, { onKnownReceipt, onTransactionReplaced })).rejects.toThrow('Transaction was canceled in the wallet before confirmation.')
 
 		expect(onTransactionReplaced).toHaveBeenCalledWith(replacementHash, 'cancelled')
 		expect(onKnownReceipt).toHaveBeenCalledTimes(1)

@@ -5,7 +5,7 @@ import { sameAddress as addressesMatch } from '@zoltar/core-shared/evm/address'
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { CANONICAL_PROXY_DEPLOYER, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, planningDeadline, randomDeadline, tokenInventory } from './planning.ts'
@@ -17,7 +17,6 @@ const shareForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapsh
 export const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
 const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 const BPS_DENOMINATOR = 10_000n
-const CANONICAL_PROXY_DEPLOYER = getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12')
 const ZERO_SALT = toHex(0, { size: 32 })
 const GENESIS_TRADING_FEE_BPS = 30
 

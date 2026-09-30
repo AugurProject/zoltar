@@ -17,7 +17,7 @@ import { getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, forkUn
 
 type SecurityPoolAddresses = {
 	escalationGame: Address
-	priceOracleManagerAndOperatorQueuer: Address
+	openOraclePriceCoordinator: Address
 	securityPool: Address
 	shareToken: Address
 	truthAuction: Address
@@ -74,7 +74,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		if ((await getTotalUnderwritingLimitAttoEth(client, securityPoolAddresses.securityPool)) > 0n) {
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		}
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		await mockWindow.advanceTime(10n * DAY)
@@ -110,7 +110,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		const forkThresholdAttoRep = (await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(endTime + 10000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 	}
 
@@ -126,7 +126,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		await approveAndDepositRepToVault(passiveRepHolder, 2n * forkThresholdAttoRep, questionId)
 		await mockWindow.setTime(endTime + 10000n)
 		const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
 		const openInterestAmount = 10n * 10n ** 18n
 		const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[1])
@@ -236,7 +236,7 @@ export function createStatoblastTruthAuctionScenarioHelpers({
 		await mockWindow.setTime(endTime + 10000n)
 		const repBalanceAttoRep = await getERC20Balance(client, getRepTokenAddress(genesisUniverse), securityPoolAddresses.securityPool)
 		if (strayRepBeforeFork > 0n) await transferRepToAddress(client, getInfraContractAddresses().securityPoolForker, strayRepBeforeFork)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		return {
 			forkData: await getSecurityPoolForkerForkData(client, securityPoolAddresses.securityPool),

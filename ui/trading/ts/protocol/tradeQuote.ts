@@ -44,9 +44,15 @@ function deadlineAtBlock(expiry: TransactionExpiry, blockTimestamp: bigint) {
 }
 
 /** A stable simulation whose deadline is resolved against the pinned block's timestamp. */
-export async function simulateWithDeadline<T>(client: Pick<WalletClient, 'getBlock'>, expiry: TransactionExpiry, simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>, deadline: bigint) => Promise<T>) {
+export async function simulateWithDeadline<T>(
+	client: Pick<WalletClient, 'getBlock'>,
+	expiry: TransactionExpiry,
+	simulate: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>, deadline: bigint) => Promise<T>,
+	resolveDeadline?: (block: Readonly<{ blockNumber: bigint; blockHash: Hash; blockTimestamp: bigint }>, requestedDeadline: bigint) => Promise<bigint>,
+) {
 	const block = await latestBlockIdentity(client)
-	const deadline = deadlineAtBlock(expiry, block.blockTimestamp)
+	const requestedDeadline = deadlineAtBlock(expiry, block.blockTimestamp)
+	const deadline = resolveDeadline === undefined ? requestedDeadline : await resolveDeadline(block, requestedDeadline)
 	return { blockNumber: block.blockNumber, blockHash: block.blockHash, deadline, result: await simulate(block, deadline) }
 }
 

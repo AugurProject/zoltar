@@ -125,21 +125,21 @@ export const createAccountTransactionLoader = (deps: AccountDialogDeps) => {
 		state.account = account
 		activityDetailState.activeAccountTransactions = accountStateDuringStagedRefresh(previousState, state, stagedRefresh)
 		interface AccountRenderOptions {
-			previous?: ReadonlyMap<string, string>
+			previous?: ReadonlyMap<string, string> | undefined
 			highlight?: boolean
 		}
 
 		const render = ({ previous = new Map<string, string>(), highlight = false }: AccountRenderOptions = {}) => {
 			const focusedCard = document.activeElement?.closest<HTMLElement>('.account-transaction[data-live-key]')
-			const focusedTransactionKey = focusedCard?.dataset.liveKey
+			const focusedTransactionKey = focusedCard?.dataset['liveKey']
 			const focusedControls = focusedCard ? [...focusedCard.querySelectorAll<HTMLElement>('a, button, summary')] : []
 			const focusedControlIndex = document.activeElement instanceof HTMLElement ? focusedControls.indexOf(document.activeElement) : -1
-			const outsideFocusKey = focusedCard || !(document.activeElement instanceof HTMLElement) ? undefined : document.activeElement.dataset.liveFocus
+			const outsideFocusKey = focusedCard || !(document.activeElement instanceof HTMLElement) ? undefined : document.activeElement.dataset['liveFocus']
 			const visibleCards = [...detailContent.querySelectorAll<HTMLElement>('.account-transaction[data-live-key]')]
 			const anchorCard = focusedCard ?? visibleCards.find(card => card.getBoundingClientRect().bottom > dialog.getBoundingClientRect().top)
-			const anchorKey = anchorCard?.dataset.liveKey
+			const anchorKey = anchorCard?.dataset['liveKey']
 			const anchorTop = anchorCard?.getBoundingClientRect().top
-			const openTransactionKeys = new Set([...detailContent.querySelectorAll<HTMLElement>('.account-transaction-action[open]')].map(action => action.closest<HTMLElement>('.account-transaction[data-live-key]')?.dataset.liveKey))
+			const openTransactionKeys = new Set([...detailContent.querySelectorAll<HTMLElement>('.account-transaction-action[open]')].map(action => action.closest<HTMLElement>('.account-transaction[data-live-key]')?.dataset['liveKey']))
 			const header = element('div', 'account-transactions-header')
 			header.append(element('p', 'eyebrow', 'Sent transactions'), element('h3', '', state.account.label ?? state.account.address), element('code', '', state.account.address), element('p', 'data-note', `${number(state.loaded.length)} of ${number(state.total)} sent transactions`))
 			const list = element('div', 'account-transactions')
@@ -177,7 +177,7 @@ export const createAccountTransactionLoader = (deps: AccountDialogDeps) => {
 					const argumentsContent = element('div', 'account-transaction-arguments')
 					argumentsContent.append(decodedArgumentsTable(transaction.action_argument_schema, transaction.action_arguments, transaction.action_display_arguments, transaction.chain_id))
 					const summary = element('summary', '', 'Decoded arguments')
-					summary.dataset.liveFocus = 'decoded-arguments'
+					summary.dataset['liveFocus'] = 'decoded-arguments'
 					action.append(summary, argumentsContent)
 					card.append(action)
 				}
@@ -186,7 +186,7 @@ export const createAccountTransactionLoader = (deps: AccountDialogDeps) => {
 			if (state.loaded.length === 0) list.append(element('p', 'state-placeholder', 'No sent transactions were found.'))
 			const more = element('button', 'secondary account-transactions-more', state.pageLoading ? 'Loading more transactions…' : 'Show more transactions')
 			more.type = 'button'
-			more.dataset.liveFocus = 'show-more-transactions'
+			more.dataset['liveFocus'] = 'show-more-transactions'
 			more.hidden = canonicalState.refreshRequired || state.nextPageCursor === undefined || (state.pageError !== undefined && state.pageErrorAppend)
 			more.disabled = canonicalState.refreshRequired || state.pageLoading
 			more.addEventListener('click', () => activityDetailState.activeAccountLoadMore?.())

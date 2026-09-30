@@ -7,7 +7,6 @@ import { AccountMenu, AccountMenuNetworkFact } from '@zoltar/ui-core-shared/app/
 import type { ComponentChildren } from 'preact'
 import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import * as appCopy from '../copy/app.js'
-import { formatSwitchNetworkAction } from '../copy/availability.js'
 
 /** The subset of the deployment wallet session the toolbar button presents. */
 type DeploymentWalletState = Readonly<{ account: string | undefined; connecting: boolean; ready: boolean }>
@@ -96,7 +95,7 @@ export function TradingWalletControls({
 					actions={showsChangeWalletAction ? <WalletConnectionControl className='secondary wallet-button' disabled={workflowLocked} onClick={onWalletConnectRequest} label={appCopy.changeWallet} /> : undefined}
 				/>
 			) : null}
-			{showsSwitchNetworkAction ? <WalletNetworkControl badge={coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)} label={formatSwitchNetworkAction(requiredNetworkName)} disabled={workflowLocked} onClick={onSwitchNetwork} /> : null}
+			{showsSwitchNetworkAction ? <WalletNetworkControl badge={coreAppCopy.formatWrongNetworkBadgeLabel(getChainDisplayLabel(walletChainId?.toString()) ?? coreAppCopy.unknownNetwork)} label={coreAppCopy.formatSwitchToNetwork(requiredNetworkName)} disabled={workflowLocked} onClick={onSwitchNetwork} /> : null}
 			{showsConnectAction ? <WalletConnectionControl className='secondary wallet-button' disabled={workflowLocked} onClick={onWalletConnectRequest} label={appCopy.connectWallet} /> : null}
 		</div>
 	)

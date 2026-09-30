@@ -20,7 +20,7 @@ export type ContractMetadata = {
 	readonly kind: string
 	readonly provenance: string
 	readonly discoveryBlock?: bigint
-	readonly discoveryTxHash?: Hash
+	readonly discoveryTxHash?: Hash | undefined
 	readonly configuredDeploymentBlock?: bigint
 	readonly deploymentBlock?: bigint
 	readonly deploymentTimestamp?: Date
@@ -54,8 +54,8 @@ type ArgumentSchema = {
 export type DecodedRecord = {
 	readonly name?: string
 	readonly signature?: string
-	readonly arguments?: SerializedArguments
-	readonly displayArguments?: SerializedArguments
+	readonly arguments?: SerializedArguments | undefined
+	readonly displayArguments?: SerializedArguments | undefined
 	readonly argumentSchema?: readonly ArgumentSchema[]
 	readonly referencedAddresses?: readonly Address[]
 	readonly status: 'decoded' | 'unknown' | 'failed'
@@ -70,7 +70,7 @@ export type StoredLog = {
 	readonly transactionIndex: number
 	readonly logIndex: number
 	readonly address: Address
-	readonly contractKind?: string
+	readonly contractKind?: string | undefined
 	readonly topics: readonly Hex[]
 	readonly data: Hex
 	readonly decoded: DecodedRecord

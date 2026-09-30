@@ -1,5 +1,5 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
-import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, getLiquidationMigrationSecurityMultiplierBps, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
 import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -42,9 +42,7 @@ export function isVaultHealthyAtFactor({
 	const baseRequiredRepAttoRep = mulDivCeil(openInterestAttoEth, repPerEthPrice, LIQUIDATION_PRICE_PRECISION)
 	const associatedRequiredAttoRep = mulDivCeil(mulDivCeil(baseRequiredRepAttoRep, poolSecurityMultiplierBps, LIQUIDATION_BPS_DENOMINATOR), healthFactorBps, LIQUIDATION_BPS_DENOMINATOR)
 	if (poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep < associatedRequiredAttoRep) return false
-	const configuredMigrationMultiplierBps = LIQUIDATION_BPS_DENOMINATOR + (poolSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
-	const liquidationReserveMultiplierBps = LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS
-	const migrationMultiplierBps = configuredMigrationMultiplierBps < liquidationReserveMultiplierBps ? liquidationReserveMultiplierBps : configuredMigrationMultiplierBps
+	const migrationMultiplierBps = getLiquidationMigrationSecurityMultiplierBps(poolSecurityMultiplierBps)
 	const freeRequiredAttoRep = mulDivCeil(mulDivCeil(baseRequiredRepAttoRep, migrationMultiplierBps, LIQUIDATION_BPS_DENOMINATOR), healthFactorBps, LIQUIDATION_BPS_DENOMINATOR)
 	return poolHeldVaultRepBackingAttoRep >= freeRequiredAttoRep
 }
@@ -74,9 +72,7 @@ export function isLiquidationBeyondMinPriceDistance({
 	if (poolSecurityMultiplierBps < LIQUIDATION_BPS_DENOMINATOR) return false
 	const valueScale = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
 	const associatedRepThreshold = ((poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) / (openInterestAttoEth * poolSecurityMultiplierBps)
-	const configuredMigrationMultiplierBps = LIQUIDATION_BPS_DENOMINATOR + (poolSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
-	const liquidationReserveMultiplierBps = LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS
-	const migrationSecurityMultiplierBps = configuredMigrationMultiplierBps < liquidationReserveMultiplierBps ? liquidationReserveMultiplierBps : configuredMigrationMultiplierBps
+	const migrationSecurityMultiplierBps = getLiquidationMigrationSecurityMultiplierBps(poolSecurityMultiplierBps)
 	const migrationThreshold = (poolHeldVaultRepBackingAttoRep * valueScale) / (openInterestAttoEth * migrationSecurityMultiplierBps)
 	const thresholdPrice = associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold
 	if (currentPrice <= thresholdPrice) return false
@@ -182,9 +178,9 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 		case 'Target backingUnits changed':
 		case 'Target commitment changed':
 			return liquidationCopy.targetSnapshotChangedError
-		case 'stale liquidation':
+		case 'Stale liquidation':
 			return liquidationCopy.stagedLiquidationStaleError
-		case 'staged operation expired':
+		case 'Staged operation expired':
 			return liquidationCopy.stagedLiquidationExpiredError
 		case 'Target commitment':
 			return liquidationCopy.targetMinimumDebtError

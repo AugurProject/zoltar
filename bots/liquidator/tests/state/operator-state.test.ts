@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertIntentSender, clearMarketEvidenceForConfigurationChange, commitReconciledIntent, initialRuntimeState, loadDurableState, operatorSnapshot, recoveredIntentCanBeResubmitted, resolveRecoveredIntentJournal, saveDurableState } from '../../src/state/operator-state.ts'
@@ -37,10 +37,25 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-schema-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [], version: 2 }), 'utf8')
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingStagedOperations: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
 			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions')
-			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingTransactions: [], version: 2 }), 'utf8')
+			await writeFile(path, JSON.stringify({ activities: [], chainId: 1, pendingTransactions: [], version: 2 }), { encoding: 'utf8', mode: 0o600 })
 			await expect(loadDurableState(path, 1)).rejects.toThrow('pendingStagedOperations')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('loads only an owner-only regular state journal', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-owner-'))
+		const path = join(directory, 'state.json')
+		try {
+			await saveDurableState(path, initialRuntimeState(true, undefined, 1))
+			await chmod(path, 0o644)
+			await expect(loadDurableState(path, 1)).rejects.toThrow('must have owner-only mode 0600')
+			await chmod(path, 0o600)
+			await symlink(path, join(directory, 'linked.json'))
+			await expect(loadDurableState(join(directory, 'linked.json'), 1)).rejects.toThrow('must not be a symbolic link')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}
@@ -239,7 +254,7 @@ describe('liquidator durable state', () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-state-'))
 		const path = join(directory, 'state.json')
 		try {
-			await writeFile(path, '{"version":2,"chainId":1,"activities":[],"pendingStagedOperations":[],"pendingTransactions":"invalid"}')
+			await writeFile(path, '{"version":2,"chainId":1,"activities":[],"pendingStagedOperations":[],"pendingTransactions":"invalid"}', { mode: 0o600 })
 			expect(loadDurableState(path, 1)).rejects.toThrow('pendingTransactions must be an array')
 		} finally {
 			await rm(directory, { force: true, recursive: true })
@@ -272,6 +287,7 @@ describe('liquidator durable state', () => {
 					],
 					version: 2,
 				}),
+				{ mode: 0o600 },
 			)
 			expect(loadDurableState(path, 1)).rejects.toThrow('hash does not match')
 		} finally {
@@ -320,6 +336,7 @@ describe('liquidator durable state', () => {
 					],
 					version: 2,
 				}),
+				{ mode: 0o600 },
 			)
 			expect(loadDurableState(path, 1)).rejects.toThrow('sender does not match')
 		} finally {

@@ -1176,7 +1176,7 @@ describe('Auction', () => {
 			const bob = createTestClient(1)
 			const carol = createTestClient(2)
 			const winningTick = tickForPrice(7n * 10n ** 18n)
-			const bidAmounts = [1n * 10n ** 18n, 2n * 10n ** 18n, 4n * 10n ** 18n]
+			const bidAmounts = [1n * 10n ** 18n, 2n * 10n ** 18n, 4n * 10n ** 18n] as const
 
 			await submitBid(alice, auctionAddress, winningTick, bidAmounts[0])
 			await submitBid(bob, auctionAddress, winningTick, bidAmounts[1])

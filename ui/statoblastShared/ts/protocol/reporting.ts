@@ -1,6 +1,9 @@
+import { getReportingSubmissionTimingGuard } from './reportingTiming.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
-import { formatUnits, zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { zeroAddress, type Address, type ContractFunctionParameters } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
@@ -462,14 +465,56 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		}))
 	const useWalletFunding = (contributionFunding ?? (forkContinuation ? 'vault' : 'wallet')) === 'wallet'
 	if (useWalletFunding && forkContinuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
-	const hash = await writeContractAndWait(client, () => ({
+	if (escalationGameAddress !== zeroAddress) {
+		const [escalationEndTime, block] = await Promise.all([client.readContract({ address: escalationGameAddress, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate', args: [] }), client.getBlock()])
+		const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime })
+		if (timingGuard !== undefined) throw new Error(timingGuard)
+	}
+
+	const callParams = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
-		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(reviewAmountAttoRep, 18)),
-		reviewAmount: `${formatUnits(reviewAmountAttoRep, 18)} REP`,
+		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)),
+		reviewAmount: formatCurrencyBalanceWithUnit(reviewAmountAttoRep, commonCopy.rep),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
-	}))
+	}
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: securityPoolAddress,
+			refreshFundingRequirements: async () => {
+				if (!useWalletFunding) return undefined
+				const tokenAddress = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken' })
+				return [{ tokenAddress, amount: reviewAmountAttoRep }]
+			},
+			validateBeforeSubmit: async () => {
+				const [currentGame, systemState] = await Promise.all([
+					client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' }),
+					client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'systemState' }),
+				])
+				if (currentGame !== escalationGameAddress || getSecurityPoolSystemState(systemState) !== 'operational') throw new Error('Reporting changed. Review the pool again.')
+				if (!useWalletFunding) {
+					const [backingUnits] = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'securityVaults', args: [client.account.address] })
+					const backing = await client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'backingUnitsToAttoRep', args: [backingUnits] })
+					if (backing < reviewAmountAttoRep) throw new Error('Vault REP backing changed. Review the report again.')
+				}
+				if (currentGame !== zeroAddress) {
+					const [continuation, endTime, acceptedDeposit] = await Promise.all([
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'forkContinuation' }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'getEscalationGameEndDate' }),
+						client.readContract({ address: currentGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [getReportingOutcomeValue(outcome), amountAttoRep] }),
+					])
+					if (useWalletFunding && continuation) throw new Error('Fork continuations use vault-funded escalation deposits.')
+					if (acceptedDeposit[0] !== reviewAmountAttoRep || acceptedDeposit[0] <= 0n) throw new Error('The report amount changed. Review the report again.')
+					const block = await client.getBlock()
+					const timingGuard = getReportingSubmissionTimingGuard({ currentTime: block.timestamp, escalationEndTime: endTime })
+					if (timingGuard !== undefined) throw new Error(timingGuard)
+				}
+			},
+		},
+	])
+	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'reportOutcome',
 		hash,
@@ -495,7 +540,7 @@ export async function approveReportingRep(client: WriteClient, securityPoolAddre
 export async function withdrawEscalationFromSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[], claimAmountAttoRep?: bigint) {
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	let reviewTitle = transactionCopy.settleEscalationDeposits
-	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatUnits(claimAmountAttoRep, 18))
+	if (claimAmountAttoRep !== undefined) reviewTitle = claimAmountAttoRep === 0n ? reportingCopy.clearDeposits(getEscalationSideLabel(outcome)) : reportingCopy.claimDeposits(getEscalationSideLabel(outcome), formatCurrencyBalance(claimAmountAttoRep))
 	const hash = await writeContractAndWait(client, () => ({
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,

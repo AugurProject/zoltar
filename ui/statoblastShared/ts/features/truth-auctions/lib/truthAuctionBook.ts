@@ -1,3 +1,4 @@
+import { getTruthAuctionBidTimingGuardMessage } from '../../../protocol/truthAuctionTiming.js'
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION_PRICE_PRECISION } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
@@ -6,6 +7,7 @@ import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.j
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
 
 type TruthAuctionDisposition = {
@@ -457,11 +459,13 @@ export function getTruthAuctionBidGuardMessage({
 	truthAuction: TruthAuctionMetrics | undefined
 	walletBalanceAttoEth: bigint | undefined
 }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before submitting a truth auction bid.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('submitting a truth auction bid') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (truthAuction === undefined) return 'Loading truth auction.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'
-	if (isTruthAuctionBiddingClosed(truthAuction, currentTimestamp)) return 'Truth auction has ended.'
+	if (truthAuction.timeRemaining === 0n) return 'Truth auction has ended.'
+	const timingGuardMessage = getTruthAuctionBidTimingGuardMessage(currentTimestamp, truthAuction.auctionEndsAt)
+	if (timingGuardMessage !== undefined) return timingGuardMessage
 
 	const trimmedAmount = submitBidAmountInput.trim()
 	if (trimmedAmount === '') return 'Enter a bid amount greater than zero.'

@@ -5,7 +5,7 @@ import { createDashboardRecoveryView } from './dashboard-recovery-view.js'
 import { registerWorkflowReconciliation } from './workflow-reconciliation.js'
 import { createDashboardSettingsView } from './dashboard-settings-view.js'
 import { createWorkflowHistory } from './workflow-history.js'
-import { requestWithTimeout } from '@zoltar/bot-shared/dashboard/polling'
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, requestWithTimeout, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { optionalRecord as record } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { createExecutionPolicyDraft } from './execution-policy-draft.js'
@@ -530,8 +530,8 @@ const { renderConfiguration, renderCountdown } = createDashboardSettingsView({
 	},
 })
 
-const stateRequestTimeoutMilliseconds = 5_000
-const configurationRequestTimeoutMilliseconds = 5_000
+/** Settings mutations validate and persist on the server, so they get longer than the shared read timeouts. */
+const mutationRequestTimeoutMilliseconds = 5_000
 const connectivityMutationTimeoutMilliseconds = 30_000
 const stateRefreshMilliseconds = 10_000
 const ecosystemOrder = ['zoltar', 'statoblast', 'open-oracle', 'trading'] as const
@@ -1049,7 +1049,7 @@ function refresh() {
 	let stateAvailable = false
 	let configurationAvailable = false
 	refreshPromise = (async () => {
-		const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', stateRequestTimeoutMilliseconds), requestJson('/api/configuration', configurationRequestTimeoutMilliseconds)])
+		const [stateResult, configurationResult] = await Promise.allSettled([requestJson('/api/state', STATE_REQUEST_TIMEOUT_MS), requestJson('/api/configuration', CONFIGURATION_REQUEST_TIMEOUT_MS)])
 		// Transaction explorer links come from the configuration, so it must be current before the state renders.
 		const parsedConfiguration = configurationResult.status === 'fulfilled' ? parseConfiguration(configurationResult.value) : undefined
 		if (parsedConfiguration !== undefined) configuration = parsedConfiguration
@@ -1109,7 +1109,7 @@ async function reconcileUnknownMutation(error: unknown, status: HTMLElement, sco
 	return { handled: true, reconciled }
 }
 
-async function put(path: string, value: unknown, timeoutMilliseconds = configurationRequestTimeoutMilliseconds) {
+async function put(path: string, value: unknown, timeoutMilliseconds = mutationRequestTimeoutMilliseconds) {
 	const body = JSON.stringify(value)
 	if (body === undefined) throw new Error('Dashboard mutation body is not serializable')
 	return await requestJson(path, timeoutMilliseconds, {

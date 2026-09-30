@@ -1,7 +1,7 @@
 import { parsePendingTransactionIntent } from './pending-transaction-intent.ts'
 import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState } from './runtime-state.ts'
-import { readFileIfPresent, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
+import { readOwnerFileIfPresent, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
 import { getAddress, isHex, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -516,7 +516,7 @@ export function operatorSnapshot(state: RuntimeState, execute: boolean, marketCo
 
 export async function loadDurableState(path: string, expectedChainId: number): Promise<DurableState> {
 	if (!Number.isSafeInteger(expectedChainId) || expectedChainId < 1) throw new Error('Expected state chain ID must be a positive integer')
-	const contents = await readFileIfPresent(path)
+	const contents = await readOwnerFileIfPresent(path, 'Liquidator state')
 	if (contents === undefined) return { activities: [], chainId: expectedChainId, lastScannedBlock: undefined, pendingStagedOperations: [], pendingTransactions: [], version: 2 }
 	const value: unknown = JSON.parse(contents)
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Liquidator state must be an object')

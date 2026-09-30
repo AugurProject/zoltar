@@ -3,7 +3,7 @@ import { exactNumber } from './format.ts'
 import { indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel } from './live-update.ts'
 
 export const networkIndicator = (input: {
-	readonly network?: NetworkRecord
+	readonly network?: NetworkRecord | undefined
 	readonly demo: boolean
 	readonly streamState: 'closed' | 'connecting' | 'open'
 	readonly failed: boolean

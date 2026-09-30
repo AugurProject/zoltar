@@ -13,14 +13,14 @@ import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletA
 import type { GlobalTransactionPresentation } from '@zoltar/ui-core-shared/types/components.js'
 import type { ListedSecurityPool, TradingActionResult, TradingDetails, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
-import { TradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
+import { TradingSection as ProductionTradingSection } from '@zoltar/ui-statoblast-shared/features/markets/components/TradingSection.js'
 import { NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE, NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE, UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
 import { deriveHasForkActivity } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
 import type { TradingSectionProps } from '@zoltar/ui-zoltar-shared/features/types.js'
 import type { AccountState, TradingFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
-import { useEffect, useState } from 'preact/hooks'
+import { useContext, useEffect, useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
 import { createAccountState as createEmptyAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 
@@ -30,6 +30,15 @@ function getExactValueTitles(root: ParentNode, exactValue: string) {
 		const title = element.getAttribute('title')
 		return title === exactValue || title?.startsWith(`${exactValue} `) === true
 	})
+}
+
+function TradingSection(props: Parameters<typeof ProductionTradingSection>[0]) {
+	const timestamp = useContext(ChainTimestampContext) ?? 1n
+	return (
+		<ChainTimestampContext.Provider value={timestamp}>
+			<ProductionTradingSection {...props} />
+		</ChainTimestampContext.Provider>
+	)
 }
 
 function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): ListedSecurityPool {
@@ -42,7 +51,7 @@ function createSelectedPool(overrides: Partial<ListedSecurityPool> = {}): Listed
 		forkOwnSecurityPool: false,
 		initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 		lastOraclePrice: 10n ** 18n,
-		lastOracleSettlementTimestamp: 0n,
+		lastOracleSettlementTimestamp: 1n,
 		managerAddress: zeroAddress,
 		marketDetails: createMarketDetails(),
 		migratedAttoRep: 0n,
@@ -260,6 +269,30 @@ void describe('TradingSection', () => {
 			await cleanupRenderedComponent?.()
 			cleanupRenderedComponent = undefined
 		},
+	})
+
+	test('keeps an open mint form enabled after the oracle price lapses', async () => {
+		const onCreateCompleteSet = mock(() => undefined)
+		const props = createTradingSectionProps({ onCreateCompleteSet, tradingForm: createTradingForm({ completeSetAmount: '0.1' }) })
+		const rendered = await renderIntoDocument(
+			<ChainTimestampContext.Provider value={1n}>
+				<TradingSection {...props} />
+			</ChainTimestampContext.Provider>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Mint complete sets' }))
+		const dialog = within(document.body).getByRole('dialog')
+		await act(() =>
+			render(
+				<ChainTimestampContext.Provider value={10n ** 6n}>
+					<TradingSection {...props} />
+				</ChainTimestampContext.Provider>,
+				rendered.container,
+			),
+		)
+		expect(getTransactionButtonState(dialog, 'Mint complete sets').disabled).toBe(false)
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Mint complete sets' }))
+		expect(onCreateCompleteSet).toHaveBeenCalled()
 	})
 
 	for (const [blockedAccount, fixLabel] of [

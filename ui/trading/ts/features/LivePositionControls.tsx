@@ -4,7 +4,7 @@ import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ProbabilityBar } from '../components/ProbabilityBar.js'
 import { formatOutcomeQuantity, SHARE_QUANTITY_DECIMALS } from '../lib/shareValue.js'
 import type { TradeSettings } from '../lib/tradeSettings.js'
@@ -17,7 +17,7 @@ import type { TransactionPhase } from './live/transactionWorkflow.js'
 import type { TradeMode } from './live/useTransactionWorkflow.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { TradeEstimatePanel } from './TradeEstimatePanel.js'
-import { formatAmountInput, probabilityPercent, roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
+import { probabilityPercent, roundDownShortcut, tradeTicketModel, type TradeEstimate, type TradeTicketModel } from './live/tradeTicketModel.js'
 import { useDebouncedValue } from './live/useDebouncedValue.js'
 
 const ESTIMATE_DEBOUNCE_MILLISECONDS = 250
@@ -71,7 +71,7 @@ function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { 
 		<WarningSurface role='status' surface='flat' variant='compact' className='trade-invalid-coverage'>
 			<p>{ticketCopy.invalidCoverageExplanation(formatOutcomeQuantity(model.shortfall.invalidRequired, 'INVALID'), formatOutcomeQuantity(model.shortfall.invalidHeld, 'INVALID'), formatOutcomeQuantity(sellable, side, 4, 'down'), side)}</p>
 			{sellable > 0n ? (
-				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatAmountInput(roundDownShortcut(sellable), SHARE_QUANTITY_DECIMALS))}>
+				<button type='button' className='secondary' disabled={disabled} onClick={() => onUseSellable(formatCurrencyInputBalance(roundDownShortcut(sellable), SHARE_QUANTITY_DECIMALS))}>
 					{ticketCopy.sellInsteadAction(formatOutcomeQuantity(sellable, side, 4, 'down'))}
 				</button>
 			) : null}
@@ -101,6 +101,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 		networkMismatchReason: wallet.networkMismatchReason,
 		walletEthAttoEth: wallet.walletEthAttoEth,
 		marketClosed: closed,
+		nowSeconds,
 		acknowledgedImpactBps: ticket.acknowledgedImpactBps,
 		workflowLocked,
 	})
@@ -160,7 +161,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 			{model.shortcuts.length === 0 ? null : (
 				<div className='trade-amount-shortcuts' role='group' aria-label={ticketCopy.sellShortcutsLabel}>
 					{model.shortcuts.map(shortcut => (
-						<button key={shortcut.label} type='button' className='secondary' disabled={controlsDisabled} onClick={() => ticket.setAmount(formatAmountInput(shortcut.value, SHARE_QUANTITY_DECIMALS))}>
+						<button key={shortcut.label} type='button' className='secondary' disabled={controlsDisabled} onClick={() => ticket.setAmount(formatCurrencyInputBalance(shortcut.value, SHARE_QUANTITY_DECIMALS))}>
 							{shortcut.label}
 						</button>
 					))}

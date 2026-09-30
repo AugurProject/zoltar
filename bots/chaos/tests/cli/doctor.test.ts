@@ -19,8 +19,6 @@ import {
 	type ChaosDoctorProbeResult,
 } from '../../src/cli/doctor.ts'
 import { loadSettings, parseSettings, serializedSettings } from '../../src/config/settings.ts'
-import { legacyDeploymentForProfile } from '../../src/config/canonical-deployment.ts'
-import { emptyImmutableTopologyData, IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION, saveImmutableTopologyCache } from '../../src/monitoring/topology-cache.ts'
 import { executionProfileId } from '../../src/config/execution-profile.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../../src/operations/timing.ts'
 import { immutableTopologySidecarDirectory } from '../support/state-sidecars.ts'
@@ -407,40 +405,6 @@ describe('chaos launch doctor', () => {
 		expect(() => assertDoctorDurableStateScope(parsed, state, undefined, '/state.json')).toThrow('different Uniswap V3 factory')
 		state.uniswapV3Factory = undefined
 		expect(() => assertDoctorDurableStateScope(parsed, state, undefined, '/state.json')).toThrow('different Uniswap V3 factory')
-	})
-
-	test('preflights an unpinned operated Sepolia state while leaving an incompatible topology for rebuild', async () => {
-		const directory = await temporaryDirectory('zoltar-chaos-doctor-legacy-')
-		const path = join(directory, 'operator.json')
-		const stateFile = join(directory, 'chaos.sepolia.json')
-		const settings = await settingsFixture('operator.configured-placeholder.json')
-		const stored = serializedSettings(settings)
-		Reflect.deleteProperty(stored, 'deploymentPin')
-		stored.runtime.stateFile = stateFile
-		await writeFile(path, `${JSON.stringify(stored)}\n`, { mode: 0o600 })
-		const previousProfile = 'profile:v1:831bd7a49fd68a696ac753b612ce41ec5c50580b093ab8e1e5151a26883e29ae'
-		const previousDeployment = legacyDeploymentForProfile(11_155_111, previousProfile)
-		if (previousDeployment === undefined) throw new Error('Missing old Sepolia deployment fixture')
-		Reflect.deleteProperty(previousDeployment, 'uniswapV3Factory')
-		await saveImmutableTopologyCache(stateFile, { chainId: 11_155_111, ...previousDeployment }, { ...emptyImmutableTopologyData(), anchor: { blockHash: `0x${'11'.repeat(32)}`, blockNumber: '100' }, schemaVersion: IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION })
-		const pointerPath = join(immutableTopologySidecarDirectory(stateFile), 'current.json')
-		const pointerBefore = await readFile(pointerPath)
-		const state = initialDurableState(11_155_111, true, previousProfile)
-		state.activities.push({ at: new Date(0).toISOString(), message: 'Existing deployment activity', status: 'info', type: 'configuration' })
-		await saveDurableState(stateFile, state)
-		const before = await readFile(path)
-		const result = await runChaosDoctor(
-			passiveDoctorDependencies(settings, {
-				deploymentAvailability: async () => 'Waiting for deployment availability',
-				load: async () => loadSettings(path),
-				loadState: loadDurableState,
-				validateCompanionState: validateDoctorCompanionState,
-			}),
-		)
-		expect(result.checks.durableState).toBe('passed')
-		expect(result).toMatchObject({ companionState: { immutableTopology: 'rebuild-required' }, operationsAvailable: false })
-		expect(await readFile(path)).toEqual(before)
-		expect(await readFile(pointerPath)).toEqual(pointerBefore)
 	})
 
 	test('rejects mismatched-profile retirement state before network probing', async () => {

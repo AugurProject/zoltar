@@ -1,6 +1,6 @@
 import { Zoltar_Zoltar } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { WriteClient, ZoltarChildUniverseActionResult, ZoltarForkActionResult, ZoltarMigrationActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getQuestionIdHex } from './helpers.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getZoltarAddress } from './zoltarDeploymentHelpers.js'
 import { writeContractAndWait } from './core.js'
 
@@ -31,5 +31,5 @@ export async function forkZoltarUniverse(client: WriteClient, universeId: bigint
 		functionName: 'forkUniverse',
 		args: [universeId, questionId],
 	}))
-	return { action: 'forkZoltar', hash, questionId: getQuestionIdHex(questionId), universeId } satisfies ZoltarForkActionResult
+	return { action: 'forkZoltar', hash, questionId: formatQuestionIdHex(questionId), universeId } satisfies ZoltarForkActionResult
 }

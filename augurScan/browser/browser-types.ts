@@ -288,7 +288,7 @@ export interface StateCatalog {
 		block_number?: string
 		log_index?: number
 	}>
-	truncated?: Record<string, boolean>
+	truncated?: Record<string, boolean> | undefined
 	limit?: number
 	offset?: number
 	catalogVersion: string
@@ -298,8 +298,8 @@ export interface StateCatalog {
 export interface AccountReference {
 	chain_id: string
 	address: string
-	label?: string | null
-	explorer_base_url?: string
+	label?: string | null | undefined
+	explorer_base_url?: string | undefined
 }
 
 export interface AccountTransaction extends AccountReference {
@@ -339,10 +339,10 @@ export interface AccountTransactionState {
 	items?: AccountTransaction[]
 	loaded: AccountTransaction[]
 	total: number
-	nextPageCursor?: string
+	nextPageCursor?: string | undefined
 	snapshotCursor?: string
 	snapshotBlock?: string
-	pageError?: string
+	pageError?: string | undefined
 	pageErrorAppend: boolean
 	pageLoading: boolean
 }
@@ -350,11 +350,11 @@ export interface AccountTransactionState {
 export interface DialogSnapshot {
 	loadedCount: number
 	expandedKeys: string[]
-	anchorKey?: string
-	anchorTop?: number
-	focusKey?: string
+	anchorKey?: string | undefined
+	anchorTop?: number | undefined
+	focusKey?: string | undefined
 	focusIndex: number
-	outsideFocus?: string
+	outsideFocus?: string | undefined
 	scrollTop: number
 }
 
@@ -362,11 +362,11 @@ export interface CanonicalRecovery {
 	title: string
 	detail: string
 	pendingRefresh: boolean
-	logToRefresh?: ActivityRecord
-	accountToRefresh?: AccountReference
+	logToRefresh?: ActivityRecord | undefined
+	accountToRefresh?: AccountReference | undefined
 	promise: Promise<boolean>
-	chainId?: string
-	accountDialogSnapshot?: DialogSnapshot
+	chainId?: string | undefined
+	accountDialogSnapshot?: DialogSnapshot | undefined
 }
 
 export interface AddressIdentity {
@@ -384,7 +384,7 @@ export interface ChartRow {
 export interface ChartDefinition<T extends { timestamp: string }> {
 	key: Extract<keyof T, string>
 	label: string
-	decimals?: number
+	decimals?: number | undefined
 	unit?: string
 	className?: string
 	pointShape?: (row: T) => 'circle' | 'diamond'
@@ -454,13 +454,13 @@ export interface SelectEntityOptions {
 	pagination?: boolean
 	historyTargetOffset?: number
 	contextVersion?: number
-	suppliedHistory?: EntityHistory
+	suppliedHistory?: EntityHistory | undefined
 }
 
 export interface RenderEntityListOptions {
 	refreshSelected?: boolean
 	live?: boolean
-	selectedHistory?: EntityHistory
+	selectedHistory?: EntityHistory | undefined
 	detailGateReserved?: boolean
 }
 
@@ -472,7 +472,7 @@ export interface LiveChangeOptions {
 export interface LoadOptions {
 	append?: boolean
 	live?: boolean
-	replaceDepth?: number
+	replaceDepth?: number | undefined
 	contextVersion?: number
 	retainVisibleDepth?: boolean
 	portfolioTarget?: { readonly kind: 'forks' | 'lp' | 'reports'; readonly count: number }
@@ -485,7 +485,7 @@ export interface DetailOptions {
 }
 
 export interface AccountDetailOptions extends DetailOptions {
-	restoreSnapshot?: DialogSnapshot
+	restoreSnapshot?: DialogSnapshot | undefined
 }
 
 export interface LiveEventPayload {
@@ -520,7 +520,7 @@ export type LogReference = Pick<ActivityRecord, 'chain_id' | 'block_hash' | 'tx_
 
 export interface ProtocolAddressLinkOptions {
 	knownLabel?: unknown
-	chainId?: string
+	chainId?: string | undefined
 	className?: string
 	compact?: boolean
 }

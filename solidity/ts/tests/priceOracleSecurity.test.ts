@@ -287,7 +287,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
 		await approveAndDepositRepToVault(client, repDeposit, questionId, statoblastSecurityMultiplierBps * 2n)
 		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		priceOracle = addresses.priceOracleManagerAndOperatorQueuer
+		priceOracle = addresses.openOraclePriceCoordinator
 		securityPool = addresses.securityPool
 	})
 
@@ -2199,7 +2199,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
 		const costAttoEth = await getRequestPriceCostAttoEth(attackerClient, priceOracle)
 
-		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(attackerClient, priceOracle, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth), /withdraw amount has no effect/i)
+		await assert.rejects(async () => await requestPriceIfNeededAndStageOperationWithValue(attackerClient, priceOracle, OperationType.WithdrawRep, attackerClient.account.address, repDeposit, DEFAULT_SELF_OPERATION_TIMEOUT_SECONDS, costAttoEth), /Withdraw amount has no effect/)
 
 		const pendingReportId = await getPendingReportId(client, priceOracle)
 		const pendingSettlementOperationCount = await getPendingSettlementOperationCount(client, priceOracle)
@@ -2243,7 +2243,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		if (secondExecutionLog === undefined) throw new Error('missing zero-effect withdrawal execution log')
 
 		assert.strictEqual(secondExecutionLog.args.success, false, 'second pending withdrawal should fail after the first empties the vault')
-		assert.strictEqual(secondExecutionLog.args.errorMessage, 'withdraw amount has no effect', 'second pending withdrawal should expose the zero-effect reason')
+		assert.strictEqual(secondExecutionLog.args.errorMessage, 'Withdraw amount has no effect', 'second pending withdrawal should expose the zero-effect reason')
 		assert.strictEqual(vaultAfterSettlement.repBackingUnits, 0n, 'first pending withdrawal should empty the vault')
 		assert.strictEqual(firstStagedOperation[1], zeroAddress, 'successful pending withdrawal should be consumed')
 		assert.strictEqual(secondStagedOperation[1], zeroAddress, 'zero-effect pending withdrawal should be consumed')
@@ -2332,7 +2332,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(executionLog.args.operationId, manualOperationId)
 		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.Liquidation))
 		assert.strictEqual(executionLog.args.success, false)
-		assert.strictEqual(executionLog.args.errorMessage, 'staged operation expired')
+		assert.strictEqual(executionLog.args.errorMessage, 'Staged operation expired')
 	})
 
 	test('staged self operations remain executable through equality and expire one second later', async () => {
@@ -2379,7 +2379,7 @@ describe('Price Oracle Refund Security Tests', () => {
 		assert.strictEqual(afterDeadlineLog.args.operationId, manualOperationId)
 		assert.strictEqual(afterDeadlineLog.args.operation, BigInt(OperationType.WithdrawRep))
 		assert.strictEqual(afterDeadlineLog.args.success, false, 'the operation should expire one second after its deadline')
-		assert.strictEqual(afterDeadlineLog.args.errorMessage, 'staged operation expired')
+		assert.strictEqual(afterDeadlineLog.args.errorMessage, 'Staged operation expired')
 	})
 
 	test('same-block execute and expire ordering assigns every deadline instant to one phase', async () => {

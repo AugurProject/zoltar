@@ -194,13 +194,13 @@ describe('funded execution orchestration', () => {
 			buyHedgeQuote: 13n,
 			sellHedgeQuote: 11n,
 		}
-		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared })])).resolves.toEqual(shared)
-		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } })])).rejects.toThrow('RPC disagreement')
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared })], 1)).resolves.toEqual(shared)
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: { ...shared, buyHedgeQuote: 14n } })], 1)).rejects.toThrow('RPC disagreement')
 	})
 
 	test('uses two agreeing execution snapshots when a third reader is offline', async () => {
 		const shared = { blockHash: `0x${'12'.repeat(32)}` as Hex, buyHedgeQuote: 13n, sellHedgeQuote: 11n }
-		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared }), Promise.reject(new TypeError('fetch failed'))])).resolves.toEqual(shared)
+		await expect(settledExecutionSnapshotWithQuorum(100n, [Promise.resolve({ endpoint: 'rpc-a', value: shared }), Promise.resolve({ endpoint: 'rpc-b', value: shared }), Promise.reject(new TypeError('fetch failed'))], 1)).resolves.toEqual(shared)
 	})
 
 	test('does not promote permissionlessly observed report tokens into the execution allowlist', () => {
@@ -247,7 +247,7 @@ describe('funded execution orchestration', () => {
 				return block
 			},
 		}))
-		expect(await receiptGasExpendituresWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'lifecycle 7', [firstReceipt, secondReceipt])).toEqual([
+		expect(await receiptGasExpendituresWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'lifecycle 7', [firstReceipt, secondReceipt], 1)).toEqual([
 			{ costAttoEth: 210_000n, minedAt: '2026-03-20T23:59:59.000Z', transactionHash: replacementHash },
 			{ costAttoEth: 420_000n, minedAt: '2026-03-21T00:00:01.000Z', transactionHash: originalHash },
 		])
@@ -298,13 +298,13 @@ describe('funded execution orchestration', () => {
 		const readers = [expected, expected].map(transaction => ({
 			getTransaction: async () => ({ ...transaction, gas: 1n, hash: originalHash, input: transaction.data }),
 		}))
-		expect(await transactionIntentWithQuorum(readers, ['https://rpc-a.example', 'https://rpc-b.example'], 'public replacement', originalHash)).toEqual(expected)
+		expect(await transactionIntentWithQuorum(readers, ['https://rpc-a.example', 'https://rpc-b.example'], 'public replacement', originalHash, 1)).toEqual(expected)
 		const alteredReader = {
 			getTransaction: async () => ({ ...expected, gas: 1n, hash: originalHash, input: '0xabcd' as Hex }),
 		}
 		const firstReader = readers[0]
 		if (firstReader === undefined) throw new Error('Test transaction reader is missing')
-		await expect(transactionIntentWithQuorum([firstReader, alteredReader], ['https://rpc-a.example', 'https://rpc-b.example'], 'public replacement', originalHash)).rejects.toThrow('RPC disagreement')
+		await expect(transactionIntentWithQuorum([firstReader, alteredReader], ['https://rpc-a.example', 'https://rpc-b.example'], 'public replacement', originalHash, 1)).rejects.toThrow('RPC disagreement')
 		expect(recoveredTransactionIntentMismatch({ data: expected.data, to: expected.to, value: '0' }, expected, address, '8')).toBeUndefined()
 		expect(recoveredTransactionIntentMismatch({ data: expected.data, to: expected.to, value: '0' }, { ...expected, data: '0xabcd' }, address, '8')).toContain('does not match')
 	})
@@ -533,10 +533,10 @@ describe('funded execution orchestration', () => {
 		const primary = transactionReceipt()
 		const secondary = { ...transactionReceipt(), gasUsed: primary.gasUsed + 1n }
 		const readers = [{ getTransactionReceipt: () => Promise.resolve(primary) }, { getTransactionReceipt: () => Promise.resolve(secondary) }]
-		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).rejects.toThrow('RPC disagreement')
+		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash], 1)).rejects.toThrow('RPC disagreement')
 		secondary.gasUsed = primary.gasUsed
 		if (primary.effectiveGasPrice === undefined) throw new Error('test receipt gas price missing')
-		expect(await transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).toEqual([
+		expect(await transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash], 1)).toEqual([
 			{
 				blockHash: primary.blockHash,
 				blockNumber: primary.blockNumber,
@@ -559,7 +559,7 @@ describe('funded execution orchestration', () => {
 				getTransactionReceipt: ({ hash }: { hash: Hex }) => (hash === replacementHash ? Promise.resolve(transactionReceipt()) : Promise.reject(new Error('receipt not found'))),
 			},
 		]
-		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending public lifecycle 7', [replacementHash, missingHash])).rejects.toThrow('receipt not found')
+		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending public lifecycle 7', [replacementHash, missingHash], 1)).rejects.toThrow('receipt not found')
 	})
 
 	test('rejects a same-height execution snapshot from a different parent hash or report state', () => {
@@ -584,24 +584,24 @@ describe('funded execution orchestration', () => {
 	test('rejects an agreeing entry receipt whose block is no longer canonical', async () => {
 		const receipt = transactionReceipt()
 		const readers = [{ getBlock: () => Promise.resolve({ hash: `0x${'90'.repeat(32)}` as Hex }) }, { getBlock: () => Promise.resolve({ hash: `0x${'90'.repeat(32)}` as Hex }) }]
-		const canonicalHash = await canonicalBlockHashWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', receipt.blockNumber)
+		const canonicalHash = await canonicalBlockHashWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', receipt.blockNumber, 1)
 		expect(() => assertReceiptSnapshotBlockHash(receipt.blockHash, canonicalHash, 'Entry')).toThrow('different canonical blocks')
 	})
 
 	test('rejects final market snapshot revalidation when endpoints diverge after pair reads', async () => {
 		const readers = [{ getBlock: () => Promise.resolve({ hash: `0x${'11'.repeat(32)}` as Hex }) }, { getBlock: () => Promise.resolve({ hash: `0x${'22'.repeat(32)}` as Hex }) }]
-		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'market snapshot final revalidation', 100n)).rejects.toThrow('RPC disagreement')
+		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'market snapshot final revalidation', 100n, 1)).rejects.toThrow('RPC disagreement')
 	})
 
 	test('retains endpoint and method context when a canonical block omits its hash', async () => {
 		const readers = [{ getBlock: () => Promise.resolve({ hash: undefined }) }]
-		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example/private'], 'pending entry 7', 100n)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending entry 7 canonical block is missing its hash')
+		await expect(canonicalBlockHashWithQuorum(readers, ['https://primary.example/private'], 'pending entry 7', 100n, 1)).rejects.toThrow('RPC https://primary.example failed while calling eth_getBlockByNumber: pending entry 7 canonical block is missing its hash')
 	})
 
 	test('rejects receipt recovery when mined gas price is missing', async () => {
 		const receipt = { ...transactionReceipt(), effectiveGasPrice: undefined }
 		const readers = [{ getTransactionReceipt: () => Promise.resolve(receipt) }, { getTransactionReceipt: () => Promise.resolve(receipt) }]
-		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash])).rejects.toThrow('effective gas price')
+		await expect(transactionReceiptsWithQuorum(readers, ['https://primary.example', 'https://secondary.example'], 'pending entry 7', [replacementHash], 1)).rejects.toThrow('effective gas price')
 	})
 
 	test('rejects lifecycle accounting from a different canonical block than its receipts', () => {
@@ -801,12 +801,18 @@ describe('funded execution orchestration', () => {
 			} satisfies EIP1193Provider
 			return createPublicClient({ chain: mainnet, transport: custom(provider) })
 		}
-		const hash = await transactionHashBySenderNonceWithQuorum([reader(), reader()], ['https://rpc-a.example', 'https://rpc-b.example'], 'public lifecycle', {
-			account: address,
-			fromBlockNumber: 100n,
-			nonce: 9n,
-			toBlockNumber: 103n,
-		})
+		const hash = await transactionHashBySenderNonceWithQuorum(
+			[reader(), reader()],
+			['https://rpc-a.example', 'https://rpc-b.example'],
+			'public lifecycle',
+			{
+				account: address,
+				fromBlockNumber: 100n,
+				nonce: 9n,
+				toBlockNumber: 103n,
+			},
+			1,
+		)
 		expect(hash).toBe(replacementHash)
 		expect(requestedNonceTags).toEqual([
 			['0x67', '0x65', '0x66'],
@@ -820,12 +826,18 @@ describe('funded execution orchestration', () => {
 			getTransactionCount: () => Promise.resolve(10n),
 		})
 		await expect(
-			transactionHashBySenderNonceWithQuorum([reader(originalHash), reader(replacementHash)], ['https://rpc-a.example', 'https://rpc-b.example'], 'public entry', {
-				account: address,
-				fromBlockNumber: 100n,
-				nonce: 9n,
-				toBlockNumber: 100n,
-			}),
+			transactionHashBySenderNonceWithQuorum(
+				[reader(originalHash), reader(replacementHash)],
+				['https://rpc-a.example', 'https://rpc-b.example'],
+				'public entry',
+				{
+					account: address,
+					fromBlockNumber: 100n,
+					nonce: 9n,
+					toBlockNumber: 100n,
+				},
+				1,
+			),
 		).rejects.toThrow('RPC disagreement')
 	})
 

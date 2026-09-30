@@ -1,4 +1,4 @@
-import { type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { encodeFunctionData, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
@@ -177,8 +177,11 @@ export async function migrateSharesFromUniverse<TReceipt extends Pick<Transactio
 	} satisfies TradingActionResult
 }
 export async function createCompleteSetInSecurityPool(client: WriteClient, securityPoolAddress: Address, amount: bigint) {
-	const game = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' })
-	if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
+	const validateBeforeSubmit = async () => {
+		const game = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' })
+		if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
+	}
+	await validateBeforeSubmit()
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)
 	const callParams = {
 		address: securityPoolAddress,
@@ -187,6 +190,19 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 		args: [],
 		value: amount,
 	}
+	client.onTransactionPlan?.([
+		{
+			...callParams,
+			contractAddress: securityPoolAddress,
+			validateBeforeSubmit: async () => {
+				const [balance, capacity] = await Promise.all([client.getBalance({ address: client.account.address }), client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getCurrentMintingCapacityAttoEth' })])
+				if (balance < amount) throw new Error('Insufficient ETH balance for minting. Gas is additional.')
+				if (capacity < amount) throw new Error('Mint capacity changed. Review the amount again.')
+				await client.estimateGas({ account: client.account, to: securityPoolAddress, data: encodeFunctionData({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'createCompleteSet' }), value: amount })
+				await validateBeforeSubmit()
+			},
+		},
+	])
 	const hash = await writeContractAndWait(client, () => callParams)
 	return {
 		action: 'createCompleteSet',

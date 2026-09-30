@@ -7,6 +7,7 @@ import { SafeERC20Ops } from '../SafeERC20Ops.sol';
 import { Zoltar } from '../Zoltar.sol';
 import { IUniformPriceDualCapBatchAuction } from './interfaces/IUniformPriceDualCapBatchAuction.sol';
 import { UniformPriceDualCapBatchAuction } from './UniformPriceDualCapBatchAuction.sol';
+import { UniformPriceDualCapBatchAuctionStorage } from './UniformPriceDualCapBatchAuctionStorage.sol';
 import { ISecurityPool, SystemState } from './interfaces/ISecurityPool.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { ESCALATION_TIME_LENGTH } from './EscalationGameTypes.sol';
@@ -429,7 +430,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		// The parent is frozen for the lifetime of its fork. Reserve its complete
 		// economic claim supply in every child, independently of how many ERC-1155
 		// balances have materialized there so far.
-		securityPool.setTotalSharesAttoShares(parent.shareTokenSupplyAttoShares());
+		securityPool.setShareTokenSupplyAttoShares(parent.shareTokenSupplyAttoShares());
 		parentSettlementCollateralAttoEth = parentData.settlementCollateralAtForkAttoEth;
 	}
 
@@ -559,7 +560,7 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 
 	function finalizeTruthAuction(ISecurityPool securityPool) external payable {
 		require(msg.value == 0, 'No repair ETH');
-		require(block.timestamp >= _getForkData(securityPool).truthAuctionStarted + SecurityPoolUtils.AUCTION_TIME, 'Auction open');
+		require(block.timestamp >= _getForkData(securityPool).truthAuctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, 'Auction open');
 		_finalizeTruthAuction(securityPool);
 	}
 
@@ -606,16 +607,16 @@ contract SecurityPoolForker is SecurityPoolForkerBase {
 		_emitForkSnapshotEvents(securityPool, address(migrationProxy), address(escalationGame), poolRepToForkAttoRep, disputeStakedRepToForkAttoRep, zoltar.getMigrationRepBalanceAttoRep(address(migrationProxy), securityPool.universeId()));
 	}
 
-	// Settles finalized truth-auction bids through the forker-owned auction.
-	// Winning and partial bids credit purchased REP into the vault and assign the
-	// corresponding share of auctioned capacity ownership. Finalized losing bids may still
-	// settle here as ETH-only refunds, in which case no vault accounting changes.
-	// Anyone can call this so that settlement is not blocked on the bidder.
 	/// @notice Accept the entire orphaned position of a finalized zero-purchase auction.
 	function takeOverUnassignedCommitment(ISecurityPool securityPool, uint256 maximumCommitmentAttoEth) external {
 		_delegateMigrationCall(vaultMigrationDelegate, abi.encodeCall(SecurityPoolForkerVaultMigrationDelegate.takeOverUnassignedCommitment, (securityPool, maximumCommitmentAttoEth)));
 	}
 
+	// Settles finalized truth-auction bids through the forker-owned auction.
+	// Winning and partial bids credit purchased REP into the vault and assign the
+	// corresponding share of auctioned capacity ownership. Finalized losing bids may still
+	// settle here as ETH-only refunds, in which case no vault accounting changes.
+	// Anyone can call this so that settlement is not blocked on the bidder.
 	function claimAuctionProceeds(ISecurityPool securityPool, address vault, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		_claimAuctionProceeds(securityPool, vault, tickIndices);
 	}

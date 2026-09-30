@@ -6,9 +6,11 @@ import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatM
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
+import { rpow } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 const PRICE_PRECISION = 10n ** 18n
 
@@ -35,16 +37,6 @@ export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefi
 export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined, remainingMintCapacityAttoEth: bigint | undefined) {
 	if (walletEthBalanceAttoEth === undefined || remainingMintCapacityAttoEth === undefined) return undefined
 	return walletEthBalanceAttoEth < remainingMintCapacityAttoEth ? walletEthBalanceAttoEth : remainingMintCapacityAttoEth
-}
-
-function rpow(value: bigint, exponent: bigint, baseUnit: bigint) {
-	let result = exponent % 2n !== 0n ? value : baseUnit
-	let squaredValue = value
-	for (let remainingExponent = exponent / 2n; remainingExponent !== 0n; remainingExponent /= 2n) {
-		squaredValue = (squaredValue * squaredValue) / baseUnit
-		if (remainingExponent % 2n !== 0n) result = (result * squaredValue) / baseUnit
-	}
-	return result
 }
 
 export function estimateMintCheckpoint({
@@ -224,7 +216,7 @@ export function getTradingMintGuardMessage({
 	totalPoolHeldAttoRep: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before minting.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before minting complete sets.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('minting complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
@@ -271,7 +263,7 @@ export function getTradingRedeemCompleteSetGuardMessage({
 	shareTokenSupplyAttoShares: bigint | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before redeeming complete sets.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before redeeming complete sets.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('redeeming complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingDetails) return 'Loading wallet share balances.'
 
@@ -316,7 +308,7 @@ export function getTradingMigrateSharesGuardMessage({
 	tradingForkUniverse: ZoltarUniverseSummary | undefined
 }) {
 	if (!hasSelectedPool) return 'Select a pool before migrating shares.'
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before migrating shares.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('migrating shares') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (loadingTradingForkUniverse) return 'Loading fork target universes.'
 	if (tradingForkUniverse === undefined) return tradingCopy.forkTargetsRefreshRequired

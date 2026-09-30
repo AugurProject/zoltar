@@ -179,6 +179,8 @@ void describe('security vault helpers', () => {
 		expect(getOracleManagerPriceValidUntilTimestamp(undefined)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(0n)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + 60n * 60n)
+		expect(getOracleManagerPriceValidUntilTimestamp(15n, 1)).toBe(315n)
+		expect(getOracleManagerPriceValidUntilTimestamp(15n, 11155111)).toBe(3615n)
 	})
 
 	void test('treats a loaded oracle validity flag as expired at the shared time boundary', () => {
@@ -219,7 +221,7 @@ void describe('security vault helpers', () => {
 			getVaultOpenInterestAttoEth: 0n,
 			minimumSecurityBondDebtAttoEth: 0n,
 			minimumVaultRepDepositAttoRep: 10n * 10n ** 18n,
-			priceOracleManagerAndOperatorQueuer: getAddress('0x00000000000000000000000000000000000000d1'),
+			openOraclePriceCoordinator: getAddress('0x00000000000000000000000000000000000000d1'),
 			repToken: getAddress('0x00000000000000000000000000000000000000a2'),
 			securityVaults: [50n * 10n ** 18n, 0n, 0n, 0n],
 			settlementCollateralAttoEth: 0n,

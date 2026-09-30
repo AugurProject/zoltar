@@ -31,6 +31,7 @@ import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { SecurityVaultFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { SecurityVaultActionResult, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseSecurityVaultOperationsParameters = WriteOperationsParameters & {
 	enabled: boolean
@@ -298,7 +299,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						securityVaultError,
-						'Connect a wallet before operating a security vault',
+						commonCopy.formatConnectWalletBefore('operating a security vault'),
 						createSecurityVaultTransactionIntent(actionName, transactionContext),
 					),
 					onRefreshError: (message, hash) => {
@@ -450,7 +451,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const result = await dependencies.queueOracleManagerOperation(writeClient, details.managerAddress, 'setVaultUnderwritingLimit', vaultAddress, factor, DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES * 60n, proposedRepPerEthPrice)
 				return queuedOperations.track(details.managerAddress, { ...result, action: 'setVaultUnderwritingLimit' })
 			},
-			'Failed to adjust backing factor',
+			'Failed to change commitment limit',
 			async (_result, securityPoolAddress, vaultAddress, isCurrentSelection) => {
 				await reloadSecurityVaultDetails(securityPoolAddress, vaultAddress, isCurrentSelection)
 			},

@@ -5,7 +5,8 @@ import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import type { DesiredPoolSettings, OperatorSettings } from '#config/settings'
 import { openOraclePriceCoordinatorAbi, erc20Abi, securityPoolAbi, securityPoolFactoryAbi, securityPoolForkerAbi, weth9Abi } from '@zoltar/bot-shared/contracts/abi'
 import { isPoolExecutionEligible, type VaultMigration } from '#core/fork-migration'
-import { BPS_DENOMINATOR, LIQUIDATION_REP_BONUS_BPS, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
+import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, liquidationSubmissionLabel, type LiquidationCandidate } from '#core/strategy'
+import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 import { recordActivity, saveDurableState, type PendingTransactionIntent, type PoolObservation, type RuntimeState } from '#state/operator-state'
 import { resolveFinalizedReceipt } from '#execution/receipt-transition'
 import { finalizedReceiptWithQuorum } from '#execution/recovery'
@@ -269,7 +270,7 @@ function reservedLiquidationRep(pool: PoolObservation, settings: OperatorSetting
 	return pool.stagedOperations.reduce((total, operation) => {
 		if (operation.operation !== 0n || operation.receiverVault.toLowerCase() !== pool.botVault.address.toLowerCase()) return total
 		const snapshotVaultRepBackingAttoRep = operation.snapshotTotalRepBackingUnits === 0n ? operation.snapshotTargetBackingUnits / PRICE_PRECISION : (operation.snapshotTargetBackingUnits * operation.snapshotTotalPoolHeldAttoRep) / operation.snapshotTotalRepBackingUnits
-		const estimatedAttoRep = (operation.operationValue * bufferedPrice * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS) + PRICE_PRECISION * BPS_DENOMINATOR - 1n) / (PRICE_PRECISION * BPS_DENOMINATOR)
+		const estimatedAttoRep = getLiquidationVaultRepBackingToTransfer(operation.operationValue, bufferedPrice)
 		if (operation.isPendingSettlement || operation.operationValue === operation.snapshotTargetUnderwritingLimitAttoEth) return total + (estimatedAttoRep > snapshotVaultRepBackingAttoRep ? estimatedAttoRep : snapshotVaultRepBackingAttoRep)
 		return total + (estimatedAttoRep < snapshotVaultRepBackingAttoRep ? estimatedAttoRep : snapshotVaultRepBackingAttoRep)
 	}, 0n)

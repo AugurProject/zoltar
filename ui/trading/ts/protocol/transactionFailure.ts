@@ -1,4 +1,4 @@
-import { isWalletRejection } from '@zoltar/ui-core-shared/lib/errors.js'
+import { isWalletRejection, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 import { publicErrorMessage } from './publicError.js'
 
 /** A failed transaction explained as what went wrong and what the user can do next. */
@@ -33,7 +33,7 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 ]
 
 const INSUFFICIENT_FUNDS: TransactionFailureExplanation = { cause: 'Your wallet does not have enough ETH for this amount plus gas.', nextStep: 'Lower the amount or add ETH to your wallet.' }
-const WALLET_REJECTED: TransactionFailureExplanation = { cause: 'You canceled the request in your wallet.', nextStep: 'Nothing was sent. Press the button again when ready.' }
+const WALLET_REJECTED: TransactionFailureExplanation = { cause: transactionErrorMessages.walletRejected, nextStep: 'Nothing was sent. Press the button again when ready.' }
 export const REVERTED_ON_CHAIN: TransactionFailureExplanation = { cause: 'The transaction reverted on-chain; only the gas fee was spent.', nextStep: 'Check the market status and try again.' }
 
 function errorTexts(error: unknown, seen = new Set<object>()): string[] {

@@ -1,11 +1,13 @@
+import { submissionWindowBlocker } from '../protocol/submissionWindow.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import * as availabilityCopy from '../copy/availability.js'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../lib/shareValue.js'
+import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import { marketAcceptsNewRisk, publicErrorMessage, simulateLiquidity, submitFreshLiquidity } from '../protocol/live.js'
 import * as workflowCopy from '../copy/workflows.js'
@@ -61,6 +63,7 @@ export function LiveLiquidityControls({
 		networkMismatchReason,
 		balanceState,
 		operation,
+		submissionBlocker: submissionWindowBlocker(market, operation, nowSeconds),
 		marketClosed: quote === undefined ? closedForAdding : !liquidityOperationAvailable(quote.operation, quote.market, nowSeconds),
 		requestedAmount: parsed,
 		walletEthAttoEth,
@@ -135,7 +138,7 @@ export function LiveLiquidityControls({
 						<div className='exchange-preview'>
 							<div>
 								<p className='detail'>{liquidityCopy.youProvide}</p>
-								<strong className='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : `${formatTrimmedUnits(quote.amount)} ${workflowCopy.eth}`}</strong>
+								<strong className='decision-amount'>{quote.operation === 'remove' ? formatLpQuantity(quote.amount) : formatValueWithUnit(formatRoundedUnits(quote.amount), workflowCopy.eth)}</strong>
 							</div>
 							<span className='exchange-arrow' aria-hidden='true'>
 								→
@@ -172,7 +175,7 @@ export function LiveLiquidityControls({
 								<MetricField label={liquidityCopy.quoteBlock}>{quote.blockNumber.toString()}</MetricField>
 							</DataGrid>
 						</ReadOnlyDetailAccordion>
-						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)} />
+						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />
 					</section>
 				)}
 			</QuotedTransactionPanel>

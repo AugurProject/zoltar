@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
-import { authoritativeQuoteMoved, formatAmountInput, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
+import { authoritativeQuoteMoved, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
@@ -27,11 +28,79 @@ const ready: TradeTicketInputs = {
 	networkMismatchReason: undefined,
 	walletEthAttoEth: 5n * eth,
 	marketClosed: false,
+	nowSeconds: 1n,
 	acknowledgedImpactBps: undefined,
 	workflowLocked: false,
 }
 
+function feeTicketMarket(timestamp: bigint, currentRetentionRate: bigint, feeEndTime: bigint) {
+	return {
+		...market,
+		currentRetentionRate,
+		valuation: {
+			timestamp,
+			feeEndTime,
+			projectedCollateralAttoEth: eth,
+			feeAccounting: {
+				settlementCollateralAttoEth: eth,
+				totalUnderwritingLimitAttoEth: eth,
+				feeEligibleUnderwritingLimitAttoEth: eth,
+				currentRetentionRate,
+				lastUpdatedFeeAccumulator: timestamp,
+				feeIndexRemainder: 0n,
+				totalFeesOwedRemainder: 0n,
+			},
+		},
+	}
+}
+
 describe('trade ticket estimate', () => {
+	test('blocks last-second and60-second market windows, allowing61seconds', () => {
+		for (const remaining of [1n, 60n, 61n]) {
+			const endingMarket = { ...market, endTime: 100n + remaining }
+			const ending = tradeTicketModel({ ...ready, market: endingMarket, ...{ nowSeconds: 100n } })
+			expect(ending.availability.disabled).toBe(remaining <= 60n)
+		}
+	})
+
+	test('blocks a sell whose approved ETH minimum cannot cover holding fees through validity', () => {
+		const feeMarket = {
+			...market,
+			currentRetentionRate: 999_999_996_843_524_738n,
+			valuation: {
+				timestamp: 2n,
+				feeEndTime: 1_000_000n,
+				projectedCollateralAttoEth: eth,
+				feeAccounting: {
+					settlementCollateralAttoEth: eth,
+					totalUnderwritingLimitAttoEth: eth,
+					feeEligibleUnderwritingLimitAttoEth: eth,
+					currentRetentionRate: 999_999_996_843_524_738n,
+					lastUpdatedFeeAccumulator: 2n,
+					feeIndexRemainder: 0n,
+					totalFeesOwedRemainder: 0n,
+				},
+			},
+		}
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', settings: { slippageBps: 0n, validityMinutes: 20n } })
+		expect(result.availability.disabled).toBe(true)
+		expect(result.availability.reason).toContain('Holding fees')
+		const protectedResult = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01' })
+		expect(protectedResult.availability.disabled).toBe(false)
+	})
+
+	test('covers holding fees through validity measured from the current ticket clock', () => {
+		const feeMarket = feeTicketMarket(2n, 999_999_000_000_000_000n, 20_000n)
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', nowSeconds: 10_000n })
+		expect(result.availability.reason).toBe(availabilityCopy.holdingFeesBoundsReason)
+	})
+
+	test('caps sell fee coverage before the question closes', () => {
+		const feeMarket = { ...feeTicketMarket(100n, 999_990_000_000_000_000n, 20_000n), endTime: 200n }
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', nowSeconds: 100n })
+		expect(result.availability.disabled).toBe(false)
+	})
+
 	test('prices a buy locally with the router math and the slippage minimum', () => {
 		const estimate = ticketEstimateFor(market, 'entry', '1')
 		if (estimate.kind !== 'entry') throw new Error('Expected a buy estimate')
@@ -77,8 +146,8 @@ describe('trade ticket inputs', () => {
 		expect(ticketModelFor(market, 'exit', '1.5').parsedAmount).toBe(15n * 10n ** 17n)
 		expect(ticketModelFor(market, 'entry', 'abc').amountError).toBe(ticketCopy.invalidEthAmount)
 		expect(ticketModelFor(market, 'exit', '0.0000000000000000001').amountError).toBe(ticketCopy.invalidShareAmount)
-		expect(formatAmountInput(15n * 10n ** 17n, 18)).toBe('1.5')
-		expect(formatAmountInput(1_000n * shares, 18)).toBe('1000')
+		expect(formatCurrencyInputBalance(15n * 10n ** 17n, 18)).toBe('1.5')
+		expect(formatCurrencyInputBalance(1_000n * shares, 18)).toBe('1000')
 	})
 
 	test('offers 25%, 50%, and the largest insured sale as shortcuts', () => {

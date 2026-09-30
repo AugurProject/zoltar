@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { assertAbiCoverage } from './abi-catalog.ts'
 import { getAddress, isAddress } from './ethereum.ts'
 import { parseBasicAccessCredentials } from './http.ts'
@@ -15,14 +16,79 @@ type NetworkFile = {
 	readonly uniswapV2FactoryAddressEnv: string
 	readonly uniswapV3FactoryAddressEnv: string
 	readonly uniswapV4PoolManagerAddressEnv: string
-	readonly defaultUniswapV2FactoryAddress?: string
-	readonly defaultUniswapV3FactoryAddress?: string
-	readonly defaultUniswapV4PoolManagerAddress?: string
+	readonly defaultUniswapV2FactoryAddress: string | undefined
 	readonly defaultRpcUrl: string
 	readonly explorerBaseUrl: string
 	readonly nativeSymbol: string
 	readonly confirmationDepth: number
 	readonly manifest: string
+}
+
+/** An empty activity-source override selects the network default; this value disables the source. */
+const DISABLED_ACTIVITY_SOURCE = 'none'
+
+const NETWORK_FILE_KEYS = new Set([
+	'id',
+	'name',
+	'chainId',
+	'rpcUrlEnv',
+	'startBlockEnv',
+	'ammFactoryAddressEnv',
+	'uniswapV2FactoryAddressEnv',
+	'uniswapV3FactoryAddressEnv',
+	'uniswapV4PoolManagerAddressEnv',
+	'defaultUniswapV2FactoryAddress',
+	'defaultRpcUrl',
+	'explorerBaseUrl',
+	'nativeSymbol',
+	'confirmationDepth',
+	'manifest',
+])
+
+const parseNetworkFile = (value: unknown, index: number): NetworkFile => {
+	const label = `networks.json entry ${index.toString()}`
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} must be an object`)
+	for (const key of Object.keys(value)) if (!NETWORK_FILE_KEYS.has(key)) throw new Error(`${label} has unknown field ${key}`)
+	const string = (key: string) => {
+		const field: unknown = Reflect.get(value, key)
+		if (typeof field !== 'string' || field.trim() === '') throw new Error(`${label} ${key} must be a non-empty string`)
+		return field
+	}
+	const optionalAddress = (key: string) => {
+		const field: unknown = Reflect.get(value, key)
+		if (field === undefined) return undefined
+		if (typeof field !== 'string' || !isAddress(field)) throw new Error(`${label} ${key} must be a complete 20-byte EVM address`)
+		return field
+	}
+	const positiveInteger = (key: string) => {
+		const field: unknown = Reflect.get(value, key)
+		if (typeof field !== 'number' || !Number.isSafeInteger(field) || field <= 0) throw new Error(`${label} ${key} must be a positive safe integer`)
+		return field
+	}
+	return {
+		id: string('id'),
+		name: string('name'),
+		chainId: positiveInteger('chainId'),
+		rpcUrlEnv: string('rpcUrlEnv'),
+		startBlockEnv: string('startBlockEnv'),
+		ammFactoryAddressEnv: string('ammFactoryAddressEnv'),
+		uniswapV2FactoryAddressEnv: string('uniswapV2FactoryAddressEnv'),
+		uniswapV3FactoryAddressEnv: string('uniswapV3FactoryAddressEnv'),
+		uniswapV4PoolManagerAddressEnv: string('uniswapV4PoolManagerAddressEnv'),
+		defaultUniswapV2FactoryAddress: optionalAddress('defaultUniswapV2FactoryAddress'),
+		defaultRpcUrl: string('defaultRpcUrl'),
+		explorerBaseUrl: string('explorerBaseUrl'),
+		nativeSymbol: string('nativeSymbol'),
+		confirmationDepth: positiveInteger('confirmationDepth'),
+		manifest: string('manifest'),
+	}
+}
+
+const parseNetworkFiles = (value: unknown): readonly NetworkFile[] => {
+	if (!Array.isArray(value) || value.length === 0) throw new Error('At least one network must be configured')
+	const definitions = value.map(parseNetworkFile)
+	if (new Set(definitions.map(({ id }) => id)).size !== definitions.length) throw new Error('networks.json network ids must be unique')
+	return definitions
 }
 
 const configRoot = path.resolve(import.meta.dir, '../config')
@@ -35,11 +101,10 @@ const requirePositiveInteger = (value: string, name: string, allowZero = false):
 	return parsed
 }
 
-const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> => parseManifestValue((await Bun.file(path.join(configRoot, 'manifests', filename)).json()) as { contracts?: unknown }, filename)
+const parseManifest = async (filename: string): Promise<readonly ManifestContract[]> => parseManifestValue(await Bun.file(path.join(configRoot, 'manifests', filename)).json(), filename)
 
 export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
-	const definitions = (await Bun.file(path.join(configRoot, 'networks.json')).json()) as readonly NetworkFile[]
-	if (!Array.isArray(definitions) || definitions.length === 0) throw new Error('At least one network must be configured')
+	const definitions = parseNetworkFiles(await Bun.file(path.join(configRoot, 'networks.json')).json())
 	const enabled = new Set((process.env['NETWORKS'] ?? definitions.map(({ id }) => id).join(',')).split(',').map((value: string) => value.trim()))
 	const configuredIds = new Set(definitions.map(({ id }) => id))
 	const unknownIds = [...enabled].filter(id => !configuredIds.has(id))
@@ -69,13 +134,17 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 					const normalized = getAddress(ammFactoryAddress)
 					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, 'Augur AMM Factory', 'ammFactory'])
 				}
+				// Uniswap V3 and V4 defaults come from the registry shared with the UIs, bots, and deployer.
+				const uniswapDeployment = getUniswapNetworkDeployment(definition.chainId)
 				for (const [environmentName, defaultAddress, label, kind] of [
 					[definition.uniswapV2FactoryAddressEnv, definition.defaultUniswapV2FactoryAddress, 'Uniswap V2 Factory', 'uniswapV2Factory'],
-					[definition.uniswapV3FactoryAddressEnv, definition.defaultUniswapV3FactoryAddress, 'Uniswap V3 Factory', 'uniswapV3Factory'],
-					[definition.uniswapV4PoolManagerAddressEnv, definition.defaultUniswapV4PoolManagerAddress, 'Uniswap V4 PoolManager', 'uniswapV4PoolManager'],
+					[definition.uniswapV3FactoryAddressEnv, uniswapDeployment.uniswapV3FactoryAddress, 'Uniswap V3 Factory', 'uniswapV3Factory'],
+					[definition.uniswapV4PoolManagerAddressEnv, uniswapDeployment.uniswapV4PoolManagerAddress, 'Uniswap V4 PoolManager', 'uniswapV4PoolManager'],
 				] as const) {
-					const configuredAddress = process.env[environmentName]?.trim() ?? defaultAddress
-					if (configuredAddress === undefined || configuredAddress === '') continue
+					const override = process.env[environmentName]?.trim()
+					if (override === DISABLED_ACTIVITY_SOURCE) continue
+					const configuredAddress = override === undefined || override === '' ? defaultAddress : override
+					if (configuredAddress === undefined) continue
 					if (!isAddress(configuredAddress)) throw new Error(`${environmentName} must be a complete 20-byte EVM address`)
 					const normalized = getAddress(configuredAddress)
 					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, label, kind])

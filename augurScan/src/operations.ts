@@ -1,5 +1,6 @@
 import { ceilDiv as divideUp } from '../../shared/core/ts/math/bigint.ts'
 import { compareBigint } from '@zoltar/core-shared/math/bigint'
+import { getLiquidationMigrationSecurityMultiplierBps } from '@zoltar/statoblast-shared/statoblast/liquidation'
 type ReportClock = 'block' | 'timestamp'
 
 export const ETH_QUOTE_DECIMALS = 18
@@ -7,14 +8,13 @@ export const USDC_QUOTE_DECIMALS = 6
 const VAULT_WARNING_HEALTH_FACTOR_BPS = 12_000n
 const BPS_DENOMINATOR = 10_000n
 const PRICE_PRECISION = 10n ** 18n
-const LIQUIDATION_REP_BONUS_BPS = 500n
 
 export type ReportLifecycleInput = {
 	readonly eventName: 'ReportSubmitted' | 'ReportDisputed' | 'ReportSettled'
-	readonly flags?: string
-	readonly reportTimestamp?: string
-	readonly disputeDelay?: string
-	readonly settlementTime?: string
+	readonly flags?: string | undefined
+	readonly reportTimestamp?: string | undefined
+	readonly disputeDelay?: string | undefined
+	readonly settlementTime?: string | undefined
 	readonly indexedBlock: string
 	readonly indexedTimestamp: string
 }
@@ -147,8 +147,8 @@ export const reportLifecycle = (input: ReportLifecycleInput): LifecycleState => 
 export type AuctionLifecycleInput = {
 	readonly started: boolean
 	readonly finalized: boolean
-	readonly startTimestamp?: string
-	readonly endTimestamp?: string
+	readonly startTimestamp?: string | undefined
+	readonly endTimestamp?: string | undefined
 	readonly indexedTimestamp: string
 	readonly bidCount: number
 	readonly settlementCount: number
@@ -222,7 +222,7 @@ export const vaultRisk = (input: VaultRiskInput) => {
 		}
 	const baseRequired = ceilDiv(openInterest * price, PRICE_PRECISION)
 	const associatedBeforeFactor = ceilDiv(baseRequired * securityMultiplier, BPS_DENOMINATOR)
-	const migrationMultiplier = [BPS_DENOMINATOR + (securityMultiplier - BPS_DENOMINATOR) / 2n, BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS].reduce((maximum, candidate) => (candidate > maximum ? candidate : maximum), 0n)
+	const migrationMultiplier = getLiquidationMigrationSecurityMultiplierBps(securityMultiplier)
 	const freeBeforeFactor = ceilDiv(baseRequired * migrationMultiplier, BPS_DENOMINATOR)
 	const associatedFactor = associatedBeforeFactor === 0n ? 0n : ((backing + dispute) * BPS_DENOMINATOR) / associatedBeforeFactor
 	const freeFactor = freeBeforeFactor === 0n ? 0n : (backing * BPS_DENOMINATOR) / freeBeforeFactor

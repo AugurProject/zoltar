@@ -4,7 +4,7 @@ export type IndexerOwnershipDiagnostic = {
 	readonly chainId: number
 	readonly networkId: string
 	readonly state: IndexerOwnershipState
-	readonly backendPid?: number
+	readonly backendPid?: number | undefined
 	readonly recordedState?: string
 	readonly ownerRunId?: string
 	readonly heartbeatAt?: string

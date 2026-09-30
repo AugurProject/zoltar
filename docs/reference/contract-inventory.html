@@ -44,8 +44,8 @@
 								<td>During external-universe initiation, the source must be authorized by its declared share token; own-game initiation does not perform that check, and neither relationship proves configured-factory registration. Child linking requires a deployed auction that this forker has never trusted before and preserves the source's factory and forker. Canonical pools remain the instances registered by the configured <code>SecurityPoolFactory</code>.</td>
 							</tr>
 							<tr>
-								<td><code>PriceOracleManagerAndOperatorQueuerFactory</code></td>
-								<td>Anyone can call <code>deployPriceOracleManagerAndOperatorQueuer</code> under a caller-namespaced salt with caller-supplied OpenOracle, REP token, and positive <code>initialReportPriorityFeeAttoEthPerGas</code>; coordinator construction rejects zero and values that would consume the reserved OpenOracle <code>uint128</code> report and escalation-halt capacity. The caller therefore chooses this immutable gas-price assumption within that bound.</td>
+								<td><code>OpenOraclePriceCoordinatorFactory</code></td>
+								<td>Anyone can call <code>deployOpenOraclePriceCoordinator</code> under a caller-namespaced salt with caller-supplied OpenOracle, REP token, and positive <code>initialReportPriorityFeeAttoEthPerGas</code>; coordinator construction rejects zero and values that would consume the reserved OpenOracle <code>uint128</code> report and escalation-halt capacity. The caller therefore chooses this immutable gas-price assumption within that bound.</td>
 								<td>A pool coordinator is the instance named by canonical <code>DeploySecurityPool</code>; <code>SecurityPoolFactory</code> atomically binds it to that pool before returning, and canonical child deployment inherits the value from the parent coordinator.</td>
 							</tr>
 							<tr>
@@ -205,7 +205,7 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolDeployer.sol"><code>SecurityPoolDeployer.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/ShareTokenFactory.sol"><code>ShareTokenFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol"><code>UniformPriceDualCapBatchAuctionFactory.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol"><code>PriceOracleManagerAndOperatorQueuerFactory.sol</code></a>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol"><code>OpenOraclePriceCoordinatorFactory.sol</code></a>
 								</td>
 								<td>Deterministic deployment entrypoints for pool, share-token, oracle-coordinator, escalation-game, and auction instances.</td>
 							</tr>

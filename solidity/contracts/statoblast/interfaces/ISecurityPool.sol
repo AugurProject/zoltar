@@ -150,7 +150,7 @@ interface ISecurityPool {
 	function shareToken() external view returns (IShareToken);
 	function repToken() external view returns (ReputationToken);
 	function securityPoolFactory() external view returns (ISecurityPoolFactory);
-	function priceOracleManagerAndOperatorQueuer() external view returns (OpenOraclePriceCoordinator);
+	function openOraclePriceCoordinator() external view returns (OpenOraclePriceCoordinator);
 	function openOracle() external view returns (OpenOracle);
 	function shareTokenSupplyAttoShares() external view returns (uint256);
 	function truthAuction() external view returns (address);
@@ -202,11 +202,11 @@ interface ISecurityPool {
 	function configureVault(address vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
 	function configureFinalizedAuctionVault(address vault, uint256 repBackingUnits, uint256 underwritingLimitAttoEth, uint256 vaultFeeIndex, uint256 newVaultBadDebtAttoEth, uint256 newTotalBadDebtAttoEth) external;
 	function assignFinalizedAuctionFees(address vault, uint256 amountAttoRep, uint256 auctionFeeIndexAtFinalization) external;
-	function setTotalRepBackingUnits(uint256 newDenominator) external;
+	function setTotalRepBackingUnits(uint256 newTotalRepBackingUnits) external;
 	function feeIndex() external view returns (uint256);
 	function vaultBadDebtAttoEth(address vault) external view returns (uint256);
 	function totalBadDebtAttoEth() external view returns (uint256);
-	function setTotalSharesAttoShares(uint256 newTotalSharesAttoShares) external;
+	function setShareTokenSupplyAttoShares(uint256 newShareTokenSupplyAttoShares) external;
 	function setPoolFinancials(uint256 newSettlementCollateralAttoEth, uint256 newTotalUnderwritingLimitAttoEth, uint256 newFeeEligibleUnderwritingLimitAttoEth, uint256 newTotalBadDebtAttoEth) external;
 	function authorizeChildPool(ISecurityPool pool) external;
 	function questionData() external view returns (ZoltarQuestionData);
@@ -223,7 +223,7 @@ interface ISecurityPoolFactory {
 	struct SecurityPoolDeployment {
 		ISecurityPool securityPool;
 		UniformPriceDualCapBatchAuction truthAuction;
-		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer;
+		OpenOraclePriceCoordinator openOraclePriceCoordinator;
 		IShareToken shareToken;
 		ISecurityPool parent;
 		uint248 universeId;

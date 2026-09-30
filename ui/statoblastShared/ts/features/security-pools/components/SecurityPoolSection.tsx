@@ -1,6 +1,5 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
-import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { formatQuestionIdHex, normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { hasMarketEndTimePassed } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -23,7 +22,8 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import { TransactionStepsContent } from '@zoltar/ui-core-shared/components/TransactionStepsContent.js'
 import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { formatOpenInterestFeePerYearPercent, ORIGIN_POOL_INITIAL_RETENTION_RATE } from '../lib/retentionRate.js'
+import { ORIGIN_POOL_INITIAL_RETENTION_RATE } from '@zoltar/statoblast-shared/statoblast/retentionRate'
+import { formatOpenInterestFeePerYearPercent } from '../lib/retentionRate.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import { abbreviateAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getInitialReportPriorityFeeValidationMessage, getSecurityPoolCreateDisabledReason, getStatoblastSecurityMultiplierValidationMessage } from '../lib/securityPoolCreationGuards.js'
@@ -137,7 +137,7 @@ export function SecurityPoolSection({
 		statoblastSecurityMultiplier: securityPoolForm.statoblastSecurityMultiplierBps,
 		zoltarUniverseHasForked,
 	}
-	const questionIdError = securityPoolForm.marketId.trim() !== '' && normalizeQuestionId(securityPoolForm.marketId) === undefined ? 'Enter a valid hexadecimal question ID.' : undefined
+	const questionIdError = securityPoolForm.marketId.trim() !== '' && normalizeQuestionId(securityPoolForm.marketId) === undefined ? commonCopy.invalidQuestionId : undefined
 	const createDisabledReason = questionIdError ?? getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool })
 	// The reason is the in-progress duplicate check exactly when clearing that flag would change it.
 	const createDisabledReasonLoading = checkingDuplicateOriginPool && createDisabledReason !== getSecurityPoolCreateDisabledReason({ ...createGuardInputs, checkingDuplicateOriginPool: false })
@@ -399,8 +399,8 @@ export function SecurityPoolSection({
 														<div>
 															<dt>{commonCopy.questionId}</dt>
 															<dd>
-																<span className='identifier-value' title={getQuestionIdHex(BigInt(existingQuestionCheck.questionId))}>
-																	{abbreviateAddress(getQuestionIdHex(BigInt(existingQuestionCheck.questionId)))}
+																<span className='identifier-value' title={formatQuestionIdHex(BigInt(existingQuestionCheck.questionId))}>
+																	{abbreviateAddress(formatQuestionIdHex(BigInt(existingQuestionCheck.questionId)))}
 																</span>
 															</dd>
 														</div>
@@ -418,7 +418,7 @@ export function SecurityPoolSection({
 															className='secondary'
 															type='button'
 															onClick={() => {
-																onSecurityPoolFormChange({ marketId: getQuestionIdHex(BigInt(existingQuestionCheck.questionId)) })
+																onSecurityPoolFormChange({ marketId: formatQuestionIdHex(BigInt(existingQuestionCheck.questionId)) })
 																setQuestionSource('existing')
 															}}
 														>

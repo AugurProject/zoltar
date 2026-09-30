@@ -9,7 +9,19 @@ function decodeCachedLiveMarket(value: unknown) {
 		const tradingStatus = read.optional('tradingStatus', read.number)
 		const valuation = read.optional('valuation', key => {
 			const stored = read.record(key)
-			return { feeEndTime: stored.bigint('feeEndTime'), projectedCollateralAttoEth: stored.bigint('projectedCollateralAttoEth'), timestamp: stored.bigint('timestamp') }
+			const feeAccounting = stored.optional('feeAccounting', key => {
+				const accounting = stored.record(key)
+				return {
+					settlementCollateralAttoEth: accounting.bigint('settlementCollateralAttoEth'),
+					totalUnderwritingLimitAttoEth: accounting.bigint('totalUnderwritingLimitAttoEth'),
+					feeEligibleUnderwritingLimitAttoEth: accounting.bigint('feeEligibleUnderwritingLimitAttoEth'),
+					currentRetentionRate: accounting.bigint('currentRetentionRate'),
+					lastUpdatedFeeAccumulator: accounting.bigint('lastUpdatedFeeAccumulator'),
+					feeIndexRemainder: accounting.bigint('feeIndexRemainder'),
+					totalFeesOwedRemainder: accounting.bigint('totalFeesOwedRemainder'),
+				}
+			})
+			return { feeEndTime: stored.bigint('feeEndTime'), projectedCollateralAttoEth: stored.bigint('projectedCollateralAttoEth'), timestamp: stored.bigint('timestamp'), ...(feeAccounting === undefined ? {} : { feeAccounting }) }
 		})
 		return {
 			availableMintingCapacityAttoEth: read.bigint('availableMintingCapacityAttoEth'),

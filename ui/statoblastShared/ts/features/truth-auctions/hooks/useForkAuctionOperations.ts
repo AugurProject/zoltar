@@ -1,3 +1,4 @@
+import { getUnresolvedEscalationMigrationSubmissionGuard } from '../../../protocol/forkMigrationTiming.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import { useSignal } from '@preact/signals'
@@ -21,12 +22,15 @@ import { createForkAuctionSuccessPresentation, createForkAuctionTransactionInten
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
+import { parseQuestionIdInput } from '@zoltar/ui-core-shared/lib/questionId.js'
+import { formatActionTense } from '@zoltar/ui-core-shared/copy/transactionActionTenses.js'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getDefaultForkAuctionFormState } from '../../markets/lib/marketForm.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey, TruthAuctionSettlementMode } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { SettlementSelectedBid } from '../../types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseForkAuctionOperationsParameters = WriteOperationsParameters & {
 	selectedSecurityPoolAddress?: string
@@ -104,13 +108,14 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 	const currentForkAuctionSelectionKey = normalizeAddress(effectiveForkAuctionSecurityPoolAddressInput) ?? ''
 	const currentForkAuctionSelectionKeyRef = useRef(currentForkAuctionSelectionKey)
 	currentForkAuctionSelectionKeyRef.current = currentForkAuctionSelectionKey
-	const getPendingTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => {
+	const getActionTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => {
 		if (displayTitleOverride !== undefined) return displayTitleOverride
 		if (actionName === 'claimAuctionProceeds') return 'Settle finalized bid'
 		return humanizeTransactionAction(actionName)
 	}
-	const getSuccessTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} submitted`
-	const getFailureTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getPendingTitle(actionName, displayTitleOverride)} failed`
+	const getPendingTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => formatActionTense(getActionTitle(actionName, displayTitleOverride), 'pending')
+	const getSuccessTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => formatActionTense(getActionTitle(actionName, displayTitleOverride), 'completed')
+	const getFailureTitle = (actionName: ForkAuctionActionResult['action'], displayTitleOverride?: string) => `${getActionTitle(actionName, displayTitleOverride)} failed`
 	const isForkAuctionSelectionCurrent = (selectionKey: string) => currentForkAuctionSelectionKeyRef.current === selectionKey
 	const resolveForkAuctionSecurityPoolAddress = () => parseAddressInput(effectiveForkAuctionSecurityPoolAddressInput, 'Security pool address')
 	const getTruthAuctionSettlementMode = (claimBids: readonly SettlementSelectedBid[], refundBids: readonly SettlementSelectedBid[]): TruthAuctionSettlementMode => {
@@ -172,7 +177,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						forkAuctionError,
-						'Connect a wallet before using fork or truth auction actions',
+						commonCopy.formatConnectWalletBefore('using fork or truth auction actions'),
 						createForkAuctionTransactionIntent(actionName, {
 							context: transactionContext,
 							...(displayTitleOverride === undefined ? {} : { submittedTitle: displayTitleOverride }),
@@ -307,6 +312,8 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 			'migrateUnresolvedEscalation',
 			async (walletAddress, details, isCurrentSelection, context) => {
 				if (!isCurrentSelection()) return undefined
+				const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: details.currentTime, migrationEndsAt: details.migrationEndsAt })
+				if (timingGuard !== undefined) throw new Error(timingGuard)
 				return await dependencies.migrateVaultWithUnresolvedEscalation(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, walletAddress, details.universeId, selectedChildOutcome)
 			},
 			'Failed to clear unresolved parent escalation-deposit accounting',
@@ -470,7 +477,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					return await dependencies.forkUniverseDirectly(
 						dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }),
 						parseBigIntInput(submittedDirectForkUniverseId, 'Fork universe ID'),
-						parseBigIntInput(submittedDirectForkQuestionId, 'Fork question ID'),
+						parseQuestionIdInput(submittedDirectForkQuestionId, 'Fork question ID'),
 						details.securityPoolAddress,
 					)
 				},

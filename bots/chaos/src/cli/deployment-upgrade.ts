@@ -7,7 +7,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { lstat, readdir } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { canonicalDeployment } from '../config/canonical-deployment.ts'
-import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
+import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
 import { executionProfileId } from '../config/execution-profile.ts'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
@@ -30,7 +30,6 @@ async function acquireUpgradeLocks(settings: OperatorSettings) {
 			chainId: settings.network.chainId,
 			execute: settings.runtime.execute,
 			privateKey: settings.privateKey,
-			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
 			stateFile: settings.runtime.stateFile,
 		},
 		CHAOS_PROCESS_LOCK_OPTIONS,
@@ -112,7 +111,8 @@ export async function prepareCurrentDeployment(options: PreparationOptions = {})
 	const locks = await (options.acquireLocks ?? acquireUpgradeLocks)(loaded.settings)
 	try {
 		const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
-		const active = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
+		assertDurableStateFactories(loaded.settings, state)
+		const active = loaded.settings
 		const current: OperatorSettings = { ...active, deployment: canonicalDeployment(active.network.chainId) }
 		const wallet = configuredWallet(active)
 		if (wallet !== undefined && state.signerAddress !== undefined && wallet.toLowerCase() !== state.signerAddress.toLowerCase()) throw new Error(`Durable state is scoped to signer ${state.signerAddress}; restore the old signer before changing deployments`)
@@ -180,7 +180,8 @@ export async function prepareArchivedRetirement(id: string, options: Preparation
 export async function retirementUpgradeStatus(path?: string, verifyCompletion: typeof verifyRetirementCompletionFinality = verifyRetirementCompletionFinality): Promise<'ready' | 'retiring'> {
 	const loaded = await loadSettings(path)
 	const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
-	const active = restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin)
+	assertDurableStateFactories(loaded.settings, state)
+	const active = loaded.settings
 	if (state.retirement.status !== 'drained' && state.retirement.status !== 'drained-with-residuals') return 'retiring'
 	const current: OperatorSettings = { ...active, deployment: canonicalDeployment(active.network.chainId) }
 	const currentFactory = current.deployment.uniswapV3Factory

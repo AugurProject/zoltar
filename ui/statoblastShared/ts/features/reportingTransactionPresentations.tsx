@@ -1,15 +1,15 @@
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { createTransactionScope, securityPoolTransactionScope } from '@zoltar/ui-core-shared/transactions/transactionScope.js'
 import * as reportingCopy from '../copy/reporting.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
+import * as transactionStepsCopy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as openOracleCopy from '../copy/openOracle.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { OpenOracleActionResult, ReportingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
-import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import * as priceRequestCopy from '../copy/priceRequest.js'
 
 type ReportingTransactionContext = PoolUniverseTransactionContext & {
@@ -71,7 +71,7 @@ function getPoolOracleTransactionRows(context: PoolOracleTransactionContext | un
 	return [
 		...(context.securityPoolAddress === undefined ? [] : [{ label: commonCopy.securityPoolAddress, value: context.securityPoolAddress }]),
 		{ label: commonCopy.oracleManager, value: context.managerAddress },
-		...(context.proposedRepPerEthPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: formatUnits(context.proposedRepPerEthPrice, 18) }]),
+		...(context.proposedRepPerEthPrice === undefined ? [] : [{ label: priceRequestCopy.attemptedRepPerEthPrice, value: formatCurrencyBalance(context.proposedRepPerEthPrice) }]),
 	]
 }
 
@@ -128,16 +128,16 @@ function getOpenOracleTransactionRows(context: OpenOracleTransactionContext | un
 }
 
 function getOpenOracleSubmittedTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
-	if (actionName === 'approveToken1' && context?.token1Symbol !== undefined) return openOracleCopy.formatApproveToken(context.token1Symbol)
-	if (actionName === 'approveToken2' && context?.token2Symbol !== undefined) return openOracleCopy.formatApproveToken(context.token2Symbol)
+	if (actionName === 'approveToken1' && context?.token1Symbol !== undefined) return commonCopy.formatApproveValue(context.token1Symbol)
+	if (actionName === 'approveToken2' && context?.token2Symbol !== undefined) return commonCopy.formatApproveValue(context.token2Symbol)
 	if (actionName === 'settle') return openOracleCopy.settlingReportTitle
 	if (actionName === 'withdrawBalance' && context?.withdrawalTokenSymbol !== undefined) return openOracleCopy.withdrawBalance(context.withdrawalTokenSymbol)
 	return getOpenOraclePendingTitle(actionName)
 }
 
 function getOpenOracleSuccessPresentationTitle(actionName: OpenOracleActionResult['action'], context: OpenOracleTransactionContext | undefined) {
-	if (actionName === 'approveToken1' && context?.token1Symbol !== undefined) return openOracleCopy.formatTokenApproved(context.token1Symbol)
-	if (actionName === 'approveToken2' && context?.token2Symbol !== undefined) return openOracleCopy.formatTokenApproved(context.token2Symbol)
+	if (actionName === 'approveToken1' && context?.token1Symbol !== undefined) return transactionStepsCopy.formatTokenApproved(context.token1Symbol)
+	if (actionName === 'approveToken2' && context?.token2Symbol !== undefined) return transactionStepsCopy.formatTokenApproved(context.token2Symbol)
 	if (actionName === 'createReportInstance') return openOracleCopy.reportCreated
 	if (actionName === 'settle') return context?.reportId === undefined ? openOracleCopy.reportSettled : openOracleCopy.settledReportNumber(context.reportId)
 	if (actionName === 'withdrawBalance' && context?.withdrawalTokenSymbol !== undefined) return openOracleCopy.formatTokenWithdrawn(context.withdrawalTokenSymbol)

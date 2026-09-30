@@ -26,7 +26,7 @@
 		"build:tests": "bun ../../tooling/ui/tests.mts zoltar",
 		"build": "bun ../../tooling/ui/apps.mts zoltar",
 		"build:prod": "bun run build && bun ../../tooling/ui/production.mts zoltar",
-		"watch": "bun ../../tooling/ui/watch.mts zoltar",
+		"watch": "bun run generate && bun ../../tooling/ui/watch.mts zoltar",
 		"serve": "bun ../../tooling/ui/dev-server.ts zoltar"
 	},
 	"version": "1.0.0"

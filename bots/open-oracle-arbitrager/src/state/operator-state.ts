@@ -20,6 +20,12 @@ import { serializeMarketConsensusEstimate, type MarketConsensusEstimate } from '
 import type { MarketConsensusObservation } from '@zoltar/bot-shared/monitoring/market-consensus'
 import type { RpcEndpointHealth } from '@zoltar/bot-shared/ethereum'
 
+/** A signer change waiting for the next scan boundary: apply a new signer, or clear the active one. */
+export type QueuedSigner = { readonly kind: 'apply'; readonly address: Address } | { readonly kind: 'clear' }
+
+export function queuedSignerChange(address: Address | undefined): QueuedSigner {
+	return address === undefined ? { kind: 'clear' } : { kind: 'apply', address }
+}
 export type ExecutionHistoryFilesystem = DurableAppendFilesystem & {
 	readFile: (path: string, encoding: 'utf8') => Promise<string>
 }
@@ -148,7 +154,7 @@ export type OperatorSnapshot = PollStatus & {
 	positions: readonly PositionRecord[]
 	paused: boolean
 	queuedSettings: readonly QueuedSettingsSection[]
-	queuedWallet: Address | null | undefined
+	queuedSigner: QueuedSigner | undefined
 	savedWallet: Address | undefined
 	settings: StrategySettings
 	status: 'connectivity-degraded' | 'error' | 'paused' | 'running' | 'stopped' | 'syncing'
@@ -235,7 +241,7 @@ export type PublicOperatorSnapshot = PollStatus &
 		positions: readonly PublicPositionRecord[]
 		paused: boolean
 		queuedSettings: readonly QueuedSettingsSection[]
-		queuedWallet: Address | null | undefined
+		queuedSigner: QueuedSigner | undefined
 		savedWallet: Address | undefined
 		status: OperatorSnapshot['status']
 		submission: Pick<SubmissionSettings, 'minimumBundleRelaySuccesses' | 'mode'>
@@ -432,7 +438,7 @@ export type OperatorSnapshotFixedState = {
 	network: NetworkName
 	networkConfigured?: boolean | undefined
 	openOracle: Address
-	queuedWallet: Address | null | undefined
+	queuedSigner: QueuedSigner | undefined
 	savedWallet: Address | undefined
 	wallet: Address | undefined
 }
@@ -495,7 +501,7 @@ export function operatorSnapshot(
 		operationLog: state.operationLog,
 		paused: state.paused,
 		queuedSettings,
-		queuedWallet: fixed.queuedWallet,
+		queuedSigner: fixed.queuedSigner,
 		savedWallet: fixed.savedWallet,
 		settings: strategySettings(strategy),
 		status: state.status,

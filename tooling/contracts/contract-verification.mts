@@ -170,10 +170,10 @@ const STEP_DEFINITIONS: Readonly<Record<string, StepDefinition>> = {
 		compilerProfile: 'main',
 		contractName: 'ShareTokenFactory',
 	},
-	priceOracleManagerAndOperatorQueuerFactory: {
-		artifactPath: 'contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol',
+	openOraclePriceCoordinatorFactory: {
+		artifactPath: 'contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol',
 		compilerProfile: 'main',
-		contractName: 'PriceOracleManagerAndOperatorQueuerFactory',
+		contractName: 'OpenOraclePriceCoordinatorFactory',
 		linksLibraries: true,
 	},
 	securityPoolForker: {

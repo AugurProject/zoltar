@@ -1,3 +1,4 @@
+import { writeStagedOperationAndWaitForReceipt } from './oracleStagedOperationExecution.js'
 import { readCoordinatorMinimumReport } from './oracleInitialReportFunding.js'
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
 import type { TransactionPlanStep } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -5,7 +6,8 @@ import { decodeEventLog, parseAbiItem, getAddress, zeroAddress, type Address, ty
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
-import { resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
+import * as securityPoolCopy from '../copy/securityPool.js'
+import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
 import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer } from './openOracleMath.js'
 import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
@@ -308,6 +310,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 			args: [],
 		}),
 	])
+	const timing = rawIsPriceValid ? await Promise.all([client.readContract({ address: managerAddress, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', args: [] }), client.getBlock()]) : undefined
 	const normalizedQueuedOperationEthCost = requireBigintValue(queuedOperationCostAttoEth, 'queued operation ETH cost')
 	const normalizedRequestPriceEthCost = requireBigintValue(requestPriceCostAttoEth, 'request price ETH cost')
 	const managerDetails: OracleManagerDetails = {
@@ -315,7 +318,7 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		exactToken1Report: undefined,
 		isPriceValid: rawIsPriceValid,
 		lastPrice,
-		lastSettlementTimestamp: 0n,
+		lastSettlementTimestamp: timing?.[0] ?? 0n,
 		managerAddress,
 		openOracleAddress: getInfraContractAddresses().openOracle,
 		pendingOperation: undefined,
@@ -323,12 +326,14 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 		pendingSettlementOperationIds: [...pendingSettlementOperationIds],
 		pendingSettlementQueueCapacity,
 		pendingReportId,
-		priceValidUntilTimestamp: undefined,
+		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(timing?.[0]),
 		queuedOperationCostAttoEth: normalizedQueuedOperationEthCost,
 		requestPriceCostAttoEth: normalizedRequestPriceEthCost,
 		token1: undefined,
 		token2: undefined,
 	}
+	const timingGuard = getOracleOperationTimingGuard(managerDetails, timing?.[1].timestamp)
+	if (timingGuard !== undefined) throw new Error(timingGuard)
 	const funding = resolveOracleOperationEthFunding({
 		managerDetails,
 	})
@@ -473,7 +478,16 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 	await assertCoordinatorRequestPriceAllowed(client, managerAddress)
 	const resolvedInitialReportPrice = proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))
 	const requestValue = reviewedRequestValueAttoEth ?? (await loadBufferedOracleRequestEthCost(client, managerAddress))
-	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPrice', contractAddress: managerAddress, value: requestValue, args: [resolvedInitialReportPrice, requestedInitialAttoWeth, requestValue] })
+	await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, {
+		functionName: 'requestPrice',
+		contractAddress: managerAddress,
+		value: requestValue,
+		args: [resolvedInitialReportPrice, requestedInitialAttoWeth, requestValue],
+		validateBeforeSubmit: async () => {
+			await assertCoordinatorRequestPriceAllowed(client, managerAddress)
+			if ((await readOracleRequestCost(client, managerAddress)) > requestValue) throw new Error('The oracle fee increased. Review the request again before sending.')
+		},
+	})
 	const callParams = {
 		address: managerAddress,
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -487,14 +501,8 @@ export async function requestOraclePrice(client: WriteClient, managerAddress: Ad
 		hash,
 	} satisfies OpenOracleActionResult
 }
-export async function executeOracleManagerStagedOperation(client: WriteContractClient, managerAddress: Address, operationId: bigint) {
-	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => ({
-		address: managerAddress,
-		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		functionName: 'executeStagedOperation',
-		args: [operationId],
-		gas: 5_000_000n,
-	}))
+export async function executeOracleManagerStagedOperation(client: WriteContractClient & Partial<Pick<ReadClient, 'readContract' | 'getBlock'>>, managerAddress: Address, operationId: bigint) {
+	const { hash, receipt } = await writeStagedOperationAndWaitForReceipt(client, managerAddress, operationId)
 	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'withdrawRep') ?? getStagedOracleExecutionResult(receipt, managerAddress, 'setVaultUnderwritingLimit')
 	return {
 		action: 'executeStagedOperation',
@@ -504,9 +512,12 @@ export async function executeOracleManagerStagedOperation(client: WriteContractC
 }
 export async function queueSecurityPoolLiquidation(client: WriteClient, managerAddress: Address, targetVault: Address, amount: bigint, validForSeconds: bigint, requestedInitialAttoWeth = 0n, receiverVault: Address = client.account.address, approvalId: Hex = `0x${'00'.repeat(32)}`, proposedRepPerEthPrice?: bigint) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	const validateBeforeSubmit = async () => {
+		if ((await loadOracleManagerQueueOperationEthValue(client, managerAddress)) > queueOperationValueAttoEth) throw new Error(securityPoolCopy.oracleOperationFundingChanged)
+	}
 	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))) : 0n
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageLiquidation', contractAddress: managerAddress, value: queueOperationValueAttoEth })
+		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageLiquidation', contractAddress: managerAddress, value: queueOperationValueAttoEth, validateBeforeSubmit })
 	}
 	const callParams = {
 		address: managerAddress,
@@ -515,6 +526,9 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 		args: [targetVault, receiverVault, amount, approvalId, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
+	if (queueOperationValueAttoEth === 0n) client.onTransactionPlan?.([{ ...callParams, contractAddress: managerAddress, validateBeforeSubmit }])
+	const refreshedValue = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	if (refreshedValue > queueOperationValueAttoEth) throw new Error(securityPoolCopy.oracleOperationFundingChanged)
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, 'liquidation')
 	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, 'liquidation')
@@ -526,9 +540,12 @@ export async function queueSecurityPoolLiquidation(client: WriteClient, managerA
 }
 export async function queueOracleManagerOperation(client: WriteClient, managerAddress: Address, operation: OracleQueueOperation, targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint, requestedInitialAttoWeth = 0n) {
 	const queueOperationValueAttoEth = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	const validateBeforeSubmit = async () => {
+		if ((await loadOracleManagerQueueOperationEthValue(client, managerAddress)) > queueOperationValueAttoEth) throw new Error(securityPoolCopy.oracleOperationFundingChanged)
+	}
 	const resolvedInitialReportPrice = queueOperationValueAttoEth > 0n ? (proposedRepPerEthPrice ?? (await getCoordinatorInitialReportPrice(client, managerAddress, requestedInitialAttoWeth))) : (proposedRepPerEthPrice ?? 0n)
 	if (queueOperationValueAttoEth > 0n) {
-		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageOperation', contractAddress: managerAddress, args: [encodeOracleQueueOperation(operation)], value: queueOperationValueAttoEth })
+		await fundCoordinatorInitialReport(client, managerAddress, resolvedInitialReportPrice, requestedInitialAttoWeth, { functionName: 'requestPriceIfNeededAndStageOperation', contractAddress: managerAddress, args: [encodeOracleQueueOperation(operation)], value: queueOperationValueAttoEth, validateBeforeSubmit })
 	}
 	const callParams = {
 		address: managerAddress,
@@ -537,6 +554,9 @@ export async function queueOracleManagerOperation(client: WriteClient, managerAd
 		args: [encodeOracleQueueOperation(operation), targetVault, amount, validForSeconds, resolvedInitialReportPrice, requestedInitialAttoWeth, queueOperationValueAttoEth],
 		value: queueOperationValueAttoEth,
 	}
+	if (queueOperationValueAttoEth === 0n) client.onTransactionPlan?.([{ ...callParams, contractAddress: managerAddress, validateBeforeSubmit }])
+	const refreshedValue = await loadOracleManagerQueueOperationEthValue(client, managerAddress)
+	if (refreshedValue > queueOperationValueAttoEth) throw new Error(securityPoolCopy.oracleOperationFundingChanged)
 	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	const queuedOperation = getStagedOracleQueuedResult(receipt, managerAddress, operation)
 	const stagedExecution = getStagedOracleExecutionResult(receipt, managerAddress, operation, queuedOperation?.operationId)
@@ -571,7 +591,7 @@ export async function loadQueuedVaultOperationState(client: Pick<ReadClient, 'ge
 		const execution = getStagedOracleExecutionResult({ logs }, managerAddress, queued.operation, queued.operationId)
 		if (execution !== undefined) {
 			if (execution.success) return { status: 'executed', execution }
-			if (execution.errorMessage === 'staged operation expired') return { status: 'expired', execution }
+			if (execution.errorMessage === 'Staged operation expired') return { status: 'expired', execution }
 			if (execution.errorMessage === 'Backing target superseded') return { status: 'superseded', execution }
 			return { status: 'failed', execution }
 		}

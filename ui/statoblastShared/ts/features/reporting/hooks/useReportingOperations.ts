@@ -1,3 +1,4 @@
+import { getReportingSubmissionTimingGuard } from '../../../protocol/reportingTiming.js'
 import { reportOutcomeWithWalletViaVault } from '../../../protocol/reportingWalletFunding.js'
 import { getReportingContributionFunding, getReportingWalletDepositAmount } from '../../../lib/reportingFunding.js'
 import * as reportingCopy from '../../../copy/reporting.js'
@@ -23,6 +24,7 @@ import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from 
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { ReportingFormState, ReportingWithdrawDepositIndexesByOutcome, WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ReportingActionResult, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseReportingOperationsParameters = WriteOperationsParameters
 type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & {
@@ -183,7 +185,7 @@ export function useReportingOperations(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						reportingError,
-						'Connect a wallet before reporting on a question',
+						commonCopy.formatConnectWalletBefore('reporting on a question'),
 						createReportingTransactionIntent(actionName, transactionContext),
 					),
 					onRefreshError: (message, hash) => {
@@ -240,6 +242,8 @@ export function useReportingOperations(
 		const latestDetails = await dependencies.loadReportingDetails(securityPoolAddress, walletAddress)
 		if (!isCurrentSelection()) return undefined
 		if (latestDetails.systemState !== 'operational') throw new Error('Reporting actions are unavailable until this pool is operational.')
+		const timingGuard = getReportingSubmissionTimingGuard(latestDetails.status === 'active' ? latestDetails : undefined)
+		if (timingGuard !== undefined) throw new Error(timingGuard)
 		const contributionPreview = previewReportingContribution(latestDetails, selectedOutcome, reportAmount)
 		if (contributionPreview.actualDepositAmount === undefined) throw new Error(contributionPreview.reason ?? 'Unable to preview the REP that would become dispute-staked for this report.')
 		const remainingSelectedOutcomeCapacity = getRemainingSelectedOutcomeContributionCapacity(latestDetails, selectedOutcome)

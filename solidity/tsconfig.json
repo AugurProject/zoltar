@@ -1,4 +1,5 @@
 {
+	"extends": "../shared/tsconfig.strict.json",
 	"compilerOptions": {
 		"target": "ESNext",
 		"module": "ESNext",
@@ -21,11 +22,6 @@
 		"declaration": false,
 		"declarationMap": false,
 		"noEmit": false,
-		"strict": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
-		"noImplicitReturns": true,
-		"noFallthroughCasesInSwitch": true,
 		"esModuleInterop": true,
 		"lib": ["ESNext", "DOM"],
 		"skipLibCheck": true,
