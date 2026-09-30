@@ -6,7 +6,7 @@ import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit, formatM
 import { tryParseBigIntListInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
-import { rpow } from '../../security-pools/lib/retentionRate.js'
+import { rpow } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'

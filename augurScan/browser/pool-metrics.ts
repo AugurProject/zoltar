@@ -1,4 +1,4 @@
-import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
+import { roundedOpenInterestFeePerYear } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { exactUnit } from './format.ts'
 
 const atomic = (value: unknown): bigint | undefined => {
@@ -6,15 +6,9 @@ const atomic = (value: unknown): bigint | undefined => {
 	return /^\d+$/.test(String(value)) ? BigInt(value) : undefined
 }
 
-// Matches Statoblast's retentionRate.ts: compound the per-second retention
-// over a 365-day year, then display the complementary fee to six decimals.
-export const annualFeeMillionths = (value: unknown): string | undefined => {
-	const retention = atomic(value)
-	if (retention === undefined) return undefined
-	const rate = Number.parseFloat(formatUnits(retention, 18))
-	const fee = Math.max(0, Math.min(100, (1 - Math.pow(rate, 31_536_000)) * 100))
-	return Math.round(fee * 1e6).toString()
-}
+// Shares Statoblast's annual fee math: compound the per-second retention
+// over a 365-day year, then round the complementary fee to six decimals.
+export const annualFeeMillionths = (value: unknown): string | undefined => roundedOpenInterestFeePerYear(atomic(value), 6)?.toString()
 
 export const annualFeeText = (value: unknown): string => {
 	const fee = annualFeeMillionths(value)

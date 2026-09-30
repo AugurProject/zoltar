@@ -6,7 +6,7 @@ import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.j
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
+import { openInterestFeePerYearBigint } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'

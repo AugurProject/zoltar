@@ -32,6 +32,9 @@ COPY shared/tsconfig.base.json shared/tsconfig.strict.json ./shared/
 COPY shared/core/tsconfig.json ./shared/core/tsconfig.json
 COPY shared/core/ts ./shared/core/ts
 RUN bun run --cwd shared/core build
+COPY shared/statoblast/tsconfig.json ./shared/statoblast/tsconfig.json
+COPY shared/statoblast/ts ./shared/statoblast/ts
+RUN bun run --cwd shared/statoblast build
 WORKDIR /workspace/augurScan
 COPY augurScan/browser ./browser
 COPY augurScan/scripts/build-browser.ts ./scripts/build-browser.ts

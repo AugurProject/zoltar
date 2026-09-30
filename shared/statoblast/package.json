@@ -28,6 +28,11 @@
 			"bun": "./ts/statoblast/liquidation.ts",
 			"default": "./js/statoblast/liquidation.js"
 		},
+		"./statoblast/retentionRate": {
+			"types": "./ts/statoblast/retentionRate.ts",
+			"bun": "./ts/statoblast/retentionRate.ts",
+			"default": "./js/statoblast/retentionRate.js"
+		},
 		"./statoblast/truthAuctionTickMath": {
 			"types": "./ts/statoblast/truthAuctionTickMath.ts",
 			"bun": "./ts/statoblast/truthAuctionTickMath.ts",
