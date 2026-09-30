@@ -250,6 +250,10 @@
 			"bun": "./ts/tests/requestGuard.test.tsx",
 			"default": "./js/tests/requestGuard.test.js"
 		},
+		"./tests/routeHeader.test.js": {
+			"bun": "./ts/tests/routeHeader.test.tsx",
+			"default": "./js/tests/routeHeader.test.js"
+		},
 		"./tests/sectionBlock.test.js": {
 			"bun": "./ts/tests/sectionBlock.test.tsx",
 			"default": "./js/tests/sectionBlock.test.js"

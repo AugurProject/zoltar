@@ -4,58 +4,6 @@
 	--content-max: 80rem;
 }
 
-.pool-entry-route {
-	width: 100%;
-	max-width: 70rem;
-	margin-inline: auto;
-}
-
-.pool-entry-layout {
-	display: grid;
-	grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-	align-items: start;
-	gap: var(--space-5);
-}
-
-.pool-entry-layout:not(:has(.first-run-role-guide)) {
-	grid-template-columns: minmax(0, 1fr);
-	max-width: var(--form-max);
-}
-
-.pool-entry-primary > .section-block-body {
-	display: grid;
-	gap: var(--space-5);
-}
-
-.pool-entry-primary .detail {
-	margin: 0;
-	font-size: var(--font-caption);
-}
-
-.pool-entry-links {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-3);
-}
-
-.pool-entry-links > button {
-	min-height: var(--touch-target-min);
-}
-
-.pool-entry-layout .first-run-roles {
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.pool-entry-layout .first-run-role-guide h3 {
-	font-size: var(--font-lg);
-}
-
-@media (max-width: 64rem) {
-	.pool-entry-layout {
-		grid-template-columns: minmax(0, 1fr);
-	}
-}
-
 .app-settings-price-oracle {
 	margin-top: var(--space-4);
 	padding-top: var(--space-4);
@@ -1160,6 +1108,47 @@
 .vault-action-launcher-grid .action-launcher-card.compact {
 	grid-template-columns: minmax(15rem, 22rem);
 	justify-content: end;
+}
+
+/* Shares tab: holdings on the left and the share actions stacked in a side column, like the Vaults tab. */
+.trading-workspace-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem);
+	align-items: start;
+	gap: var(--space-5);
+	min-width: 0;
+}
+
+.trading-workspace-layout.is-single {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.trading-workspace-layout:not(.is-single) .trading-share-distribution {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-4);
+}
+
+.trading-workspace-layout:not(.is-single) .vault-action-launcher-grid .action-launcher-card,
+.trading-workspace-layout:not(.is-single) .vault-action-launcher-grid .action-launcher-card.compact {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-2);
+}
+
+.trading-workspace-layout:not(.is-single) .action-launcher-card-copy .detail {
+	font-size: var(--font-caption);
+}
+
+@media (max-width: 64rem) {
+	.trading-workspace-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (max-width: 40rem) {
+	.trading-workspace-layout:not(.is-single) .trading-share-distribution {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .action-launcher-card {
@@ -2819,16 +2808,82 @@ span.rep-price-status.stale,
 	margin-top: var(--space-2);
 }
 
-.pool-overview-header > .pool-capacity-summary {
-	width: 100%;
-}
-
 .pool-overview-header {
 	display: grid;
 	min-width: 0;
-	grid-template-columns: minmax(0, 1fr) 20rem;
-	align-items: center;
-	gap: var(--space-5);
+	gap: var(--space-4);
+}
+
+/* Identity on the left, the pool's next actions on the right. */
+.pool-overview-title-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: start;
+	gap: var(--space-3) var(--space-5);
+	min-width: 0;
+}
+
+.pool-overview-title-row > .pool-action-card {
+	flex-direction: column;
+	align-items: flex-end;
+	gap: var(--space-2);
+	padding: 0;
+}
+
+.pool-overview-title-row > .pool-action-card .pool-action-list {
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-2);
+}
+
+/* Capacity, oracle price, and stage side by side, separated by rules rather than boxed: the strip sits inside the pool's section surface. */
+.pool-status-strip {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+	min-width: 0;
+	border-block: 1px solid var(--divider-subtle);
+}
+
+.pool-status-strip > * {
+	min-width: 0;
+	padding: var(--space-3) var(--space-4);
+}
+
+.pool-status-strip > :first-child {
+	padding-inline-start: 0;
+}
+
+.pool-status-strip > * + * {
+	border-inline-start: 1px solid var(--divider-subtle);
+}
+
+.pool-status-strip > .pool-oracle-status {
+	flex-direction: column;
+	align-items: flex-start;
+	justify-content: flex-start;
+	gap: var(--space-2);
+	background: none;
+	border-inline-start: 1px solid var(--divider-subtle);
+}
+
+.pool-status-strip > .pool-oracle-status.warning {
+	box-shadow: inset 3px 0 0 var(--warning-border-strong);
+	background: none;
+}
+
+.pool-status-strip .pool-oracle-status-value {
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.pool-status-strip .progress-meter-label {
+	color: var(--muted);
+	font-size: var(--font-label);
+}
+
+.pool-status-strip .pool-oracle-status .oracle-price-value {
+	font-family: var(--font-family-mono);
+	font-weight: 600;
 }
 
 .vault-risk-summary:empty {
@@ -3079,9 +3134,14 @@ span.rep-price-status.stale,
 
 @media (max-width: 64rem) {
 	.pool-directory-row,
-	.pool-overview-header {
+	.pool-overview-title-row {
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-3);
+	}
+
+	.pool-overview-title-row > .pool-action-card,
+	.pool-overview-title-row > .pool-action-card .pool-action-list {
+		align-items: stretch;
 	}
 
 	.pool-open-link {
@@ -3551,89 +3611,50 @@ span.rep-price-status.stale,
 	text-decoration: underline;
 }
 
+.pool-lifecycle {
+	display: grid;
+	align-content: start;
+	gap: var(--space-2);
+}
+
+.pool-lifecycle-summary {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+}
+
+.pool-lifecycle-summary-label {
+	color: var(--muted);
+	font-size: var(--font-label);
+}
+
+.pool-lifecycle-position {
+	color: var(--muted);
+	font-family: var(--font-family-mono);
+	font-size: var(--font-label);
+}
+
 .pool-lifecycle-steps {
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
-	gap: var(--space-2);
+	gap: 3px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
 .pool-lifecycle-steps li {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2);
-	min-width: 0;
-	padding-top: var(--space-2);
-	border-top: 3px solid var(--border-default);
-	color: var(--muted);
-	font-size: 0.8125rem;
+	height: 0.375rem;
+	border-radius: var(--radius-pill);
+	background: var(--border-default);
 }
 
 .pool-lifecycle-steps li.completed {
-	border-top-color: var(--accent-medium);
-	color: var(--text-secondary);
+	background: var(--accent-medium);
 }
 
 .pool-lifecycle-steps li.current {
-	border-top-color: var(--accent);
-	color: var(--text);
-	font-weight: 600;
-}
-
-.pool-lifecycle-marker {
-	display: inline-grid;
-	flex: none;
-	place-items: center;
-	width: 1.5rem;
-	height: 1.5rem;
-	border: 1px solid var(--border-strong);
-	border-radius: var(--radius-circle);
-	font-family: var(--font-family-mono);
-	font-size: 0.8125rem;
-}
-
-.pool-lifecycle-steps li.completed .pool-lifecycle-marker {
-	border-color: var(--accent-medium);
-	color: var(--accent);
-}
-
-.pool-lifecycle-steps li.current .pool-lifecycle-marker {
-	border-color: var(--accent);
 	background: var(--accent);
-	color: var(--bg-deep);
-}
-
-.pool-lifecycle-label {
-	min-width: 0;
-	overflow-wrap: anywhere;
-}
-
-.pool-lifecycle-mobile {
-	display: none;
-	margin: 0;
-	color: var(--accent);
-	font-weight: 600;
-}
-
-.pool-secondary-context {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: start;
-	gap: var(--space-3) var(--space-4);
-}
-
-.pool-secondary-context:has(.pool-reference-details details[open]) {
-	grid-template-columns: minmax(0, 1fr);
-}
-
-.pool-secondary-context > .pool-reference-details:last-child {
-	justify-self: end;
-}
-
-.pool-secondary-context:has(details[open]) > .pool-reference-details {
-	justify-self: stretch;
 }
 
 .pool-reference-details > details > summary {
@@ -3761,20 +3782,27 @@ span.rep-price-status.stale,
 		font-size: var(--font-label);
 	}
 
-	.pool-secondary-context {
+	.pool-action-item {
+		gap: var(--space-2);
+	}
+
+	/* On phones the figures stack so each value keeps its line; rules separate them instead of columns. */
+	.pool-status-strip {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.pool-lifecycle-steps {
-		display: none;
+	.pool-status-strip > *,
+	.pool-status-strip > .pool-oracle-status {
+		padding-inline: 0;
+		border-inline-start: 0;
 	}
 
-	.pool-lifecycle-mobile {
-		display: block;
+	.pool-status-strip > * + * {
+		border-top: 1px solid var(--divider-subtle);
 	}
 
-	.pool-action-item {
-		gap: var(--space-2);
+	.pool-status-strip > .pool-oracle-status.warning {
+		padding-inline-start: var(--space-3);
 	}
 
 	.pool-action-label,
@@ -3787,55 +3815,66 @@ span.rep-price-status.stale,
 	}
 }
 
-/* First-run role guide on the pool directory: flat role columns divided by rules, stacked on narrow screens. */
-.first-run-role-guide > .section-block-header {
+/* First-run role guide on the pool directory: one line of role guides above the list, wrapping on narrow screens. */
+.first-run-role-guide {
+	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
+	gap: var(--space-2) var(--space-5);
+	padding: var(--space-2) var(--space-4);
+	border: 1px solid var(--divider-subtle);
+	border-radius: var(--radius-section);
+	background: var(--surface-section);
 }
 
-.first-run-role-guide .section-block-actions {
-	display: flex;
-	align-items: center;
+.first-run-role-guide h3 {
+	margin: 0;
+	font-size: var(--font-body);
 }
 
 .first-run-roles {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: var(--space-4);
+	display: flex;
+	flex: 1 1 auto;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-5);
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
 .first-run-role {
-	display: grid;
-	align-content: start;
-	gap: var(--space-2);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-1) var(--space-2);
 	min-width: 0;
-	padding-top: var(--space-3);
-	border-top: 1px solid var(--divider-subtle);
 }
 
-.first-run-role .detail {
-	margin: 0;
+.first-run-role-title {
+	color: var(--muted);
 	font-size: var(--font-label);
 }
 
-@media (max-width: 64rem) {
+.first-run-role-guide > button {
+	margin-left: auto;
+}
+
+@media (max-width: 40rem) {
+	/* The title and Dismiss share the first row; the role guides stack beneath. */
+	.first-run-role-guide {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding: var(--space-3);
+	}
+
 	.first-run-roles {
-		grid-template-columns: minmax(0, 1fr);
-		gap: var(--space-3);
+		grid-column: 1 / -1;
+		grid-row: 2;
 	}
 
-	/* Keep Dismiss beside the title so the guide stays short above the pool list on narrow screens. */
-	.first-run-role-guide > .section-block-header {
-		flex-direction: row;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.first-run-role {
-		gap: var(--space-1);
-		padding-top: var(--space-2);
+	.first-run-roles {
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 }
 
