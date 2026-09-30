@@ -32,9 +32,12 @@ const instructionFiles = new Set(['LICENSE', '.vscode/settings.json', '.vscode/t
 const rootGlobalFiles = new Set(['.coverage-policy.json', '.dockerignore', '.editorconfig', '.gitattributes', '.gitignore', '.npmrc', '.prettierignore', '.prettierrc.json', 'biome.json', 'bun.lock', 'bunfig.toml', 'knip.ts', 'package.json', 'tsconfig.json', 'tsconfig.scripts.json'])
 const ordered = (scopes: ReadonlySet<CiScope>): CiScope[] => ciScopes.filter(scope => scopes.has(scope))
 
+export function isDocumentationChange(filePath: string) {
+	return /^\.(?:agents|claude)\/skills\/[a-z0-9-]+$/.test(filePath) || filePath.endsWith('.md') || instructionFiles.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')
+}
+
 function directScopeForPath(filePath: string): CiScope | 'full' {
-	if (/^\.(?:agents|claude)\/skills\/[a-z0-9-]+$/.test(filePath)) return 'docs'
-	if (filePath.endsWith('.md') || instructionFiles.has(filePath) || filePath.startsWith('docs/') || filePath.startsWith('.codex/') || filePath.startsWith('.ci-agents/')) return 'docs'
+	if (isDocumentationChange(filePath)) return 'docs'
 	if (filePath.startsWith('.github/') || filePath.startsWith('scripts/') || filePath.startsWith('tooling/') || rootGlobalFiles.has(filePath)) return 'full'
 	return projectForPath(filePath)?.ci?.scope ?? 'full'
 }
@@ -62,7 +65,7 @@ export function classifyCiChange(filePaths: readonly string[], options: { readon
 		else direct.add(scope)
 	}
 	// Prose inside a project must not select that project's runtime consumers.
-	const runtimeFiles = changedFiles.filter(filePath => directScopeForPath(filePath) !== 'docs')
+	const runtimeFiles = changedFiles.filter(filePath => !isDocumentationChange(filePath))
 	const expanded = expandScopes(direct, runtimeFiles, forcedFull)
 	const directScopes = ordered(direct)
 	const expandedScopes = ordered(expanded)

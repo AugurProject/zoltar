@@ -17,6 +17,7 @@ import {
 	formatUnits,
 	getAddress,
 	getCreate2Address,
+	getCreateAddress,
 	hexToBytes,
 	http,
 	isAddress,
@@ -41,6 +42,23 @@ import {
 } from '@zoltar/core-shared/evm/ethereum'
 
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' satisfies Hex
+test('toHex applies byte sizes consistently to UTF-8 strings and bytes', () => {
+	expect(toHex('A', { size: 4 })).toBe(toHex(new TextEncoder().encode('A'), { size: 4 }))
+	expect(toHex('é', { size: 3 })).toBe('0x00c3a9')
+	expect(toHex('', { size: 0 })).toBe('0x')
+	expect(toHex(0n, { size: 0 })).toBe('0x')
+	expect(() => toHex('AB', { size: 1 })).toThrow('Value exceeds requested size')
+	expect(() => toHex('é', { size: 1 })).toThrow('Value exceeds requested size')
+})
+
+test('toHex rejects invalid byte sizes for every input kind', () => {
+	for (const size of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+		for (const value of [0n, 1, '', 'A', new Uint8Array([]), new Uint8Array([1])]) {
+			expect(() => toHex(value, { size })).toThrow('Size must be a nonnegative safe integer')
+		}
+	}
+})
+
 const ACCOUNT_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 const TOKEN_ADDRESS = '0x00000000000000000000000000000000000000AA'
 const OWNER_ADDRESS = '0x00000000000000000000000000000000000000BB'
@@ -1392,6 +1410,17 @@ describe('shared ethereum compatibility layer', () => {
 				salt: toHex(1, { size: 32 }),
 			}),
 		)
+	})
+
+	test.each([-1, 0.5, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('unit helpers reject invalid decimal precision %s', decimals => {
+		expect(() => parseUnits('1.2', decimals)).toThrow('Decimals must be a nonnegative safe integer')
+		expect(() => formatUnits(12n, decimals)).toThrow('Decimals must be a nonnegative safe integer')
+	})
+
+	test('unit helpers support zero precision and signed round trips', () => {
+		for (const decimals of [0, 2, 18]) {
+			for (const value of [0n, 12n, -12n, 123456n]) expect(parseUnits(formatUnits(value, decimals), decimals)).toBe(value)
+		}
 	})
 
 	test('public client normalizes rpc reads, blocks, logs, and receipt polling', async () => {
@@ -3416,6 +3445,55 @@ describe('shared ethereum compatibility layer', () => {
 			}),
 		).toBe(21_000n)
 		expect(calls.map(call => call.method)).toEqual(['eth_call', 'eth_estimateGas'])
+	})
+
+	for (const extended of [false, true]) {
+		test(`wallet raw estimates and reads preserve default and explicit accounts (extended=${extended})`, async () => {
+			let expectedAccount = OWNER_ADDRESS
+			const client = createWalletClient({
+				account: OWNER_ADDRESS,
+				transport: custom(
+					createProvider(({ method, params }) => {
+						const transaction = getArrayEntry(params, 0, 'wallet request')
+						expect(getObjectEntry(transaction, 'from', 'wallet transaction')).toBe(getAddress(expectedAccount))
+						return method === 'eth_estimateGas' ? '0x5208' : encodeAbiParameters([{ type: 'uint256' }], [3n])
+					}, []),
+				),
+			})
+			const wallet = extended ? client.extend(publicActions) : client
+			expect(await wallet.estimateGas({ to: TOKEN_ADDRESS })).toBe(21_000n)
+			expect(await wallet.readContract({ abi: OWNER_CHECK_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'ownerCheck' })).toBe(3n)
+			expectedAccount = RECIPIENT_ADDRESS
+			expect(await wallet.estimateGas({ account: RECIPIENT_ADDRESS, to: TOKEN_ADDRESS })).toBe(21_000n)
+			expect(await wallet.readContract({ account: RECIPIENT_ADDRESS, abi: OWNER_CHECK_ABI, address: TOKEN_ADDRESS, args: [RECIPIENT_ADDRESS], functionName: 'ownerCheck' })).toBe(3n)
+		})
+	}
+
+	test('address derivation rejects malformed deployers and CREATE2 hashes', () => {
+		const salt = toHex(0, { size: 32 })
+		for (const bytecodeHash of ['0x', '0x01', `0x${'00'.repeat(33)}`] as const) {
+			expect(() => getCreate2Address({ from: OWNER_ADDRESS, salt, bytecodeHash })).toThrow('CREATE2 bytecode hash must be 32 bytes')
+		}
+		expect(() => getCreate2Address({ from: '0x01', salt, bytecode: '0x' })).toThrow('Deployment address must be 20 bytes')
+		expect(() => getCreateAddress({ from: '0x01', nonce: 0n })).toThrow('Deployment address must be 20 bytes')
+		const mixedCaseDeployer = '0x7A0D94F55792C434D74A40883c6ED8545e406D12'
+		expect(getCreate2Address({ from: mixedCaseDeployer, salt, bytecode: '0x' })).toBe(getCreate2Address({ from: '0x7a0d94f55792c434d74a40883c6ed8545e406d12', salt, bytecode: '0x' }))
+		expect(getCreateAddress({ from: mixedCaseDeployer, nonce: 0n })).toBe(getCreateAddress({ from: '0x7a0d94f55792c434d74a40883c6ed8545e406d12', nonce: 0n }))
+	})
+
+	test('public reads reject conflicting block selectors before RPC dispatch', async () => {
+		const client = createPublicClient({
+			transport: custom(
+				createProvider(() => {
+					throw new Error('Unexpected RPC dispatch')
+				}, []),
+			),
+		})
+		const parameters = { address: TOKEN_ADDRESS, blockNumber: 1n, blockTag: 'latest' } as const
+		for (const read of [client.getBalance, client.getCode, client.getBytecode, client.getTransactionCount]) {
+			await expect(read(parameters)).rejects.toThrow('only one block selector')
+		}
+		await expect(client.getBlock(parameters)).rejects.toThrow('only one block selector')
 	})
 
 	test('public client exposes raw gas estimation, gas price, and pending nonce RPCs', async () => {

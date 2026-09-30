@@ -2,6 +2,25 @@ import { expect, test } from 'bun:test'
 import { createProjectTaskPlan } from './run-project-tasks.mts'
 import { type Project } from './projects.ts'
 
+test('project task CLI rejects selections that would silently run no checks', async () => {
+	for (const args of [
+		['knip', '--group', 'does-not-exist'],
+		['knip', '--project-path', 'ui/zoltar'],
+		['knip', 'ui-zoltar'],
+		['knip', 'ui-trading', 'ui-zoltar'],
+		['knip', '--project-path', 'ui/zoltar', '--dependencies'],
+		['knip', 'ui-zoltar', '--dependencies'],
+		['knip', '--path-prefix', 'does-not-exist'],
+		['knip', '--path-prefix', 'ui/zoltar'],
+	]) {
+		const child = Bun.spawn({ cmd: ['bun', './tooling/repo/run-project-tasks.mts', ...args], stdout: 'pipe', stderr: 'pipe' })
+		const [exitCode, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()])
+		expect(exitCode).not.toBe(0)
+		expect(stdout).toBe('')
+		expect(stderr).toMatch(/does not support knip|No projects support knip/)
+	}
+})
+
 const registry: readonly Project[] = [
 	{ id: 'app', path: 'app', type: 'ui-app', dependencies: ['domain'], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'app', inputs: ['app/**'] } }, generatedDirectories: [] },
 	{ id: 'domain', path: 'domain', type: 'ui-library', dependencies: [], tasks: { build: { command: ['bun', 'run', 'build'], cwd: 'domain', inputs: ['domain/**'] } }, generatedDirectories: [] },

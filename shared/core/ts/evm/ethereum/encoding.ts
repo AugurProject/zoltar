@@ -171,8 +171,9 @@ export function concatHex(values: readonly Hex[]) {
 }
 
 export function toHex(value: bigint | number | string | Uint8Array, options: { size?: number | undefined } = {}) {
+	if (options.size !== undefined && (!Number.isSafeInteger(options.size) || options.size < 0)) throw new Error('Size must be a nonnegative safe integer')
 	if (typeof value === 'string') {
-		return ensure0x(nobleBytesToHex(utf8ToBytes(value)))
+		return toHex(utf8ToBytes(value), options)
 	}
 	if (typeof value === 'bigint' || typeof value === 'number') {
 		const bigintValue = normalizeQuantityValue(value)
@@ -199,7 +200,12 @@ export function keccak256(value: Hex | Uint8Array | string) {
 	return ensure0x(nobleBytesToHex(keccak_256(bytes)))
 }
 
+function validateUnitDecimals(decimals: number) {
+	if (!Number.isSafeInteger(decimals) || decimals < 0) throw new Error('Decimals must be a nonnegative safe integer')
+}
+
 export function parseUnits(value: string, decimals: number) {
+	validateUnitDecimals(decimals)
 	const trimmed = value.trim()
 	if (!/^-?(?:\d+\.?\d*|\.\d+)$/.test(trimmed)) throw new Error(`Invalid decimal value: ${value}`)
 	const negative = trimmed.startsWith('-')
@@ -215,6 +221,7 @@ export function parseUnits(value: string, decimals: number) {
 }
 
 export function formatUnits(value: bigint, decimals: number) {
+	validateUnitDecimals(decimals)
 	const negative = value < 0n
 	const normalized = negative ? -value : value
 	const base = 10n ** BigInt(decimals)
