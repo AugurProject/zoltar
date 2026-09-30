@@ -37,7 +37,7 @@ export function PoolWorkspaceNavigation({ forkWorkflowPrimary = false, view, onC
 					}
 				}}
 			>
-				<summary>{copy.moreTools}</summary>
+				<summary>{copy.tools}</summary>
 				<div className='pool-tools-options'>
 					{toolViews.map(value => (
 						<button

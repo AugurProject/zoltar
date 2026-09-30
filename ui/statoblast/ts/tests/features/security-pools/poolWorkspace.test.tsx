@@ -11,6 +11,7 @@ import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-sh
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
+import { PoolActionCard } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'
 import type { SelectedPoolView } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityPoolWorkflow.js'
 import { createAccountState, createLoadedPoolProps, createOracleManagerDetails, createSelectedPool, createSecurityPoolWorkflowProps } from './workflow/builders.js'
 import { useSecurityPoolWorkflowSectionTestDom } from './workflow/testDom.js'
@@ -44,6 +45,10 @@ test('opens a typed pool once its address is complete and never shows contents f
 		)
 	}
 	setCleanup((await renderIntoDocument(<Harness />)).cleanup)
+	const switcher = document.querySelector<HTMLDetailsElement>('details.pool-switcher')
+	if (switcher === null) throw new Error('Expected the pool switcher')
+	expect(switcher.open).toBe(false)
+	switcher.open = true
 	const page = within(document.body)
 	expect(page.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
 	const input = page.getByRole('textbox', { name: 'Security pool address' })
@@ -190,6 +195,24 @@ test('shows the stage and offers only controls that leave the open tab', async (
 	expect(within(card).queryByRole('button', { name: 'Open vaults' })).toBeNull()
 	await act(() => fireEvent.click(within(card).getByRole('button', { name: 'Open shares' })))
 	expect(views).toEqual(['trading'])
+})
+
+test('omits the open vault navigation hint while retaining reporting deadlines on the open reporting tab', async () => {
+	const items = [
+		{ id: 'manageVault', tab: 'vaults', tone: 'action' },
+		{ id: 'reportOrEscalate', tab: 'reporting', tone: 'attention', deadline: 1_060n },
+	] as const
+	const firstRender = await renderIntoDocument(<PoolActionCard currentTimestamp={1_000n} currentView='vaults' items={items} onChange={() => undefined} />)
+	setCleanup(firstRender.cleanup)
+	expect(document.body.textContent).not.toContain('Manage your vault')
+	expect(document.body.textContent).toContain('Report or escalate an outcome')
+	expect(document.querySelector('time')?.getAttribute('datetime')).toBe('1970-01-01T00:17:40.000Z')
+	await firstRender.cleanup()
+	const secondRender = await renderIntoDocument(<PoolActionCard currentTimestamp={1_000n} currentView='reporting' items={items} onChange={() => undefined} />)
+	setCleanup(secondRender.cleanup)
+	expect(within(document.body).getByRole('button', { name: 'Open vaults' })).not.toBeNull()
+	expect(document.body.textContent).toContain('Report or escalate an outcome')
+	expect(document.body.textContent).toContain('in 1m')
 })
 
 test('shows known standing commitments independently of a missing price', async () => {

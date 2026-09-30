@@ -214,14 +214,19 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 						<span aria-hidden='true'>←</span>
 						{workspaceCopy.allPools}
 					</a>
-					<PoolSelectionControl address={securityPoolAddress} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} poolLoaded={selectedPool !== undefined} />
+					<details className='pool-switcher' open={selectedPool === undefined}>
+						<summary>{workspaceCopy.switchPool}</summary>
+						<PoolSelectionControl address={securityPoolAddress} loading={loadingSecurityPools} onAddressChange={onSecurityPoolAddressChange} onLoad={onRefreshSelectedPoolData} poolLoaded={selectedPool !== undefined} />
+					</details>
 				</div>
 				{objectHeaderProps === undefined ? undefined : <SecurityPoolObjectHeader {...objectHeaderProps} />}
 				<ErrorNotice message={securityPoolOverviewError} />
 				{model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />}
 				{showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined}
-				{showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined}
-				{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
+				<div className='pool-secondary-context'>
+					{showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined}
+					{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
+				</div>
 			</div>
 
 			{selectedPool === undefined || !model.selectedPoolUniverseMismatch ? undefined : <SecurityPoolUniverseMismatchNotice activeUniverseId={activeUniverseId} onReturnToCurrentUniverse={onReturnToCurrentUniverse} onSwitchToPoolUniverse={onSwitchToPoolUniverse} selectedPool={selectedPool} />}

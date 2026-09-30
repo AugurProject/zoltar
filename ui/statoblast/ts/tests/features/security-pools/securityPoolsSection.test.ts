@@ -181,6 +181,28 @@ void describe('SecurityPoolsSection', () => {
 		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
 	})
 
+	void test('links the landing actions to browse and create without scanning the registry', async () => {
+		const views: string[] = []
+		const scans: number[] = []
+		const rendered = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open', onActiveViewChange: view => views.push(view), overview: createOverviewProps({ onLoadSecurityPoolPage: page => scans.push(page) }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		const page = within(document.body)
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Browse pools' })))
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Create pool' })))
+		expect(views).toEqual(['browse', 'create'])
+		expect(scans).toEqual([])
+	})
+
+	void test('opens creation from the browse header without scanning the registry', async () => {
+		const views: string[] = []
+		const scans: number[] = []
+		const rendered = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ onActiveViewChange: view => views.push(view), overview: createOverviewProps({ onLoadSecurityPoolPage: page => scans.push(page) }) })))
+		cleanupRenderedComponent = rendered.cleanup
+		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Create pool' })))
+		expect(views).toEqual(['create'])
+		expect(scans).toEqual([])
+	})
+
 	void test('opens the browse view from local favorites without scanning the chain', async () => {
 		const calls: string[] = []
 		const renderedComponent = await renderIntoDocument(
