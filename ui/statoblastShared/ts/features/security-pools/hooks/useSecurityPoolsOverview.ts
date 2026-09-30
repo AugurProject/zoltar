@@ -1,3 +1,5 @@
+import type { TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
+import { runReadOperation } from '@zoltar/ui-core-shared/lib/readOperation.js'
 import { getLiquidationFundingPreviewRequestKey, resolveLiquidationFunding } from './liquidationFunding.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { useSignal } from '@preact/signals'
@@ -6,8 +8,7 @@ import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import { normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
-import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
+import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback, type ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createLiquidationFailurePresentation, createLiquidationSuccessPresentation, createLiquidationTransactionIntent, createLiquidationWarningPresentation } from '../../transactionPresentations.js'
 import { buildWriteActionConfig, runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -21,17 +22,12 @@ import { useSecurityPoolBrowsePage } from './useSecurityPoolBrowsePage.js'
 import { appQueryCache, isSameQueryData } from '@zoltar/ui-core-shared/lib/dataRefresh.js'
 import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
-import type { TransactionCancellationParameters, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolOverviewActionResult, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { defaultUseSecurityPoolsOverviewDependencies, type SecurityPoolsOverviewProductionWriteClient, type UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
 export type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
-type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters &
-	TransactionCancellationParameters &
-	WriteOperationContext & {
-		environmentRefreshKey: number
-	}
+type UseSecurityPoolsOverviewParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext & { environmentRefreshKey: number }
 
 /** The selected pool's lineage, refreshed in place on each new block. */
 const securityPoolLineageQueries = appQueryCache.createStore<ListedSecurityPool[]>()
@@ -85,12 +81,14 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	const securityPoolOverviewResult = useSignal<SecurityPoolOverviewActionResult | undefined>(undefined)
 	const securityPools = useSignal<ListedSecurityPool[]>([])
 	const nextSecurityPoolsLoad = useRequestGuard()
+	const activeLineageIsCurrent = useRef<() => boolean>(() => false)
 	const nextUniverseDirectoryLoad = useRequestGuard()
 	const nextLiquidationFundingPreviewLoad = useRequestGuard()
 	const nextLiquidationApprovalLoad = useRequestGuard()
 	const nextLiquidationReceiverVaultSummaryLoad = useRequestGuard()
 	const browsePage = useSecurityPoolBrowsePage({
 		accountAddress,
+		environmentRefreshKey,
 		loadSecurityPoolPage: dependencies.loadSecurityPoolPage,
 		setOverviewError: message => {
 			securityPoolOverviewError.value = message
@@ -105,6 +103,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		const requestedEnvironmentRefreshKey = environmentRefreshKey
 		const normalizedCheckedAddress = normalizeAddress(securityPoolAddress)
 		const isCurrent = nextSecurityPoolsLoad()
+		activeLineageIsCurrent.current = isCurrent
 		const nextCheckedAddress = normalizedCheckedAddress ?? checkedSecurityPoolAddress.value
 		const result = await securityPoolsLoad.run({
 			isCurrent,
@@ -115,9 +114,9 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				securityPoolsLoadErrorEnvironmentRefreshKey.value = undefined
 			},
 			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
-			load: async () => {
+			load: async operation => {
 				if (nextCheckedAddress === undefined) return []
-				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress)
+				return await dependencies.loadSecurityPoolLineage(parseAddressInput(nextCheckedAddress, 'Security pool'), accountAddress, operation)
 			},
 			onSuccess: pools => {
 				securityPoolsCommitVersion.current += 1
@@ -143,12 +142,13 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		const queryKey = getLineageQueryKey(address)
 		if (address === undefined || queryKey === undefined || securityPoolsLoad.isLoading.peek()) return
 		const commitVersion = ++securityPoolsCommitVersion.current
+		const isLineageCurrent = activeLineageIsCurrent.current
+		const isCurrent = () => isLineageCurrent() && latestEnvironmentRefreshKey.current === environmentRefreshKey && latestAccountAddress.current === accountAddress && checkedSecurityPoolAddress.value === address
 		try {
-			const pools = await securityPoolLineageQueries.fetch(queryKey, async () => await dependencies.loadSecurityPoolLineage(parseAddressInput(address, 'Security pool'), accountAddress))
-			if (securityPoolsCommitVersion.current === commitVersion && !securityPoolsLoad.isLoading.peek() && checkedSecurityPoolAddress.value === address && !isSameQueryData(pools, securityPools.value)) securityPools.value = pools
+			const pools = await securityPoolLineageQueries.fetch(queryKey, async () => await runReadOperation(async operation => await dependencies.loadSecurityPoolLineage(parseAddressInput(address, 'Security pool'), accountAddress, operation), { isCurrent }))
+			if (isCurrent() && securityPoolsCommitVersion.current === commitVersion && !securityPoolsLoad.isLoading.peek() && checkedSecurityPoolAddress.value === address && !isSameQueryData(pools, securityPools.value)) securityPools.value = pools
 		} catch (error) {
-			// A failed background read keeps the loaded pools; the next block retries.
-			void error
+			void error // A failed background read keeps the loaded pools; the next block retries.
 		}
 	}
 
@@ -165,11 +165,11 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 				universeDirectoryLoadedEnvironmentRefreshKey.value = undefined
 			},
 			waitUntilReady: dependencies.waitForSecurityPoolReadBackend,
-			load: async () => {
+			load: async operation => {
 				const loadedPools: ListedSecurityPool[] = []
 				const pageSize = 100
 				for (let pageIndex = 0; ; pageIndex += 1) {
-					const page = await dependencies.loadSecurityPoolPage(pageIndex, pageSize, requestedAccountAddress)
+					const page = await dependencies.loadSecurityPoolPage(pageIndex, pageSize, requestedAccountAddress, operation)
 					loadedPools.push(...page.pools)
 					if (BigInt(loadedPools.length) >= page.poolCount || page.pools.length < pageSize) return loadedPools
 				}

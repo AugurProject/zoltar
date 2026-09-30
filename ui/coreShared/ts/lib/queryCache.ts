@@ -15,7 +15,9 @@ export type QueryState<T> = {
 
 type QueryEntry<T> = QueryState<T> & { generation: number; promise: Promise<T> | undefined }
 
-type StoreControl = { clear: () => void; invalidate: () => void }
+type InvalidationReason = 'block' | 'invalidate'
+
+type StoreControl = { clear: () => void; invalidate: (reason: InvalidationReason) => void }
 
 export type QueryStore<T> = ReturnType<typeof createStoreFor<T>>['store']
 
@@ -41,12 +43,13 @@ function createStoreFor<T>(now: () => number) {
 			return { data, error, updatedAt, fetching, stale }
 		},
 		/**
-		 * Reads through the cache: a request already in flight for the key is shared instead of repeated, unless an
-		 * invalidation arrived after it began. Then a new read starts and only the newest read may settle.
+		 * Reads through the cache: a request already in flight for the key is shared even when a new block
+		 * invalidates it. Let it make progress; retain the stale flag so a later refresh reads the newer block.
+		 * Explicit invalidation, foreground set(), and environment clear() retire older answers.
 		 */
 		fetch(key: string, loader: () => Promise<T>): Promise<T> {
 			const current = read(key)
-			if (current.promise !== undefined && current.generation === generation && !current.stale) return current.promise
+			if (current.promise !== undefined && current.generation === generation) return current.promise
 			const requestGeneration = generation
 			const promise = loader()
 			update(key, { ...current, fetching: true, stale: false, generation: requestGeneration, promise })
@@ -67,11 +70,11 @@ function createStoreFor<T>(now: () => number) {
 			update(key, { ...read(key), data, error: undefined, updatedAt: now(), stale: false, fetching: false, promise: undefined })
 		},
 		/** Marks one key, or every key, stale and notifies subscribers so the visible ones refetch. */
-		invalidate(key?: string) {
+		invalidate(key?: string, reason: InvalidationReason = 'invalidate') {
 			const keys = key === undefined ? [...entries.keys()] : [key]
 			for (const target of keys) {
 				const entry = entries.get(target)
-				if (entry !== undefined) update(target, { ...entry, stale: true })
+				if (entry !== undefined) update(target, { ...entry, stale: true, ...(reason === 'invalidate' ? { fetching: false, promise: undefined } : {}) })
 			}
 		},
 		subscribe(key: string, listener: () => void) {
@@ -91,7 +94,7 @@ function createStoreFor<T>(now: () => number) {
 			entries.clear()
 			for (const key of keys) notify(key)
 		},
-		invalidate: () => store.invalidate(),
+		invalidate: reason => store.invalidate(undefined, reason),
 	}
 	return { store, control }
 }
@@ -105,8 +108,8 @@ export function createQueryCache({ now = () => Date.now() }: { now?: () => numbe
 			return store
 		},
 		/** Marks every cached query stale, for example after a new block or a simulation control. */
-		invalidateAll() {
-			for (const store of stores) store.invalidate()
+		invalidateAll(reason: InvalidationReason = 'invalidate') {
+			for (const store of stores) store.invalidate(reason)
 		},
 		/** Drops every cached result, for example when the environment or network is replaced. */
 		clear() {

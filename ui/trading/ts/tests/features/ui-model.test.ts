@@ -1,3 +1,4 @@
+import { createDeferred } from '@zoltar/ui-core-shared/tests/testUtils/deferred.js'
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
 import { formatEthAmountPair, formatRoundedUnits } from '../../lib/format.js'
@@ -303,6 +304,51 @@ describe('standalone trading UI model', () => {
 		})
 		expect(maximumActive).toBe(2)
 		expect(results).toEqual([0, 10, 20, 30, 40])
+	})
+
+	test('publishes fixed positions with gaps when reads finish out of order', async () => {
+		const first = createDeferred<number>()
+		const second = createDeferred<number>()
+		const third = createDeferred<number>()
+		const progress: (number | undefined)[][] = []
+		const pending = mapWithConcurrency(
+			[first, second, third],
+			3,
+			async value => await value.promise,
+			rows => progress.push(rows),
+		)
+		second.resolve(20)
+		await Bun.sleep(0)
+		expect(progress).toEqual([[undefined, 20, undefined]])
+		first.resolve(10)
+		await Bun.sleep(0)
+		expect(progress).toEqual([
+			[undefined, 20, undefined],
+			[10, 20, undefined],
+		])
+		third.resolve(30)
+		expect(await pending).toEqual([10, 20, 30])
+		expect(progress).toEqual([
+			[undefined, 20, undefined],
+			[10, 20, undefined],
+			[10, 20, 30],
+		])
+	})
+
+	test('counts undefined mapper results as completed progress', async () => {
+		const progress: (number | undefined)[][] = []
+		expect(
+			await mapWithConcurrency(
+				[0, 1],
+				1,
+				async value => (value === 0 ? undefined : value),
+				rows => progress.push(rows),
+			),
+		).toEqual([undefined, 1])
+		expect(progress).toEqual([
+			[undefined, undefined],
+			[undefined, 1],
+		])
 	})
 
 	test('scopes portfolio share balances to one exact SecurityPool token namespace', () => {
