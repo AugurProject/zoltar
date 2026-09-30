@@ -248,12 +248,7 @@ export function SecurityVaultSection({
 
 	const stagedOperationTimeoutField = <VaultOperationTimeoutField value={normalizedSecurityVaultForm.stagedOperationTimeoutMinutes} disabled={!queueWithdrawRepEnabled} onChange={stagedOperationTimeoutMinutes => onSecurityVaultFormChange({ stagedOperationTimeoutMinutes })} />
 	const vaultLoadNotice = (() => {
-		if (loadingSecurityVault)
-			return (
-				<p className='detail'>
-					<LoadingText>{securityPoolCopy.loadingVault}</LoadingText>
-				</p>
-			)
+		if (loadingSecurityVault) return <UserMessage className='detail' loading detail={securityPoolCopy.loadingVault} />
 		if (securityVaultMissing) return <StateHint presentation={{ key: 'not_found', badgeLabel: commonCopy.notFound, badgeTone: 'blocked', detail: securityPoolCopy.invalidVaultAddressHint }} />
 		return undefined
 	})()
@@ -442,7 +437,7 @@ export function SecurityVaultSection({
 				walletRepBalanceError={vaultActionModal === 'deposit-rep' ? undefined : walletRepBalanceError}
 			/>
 			<OperationModal confirmSingleStepFromForm closeOnSuccessKey={securityVaultResult?.action === 'depositRepToVault' ? securityVaultResult.hash : undefined} context={vaultTransactionContext} isOpen={vaultActionModal === 'deposit-rep'} onClose={closeVaultActionModal} title={depositRepActionLabel}>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
+				{currentSelectedVaultDetails === undefined ? <UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} /> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{vaultExistsOnchain ? (
@@ -464,7 +459,7 @@ export function SecurityVaultSection({
 				onClose={closeVaultActionModal}
 				title={repExitActionLabel}
 			>
-				{currentSelectedVaultDetails === undefined ? <p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p> : null}
+				{currentSelectedVaultDetails === undefined ? <UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} /> : null}
 				{currentSelectedVaultDetails === undefined ? null : (
 					<>
 						{effectiveRepExitMode === 'redeem' ? null : <VaultQueuedOperationStatusCards {...operationStatusProps} operation='withdrawRep' />}

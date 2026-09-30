@@ -7,7 +7,6 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { LoadingText } from '@zoltar/ui-core-shared/components/LoadingText.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
@@ -238,11 +237,7 @@ export function renderSelectedReportActionSection({
 				return undefined
 			})()
 			const disputeInputBlockDetail =
-				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? (
-					<p className='detail' id={disputeInputBlockMessageId}>
-						{disputeSubmission.inputBlockMessage.kind === 'hidden-loading' ? <LoadingText>{disputeSubmission.inputBlockMessage.message}</LoadingText> : disputeSubmission.inputBlockMessage.message}
-					</p>
-				) : undefined
+				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? <UserMessage className='detail' id={disputeInputBlockMessageId} loading={disputeSubmission.inputBlockMessage.kind === 'hidden-loading'} detail={disputeSubmission.inputBlockMessage.message} /> : undefined
 			return (
 				<SectionBlock variant='embedded'>
 					<div className='form-grid'>
@@ -300,11 +295,14 @@ export function renderSelectedReportActionSection({
 							</label>
 						</div>
 						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : (
-							<p className='detail'>
-								{disputeSubmission.maximumNewAmount1 === undefined
-									? openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))
-									: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))}
-							</p>
+							<UserMessage
+								className='detail'
+								detail={
+									disputeSubmission.maximumNewAmount1 === undefined
+										? openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))
+										: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))
+								}
+							/>
 						)}
 						{sharedApprovalGuardMessage === undefined ? undefined : (
 							// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
@@ -320,7 +318,7 @@ export function renderSelectedReportActionSection({
 						) : (
 							disputeInputBlockDetail
 						)}
-						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <p className='detail'>{disputeSubmission.blockMessage.message}</p>}
+						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <UserMessage className='detail' detail={disputeSubmission.blockMessage.message} />}
 						<div className='actions'>
 							<TransactionActionButton
 								idleLabel={openOracleCopy.disputeAndSwapAction}

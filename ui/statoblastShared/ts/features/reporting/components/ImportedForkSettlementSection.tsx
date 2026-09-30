@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/reportingEscalation.js'
 import type { ComponentChildren } from 'preact'
@@ -133,9 +134,9 @@ export function ImportedForkSettlementSection({ activeReportingDetails, disabled
 
 	return (
 		<SectionBlock density='compact' title={forkAuctionCopy.settleForkCarriedEscalationDeposits} variant='embedded'>
-			<p className='detail'>{forkAuctionCopy.importedDepositSettlementDetail}</p>
-			{resolved ? undefined : <p className='detail'>{forkAuctionCopy.forkDepositSettlementAvailabilityDetail}</p>}
-			<p className='detail'>{forkAuctionCopy.escalationAuctionHaircutDetail}</p>
+			<UserMessage className='detail' detail={forkAuctionCopy.importedDepositSettlementDetail} />
+			{resolved ? undefined : <UserMessage className='detail' detail={forkAuctionCopy.forkDepositSettlementAvailabilityDetail} />}
+			<UserMessage className='detail' detail={forkAuctionCopy.escalationAuctionHaircutDetail} />
 			{settleableSides.map(side => (
 				<ImportedForkSettlementSide activeReportingDetails={activeReportingDetails} disabled={disabled} key={side.key} onDepositSelectionChange={onDepositSelectionChange} renderSettlementAction={renderSettlementAction} resolved={resolved} selectedDepositIndexes={selectedDepositIndexesByOutcome[side.key]} side={side} />
 			))}

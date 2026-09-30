@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -64,7 +65,7 @@ export function SecurityVaultInlineActionSections({
 			</SectionBlock>
 			<SectionBlock title={securityPoolCopy.claimFeesTitle} variant='embedded'>
 				{currentSelectedVaultDetails === undefined ? (
-					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
+					<UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} />
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={securityPoolCopy.claimableFees}>
@@ -84,7 +85,7 @@ export function SecurityVaultInlineActionSections({
 
 			<SectionBlock title={repExitActionLabel} variant='embedded'>
 				{repExitAmount === undefined ? (
-					<p className='detail'>{securityPoolCopy.selectedVaultDetailsUnavailable}</p>
+					<UserMessage className='detail' detail={securityPoolCopy.selectedVaultDetailsUnavailable} />
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={repExitAmountLabel}>
@@ -105,7 +106,7 @@ export function SecurityVaultInlineActionSections({
 				)}
 				{repExitFields}
 				<div className='actions'>{repExitActionButton}</div>
-				{repExitMode === 'redeem' && disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n ? <p className='detail'>{securityPoolCopy.escalationWithdrawalRequiredDetail}</p> : undefined}
+				{repExitMode === 'redeem' && disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n ? <UserMessage className='detail' detail={securityPoolCopy.escalationWithdrawalRequiredDetail} /> : undefined}
 			</SectionBlock>
 
 			<ErrorNotice message={securityVaultError} />

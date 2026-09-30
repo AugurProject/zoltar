@@ -36,13 +36,8 @@ export function createForkAuctionActionRenderer({ activeAction, forkPoolState, w
 export function ForkAuctionOutcomePoolNotice({ error, loading, onRetry, outcomeLabel, poolAvailable }: { error: string | undefined; loading: boolean; onRetry: () => void; outcomeLabel: string; poolAvailable: boolean }) {
 	if (poolAvailable) return undefined
 	let status: ComponentChildren = <ErrorNotice message={error} />
-	if (loading)
-		status = (
-			<p className='detail'>
-				<LoadingText>{forkAuctionCopy.formatLoadingOutcomePoolDetail(outcomeLabel)}</LoadingText>
-			</p>
-		)
-	else if (error === undefined) status = <p className='detail'>{forkAuctionCopy.formatMissingOutcomePoolDetail(outcomeLabel)}</p>
+	if (loading) status = <UserMessage className='detail' loading detail={forkAuctionCopy.formatLoadingOutcomePoolDetail(outcomeLabel)} />
+	else if (error === undefined) status = <UserMessage className='detail' detail={forkAuctionCopy.formatMissingOutcomePoolDetail(outcomeLabel)} />
 	return (
 		<div className='fork-workflow-outcome-notice'>
 			{status}
@@ -73,9 +68,9 @@ export function ForkAuctionEndedNotice({ actionButton, currentTimestamp, finaliz
 export function ForkAuctionStartSection({ actionButton, bypassReason, readyInText }: { actionButton: ComponentChildren; bypassReason: string | undefined; readyInText: string | undefined }) {
 	return (
 		<SectionBlock title={forkAuctionCopy.startTruthAuctionTitle} variant='embedded'>
-			<p className='detail'>{forkAuctionCopy.startTruthAuctionDetail}</p>
-			{readyInText === undefined ? undefined : <p className='detail'>{readyInText}</p>}
-			{bypassReason === undefined ? undefined : <p className='detail'>{bypassReason}</p>}
+			<UserMessage className='detail' detail={forkAuctionCopy.startTruthAuctionDetail} />
+			{readyInText === undefined ? undefined : <UserMessage className='detail' detail={readyInText} />}
+			{bypassReason === undefined ? undefined : <UserMessage className='detail' detail={bypassReason} />}
 			<div className='actions'>{actionButton}</div>
 		</SectionBlock>
 	)
@@ -85,11 +80,7 @@ export function ForkAuctionBidsStatusSection({ error, loading, onRetry, retrying
 	if (!loading && error === undefined && !retrying) return undefined
 	return (
 		<SectionBlock title={forkAuctionCopy.currentBids} variant='embedded'>
-			{loading && !retrying ? (
-				<p className='detail'>
-					<LoadingText>{forkAuctionCopy.loadingAuctionBids}</LoadingText>
-				</p>
-			) : undefined}
+			{loading && !retrying ? <UserMessage className='detail' loading detail={forkAuctionCopy.loadingAuctionBids} /> : undefined}
 			<ErrorNotice message={error} />
 			{error === undefined && !retrying ? undefined : (
 				<div className='actions'>
@@ -113,11 +104,16 @@ function BidPriceGuidance({ clearingPrice, minimumWinningPriceInput, onBidPriceC
 	const repPerEthDetail = formatRepPerEthDetail(clearingPrice)
 	return (
 		<div className='truth-auction-bid-guidance'>
-			<p className='detail'>
-				{forkAuctionCopy.currentClearingPriceLead}
-				<strong>{renderTruthAuctionPriceValue(clearingPrice)}</strong>
-				{repPerEthDetail === undefined ? undefined : <> {repPerEthDetail}</>}
-			</p>
+			<UserMessage
+				className='detail'
+				detail={
+					<>
+						{forkAuctionCopy.currentClearingPriceLead}
+						<strong>{renderTruthAuctionPriceValue(clearingPrice)}</strong>
+						{repPerEthDetail === undefined ? undefined : <> {repPerEthDetail}</>}
+					</>
+				}
+			/>
 			{minimumWinningPriceInput === undefined ? undefined : (
 				<button className='secondary' onClick={() => onBidPriceChange(minimumWinningPriceInput)} type='button'>
 					{forkAuctionCopy.formatUseMinimumWinningPrice(minimumWinningPriceInput)}
@@ -184,7 +180,7 @@ export function ForkAuctionSubmitBidSection({
 export function ForkAuctionSettlementActionSection({ actionButton, description, selectionSummary, title }: { actionButton: ComponentChildren; description: ComponentChildren; selectionSummary: ComponentChildren; title: ComponentChildren }) {
 	return (
 		<SectionBlock density='compact' title={title} headingLevel={4} variant='embedded'>
-			{description === undefined || selectionSummary !== undefined ? undefined : <p className='detail'>{description}</p>}
+			{description === undefined || selectionSummary !== undefined ? undefined : <UserMessage className='detail' detail={description} />}
 			{selectionSummary}
 			<div className='actions'>{actionButton}</div>
 		</SectionBlock>
