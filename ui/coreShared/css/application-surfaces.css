@@ -445,6 +445,11 @@
 	gap: 0.8rem;
 }
 
+.question-preview-outcomes {
+	display: grid;
+	gap: 0.45rem;
+}
+
 @media (max-width: 64rem) {
 	.metric-tile-grid[data-columns="4"] {
 		grid-template-columns: repeat(2, minmax(0, 1fr));

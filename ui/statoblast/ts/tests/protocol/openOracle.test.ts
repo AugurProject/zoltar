@@ -73,7 +73,23 @@ describe('openOracle protocol client', () => {
 			readContract: async request => readStoredOracleFixture(request.functionName, preimage),
 		})
 		const report = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
-		expect(report.price).toBe(10n ** 30n / 3000n)
+		expect(report.price).toBe(3000n * 10n ** 30n)
+	})
+
+	test('exposes fee and escalation flags on loaded report details', async () => {
+		const preimage = createOpenOraclePreimage()
+		const client = createMockLoaderClient({
+			getBlock: async () => ({ number: 1n, timestamp: 2n }),
+			multicall: async () => [18n, 18n, 'ONE', 'TWO'],
+			readContract: async request => readStoredOracleFixture(request.functionName, preimage),
+		})
+		const defaultReport = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+		expect(defaultReport.feesOnlyAtHalt).toBe(false)
+		expect(defaultReport.flexibleEscalation).toBe(false)
+		preimage.game.flags |= (1n << 5n) | (1n << 6n)
+		const flaggedReport = await loadOpenOracleReportDetails(client, getOpenOracleAddress(), 1n)
+		expect(flaggedReport.feesOnlyAtHalt).toBe(true)
+		expect(flaggedReport.flexibleEscalation).toBe(true)
 	})
 
 	test('loads stored oracle reports with log access disabled', async () => {
@@ -237,7 +253,7 @@ describe('openOracle protocol client', () => {
 				for (const contract of request.contracts) {
 					requestedFunctionNames.push(getContractFunctionName(contract))
 				}
-				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n]
+				return [1n, pendingOperationSlotId, [pendingOperationSlotId, 13n], 4n, 0n, 1n, true, 10n, 40n, 60n, 1_000n]
 			},
 			readContract: async request => {
 				if (request.functionName === 'getSettlementCallbackGasLimit') return 10
@@ -285,7 +301,20 @@ describe('openOracle protocol client', () => {
 
 		const details = await loadOracleManagerDetails(client, managerAddress)
 
-		expect(requestedFunctionNames).toEqual(['lastPrice', 'pendingOperationSlotId', 'getPendingSettlementOperationIds', 'MAX_PENDING_SETTLEMENT_OPERATIONS', 'pendingReportId', 'getQueuedOperationCostAttoEth', 'isPriceValid', 'lastSettlementTimestamp', 'getActiveStagedOperationCount', 'settlementTime'])
+		expect(requestedFunctionNames).toEqual([
+			'lastPrice',
+			'pendingOperationSlotId',
+			'getPendingSettlementOperationIds',
+			'MAX_PENDING_SETTLEMENT_OPERATIONS',
+			'pendingReportId',
+			'getQueuedOperationCostAttoEth',
+			'isPriceValid',
+			'lastSettlementTimestamp',
+			'getActiveStagedOperationCount',
+			'settlementTime',
+			'minLiquidationPriceDistanceBps',
+		])
+		expect(details.minLiquidationPriceDistanceBps).toBe(1_000n)
 		expect(capturedActiveOperationArgs).toEqual([0n, 25n])
 		expect(details.activeStagedOperationCount).toBe(40n)
 		expect(details.pendingOperation?.operationId).toBe(pendingOperationSlotId)
@@ -341,6 +370,25 @@ describe('openOracle protocol client', () => {
 		})
 		expect(decodedCall.functionName).toBe('settle')
 		expect(decodedCall.args?.[0]).toBe(7n)
+	})
+
+	test('settleOracleReport raises the gas limit to cover a large settlement callback', async () => {
+		const callbackGasLimit = 10_000_000n
+		const preimage = createOpenOraclePreimage(7n)
+		preimage.game.callbackContract = getAddress('0x00000000000000000000000000000000000000f9')
+		preimage.game.callbackGasLimit = callbackGasLimit
+		let capturedGas: bigint | undefined
+		const client = createMockWriteClient(request => {
+			capturedGas = request.gas
+		})
+
+		await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
+		// EIP-150 forwards at most 63/64 of the remaining gas, and settle requires callbackGasLimit / 63 to remain afterwards.
+		expect(capturedGas ?? 0n).toBeGreaterThan((callbackGasLimit * 64n) / 63n + callbackGasLimit / 63n)
+
+		preimage.game.callbackGasLimit = 1_000n
+		await settleOracleReport(client, getOpenOracleAddress(), 7n, preimage)
+		expect(capturedGas).toBe(5_000_000n)
 	})
 
 	test('loads sentinel-adjusted balances and keeps a failed withdrawal retryable', async () => {

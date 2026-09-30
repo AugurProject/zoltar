@@ -332,6 +332,10 @@
 			"bun": "./ts/features/open-oracle/lib/openOracle.ts",
 			"default": "./js/features/open-oracle/lib/openOracle.js"
 		},
+		"./features/open-oracle/lib/openOracleDispute.js": {
+			"bun": "./ts/features/open-oracle/lib/openOracleDispute.ts",
+			"default": "./js/features/open-oracle/lib/openOracleDispute.js"
+		},
 		"./features/open-oracle/lib/openOracleReadiness.js": {
 			"bun": "./ts/features/open-oracle/lib/openOracleReadiness.ts",
 			"default": "./js/features/open-oracle/lib/openOracleReadiness.js"

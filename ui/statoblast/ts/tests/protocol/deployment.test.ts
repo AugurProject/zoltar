@@ -4,7 +4,9 @@ import { DeploymentStatusOracle_DeploymentStatusOracle } from '@zoltar/ui-core-s
 import { asWriteClient, createMockWriteClient } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import type { WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE, createSimulationProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { assertStaticStatoblastDeploymentArtifactRuntimeCodeHashes, getDeploymentSteps, loadDeploymentStatusOracleSnapshot } from '@zoltar/ui-statoblast-shared/protocol/deployment.js'
+import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 
 const simulationProfile = createSimulationProfile({ genesisRepTokenAddress: '0x1000000000000000000000000000000000000001', wethAddress: '0x2000000000000000000000000000000000000002' })
 const ORACLE_CREATION_CODE = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.bytecode.object}` as const
@@ -56,6 +58,29 @@ describe('statoblast deployment steps', () => {
 			const initCode = await captureDeploymentInitCode(oracleStep.deploy)
 			expect(initCode.startsWith(ORACLE_CREATION_CODE)).toBe(true)
 			expect(`0x${initCode.slice(ORACLE_CREATION_CODE.length)}`).toBe(encodeAbiParameters([{ type: 'address[]' }], [expectedMonitoredAddresses]))
+		}
+	})
+
+	test('marks a step undeployed when the status oracle flags it but the chain has no code at its address', async () => {
+		const resetEnvironment = installActiveEnvironmentForTesting(createFakeBackend({ profile: MAINNET_NETWORK_PROFILE }))
+		try {
+			const steps = getDeploymentSteps(MAINNET_NETWORK_PROFILE)
+			const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
+			if (oracleStep === undefined) throw new Error('Expected the deployment status oracle step')
+			const oracleRuntimeCode: Hex = `0x${DeploymentStatusOracle_DeploymentStatusOracle.evm.deployedBytecode.object}`
+			const allStepsMask = (1n << BigInt(steps.length - 1)) - 1n
+			const snapshot = await loadDeploymentStatusOracleSnapshot({
+				getCode: async ({ address }) => (address === oracleStep.address ? oracleRuntimeCode : '0x'),
+				readContract: async ({ functionName }) => {
+					if (functionName === 'getDeploymentMask') return allStepsMask as never
+					throw new Error(`Unexpected read: ${functionName}`)
+				},
+			})
+			expect(snapshot.deploymentStatuses.find(step => step.id === 'deploymentStatusOracle')?.deployed).toBe(true)
+			expect(snapshot.deploymentStatuses.filter(step => step.id !== 'deploymentStatusOracle' && step.deployed).map(step => step.id)).toEqual([])
+			expect(snapshot.applicationDeploymentComplete).toBe(false)
+		} finally {
+			resetEnvironment()
 		}
 	})
 })

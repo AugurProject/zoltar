@@ -32,6 +32,7 @@ export function VaultBackingFactorForm({
 	poolSecurityMultiplierBps,
 	onAdjust,
 	walletBlocker,
+	directExecution = false,
 }: {
 	details: SecurityVaultDetails | undefined
 	oracleManagerDetails?: OracleManagerDetails | undefined
@@ -45,12 +46,14 @@ export function VaultBackingFactorForm({
 	onAdjust: (limit: string, proposedRepPerEthPrice?: bigint) => void
 	/** The wallet prerequisite, when it is the `blocker`. */
 	walletBlocker?: WalletActionBlocker | undefined
+	/** After resolution the change is sent straight to the pool, so no oracle price or report is involved. */
+	directExecution?: boolean
 }) {
 	const [initialPrice, setInitialPrice] = useState<OracleInitialPriceInput>({ price: '' })
 	const priceFieldId = useId()
-	const needsInitialPrice = needsOracleInitialPrice(oracleManagerDetails, executionRepPerEthPrice !== undefined)
+	const needsInitialPrice = !directExecution && needsOracleInitialPrice(oracleManagerDetails, executionRepPerEthPrice !== undefined)
 	const { proposedRepPerEthPrice, error: priceError } = parseOracleInitialPrice(needsInitialPrice ? initialPrice : undefined)
-	const executionMessage = getOracleOperationExecutionMessage(oracleManagerDetails, executionRepPerEthPrice !== undefined, details?.vaultAddress)
+	const executionMessage = directExecution ? securityPoolCopy.commitmentDirectExitDetail : getOracleOperationExecutionMessage(oracleManagerDetails, executionRepPerEthPrice !== undefined, details?.vaultAddress)
 	const [limitInput, setLimit] = useState<string | undefined>(undefined)
 	const minimumBps = poolSecurityMultiplierBps ?? details?.statoblastSecurityMultiplierBps
 	const currentLimit = details?.underwritingLimitAttoEth
@@ -67,8 +70,10 @@ export function VaultBackingFactorForm({
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
 	}
 	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
-	const maximum = getMaximumHealthyCommitment(details, repPerEthPrice, minimumBps)
-	const riskKey = `${details?.securityPoolAddress}:${details?.vaultAddress}:${limitAttoEth}:${repPerEthPrice}:${maximum}`
+	// The increase guard checks the execution oracle price, so Max and the risk warning use it too; the UI price is only a fallback estimate.
+	const maximumRepPerEthPrice = executionRepPerEthPrice ?? repPerEthPrice
+	const maximum = getMaximumHealthyCommitment(details, maximumRepPerEthPrice, minimumBps)
+	const riskKey = `${details?.securityPoolAddress}:${details?.vaultAddress}:${limitAttoEth}:${maximumRepPerEthPrice}:${maximum}`
 	const [acknowledgedRisk, setAcknowledgedRisk] = useState<string | undefined>(undefined)
 	const unsafe = maximum !== undefined && limitAttoEth !== undefined && limitAttoEth > maximum && (currentLimit === undefined || limitAttoEth > currentLimit)
 	const riskReason = unsafe && acknowledgedRisk !== riskKey ? securityPoolCopy.commitmentRiskRequired : undefined
@@ -105,7 +110,7 @@ export function VaultBackingFactorForm({
 				</MetricField>
 				<MetricField label={securityPoolCopy.maximumHealthyCommitment}>
 					<CurrencyValue precision='exact' value={maximum} suffix={commonCopy.eth} />
-					<RepPriceStatusLabel />
+					{executionRepPerEthPrice === undefined ? <RepPriceStatusLabel /> : undefined}
 				</MetricField>
 			</MetricGrid>
 			{maximum === undefined ? <p className='detail'>{securityPoolCopy.commitmentPriceUnavailable}</p> : undefined}
