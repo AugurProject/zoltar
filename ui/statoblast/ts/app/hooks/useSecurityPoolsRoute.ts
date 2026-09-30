@@ -27,7 +27,7 @@ import type { RepPerEthPriceProps, SecurityPoolsSectionProps, SecurityPoolsView 
 import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 
 /** App-shell values every Security Pools section reads, grouped like the Zoltar workspace. */
-export type SecurityPoolsRouteContext = {
+type SecurityPoolsRouteContext = {
 	accountState: AccountState
 	activeEnvironmentNonce: number
 	activeUniverseId: bigint

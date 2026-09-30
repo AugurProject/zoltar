@@ -3,7 +3,7 @@ import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
 import type { InjectedEthereum } from '../../protocol/injected.js'
 
-export type WalletConnectionFeedback = { route: string; detail: string }
+type WalletConnectionFeedback = { route: string; detail: string }
 
 export type WalletSessionState = {
 	account: Address | undefined

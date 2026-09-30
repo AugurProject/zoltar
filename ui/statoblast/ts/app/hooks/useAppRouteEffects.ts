@@ -6,7 +6,7 @@ import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/op
 import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 /** Copies route state (URL pool, question, vault owner, and oracle report) into the form states that mirror it. */
-export type RouteFormSync = {
+type RouteFormSync = {
 	setOpenOracleReportId: (reportId: string) => void
 	setSecurityPoolAddress: (securityPoolAddress: string) => void
 	setSecurityPoolQuestionId: (questionId: string) => void
