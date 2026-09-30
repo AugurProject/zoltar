@@ -69,7 +69,7 @@ describe('useRepPrices refresh races', () => {
 			getRepAddress: () => getAddress('0x00000000000000000000000000000000000000e1'),
 			isRepPricingEnabled: () => true,
 			quoteBestExactInputWithSource: async () => (++ethCalls === 1 ? await stalled.promise : quote),
-			quoteBestV3ExactInputWithSource: async () => quote,
+			quoteBestV3ExactInputWithSource: async () => await stalled.promise,
 			quoteRepForUsdcV4WithSource: async () => quote,
 		})
 		await renderRepPrices('')
@@ -83,6 +83,30 @@ describe('useRepPrices refresh races', () => {
 			await stalled.promise
 		})
 		expect(readRepPriceProbe().repPerEth).toBe('3')
+	})
+
+	test('uses the V3 quote when the V4 request stalls', async () => {
+		const originalSetTimeout = globalThis.setTimeout
+		spyOn(globalThis, 'setTimeout').mockImplementation((handler, delay, ...args) => originalSetTimeout(handler, delay === 30_000 ? 10 : delay, ...args))
+		const stalled = createDeferred<RepQuote>()
+		const v3Quote = mock(async () => mockQuote(7n))
+		installRepPriceQuoterForTesting({
+			getRepAddress: () => getAddress('0x00000000000000000000000000000000000000e1'),
+			isRepPricingEnabled: () => true,
+			quoteBestExactInputWithSource: async () => await stalled.promise,
+			quoteBestV3ExactInputWithSource: v3Quote,
+			quoteRepForUsdcV4WithSource: async () => mockQuote(3n),
+		})
+		await renderRepPrices()
+		await waitFor(() => expect(readRepPriceProbe().loading).toBe('ready'))
+		expect(v3Quote).toHaveBeenCalledTimes(1)
+		expect(readRepPriceProbe().repPerEth).toBe('7')
+		expect(readRepPriceProbe().ethFailure).toBe('-')
+		await act(async () => {
+			stalled.resolve(mockQuote(99n))
+			await stalled.promise
+		})
+		expect(readRepPriceProbe().repPerEth).toBe('7')
 	})
 
 	test('keeps the newest REP price refresh when overlapping requests resolve out of order', async () => {
