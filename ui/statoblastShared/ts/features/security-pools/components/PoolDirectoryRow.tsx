@@ -17,6 +17,7 @@ import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from 
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { PoolCapacitySummary } from './PoolCapacitySummary.js'
+import { formatInitialReportPriorityFee } from '../lib/priorityFee.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 
@@ -84,9 +85,7 @@ export function PoolDirectoryRow({
 			</a>
 			<div className='pool-directory-details decision-summary'>
 				<ReadOnlyDetailAccordion title={copy.poolDetails}>
-					<MetricField label={commonCopy.initialReportPriorityFee}>
-						<CurrencyValue value={pool.initialReportPriorityFeeAttoEthPerGas} suffix={commonCopy.eth} precision='exact' />
-					</MetricField>
+					<MetricField label={commonCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(pool.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 					<MetricField label={securityPoolCopy.openInterestFeeYear}>
 						<CurrencyValue value={openInterestFeePerYearBigint(pool.currentRetentionRate)} suffix={commonCopy.percent} />
 					</MetricField>

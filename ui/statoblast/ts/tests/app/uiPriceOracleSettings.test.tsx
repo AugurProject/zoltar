@@ -22,6 +22,17 @@ test('falls back safely when browser storage cannot be acquired', () => {
 	}
 })
 
+test('falls back to the default when browser storage is disabled and reads as null', () => {
+	const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+	try {
+		Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: null })
+		expect(readUiPriceOracle()).toBe('open-oracle-fallback')
+	} finally {
+		if (originalDescriptor === undefined) Reflect.deleteProperty(globalThis, 'localStorage')
+		else Object.defineProperty(globalThis, 'localStorage', originalDescriptor)
+	}
+})
+
 test('propagates unexpected browser storage read failures', () => {
 	expect(() =>
 		readUiPriceOracle({

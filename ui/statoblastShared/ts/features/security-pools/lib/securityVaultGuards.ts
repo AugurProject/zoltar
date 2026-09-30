@@ -15,6 +15,7 @@ export function getTargetHealthFactorGuardMessage(targetHealthFactor: string, mi
 
 export function getVaultDepositGuardMessage({
 	approvalSatisfied,
+	currentVaultRepBackingAttoRep,
 	depositAmount,
 	isDepositBelowMinimum,
 	minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
@@ -23,6 +24,7 @@ export function getVaultDepositGuardMessage({
 	walletRepShortfallAttoRep,
 }: {
 	approvalSatisfied: boolean
+	currentVaultRepBackingAttoRep?: bigint | undefined
 	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
 	minimumVaultRepDepositAttoRep?: bigint | undefined
@@ -36,7 +38,12 @@ export function getVaultDepositGuardMessage({
 	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
 	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatAdditionalCurrencyBalance(walletRepShortfallAttoRep, 'REP')} in this wallet.`
-	if (isDepositBelowMinimum) return `New vaults require at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} in the first deposit.`
+	if (isDepositBelowMinimum) {
+		// Pool-held REP-per-unit rounding can credit slightly less than the deposit, so an exact minimum can still fall short.
+		if (currentVaultRepBackingAttoRep !== undefined && currentVaultRepBackingAttoRep > 0n) return `This vault must hold at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} after the deposit. Deposit more REP.`
+		if (depositAmount >= minimumVaultRepDepositAttoRep) return `Pool rounding would credit this vault slightly less than the ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} minimum. Deposit a little more.`
+		return `New vaults require at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} in the first deposit.`
+	}
 	return undefined
 }
 
@@ -60,7 +67,9 @@ export function getVaultWithdrawGuardMessage({
 	if (withdrawAmount === undefined) return 'Enter a valid REP withdraw amount.'
 	if (withdrawAmount <= 0n) return undefined
 	if (disputeStakedAttoRep > 0n) return 'Settle escalation deposits before withdrawing REP.'
-	if (withdrawableRepAmountAttoRep === undefined || withdrawableRepAmountAttoRep <= 0n) return undefined
+	// Without a price the REP locked by commitments is unknown, so no amount can be offered safely.
+	if (withdrawableRepAmountAttoRep === undefined) return 'A REP price is needed to estimate how much REP your commitment keeps locked. Request a new oracle price or lower the commitment limit first.'
+	if (withdrawableRepAmountAttoRep <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalanceWithUnit(withdrawableRepAmountAttoRep, 'REP')} or less.`
 	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
 	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
@@ -74,9 +83,12 @@ export function getVaultWithdrawGuardMessage({
 	return undefined
 }
 
-export function getVaultRedeemRepGuardMessage({ disputeStakedAttoRep, redeemableRepAmountAttoRep }: { disputeStakedAttoRep: bigint | undefined; redeemableRepAmountAttoRep: bigint | undefined }) {
+export function getVaultRedeemRepGuardMessage({ disputeStakedAttoRep, redeemableRepAmountAttoRep, underwritingLimitAttoEth }: { disputeStakedAttoRep: bigint | undefined; redeemableRepAmountAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint | undefined }) {
 	if (disputeStakedAttoRep !== undefined && disputeStakedAttoRep > 0n) return 'Settle escalation deposits before redeeming REP.'
 	if (redeemableRepAmountAttoRep === undefined || redeemableRepAmountAttoRep <= 0n) return 'No redeemable REP is available for this vault.'
+	// `redeemRepFromVault` reverts while the vault still holds a commitment.
+	if (underwritingLimitAttoEth === undefined) return 'Refresh vault details before redeeming REP.'
+	if (underwritingLimitAttoEth > 0n) return 'Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.'
 	return undefined
 }
 

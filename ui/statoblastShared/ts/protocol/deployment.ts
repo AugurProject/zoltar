@@ -1,8 +1,9 @@
 import type { NetworkProfile } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
 import { getRuntimeNetworkProfile, SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { bytesToHex, encodeDeployData, hexToBytes, keccak256, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { bytesToHex, encodeDeployData, hexToBytes, toHex, type Address, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import type { DeploymentStatusSnapshot, DeploymentStep, DeploymentStepId, ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import {
+	assertDeploymentStepRuntimeCode,
 	assertStaticDeploymentArtifactRuntimeCodeHashes,
 	buildDeploymentStatusSnapshot,
 	deployViaProxy,
@@ -226,14 +227,6 @@ function getDeploymentStatusOracleAddress(profile = getRuntimeNetworkProfile()):
 	}).getDeploymentStatusOracleAddress()
 }
 
-function assertStepRuntimeCode(step: DeploymentStep, code: Hex | undefined): boolean {
-	if (step.trustedSimulationCodePresence) return true
-	if (code === undefined || code === '0x') return false
-	if (step.expectedRuntimeCodeHash === undefined) throw new Error(`Exact runtime-code verification is unavailable for deployment step ${step.id} on the active network`)
-	if (keccak256(code) !== step.expectedRuntimeCodeHash) throw new Error(`Unexpected runtime code for ${step.id} at ${step.address}`)
-	return true
-}
-
 export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient, 'readContract' | 'getCode'>): Promise<DeploymentStatusSnapshot> {
 	const profile = getRuntimeNetworkProfile()
 	const steps = getDeploymentSteps(profile)
@@ -249,17 +242,18 @@ export async function loadDeploymentStatusOracleSnapshot(client: Pick<ReadClient
 	const oracleStep = steps.find(step => step.id === 'deploymentStatusOracle')
 	const proxyStep = steps.find(step => step.id === 'proxyDeployer')
 	if (oracleStep === undefined || proxyStep === undefined) throw new Error('Deployment plan is missing required verification steps')
-	if (!assertStepRuntimeCode(oracleStep, oracleCode)) {
+	if (!assertDeploymentStepRuntimeCode(oracleStep, oracleCode)) {
 		const proxyDeployerCode = await client.getCode({ address: PROXY_DEPLOYER_ADDRESS })
-		const proxyDeployerDeployed = assertStepRuntimeCode(proxyStep, proxyDeployerCode)
+		const proxyDeployerDeployed = assertDeploymentStepRuntimeCode(proxyStep, proxyDeployerCode)
 		return buildDeploymentStatusSnapshot(steps, proxyDeployerDeployed ? 1n : 0n, false)
 	}
 	const snapshot = buildDeploymentStatusSnapshot(steps, await loadDeploymentStatusOracleMaskAtAddress(client, oracleAddress), true)
-	await Promise.all(
+	// The oracle mask only says a step was recorded; a step whose address holds no code is reported as not deployed.
+	const deploymentStatuses = await Promise.all(
 		snapshot.deploymentStatuses.map(async step => {
-			if (!step.deployed) return
-			assertStepRuntimeCode(step, await client.getCode({ address: step.address }))
+			if (!step.deployed || step.id === 'deploymentStatusOracle') return step
+			return assertDeploymentStepRuntimeCode(step, await client.getCode({ address: step.address })) ? step : { ...step, deployed: false }
 		}),
 	)
-	return snapshot
+	return { applicationDeploymentComplete: deploymentStatuses.every(step => step.deployed), deploymentStatuses }
 }

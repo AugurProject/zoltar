@@ -13,10 +13,12 @@ import type { OpenOracleReportDetails, OpenOracleReportSummary, OpenOracleReport
 import { renderSelectedReportActionSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleReportContent.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
-import { deriveOpenOracleDisputeSubmissionDetails, type OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import type { OpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracle.js'
+import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
 import { openOracleReportDownloadStore } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/reportBrowse.js'
 import type { OpenOracleSectionProps } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { AccountState, OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { render } from 'preact'
 import { act } from 'preact/test-utils'
@@ -162,6 +164,8 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		token2Decimals: 18,
 		token2Symbol: 'WETH',
 		trackDisputes: false,
+		feesOnlyAtHalt: false,
+		flexibleEscalation: false,
 		...overrides,
 	}
 }
@@ -455,6 +459,47 @@ void describe('OpenOracleSection', () => {
 		} finally {
 			await rendered.cleanup()
 			domEnvironment.cleanup()
+		}
+	})
+
+	void test('names the canonical WETH as ETH in report price directions but keeps the token symbol for token actions', async () => {
+		const domEnvironment = installDomEnvironment()
+		const rendered = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleReportDetails: createOpenOracleReportDetails({
+						currentReporter: REPORTER,
+						price: 3n * 10n ** 30n,
+						reportTimestamp: 100n,
+						token1: getWethAddress(),
+						token1Symbol: 'WETH',
+						token2: getAddress('0x2000000000000000000000000000000000000000'),
+						token2Symbol: 'REP',
+					}),
+					openOracleReportLookupState: 'ready',
+				})}
+			/>,
+		)
+
+		try {
+			const text = document.body.textContent ?? ''
+			expect(text).toContain('REP per ETH')
+			expect(text).not.toContain('per WETH')
+			expect(text).toContain('WETH / REP')
+		} finally {
+			await rendered.cleanup()
+			domEnvironment.cleanup()
+		}
+	})
+
+	void test('keeps the symbol of a non-canonical token named WETH in report price directions', async () => {
+		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 1n, [createReportSummary(1n, { token1: getAddress('0x5000000000000000000000000000000000000000'), token1Symbol: 'WETH', token2Symbol: 'REP' })]) })
+		try {
+			await clickButton('Discover reports')
+			expect(document.body.textContent).toContain('REP per WETH')
+		} finally {
+			await browse.cleanup()
 		}
 	})
 

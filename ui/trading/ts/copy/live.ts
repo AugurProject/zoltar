@@ -74,7 +74,7 @@ function securityPoolRefreshFailed(refreshError: string) {
 const forkedAt = 'Forked'
 
 function priorityFeePerGas(amount: string) {
-	return `${amount} nETH / gas`
+	return `${amount}\u00a0nanoETH per gas`
 }
 
 const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'

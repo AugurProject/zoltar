@@ -28,8 +28,8 @@ test('truth-auction settlement copy identifies REP backing-unit credits', () => 
 })
 
 test('truth-auction dynamic values use nonbreaking separators', () => {
-	expect(forkAuctionCopy.formatEthPerRepValue('12')).toBe('12\u00a0ETH / REP')
-	expect(forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart('12')).toContain('12\u00a0ETH / REP')
+	expect(forkAuctionCopy.formatEthPerRepValue('12')).toBe('12\u00a0ETH per REP')
+	expect(forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart('12')).toContain('12\u00a0ETH per REP')
 	expect(forkAuctionCopy.zeroEth).toBe('0\u00a0ETH')
 })
 

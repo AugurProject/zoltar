@@ -105,6 +105,8 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		token2Decimals: 0,
 		token2Symbol: 'WETH',
 		trackDisputes: false,
+		feesOnlyAtHalt: false,
+		flexibleEscalation: false,
 		...overrides,
 	}
 }
@@ -439,6 +441,37 @@ describe('useOpenOracleOperations', () => {
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
 		expect(approveErc20).not.toHaveBeenCalled()
 		expect(tokenAccessLoadCount).toBe(1)
+	})
+
+	test('dispute availability follows the live clock after the dispute delay passes', async () => {
+		const loadedReport = createOpenOracleReportDetails({
+			currentReporter: getAddress('0x00000000000000000000000000000000000000dd'),
+			currentTime: 10n,
+			disputeDelay: 1n,
+			reportTimestamp: 10n,
+			settlementTime: 100n,
+		})
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async () => loadedReport),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		expect(requireHookState(hookState).openOracleDisputeSubmission?.inputBlockMessage?.message).toBe('This report is not ready to dispute.')
+
+		await waitFor(
+			() => {
+				expect(requireHookState(hookState).openOracleDisputeSubmission?.inputBlockMessage?.message).not.toBe('This report is not ready to dispute.')
+			},
+			{ timeout: 3000 },
+		)
 	})
 
 	test('approval preflight blocks a report that settled after it was loaded', async () => {

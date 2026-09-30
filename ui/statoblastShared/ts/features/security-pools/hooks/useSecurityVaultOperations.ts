@@ -25,6 +25,7 @@ import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, getSecurityVaultActionRepAmount, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
+import { getVaultRedeemRepGuardMessage } from '../lib/securityVaultGuards.js'
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
@@ -50,6 +51,7 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	createWalletWriteClient: (walletAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	depositRepToVaultToSecurityPool: (client: TWriteClient, securityPoolAddress: Address, amount: bigint, targetHealthFactorBps: bigint) => Promise<SecurityVaultActionResult>
 	isSecurityPoolVaultAdmissionClosed: (securityPoolAddress: Address) => Promise<boolean>
+	isSecurityPoolEscalationResolved: (securityPoolAddress: Address) => Promise<boolean>
 	loadCoordinatorInitialReportFundingRequirement: (client: TWriteClient, managerAddress: Address, walletAddress: Address, proposedRepPerEthPrice?: bigint) => Promise<Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>>
 	loadErc20Balance: (tokenAddress: Address, accountAddress: Address) => Promise<bigint>
 	loadQueuedVaultOperationState: (managerAddress: Address, result: SecurityVaultActionResult) => Promise<Awaited<ReturnType<typeof loadQueuedVaultOperationState>>>
@@ -58,6 +60,7 @@ export type UseSecurityVaultOperationsDependencies<TWriteClient = SecurityVaultP
 	queueOracleManagerOperation: (client: TWriteClient, managerAddress: Address, operation: 'withdrawRep' | 'setVaultUnderwritingLimit', targetVault: Address, amount: bigint, validForSeconds: bigint, proposedRepPerEthPrice?: bigint) => Promise<SecurityVaultQueueResult>
 	redeemRepFromVaultFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 	redeemSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
+	setUnderwritingLimit: (client: TWriteClient, securityPoolAddress: Address, limitAttoEth: bigint) => Promise<SecurityVaultActionResult>
 	updateSecurityVaultFees: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address) => Promise<SecurityVaultActionResult>
 }
 
@@ -146,9 +149,15 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 		lastEffectiveVaultSelectionKey.current = effectiveVaultSelectionKey
 	}, [effectiveVaultSelectionKey, enabled])
 
+	// The owner follows the wallet while it is empty or still names the previously connected wallet; a typed-in owner stays.
+	const lastConnectedAccountAddress = useRef<Address | undefined>(undefined)
 	useEffect(() => {
 		if (accountAddress === undefined) return
-		if (securityVaultForm.value.selectedVaultOwner.trim() !== '') return
+		const previousAccountAddress = lastConnectedAccountAddress.current
+		lastConnectedAccountAddress.current = accountAddress
+		const selectedVaultOwner = securityVaultForm.value.selectedVaultOwner.trim()
+		const followsWallet = selectedVaultOwner === '' || (previousAccountAddress !== undefined && sameAddress(selectedVaultOwner, previousAccountAddress))
+		if (!followsWallet || sameAddress(selectedVaultOwner, accountAddress)) return
 		securityVaultForm.value = {
 			...securityVaultForm.value,
 			selectedVaultOwner: accountAddress.toString(),
@@ -424,6 +433,14 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const guard = getVaultBackingFactorAdjustmentGuard(details, factor)
 				if (guard !== undefined) throw new Error(guard)
 				if (details === undefined) throw new Error('Refresh vault details.')
+				// The price coordinator rejects staged operations once the question resolves, while the pool still accepts a
+				// direct commitment reduction. REP redemption needs a zero commitment, so this is the vault's only way out.
+				const escalationResolved = await dependencies.isSecurityPoolEscalationResolved(securityPoolAddress)
+				if (!isCurrentSelection()) return undefined
+				if (escalationResolved) {
+					if (factor > details.underwritingLimitAttoEth) throw new Error(securityPoolCopy.commitmentIncreaseAfterResolutionError)
+					return await dependencies.setUnderwritingLimit(createVaultWriteClient(vaultAddress, context), securityPoolAddress, factor)
+				}
 				if (factor > details.underwritingLimitAttoEth && (await dependencies.isSecurityPoolVaultAdmissionClosed(securityPoolAddress))) throw new Error(securityPoolCopy.vaultDepositAdmissionClosedDetail)
 				if (!isCurrentSelection()) return undefined
 				const { managerDetails, writeClient } = await prepareVaultOracleOperation(details, vaultAddress, context, proposedRepPerEthPrice)
@@ -467,6 +484,8 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 				const details = await loadExistingSecurityVaultDetails(securityPoolAddress, vaultAddress, 'Security pool does not exist', isCurrentSelection)
 				if (details === undefined) return undefined
 				if (!isCurrentSelection()) return undefined
+				const redeemGuard = getVaultRedeemRepGuardMessage({ disputeStakedAttoRep: details.disputeStakedAttoRep, redeemableRepAmountAttoRep: details.vaultAttoRepBacking, underwritingLimitAttoEth: details.underwritingLimitAttoEth })
+				if (redeemGuard !== undefined) throw new Error(redeemGuard)
 				return await dependencies.redeemRepFromVaultFromSecurityPool(createVaultWriteClient(vaultAddress, context), securityPoolAddress, vaultAddress)
 			},
 			'Failed to redeem REP',

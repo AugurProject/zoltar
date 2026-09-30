@@ -30,7 +30,8 @@ export function getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuc
 	if (truthAuction.finalized) return forkAuctionCopy.truthAuctionFinalizedReason
 	if (truthAuctionEndsAt === undefined) return forkAuctionCopy.auctionEndTimeUnavailable
 	if (currentTimestamp === undefined) return forkAuctionCopy.loadingCurrentChainTime
-	if (currentTimestamp <= truthAuctionEndsAt) return forkAuctionCopy.auctionOngoingReason
+	// UniformPriceDualCapBatchAuction.finalize requires block.timestamp >= auctionStarted + AUCTION_TIME.
+	if (currentTimestamp < truthAuctionEndsAt) return forkAuctionCopy.auctionOngoingReason
 	return undefined
 }
 
@@ -68,7 +69,8 @@ export function getTruthAuctionStateBadge({
 export function getMigrationStateBadge({ currentTimestamp, effectiveTruthAuctionStartedAt, migrationEndsAt }: { currentTimestamp: bigint | undefined; effectiveTruthAuctionStartedAt: bigint | undefined; migrationEndsAt: bigint | undefined }) {
 	if (migrationEndsAt === undefined) return { label: forkAuctionCopy.notStartedBadgeLabel, tone: 'muted' } as const
 	if (effectiveTruthAuctionStartedAt !== undefined && effectiveTruthAuctionStartedAt > 0n) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
-	if (currentTimestamp !== undefined && currentTimestamp >= migrationEndsAt) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
+	// Migration accepts block.timestamp <= forkActivationTime + MIGRATION_TIME, so it closes only after migrationEndsAt.
+	if (currentTimestamp !== undefined && currentTimestamp > migrationEndsAt) return { label: forkAuctionCopy.closed, tone: 'ok' } as const
 	return { label: forkAuctionCopy.open, tone: 'pending' } as const
 }
 

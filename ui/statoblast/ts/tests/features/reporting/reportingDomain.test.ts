@@ -126,6 +126,11 @@ describe('reportingDomain', () => {
 		).toBe('Timed Out')
 	})
 
+	test('getEscalationPhase stays pending at the activation timestamp because the contract clock starts after it', () => {
+		expect(getEscalationPhase(createReportingDetails({ activationTime: 200n, currentTime: 200n }))).toBe('Pending Start')
+		expect(getEscalationPhase(createReportingDetails({ activationTime: 200n, currentTime: 201n }))).toBe('Active')
+	})
+
 	test('getReportingMinimumOutcomeChangeContribution returns the smallest strict lead', () => {
 		expect(getReportingMinimumOutcomeChangeContribution(createReportingDetails(), 'yes')).toEqual({
 			amountAttoRep: rep(3n) + 1n,

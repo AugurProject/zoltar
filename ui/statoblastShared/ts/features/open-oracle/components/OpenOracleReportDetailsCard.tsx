@@ -25,7 +25,17 @@ import { getReportPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import { formatOpenOracleFeePercentage, formatOpenOracleMultiplier, getOpenOracleDisputeAvailability, getOpenOracleReportStatus, getOpenOracleReportStatusTone, getOpenOracleSelectedReportActionMode, getOpenOracleSettleAvailability, type OpenOracleDisputeInputField } from '../lib/openOracle.js'
+import {
+	formatOpenOracleFeePercentage,
+	formatOpenOracleReportPriceUnit,
+	formatOpenOracleMultiplier,
+	getOpenOracleDisputeAvailability,
+	getOpenOracleReportStatus,
+	getOpenOracleReportStatusTone,
+	getOpenOracleSelectedReportActionMode,
+	getOpenOracleSettleAvailability,
+	type OpenOracleDisputeInputField,
+} from '../lib/openOracle.js'
 import { getOpenOracleReadinessActions } from '../lib/openOracleReadiness.js'
 import { getOpenOracleStagePresentation } from '../lib/openOracleStage.js'
 import { getOpenOracleReportEntityId } from '../lib/reportBrowse.js'
@@ -249,7 +259,7 @@ export function OpenOracleReportDetailsCard({
 					{ label: openOracleCopy.reporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 					{
 						label: openOracleCopy.price,
-						value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
+						value: <CurrencyValue value={openOracleReportDetails.price} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} />,
 					},
 				]}
 			/>
@@ -327,7 +337,7 @@ export function OpenOracleReportDetailsCard({
 						},
 						{
 							label: openOracleCopy.price,
-							value: <CurrencyValue value={openOracleReportDetails.price} suffix={openOracleCopy.formatTokenPairSuffix(openOracleReportDetails.token1Symbol, openOracleReportDetails.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} />,
+							value: <CurrencyValue value={openOracleReportDetails.price} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} />,
 						},
 						{
 							label: openOracleCopy.settlerReward,

@@ -48,19 +48,12 @@ export const openInterestFeeYear = 'Open interest fee / year'
 export const totalPoolHeldAttoRep = 'Pool-held REP'
 export const vaultCount = 'Known vaults'
 export const loadingSecurityPools = 'Loading security pools…'
-export const retryingSecurityPoolsTruncated = 'Retrying security pools…'
 export const retryLoadingPools = 'Retry'
-export const poolPageLoadError = 'Unable to refresh security pools.'
-export const searchDownloadedPools = 'Search downloaded pools'
+export const searchPools = 'Search pools'
 export const sortPools = 'Sort'
 export const remainingCapacity = 'Remaining capacity'
-export const discoverPools = 'Discover pools'
 export const noFavoritePools = 'No favorite pools yet'
-export const noFavoritePoolsDetail = 'Discover pools or paste a pool address. Pools you open are saved here.'
-export const noFavoritePoolsWithDownloadsDetail = 'Star a downloaded pool, or open one, to keep it here.'
-export const showDownloadedPools = 'Show downloaded pools'
-export const noDownloadedPools = 'No downloaded pools yet'
-export const noDownloadedPoolsDetail = 'Discover pools to download their summaries to this browser.'
+export const noFavoritePoolsDetail = 'Open a pool by address to save it here.'
 export const openPoolAtAddress = 'Open pool at this address'
 export const formatOtherUniversePoolsHidden = (count: CopyTemplateValue) => `${count} saved in other universes.`
 export const formatPoolUpdated = (relativeTime: CopyTemplateValue) => `Updated ${relativeTime}`
@@ -79,7 +72,6 @@ export const poolCountPlural = 'pools'
 export const poolSummarySingularVerb = 'matches'
 export const poolSummaryPluralVerb = 'match'
 export const formatPoolPageSummary = (matchingPoolCount: CopyTemplateValue, loadedPoolCount: CopyTemplateValue, poolLabel: CopyTemplateValue, matchVerb: CopyTemplateValue) => `${matchingPoolCount} of ${loadedPoolCount} ${poolLabel} ${matchVerb}.`
-export const noSecurityPools = 'No security pools'
 export const poolFiltersEmpty = 'No pools match the current search and filter settings.'
 export const managerAddress = 'Manager address'
 export const formatVaultDirectorySummary = (loadedVaultCount: CopyTemplateValue, totalVaultCount: CopyTemplateValue) => `Showing ${loadedVaultCount} current positions from ${totalVaultCount} known vaults, newest-registered first.`
@@ -156,7 +148,7 @@ export const poolCreationLocked = 'Pool creation locked'
 export const poolCreated = 'Pool created'
 export const poolCreationAfterForkReason = 'Security pools cannot be created after this universe has forked.'
 export const checkingDuplicate = 'Checking duplicate…'
-export const duplicatePoolDetail = 'Change the priority fee or Statoblast security multiplier to create a different origin pool.'
+export const duplicatePoolDetail = 'Change the priority fee or security multiplier to create a different origin pool.'
 export const initialOpenInterestFeeYear = 'Starting open interest fee / year'
 export const ineligibleQuestionDetail = 'Security pools can only be created for exact binary Yes / No questions. Enter an eligible question to proceed.'
 export const loadingQuestion = 'Loading question…'
@@ -164,6 +156,10 @@ export const poolAddressLabel = 'Pool address'
 export const poolAlreadyExists = 'Pool already exists'
 export const statoblastSecurityMultiplierBpsHelpText = 'Up to four decimal places; higher values require more REP.'
 export const initialReportPriorityFeeHelpText = 'Fixed gas-price premium added to Open Oracle report security.'
+export const initialReportPriorityFeeUnit = 'nanoETH per gas'
+// A word rather than a lone ×, which reads as a clear-field button at the end of the input.
+export const securityMultiplierInputUnit = 'times'
+export const stagedOperationFailedDetail = 'The staged operation did not execute.'
 export const claimableFees = 'Claimable fees'
 export const claimingFees = 'Claiming fees…'
 export const missingVaultDepositDetail = 'This vault does not exist. Deposit REP to create it.'
@@ -261,7 +257,7 @@ export function universeVaultCount(count: bigint) {
 	return `${count} known ${count === 1n ? 'vault' : 'vaults'}`
 }
 
-export const manualRepPerEth = 'Open Oracle REP / ETH starting price'
+export const manualRepPerEth = 'Open Oracle REP per ETH starting price'
 export const manualInitialPriceError = 'Enter a positive REP per ETH price with up to 18 decimal places.'
 
 export const currentProportionalObligation = 'Current proportional obligation'
@@ -282,6 +278,10 @@ export const commitmentPriceUnavailable = 'The selected UI price is unavailable.
 export const commitmentRiskWarning = 'This limit would make your vault liquidatable at the selected UI price. The execution price may differ.'
 export const commitmentRiskAcknowledgement = 'I understand that my vault could be liquidated immediately.'
 export const commitmentRiskRequired = 'Confirm the immediate liquidation risk to continue.'
+export const commitmentDirectExitDetail = 'The question has resolved, so this change goes straight to the pool without an oracle price. Commitments can only be lowered now; set 0 ETH to unlock REP redemption.'
+export const commitmentIncreaseAfterResolutionError = 'Commitments can only be lowered after the question resolves.'
+export const formatWithdrawEntireVaultNotice = (minimum: CopyTemplateValue) => `This leaves less than the ${minimum} vault minimum, so the whole vault is withdrawn instead.`
+export const customApprovalAmountDisclosure = 'Advanced: custom approval amount'
 
 export const questionEndedReason = 'This question has already ended.'
 

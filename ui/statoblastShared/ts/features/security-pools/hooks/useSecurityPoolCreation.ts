@@ -21,7 +21,7 @@ import { createMarketParameters, createSecurityPoolParameters } from '../../mark
 import { hasDeployedStep } from '@zoltar/ui-core-shared/lib/deploymentStatus.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { getDefaultSecurityPoolFormState, tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { tryParseInitialReportPriorityFeeInput } from '../lib/priorityFee.js'
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { MarketFormState, SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
 import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -96,13 +96,13 @@ export function useSecurityPoolCreation({
 	const isCurrentSubmittedPool = (parameters: { questionId: bigint; statoblastSecurityMultiplierBps: bigint; initialReportPriorityFeeAttoEthPerGas: bigint }) =>
 		isCurrentSubmittedQuestion(parameters.questionId) &&
 		tryParseStatoblastSecurityMultiplierBpsInput(securityPoolForm.value.statoblastSecurityMultiplierBps) === parameters.statoblastSecurityMultiplierBps &&
-		tryParseDecimalInput(securityPoolForm.value.initialReportPriorityFeeEth, 18) === parameters.initialReportPriorityFeeAttoEthPerGas
+		tryParseInitialReportPriorityFeeInput(securityPoolForm.value.initialReportPriorityFeeNanoEth) === parameters.initialReportPriorityFeeAttoEthPerGas
 
 	const loadDuplicateOriginPoolState = async () => {
 		const isCurrent = nextDuplicateCheck()
 		const marketId = securityPoolForm.value.marketId.trim()
 		const statoblastSecurityMultiplierBpsInput = securityPoolForm.value.statoblastSecurityMultiplierBps.trim()
-		const initialReportPriorityFeeInput = securityPoolForm.value.initialReportPriorityFeeEth.trim()
+		const initialReportPriorityFeeInput = securityPoolForm.value.initialReportPriorityFeeNanoEth.trim()
 		if (marketId === '' || statoblastSecurityMultiplierBpsInput === '' || initialReportPriorityFeeInput === '') {
 			duplicateOriginPoolExists.value = false
 			duplicateOriginPoolAddress.value = undefined
@@ -111,7 +111,7 @@ export function useSecurityPoolCreation({
 
 		const questionId = tryParseBigIntInput(normalizeQuestionId(marketId) ?? '')
 		const statoblastSecurityMultiplierBps = tryParseStatoblastSecurityMultiplierBpsInput(statoblastSecurityMultiplierBpsInput)
-		const initialReportPriorityFeeAttoEthPerGas = tryParseDecimalInput(initialReportPriorityFeeInput, 18)
+		const initialReportPriorityFeeAttoEthPerGas = tryParseInitialReportPriorityFeeInput(initialReportPriorityFeeInput)
 		if (questionId === undefined || statoblastSecurityMultiplierBps === undefined || initialReportPriorityFeeAttoEthPerGas === undefined || initialReportPriorityFeeAttoEthPerGas <= 0n) {
 			duplicateOriginPoolExists.value = false
 			duplicateOriginPoolAddress.value = undefined
@@ -160,7 +160,7 @@ export function useSecurityPoolCreation({
 				}
 				existingQuestionCheck.value = { status: 'existing', questionId: getQuestionIdHex(questionId), poolAddress: undefined }
 				const multiplier = tryParseStatoblastSecurityMultiplierBpsInput(securityPoolForm.value.statoblastSecurityMultiplierBps)
-				const fee = tryParseDecimalInput(securityPoolForm.value.initialReportPriorityFeeEth, 18)
+				const fee = tryParseInitialReportPriorityFeeInput(securityPoolForm.value.initialReportPriorityFeeNanoEth)
 				if (multiplier === undefined || fee === undefined) return
 				try {
 					const poolAddress = await withReadTimeout(getOriginSecurityPoolAddress(createConnectedReadClient(), questionId, multiplier, fee))
@@ -174,7 +174,7 @@ export function useSecurityPoolCreation({
 				if (isCurrent()) existingQuestionCheck.value = { status: 'error' }
 			}
 		})()
-	}, [enabled, newQuestionForm, questionDataDeployed, securityPoolForm.value.statoblastSecurityMultiplierBps, securityPoolForm.value.initialReportPriorityFeeEth, existingQuestionCheckRetry.value])
+	}, [enabled, newQuestionForm, questionDataDeployed, securityPoolForm.value.statoblastSecurityMultiplierBps, securityPoolForm.value.initialReportPriorityFeeNanoEth, existingQuestionCheckRetry.value])
 
 	const loadMarketById = async (marketId: string, options?: { clearExisting?: boolean; isCurrent?: () => boolean }) => {
 		if (!hasDeployedStep(deploymentStatuses, 'zoltarQuestionData')) {
@@ -218,7 +218,7 @@ export function useSecurityPoolCreation({
 		const submittedSecurityPoolForm = questionIdOverride === undefined ? baseSecurityPoolForm : { ...baseSecurityPoolForm, marketId: questionIdOverride }
 		// A new question has no ID until the write derives it, and the existing-question field may hold a stale value.
 		const transactionContext = {
-			initialReportPriorityFeeEth: submittedSecurityPoolForm.initialReportPriorityFeeEth,
+			initialReportPriorityFeeNanoEth: submittedSecurityPoolForm.initialReportPriorityFeeNanoEth,
 			questionId: newQuestionForm === undefined ? submittedSecurityPoolForm.marketId : undefined,
 			questionTitle: newQuestionForm?.title,
 			statoblastSecurityMultiplierBps: tryParseStatoblastSecurityMultiplierBpsInput(submittedSecurityPoolForm.statoblastSecurityMultiplierBps),
@@ -316,7 +316,7 @@ export function useSecurityPoolCreation({
 							if (!isRecoverableContractReadError(error)) throw error
 							// The duplicate remains blocked when its address lookup fails.
 						}
-						throw new Error('A security pool for this question, Statoblast security multiplier, and priority fee already exists.')
+						throw new Error('A security pool for this question, security multiplier, and priority fee already exists.')
 					}
 
 					const reviewLabels = { title: newQuestion === undefined ? securityPoolCopy.createPoolReviewTitle : securityPoolCopy.createQuestionAndPoolReviewTitle }
@@ -351,7 +351,7 @@ export function useSecurityPoolCreation({
 	useEffect(() => {
 		if (!enabled) return
 		void loadDuplicateOriginPoolState()
-	}, [enabled, securityPoolForm.value.initialReportPriorityFeeEth, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
+	}, [enabled, securityPoolForm.value.initialReportPriorityFeeNanoEth, securityPoolForm.value.marketId, securityPoolForm.value.statoblastSecurityMultiplierBps])
 
 	useEffect(() => {
 		if (!enabled) return

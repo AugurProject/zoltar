@@ -58,15 +58,16 @@ describe('useStatoblastUrlState', () => {
 		return () => requireState(hookState)
 	}
 
-	test('keeps the address entry active before the default route hash is installed', async () => {
+	test('lands on Browse pools before the default route hash is installed', async () => {
 		window.history.replaceState({}, '', '/')
 		const state = await renderHarness()
-		expect(state().securityPoolsView).toBe('open')
+		expect(state().securityPoolsView).toBe('browse')
 		expect(state().securityPoolAddress).toBe('')
-		await act(() => state().setSecurityPoolsView('browse'))
-		expect(window.location.hash).toBe('#/pools')
 		await act(() => state().setSecurityPoolsView('open'))
 		expect(window.location.hash).toBe('#/pools/open')
+		expect(state().securityPoolsView).toBe('open')
+		await act(() => state().setSecurityPoolsView('browse'))
+		expect(window.location.hash).toBe('#/pools')
 	})
 
 	test('loads the initial pool page from the route hash', async () => {
@@ -120,6 +121,69 @@ describe('useStatoblastUrlState', () => {
 
 		await act(() => state().setSecurityPoolAddress(''))
 		expect(window.location.hash).toBe('#/pools?universe=7')
+	})
+
+	test('replaces history while a question ID is typed and pushes when leaving another view', async () => {
+		window.history.replaceState({}, '', '/#/pools?universe=1')
+		const originalPushState = window.history.pushState.bind(window.history)
+		const originalReplaceState = window.history.replaceState.bind(window.history)
+		let pushes = 0
+		let replaces = 0
+		window.history.pushState = (...parameters: Parameters<History['pushState']>) => {
+			pushes += 1
+			return originalPushState(...parameters)
+		}
+		window.history.replaceState = (...parameters: Parameters<History['replaceState']>) => {
+			replaces += 1
+			return originalReplaceState(...parameters)
+		}
+		try {
+			const state = await renderHarness()
+			pushes = 0
+			replaces = 0
+			await act(() => state().setSecurityPoolQuestionId('0x1'))
+			expect(pushes).toBe(1)
+			for (const questionId of ['0x12', '0x123', '0x1234']) await act(() => state().setSecurityPoolQuestionId(questionId))
+			expect(pushes).toBe(1)
+			expect(replaces).toBe(3)
+			expect(window.location.hash).toBe('#/pools/create?universe=1&questionId=0x1234')
+			await act(() => state().setSecurityPoolQuestionId(''))
+			expect(pushes).toBe(1)
+			expect(window.location.hash).toBe('#/pools/create?universe=1')
+			await act(() => {
+				window.history.back()
+				window.dispatchEvent(new Event('popstate'))
+			})
+			expect(state().securityPoolsView).toBe('browse')
+		} finally {
+			window.history.pushState = originalPushState
+			window.history.replaceState = originalReplaceState
+		}
+	})
+
+	test('opens a pool in another universe with one history entry', async () => {
+		const state = await renderHarness()
+		const originalPushState = window.history.pushState.bind(window.history)
+		let pushes = 0
+		window.history.pushState = (...parameters: Parameters<History['pushState']>) => {
+			pushes += 1
+			return originalPushState(...parameters)
+		}
+		try {
+			await act(() => state().openSecurityPoolInUniverse(3n, POOL_B))
+			expect(pushes).toBe(1)
+			expect(window.location.hash).toBe(`#/pools/${POOL_B}?universe=3`)
+			expect(state().activeUniverseId).toBe(3n)
+			expect(state().securityPoolAddress).toBe(POOL_B)
+			await act(() => {
+				window.history.back()
+				window.dispatchEvent(new Event('popstate'))
+			})
+			expect(state().activeUniverseId).toBe(1n)
+			expect(state().securityPoolAddress).toBe(POOL_A)
+		} finally {
+			window.history.pushState = originalPushState
+		}
 	})
 
 	test('keeps Open Oracle state in the query of the current route', async () => {

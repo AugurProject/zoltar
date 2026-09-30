@@ -277,7 +277,7 @@ export function useReportingOperations(
 				if (preflight === undefined) return undefined
 				if (preflight.walletDepositAmount === undefined) throw new Error('Loading vault funding requirements.')
 				if (preflight.contributionFunding !== 'wallet') throw new Error('This escalation contribution uses vault backing and does not require wallet REP approval.')
-				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.walletDepositAmount) throw new Error('The escalation game already has enough REP allowance for this contribution.')
+				if ((preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) >= preflight.walletDepositAmount) throw new Error('The security pool already has enough REP allowance for this contribution.')
 				return { ...(await dependencies.approveReportingRep(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.walletDepositAmount)), amountAttoRep: preflight.walletDepositAmount }
 			},
 			'Failed to approve REP for reporting',
@@ -291,7 +291,7 @@ export function useReportingOperations(
 				const preflight = await loadReportingContributionPreflight(walletAddress, securityPoolAddress, currentForm, isCurrentSelection, displayedDetails)
 				if (preflight === undefined) return undefined
 				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < (preflight.walletDepositAmount ?? preflight.actualDepositAmount)) {
-					throw new Error('Approve REP for this escalation game before reporting.')
+					throw new Error('Approve REP for this security pool before reporting.')
 				}
 				if (preflight.contributionFunding === 'wallet' && preflight.latestDetails.status === 'active' && preflight.latestDetails.forkContinuation) {
 					const execute = dependencies.reportOutcomeWithWalletViaVault
@@ -312,8 +312,10 @@ export function useReportingOperations(
 						throw error
 					}
 				}
+				// Wallet deposits transferFrom the accepted amount against an approval sized to the preview, so cap the maximum at that previewed amount.
+				const maximumDepositAttoRep = preflight.contributionFunding === 'wallet' ? preflight.actualDepositAmount : preflight.reportAmount
 				return {
-					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.actualDepositAmount, preflight.contributionFunding)),
+					...(await dependencies.reportOutcomeInSecurityPool(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, maximumDepositAttoRep, preflight.actualDepositAmount, preflight.contributionFunding)),
 					amountAttoRep: preflight.actualDepositAmount,
 				}
 			},

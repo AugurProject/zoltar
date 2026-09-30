@@ -8,8 +8,8 @@ const STATOBLAST_ROUTING_CONFIG: RoutingConfig<StatoblastRoute> = {
 	defaultRoute: 'pools',
 	routes: [
 		{ hash: '#/deploy', name: 'deploy' },
-		// The legacy security pools hash resolves to Pools; the URL state rewrites its query onto the pool path.
-		{ aliases: [POOLS_ROUTE_HASH, '#/security-pools'], hash: buildPoolsRouteHash({ view: 'open' }), name: 'pools', queryParameters: new Set(['questionId']) },
+		// Pools lands on Browse pools. The legacy security pools hash resolves to Pools; the URL state rewrites its query onto the pool path.
+		{ aliases: [buildPoolsRouteHash({ view: 'open' }), '#/security-pools'], hash: POOLS_ROUTE_HASH, name: 'pools', queryParameters: new Set(['questionId']) },
 		{ match: routeHash => (parsePoolsRouteHash(routeHash) === undefined ? undefined : 'pools') },
 		{ hash: '#/open-oracle', name: 'open-oracle', queryParameters: new Set(['openOracleReportId', 'openOracleView']) },
 	],

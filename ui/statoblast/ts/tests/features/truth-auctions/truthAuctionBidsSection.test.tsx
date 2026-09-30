@@ -68,7 +68,7 @@ describe('TruthAuctionBidsSection', () => {
 
 		const priceValue = within(document.body).getByText('Price 42')
 		const statusValue = within(document.body).getByText('Winning')
-		expect(priceValue.getAttribute('data-label')).toBe('Price (ETH / REP)')
+		expect(priceValue.getAttribute('data-label')).toBe('Price (ETH per REP)')
 		expect(statusValue.parentElement?.getAttribute('data-label')).toBe('Status')
 		const bidHistory = within(document.body).getByRole('table', { name: 'Auction bid history' })
 		const scrollRegion = within(document.body).getByRole('region', { name: 'Scrollable auction bid history' })
