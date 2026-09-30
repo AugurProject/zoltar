@@ -174,8 +174,11 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 		if (currentPoolOracleManagerDetails === undefined || currentPoolOraclePriceUsable === true) return undefined
 		return currentPoolOracleManagerDetails.lastSettlementTimestamp > 0n ? securityPoolCopy.reportingOraclePriceExpiredReason : securityPoolCopy.reportingOraclePriceRequiredReason
 	})()
+	// After resolution no pool action reads the oracle price, so an expired price is neither a warning nor a reason to request one.
+	// The lifecycle state decides this because reporting details are not loaded on every pool view.
+	const poolEnded = selectedPoolLifecycleState === 'ended'
 	// The pool page's price row offers a new request only when the price is unusable and requesting one is allowed in this stage.
-	const needsPrice = !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
+	const needsPrice = !poolEnded && !isPoolQuestionFinalized(currentReportingDetails) && showSelectedPoolWorkflowDetails && selectedPoolStateModel.actions.requestPrice.enabled && (currentPoolOraclePriceUsable === false || currentPoolOracleManagerError !== undefined)
 	const accountPoolVault = selectedPool?.vaults.find(vault => sameAddress(vault.vaultAddress, accountState.address))
 	const accountVault = selectedVaultIsOwnedByAccount && hasLoadedCurrentVault ? toAccountVault(selectedVaultDetails) : toAccountVault(accountPoolVault)
 	const truthAuctionStartedAt = currentForkAuctionDetails?.truthAuctionStartedAt ?? selectedPool?.truthAuctionStartedAt ?? 0n
@@ -203,9 +206,10 @@ export function derivePoolViewModel(input: PoolViewModelInput) {
 	const currentPoolOracleSettlementTimestamp = (currentPoolOracleManagerDetails ?? selectedPoolOracleMetricValues)?.lastSettlementTimestamp
 	const requestPriceOpenGuardMessage = requestPriceTransactionValueAttoEth === undefined ? securityPoolCopy.loadOracleBeforePriceReview : requestPriceGuardMessage
 	const requestPriceOpenWalletBlocker = requestPriceTransactionValueAttoEth === undefined ? undefined : walletBlocker
-	// A pool from another universe keeps its workspace hidden, but a pending report stays reachable from its price row.
+	// A pool from another universe keeps its workspace hidden, and an ended pool hides its unused price, but a pending report stays reachable from its price row.
+	const hasPendingPoolReport = (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n
 	const oracleStatus =
-		selectedPool !== undefined && (showSelectedPoolWorkflowDetails || (currentPoolOracleManagerDetails?.pendingReportId ?? 0n) > 0n)
+		selectedPool !== undefined && ((showSelectedPoolWorkflowDetails && !poolEnded) || hasPendingPoolReport)
 			? { ...currentPoolOracleManagerDetails, currentTimestamp, lastPrice: currentPoolOraclePrice, lastSettlementTimestamp: currentPoolOracleSettlementTimestamp ?? 0n, requestDisabledReason: requestPriceOpenGuardMessage, requestWalletBlocker: requestPriceOpenWalletBlocker }
 			: undefined
 
