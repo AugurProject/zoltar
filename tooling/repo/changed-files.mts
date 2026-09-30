@@ -1,7 +1,6 @@
 import { type GitRunner, mergeBaseWithMain, runGit } from './git.mts'
 
-const CHANGED_FILE_DIFF_FILTER = 'ACMRTUXB'
-const TEST_PLAN_DIFF_FILTER = `${CHANGED_FILE_DIFF_FILTER}D`
+const CHANGED_FILE_DIFF_FILTER = 'ACMRTUXBD'
 
 export type ChangedFileEntry = {
 	path: string
@@ -9,23 +8,9 @@ export type ChangedFileEntry = {
 	status: 'added' | 'deleted' | 'modified' | 'renamed'
 }
 
+/** Final task paths against the merge base, including deletions and both sides of renames. */
 export function getChangedFiles(runGitFn: GitRunner = runGit) {
-	const changedFiles = new Set<string>()
-	const fileLists = [
-		runGitFn(['diff', '--name-only', `--diff-filter=${CHANGED_FILE_DIFF_FILTER}`, 'origin/main...HEAD']),
-		runGitFn(['diff', '--name-only', `--diff-filter=${CHANGED_FILE_DIFF_FILTER}`]),
-		runGitFn(['diff', '--cached', '--name-only', `--diff-filter=${CHANGED_FILE_DIFF_FILTER}`]),
-		runGitFn(['ls-files', '--others', '--exclude-standard']),
-	]
-
-	for (const fileList of fileLists) {
-		for (const filePath of fileList.split('\n')) {
-			if (filePath === '') continue
-			changedFiles.add(filePath)
-		}
-	}
-
-	return [...changedFiles].sort()
+	return [...new Set(getChangedFileEntries(runGitFn).flatMap(entry => (entry.previousPath === undefined ? [entry.path] : [entry.path, entry.previousPath])))].sort()
 }
 
 const parseNameStatus = (output: string): ChangedFileEntry[] => {
@@ -57,14 +42,14 @@ const parseNameStatus = (output: string): ChangedFileEntry[] => {
 
 /** Paths touched by commits on HEAD since it diverged from `baseRef`, including both sides of renames and copies. */
 export function getCommittedChangedPaths(baseRef: string, runGitFn: GitRunner = runGit) {
-	const changes = parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, `${baseRef}...HEAD`]))
+	const changes = parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${CHANGED_FILE_DIFF_FILTER}`, `${baseRef}...HEAD`]))
 	return [...new Set(changes.flatMap(change => (change.previousPath === undefined ? [change.path] : [change.previousPath, change.path])))].sort()
 }
 
 export function getChangedFileEntries(runGitFn: GitRunner = runGit) {
 	const changesByPath = new Map<string, ChangedFileEntry>()
 	const mergeBase = mergeBaseWithMain(runGitFn)
-	for (const change of parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${TEST_PLAN_DIFF_FILTER}`, mergeBase]))) changesByPath.set(change.path, change)
+	for (const change of parseNameStatus(runGitFn(['diff', '--name-status', '-z', '--find-renames', `--diff-filter=${CHANGED_FILE_DIFF_FILTER}`, mergeBase]))) changesByPath.set(change.path, change)
 	for (const filePath of runGitFn(['ls-files', '-z', '--others', '--exclude-standard']).split('\0')) {
 		if (filePath !== '') changesByPath.set(filePath, { path: filePath, status: 'added' })
 	}

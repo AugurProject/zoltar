@@ -1,11 +1,14 @@
 import { getChangedFiles } from './changed-files.mts'
-import { classifyCiChange } from '../ci/classify-ci-change.mts'
+import { classifyCiChange, isDocumentationChange } from '../ci/classify-ci-change.mts'
 import { affectedProjects, projects, projectTaskNames, taskProjects, type ProjectTaskName } from './projects.ts'
 import { createProjectTaskPlan, runProjectTaskPlan, type ProjectTaskPlanEntry } from './run-project-tasks.mts'
 
 export function affectedCheckSelection(filePaths: readonly string[]) {
 	const classification = classifyCiChange(filePaths)
-	return classification.forcedFull ? projects : affectedProjects(filePaths, projects)
+	if (classification.forcedFull) return projects
+	const runtimePaths = filePaths.filter(filePath => !isDocumentationChange(filePath))
+	const documentationPaths = filePaths.some(isDocumentationChange) ? projects.filter(project => project.type === 'documentation').map(project => project.path) : []
+	return affectedProjects([...runtimePaths, ...documentationPaths], projects)
 }
 
 const checkTasks = ['typecheck', 'lint', 'test', 'check'] satisfies readonly ProjectTaskName[]

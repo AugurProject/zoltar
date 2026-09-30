@@ -211,7 +211,7 @@ contract SecurityPool is SecurityPoolStorage {
 	function getFeeEpochEndTime() public view returns (uint256) {
 		uint256 forkTime = zoltar.getForkTime(universeId);
 		if (feeEpochEndTime != type(uint256).max) {
-			if (forkTime != 0 && address(parent) == address(0x0)) return forkTime;
+			if (forkTime != 0 && address(parent) == address(0x0) && !isEscalationResolved()) return forkTime;
 			return feeEpochEndTime;
 		}
 		uint256 endTime = feeEpochEndTime;
