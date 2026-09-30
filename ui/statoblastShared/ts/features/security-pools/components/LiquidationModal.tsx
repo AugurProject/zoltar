@@ -18,7 +18,7 @@ import { formatCurrencyBalanceWithUnit, formatDuration } from '@zoltar/ui-core-s
 import { getDeterministicLiquidationFailureReason, getLiquidationFailureReason, getMaxLiquidationAmount } from '../lib/liquidation.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseEthAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
-import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import type { UiRepPriceSource } from '../lib/repPriceSource.js'
 import { getStagedOperationTimeoutSeconds, isOracleManagerPriceUsable } from '../lib/securityVault.js'
 import {
@@ -303,7 +303,7 @@ export function LiquidationModal({
 	// The wallet prerequisite comes before every other blocker, so a disconnected wallet or wrong network offers its connect or switch fix.
 	let disabledReasonElementId = !walletGuard.blocked && delegatedReceiver && loadingLiquidationReceiverVaultSummary ? 'liquidation-receiver-loading-status' : undefined
 	if (!walletGuard.blocked && initialPriceError !== undefined && initialPrice.price !== '') disabledReasonElementId = `${initialPriceFieldId}-error`
-	const liquidationActionReason = initialPriceError ?? liquidationBlocker?.reason
+	const liquidationActionReason = getOracleOperationTimingGuard(currentPoolOracleManagerDetails, currentTimestamp, hasUsableOraclePrice) ?? initialPriceError ?? liquidationBlocker?.reason
 	const liquidationButtonDisabledReason = walletGuard.reason ?? liquidationLifecycleBlocker ?? liquidationActionReason
 	const queuedLiquidationOperation = getQueuedLiquidationOperation({ currentPoolOracleManagerDetails, liquidationTargetVault, securityPoolOverviewResult })
 	const queuedLiquidationStatus = getQueuedLiquidationStatus({ currentPoolOracleManagerDetails, currentTimestamp, loadingPoolOracleManager, queuedLiquidationOperation, securityPoolOverviewResult })

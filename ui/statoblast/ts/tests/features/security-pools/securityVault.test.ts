@@ -179,6 +179,8 @@ void describe('security vault helpers', () => {
 		expect(getOracleManagerPriceValidUntilTimestamp(undefined)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(0n)).toBe(undefined)
 		expect(getOracleManagerPriceValidUntilTimestamp(15n)).toBe(15n + 60n * 60n)
+		expect(getOracleManagerPriceValidUntilTimestamp(15n, 1)).toBe(315n)
+		expect(getOracleManagerPriceValidUntilTimestamp(15n, 11155111)).toBe(3615n)
 	})
 
 	void test('treats a loaded oracle validity flag as expired at the shared time boundary', () => {

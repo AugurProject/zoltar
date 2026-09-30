@@ -18,3 +18,11 @@ export const quoteUnavailableReason = 'Quote unavailable. Change the amount or t
 export function formatInsufficientOutcomeReason(outcome: 'YES' | 'NO') {
 	return `Insufficient ${outcome} balance.`
 }
+
+export const holdingFeesBoundsReason = 'Holding fees exceed these limits before expiry. Increase slippage or shorten validity in Settings.'
+export const holdingFeesUnavailableReason = 'Holding fee projection unavailable. Refresh the market before submitting.'
+
+export const submissionTimingUnavailableReason = 'Market or oracle timing is unavailable. Refresh before submitting.'
+export const questionClosingSoonReason = 'This question closes in 60 seconds or less. New trades and liquidity deposits are paused.'
+export const oracleExpiringSoonReason = 'The oracle price expires in 60 seconds or less. Wait for expiry, then request a price update before buying or depositing liquidity.'
+export const submissionTimingChangedReason = 'Transaction timing changed. Refresh the quote before submitting.'

@@ -1,5 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
+import type { FeeAccounting } from './holdingFees.js'
 import * as blockerCopy from '../copy/marketBlockers.js'
 
 export type LiveMarket = Readonly<{
@@ -13,6 +14,7 @@ export type LiveMarket = Readonly<{
 	title: string
 	description: string
 	endTime: bigint
+	oracleValidUntilTimestamp?: bigint | undefined
 	statoblastSecurityMultiplierBps: bigint
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	systemState: number
@@ -21,7 +23,7 @@ export type LiveMarket = Readonly<{
 	vaultCount: bigint
 	shareTokenSupplyAttoShares: bigint
 	settlementCollateralAttoEth: bigint
-	valuation?: Readonly<{ timestamp: bigint; feeEndTime: bigint; projectedCollateralAttoEth: bigint }>
+	valuation?: Readonly<{ timestamp: bigint; feeEndTime: bigint; projectedCollateralAttoEth: bigint; feeAccounting?: FeeAccounting }>
 	currentRetentionRate: bigint
 	totalUnderwritingLimitAttoEth: bigint
 	feeEligibleUnderwritingLimitAttoEth: bigint

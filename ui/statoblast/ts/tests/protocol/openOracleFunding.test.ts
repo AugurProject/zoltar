@@ -1,9 +1,9 @@
-import { createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createMockWriteClient, createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 /// <reference types='bun-types' />
 
 import { describe, expect, test } from 'bun:test'
 import { getAddress } from '@zoltar/core-shared/evm/ethereum'
-import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
+import { queueOracleManagerOperation, loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 
 const MANAGER_ADDRESS = getAddress('0x0000000000000000000000000000000000000002')
 
@@ -114,5 +114,71 @@ for (const missing of ['base fee', 'block number']) {
 			},
 		})
 		await expect(loadCoordinatorInitialReportFundingRequirement(client, MANAGER_ADDRESS, MANAGER_ADDRESS, 10n ** 18n)).rejects.toThrow('current block fee is unavailable')
+	})
+}
+
+for (const timestamp of [3600n, 3541n]) {
+	test(`blocks the free coordinator operation path near oracle expiry (${timestamp})`, async () => {
+		const readContract = createReadContractStub(async request => {
+			if (request.functionName === 'lastPrice') return 10n ** 18n
+			if (request.functionName === 'getPendingSettlementOperationIds') return []
+			if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n
+			if (request.functionName === 'pendingReportId') return 0n
+			if (request.functionName === 'getQueuedOperationCostAttoEth') return 0n
+			if (request.functionName === 'getSettlementCallbackGasLimit') return 10
+			if (request.functionName === 'gasConsumedOpenOracleReportPrice') return 20n
+			if (request.functionName === 'isPriceValid') return true
+			if (request.functionName === 'lastSettlementTimestamp') return 1n
+			throw new Error(`Unexpected read ${request.functionName}`)
+		})
+		const client = { readContract, getBlock: async () => ({ timestamp, transactions: [], baseFeePerGas: 0n }) }
+		await expect(loadOracleManagerQueueOperationEthValue(client, MANAGER_ADDRESS)).rejects.toThrow('expires too soon')
+	})
+}
+
+for (const mode of ['fresh', 'stale-join', 'becomes-stale'] as const) {
+	test(`rechecks coordinator funding before writing: ${mode}`, async () => {
+		let validityReads = 0
+		let sends = 0
+		const writer = createMockWriteClient(
+			() => {
+				sends += 1
+			},
+			async request => {
+				switch (request.functionName) {
+					case 'lastPrice':
+						return 10n ** 18n
+					case 'lastSettlementTimestamp':
+						return 1n
+					case 'getPendingSettlementOperationIds':
+						return mode === 'stale-join' ? [1n] : []
+					case 'MAX_PENDING_SETTLEMENT_OPERATIONS':
+						return 4n
+					case 'pendingReportId':
+						return mode === 'stale-join' ? 7n : 0n
+					case 'getQueuedOperationCostAttoEth':
+						return 0n
+					case 'getSettlementCallbackGasLimit':
+						return 10
+					case 'gasConsumedOpenOracleReportPrice':
+						return 20n
+					case 'isPriceValid':
+						validityReads += 1
+						return mode === 'fresh' || (mode === 'becomes-stale' && validityReads === 1)
+					default:
+						throw new Error(`Unexpected read: ${request.functionName}`)
+				}
+			},
+		)
+		const client = { ...asWriteClient(writer), waitForTransactionReceipt: async () => ({ status: 'success' as const, logs: [] }), getBlock: async () => ({ timestamp: 1n, transactions: [], baseFeePerGas: 0n }) }
+		const result = queueOracleManagerOperation(client, MANAGER_ADDRESS, 'withdrawRep', MANAGER_ADDRESS, 1n, 60n)
+		if (mode === 'becomes-stale') {
+			await expect(result).rejects.toThrow('funding requirements changed')
+			expect(sends).toBe(0)
+		} else {
+			await expect(result).resolves.toHaveProperty('action', 'queueOperation')
+			expect(sends).toBe(1)
+		}
+		expect(validityReads).toBe(2)
 	})
 }

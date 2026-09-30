@@ -1,3 +1,4 @@
+import { getUnresolvedEscalationMigrationSubmissionGuard } from '../../../protocol/forkMigrationTiming.js'
 import { usePendingAuctionRefund } from './usePendingAuctionRefund.js'
 import { ForkAuctionOutcomePoolNotice } from '../components/ForkAuctionActionSections.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -397,7 +398,8 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt,
 	})
 	const migrateUnresolvedEscalationGuardMessage = (() => {
-		if (migrationWindowClosedGuardMessage !== undefined) return migrationWindowClosedGuardMessage
+		const timingGuard = getUnresolvedEscalationMigrationSubmissionGuard({ currentTimestamp: context.effectiveCurrentTimestamp, migrationEndsAt: context.forkAuctionDetails?.migrationEndsAt })
+		if (timingGuard !== undefined) return timingGuard
 		if (context.loadingReportingDetails) return forkAuctionCopy.unresolvedDepositsLoading
 		if (selectedOutcomeEscalationEntitlementMaterialized) return forkAuctionCopy.formatEntitlementAlreadyMaterialized(context.selectedOutcomeLabel)
 		if (hasStoredEscalationMigrationEntitlement) return undefined

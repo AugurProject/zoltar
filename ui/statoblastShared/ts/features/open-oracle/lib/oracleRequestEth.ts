@@ -1,8 +1,8 @@
 import { formatAdditionalCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { addOpenOracleBountyBuffer } from '../../../protocol/openOracleMath.js'
-import { resolveOracleOperationEthFunding } from '../../../protocol/oracleRequestFunding.js'
+import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from '../../../protocol/oracleRequestFunding.js'
 
-export { resolveOracleOperationEthFunding }
+export { getOracleOperationTimingGuard, resolveOracleOperationEthFunding }
 
 function getBufferedOracleRequestEthValue(requestPriceCostAttoEth: bigint | undefined) {
 	if (requestPriceCostAttoEth === undefined) return undefined

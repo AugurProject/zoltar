@@ -29,13 +29,23 @@ describe('favorite markets', () => {
 		resetLocalEntityStoreForTesting()
 		try {
 			const scope = { app: 'trading', kind: 'market', network: 'test-0x1' } as const
-			const market = createMarket(1, { originUniverseId: 7n, tradingStatus: undefined, valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })
+			const valuation = {
+				feeEndTime: 3n,
+				projectedCollateralAttoEth: 4n,
+				timestamp: 5n,
+				feeAccounting: { settlementCollateralAttoEth: 10n, totalUnderwritingLimitAttoEth: 8n, feeEligibleUnderwritingLimitAttoEth: 7n, currentRetentionRate: 10n ** 18n, lastUpdatedFeeAccumulator: 2n, feeIndexRemainder: 1n, totalFeesOwedRemainder: 0n },
+			}
+			const market = createMarket(1, { originUniverseId: 7n, tradingStatus: undefined, valuation })
+			const withoutCheckpoint = createMarket(2, { oracleValidUntilTimestamp: undefined, valuation: { feeEndTime: 3n, projectedCollateralAttoEth: 4n, timestamp: 5n } })
 			const items = [
 				{ data: market, fetchedAt: 1, id: market.pool },
+				{ data: withoutCheckpoint, fetchedAt: 1, id: withoutCheckpoint.pool },
 				{ data: { ...market, pool: 'not an address' }, fetchedAt: 1, id: 'broken' },
+				{ data: { ...market, oracleValidUntilTimestamp: 'invalid' }, fetchedAt: 1, id: 'broken-time' },
+				{ data: { ...market, valuation: { ...valuation, feeAccounting: { ...valuation.feeAccounting, feeIndexRemainder: 'invalid' } } }, fetchedAt: 1, id: 'broken-accounting' },
 			]
 			window.localStorage.setItem(getDownloadedStorageKey(scope), serializeStoredValue({ items, version: 1 }))
-			expect(marketDownloadStore.read(scope).map(entry => entry.data)).toEqual([market])
+			expect(marketDownloadStore.read(scope).map(entry => entry.data)).toEqual([market, withoutCheckpoint])
 		} finally {
 			resetLocalEntityStoreForTesting()
 			dom.cleanup()

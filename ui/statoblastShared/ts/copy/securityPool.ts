@@ -288,3 +288,7 @@ export const questionEndedReason = 'This question has already ended.'
 
 export const commitmentNeedsOracleReport = 'A new Open Oracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.'
 export const openPriceOracle = 'Open price oracle'
+
+export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires too soon. Retry after it expires and review report funding.'
+export const oracleOperationFundingChanged = 'Oracle funding requirements changed. Review funding again before sending.'
+export const oracleOperationTimingUnavailable = 'Checking oracle price validity.'

@@ -6,6 +6,7 @@ import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidi
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -60,8 +61,16 @@ function blockTwoWalletClient(handle: (method: string, params: unknown) => Promi
 		account,
 		transport: custom({
 			async request({ method, params }) {
+				if (method === 'eth_chainId') return '0x1'
 				if (method === 'eth_blockNumber') return '0x2'
 				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+				if (method === 'eth_call' && Array.isArray(params)) {
+					const transaction = params[0]
+					if (typeof transaction === 'object' && transaction !== null && 'to' in transaction && 'data' in transaction && typeof transaction.to === 'string' && transaction.to.toLowerCase() === pool.toLowerCase() && typeof transaction.data === 'string') {
+						const response = feeAccountingRpcResult(transaction.data as Hex, market, 1n)
+						if (response !== undefined) return response
+					}
+				}
 				return await handle(method, params)
 			},
 		}),

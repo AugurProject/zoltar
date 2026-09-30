@@ -136,6 +136,14 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			controller.assertActive()
 			await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
+				const gasPrice = await client.getGasPrice()
+				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
+				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
+				await validate()
+				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+				controller.assertActive()
+			}
 			const currentFunding = await expected.refreshFundingRequirements?.()
 			for (const funding of currentFunding ?? expected.tokenFunding ?? []) {
 				const spender = expected.contractAddress
@@ -149,14 +157,9 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (expected.tokenFunding !== undefined) await validate()
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
-			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
-				const gasPrice = await client.getGasPrice()
-				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
-				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
-				await validate()
-				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
-				controller.assertActive()
-			}
+			await expected.validateBeforeSubmit?.()
+			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
+			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)
 			const hash = await execute(approvalArgs)
 			controller.submitted(hash)

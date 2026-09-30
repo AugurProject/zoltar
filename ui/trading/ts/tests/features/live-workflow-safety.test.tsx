@@ -263,7 +263,8 @@ describe('live workflow safety boundary', () => {
 		discoveredLoadError = undefined
 		await rerouteForRefresh(marketRoute)
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'recovered market details')
-		discoveredEndTime = now + 2n
+		// Keep the wallet-uncertainty exercise outside the bounded submission cutoff.
+		discoveredEndTime = now + 600n
 
 		const unmountedConnectionChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())
 		const summariesBeforeUnmountedConnectionResolution = walletSummaries.length

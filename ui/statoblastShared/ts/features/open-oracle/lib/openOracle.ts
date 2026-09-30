@@ -9,6 +9,7 @@ import { formatWriteErrorMessage, getErrorDetail } from '@zoltar/ui-core-shared/
 import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
+import { getOpenOracleDisputeSubmissionReserve, getOpenOracleDisputeSubmissionTimingGuard } from '../../../protocol/openOracleDisputeTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { parseBigIntInput, tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import type { TokenApprovalRequirement } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
@@ -331,6 +332,8 @@ export function getOpenOracleDisputeAvailability(report: Pick<OpenOracleReportDe
 			canAct: false,
 			message: 'Dispute window closed. Settle report instead.',
 		}
+	const submissionGuard = getOpenOracleDisputeSubmissionTimingGuard({ ...report, currentClock })
+	if (submissionGuard !== undefined) return { canAct: false, message: submissionGuard }
 	return {
 		canAct: true,
 		message: undefined,
@@ -343,7 +346,15 @@ export function getOpenOracleLiveReportDetails<TReport extends Pick<OpenOracleRe
 // Seconds after the report was read at which dispute or settlement availability changes; block-based reports have no wall-clock boundaries.
 export function getOpenOracleLifecycleBoundaryOffsets(report: Pick<OpenOracleReportDetails, 'currentReporter' | 'currentTime' | 'disputeDelay' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>) {
 	if (!report.timeType || report.isDistributed || !hasOpenOracleAtomicInitialReport(report)) return []
-	return [report.reportTimestamp + report.disputeDelay, report.reportTimestamp + report.settlementTime].filter(boundary => boundary > report.currentTime).map(boundary => boundary - report.currentTime)
+	const settlementStart = report.reportTimestamp + report.settlementTime
+	return [...new Set([report.reportTimestamp + report.disputeDelay, settlementStart - getOpenOracleDisputeSubmissionReserve(report.timeType), settlementStart])]
+		.sort((left, right) => {
+			if (left < right) return -1
+			if (left > right) return 1
+			return 0
+		})
+		.filter(boundary => boundary > report.currentTime)
+		.map(boundary => boundary - report.currentTime)
 }
 export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleReportActionAvailability {
 	if (!hasOpenOracleAtomicInitialReport(report))

@@ -64,3 +64,5 @@ export const shareBackingDetail = 'ETH values assume the outcome wins; they are 
 
 export const actionUnavailableReason = 'This action is unavailable in the current pool state.'
 export const maxUsesWalletBalanceHint = 'Max uses your entire ETH balance. Leave ETH for gas.'
+
+export const oraclePriceExpiresTooSoon = 'The oracle price expires too soon. Mint after a new price settles.'

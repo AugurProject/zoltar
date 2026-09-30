@@ -12,6 +12,8 @@ import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js
 import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
+import { hasOracleMintSubmissionWindow } from '../../../protocol/oracleTiming.js'
+
 const PRICE_PRECISION = 10n ** 18n
 
 export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active underwriting commitments.'
@@ -194,13 +196,18 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 	return deploymentStatuses.length > 0 && deploymentStatuses.every(step => step.deployed)
 }
 
-export function getTradingOraclePriceGuardMessage(oraclePriceUsable: boolean | undefined) {
+export function getTradingOraclePriceGuardMessage(oraclePriceUsable: boolean | undefined, currentTimestamp: bigint | undefined, priceValidUntilTimestamp: bigint | undefined) {
 	if (oraclePriceUsable === undefined) return tradingCopy.loadingOraclePrice
 	if (!oraclePriceUsable) return tradingCopy.staleOraclePrice
+	const hasSubmissionWindow = hasOracleMintSubmissionWindow(currentTimestamp, priceValidUntilTimestamp)
+	if (hasSubmissionWindow === undefined) return tradingCopy.loadingOraclePrice
+	if (!hasSubmissionWindow) return tradingCopy.oraclePriceExpiresTooSoon
 	return undefined
 }
 
 export function getTradingMintGuardMessage({
+	currentTimestamp,
+	priceValidUntilTimestamp,
 	accountAddress,
 	settlementCollateralAttoEth,
 	ethBalanceAttoEth,
@@ -212,6 +219,8 @@ export function getTradingMintGuardMessage({
 	shareTokenSupplyAttoShares,
 	totalPoolHeldAttoRep,
 }: {
+	currentTimestamp: bigint | undefined
+	priceValidUntilTimestamp: bigint | undefined
 	accountAddress: Address | undefined
 	settlementCollateralAttoEth: bigint | undefined
 	ethBalanceAttoEth: bigint | undefined
@@ -226,7 +235,8 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('minting complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
-	if (isPriceValid === false) return tradingCopy.staleOraclePrice
+	const oraclePriceGuard = getTradingOraclePriceGuardMessage(isPriceValid ?? true, currentTimestamp, priceValidUntilTimestamp)
+	if (oraclePriceGuard !== undefined) return oraclePriceGuard
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
