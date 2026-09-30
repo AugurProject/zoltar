@@ -329,6 +329,10 @@ test('hides the oracle price row in an ended pool, where a new price has no use'
 	// Reporting details are not loaded on the vault view, so the pool lifecycle alone must retire the expired-price warning.
 	expect(document.body.querySelector('.pool-oracle-status')).toBeNull()
 	expect(within(document.body).queryByRole('button', { name: 'Request new price' })).toBeNull()
+	// The expired price does not move into Pool details either.
+	const details = document.body.querySelector('.pool-reference-details')
+	expect(details).not.toBeNull()
+	expect(details?.textContent).not.toContain('Open Oracle price')
 })
 
 test('keeps a pending report reachable from the price row in an ended pool', async () => {
