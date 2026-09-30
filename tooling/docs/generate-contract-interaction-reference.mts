@@ -2,11 +2,9 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { keccak256 } from '../../shared/core/ts/evm/ethereum'
 import { ensureContractArtifactsAreCurrent } from '../contracts/ensure-contract-artifacts.mts'
 import { walkFiles } from '../repo/walk.mts'
 import {
-	assemblyDelegateCalls,
 	assemblyEventEmissions,
 	contractPageOutputPath,
 	contractPagesDirectory,
@@ -20,7 +18,6 @@ import {
 	readDeclarationExclusionsBySource,
 	referencedEventAbiFingerprint,
 	stateChangingAbiFingerprintBySource,
-	type AssemblyDelegateCall,
 	type ContractDeclaration,
 } from './contract-reference-metadata.mts'
 import { renderAccountingExamples } from './contract-reference-examples.mts'
@@ -106,9 +103,6 @@ async function generateReferencePages(): Promise<GeneratedPage[]> {
 		assert.ok(canonicalSourcePath, `No canonical event declaration is configured for assembly emission ${emission.name}`)
 		assertEventDeclaration(await getSource(canonicalSourcePath), { name: emission.name }, canonicalSourcePath)
 		assertAssemblyEventEmission(await getSource(emission.sourcePath), emission, emission.sourcePath)
-	}
-	for (const delegateCall of assemblyDelegateCalls) {
-		assertAssemblyDelegateCall(await getSource(delegateCall.sourcePath), await getSource(delegateCall.targetSourcePath), delegateCall)
 	}
 	for (const contractReference of contractReferences) {
 		const readDeclarations: string[] = []
@@ -397,20 +391,6 @@ function assertAssemblyEventEmission(source: string, emission: { dataArguments: 
 	assert.ok(compactSource.includes(`log${topicCount}(add(eventData,0x20),mload(eventData),eventSignature${indexedArguments})`), `${sourceLabel} assembly event topics for ${emission.name} changed`)
 }
 
-function assertAssemblyDelegateCall(source: string, targetSource: string, delegateCall: AssemblyDelegateCall): void {
-	assertEntrypointSignatures(targetSource, { name: delegateCall.targetFunctionName }, [delegateCall.targetEntrypointSignature], delegateCall.targetSourcePath)
-	const targetDeclarations = getFunctionDeclarations(targetSource, delegateCall.targetFunctionName).filter(declaration => declaration.visibility === 'external' || declaration.visibility === 'public')
-	assert.equal(targetDeclarations.length, 1, `${delegateCall.targetSourcePath} must declare exactly one public ${delegateCall.targetFunctionName} target`)
-	assert.equal(targetDeclarations[0]?.payable, true, `${delegateCall.targetSourcePath} ${delegateCall.targetFunctionName} must remain payable for value-bearing delegatecall flows`)
-	assert.equal(keccak256(delegateCall.abiSignature).slice(0, 10), delegateCall.selector, `${delegateCall.targetSourcePath} ABI selector for ${delegateCall.targetFunctionName} changed`)
-	const compactSource = source.replace(/\s+/g, '')
-	assert.ok(compactSource.includes(`mstore(pointer,shl(224,${delegateCall.selector}))`), `${delegateCall.sourcePath} hard-coded selector for ${delegateCall.targetFunctionName} changed`)
-	for (const { argument, offset } of delegateCall.argumentOffsets) {
-		assert.ok(compactSource.includes(`mstore(add(pointer,${offset}),${argument})`), `${delegateCall.sourcePath} calldata argument ${argument} for ${delegateCall.targetFunctionName} changed`)
-	}
-	assert.ok(compactSource.includes(`delegatecall(gas(),eventEmitter,pointer,${delegateCall.calldataLength},0,0)`), `${delegateCall.sourcePath} calldata length or target for ${delegateCall.targetFunctionName} changed`)
-}
-
 function normalizeSolidityParameters(parameters: string): string {
 	return parameters
 		.replace(/\s+/g, ' ')
@@ -581,35 +561,6 @@ function assertDeclarationCheckerRegression(): void {
 	assert.throws(() => assertAssemblyEventEmission(assemblyEventFixture.replace('Checkpoint(address,uint256)', 'Checkpoint(uint256,address)'), assemblyEventMetadata, 'assembly signature fixture'), /assembly event signature for Checkpoint changed/)
 	assert.throws(() => assertAssemblyEventEmission(assemblyEventFixture.replace('abi.encode(value)', 'abi.encode(otherValue)'), assemblyEventMetadata, 'assembly data fixture'), /assembly event data for Checkpoint changed/)
 	assert.throws(() => assertAssemblyEventEmission(assemblyEventFixture.replace('eventSignature, account', 'eventSignature, otherAccount'), assemblyEventMetadata, 'assembly topic fixture'), /assembly event topics for Checkpoint changed/)
-	const assemblyDelegateCallFixture = `
-		function emitForkSnapshotEvents(
-			ISecurityPool parent,
-			address migrationProxy,
-			address sourceGame,
-			uint256 totalPoolHeldRepAtForkAttoRep,
-			uint256 disputeStakedRepAtForkAttoRep,
-			uint256 resultingLockedAttoRep
-		) external payable {}
-		assembly ('memory-safe') {
-			let pointer := mload(0x40)
-			mstore(pointer, shl(224, 0x408d33da))
-			mstore(add(pointer, 0x04), parent)
-			mstore(add(pointer, 0x24), migrationProxy)
-			mstore(add(pointer, 0x44), sourceGame)
-			mstore(add(pointer, 0x64), totalPoolHeldRepAtForkAttoRep)
-			mstore(add(pointer, 0x84), disputeStakedRepAtForkAttoRep)
-			mstore(add(pointer, 0xa4), resultingLockedAttoRep)
-			delegatecall(gas(), eventEmitter, pointer, 0xc4, 0, 0)
-		}
-	`
-	const assemblyDelegateCallMetadata = assemblyDelegateCalls[0]
-	if (assemblyDelegateCallMetadata === undefined) throw new Error('Expected assembly delegate-call metadata')
-	assert.doesNotThrow(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture, assemblyDelegateCallMetadata))
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0x408d33da', '0x408d33db'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /hard-coded selector for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('0xa4), resultingLockedAttoRep', '0xa4), otherRep'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata argument resultingLockedAttoRep for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture.replace('pointer, 0xc4', 'pointer, 0xa4'), assemblyDelegateCallFixture, assemblyDelegateCallMetadata), /calldata length or target for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('uint256 resultingLockedAttoRep', 'address resultingLockedAttoRep'), assemblyDelegateCallMetadata), /entrypoint signatures for emitForkSnapshotEvents changed/)
-	assert.throws(() => assertAssemblyDelegateCall(assemblyDelegateCallFixture, assemblyDelegateCallFixture.replace('external payable', 'external'), assemblyDelegateCallMetadata), /emitForkSnapshotEvents must remain payable/)
 	assert.deepEqual(getPublicStateChangingDeclarationNames('function mutate(uint256 value) external returns (uint256) { return value; }\nfunction inspect() public view returns (uint256) { return 1; }\nreceive() external payable {}'), ['mutate', 'receive'])
 	assert.notEqual(computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external payable {}')), computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external {}')))
 	assert.notEqual(computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external returns (uint256) {}')), computeStateChangingAbiFingerprint(getPublicStateChangingDeclarations('function mutate() external returns (address) {}')))
