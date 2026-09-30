@@ -1333,6 +1333,11 @@ button.tx-action-wallet-fix {
 		width: 100%;
 	}
 
+	/* Exactly three views fit one row, so none is left alone on a second row. */
+	.route-subnav-shell .route-subtab-nav.view-tabs.segmented:has(> :nth-child(3):last-child) {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
 	.route-subnav-shell .route-subtab-nav.view-tabs.segmented .view-tab {
 		justify-content: center;
 		padding-inline: 0.5rem;

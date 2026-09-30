@@ -154,6 +154,7 @@ export const liveCopy = {
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
 	noEligiblePools: 'No security pools on this page are available for a new market.',
+	noEligiblePoolsDetail: 'Create a security pool in Statoblast, then open it here.',
 	noMarkets: 'No trading markets in this universe.',
 	marketList: 'Markets',
 	favoriteMarkets: 'Favorites',
