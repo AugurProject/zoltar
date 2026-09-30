@@ -330,9 +330,7 @@ contract SecurityPool is SecurityPoolStorage {
 	}
 
 	function getCurrentMintingCapacityAttoEth() public view returns (uint256) {
-		if (!openOraclePriceCoordinator.isPriceValid() || address(escalationGame) != address(0)) return 0;
-		uint256 backedCapacityAttoEth = SecurityPoolUtils.calculateBackingSupportedLimitAttoEth(getTotalPoolHeldAttoRep(), openOraclePriceCoordinator.lastPrice(), statoblastSecurityMultiplierBps);
-		return backedCapacityAttoEth >= totalUnderwritingLimitAttoEth ? totalUnderwritingLimitAttoEth : 0;
+		return address(escalationGame) == address(0) ? totalUnderwritingLimitAttoEth : 0;
 	}
 
 	function getVaultOpenInterestAttoEth(address vault) public view returns (uint256) {

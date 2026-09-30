@@ -8,7 +8,6 @@ type RevertExplanation = TransactionFailureExplanation & Readonly<{ reasons: rea
 
 // Contracts revert with plain strings (see solidity/contracts/trading and SecurityPool); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
-	{ reasons: ['Stale price'], cause: 'The pool’s REP/ETH oracle price is stale.', nextStep: 'Request a price update in the liquidity panel, then retry after the report settles.' },
 	{
 		// The last reason is the client-side check that the pre-signing simulation still meets the quoted limits.
 		reasons: ['Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed quote no longer satisfies'],
@@ -21,7 +20,8 @@ const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
 		cause: 'This market no longer accepts this action.',
 		nextStep: 'Reload the market to see its current status.',
 	},
-	{ reasons: ['Pool backing insufficient', 'Collateral low', 'Vault backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Over capacity'], cause: 'The security pool does not have enough minting capacity for this size.', nextStep: 'Try a smaller amount.' },
+	{ reasons: ['Collateral low', 'Vault backing insufficient'], cause: 'The security pool does not have enough backing for this size.', nextStep: 'Try a smaller amount.' },
 	{
 		reasons: ['Insufficient output', 'Net input is zero', 'Input is zero', 'ETH input is zero', 'Complete set is zero', 'Liquidity rounds to zero', 'Liquidity output is zero', 'Liquidity is zero', 'Initial reserves round to zero', 'Initial liquidity too small'],
 		cause: 'The amount is too small to trade.',

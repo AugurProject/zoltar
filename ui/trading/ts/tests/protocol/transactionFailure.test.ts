@@ -9,12 +9,12 @@ function revertError(reason: string) {
 
 describe('transaction failure explanations', () => {
 	test.each([
-		['Stale price', 'The pool’s REP/ETH oracle price is stale.'],
 		['Minimum long shares', 'The price moved past your slippage limit.'],
 		['Liquidity price slippage', 'The price moved past your slippage limit.'],
 		['Deadline expired', 'The transaction expired before it was mined.'],
 		['Question ended', 'This market no longer accepts this action.'],
-		['Pool backing insufficient', 'The security pool does not have enough backing for this size.'],
+		['Over capacity', 'The security pool does not have enough minting capacity for this size.'],
+		['Vault backing insufficient', 'The security pool does not have enough backing for this size.'],
 		['Net input is zero', 'The amount is too small to trade.'],
 		['Pair already initialized', 'Someone already added the first liquidity.'],
 	])('explains the %s revert string with a cause and a next step', (reason, cause) => {

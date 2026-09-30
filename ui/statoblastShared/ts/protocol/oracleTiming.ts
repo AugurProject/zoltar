@@ -6,7 +6,7 @@ export function getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp
 	return lastSettlementTimestamp + (chainId === SEPOLIA_NETWORK_PROFILE.chain.id ? 60n : 5n) * 60n
 }
 
-export function hasOracleMintSubmissionWindow(currentTimestamp: bigint | undefined, priceValidUntilTimestamp: bigint | undefined) {
+export function hasOraclePriceSubmissionWindow(currentTimestamp: bigint | undefined, priceValidUntilTimestamp: bigint | undefined) {
 	if (currentTimestamp === undefined || priceValidUntilTimestamp === undefined) return undefined
 	return hasSubmissionWindow(currentTimestamp, priceValidUntilTimestamp)
 }

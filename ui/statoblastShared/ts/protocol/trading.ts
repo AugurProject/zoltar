@@ -1,12 +1,10 @@
 import { encodeFunctionData, type Address, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { sortBigIntsAscending } from '@zoltar/core-shared/serialization/bigInt'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
+import { statoblast_SecurityPool_SecurityPool, statoblast_tokens_ShareToken_ShareToken } from '../contractArtifact.js'
 import type { ReadClient, ReportingOutcomeKey, TradingActionResult, TradingDetails, TradingShareBalances, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getMinBigintValue, isBigintTriple } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { getOracleManagerPriceValidUntilTimestamp, hasOracleMintSubmissionWindow } from './oracleTiming.js'
-import * as tradingCopy from '../copy/trading.js'
 import { readSecurityPoolUniverseId } from './securityPoolActions.js'
 
 type ReadWriteContractClient<TReceipt extends Pick<TransactionReceipt, 'status'> = TransactionReceipt> = Pick<ReadClient, 'readContract'> & WriteContractClient<TReceipt>
@@ -22,12 +20,10 @@ type SecurityPoolMintCapacity = {
 	shareTokenSupplyAttoShares: bigint
 	totalPoolHeldAttoRep: bigint
 	totalUnderwritingLimitAttoEth: bigint
-	isPriceValid: boolean
-	priceValidUntilTimestamp: bigint | undefined
 	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, openOraclePriceCoordinator, currentRetentionRate, feeEndTimestamp, escalationGame] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, currentRetentionRate, feeEndTimestamp, escalationGame] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -54,12 +50,6 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'openOraclePriceCoordinator',
-			address: securityPoolAddress,
-			args: [],
-		},
-		{
-			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'currentRetentionRate',
 			address: securityPoolAddress,
 			args: [],
@@ -72,14 +62,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
 	])
-	const [priceValidity, currentBlock] = await Promise.all([
-		readRequiredMulticall(client, [
-			{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: openOraclePriceCoordinator, args: [] },
-			{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp', address: openOraclePriceCoordinator, args: [] },
-		]),
-		client.getBlock(),
-	])
-	const [isPriceValid, lastSettlementTimestamp] = priceValidity
+	const currentBlock = await client.getBlock()
 	return {
 		currentRetentionRate,
 		currentTimestamp: currentBlock.timestamp,
@@ -92,8 +75,6 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		shareTokenSupplyAttoShares,
 		totalPoolHeldAttoRep,
 		totalUnderwritingLimitAttoEth: poolAccountingSnapshot.totalUnderwritingLimitAttoEth,
-		isPriceValid,
-		priceValidUntilTimestamp: getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp),
 		totalFeesOwedRemainder: poolAccountingSnapshot.totalFeesOwedRemainder,
 	}
 }
@@ -199,11 +180,6 @@ export async function createCompleteSetInSecurityPool(client: WriteClient, secur
 	const validateBeforeSubmit = async () => {
 		const game = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'escalationGame' })
 		if (BigInt(game) !== 0n) throw new Error('Minting closed after escalation starts.')
-		const managerAddress = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddress, functionName: 'openOraclePriceCoordinator' })
-		const [lastSettlementTimestamp, currentBlock] = await Promise.all([client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: managerAddress, functionName: 'lastSettlementTimestamp' }), client.getBlock()])
-		const hasSubmissionWindow = hasOracleMintSubmissionWindow(currentBlock.timestamp, getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp))
-		if (hasSubmissionWindow === undefined) throw new Error(tradingCopy.loadingOraclePrice)
-		if (!hasSubmissionWindow) throw new Error(tradingCopy.oraclePriceExpiresTooSoon)
 	}
 	await validateBeforeSubmit()
 	const universeId = await readSecurityPoolUniverseId(client, securityPoolAddress)

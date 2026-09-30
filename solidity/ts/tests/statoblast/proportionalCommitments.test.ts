@@ -66,26 +66,15 @@ describe('Statoblast: continuous proportional commitments', () => {
 		expect(await obligation(receiver.account.address)).toBeLessThanOrEqual(5n * unit)
 	})
 
-	test('underbacked total commitments close all minting even when a small mint would be covered', async () => {
+	test('minting fills standing commitments regardless of oracle price or backing', async () => {
 		await freshPrice()
 		await setLimit(400n * unit)
 		await freshPrice(2n * fixture.reportedRepEthPrice)
-		expect(await total()).toBe(400n * unit)
-		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(0n)
-		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Pool backing insufficient')
-		await setLimit(250n * unit)
-		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(250n * unit)
-		await createCompleteSet(fixture.client, pool(), 250n * unit)
-	})
-
-	test('minting rejects insufficient aggregate backing and stale oracle prices', async () => {
-		await freshPrice()
-		await setLimit(400n * unit)
-		await freshPrice(2n * fixture.reportedRepEthPrice)
-		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Pool backing insufficient')
 		await fixture.mockWindow.advanceTime(301n)
-		await expect(createCompleteSet(fixture.client, pool(), unit, true)).rejects.toThrow('Stale price')
-		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(0n)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'getCurrentMintingCapacityAttoEth' })).toBe(400n * unit)
+		await createCompleteSet(fixture.client, pool(), 400n * unit)
+		expect(await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })).toBe(400n * unit)
+		await expect(createCompleteSet(fixture.client, pool(), 400n * unit)).rejects.toThrow('Over capacity')
 	})
 
 	test('reported backing ratios value the full ETH commitment at the live price', async () => {
@@ -113,7 +102,6 @@ describe('Statoblast: continuous proportional commitments', () => {
 		await setLimit(400n * unit)
 		await createCompleteSet(fixture.client, pool(), 10n * unit)
 		await freshPrice(2n * fixture.reportedRepEthPrice)
-		await expect(createCompleteSet(fixture.client, pool(), unit)).rejects.toThrow('Pool backing insufficient')
 		const before = await getSecurityVault(fixture.client, pool(), fixture.client.account.address)
 		const collateralBefore = await fixture.client.readContract({ abi, address: pool(), functionName: 'settlementCollateralAttoEth' })
 		await fixture.mockWindow.advanceTime(86_400n)

@@ -35,7 +35,6 @@ function decodeCachedLiveMarket(value: unknown) {
 			lpTotalSupply: read.bigint('lpTotalSupply'),
 			mintingCapacityCeilingAttoEth: read.bigint('mintingCapacityCeilingAttoEth'),
 			noReserve: read.bigint('noReserve'),
-			oracleValidUntilTimestamp: read.optional('oracleValidUntilTimestamp', read.bigint),
 			pair,
 			pool: read.address('pool'),
 			questionId: read.bigint('questionId'),

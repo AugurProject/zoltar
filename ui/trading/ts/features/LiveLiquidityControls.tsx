@@ -50,7 +50,6 @@ export function LiveLiquidityControls({
 	Readonly<{
 		walletEthAttoEth: bigint | undefined
 		nowSeconds: bigint
-		oracleBlocker?: string | undefined
 		services?: LiveLiquidityServices
 	}>) {
 	const { market, balanceState, account, walletClient, settings } = context
@@ -59,7 +58,7 @@ export function LiveLiquidityControls({
 	const { quote, state, workflowLocked } = transaction
 	const closedForAdding = !marketAcceptsNewRisk(market, nowSeconds)
 	const walletConnected = account !== undefined && walletClient !== undefined
-	const baseAvailability = resolveLiquidityAvailability({
+	const availability = resolveLiquidityAvailability({
 		walletConnected,
 		networkMismatchReason,
 		balanceState,
@@ -74,7 +73,6 @@ export function LiveLiquidityControls({
 		quoteState: transaction.quoteState,
 		quoteError: transaction.quoteError,
 	})
-	const availability = operation !== 'remove' && context.oracleBlocker !== undefined && walletConnected && networkMismatchReason === undefined ? { disabled: true, reason: context.oracleBlocker } : baseAvailability
 	const walletStep = panelWalletStep(wallet, walletConnected && networkMismatchReason === undefined, workflowLocked)
 	const fieldId = useId()
 	const amountId = `${fieldId}-amount`
@@ -177,7 +175,7 @@ export function LiveLiquidityControls({
 								<MetricField label={liquidityCopy.quoteBlock}>{quote.blockNumber.toString()}</MetricField>
 							</DataGrid>
 						</ReadOnlyDetailAccordion>
-						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question-or-oracle')} />
+						<UserMessage className='detail trade-estimate-note' detail={settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, operation === 'remove' ? undefined : 'question')} />
 					</section>
 				)}
 			</QuotedTransactionPanel>

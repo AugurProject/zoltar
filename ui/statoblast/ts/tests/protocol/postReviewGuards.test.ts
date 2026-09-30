@@ -15,7 +15,6 @@ const hash = `0x${'1'.repeat(64)}` as const
 afterEach(() => transactionSteps.value?.cancel())
 
 for (const change of [
-	'mint expiry',
 	'mint escalation',
 	'auction expiry',
 	'auction finalized',
@@ -98,7 +97,6 @@ for (const change of [
 				getBalance: async () => (changed && change.endsWith('balance') ? 0n : 1000n),
 				getBlock: async () => {
 					if (!changed) return createBlockWithTimestamp(1n)
-					if (change === 'mint expiry') return createBlockWithTimestamp(3541n)
 					if (change === 'auction expiry') return createBlockWithTimestamp(604_741n)
 					if (change === 'report expiry') return createBlockWithTimestamp(941n)
 					return createBlockWithTimestamp(1n)

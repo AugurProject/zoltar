@@ -16,7 +16,7 @@ describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 	const { PRICE_PRECISION, getVaultRepClaim, repDeposit } = fixture
 
-	test('retains failed commitments across redemption and blocks a fresh underbacked generation', async () => {
+	test('retains failed commitments across redemption without carrying bad debt into a fresh generation', async () => {
 		const { client, mockWindow, questionId, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
 		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
@@ -65,13 +65,9 @@ describe('Audit PoC: stale bad debt survives a collateral reset', () => {
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPool), receiverRepClaim + defaultedVaultResidualRepAttoRep, 'the rejected withdrawal must preserve all pool-held REP')
 		await manipulatePriceOracle(client, mockWindow, coordinator, underfundedPrice * 100n)
 
-		const backedMintingCapacityAttoEth = await client.readContract({
-			abi: statoblast_SecurityPool_SecurityPool.abi,
-			address: securityPool,
-			functionName: 'getCurrentMintingCapacityAttoEth',
-		})
-		strictEqualTypeSafe(backedMintingCapacityAttoEth, 0n, 'underbacked standing commitments must close minting even after collateral redemption')
-		await assert.rejects(createCompleteSet(victim, securityPool, 1n * 10n ** 18n, true), /Pool backing insufficient/)
-		strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPool), 0n, 'the rejected fresh mint should not start a new undercollateralized generation')
+		const freshCollateralAttoEth = 1n * 10n ** 18n
+		await createCompleteSet(victim, securityPool, freshCollateralAttoEth)
+		strictEqualTypeSafe(await getSettlementCollateralAttoEth(client, securityPool), freshCollateralAttoEth, 'a fresh mint within standing commitments should start a new collateral generation')
+		strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'totalBadDebtAttoEth' }), 0n, 'the fresh generation must not inherit the previous generation bad debt')
 	})
 })

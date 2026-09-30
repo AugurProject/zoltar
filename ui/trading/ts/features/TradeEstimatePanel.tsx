@@ -109,7 +109,7 @@ export function TradeEstimatePanel({
 				className='detail trade-estimate-note'
 				detail={
 					<>
-						{ticketCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, estimate.kind === 'entry' ? 'question-or-oracle' : 'question')}
+						{ticketCopy.estimateNote} {settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes, 'question')}
 					</>
 				}
 			/>

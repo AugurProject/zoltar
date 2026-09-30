@@ -15,7 +15,6 @@ function storedSettings(raw: string | undefined) {
 }
 
 test('discloses only the cutoffs that apply to the operation', () => {
-	expect(protectionSummary('0.5', 20n, 'question-or-oracle')).toContain('oracle expiry')
 	expect(protectionSummary('0.5', 20n, 'question')).toContain('question close')
 	expect(protectionSummary('0.5', 20n, 'question')).not.toContain('oracle')
 	expect(protectionSummary('0.5', 20n)).not.toContain('ends sooner')

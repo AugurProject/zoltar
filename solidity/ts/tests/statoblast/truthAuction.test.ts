@@ -649,10 +649,10 @@ describe('Statoblast: truth auction', () => {
 			strictEqualTypeSafe(unassignedAfterAccrual.claimableFeesAttoEth, 0n, 'zero-purchase unassigned capacity must remain outside fee ownership')
 		})
 
-		test('unhealthy unassigned auction ownership blocks new minting until a claim assigns it', async () => {
-			const { auctionParticipant, auctionTick, yesSecurityPool } = await setupLongDatedChildAuction('unassigned health guard')
+		test('unhealthy unassigned auction ownership does not block minting within standing commitments', async () => {
+			const { yesSecurityPool } = await setupLongDatedChildAuction('unassigned health guard')
 			const unassignedPosition = await getUnassignedPosition(yesSecurityPool.securityPool)
-			assert.ok(unassignedPosition.underwritingLimitAttoEth > 0n, 'the health-guard regression requires unassigned capacity')
+			assert.ok(unassignedPosition.underwritingLimitAttoEth > 0n, 'the regression requires unassigned capacity')
 
 			const forkDataStorageBase = getMappingStorageSlot(yesSecurityPool.securityPool, 0n)
 			await mockWindow.addStateOverrides({
@@ -663,18 +663,10 @@ describe('Statoblast: truth auction', () => {
 				},
 			})
 
+			const collateralBefore = await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)
 			const mintAmountAttoEth = 10n ** 15n
-			await assert.rejects(createCompleteSet(client, yesSecurityPool.securityPool, mintAmountAttoEth), /Unassigned position unhealthy/)
-			await claimAuctionProceeds(client, yesSecurityPool.securityPool, auctionParticipant.account.address, [{ tick: auctionTick, bidIndex: 0n }])
-			const auctionVault = await getSecurityVault(client, yesSecurityPool.securityPool, auctionParticipant.account.address)
-			await mockWindow.addStateOverrides({
-				[getInfraContractAddresses().securityPoolForker]: {
-					stateDiff: {
-						[formatStorageSlot(forkDataStorageBase + 28n)]: auctionVault.repBackingUnits,
-					},
-				},
-			})
 			await createCompleteSet(client, yesSecurityPool.securityPool, mintAmountAttoEth)
+			assert.ok((await getSettlementCollateralAttoEth(client, yesSecurityPool.securityPool)) > collateralBefore, 'the mint should add settlement collateral')
 		})
 
 		test('nonzero fee redemption cannot reclassify forced child ETH as collateral', async () => {

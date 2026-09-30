@@ -106,11 +106,6 @@
 								<td><a href="../explanation/fees.html">Fee accrual</a></td>
 							</tr>
 							<tr>
-								<td><code>calculateBackingSupportedLimitAttoEth(backingAttoRep, repEthPrice, securityMultiplierBps)</code></td>
-								<td>Computes the maximum fully backed ETH limit supported by pool-held REP with no dispute stake. It inverts both rounded backing checks, including the liquidation reserve. This preview does not change standing limits or authorize minting. A zero price returns zero.</td>
-								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
-							</tr>
-							<tr>
 								<td><code>calculateVaultOpenInterestAttoEth(activeOpenInterestAttoEth, vaultUnderwritingLimitAttoEth, totalUnderwritingLimitAttoEth)</code></td>
 								<td>Attributes live pool open interest pro rata to capacity ownership, rounding a positive vault share upward. Zero vault or total ownership returns zero.</td>
 								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
@@ -127,7 +122,7 @@
 							</tr>
 							<tr>
 								<td><code>calculateRetentionRate(settlementCollateralAttoEth, mintingCapacityAttoEth)</code></td>
-								<td>Zero live minting capacity returns the maximum retention rate. Otherwise retention decreases linearly through the 80% utilization dip and remains at the minimum rate above it.</td>
+								<td>Zero minting capacity returns the maximum retention rate. Otherwise retention decreases linearly through the 80% utilization dip and remains at the minimum rate above it.</td>
 								<td><a href="../explanation/fees.html">Retention rate</a></td>
 							</tr>
 						</tbody>

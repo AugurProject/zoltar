@@ -10,20 +10,8 @@ import type { SecurityPoolLifecycleState, SecurityPoolStateModel } from '../lib/
 import type { getSelectedPoolOracleMetricValues } from '../lib/securityPoolWorkflow.js'
 import { createRequestPriceReview, SecurityPoolPriceOracleSection, SecurityPoolStagedOperationsSection, type RequestPriceReview } from './SecurityPoolOracleSections.js'
 
-export function SelectedPoolTradingPanel({
-	currentPoolOracleManagerDetails,
-	currentPoolOraclePriceUsable,
-	poolState,
-	selectedPool,
-	trading,
-}: {
-	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
-	currentPoolOraclePriceUsable: boolean | undefined
-	poolState: SecurityPoolStateModel
-	selectedPool: ListedSecurityPool | undefined
-	trading: SecurityPoolWorkflowRouteContentProps['trading']
-}) {
-	return <TradingSection {...trading} oracleManagerDetails={currentPoolOracleManagerDetails} oraclePriceUsable={currentPoolOraclePriceUsable} selectedPool={selectedPool} poolState={poolState} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
+export function SelectedPoolTradingPanel({ poolState, selectedPool, trading }: { poolState: SecurityPoolStateModel; selectedPool: ListedSecurityPool | undefined; trading: SecurityPoolWorkflowRouteContentProps['trading'] }) {
+	return <TradingSection {...trading} selectedPool={selectedPool} poolState={poolState} embedInCard showHeader={false} showSecurityPoolAddressInput={false} />
 }
 
 export function SelectedPoolReportingPanel({

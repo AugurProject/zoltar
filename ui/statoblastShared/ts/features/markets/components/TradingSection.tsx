@@ -33,7 +33,6 @@ import {
 	getShareSettlementBalances,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
-	getTradingOraclePriceGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
 	convertAttoSharesToSettlementCollateralAttoEth,
@@ -44,7 +43,6 @@ import {
 	UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE,
 	getPoolMintingCapacityAttoEth,
 } from '../lib/trading.js'
-import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import type { ReadinessAction } from '../../types.js'
 import type { TradingSectionProps } from '../../types.js'
 type TradingActionModal = 'mint' | 'redeem-complete-sets' | 'migrate-shares' | undefined
@@ -61,8 +59,6 @@ export function TradingSection({
 	poolState,
 	tradingDetails,
 	selectedPool,
-	oracleManagerDetails,
-	oraclePriceUsable,
 	tradingActiveAction,
 	tradingError,
 	tradingForm,
@@ -118,23 +114,17 @@ export function TradingSection({
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
-	const priceValidUntilTimestamp = getOracleManagerPriceValidUntilTimestamp(oracleManagerDetails?.lastSettlementTimestamp ?? selectedPool?.lastOracleSettlementTimestamp)
-	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable, currentTimestamp, priceValidUntilTimestamp)
-	const mintGuardMessage =
-		oraclePriceGuardMessage ??
-		getTradingMintGuardMessage({
-			currentTimestamp,
-			priceValidUntilTimestamp,
-			accountAddress: accountState.address,
-			settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
-			ethBalanceAttoEth: accountState.ethBalanceAttoEth,
-			mintingCapacityAttoEth,
-			hasSelectedPool,
-			isOnActiveAppChain,
-			mintAmountInput: tradingForm.completeSetAmount,
-			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
-			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
-		})
+	const mintGuardMessage = getTradingMintGuardMessage({
+		accountAddress: accountState.address,
+		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
+		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
+		mintingCapacityAttoEth,
+		hasSelectedPool,
+		isOnActiveAppChain,
+		mintAmountInput: tradingForm.completeSetAmount,
+		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
+		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
+	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
@@ -162,7 +152,6 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
-		if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 		if (remainingMintCapacity === 0n) {
@@ -220,10 +209,10 @@ export function TradingSection({
 		if (!actionEnabled) return tradingCopy.actionUnavailableReason
 		return guardMessage
 	}
-	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled and no reason precedes the guard (the mint dialog checks the oracle price first).
+	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled.
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
-	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined, precedingReason?: string) =>
-		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool && precedingReason === undefined) ? walletBlocker : undefined)
+	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined) =>
+		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -390,7 +379,7 @@ export function TradingSection({
 					value={tradingForm.completeSetAmount}
 				/>
 				<div className='actions'>
-					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage, oraclePriceGuardMessage)} />
+					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage)} />
 				</div>
 			</OperationModal>
 

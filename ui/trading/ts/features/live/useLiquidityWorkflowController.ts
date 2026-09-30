@@ -35,10 +35,8 @@ export function useLiquidityWorkflowController({
 	createGuardedWalletWrite,
 	onWorkflowLockChange,
 	services,
-	oracleBlocker,
 }: LiveWorkflowContext &
 	Readonly<{
-		oracleBlocker?: string | undefined
 		nowSeconds: bigint
 		services: LiveLiquidityServices
 	}>) {
@@ -49,7 +47,7 @@ export function useLiquidityWorkflowController({
 	const parsed = tryParseNonNegativeDecimalInput(amount.trim(), operation === 'remove' ? SHARE_QUANTITY_DECIMALS : 18)
 	const parsedProbability = tryParseNonNegativeDecimalInput(probability.trim(), 2)
 	const conditionalBps = parsedProbability !== undefined && parsedProbability > 0n && parsedProbability < 10_000n ? parsedProbability : undefined
-	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds) && (operation === 'remove' || oracleBlocker === undefined)
+	const operationAvailable = liquidityOperationAvailable(operation, market, nowSeconds)
 	const quotable = account !== undefined && walletClient !== undefined && balanceState === 'ready' && operationAvailable && parsed !== undefined && parsed > 0n && (operation !== 'initialize' || conditionalBps !== undefined)
 	// The key names every input the quote prices, so a background refresh that moves the pool retires the quote and re-quotes.
 	const quoteKey = quotable ? [account, configuration.chainId, configuration.router, liquidityQuoteBasis(market), operation, parsed, conditionalBps ?? '', settings.slippageBps, settings.validityMinutes].join('|') : undefined
@@ -88,7 +86,7 @@ export function useLiquidityWorkflowController({
 	}, [initialized, operation, transaction.workflowLocked])
 
 	async function submit() {
-		if (walletClient === undefined || account === undefined || quote === undefined || transaction.workflowLocked || (operation !== 'remove' && oracleBlocker !== undefined)) return
+		if (walletClient === undefined || account === undefined || quote === undefined || transaction.workflowLocked) return
 		if (!liquidityOperationAvailable(quote.operation, quote.market, nowSeconds)) {
 			transaction.dispatchWorkflow({ type: 'failed', operation: 'liquidity', message: liquidityCopy.closedToAdditions })
 			return
