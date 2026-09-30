@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { ConnectivityDegradedError, operationalFailureDisposition } from './resilience.ts'
 import { rpcQuorumDescription, type RpcQuorumRequirement } from './rpc-quorum-policy.ts'
 

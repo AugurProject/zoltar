@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { keccak256, type Address, type BlockTransaction, type Hex, type JsonValue } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
 import { isEndpointRejection } from './transaction-rejection.ts'

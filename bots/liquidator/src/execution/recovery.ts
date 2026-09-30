@@ -1,4 +1,4 @@
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { createPublicClient, createWalletClient, encodeFunctionData, parseTransaction, type Account, type Chain, type Hex, type Transport, type WalletClient } from '@zoltar/bot-shared/ethereum'
 import { createRpcEndpointPool } from '@zoltar/bot-shared/ethereum'
 import { fetchLogsWithAdaptiveRanges, latestLogRange, newestFirstScanRanges } from '@zoltar/bot-shared/monitoring/block-sync'

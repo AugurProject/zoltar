@@ -1,7 +1,7 @@
 import { marketConfigurations } from '#core/candidate-selection'
 import { recordActivity, saveDurableState } from '#state/operator-state'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { observeCentralizedMarkets } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { centralizedExchangeFactory } from './centralized-exchanges.ts'

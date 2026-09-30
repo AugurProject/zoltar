@@ -11,7 +11,7 @@ import { appendSettlementRecord, loadSettlementJournal, mergeSettlementRecord, r
 import { isExecutionPausedError } from '#execution/execution-orchestration'
 import { dateFromBlockTimestamp } from '#execution/recovery-support'
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 
 /**

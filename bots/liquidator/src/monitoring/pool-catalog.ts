@@ -1,5 +1,5 @@
 import { loadPoolDeploymentDate } from './pool-deployment-date.ts'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { securityPoolAbi, securityPoolFactoryAbi, zoltarQuestionDataAbi } from '@zoltar/bot-shared/contracts/abi'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { getAddress, type Address } from '@zoltar/bot-shared/ethereum'

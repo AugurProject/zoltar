@@ -1,4 +1,4 @@
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { MAINNET_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'

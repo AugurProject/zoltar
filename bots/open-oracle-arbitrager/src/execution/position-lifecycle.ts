@@ -21,7 +21,7 @@ import { submitContractTransaction, waitForTrackedTransaction, type TrackTransac
 import { parseDecimalWeth } from '#state/operator-state'
 import type { PositionRecord } from '#state/position-store'
 import { encodeFunctionData, parseUnits, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, OPEN_ORACLE_FLAG_TIME_TYPE } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 

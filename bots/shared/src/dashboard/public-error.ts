@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { logEvent, type BotName } from '../infrastructure/log-event.ts'
 import { publicOperatorFailure } from './public-failures.ts'
 import { dashboardJson } from './security.ts'

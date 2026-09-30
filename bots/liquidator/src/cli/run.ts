@@ -5,7 +5,7 @@ import { validateReconciliationIntentChain } from '#core/transaction-reconciliat
 import { assertIntentSender, loadDurableState, recordActivity } from '#state/operator-state'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks, botDashboardLifecycle, createBotShutdownController, runBotMain, withBotProcessLocks, type BotProcessLockOptions, type BotProcessLocks, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { pollUntilStopped, retryDelayMilliseconds } from '@zoltar/bot-shared/monitoring/resilience'

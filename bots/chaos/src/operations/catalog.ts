@@ -2,7 +2,7 @@ import { restoreOperationPlanningInputs } from './manual-inputs.ts'
 import { OPEN_ORACLE_OPERATIONS } from './open-oracle.ts'
 import { STATOBLAST_OPERATIONS } from './statoblast.ts'
 import { assertWorkflowPrerequisiteLimit } from './timing.ts'
-import { TRADING_OPERATIONS } from './trading.ts'
+import { TRADING_OPERATIONS } from './trading/catalog.ts'
 import type { CanonicalLifecyclePresence, EcosystemSnapshot, EvaluatedOperation, OperationContinuationContext, OperationDefinition, OperationPlan, PlanningOptions } from './types.ts'
 import { ZOLTAR_OPERATIONS } from './zoltar.ts'
 

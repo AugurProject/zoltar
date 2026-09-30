@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { EndpointCheckFailure, type EndpointCheck } from '../monitoring/connectivity.ts'
 
 const SHARED_VALIDATION_MESSAGES = new Set([

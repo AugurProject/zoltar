@@ -12,7 +12,7 @@ import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/da
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { join } from 'node:path'
 import { operatorHeader } from './header.ts'
 import { settingsPageMarkup } from './settings-page.tsx'

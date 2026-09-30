@@ -1,4 +1,4 @@
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { renderRepMarketConsensus, renderRepMarketConsensusError } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { renderBlockStatus as renderSharedBlockStatus, WAITING_FOR_BLOCK } from '@zoltar/bot-shared/dashboard/block-status'
 import { isSnapshot } from './snapshot-validation.ts'

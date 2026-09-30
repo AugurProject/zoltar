@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { Address, Hex, JsonValue } from '../ethereum.ts'
 import { bigintToSafeNumber, getAddress, keccak256 } from '../ethereum.ts'
 import type { SubmissionSettings } from '../execution/transaction-submission.ts'

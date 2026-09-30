@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'

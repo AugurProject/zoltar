@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { stepReceiptEvidenceDisposition } from '../../src/execution/receipt-validation.ts'
-import { TRADING_OPERATIONS } from '../../src/operations/trading.ts'
+import { TRADING_OPERATIONS } from '../../src/operations/trading/catalog.ts'
 import type { OperationEvidence } from '../../src/operations/types.ts'
 import { address, hash, planningOptionsFixture, snapshotFixture } from './fixture.ts'
 

@@ -1,5 +1,5 @@
 import { integer } from '../infrastructure/json-validation.ts'
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { historyUnavailableError } from '../monitoring/block-sync.ts'
 import { permanentHistoricalLogError } from '../monitoring/log-availability.ts'
 import { custom, http, requestTransport, RpcError } from './rpc-transport.ts'

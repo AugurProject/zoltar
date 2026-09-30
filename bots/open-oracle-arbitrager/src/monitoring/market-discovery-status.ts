@@ -1,5 +1,5 @@
 import { recordOperation, type MarketAvailabilityNotice, type OperatorState } from '#state/operator-state'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { missingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 

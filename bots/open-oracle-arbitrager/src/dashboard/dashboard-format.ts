@@ -1,4 +1,4 @@
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { formatAmount } from '@zoltar/bot-shared/dashboard/amount'
 import type { PublicOperatorSnapshot, PublicTransactionActivity } from '#state/operator-state'

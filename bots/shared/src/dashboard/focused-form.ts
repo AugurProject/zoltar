@@ -1,4 +1,4 @@
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { setText } from './dom.ts'
 import { setFormSubmitting } from './form-state.ts'
 

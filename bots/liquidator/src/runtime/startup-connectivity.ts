@@ -1,5 +1,5 @@
 import { recordActivity } from '#state/operator-state'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, readRpcChainId } from '@zoltar/bot-shared/monitoring/connectivity'
 import { operationalFailureDisposition } from '@zoltar/bot-shared/monitoring/resilience'
 import type { LiquidatorDeps, LiquidatorRuntime } from './liquidator-runtime.ts'

@@ -1,4 +1,4 @@
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { createPublicClient, keccak256, privateKeyToAccount, type Address, type Chain, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import { executorArtifact } from '#contracts/artifacts.generated'
 import { endpointLabel, estimateRpcTransactionGas, readRpcGasPrice, readRpcPendingNonce, sendRawTransactionToRpc } from '#monitoring/connectivity'

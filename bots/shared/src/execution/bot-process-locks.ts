@@ -1,5 +1,5 @@
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '../ethereum.ts'
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { acquireExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from './process-lock.ts'
 
 export type BotLockSettings = {
