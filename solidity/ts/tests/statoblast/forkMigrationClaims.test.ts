@@ -1,4 +1,5 @@
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import { beforeEach, describe, test } from 'bun:test'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
@@ -22,7 +23,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, getYesChildPool } = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -211,7 +212,7 @@ describe('Statoblast: fork migration', () => {
 			await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 			await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 
-			const parentForkDataSlot = getMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
+			const parentForkDataSlot = getAddressMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
 			const parentOutcomeIndexSlot = formatStorageSlot(parentForkDataSlot + 15n)
 			await mockWindow.addStateOverrides({
 				[getInfraContractAddresses().securityPoolForker]: {

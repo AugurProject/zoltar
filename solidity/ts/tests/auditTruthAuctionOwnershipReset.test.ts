@@ -1,4 +1,5 @@
 import { setUnderwritingLimit } from '../testSupport/simulator/utils/contracts/securityPool'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../testSupport/storage'
 import { getTotalRepPurchasedAttoRep } from '../testSupport/simulator/utils/contracts/auction'
 import { getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
@@ -24,7 +25,7 @@ import { useStatoblastTruthAuctionFixture } from './statoblast/fixture'
 describe('Recursive truth-auction ownership regression', () => {
 	const fixture = useStatoblastTruthAuctionFixture()
 
-	const { PRICE_PRECISION, formatStorageSlot, genesisUniverse, getMappingStorageSlot, outcomes, reportBond, repDeposit, statoblastSecurityMultiplierBps } = fixture
+	const { PRICE_PRECISION, genesisUniverse, outcomes, reportBond, repDeposit, statoblastSecurityMultiplierBps } = fixture
 
 	test('three recursive full-cap auctions preserve only backed claims', async () => {
 		const { client, mockWindow, questionData, questionId, securityPoolAddresses } = fixture
@@ -136,7 +137,7 @@ describe('Recursive truth-auction ownership regression', () => {
 		assert.ok(dilutedAttackerClaim + winnerClaim <= (await getTotalPoolHeldAttoRep(client, currentPool.securityPool)), 'aggregate immediately redeemable claims must not exceed pool-held REP')
 
 		const childRepToken = await getRepToken(client, currentPool.securityPool)
-		const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+		const reporterBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[childRepToken]: {
 				stateDiff: {

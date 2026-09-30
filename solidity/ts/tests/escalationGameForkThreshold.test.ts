@@ -8,13 +8,13 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, GENESIS_UNIVERSE, STATOBLAST_SECURITY_MULTIPLIER_BPS } from '../testSupport/simulator/utils/constants'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getNonDecisionThresholdAttoRep } from '../testSupport/simulator/utils/contracts/escalationGame'
 import { backingUnitsToAttoRep, depositToEscalationGame, getSecurityVault, redeemRepFromVault, withdrawFromEscalationGame } from '../testSupport/simulator/utils/contracts/securityPool'
 import { approveAndDepositRepToVault, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, ensureZoltarDeployed, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { approveToken, getERC20Balance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
@@ -39,8 +39,6 @@ describe('Escalation Game Fork Threshold Test', () => {
 	const { getAnvilWindowEthereum } = useIsolatedAnvilNode()
 	let mockWindow: AnvilWindowEthereum
 	let client: WriteClient
-	const genesisUniverse = 0n
-	const statoblastSecurityMultiplierBps = 20_000n
 	const currentTimestamp = BigInt(Math.floor(Date.now() / 1000))
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let securityPoolAddresses: {
@@ -51,7 +49,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let questionId: bigint
 
 	const overrideGenesisTheoreticalSupply = async (totalSupply: bigint) => {
-		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [genesisUniverse, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
+		const universeSupplySlot = keccak256(encodeAbiParameters([{ type: 'uint248' }, { type: 'uint256' }], [GENESIS_UNIVERSE, ZOLTAR_UNIVERSE_THEORETICAL_SUPPLIES_SLOT]))
 		await mockWindow.addStateOverrides({ [getZoltarAddress()]: { stateDiff: { [universeSupplySlot]: totalSupply } } })
 	}
 
@@ -62,24 +60,15 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
 
-		const questionData = {
-			title: 'Test',
-			description: '',
-			startTime: 0n,
-			endTime: questionEndDate,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const questionData = makeQuestion('Test', questionEndDate)
 		const outcomes = ['Yes', 'No']
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
 
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		await deployOriginSecurityPool(client, GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		await approveAndDepositRepToVault(client, 10_000n * 10n ** 18n, questionId)
 
-		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		securityPoolAddresses = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 	})
 
 	test('withdrawal amount scaled by actual fork threshold after decrease', async () => {
@@ -97,7 +86,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		const escalationThreshold = await getNonDecisionThresholdAttoRep(client, escalationGameAddress)
 
 		// Get current total supply of REP
-		const repToken = getRepTokenAddress(genesisUniverse)
+		const repToken = getRepTokenAddress(GENESIS_UNIVERSE)
 		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 
 		// Ensure initial fork threshold > escalationThreshold (should be twice)
@@ -224,21 +213,12 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[5])
 		const forkQuestionEnd = (await mockWindow.getTime()) + DAY
-		const forkQuestionData = {
-			title: 'Late unrelated finalized-game fork',
-			description: '',
-			startTime: 0n,
-			endTime: forkQuestionEnd,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const forkQuestionData = makeQuestion('Late unrelated finalized-game fork', forkQuestionEnd)
 		const forkQuestionId = getQuestionId(forkQuestionData, ['Yes', 'No'])
 		await createQuestion(forkInitiator, forkQuestionData, ['Yes', 'No'])
 		await mockWindow.setTime(forkQuestionEnd + 1n)
 		await approveToken(forkInitiator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-		await forkUniverse(forkInitiator, genesisUniverse, forkQuestionId)
+		await forkUniverse(forkInitiator, GENESIS_UNIVERSE, forkQuestionId)
 
 		for (let accountIndex = 1; accountIndex < TEST_ADDRESSES.length; accountIndex++) {
 			const migratorAddress = TEST_ADDRESSES[accountIndex]
@@ -247,14 +227,14 @@ describe('Escalation Game Fork Threshold Test', () => {
 			const migratorBalance = await getERC20Balance(migrator, addressString(GENESIS_REPUTATION_TOKEN), migrator.account.address)
 			if (migratorBalance === 0n) continue
 			await approveToken(migrator, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
-			await addRepToMigrationBalance(migrator, genesisUniverse, migratorBalance)
+			await addRepToMigrationBalance(migrator, GENESIS_UNIVERSE, migratorBalance)
 		}
 
 		const reducedForkThreshold = await client.readContract({
 			abi: Zoltar_Zoltar.abi,
 			address: getZoltarAddress(),
 			functionName: 'getForkThresholdAttoRep',
-			args: [genesisUniverse],
+			args: [GENESIS_UNIVERSE],
 		})
 		assert.ok(reducedForkThreshold < configuredThreshold, 'real post-fork migration should reduce the live threshold below the finalized game threshold')
 
@@ -281,7 +261,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 	test('deploys the escalation game with the tracked Zoltar fork threshold instead of the token supply', async () => {
 		const depositAmount = 100n * 10n ** 18n
-		const repToken = getRepTokenAddress(genesisUniverse)
+		const repToken = getRepTokenAddress(GENESIS_UNIVERSE)
 		const initialTotalSupply = await getTotalTheoreticalSupply(client, repToken)
 		const approximateForkThreshold = initialTotalSupply / 10n / DEFAULT_PROTOCOL_CONFIG.forkThresholdDivisor
 		const oddForkThreshold = approximateForkThreshold % 2n === 0n ? approximateForkThreshold + 1n : approximateForkThreshold
@@ -309,31 +289,22 @@ describe('Escalation Game Fork Threshold Test', () => {
 	})
 
 	test('derives newly deployed genesis pool parameters from live supply after multiple burns', async () => {
-		const initialSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
+		const initialSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [GENESIS_UNIVERSE] })
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		let expectedLiveSupply = initialSupply
 		for (const burnAmount of [initialSupply / 20n, initialSupply / 25n]) {
-			await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'burnRep', args: [genesisUniverse, burnAmount] }))
+			await writeContractAndWait(client, () => client.writeContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'burnRep', args: [GENESIS_UNIVERSE, burnAmount] }))
 			expectedLiveSupply -= burnAmount
-			assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] }), expectedLiveSupply, 'each burn must reduce the authoritative live universe supply exactly once')
+			assert.strictEqual(await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [GENESIS_UNIVERSE] }), expectedLiveSupply, 'each burn must reduce the authoritative live universe supply exactly once')
 		}
-		const liveSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [genesisUniverse] })
+		const liveSupply = await client.readContract({ abi: Zoltar_Zoltar.abi, address: getZoltarAddress(), functionName: 'getUniverseTheoreticalSupplyAttoRep', args: [GENESIS_UNIVERSE] })
 		assert.strictEqual(liveSupply, expectedLiveSupply, 'the deployed pool must observe the complete burn sequence')
-		const nextQuestionData = {
-			title: 'Pool after multiple genesis REP burns',
-			description: '',
-			startTime: 0n,
-			endTime: questionEndDate + DAY,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const nextQuestionData = makeQuestion('Pool after multiple genesis REP burns', questionEndDate + DAY)
 		const nextOutcomes = ['Yes', 'No']
 		const nextQuestionId = getQuestionId(nextQuestionData, nextOutcomes)
 		await createQuestion(client, nextQuestionData, nextOutcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, nextQuestionId, statoblastSecurityMultiplierBps)
-		const nextPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, nextQuestionId, statoblastSecurityMultiplierBps).securityPool
+		await deployOriginSecurityPool(client, GENESIS_UNIVERSE, nextQuestionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		const nextPool = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, nextQuestionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).securityPool
 		const expectedInitialDeposit = liveSupply / 10_000_000n < 10n ** 18n ? 10n ** 18n : liveSupply / 10_000_000n
 
 		assert.strictEqual(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: nextPool, functionName: 'initialEscalationGameDepositAttoRep' }), expectedInitialDeposit, 'initial escalation deposit should use live Zoltar supply')
@@ -351,7 +322,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 			abi: Zoltar_Zoltar.abi,
 			address: getZoltarAddress(),
 			functionName: 'getNonDecisionThresholdAttoRep',
-			args: [genesisUniverse],
+			args: [GENESIS_UNIVERSE],
 		})
 		const expectedThreshold = (forkThresholdAttoRep + 1n) / 2n
 		const twoOutcomeTotal = 2n * nonDecisionThresholdAttoRep

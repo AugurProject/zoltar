@@ -1,9 +1,10 @@
 import { beforeAll, beforeEach, describe, test } from 'bun:test'
-import { decodeEventLog, encodeDeployData, encodeFunctionData, type Abi, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
+import { initializeForkCarrySnapshotAbi, initializeForkCarrySnapshotWithResolutionBalancesAbi, initializeForkCarrySnapshotFromSourceAbi, initializeGameForkCarrySnapshotAbi } from './carrySnapshotAbis'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, type Address, type Hex, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { BURN_ADDRESS, DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { BURN_ADDRESS, DAY, TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { contractExists, requireAddress, requireArray, requireBigInt, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { QuestionOutcome } from '../testSupport/simulator/types/types'
@@ -30,72 +31,9 @@ import { replayZoltarEvents, type ReplayLog } from './eventReplay/eventReplayMod
 
 const ESCALATION_TIME_LENGTH = 4233600n
 const FRESH_FORK_RESPONSE_PERIOD = 3n * 24n * 60n * 60n
-const MAX_UINT256 = 2n ** 256n - 1n
 const NON_DECISION_STATE_NONE = 0n
 const NON_DECISION_STATE_LOCAL = 1n
 const NON_DECISION_STATE_INHERITED_THRESHOLD_TIE = 2n
-const initializeForkCarrySnapshotAbi: Abi = [
-	{
-		inputs: [
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
-			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
-		],
-		name: 'initializeForkCarrySnapshot',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-]
-const initializeForkCarrySnapshotWithResolutionBalancesAbi: Abi = [
-	{
-		inputs: [
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
-			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
-			{ name: 'snapshotResolutionBalances', type: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
-		],
-		name: 'initializeForkCarrySnapshotWithResolutionBalances',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-]
-const initializeForkCarrySnapshotFromSourceAbi: Abi = [
-	{
-		inputs: [
-			{ name: 'sourceGame', type: 'address' },
-			{ name: 'snapshotId', type: 'bytes32' },
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
-			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
-		],
-		name: 'initializeForkCarrySnapshotFromSource',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-]
-const initializeGameForkCarrySnapshotAbi: Abi = [
-	{
-		inputs: [
-			{ name: 'sourceGame', type: 'address' },
-			{ name: 'snapshotId', type: 'bytes32' },
-			{ name: 'snapshotPeaksInput', type: 'bytes32[64][3]' },
-			{ name: 'snapshotLeafCountsInput', type: 'uint256[3]' },
-			{ name: 'snapshotCarryTotals', type: 'uint256[3]' },
-			{ name: 'snapshotResolutionBalances', type: 'uint256[3]' },
-			{ name: 'snapshotNullifierRoots', type: 'bytes32[3]' },
-		],
-		name: 'initializeForkCarrySnapshotWithResolutionBalances',
-		outputs: [],
-		stateMutability: 'nonpayable',
-		type: 'function',
-	},
-]
 
 describe('Escalation Game Test Suite', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()

@@ -1,4 +1,5 @@
-import { decodeEventLog, encodeAbiParameters, encodeDeployData, encodeFunctionData, keccak256, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, encodeDeployData, encodeFunctionData, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { formatStorageSlot, getUintMappingStorageSlot } from '../testSupport/storage'
 import { OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, getOpenOracleGameTuple, getOpenOracleHelperTuple, hashOpenOracleStatePreimage, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import {
 	DEFAULT_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS,
@@ -30,7 +31,7 @@ import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilN
 import assert from '../testSupport/simulator/utils/assert'
 import { addressString, dateToBigintSeconds } from '../testSupport/simulator/utils/bigint'
 import { WriteClient, createWriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS } from '../testSupport/simulator/utils/constants'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, WETH_ADDRESS, GENESIS_UNIVERSE, STATOBLAST_SECURITY_MULTIPLIER_BPS } from '../testSupport/simulator/utils/constants'
 import { applyLibraries, deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { createCompleteSet, depositRepToVault, depositToEscalationGame, getSecurityVault, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, getTotalClaimableVaultFeesAttoEth } from '../testSupport/simulator/utils/contracts/securityPool'
 import {
@@ -64,7 +65,7 @@ import {
 } from '../testSupport/simulator/utils/contracts/statoblast'
 import { approveAndDepositRepToVault, handleOracleReporting, manipulatePriceOracle } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { approveToken, getERC20Balance, getETHBalance, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import {
@@ -174,14 +175,6 @@ function encodeOracleCoordinatorDeployData(args: OracleCoordinatorConstructorArg
 	})
 }
 
-function formatStorageSlot(slot: bigint) {
-	return `0x${slot.toString(16).padStart(64, '0')}`
-}
-
-function getMappingStorageSlot(key: bigint, mappingSlot: bigint) {
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [key, mappingSlot])))
-}
-
 const getOpenOracleHeldBalance = async (client: WriteClient, holder: Address, token: Address) =>
 	await client.readContract({
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
@@ -200,8 +193,6 @@ describe('Price Oracle Refund Security Tests', () => {
 	const questionEndDate = currentTimestamp + 365n * DAY
 	let priceOracle: Address
 	let questionId: bigint
-	const genesisUniverse = 0n
-	const statoblastSecurityMultiplierBps = 20_000n
 	const EXTRA_INFO = 'test question!'
 	let securityPool: Address
 	const getOracleCoordinatorConstructorArgs = (): OracleCoordinatorConstructorArgs => [
@@ -246,7 +237,7 @@ describe('Price Oracle Refund Security Tests', () => {
 			...eventState.latest,
 			game: { ...eventState.latest.game, callbackGasLimit: 1n },
 		}
-		const gameSlot = getMappingStorageSlot(pendingReportId, OPEN_ORACLE_GAME_MAPPING_SLOT)
+		const gameSlot = getUintMappingStorageSlot(pendingReportId, OPEN_ORACLE_GAME_MAPPING_SLOT)
 		await mockWindow.addStateOverrides({
 			[openOracle]: {
 				stateDiff: {
@@ -271,22 +262,13 @@ describe('Price Oracle Refund Security Tests', () => {
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
 		// Create the question on-chain first
-		const questionData = {
-			title: EXTRA_INFO,
-			description: '',
-			startTime: 0n,
-			endTime: questionEndDate,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const questionData = makeQuestion(EXTRA_INFO, questionEndDate)
 		const outcomes = ['Yes', 'No']
 		await createQuestion(client, questionData, outcomes)
 		questionId = getQuestionId(questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		await approveAndDepositRepToVault(client, repDeposit, questionId, statoblastSecurityMultiplierBps * 2n)
-		const addresses = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps)
+		await deployOriginSecurityPool(client, GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		await approveAndDepositRepToVault(client, repDeposit, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS * 2n)
+		const addresses = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
 		priceOracle = addresses.openOraclePriceCoordinator
 		securityPool = addresses.securityPool
 	})
@@ -1558,7 +1540,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				numReports: MAX_OPEN_ORACLE_REPORT_COUNT,
 			},
 		}
-		const gameSlot = getMappingStorageSlot(reportId, OPEN_ORACLE_GAME_MAPPING_SLOT)
+		const gameSlot = getUintMappingStorageSlot(reportId, OPEN_ORACLE_GAME_MAPPING_SLOT)
 		await mockWindow.addStateOverrides({
 			[getInfraContractAddresses().openOracle]: {
 				stateDiff: {
@@ -1741,7 +1723,7 @@ describe('Price Oracle Refund Security Tests', () => {
 
 	test('capacity and missing-game guards expose exact reasons without mutating pool or vault state', async () => {
 		await manipulatePriceOracle(client, mockWindow, priceOracle)
-		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
+		const shareToken = getSecurityPoolAddresses(addressString(0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).shareToken
 		const tokenIds = await Promise.all(
 			[0n, 1n, 2n].map(
 				async outcome =>
@@ -1749,7 +1731,7 @@ describe('Price Oracle Refund Security Tests', () => {
 						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						address: shareToken,
 						functionName: 'getTokenId',
-						args: [genesisUniverse, outcome],
+						args: [GENESIS_UNIVERSE, outcome],
 					}),
 			),
 		)
@@ -1856,7 +1838,7 @@ describe('Price Oracle Refund Security Tests', () => {
 				bytecode: `0x${rejectingEthReceiverArtifact.evm.bytecode.object}`,
 			}),
 		)
-		const shareToken = getSecurityPoolAddresses(addressString(0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).shareToken
+		const shareToken = getSecurityPoolAddresses(addressString(0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).shareToken
 		await executeThroughRejectingReceiver(
 			receiver,
 			securityPool,
@@ -1874,7 +1856,7 @@ describe('Price Oracle Refund Security Tests', () => {
 						abi: statoblast_tokens_ShareToken_ShareToken.abi,
 						address: shareToken,
 						functionName: 'getTokenId',
-						args: [genesisUniverse, outcome],
+						args: [GENESIS_UNIVERSE, outcome],
 					}),
 			),
 		)

@@ -1,4 +1,5 @@
 import { beforeEach, describe, test } from 'bun:test'
+import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/auction'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import assert from '../../testSupport/simulator/utils/assert'
@@ -26,7 +27,7 @@ import {
 	updateVaultFees,
 } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, getMigratedAttoRep, getQuestionOutcome, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { balanceOfShares, getEthRaiseCapAttoEth, getQuestionEndDate, migrateShares, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { balanceOfShares, getQuestionEndDate, migrateShares, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveAndDepositRepToVault, manipulatePriceOracle, setVaultCapacityFixture, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { approximatelyEqual, ensureDefined, strictEqualTypeSafe } from '../../testSupport/simulator/utils/testUtils'

@@ -4,6 +4,18 @@ import { ReadClient, WriteClient, writeContractAndWait } from '../clients'
 import { getInfraContractAddresses } from './deployStatoblast'
 import { CONTRACT_PAGE_SIZE } from './pagination'
 
+/** Categorical test question with empty metadata that opens immediately and ends at `endTime`. */
+export const makeQuestion = (title: string, endTime = 0n): ZoltarQuestionData => ({
+	title,
+	description: '',
+	startTime: 0n,
+	endTime,
+	numTicks: 0n,
+	displayValueMin: 0n,
+	displayValueMax: 0n,
+	answerUnit: '',
+})
+
 export const getOutcomeLabels = async (client: ReadClient, questionId: bigint) => {
 	let currentIndex = 0n
 	const pages: string[] = []

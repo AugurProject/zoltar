@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, test } from 'bun:test'
 import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { setupTestAccounts, sortStringArrayByKeccak } from '../testSupport/simulator/utils/utilities'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
 import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -27,8 +27,6 @@ import {
 	isScalarParityMalformedOutcomeIndex,
 } from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
 import type { ScalarParityQuestion } from '@zoltar/zoltar-shared/testing/scalarOutcomeParityFixtures'
-
-const MAX_UINT256 = 2n ** 256n - 1n
 const SCALAR_ENCODING_FUZZ_SAMPLE_COUNT = 12
 const SCALAR_ENCODING_FUZZ_STATE_MASK = (1n << 128n) - 1n
 const SCALAR_RESERVED_BITS_MASK = ((1n << 15n) - 1n) << 240n

@@ -1,4 +1,5 @@
 import { statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import {
 	createCompleteSet,
 	redeemCompleteSet,
@@ -22,7 +23,7 @@ import {
 	updateVaultFees,
 } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { isIgnorableLogDecodeError } from '../logDecodeErrors'
-import { getTotalRepPurchasedAttoRep } from '../../testSupport/simulator/utils/contracts/auction'
+import { getTotalRepPurchasedAttoRep, getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/auction'
 import { forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
 import {
 	claimAuctionProceeds,
@@ -42,7 +43,7 @@ import {
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
 import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
-import { getEthRaiseCapAttoEth, getQuestionEndDate, participateAuction, migrateShares } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { getQuestionEndDate, participateAuction, migrateShares } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { deployOriginSecurityPool, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
@@ -84,23 +85,7 @@ describe('Statoblast: truth auction', () => {
 	if (feeEpochStorage === undefined) throw new Error('SecurityPool storage layout is missing feeEpochEndTime')
 	const feeEpochEndTimeStorageSlot = BigInt(feeEpochStorage.slot)
 
-	const {
-		formatStorageSlot,
-		getMappingStorageSlot,
-		getMigrationProxyAddressAbi,
-		PRICE_PRECISION,
-		reportBond,
-		repDeposit,
-		genesisUniverse,
-		statoblastSecurityMultiplierBps,
-		outcomes,
-		triggerExternalForkForSecurityPool,
-		setupStartedTruthAuction,
-		setupTruthAuctionWithMixedBids,
-		setupTruthAuctionWithTwoWinningBids,
-		setupFinalizedTruthAuctionWithMixedBids,
-		getYesChildPool,
-	} = fixture
+	const { PRICE_PRECISION, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, triggerExternalForkForSecurityPool, setupStartedTruthAuction, setupTruthAuctionWithMixedBids, setupTruthAuctionWithTwoWinningBids, setupFinalizedTruthAuctionWithMixedBids, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastTruthAuctionFixture['mockWindow']
 
@@ -182,7 +167,7 @@ describe('Statoblast: truth auction', () => {
 
 	const finalizeChildQuestionAsYes = async (childSecurityPool: typeof securityPoolAddresses) => {
 		const childRepToken = await getRepToken(client, childSecurityPool.securityPool)
-		const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+		const reporterBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[childRepToken]: {
 				stateDiff: {
@@ -225,7 +210,7 @@ describe('Statoblast: truth auction', () => {
 			await mockWindow.addStateOverrides({
 				[getInfraContractAddresses().securityPoolForker]: {
 					stateDiff: {
-						[formatStorageSlot(getMappingStorageSlot(securityPoolAddresses.securityPool, 13n))]: forcedAuctionedBadDebtAttoEth,
+						[formatStorageSlot(getAddressMappingStorageSlot(securityPoolAddresses.securityPool, 13n))]: forcedAuctionedBadDebtAttoEth,
 					},
 				},
 			})
@@ -600,7 +585,7 @@ describe('Statoblast: truth auction', () => {
 			await mockWindow.advanceTime(DAY)
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
 			const childRep = await getRepToken(client, yesSecurityPool.securityPool)
-			await mockWindow.addStateOverrides({ [childRep]: { stateDiff: { [formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))]: repDeposit } } })
+			await mockWindow.addStateOverrides({ [childRep]: { stateDiff: { [formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))]: repDeposit } } })
 			await approveToken(client, childRep, getInfraContractAddresses().openOracle)
 			await manipulatePriceOracle(client, mockWindow, yesSecurityPool.openOraclePriceCoordinator)
 			await updateVaultFees(client, yesSecurityPool.securityPool, client.account.address)
@@ -611,7 +596,7 @@ describe('Statoblast: truth auction', () => {
 			const recover = (maximum: bigint) => client.writeContract({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, address: getInfraContractAddresses().securityPoolForker, functionName: 'takeOverUnassignedCommitment', args: [yesSecurityPool.securityPool, maximum] })
 			await assert.rejects(recover(before.underwritingLimitAttoEth - 1n), /Commitment exceeds authorization/)
 			const poolRepBefore = await getERC20Balance(client, childRep, yesSecurityPool.securityPool)
-			const poolBalanceSlot = formatStorageSlot(getMappingStorageSlot(yesSecurityPool.securityPool, 0n))
+			const poolBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(yesSecurityPool.securityPool, 0n))
 			await mockWindow.addStateOverrides({ [childRep]: { stateDiff: { [poolBalanceSlot]: 0n } } })
 			await assert.rejects(recover(before.underwritingLimitAttoEth), /Vault backing insufficient/)
 			strictEqualTypeSafe((await getUnassignedPosition(yesSecurityPool.securityPool)).underwritingLimitAttoEth, before.underwritingLimitAttoEth, 'failed health check preserves the entire residual commitment')
@@ -654,7 +639,7 @@ describe('Statoblast: truth auction', () => {
 			const unassignedPosition = await getUnassignedPosition(yesSecurityPool.securityPool)
 			assert.ok(unassignedPosition.underwritingLimitAttoEth > 0n, 'the health-guard regression requires unassigned capacity')
 
-			const forkDataStorageBase = getMappingStorageSlot(yesSecurityPool.securityPool, 0n)
+			const forkDataStorageBase = getAddressMappingStorageSlot(yesSecurityPool.securityPool, 0n)
 			await mockWindow.addStateOverrides({
 				[getInfraContractAddresses().securityPoolForker]: {
 					stateDiff: {
@@ -991,7 +976,7 @@ describe('Statoblast: truth auction', () => {
 			await triggerExternalForkForSecurityPool(undefined, 'non-divisible fully utilized fork source')
 			const parentSettlementCollateralAtForkAttoEth = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
 			const fullyUtilizedUnderwritingLimitAttoEth = (parentSettlementCollateralAtForkAttoEth * statoblastSecurityMultiplierBps) / 10_000n
-			const parentVaultSlot = getMappingStorageSlot(client.account.address, 16n)
+			const parentVaultSlot = getAddressMappingStorageSlot(client.account.address, 16n)
 			await mockWindow.addStateOverrides({
 				[securityPoolAddresses.securityPool]: {
 					stateDiff: {
@@ -1375,13 +1360,13 @@ describe('Statoblast: truth auction', () => {
 
 			const securityPoolForkerAddress = getInfraContractAddresses().securityPoolForker
 			const firstProxyAddress = await client.readContract({
-				abi: getMigrationProxyAddressAbi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'getMigrationProxyAddress',
 				address: securityPoolForkerAddress,
 				args: [securityPoolAddresses.securityPool],
 			})
 			const secondProxyAddress = await client.readContract({
-				abi: getMigrationProxyAddressAbi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'getMigrationProxyAddress',
 				address: securityPoolForkerAddress,
 				args: [secondSecurityPoolAddresses.securityPool],
@@ -1398,7 +1383,7 @@ describe('Statoblast: truth auction', () => {
 			assert.ok(await contractExists(client, secondProxyAddress), 'second proxy should deploy when the second parent pool initiates its fork')
 			strictEqualTypeSafe(
 				await client.readContract({
-					abi: getMigrationProxyAddressAbi,
+					abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 					functionName: 'getMigrationProxyAddress',
 					address: securityPoolForkerAddress,
 					args: [securityPoolAddresses.securityPool],
@@ -1408,7 +1393,7 @@ describe('Statoblast: truth auction', () => {
 			)
 			strictEqualTypeSafe(
 				await client.readContract({
-					abi: getMigrationProxyAddressAbi,
+					abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 					functionName: 'getMigrationProxyAddress',
 					address: securityPoolForkerAddress,
 					args: [secondSecurityPoolAddresses.securityPool],
@@ -1431,7 +1416,7 @@ describe('Statoblast: truth auction', () => {
 			await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 			const securityPoolForkerAddress = getInfraContractAddresses().securityPoolForker
 			const migrationProxyAddress = await client.readContract({
-				abi: getMigrationProxyAddressAbi,
+				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'getMigrationProxyAddress',
 				address: securityPoolForkerAddress,
 				args: [securityPoolAddresses.securityPool],
@@ -1605,7 +1590,7 @@ describe('Statoblast: truth auction', () => {
 			await finalizeTruthAuction(client, yesSecurityPool.securityPool)
 			const forkData = await getSecurityPoolForkerForkData(client, yesSecurityPool.securityPool)
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
-			const clientChildRepBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+			const clientChildRepBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[childRepToken]: {
 					stateDiff: {
@@ -1630,7 +1615,7 @@ describe('Statoblast: truth auction', () => {
 			const auctionFeesAtIndexOne = auctionedUnderwritingLimitAttoEth / PRICE_PRECISION
 			const migratedFeesAtIndexOne = migratedUnderwritingLimitAttoEth / PRICE_PRECISION
 			const aggregateOnlyReserveAttoEth = PRICE_PRECISION
-			const migratedVaultFeeIndexSlot = getMappingStorageSlot(client.account.address, 16n) + 3n
+			const migratedVaultFeeIndexSlot = getAddressMappingStorageSlot(client.account.address, 16n) + 3n
 			const feeEpochEndTime = (await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: yesSecurityPool.securityPool, functionName: 'getPoolAccountingSnapshot', args: [] })).lastUpdatedFeeAccumulator
 			await mockWindow.addStateOverrides({
 				[yesSecurityPool.securityPool]: {
@@ -2111,7 +2096,7 @@ describe('Statoblast: truth auction', () => {
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
 			const supplyBasedMinimumDeposit = (await getTotalTheoreticalSupply(client, childRepToken)) / 100_000n
 			const freshDeposit = supplyBasedMinimumDeposit > 10n * 10n ** 18n ? supplyBasedMinimumDeposit : 10n * 10n ** 18n
-			const freshVaultBalanceSlot = formatStorageSlot(getMappingStorageSlot(freshVault.account.address, 0n))
+			const freshVaultBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(freshVault.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[childRepToken]: {
 					stateDiff: {
@@ -2183,7 +2168,7 @@ describe('Statoblast: truth auction', () => {
 			})
 			strictEqualTypeSafe(snapshotBeforeClaim.feeEligibleUnderwritingLimitAttoEth, snapshotBeforeClaim.totalUnderwritingLimitAttoEth, 'sold auction capacity should already be fee-eligible before its winner claims')
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
-			const reporterBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+			const reporterBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[childRepToken]: {
 					stateDiff: {
@@ -2386,7 +2371,7 @@ describe('Statoblast: truth auction', () => {
 			const settlementCaller = createWriteClient(mockWindow, TEST_ADDRESSES[5])
 			const openInterestHolder = createWriteClient(mockWindow, TEST_ADDRESSES[2])
 			const passiveRepHolder = createWriteClient(mockWindow, TEST_ADDRESSES[6])
-			const liquidatorGenesisRepBalanceSlot = formatStorageSlot(getMappingStorageSlot(liquidatorClient.account.address, 0n))
+			const liquidatorGenesisRepBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(liquidatorClient.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[addressString(GENESIS_REPUTATION_TOKEN)]: {
 					stateDiff: {
@@ -2422,7 +2407,7 @@ describe('Statoblast: truth auction', () => {
 			const expectedEthToBuy = await getEthRaiseCapAttoEth(client, yesSecurityPool.truthAuction)
 			const winningTick = await participateAuction(client, yesSecurityPool.truthAuction, repAtFork / 4n, expectedEthToBuy)
 			const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
-			const liquidatorChildRepBalanceSlot = formatStorageSlot(getMappingStorageSlot(liquidatorClient.account.address, 0n))
+			const liquidatorChildRepBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(liquidatorClient.account.address, 0n))
 			const liquidateClaimableChildVault = async (amount: bigint) => {
 				await mockWindow.addStateOverrides({
 					[childRepToken]: {
