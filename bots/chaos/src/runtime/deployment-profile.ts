@@ -1,6 +1,7 @@
 import type { Address, Hash } from '@zoltar/bot-shared/ethereum'
 import { requestTransport } from '@zoltar/bot-shared/ethereum/rpc-transport'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
+import { rpcQuorumDescription } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import type { OperatorSettings } from '../config/settings.ts'
 import { deploymentFactoryId } from '../config/execution-profile.ts'
 import { resetRuntimeStateForProfile, type RuntimeState } from '../state/operator-state.ts'
@@ -40,7 +41,7 @@ function boundCompletionEvidence(state: RuntimeState, wallet: Address | undefine
 export async function verifyRetirementCompletionFinality(settings: OperatorSettings, evidence: BoundRetirementCompletionEvidence) {
 	if (settings.connectivity === undefined) throw new Error('Retirement completion cannot authorize deployment replacement without configured RPC connectivity')
 	const rpcUrls = chaosReadEndpoints(settings)
-	if (new Set(rpcUrls.map(rpcUrl => new URL(rpcUrl).origin)).size < settings.connectivity.rpcQuorum) throw new Error('Retirement completion requires at least two independent RPC readers')
+	if (new Set(rpcUrls.map(rpcUrl => new URL(rpcUrl).origin)).size < settings.connectivity.rpcQuorum) throw new Error(`Retirement completion requires at least ${rpcQuorumDescription(settings.connectivity.rpcQuorum)}`)
 	const pool = createChaosReadPool(settings)
 	const observations = chaosReadClients(settings, pool)
 	const finalized = await confirmCanonicalReceiptFinality(

@@ -40,7 +40,7 @@ jobs:
       - name: Read canonical UI artifact metadata
         id: projects
         run: bun ./tooling/repo/query-projects.mts --github-output
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: domain-production-ui
           path: ${{ steps.projects.outputs.ui_artifact_outputs }}
@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-ci
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: domain-production-ui
           path: ui
@@ -75,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [auction-boot, pool-recovery, reporting-migration, deployment-auction]
+        scenario: [auction-boot, pool-recovery, reporting-migration, deployment-auction, ended-pool-exit, liquidation-distance]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,7 +96,7 @@ jobs:
         if: steps.scope.outputs.core == 'true'
         with:
           build-inputs: ${{ inputs.build-inputs }}
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         if: steps.scope.outputs.core == 'true'
         with:
           name: domain-production-ui

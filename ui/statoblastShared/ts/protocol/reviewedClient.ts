@@ -1,7 +1,8 @@
 import * as transactionCopy from '@zoltar/ui-core-shared/copy/transaction.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getTransactionReviewSignal, isTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
-import { formatUnits, getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { getAddress, encodeFunctionData, maxUint256 } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { TransactionPlanStep, TransactionRequestPreview, WriteClient } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
 import { getErrorMessage, isRecoverableContractReadError, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -20,7 +21,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 			(preview.tokenFunding ?? []).map(async funding => {
 				try {
 					const [symbol, decimals] = await Promise.all([client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: funding.tokenAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
-					return { amount: `${formatUnits(funding.amount, Number(decimals))} ${symbol}`, limit: funding.limit === undefined ? undefined : `${formatUnits(funding.limit, Number(decimals))} ${symbol}` }
+					return { amount: funding.amount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
 				} catch (error) {
 					throw new Error('Could not calculate report funding amounts. Retry before sending any transactions.', { cause: error })
 				}
@@ -40,8 +41,8 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		let label = commonCopy.no
 		if (outcome === 0 || outcome === 0n) label = commonCopy.invalid
 		if (outcome === 1 || outcome === 1n) label = commonCopy.yes
-		details.title = preview.reviewTitle ?? transactionCopy.reportingAction(label, formatUnits(amount, 18))
-		details.amount = preview.reviewAmount ?? `${formatUnits(amount, 18)} REP`
+		details.title = preview.reviewTitle ?? transactionCopy.reportingAction(label, formatCurrencyBalance(amount))
+		details.amount = preview.reviewAmount ?? formatCurrencyBalanceWithUnit(amount, commonCopy.rep)
 		details.paidFrom = preview.functionName === 'depositToEscalationGame' ? transactionCopy.vaultBackedRep : transactionCopy.walletRep
 	}
 	if (preview.functionName === 'settle') details.title = transactionCopy.settleReportNumber(String(preview.args?.[0] ?? ''))
@@ -60,12 +61,13 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 	details.amount = `${amount} token base units`
 	try {
 		const [symbol, decimals] = await Promise.all([client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'symbol' }), client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'decimals' })])
-		details.title = transactionCopy.approveTokenAmount(`${amount === maxUint256 ? commonCopy.max : formatUnits(amount, Number(decimals))} ${symbol}`)
-		details.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, Number(decimals))} ${symbol}`
+		const formatApprovalAmount = (value: bigint) => (value === maxUint256 ? commonCopy.max : formatCurrencyBalance(value, Number(decimals)))
+		details.title = commonCopy.formatApproveTokenAmount(formatApprovalAmount(amount), symbol)
+		details.amount = formatValueWithUnit(formatApprovalAmount(amount), symbol)
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
 			details.approval = { requiredAmount: requiredApprovalAmount, recommendedAmount: amount > requiredApprovalAmount ? amount : undefined, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
-			details.amount = `${requiredApprovalAmount === maxUint256 ? commonCopy.max : formatUnits(requiredApprovalAmount, Number(decimals))} ${symbol}`
+			details.amount = formatValueWithUnit(formatApprovalAmount(requiredApprovalAmount), symbol)
 		}
 	} catch (error) {
 		throw new Error('Could not read token details for approval. Retry before sending any transactions.', { cause: error })

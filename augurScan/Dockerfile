@@ -57,6 +57,7 @@ COPY --from=dependencies /workspace/node_modules ./node_modules
 COPY package.json bun.lock ./
 COPY augurScan/package.json ./augurScan/
 COPY shared/core/package.json ./shared/core/
+COPY shared/statoblast/package.json ./shared/statoblast/
 COPY --from=dependencies /workspace/augurScan/node_modules ./augurScan/node_modules
 COPY --from=dependencies /workspace/shared/core/node_modules ./shared/core/node_modules
 COPY augurScan/config ./augurScan/config
@@ -72,6 +73,8 @@ COPY shared/core/ts/evm/ ./shared/core/ts/evm/
 COPY shared/core/ts/errors/ ./shared/core/ts/errors/
 COPY shared/core/ts/math/ ./shared/core/ts/math/
 COPY shared/core/ts/monitoring/ ./shared/core/ts/monitoring/
+COPY shared/core/ts/deployment/uniswapDeployments.ts ./shared/core/ts/deployment/uniswapDeployments.ts
+COPY shared/statoblast/ts/statoblast/liquidation.ts ./shared/statoblast/ts/statoblast/liquidation.ts
 RUN mkdir -p /workspace/augurScan/logs /var/log/augurscan && chown -R bun:bun /workspace/augurScan/logs /var/log/augurscan
 USER bun
 EXPOSE 3000

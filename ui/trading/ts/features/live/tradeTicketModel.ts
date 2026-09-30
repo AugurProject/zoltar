@@ -105,13 +105,6 @@ function estimateSell(market: LiveMarket, side: Side, requestedShares: bigint, s
 	}
 }
 
-/** Plain decimal text for an input field: no digit grouping, trailing zeros trimmed. */
-export function formatAmountInput(value: bigint, decimals: number) {
-	const base = 10n ** BigInt(decimals)
-	const fraction = (value % base).toString().padStart(decimals, '0').replace(/0+$/, '')
-	return fraction === '' ? (value / base).toString() : `${(value / base).toString()}.${fraction}`
-}
-
 function amountDecimals(mode: TradeMode) {
 	return mode === 'entry' ? 18 : SHARE_QUANTITY_DECIMALS
 }

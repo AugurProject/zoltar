@@ -104,9 +104,9 @@ const expectedCanonicalManifest = [
 	'SecurityPoolForkEventEmitter:contracts/statoblast/SecurityPoolEventEmitter.sol:delegate-module',
 	'OpenOraclePriceCoordinator:contracts/statoblast/OpenOraclePriceCoordinator.sol:dynamic-endpoint',
 	'LiquidationApprovalRegistry:contracts/statoblast/LiquidationApprovalRegistry.sol:dynamic-endpoint',
-	'PriceOracleManagerAndOperatorQueuerFactory:contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol:static-endpoint',
-	'LiquidationApprovalRegistryDeployer:contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol:deployment-helper',
-	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/PriceOracleManagerAndOperatorQueuerFactory.sol:deployment-helper',
+	'OpenOraclePriceCoordinatorFactory:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:static-endpoint',
+	'LiquidationApprovalRegistryDeployer:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:deployment-helper',
+	'PriceCoordinatorDeploymentWorker:contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol:deployment-helper',
 	'SecurityPoolForker:contracts/statoblast/SecurityPoolForker.sol:static-endpoint',
 	'SecurityPoolForkerVaultMigrationDelegate:contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol:delegate-module',
 	'EscalationGameForker:contracts/statoblast/EscalationGameForker.sol:delegate-module',
@@ -382,7 +382,7 @@ describe('contract operation classification', () => {
 	test('keeps deployment helpers, direct delegates, orphan factories, and migration proxies out of random work', () => {
 		const helperContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'deployment-helper' || entry.exposure === 'fallback-module' || entry.exposure === 'migration-proxy').map(entry => entry.contract))
 		const directDelegateContracts = new Set(CANONICAL_MUTATING_CONTRACT_MANIFEST.filter(entry => entry.exposure === 'delegate-module').map(entry => entry.contract))
-		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'PriceOracleManagerAndOperatorQueuerFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
+		const orphanFactoryContracts = new Set(['EscalationGameFactory', 'OpenOraclePriceCoordinatorFactory', 'ShareTokenFactory', 'UniformPriceDualCapBatchAuctionFactory'])
 		for (const entry of MUTATING_CONTRACT_SURFACE) {
 			if (helperContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('role-restricted')
 			if (directDelegateContracts.has(entry.contract) || orphanFactoryContracts.has(entry.contract)) expect(entry.classification, `${entry.contract}.${entry.method}`).toBe('excluded-dangerous')

@@ -1,5 +1,5 @@
 import { ConnectivityDegradedError, operationalFailureDisposition } from './resilience.ts'
-import { rpcQuorumDescription, rpcQuorumRequirement } from './rpc-quorum-policy.ts'
+import { rpcQuorumDescription, type RpcQuorumRequirement } from './rpc-quorum-policy.ts'
 
 function canonical(value: unknown): string {
 	if (typeof value === 'bigint') return `bigint:${value.toString()}`
@@ -15,7 +15,7 @@ function canonical(value: unknown): string {
 	throw new Error(`Unsupported quorum value type: ${typeof value}`)
 }
 
-export function quorumValue<T>(label: string, observations: readonly { endpoint: string; value: T }[], requirement = rpcQuorumRequirement()) {
+export function quorumValue<T>(label: string, observations: readonly { endpoint: string; value: T }[], requirement: RpcQuorumRequirement) {
 	const uniqueEndpoints = new Set(observations.map(observation => observation.endpoint))
 	if (uniqueEndpoints.size < requirement) throw new Error(`${label} requires at least ${rpcQuorumDescription(requirement)}`)
 	const first = observations[0]
@@ -32,7 +32,7 @@ export function availableSettledValues<T>(settled: readonly PromiseSettledResult
 	return settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []))
 }
 
-export async function settledQuorumValue<T>(label: string, observations: readonly Promise<{ endpoint: string; value: T }>[], requirement = rpcQuorumRequirement()) {
+export async function settledQuorumValue<T>(label: string, observations: readonly Promise<{ endpoint: string; value: T }>[], requirement: RpcQuorumRequirement) {
 	const settled = await Promise.allSettled(observations)
 	const available = availableSettledValues(settled)
 	if (available.length < requirement) {

@@ -9,8 +9,6 @@ import { type VaultStateIndex, refreshVaultStateIndex } from './vault-state-inde
 
 export type ReadClient = PublicClient<Transport, Chain>
 
-const MULTICALL3_ADDRESS = getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108')
-
 export type PoolMonitorIndex = {
 	operatorVaultsByPool: Map<string, VaultPosition>
 	vaultsByPool: Map<string, VaultStateIndex<VaultPosition>>
@@ -43,13 +41,11 @@ function requireVaultPositionTuple(value: unknown) {
 	return [requireBigint(value[0], 'vault backing units'), requireBigint(value[1], 'vault capacity ownership'), requireBigint(value[2], 'vault claimable fees')] as const
 }
 
-export async function loadVaultPage(client: ReadClient, pool: Address, escalationGame: Address, vaultAddresses: readonly Address[], blockNumber: bigint) {
+export async function loadVaultPage(client: ReadClient, multicall3: Address, pool: Address, escalationGame: Address, vaultAddresses: readonly Address[], blockNumber: bigint) {
 	const [rawVaults, badDebt, disputeStake] = await Promise.all([
-		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: MULTICALL3_ADDRESS }),
-		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: MULTICALL3_ADDRESS }),
-		escalationGame === zeroAddress
-			? vaultAddresses.map(() => 0n)
-			: client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: MULTICALL3_ADDRESS }),
+		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'securityVaults' as const })), multicallAddress: multicall3 }),
+		client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: securityPoolAbi, address: pool, args: [vault], functionName: 'vaultBadDebtAttoEth' as const })), multicallAddress: multicall3 }),
+		escalationGame === zeroAddress ? vaultAddresses.map(() => 0n) : client.multicall({ allowFailure: false, blockNumber, contracts: vaultAddresses.map(vault => ({ abi: escalationGameAbi, address: escalationGame, args: [vault], functionName: 'disputeStakedRepByVaultAttoRep' as const })), multicallAddress: multicall3 }),
 	])
 	return vaultAddresses.map((address, index) => {
 		const raw = rawVaults[index]
@@ -85,6 +81,7 @@ export function currentVaultPositionForPoolAccounting(vault: VaultPosition, tota
 
 export async function loadCurrentVaults(
 	client: ReadClient,
+	multicall3: Address,
 	index: VaultStateIndex<VaultPosition>,
 	pool: Address,
 	escalationGame: Address,
@@ -107,7 +104,7 @@ export async function loadCurrentVaults(
 			const disputeStakedVaults = [...index.activeVaults.values()].filter(vault => vault.disputeStakedAttoRep > 0n).map(vault => vault.address)
 			return await loadChangedVaultAddresses(fromBlock, toBlock, sources, haircutSources, disputeStakedVaults)
 		},
-		loadPositions: async vaults => await loadVaultPage(client, pool, escalationGame, vaults, block.number),
+		loadPositions: async vaults => await loadVaultPage(client, multicall3, pool, escalationGame, vaults, block.number),
 		loadRegistryRange: async (start, count) => {
 			const page = await client.readContract({ abi: securityPoolAbi, address: pool, args: [start, count], blockNumber: block.number, functionName: 'getVaults' })
 			return page.map(address => getAddress(address))

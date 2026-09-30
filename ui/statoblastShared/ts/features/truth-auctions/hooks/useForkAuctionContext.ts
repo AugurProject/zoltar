@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
@@ -6,7 +7,7 @@ import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { getCurrentSelectedPoolForkAuctionDetails, getForkWorkflowStageSelection } from '../../security-pools/lib/securityPoolWorkflow.js'
 import { useSelectedAuctionReadState } from './useSelectedAuctionReadState.js'
 import type { ForkAuctionSectionProps } from '../../types.js'
-import { getForkOnlyFallbackText, getForkTypeLabel, getForkWorkflowStageAheadMessage, getPreviewForkTypeLabel, getPreviewMigrationSummary, isFullReadClient } from '../components/ForkAuctionPresentation.js'
+import { getForkTypeLabel, getForkWorkflowStageAheadMessage, getPreviewForkTypeLabel, isFullReadClient } from '../components/ForkAuctionPresentation.js'
 
 export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 	const {
@@ -84,8 +85,8 @@ export function useForkAuctionContext(props: ForkAuctionSectionProps) {
 		previewPool,
 	})
 	const resolvedForkTypeLabel = forkAuctionDetails === undefined ? previewForkTypeLabel : getForkTypeLabel(forkAuctionDetails.forkOwnSecurityPool)
-	const forkOnlyFallbackText = getForkOnlyFallbackText(hasPreviewForkActivity)
-	const migrationSummaryText = forkAuctionDetails === undefined ? getPreviewMigrationSummary(previewPool, hasPreviewForkActivity) : undefined
+	const forkOnlyFallbackText = commonCopy.metricUnavailablePlaceholder
+	const migrationSummaryText = forkAuctionDetails === undefined ? commonCopy.metricUnavailablePlaceholder : undefined
 	const hasLoadedPoolContext = securityPoolAddress !== undefined && systemState !== undefined
 	const selectedOutcomeLabel = getReportingOutcomeLabel(forkAuctionForm.selectedOutcome)
 	const selectedAuctionLabel = selectedOutcomeLabel

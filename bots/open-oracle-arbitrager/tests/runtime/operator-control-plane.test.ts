@@ -105,7 +105,7 @@ async function startControlPlane(parameters: { deploymentRecovery?: DeploymentRe
 		network: config.network.name,
 		networkConfigured: config.networkConfigured,
 		openOracle: config.openOracle,
-		queuedWallet: undefined,
+		queuedSigner: undefined,
 		savedWallet: undefined,
 		wallet: parameters.privateKey === undefined ? undefined : privateKeyToAccount(parameters.privateKey).address,
 	}
@@ -231,7 +231,7 @@ test('execution mode reserves the running signer lock and pauses when enabled, a
 	expect(pending.signerUpdate).toBe(true)
 	expect(pending.privateKey).toBe(privateKey)
 	expect(pending.signerLock).toBeDefined()
-	expect(fixedState.queuedWallet).toBe(wallet)
+	expect(fixedState.queuedSigner).toEqual({ address: wallet, kind: 'apply' })
 	expect(pending.paused).toBe(true)
 	expect(state.paused).toBe(true)
 	expect(state.status).toBe('paused')
@@ -287,7 +287,7 @@ test('execution mode binds to a queued signer and skips lock acquisition when th
 	queued.pending.signerUpdate = true
 	queued.pending.privateKey = queuedKey
 	queued.pending.persistedPrivateKey = undefined
-	queued.fixedState.queuedWallet = queuedWallet
+	queued.fixedState.queuedSigner = { address: queuedWallet, kind: 'apply' }
 	expect((await queued.put('/api/execution', { execute: true })).status).toBe(200)
 	expect(queued.locks.acquired).toEqual([queuedWallet])
 	expect(queued.pending.privateKey).toBe(queuedKey)

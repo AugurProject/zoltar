@@ -5,6 +5,7 @@ import type { ComponentChildren } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
+import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { openInterestFeePerYearBigint } from '../lib/retentionRate.js'
 import { formatStatoblastSecurityMultiplier } from '../../markets/lib/trading.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
@@ -21,9 +22,7 @@ type SecurityPoolSummaryMetricsProps = {
 }
 
 function formatRepPerCapacityBps(value: bigint) {
-	const whole = value / 10_000n
-	const fraction = (value % 10_000n).toString().padStart(4, '0').replace(/0+$/, '')
-	return `${whole.toString()}${fraction === '' ? '' : `.${fraction}`} ${commonCopy.repPerEth}`
+	return formatValueWithUnit(formatTrimmedUnits(value, 4), commonCopy.repPerEth)
 }
 
 /** Static pool parameters. Settlement collateral against standing commitments is shown by `PoolCapacitySummary`. */

@@ -5,13 +5,17 @@ import { transactionErrorMessages } from '../lib/errors.js'
 import type { TransactionPlanStep } from '../wallet/chainBackend.js'
 import { transitionTransactionLifecycle, type TransactionFailure, type TransactionLifecycle, type TransactionLifecycleEvent, type TransactionPhase } from './transactionLifecycle.js'
 import { signal } from '@preact/signals'
-import { formatUnits, maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { maxUint256, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatValueWithUnit } from '../lib/formatters.js'
+
+/** A token amount a step transfers from the wallet, kept as a fixed-point value so every surface formats it from the same source. */
+export type TokenFundingAmount = { amount: bigint; tokenSymbol: string; tokenUnits: number }
 
 export type TransactionStepDetails = {
 	proposedRepPerEthPrice?: bigint | undefined
 	approval?: { requiredAmount: bigint; recommendedAmount?: bigint | undefined; approvedAmount: bigint; tokenSymbol: string; tokenUnits: number }
 	oracleOutcome?: TransactionPlanStep['oracleOutcome']
-	tokenFunding?: readonly { amount: string; limit: string | undefined }[]
+	tokenFunding?: readonly TokenFundingAmount[]
 	optional?: boolean
 	paidFrom?: string
 	title: string
@@ -159,7 +163,7 @@ export function createTransactionStepController(signal = getTransactionReviewSig
 				selected = true
 				activeIndex = index
 				for (const other of steps) if (other !== step && other.phase === 'review') other.phase = 'upcoming'
-				if (amount !== undefined && step.approval !== undefined) step.amount = `${amount === maxUint256 ? commonCopy.max : formatUnits(amount, step.approval.tokenUnits)} ${step.approval.tokenSymbol}`
+				if (amount !== undefined && step.approval !== undefined) step.amount = formatValueWithUnit(amount === maxUint256 ? commonCopy.max : formatCurrencyBalance(amount, step.approval.tokenUnits), step.approval.tokenSymbol)
 				step.approvalAmount = amount ?? step.approval?.requiredAmount
 				transitionStep(step, { type: 'review-confirmed' })
 				rejectReview = undefined

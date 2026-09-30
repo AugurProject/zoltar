@@ -18,7 +18,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 	test('a multiplier-safe vault cannot withdraw below multiplier-adjusted coverage', async () => {
 		const { client, mockWindow, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 
 		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
 		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
@@ -47,7 +47,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 	test('a vault without collateral can explicitly exit its standing commitment before withdrawing', async () => {
 		const { client, mockWindow, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (2n * statoblastSecurityMultiplierBps * reportedRepEthPrice)
 		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
 
@@ -61,7 +61,7 @@ describe('Audit PoC: security multiplier withdrawal bypass', () => {
 	test('a vault cannot move multiplier-required REP into an escalation game', async () => {
 		const { client, mockWindow, questionData, securityPoolAddresses } = fixture
 		const securityPool = securityPoolAddresses.securityPool
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 		const underwritingLimitAttoEth = (repDeposit * PRICE_PRECISION * BPS_DENOMINATOR) / (statoblastSecurityMultiplierBps * reportedRepEthPrice)
 		await setVaultCapacityFixture(client, mockWindow, coordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
 		await mockWindow.setTime(questionData.endTime + 1n)

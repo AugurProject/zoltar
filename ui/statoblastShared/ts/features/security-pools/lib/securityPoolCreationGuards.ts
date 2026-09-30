@@ -6,6 +6,7 @@ import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transa
 import { tryParseInitialReportPriorityFeeInput } from './priorityFee.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 const MINIMUM_STATOBLAST_SECURITY_MULTIPLIER_BPS = 10_002n
 
@@ -51,7 +52,7 @@ export function getSecurityPoolCreateDisabledReason({
 	statoblastSecurityMultiplier: string
 	zoltarUniverseHasForked: boolean
 }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before creating a security pool.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a security pool') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const statoblastSecurityMultiplierValidationMessage = getStatoblastSecurityMultiplierValidationMessage(statoblastSecurityMultiplier)
 	if (statoblastSecurityMultiplierValidationMessage !== undefined) return statoblastSecurityMultiplierValidationMessage

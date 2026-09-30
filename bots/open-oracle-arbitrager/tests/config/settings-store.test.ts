@@ -4,12 +4,12 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment, canonicalNetworkDeployment, canonicalUniswapDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import example from '../../config/operator.example.json'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, open, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
+import { CONFIGURATION_REVISION_CONFLICT, type RevisionedFileFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
-import { CONFIGURATION_REVISION_CONFLICT, durableJournalPaths, loadOperatorSettings, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile } from '#config/settings-store'
+import { durableJournalPaths, loadOperatorSettings, loadOperatorSettingsWithRevision, parseOperatorSettings, saveOperatorSettings, serializeOperatorSettings, switchOperatorNetworkProfile } from '#config/settings-store'
 import { networkProfilePath } from '@zoltar/bot-shared/config/profiles'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { parseSettlementSettings, settlementJournalPath } from '#state/settlement-store'
@@ -156,6 +156,21 @@ describe('operator settings persistence', () => {
 		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(1)
 	})
 
+	test('migrates a configuration file without a saved RPC policy from the shared ZOLTAR_BOT_RPC_QUORUM default', () => {
+		const serialized = serializeOperatorSettings(settings(undefined))
+		delete serialized.rpcQuorum
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			expect(parseOperatorSettings(serialized).rpcQuorum).toBe(2)
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '3'
+			expect(() => parseOperatorSettings(serialized)).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
+	})
+
 	test('keeps settlement disabled for configuration files that predate the block and round-trips an enabled one', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
 		expect(serialized.settlement).toEqual({ enabled: false, maxGasPriceNanoEth: '50', minimumProfitWeth: '0.001', rewardWithdrawThresholdEth: '0.01' })
@@ -196,6 +211,19 @@ describe('operator settings persistence', () => {
 		expect(await loadOperatorSettings(path)).toEqual(settings(privateKey))
 	})
 
+	test('loads only an owner-only regular configuration file', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-settings-owner-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'settings.json')
+		await saveOperatorSettings(path, settings(undefined))
+		await chmod(path, 0o644)
+		await expect(loadOperatorSettings(path)).rejects.toThrow('must have owner-only mode 0600')
+		await chmod(path, 0o600)
+		await symlink(path, join(directory, 'linked.json'))
+		await expect(loadOperatorSettings(join(directory, 'linked.json'))).rejects.toThrow('must not be a symbolic link')
+		expect(await loadOperatorSettings(join(directory, 'missing.json'))).toBeUndefined()
+	})
+
 	test('checks the expected revision at commit and returns the revision of the exact saved bytes', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-settings-'))
 		temporaryDirectories.push(directory)
@@ -217,7 +245,7 @@ describe('operator settings persistence', () => {
 				if (readPath === path && !replacedBeforeCommit) {
 					replacedBeforeCommit = true
 					const external = (await readFile(path, 'utf8')).replace('"paused": false', '"paused": true')
-					await writeFile(path, external, 'utf8')
+					await writeFile(path, external, { encoding: 'utf8', mode: 0o600 })
 				}
 				return readFile(readPath, encoding)
 			},
@@ -246,13 +274,13 @@ describe('operator settings persistence', () => {
 		temporaryDirectories.push(directory)
 		const path = join(directory, 'settings.json')
 		expect(await loadOperatorSettings(path)).toBeUndefined()
-		await writeFile(path, 'not json', 'utf8')
+		await writeFile(path, 'not json', { encoding: 'utf8', mode: 0o600 })
 		expect(loadOperatorSettings(path)).rejects.toThrow('not valid JSON')
 		await saveOperatorSettings(path, settings(undefined))
 		const parsed = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
-		await writeFile(path, JSON.stringify({ ...parsed, unexpected: true }), 'utf8')
+		await writeFile(path, JSON.stringify({ ...parsed, unexpected: true }), { encoding: 'utf8', mode: 0o600 })
 		expect(loadOperatorSettings(path)).rejects.toThrow('Unknown operator configuration field')
-		await writeFile(path, JSON.stringify({ ...parsed, version: 3 }), 'utf8')
+		await writeFile(path, JSON.stringify({ ...parsed, version: 3 }), { encoding: 'utf8', mode: 0o600 })
 		expect(loadOperatorSettings(path)).rejects.toThrow('unsupported version')
 	})
 

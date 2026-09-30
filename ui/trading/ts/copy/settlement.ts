@@ -11,7 +11,7 @@ export const selectedSourceBalance = 'Selected source balance:'
 export const loadingForkDetails = 'Loading fork question and child branches…'
 export const forkDetailsUnavailable = 'Fork question details are unavailable.'
 export const retryForkDetails = 'Retry fork details'
-export const walletBalancesUnavailable = 'Wallet balances are unavailable'
+export { walletBalancesUnavailable } from './app.js'
 
 export function redeemOutcomeAction(outcome: 'INVALID' | 'YES' | 'NO') {
 	return `Redeem ${outcome}`
@@ -29,7 +29,7 @@ export const quoteFailed = 'Settlement quote failed'
 export const quoteUnavailable = 'Settlement quote unavailable'
 export const gettingQuote = 'Getting a quote…'
 export const quoteHeading = 'Redemption quote'
-export const youReceive = 'You receive ≈'
+export { youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const minimumReceived = 'Minimum received'
 export const redeemCompleteSetsAction = 'Redeem complete sets'
 

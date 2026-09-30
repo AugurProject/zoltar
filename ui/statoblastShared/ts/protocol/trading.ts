@@ -24,7 +24,7 @@ type SecurityPoolMintCapacity = {
 	totalFeesOwedRemainder?: bigint
 }
 export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'getBlock' | 'multicall'>, securityPoolAddress: Address): Promise<SecurityPoolMintCapacity> {
-	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, priceOracleManagerAndOperatorQueuer, currentRetentionRate, feeEndTimestamp, escalationGame] = await readRequiredMulticall(client, [
+	const [poolAccountingSnapshot, shareTokenSupplyAttoShares, totalPoolHeldAttoRep, mintingCapacityAttoEth, openOraclePriceCoordinator, currentRetentionRate, feeEndTimestamp, escalationGame] = await readRequiredMulticall(client, [
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			functionName: 'getPoolAccountingSnapshot',
@@ -51,7 +51,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{
 			abi: statoblast_SecurityPool_SecurityPool.abi,
-			functionName: 'priceOracleManagerAndOperatorQueuer',
+			functionName: 'openOraclePriceCoordinator',
 			address: securityPoolAddress,
 			args: [],
 		},
@@ -69,7 +69,7 @@ export async function loadSecurityPoolMintCapacity(client: Pick<ReadClient, 'get
 		},
 		{ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame', address: securityPoolAddress, args: [] },
 	])
-	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: priceOracleManagerAndOperatorQueuer, args: [] }]), client.getBlock()])
+	const [priceValidity, currentBlock] = await Promise.all([readRequiredMulticall(client, [{ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'isPriceValid', address: openOraclePriceCoordinator, args: [] }]), client.getBlock()])
 	const [isPriceValid] = priceValidity
 	return {
 		currentRetentionRate,

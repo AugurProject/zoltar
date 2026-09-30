@@ -153,7 +153,7 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 					: decodeItemsPage(await api(queryPath(append ? (activityRoute.nextCursor ?? '') : '')), isActivityRecord, 'Activity')
 			if (!isCurrentContextRequest(contextVersion, deps.getViewContextVersion(), requestVersion, activityRoute.requestVersion) || !isCurrentCanonicalGeneration(canonicalGeneration, canonicalState.dataGeneration)) return false
 			const anchor = live && window.scrollY >= 420 ? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find(row => row.getBoundingClientRect().bottom > 0) : undefined
-			const anchorKey = anchor?.dataset.liveKey
+			const anchorKey = anchor?.dataset['liveKey']
 			const anchorTop = anchor?.getBoundingClientRect().top
 			const renderScrollY = window.scrollY
 			const retainedDrawers = append ? [] : eventDrawers()
@@ -163,10 +163,10 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 				for (const drawer of retainedDrawers) drawer.remove()
 				feed.replaceChildren()
 			}
-			const refreshedKeys = new Set(append ? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].flatMap(row => (row.dataset.liveKey === undefined ? [] : [row.dataset.liveKey])) : [])
+			const refreshedKeys = new Set(append ? [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].flatMap(row => (row.dataset['liveKey'] === undefined ? [] : [row.dataset['liveKey']])) : [])
 			for (const log of payload.items) {
 				const row = rowFor(log)
-				const rowKey = row.dataset.liveKey
+				const rowKey = row.dataset['liveKey']
 				if (rowKey !== undefined && refreshedKeys.has(rowKey)) continue
 				if (rowKey !== undefined) refreshedKeys.add(rowKey)
 				feed.append(row)
@@ -185,7 +185,7 @@ export const createActivityRoute = (deps: ActivityRouteDeps) => {
 			}
 			if (live) window.scrollTo({ top: renderScrollY, behavior: 'instant' })
 			if (anchorKey !== undefined && anchorTop !== undefined) {
-				const currentAnchor = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find(row => row.dataset.liveKey === anchorKey)
+				const currentAnchor = [...feed.querySelectorAll<HTMLElement>('.log-row[data-live-key]')].find(row => row.dataset['liveKey'] === anchorKey)
 				if (currentAnchor !== undefined) window.scrollBy(0, currentAnchor.getBoundingClientRect().top - anchorTop)
 			}
 			if (drawerReanchored && activeDrawerContext) restoreDetailContext(activeDrawerContext, activeDrawer)

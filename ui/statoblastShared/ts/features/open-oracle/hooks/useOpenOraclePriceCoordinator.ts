@@ -15,14 +15,15 @@ import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TransactionLifecycleParameters, WriteOperationContext } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleActionResult, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
-type UsePriceOracleManagerParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext
+type UseOpenOraclePriceCoordinatorParameters = TransactionLifecycleParameters & TransactionCancellationParameters & WriteOperationContext
 
 type PriceOracleReadClient = Pick<ReturnType<typeof createConnectedReadClient>, 'getBalance'>
 type PriceOracleProductionWriteClient = ReturnType<typeof createWalletWriteClient>
 type CoordinatorInitialReportFunding = Awaited<ReturnType<typeof loadCoordinatorInitialReportFundingRequirement>>
 
-export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProductionWriteClient> = {
+export type UseOpenOraclePriceCoordinatorDependencies<TWriteClient = PriceOracleProductionWriteClient> = {
 	createConnectedReadClient: () => PriceOracleReadClient
 	createWalletWriteClient: (accountAddress: Address, callbacks?: Parameters<typeof createWalletWriteClient>[1]) => TWriteClient
 	executeOracleManagerStagedOperation: (client: TWriteClient, managerAddress: Address, operationId: bigint) => Promise<OpenOracleActionResult>
@@ -31,7 +32,7 @@ export type UsePriceOracleManagerDependencies<TWriteClient = PriceOracleProducti
 	requestOraclePrice: (client: TWriteClient, managerAddress: Address, proposedRepPerEthPrice: bigint, requestedInitialAttoWeth: bigint, reviewedRequestValueAttoEth: bigint) => Promise<OpenOracleActionResult>
 }
 
-export const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDependencies = {
+export const defaultUseOpenOraclePriceCoordinatorDependencies: UseOpenOraclePriceCoordinatorDependencies = {
 	createConnectedReadClient,
 	createWalletWriteClient,
 	executeOracleManagerStagedOperation: async (client, managerAddress, operationId) => await executeOracleManagerStagedOperation(client, managerAddress, operationId),
@@ -40,9 +41,9 @@ export const defaultUsePriceOracleManagerDependencies: UsePriceOracleManagerDepe
 	requestOraclePrice: async (client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, reviewedRequestValueAttoEth) => await requestOraclePrice(client, managerAddress, proposedRepPerEthPrice, requestedInitialAttoWeth, reviewedRequestValueAttoEth),
 }
 
-function usePriceOracleManagerWithDependencies<TWriteClient>(
-	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UsePriceOracleManagerParameters,
-	dependencies: UsePriceOracleManagerDependencies<TWriteClient>,
+function useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>(
+	{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, onTransactionSubmitted, refreshState }: UseOpenOraclePriceCoordinatorParameters,
+	dependencies: UseOpenOraclePriceCoordinatorDependencies<TWriteClient>,
 ) {
 	const poolOracleManagerLoad = useLoadController()
 	const poolOracleActiveAction = useSignal<OpenOracleActionResult['action'] | undefined>(undefined)
@@ -93,7 +94,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 			await runWriteAction(
 				{
 					accountAddress,
-					missingWalletMessage: 'Connect a wallet before requesting a price',
+					missingWalletMessage: commonCopy.formatConnectWalletBefore('requesting a price'),
 					reviewSignal: signal,
 					onTransactionCanceled,
 					onWriteCanceled: () => {
@@ -172,7 +173,7 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 			await runWriteAction(
 				{
 					accountAddress,
-					missingWalletMessage: 'Connect a wallet before executing a staged operation',
+					missingWalletMessage: commonCopy.formatConnectWalletBefore('executing a staged operation'),
 					onRefreshError: (message, hash) => {
 						poolOracleFeedback.value = createWarningActionFeedback('executeStagedOperation', getSuccessTitle('executeStagedOperation'), message, hash)
 						const result = poolPriceOracleResult.value
@@ -221,9 +222,9 @@ function usePriceOracleManagerWithDependencies<TWriteClient>(
 	}
 }
 
-export function usePriceOracleManager(parameters: UsePriceOracleManagerParameters): ReturnType<typeof usePriceOracleManagerWithDependencies<PriceOracleProductionWriteClient>>
-export function usePriceOracleManager<TWriteClient>(parameters: UsePriceOracleManagerParameters, dependencies: UsePriceOracleManagerDependencies<TWriteClient>): ReturnType<typeof usePriceOracleManagerWithDependencies<TWriteClient>>
-export function usePriceOracleManager<TWriteClient>(parameters: UsePriceOracleManagerParameters, dependencies?: UsePriceOracleManagerDependencies<TWriteClient>) {
-	if (dependencies === undefined) return usePriceOracleManagerWithDependencies(parameters, defaultUsePriceOracleManagerDependencies)
-	return usePriceOracleManagerWithDependencies(parameters, dependencies)
+export function useOpenOraclePriceCoordinator(parameters: UseOpenOraclePriceCoordinatorParameters): ReturnType<typeof useOpenOraclePriceCoordinatorWithDependencies<PriceOracleProductionWriteClient>>
+export function useOpenOraclePriceCoordinator<TWriteClient>(parameters: UseOpenOraclePriceCoordinatorParameters, dependencies: UseOpenOraclePriceCoordinatorDependencies<TWriteClient>): ReturnType<typeof useOpenOraclePriceCoordinatorWithDependencies<TWriteClient>>
+export function useOpenOraclePriceCoordinator<TWriteClient>(parameters: UseOpenOraclePriceCoordinatorParameters, dependencies?: UseOpenOraclePriceCoordinatorDependencies<TWriteClient>) {
+	if (dependencies === undefined) return useOpenOraclePriceCoordinatorWithDependencies(parameters, defaultUseOpenOraclePriceCoordinatorDependencies)
+	return useOpenOraclePriceCoordinatorWithDependencies(parameters, dependencies)
 }

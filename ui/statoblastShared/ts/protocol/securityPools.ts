@@ -11,7 +11,8 @@ import { readWithRpcStateRetries } from '@zoltar/ui-core-shared/lib/rpcStateRetr
 import { readRequiredMulticall } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { requireForkDataView } from './forkData.js'
 import { getReportingOutcomeKey, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
-import { getForkOutcomeKey, getProtocolPageOffset, getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getForkOutcomeKey, getProtocolPageOffset } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { requireSecurityPoolDeploymentTupleArray, requireSecurityVaultTupleArray, type SecurityPoolDeploymentTuple } from './helpers.js'
 import { getInfraContractAddresses } from './deploymentHelpers.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
@@ -313,7 +314,7 @@ async function loadSecurityPoolDetails(
 		vaultPreviewLimit: bigint
 	},
 ): Promise<ListedSecurityPool> {
-	const { initialReportPriorityFeeAttoEthPerGas, parent, priceOracleManagerAndOperatorQueuer: managerAddress, questionId, statoblastSecurityMultiplierBps, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
+	const { initialReportPriorityFeeAttoEthPerGas, parent, openOraclePriceCoordinator: managerAddress, questionId, statoblastSecurityMultiplierBps, securityPool: securityPoolAddress, truthAuction: truthAuctionAddress, universeId } = deployment
 	const shouldLoadVaults = shouldLoadSecurityPoolVaults(deployment, options)
 	const [
 		[
@@ -475,7 +476,7 @@ async function loadSecurityPoolDetails(
 		migratedAttoRep,
 		parent,
 		questionOutcome: getReportingOutcomeKey(questionOutcome),
-		questionId: getQuestionIdHex(questionId),
+		questionId: formatQuestionIdHex(questionId),
 		statoblastSecurityMultiplierBps,
 		securityPoolAddress,
 		shareTokenSupplyAttoShares,
@@ -676,7 +677,7 @@ export async function loadSecurityVaultDetails(client: ReadClient, securityPoolA
 	] = await Promise.all([
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'vaultBadDebtAttoEth', address: securityPoolAddress, args: [vaultAddress], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'currentRetentionRate', address: securityPoolAddress, args: [], blockNumber }),
-		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'priceOracleManagerAndOperatorQueuer', address: securityPoolAddress, args: [], blockNumber }),
+		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumSecurityBondDebtAttoEth', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'minimumVaultRepDepositAttoRep', address: securityPoolAddress, args: [], blockNumber }),
 		client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'totalRepBackingUnits', address: securityPoolAddress, args: [], blockNumber }),

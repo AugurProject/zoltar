@@ -46,7 +46,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 	let securityPoolAddresses: {
 		securityPool: Address
 		escalationGame: Address
-		priceOracleManagerAndOperatorQueuer: Address
+		openOraclePriceCoordinator: Address
 	}
 	let questionId: bigint
 
@@ -87,7 +87,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 
 		// Advance time past the question's end date to allow escalation game deposit
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		// Deploy escalation game and deposit on Yes
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
@@ -212,7 +212,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await approveAndDepositRepToVault(attacker, depositAmount, questionId)
 
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, firstDeposit)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, secondDeposit)
 		const configuredThreshold = await getNonDecisionThresholdAttoRep(client, securityPoolAddresses.escalationGame)
@@ -291,7 +291,7 @@ describe('Escalation Game Fork Threshold Test', () => {
 		await overrideGenesisTheoreticalSupply(overriddenTotalSupply)
 
 		await mockWindow.setTime(questionEndDate + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAmount)
 
 		assert.strictEqual(

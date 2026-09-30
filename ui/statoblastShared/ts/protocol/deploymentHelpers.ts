@@ -9,7 +9,7 @@ import {
 	statoblast_SecurityPoolForker_SecurityPoolForker,
 	statoblast_SecurityPoolUtils_SecurityPoolUtils,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
-	statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_factories_ShareTokenFactory_ShareTokenFactory,
 	statoblast_factories_UniformPriceDualCapBatchAuctionFactory_UniformPriceDualCapBatchAuctionFactory,
@@ -26,7 +26,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 		escalationGameFactory: statoblast_factories_EscalationGameFactory_EscalationGameFactory,
 		multicall3: statoblast_Multicall3_Multicall3,
 		openOracle: statoblast_openOracle_OpenOracle_OpenOracle,
-		priceOracleManagerAndOperatorQueuerFactory: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+		openOraclePriceCoordinatorFactory: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 		securityPoolFactory: statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 		securityPoolForker: statoblast_SecurityPoolForker_SecurityPoolForker,
 		securityPoolOperationsDelegate: statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate,
@@ -37,7 +37,7 @@ const statoblastInitCodes = createStatoblastInitCodes(
 	{ proxyDeployerAddress: PROXY_DEPLOYER_ADDRESS, zeroSalt: ZERO_SALT },
 )
 
-export const { getEscalationGameFactoryByteCode, getPriceOracleManagerAndOperatorQueuerFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getSecurityPoolOperationsDelegateByteCode, getShareTokenFactoryByteCode } = statoblastInitCodes
+export const { getEscalationGameFactoryByteCode, getOpenOraclePriceCoordinatorFactoryByteCode, getSecurityPoolFactoryByteCode, getSecurityPoolForkerByteCode, getSecurityPoolOperationsDelegateByteCode, getShareTokenFactoryByteCode } = statoblastInitCodes
 
 export const getSecurityPoolOperationsDelegateRuntimeCode = () => statoblastInitCodes.applyLibraries(statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.deployedBytecode.object)
 
@@ -60,7 +60,7 @@ export function getInfraStepConstructorArguments(profile: NetworkProfile = getRu
 		securityPoolOperationsDelegate: constructorArgumentsFromInitCode(getSecurityPoolOperationsDelegateByteCode(), statoblast_SecurityPoolOperationsDelegate_SecurityPoolOperationsDelegate.evm.bytecode.object),
 		openOracle: '',
 		shareTokenFactory: constructorArgumentsFromInitCode(getShareTokenFactoryByteCode(addresses.zoltar), statoblast_factories_ShareTokenFactory_ShareTokenFactory.evm.bytecode.object),
-		priceOracleManagerAndOperatorQueuerFactory: constructorArgumentsFromInitCode(getPriceOracleManagerAndOperatorQueuerFactoryByteCode(profile.wethAddress), statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
+		openOraclePriceCoordinatorFactory: constructorArgumentsFromInitCode(getOpenOraclePriceCoordinatorFactoryByteCode(profile.wethAddress), statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
 		securityPoolForker: constructorArgumentsFromInitCode(getSecurityPoolForkerByteCode(addresses.zoltar), statoblast_SecurityPoolForker_SecurityPoolForker.evm.bytecode.object),
 		escalationGameClaimDelegate: '',
 		escalationGameFactory: constructorArgumentsFromInitCode(getEscalationGameFactoryByteCode(addresses.escalationGameClaimDelegate), statoblast_factories_EscalationGameFactory_EscalationGameFactory.evm.bytecode.object),
@@ -84,8 +84,8 @@ type BootstrapDescendantAddresses = {
 
 export function getBootstrapDescendantAddresses(profile: NetworkProfile = getRuntimeNetworkProfile()): BootstrapDescendantAddresses {
 	const infrastructure = getInfraContractAddresses(profile)
-	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n })
-	const priceCoordinatorDeploymentWorker = getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n })
+	const liquidationApprovalRegistryDeployer = getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n })
+	const priceCoordinatorDeploymentWorker = getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 2n })
 	const securityPoolDeployer = getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n })
 	const securityPoolDeploymentWorker = getCreateAddress({ from: securityPoolDeployer, nonce: 2n })
 	return {

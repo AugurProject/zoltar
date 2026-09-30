@@ -27,7 +27,7 @@ describe('Audit: forced REP redemption before escalation residual sweep', () => 
 
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		await depositOrdinaryEscalationPrincipals(escalationDepositor, securityPoolAddresses.securityPool)
 		const escalationGame = await advancePastOrdinaryEscalationDeadline(client, mockWindow, securityPoolAddresses.securityPool)

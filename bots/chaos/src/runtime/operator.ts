@@ -2,7 +2,7 @@ import { preflightOperationPreview } from '../execution/operation-preview.ts'
 import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { reconcileClosedV3RetirementWorkflow, V3_RETIREMENT_OPERATION } from './retirement-v3-continuation.ts'
 import { reconcileIncludedTransactions } from '../execution/inclusion-journal.ts'
-import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
+import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
 import { privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -371,7 +371,7 @@ async function handleCycleFailure(error: unknown, configuration: ConfigurationSt
 export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
 	const initialWallet = configuredWallet(loaded.settings)
 	const storedState = await loadRuntimeState(loaded.settings.runtime.stateFile, loaded.settings.paused, initialWallet, loaded.settings.network.chainId)
-	loaded = { ...loaded, settings: restoreDeploymentForDurableState(loaded.settings, storedState, loaded.needsDeploymentPin) }
+	assertDurableStateFactories(loaded.settings, storedState)
 	const state = migrateEmptyBootstrapState(storedState, loaded.settings)
 	const initialProfileId = executionProfileId(loaded.settings)
 	assertDurableSignerScope(state, initialWallet, loaded.settings.runtime.stateFile)

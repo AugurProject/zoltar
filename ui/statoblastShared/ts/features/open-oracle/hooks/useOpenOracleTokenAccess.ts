@@ -7,7 +7,8 @@ import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
-import { toBigIntReadResult, toReadError, type OpenOracleRawReadResult, type OpenOracleTokenAccessLoadResult, type OptionalReadResult, type RefreshOpenOracleTokenAccessOptions, type TokenAccessLoadResult } from '../lib/openOracleTokenAccess.js'
+import { toTokenAccessReadResult, type OpenOracleRawReadResult, type OpenOracleTokenAccessLoadResult, type RefreshOpenOracleTokenAccessOptions, type TokenAccessLoadResult } from '../lib/openOracleTokenAccess.js'
+import { toReadError, type OptionalReadResult } from '@zoltar/ui-core-shared/lib/optionalReadResult.js'
 
 export function useOpenOracleTokenAccess({ accountAddress, isSelectedReportCurrent, readOptionalMulticall }: { accountAddress: Address | undefined; isSelectedReportCurrent: (reportIdInput: string) => boolean; readOptionalMulticall: (contracts: readonly unknown[]) => Promise<readonly OpenOracleRawReadResult[]> }) {
 	const openOracleTokenAccessLoad = useLoadController()
@@ -155,7 +156,7 @@ export function useOpenOracleTokenAccess({ accountAddress, isSelectedReportCurre
 						} satisfies OptionalReadResult<bigint>
 						return [failureResult, failureResult, failureResult, failureResult]
 					})
-					const [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult] = tokenAccessReadResults.map(toBigIntReadResult)
+					const [token1ApprovalReadResult, token2ApprovalReadResult, token1BalanceReadResult, token2BalanceReadResult] = tokenAccessReadResults.map(toTokenAccessReadResult)
 					if (token1ApprovalReadResult === undefined || token2ApprovalReadResult === undefined || token1BalanceReadResult === undefined || token2BalanceReadResult === undefined) throw new Error('Unexpected token access response')
 
 					return {

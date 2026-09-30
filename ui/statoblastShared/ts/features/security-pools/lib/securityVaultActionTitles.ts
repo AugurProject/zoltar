@@ -1,10 +1,11 @@
 import type { SecurityVaultActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 
 export const getPendingTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
 		case 'setVaultUnderwritingLimit':
-			return 'Adjusting backing factor'
+			return securityPoolCopy.adjustingVaultBackingFactor
 		case 'approveRep':
 			return 'Approving REP'
 		case 'depositRepToVault':
@@ -24,7 +25,7 @@ export const getPendingTitle = (actionName: SecurityVaultActionResult['action'])
 export const getSuccessTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
 		case 'setVaultUnderwritingLimit':
-			return 'Vault target change submitted'
+			return securityPoolCopy.backingRatioChangeSubmitted
 		case 'approveRep':
 			return 'REP approved'
 		case 'depositRepToVault':
@@ -44,7 +45,7 @@ export const getSuccessTitle = (actionName: SecurityVaultActionResult['action'])
 export const getFailureTitle = (actionName: SecurityVaultActionResult['action']) => {
 	switch (actionName) {
 		case 'setVaultUnderwritingLimit':
-			return 'Backing factor adjustment failed'
+			return securityPoolCopy.backingRatioChangeFailed
 		case 'approveRep':
 			return 'REP approval failed'
 		case 'depositRepToVault':

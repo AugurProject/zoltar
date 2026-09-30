@@ -6,6 +6,7 @@ import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.j
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
 
 type TruthAuctionDisposition = {
@@ -457,7 +458,7 @@ export function getTruthAuctionBidGuardMessage({
 	truthAuction: TruthAuctionMetrics | undefined
 	walletBalanceAttoEth: bigint | undefined
 }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before submitting a truth auction bid.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('submitting a truth auction bid') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (truthAuction === undefined) return 'Loading truth auction.'
 	if (truthAuction.finalized) return 'Truth auction is already finalized.'

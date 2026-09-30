@@ -221,7 +221,7 @@ export const auctionCatalogData = async (sql: SQL, chainId: number, asOf: Record
 	})
 }
 
-export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string; vaultAddress?: string; poolAfter?: string; vaultAfter?: string; limit?: number; snapshotBlock?: string } = {}) => {
+export const riskCatalogData = async (sql: SQL, chainId: number, options: { poolAddress?: string | undefined; vaultAddress?: string | undefined; poolAfter?: string | undefined; vaultAfter?: string | undefined; limit?: number | undefined; snapshotBlock?: string | undefined } = {}) => {
 	const queryLimit = (options.limit ?? 250) + 1
 	const snapshotBlock = options.snapshotBlock ?? '9223372036854775807'
 	const [pools, vaults, liquidations, approvalEvents, totals] = await Promise.all([

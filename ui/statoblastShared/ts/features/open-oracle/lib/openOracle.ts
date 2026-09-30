@@ -6,7 +6,7 @@ import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-sha
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 import { parseAddressInput, tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
@@ -79,7 +79,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppCh
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
 		isOnActiveAppChain,
 		walletConnected,
-		walletRequiredReason: 'Connect a wallet before creating a standalone Open Oracle report.',
+		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone Open Oracle report'),
 	})
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const ethValue = tryParseDecimalInput(ethValueInput)
@@ -371,28 +371,9 @@ export function getOpenOracleSettleAvailability(report: Pick<OpenOracleReportDet
 	}
 }
 
-function formatGroupedInteger(value: bigint) {
-	return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-}
-
-function formatScaledBigInt(value: bigint, scale: bigint, minimumFractionDigits = 0, groupInteger = false) {
-	const isNegative = value < 0n
-	const absoluteValue = isNegative ? -value : value
-	const integerPart = absoluteValue / scale
-	const fractionPart = absoluteValue % scale
-	const scaleDigits = scale.toString().length - 1
-	let fractionText = fractionPart.toString().padStart(scaleDigits, '0').replace(/0+$/, '')
-	while (fractionText.length < minimumFractionDigits) {
-		fractionText += '0'
-	}
-
-	const integerText = groupInteger ? formatGroupedInteger(integerPart) : integerPart.toString()
-	return `${isNegative ? '-' : ''}${integerText}${fractionText === '' ? '' : `.${fractionText}`}`
-}
-
 export function formatOpenOracleFeePercentage(feePercentage: bigint | undefined) {
 	if (feePercentage === undefined) return '—'
-	return `${formatScaledBigInt(feePercentage, 100_000n, 0, true)}%`
+	return formatScaledPercentage(feePercentage, 5)
 }
 function parseOpenOracleFeePercentageInput(value: string, label: string) {
 	const trimmed = value.trim()
@@ -436,7 +417,7 @@ export function formatOpenOracleReportPriceUnit(report: Pick<OpenOracleReportSum
 }
 
 export function getOracleLastPriceDisplay({ lastPrice, lastSettlementTimestamp }: { lastPrice: bigint; lastSettlementTimestamp: bigint }) {
-	if (lastSettlementTimestamp === 0n) return '-'
+	if (lastSettlementTimestamp === 0n) return commonCopy.metricUnavailablePlaceholder
 	return `${formatAmountDisplay(lastPrice)}\u00a0REP per ETH`
 }
 

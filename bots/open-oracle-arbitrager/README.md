@@ -193,6 +193,18 @@ direct Bun process needs an external supervisor. If the host or named volume is
 lost, restore the complete bot state before resuming live execution with the same
 signer. Do not reuse that signer from incomplete recovery state.
 
+Compose sets `ZOLTAR_BOT_SIGNER_LOCK_ROOT=.state/process-locks` and mounts the fixed
+`zoltar-bot-signer-locks` volume there, so the OpenOracle arbitrager, liquidator, and
+chaos containers on one Docker host share one chain-and-signer lock; it does not fence
+another host. A direct Bun process uses `ZOLTAR_BOT_SIGNER_LOCK_ROOT` when it is set to
+a non-empty path (an operator-owned directory with mode `0700`), otherwise a
+`zoltar-bot-locks` directory under the system temporary directory. Processes that
+share a signer must resolve the same lock root.
+
+`SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the scan
+status log uses to report a scan as lagging. Mainnet and Sepolia default to `12000`;
+on other chains the log reports lag only from the observed head distance.
+
 On first start, the container creates a paused, dry-run configuration in its
 persistent volume. Open `http://127.0.0.1:4173`; the dashboard does not require a
 username or password. Compose publishes the port only on host loopback, so connect
@@ -205,7 +217,9 @@ sufficient and independent quorum RPCs are optional. To require two agreeing rea
 select **2 · require two agreeing independent RPCs** in **Chain and RPC endpoints**
 and enter two independent quorum RPC URLs in the same form so one endpoint may be
 unavailable. The saved agreement requirement and endpoint set apply automatically at
-the next scan boundary.
+the next scan boundary. `ZOLTAR_BOT_RPC_QUORUM` only supplies the migration default for
+a configuration file that has no saved policy; values other than `1` or `2` stop that
+migration.
 
 In **Chain and RPC endpoints**, select the chain, enter its read, public, and quorum RPC
 URLs, and save so every endpoint is checked against that chain. The Settings page is
@@ -695,7 +709,9 @@ security.
 `.state/operator.json` is the active compatibility file. Complete settings for each
 chain are retained in `.state/operator.json.mainnet.profile` and
 `.state/operator.json.sepolia.profile` while that profile is inactive. Back up all
-three files so both chain profiles can be restored. The bot accepts no command-line
+three files so both chain profiles can be restored. The bot refuses to load an
+operator settings file or position journal that is a symbolic link, is not owned by
+the bot user, or has a mode other than `0600`. The bot accepts no command-line
 arguments and does not read chain, RPC URL, or quorum settings from environment
 variables. Copy the example before first startup:
 

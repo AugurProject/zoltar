@@ -38,17 +38,17 @@ function chainRead(answers: readonly (number | Error)[]) {
 test('selects the first endpoint that answered once the quorum agrees on the configured chain', async () => {
 	const clients = ['primary', 'second', 'third'] as const
 	const agreed = chainRead([network.chain.id, network.chain.id, network.chain.id])
-	expect(await selectQuorumChainClient(clients, endpoints, network, agreed.read)).toEqual({ client: 'primary', rpcUrl: 'https://primary.example' })
+	expect(await selectQuorumChainClient(clients, endpoints, network, agreed.read, 1)).toEqual({ client: 'primary', rpcUrl: 'https://primary.example' })
 	expect(agreed.requested).toEqual(endpoints)
 	// A rejected primary still yields a usable client from the next fulfilled endpoint.
 	const primaryDown = chainRead([new Error('fetch failed'), network.chain.id, network.chain.id])
-	expect(await selectQuorumChainClient(clients, endpoints, network, primaryDown.read)).toEqual({ client: 'second', rpcUrl: 'https://second.example' })
+	expect(await selectQuorumChainClient(clients, endpoints, network, primaryDown.read, 1)).toEqual({ client: 'second', rpcUrl: 'https://second.example' })
 })
 
 test('rejects a quorum that agrees on a different chain or has no available endpoint', async () => {
 	const clients = ['primary', 'second'] as const
 	const wrongChain = chainRead([1, 1])
-	await expect(selectQuorumChainClient(clients, endpoints.slice(0, 2), network, wrongChain.read)).rejects.toThrow('Read RPC quorum https://primary.example, https://second.example returned chain 1 while calling eth_chainId; expected sepolia chain 11155111')
+	await expect(selectQuorumChainClient(clients, endpoints.slice(0, 2), network, wrongChain.read, 1)).rejects.toThrow('Read RPC quorum https://primary.example, https://second.example returned chain 1 while calling eth_chainId; expected sepolia chain 11155111')
 	const offline = chainRead([new Error('fetch failed'), new Error('fetch failed')])
-	await expect(selectQuorumChainClient(clients, endpoints.slice(0, 2), network, offline.read)).rejects.toThrow('configured chain id requires at least one available RPC endpoint')
+	await expect(selectQuorumChainClient(clients, endpoints.slice(0, 2), network, offline.read, 1)).rejects.toThrow('configured chain id requires at least one available RPC endpoint')
 })

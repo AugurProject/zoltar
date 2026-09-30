@@ -374,11 +374,11 @@ export const getTotalPoolHeldAttoRep = async (client: ReadClient, securityPoolAd
 	)
 
 async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Address) {
-	const priceOracleManagerAndOperatorQueuer = requireAddress(
+	const openOraclePriceCoordinator = requireAddress(
 		await client.readContract({
 			abi: statoblast_SecurityPool_SecurityPool.abi,
 			address: securityPoolAddress,
-			functionName: 'priceOracleManagerAndOperatorQueuer',
+			functionName: 'openOraclePriceCoordinator',
 			args: [],
 		}),
 		'Price coordinator',
@@ -386,7 +386,7 @@ async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Ad
 	const isPriceValid = requireBoolean(
 		await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			address: priceOracleManagerAndOperatorQueuer,
+			address: openOraclePriceCoordinator,
 			functionName: 'isPriceValid',
 			args: [],
 		}),
@@ -399,14 +399,14 @@ async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Ad
 		const lastPrice = requireBigInt(
 			await client.readContract({
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				address: priceOracleManagerAndOperatorQueuer,
+				address: openOraclePriceCoordinator,
 				functionName: 'lastPrice',
 				args: [],
 			}),
 			'Cached oracle price',
 		)
 		await mockWindow.addStateOverrides({
-			[priceOracleManagerAndOperatorQueuer]: {
+			[openOraclePriceCoordinator]: {
 				stateDiff: {
 					[`0x${3n.toString(16).padStart(64, '0')}`]: currentTimestamp,
 					...(lastPrice === 0n ? { [`0x${4n.toString(16).padStart(64, '0')}`]: 10n ** 18n } : {}),
@@ -416,7 +416,7 @@ async function prepareTestMintPrice(client: WriteClient, securityPoolAddress: Ad
 		const refreshedPriceIsValid = requireBoolean(
 			await client.readContract({
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-				address: priceOracleManagerAndOperatorQueuer,
+				address: openOraclePriceCoordinator,
 				functionName: 'isPriceValid',
 				args: [],
 			}),

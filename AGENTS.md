@@ -142,11 +142,14 @@ checksums against the tracked source pins and never download replacements. `bun 
 | `ui/trading/ts/generated/contractArtifact.ts` | `bun ./tooling/ui/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
 | `ui/*/vendor/**` | `bun run ui:vendor` |
 | `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
+| `docs/assets/js/auctionClearing.js` | `bun run docs:build-runtime` |
+| `docs/assets/js/deploymentMaskDecoder.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/responsiveDocs.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/interactiveTools.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/invariantExplorer.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/mmrProofPlanner.js` | `bun run docs:build-runtime` |
+| `docs/assets/js/openOracleTools.js` | `bun run docs:build-runtime` |
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
@@ -155,6 +158,7 @@ checksums against the tracked source pins and never download replacements. `bun 
 | `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
 | `scripts/artifacts/uniswap-deployment.json` | Pinned Permit2, SwapRouter, and Uniswap V3/V4 bytecode from the upstream package versions recorded in the artifact (Permit2 and the SwapRouter deploy on every chain; the rest on deterministic testnets), plus Uniswap's published Sepolia WETH, V3 factory, QuoterV2, V4 PoolManager, and V4 Quoter creation transactions vendored byte for byte with their runtime code hashes; validate with `bun run check:uniswap-deployment-artifact` |
 | `augurScan/config/abis.json`, `augurScan/config/manifests/*.json`, and `augurScan/config/system-contracts.generated.ts` | `cd augurScan && bun run metadata:build`; validate with `bun run metadata:check` in that package |
+| `augurScan/public/app.js` | `cd augurScan && bun run build:browser` (also run by `bun run build`) |
 | `augurScan/config/dependency-abis.json` | Vendored dependency ABIs, updated manually with reviewed source URLs and SHA-256 pins in `config/dependency-abi-sources.json`; validate with `cd augurScan && bun run metadata:check`. Builds must not rewrite or download this file. |
 
 Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.

@@ -20,6 +20,7 @@ import {
 	type PublicClientActions,
 	type PublicClientShape,
 	type ReplacementReason,
+	type RpcLog,
 	type RpcLogForEvent,
 	type Transport,
 } from '../types.js'
@@ -177,6 +178,63 @@ async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(t
 }
 
 export function buildPublicClientActions<TTransport extends Transport, TChain extends Chain | undefined>({ chain, transport }: { chain: TChain; transport: TTransport }): Omit<PublicClientShape<TTransport, TChain>, 'chain' | 'extend' | 'transport'> {
+	// The overload carries the event-specific decoded argument types; the implementation decodes against the runtime ABI.
+	async function getLogs<TEvent extends AbiParameter | undefined>(parameters: {
+		address?: Address | readonly Address[] | undefined
+		args?: Readonly<Record<string, unknown>> | undefined
+		event?: TEvent
+		fromBlock?: bigint | undefined
+		toBlock?: bigint | undefined
+		topics?: readonly LogTopicFilter[] | undefined
+	}): Promise<readonly RpcLogForEvent<TEvent>[]>
+	async function getLogs(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: AbiParameter | undefined; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }): Promise<readonly RpcLog[]> {
+		const event = parameters.event
+		if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
+		const address = typeof parameters.address === 'string' || parameters.address === undefined ? parameters.address : [...parameters.address]
+		const addressFilter = getLogAddressFilter(address)
+		const fromBlock = parameters.fromBlock
+		const toBlock = parameters.toBlock
+		const topics =
+			parameters.topics ??
+			(event === undefined
+				? undefined
+				: encodeEventTopics({
+						abi: [event],
+						...(parameters.args === undefined ? {} : { args: parameters.args }),
+						eventName: event.name ?? 'event',
+					}))
+		const requestedTopics = topics === undefined ? undefined : snapshotLogTopicFilter(topics)
+		const requestTopics = requestedTopics === undefined ? undefined : snapshotLogTopicFilter(requestedTopics)
+		const rawLogs = await requestTransportWithRateLimitRetries<readonly JsonValue[]>(transport, {
+			method: 'eth_getLogs',
+			params: [
+				{
+					...(address === undefined ? {} : { address }),
+					...(fromBlock === undefined ? {} : { fromBlock: hexQuantity(fromBlock) }),
+					...(toBlock === undefined ? {} : { toBlock: hexQuantity(toBlock) }),
+					...(requestTopics === undefined ? {} : { topics: requestTopics }),
+				},
+			],
+		})
+		return rawLogs.map(rawLog => {
+			const normalizedLog = normalizeLog(rawLog)
+			if (addressFilter !== undefined && !addressFilter.has(normalizedLog.address.toLowerCase())) throw new Error('RPC returned a log outside the requested filter')
+			if (fromBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber < fromBlock)) throw new Error('RPC returned a log outside the requested filter')
+			if (toBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber > toBlock)) throw new Error('RPC returned a log outside the requested filter')
+			if (requestedTopics !== undefined && !logMatchesTopicFilter(normalizedLog.topics, requestedTopics)) throw new Error('RPC returned a log outside the requested filter')
+			if (event === undefined) return normalizedLog
+			const decodedLog = decodeEventLog({
+				abi: [event],
+				data: normalizedLog.data,
+				topics: normalizedLog.topics,
+			})
+			return {
+				...normalizedLog,
+				args: decodedLog.args,
+				eventName: decodedLog.eventName,
+			}
+		})
+	}
 	const getCode: PublicClientActions['getCode'] = async parameters => {
 		const result = normalizeRpcHex(
 			await requestTransportWithRateLimitRetries<string>(transport, {
@@ -252,54 +310,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 				}),
 				'transaction count',
 			),
-		getLogs: async <TEvent extends AbiParameter | undefined>(parameters: { address?: Address | readonly Address[] | undefined; args?: Readonly<Record<string, unknown>> | undefined; event?: TEvent; fromBlock?: bigint | undefined; toBlock?: bigint | undefined; topics?: readonly LogTopicFilter[] | undefined }) => {
-			const event = parameters.event
-			if (event !== undefined && parameters.topics !== undefined) throw new Error('getLogs accepts either an event or raw topics, not both')
-			const address = typeof parameters.address === 'string' || parameters.address === undefined ? parameters.address : [...parameters.address]
-			const addressFilter = getLogAddressFilter(address)
-			const fromBlock = parameters.fromBlock
-			const toBlock = parameters.toBlock
-			const topics =
-				parameters.topics ??
-				(event === undefined
-					? undefined
-					: encodeEventTopics({
-							abi: [event],
-							...(parameters.args === undefined ? {} : { args: parameters.args }),
-							eventName: event.name ?? 'event',
-						}))
-			const requestedTopics = topics === undefined ? undefined : snapshotLogTopicFilter(topics)
-			const requestTopics = requestedTopics === undefined ? undefined : snapshotLogTopicFilter(requestedTopics)
-			const rawLogs = await requestTransportWithRateLimitRetries<readonly JsonValue[]>(transport, {
-				method: 'eth_getLogs',
-				params: [
-					{
-						...(address === undefined ? {} : { address }),
-						...(fromBlock === undefined ? {} : { fromBlock: hexQuantity(fromBlock) }),
-						...(toBlock === undefined ? {} : { toBlock: hexQuantity(toBlock) }),
-						...(requestTopics === undefined ? {} : { topics: requestTopics }),
-					},
-				],
-			})
-			return rawLogs.map(rawLog => {
-				const normalizedLog = normalizeLog(rawLog)
-				if (addressFilter !== undefined && !addressFilter.has(normalizedLog.address.toLowerCase())) throw new Error('RPC returned a log outside the requested filter')
-				if (fromBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber < fromBlock)) throw new Error('RPC returned a log outside the requested filter')
-				if (toBlock !== undefined && (normalizedLog.blockNumber === undefined || normalizedLog.blockNumber > toBlock)) throw new Error('RPC returned a log outside the requested filter')
-				if (requestedTopics !== undefined && !logMatchesTopicFilter(normalizedLog.topics, requestedTopics)) throw new Error('RPC returned a log outside the requested filter')
-				if (event === undefined) return normalizedLog
-				const decodedLog = decodeEventLog({
-					abi: [event],
-					data: normalizedLog.data,
-					topics: normalizedLog.topics,
-				})
-				return {
-					...normalizedLog,
-					args: decodedLog.args,
-					eventName: decodedLog.eventName,
-				}
-			}) as unknown as readonly RpcLogForEvent<TEvent>[]
-		},
+		getLogs,
 		getTransaction: async parameters => {
 			const requestedHash = normalizeHash(parameters.hash)
 			const rawTransaction = await requestTransportWithRateLimitRetries<JsonValue>(transport, {

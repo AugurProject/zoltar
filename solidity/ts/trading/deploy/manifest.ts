@@ -10,25 +10,25 @@ export function requireAddress(value: unknown, label: string): Address {
 }
 
 function readManifestChainId(manifest: Record<string, unknown>) {
-	const network = manifest.network
-	const candidate = isRecord(network) ? network.chainId : manifest.chainId
+	const network = manifest['network']
+	const candidate = isRecord(network) ? network['chainId'] : manifest['chainId']
 	if (typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate >= 0) return BigInt(candidate)
 	if (typeof candidate === 'string' && /^(?:0x[0-9a-fA-F]+|[0-9]+)$/.test(candidate)) return BigInt(candidate)
 	throw new Error('Core deployment manifest does not contain a valid chain ID')
 }
 
 function readSecurityPoolFactory(manifest: Record<string, unknown>) {
-	const direct = manifest.securityPoolFactory
+	const direct = manifest['securityPoolFactory']
 	if (direct !== undefined) return requireAddress(direct, 'securityPoolFactory')
-	const deploymentSteps = manifest.deploymentSteps
+	const deploymentSteps = manifest['deploymentSteps']
 	if (Array.isArray(deploymentSteps)) {
-		const factoryStep = deploymentSteps.find(step => isRecord(step) && step.id === 'securityPoolFactory')
-		if (isRecord(factoryStep)) return requireAddress(factoryStep.address, 'deploymentSteps.securityPoolFactory.address')
+		const factoryStep = deploymentSteps.find(step => isRecord(step) && step['id'] === 'securityPoolFactory')
+		if (isRecord(factoryStep)) return requireAddress(factoryStep['address'], 'deploymentSteps.securityPoolFactory.address')
 	}
-	const contracts = manifest.contracts
+	const contracts = manifest['contracts']
 	if (isRecord(contracts)) {
-		const candidate = contracts.SecurityPoolFactory ?? contracts.securityPoolFactory
-		if (isRecord(candidate)) return requireAddress(candidate.address, 'contracts.SecurityPoolFactory.address')
+		const candidate = contracts['SecurityPoolFactory'] ?? contracts['securityPoolFactory']
+		if (isRecord(candidate)) return requireAddress(candidate['address'], 'contracts.SecurityPoolFactory.address')
 		if (candidate !== undefined) return requireAddress(candidate, 'contracts.SecurityPoolFactory')
 	}
 	throw new Error('Core deployment manifest does not contain SecurityPoolFactory')

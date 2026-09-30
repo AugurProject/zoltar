@@ -24,6 +24,7 @@ import { useQueryState } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, getStagedOperationTimeoutSeconds, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import type { LiquidationApprovalDetails, LiquidationFundingPreview, ListedSecurityPool, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
 import { defaultUseSecurityPoolsOverviewDependencies, type SecurityPoolsOverviewProductionWriteClient, type UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export type { UseSecurityPoolsOverviewDependencies } from './securityPoolsOverviewDependencies.js'
 
@@ -362,7 +363,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						securityPoolOverviewError,
-						'Connect a wallet before queueing liquidation',
+						commonCopy.formatConnectWalletBefore('queueing liquidation'),
 						createLiquidationTransactionIntent(transactionContext),
 					),
 					onRefreshError: (message, hash) => {

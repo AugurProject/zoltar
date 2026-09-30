@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
-import { authoritativeQuoteMoved, formatAmountInput, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
+import { authoritativeQuoteMoved, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
@@ -77,8 +78,8 @@ describe('trade ticket inputs', () => {
 		expect(ticketModelFor(market, 'exit', '1.5').parsedAmount).toBe(15n * 10n ** 17n)
 		expect(ticketModelFor(market, 'entry', 'abc').amountError).toBe(ticketCopy.invalidEthAmount)
 		expect(ticketModelFor(market, 'exit', '0.0000000000000000001').amountError).toBe(ticketCopy.invalidShareAmount)
-		expect(formatAmountInput(15n * 10n ** 17n, 18)).toBe('1.5')
-		expect(formatAmountInput(1_000n * shares, 18)).toBe('1000')
+		expect(formatCurrencyInputBalance(15n * 10n ** 17n, 18)).toBe('1.5')
+		expect(formatCurrencyInputBalance(1_000n * shares, 18)).toBe('1000')
 	})
 
 	test('offers 25%, 50%, and the largest insured sale as shortcuts', () => {

@@ -24,26 +24,26 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 	const displayedContractItems = [...contractItems].sort((left, right) => sectionOrder.indexOf(contractRegistrySection(left)) - sectionOrder.indexOf(contractRegistrySection(right)))
 	const scrollLeft = list.scrollLeft
 	const scrollTop = list.scrollTop
-	const focusedContractAddress = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('.contract-row')?.dataset.contractAddress : undefined
-	const focusedAction = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[data-contract-action]')?.dataset.contractAction : undefined
+	const focusedContractAddress = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('.contract-row')?.dataset['contractAddress'] : undefined
+	const focusedAction = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[data-contract-action]')?.dataset['contractAction'] : undefined
 	const groupScrollPositions = new Map(
 		[...list.querySelectorAll<HTMLElement>('.contract-group[data-contract-group]')].flatMap(group => {
-			const name = group.dataset.contractGroup
+			const name = group.dataset['contractGroup']
 			const rows = group.querySelector<HTMLElement>('.contract-group-rows')
 			return name === undefined || rows === null ? [] : [[name, rows.scrollLeft] as const]
 		}),
 	)
-	const existingRows = new Map([...list.querySelectorAll<HTMLElement>('.contract-row[data-contract-address]')].map(row => [row.dataset.contractAddress, row]))
+	const existingRows = new Map([...list.querySelectorAll<HTMLElement>('.contract-row[data-contract-address]')].map(row => [row.dataset['contractAddress'], row]))
 	const groupedRows = new Map<ContractRegistrySection, HTMLElement[]>()
 	for (const contract of displayedContractItems) {
 		const status = contractDeploymentStatus(contract)
 		const addressKey = contract.address.toLowerCase()
 		const row = existingRows.get(addressKey) ?? element('article', 'contract-row')
-		row.dataset.contractAddress = addressKey
+		row.dataset['contractAddress'] = addressKey
 		const head = element('span', 'contract-row-head')
 		const deployment = contract.deployment_block ? internalEvidenceLink(contract.explorer_base_url, 'block', contract.deployment_block, `${contract.deployment_block_exact === false ? 'Deployed at or before' : 'Deployed at'} #${number(contract.deployment_block)}`) : element('span', '', status.label)
 		deployment.className = `deployment-status ${status.tone}`
-		deployment.dataset.contractAction = `${addressKey}:deployment`
+		deployment.dataset['contractAction'] = `${addressKey}:deployment`
 		const deploymentDetails = element('span', 'contract-deployment')
 		deploymentDetails.append(deployment)
 		head.append(element('strong', '', contract.label), deploymentDetails)
@@ -55,7 +55,7 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 		}
 		const address = internalEvidenceLink(contract.explorer_base_url, 'address', contract.address, contract.address)
 		address.className = 'contract-address-link'
-		address.dataset.contractAction = `${addressKey}:address`
+		address.dataset['contractAction'] = `${addressKey}:address`
 		row.replaceChildren(head, address)
 		const section = contractRegistrySection(contract)
 		const rows = groupedRows.get(section) ?? []
@@ -66,7 +66,7 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 		const rows = groupedRows.get(sectionName)
 		if (rows === undefined || rows.length === 0) return []
 		const section = element('section', 'contract-group')
-		section.dataset.contractGroup = sectionName
+		section.dataset['contractGroup'] = sectionName
 		const rowList = element('div', 'contract-group-rows')
 		rowList.append(...rows)
 		section.append(rowList)
@@ -74,7 +74,7 @@ export const renderContractsPage = (deps: ContractsPageDeps) => {
 	})
 	list.replaceChildren(...sections)
 	for (const section of list.querySelectorAll<HTMLElement>('.contract-group[data-contract-group]')) {
-		const name = section.dataset.contractGroup
+		const name = section.dataset['contractGroup']
 		const rows = section.querySelector<HTMLElement>('.contract-group-rows')
 		if (name !== undefined && rows !== null) rows.scrollLeft = groupScrollPositions.get(name) ?? 0
 	}

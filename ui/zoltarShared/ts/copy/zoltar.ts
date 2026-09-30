@@ -5,7 +5,6 @@ export const forkZoltar = 'Fork universe'
 export const migrateRep = 'Migrate REP'
 export const alreadyForkedReason = 'This universe has already forked.'
 export const forkQuestionRequiredReason = 'Select a valid fork question to continue.'
-export const forkQuestionIdInvalid = 'Enter a valid hexadecimal question ID.'
 export const forkQuestionTimeLoadingReason = 'Loading current chain time before checking whether the selected question has ended.'
 export const formatForkQuestionActiveReason = (endTime: CopyTemplateValue, relativeEndTime: CopyTemplateValue) => `The selected question must end before the universe can fork. It ends ${endTime} (${relativeEndTime}).`
 export const forkEconomicsUnavailableReason = 'Fork burn and migration-credit terms are unavailable.'

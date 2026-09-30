@@ -31,22 +31,6 @@ contract ERC1155CoverageHarness is ERC1155 {
 	function burnMany(address account, uint256[] memory ids, uint256[] memory values) external {
 		_burnBatch(account, ids, values);
 	}
-
-	function transferWithLegacyHelper(address from, address to, uint256 id, uint256 value) external {
-		_transferFrom(from, to, id, value);
-	}
-
-	function internalTransferWithLegacyHelper(address from, address to, uint256 id, uint256 value) external {
-		_internalTransferFrom(from, to, id, value);
-	}
-
-	function batchTransferWithLegacyHelper(address from, address to, uint256[] memory ids, uint256[] memory values) external {
-		_batchTransferFrom(from, to, ids, values);
-	}
-
-	function internalBatchTransferWithLegacyHelper(address from, address to, uint256[] memory ids, uint256[] memory values) external {
-		_internalBatchTransferFrom(from, to, ids, values);
-	}
 }
 
 contract CoverageAttributionExecuted {

@@ -29,7 +29,14 @@ type StorageLike = {
 	setItem?(key: string, value: string): void
 }
 
-export type RpcNetworkId = 'mainnet' | 'sepolia' | 'simulation'
+const RPC_NETWORK_IDS = ['mainnet', 'sepolia', 'simulation'] as const
+
+export type RpcNetworkId = (typeof RPC_NETWORK_IDS)[number]
+
+/** Narrows untrusted text, such as a select value, to a known RPC network. */
+export function parseRpcNetworkId(value: string) {
+	return RPC_NETWORK_IDS.find(networkId => networkId === value)
+}
 
 type GlobalWithRpcConfig = typeof globalThis & {
 	__ZOLTAR_RPC_URL__?: unknown
@@ -90,7 +97,7 @@ export function readNetworkRpcUrls(storage: StorageLike | undefined = getGlobalL
 		if (storedUrls === null) return urls
 		const parsed: unknown = JSON.parse(storedUrls)
 		if (typeof parsed !== 'object' || parsed === null) return urls
-		for (const networkId of ['mainnet', 'sepolia', 'simulation'] as const) {
+		for (const networkId of RPC_NETWORK_IDS) {
 			const configuredUrl = Reflect.get(parsed, networkId)
 			if (typeof configuredUrl === 'string') urls[networkId] = configuredUrl
 		}

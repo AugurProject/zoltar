@@ -14,7 +14,7 @@ export type SubmittedTransactionReceiptOptions = {
 }
 
 function replacementFailureMessage(reason: ReplacementReason) {
-	if (reason === 'cancelled') return 'Transaction was cancelled in the wallet before confirmation.'
+	if (reason === 'cancelled') return 'Transaction was canceled in the wallet before confirmation.'
 	return 'Transaction was replaced in the wallet before confirmation.'
 }
 

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
-import { usePriceOracleManager } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
+import { useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
 import { useReportingOperations } from '@zoltar/ui-statoblast-shared/features/reporting/hooks/useReportingOperations.js'
 import { useSecurityPoolCreation } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolCreation.js'
 import { useSecurityPoolsOverview } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityPoolsOverview.js'
@@ -38,7 +38,7 @@ export function useSecurityPoolsRoute({
 	onViewPendingReport,
 	inlineOracle,
 	openSecurityPoolInUniverse,
-	priceOracleManager,
+	openOraclePriceCoordinator,
 	repPerEthPrice,
 	repPerEthSource,
 	repPerEthSourceUrl,
@@ -72,7 +72,7 @@ export function useSecurityPoolsRoute({
 	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
 	onViewPendingReport: (reportId: bigint) => void
 	openSecurityPoolInUniverse: (universeId: bigint, securityPoolAddress: string) => void
-	priceOracleManager: ReturnType<typeof usePriceOracleManager>
+	openOraclePriceCoordinator: ReturnType<typeof useOpenOraclePriceCoordinator>
 	repPerEthPrice: bigint | undefined
 	repPerEthSource: SecurityPoolsSectionProps['createPool']['repPerEthSource']
 	repPerEthSourceUrl: string | undefined
@@ -93,7 +93,7 @@ export function useSecurityPoolsRoute({
 }) {
 	const [questionAndPoolCreating, setQuestionAndPoolCreating] = useState(false)
 	const { createMarket, loadZoltarForkAccess, marketCreating, marketError, marketForm, marketResult, resetMarket, setMarketForm, zoltarUniverse } = marketCreation
-	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = priceOracleManager
+	const { executePendingPoolOperation, loadingPoolOracleManager, loadPoolOracleManager, poolOracleActiveAction, poolOracleManagerDetails, poolOracleManagerError, poolOracleManagerErrorAddress, poolPriceOracleResult, requestPoolPrice } = openOraclePriceCoordinator
 	const zoltarUniverseHasForked = zoltarUniverse?.hasForked === true
 	const {
 		checkingDuplicateOriginPool,

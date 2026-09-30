@@ -31,6 +31,7 @@ export async function deployExecutorFromConnectivity(
 		persistIntent: parameters.persistIntent,
 		privateKey: parameters.privateKey,
 		readRpcUrls,
+		rpcQuorum: parameters.rpcQuorum,
 		rpcUrls: parameters.connectivity.publicRpcUrls,
 		salt: parameters.salt,
 	})

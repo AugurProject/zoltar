@@ -1,5 +1,7 @@
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
-import { formatUnits, type Address } from '@zoltar/core-shared/evm/ethereum'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { formatCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { ReportingActionResult, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_EscalationGame_EscalationGame } from '../contractArtifact.js'
 import { getReportingOutcomeValue } from '@zoltar/ui-core-shared/lib/contractEnums.js'
@@ -24,16 +26,16 @@ export async function reportOutcomeWithWalletViaVault(client: WriteClient, secur
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'depositRepToVault',
 		args: [depositAmount, target],
-		reviewTitle: `Deposit ${formatUnits(depositAmount, 18)} REP into this pool`,
-		reviewDescription: `Paid from your wallet. Next, ${formatUnits(actualReportAmount, 18)} REP from this vault funds your report. Your vault will hold ${formatUnits(fundingQuote.remainingVaultRepAttoRep, 18)} REP after reporting. Depositing REP does not change your standing ETH commitment.`,
+		reviewTitle: `Deposit ${formatCurrencyBalanceWithUnit(depositAmount, commonCopy.rep)} into this pool`,
+		reviewDescription: `Paid from your wallet. Next, ${formatCurrencyBalanceWithUnit(actualReportAmount, commonCopy.rep)} from this vault funds your report. Your vault will hold ${formatCurrencyBalanceWithUnit(fundingQuote.remainingVaultRepAttoRep, commonCopy.rep)} after reporting. Depositing REP does not change your standing ETH commitment.`,
 	} as const
 	const report = {
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'depositToEscalationGame',
 		args: [getReportingOutcomeValue(outcome), reportAmount],
-		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatUnits(actualReportAmount, 18)),
-		reviewAmount: `${formatUnits(actualReportAmount, 18)} REP`,
+		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(actualReportAmount)),
+		reviewAmount: formatCurrencyBalanceWithUnit(actualReportAmount, commonCopy.rep),
 	} as const
 	client.onTransactionPlan?.([
 		{ ...deposit, contractAddress: securityPoolAddress },

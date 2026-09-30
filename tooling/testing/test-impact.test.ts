@@ -40,7 +40,7 @@ describe('test impact recommendations', () => {
 	})
 
 	test('maps CI workflow changes to workflow contract tests', () => {
-		expect(commandsFor(['.github/workflows/browser-workflow.yml', '.github/workflows/coverage.yml', '.github/workflows/test-domains.yml', '.github/workflows/test-stability.yml', 'workflow/coverage.yml', 'workflow/ci.yml', 'workflow/actions/setup-ci/action.yml'])).toEqual([
+		expect(commandsFor(['.github/workflows/browser-workflow.yml', '.github/workflows/coverage.yml', '.github/workflows/test-domains.yml', '.github/workflows/test-stability.yml', '.github/workflows/ipfs-deploy.yml', '.github/actions/setup-ci/action.yml'])).toEqual([
 			'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',
 		])
 	})

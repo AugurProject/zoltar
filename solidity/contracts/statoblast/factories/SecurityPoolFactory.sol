@@ -9,7 +9,7 @@ import { ShareTokenFactory } from './ShareTokenFactory.sol';
 import { UniformPriceDualCapBatchAuctionFactory } from './UniformPriceDualCapBatchAuctionFactory.sol';
 import { UniformPriceDualCapBatchAuction } from '../UniformPriceDualCapBatchAuction.sol';
 import { IShareToken } from '../interfaces/IShareToken.sol';
-import { PriceOracleManagerAndOperatorQueuerFactory } from './PriceOracleManagerAndOperatorQueuerFactory.sol';
+import { OpenOraclePriceCoordinatorFactory } from './OpenOraclePriceCoordinatorFactory.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
@@ -20,7 +20,7 @@ import { SecurityPoolUtils } from '../SecurityPoolUtils.sol';
 contract SecurityPoolFactory is ISecurityPoolFactory {
 	ShareTokenFactory immutable shareTokenFactory;
 	UniformPriceDualCapBatchAuctionFactory immutable uniformPriceDualCapBatchAuctionFactory;
-	PriceOracleManagerAndOperatorQueuerFactory immutable priceOracleManagerAndOperatorQueuerFactory;
+	OpenOraclePriceCoordinatorFactory immutable openOraclePriceCoordinatorFactory;
 	Zoltar immutable zoltar;
 	OpenOracle immutable openOracle;
 	EscalationGameFactory immutable escalationGameFactory;
@@ -35,14 +35,14 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 	mapping(ISecurityPool => bytes32) private securityPoolOriginIds;
 	mapping(ISecurityPool => bool) private securityPoolHasInheritedForkOutcome;
 
-	event DeploySecurityPool(ISecurityPool indexed securityPool, UniformPriceDualCapBatchAuction truthAuction, OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
+	event DeploySecurityPool(ISecurityPool indexed securityPool, UniformPriceDualCapBatchAuction truthAuction, OpenOraclePriceCoordinator openOraclePriceCoordinator, IShareToken shareToken, ISecurityPool indexed parent, uint248 indexed universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth);
 	event SecurityPoolRegistered(bytes32 indexed originId, bytes32 indexed poolId, uint248 indexed universeId, ISecurityPool securityPool);
 
-	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, PriceOracleManagerAndOperatorQueuerFactory _priceOracleManagerAndOperatorQueuerFactory, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep, address operationsDelegate) {
+	constructor(ISecurityPoolForker _securityPoolForker, ZoltarQuestionData _questionData, EscalationGameFactory _escalationGameFactory, OpenOracle _openOracle, Zoltar _zoltar, ShareTokenFactory _shareTokenFactory, UniformPriceDualCapBatchAuctionFactory _uniformPriceDualCapBatchAuctionFactory, OpenOraclePriceCoordinatorFactory _openOraclePriceCoordinatorFactory, uint256 _minimumSecurityBondDebtAttoEth, uint256 _minimumVaultRepDepositAttoRep, address operationsDelegate) {
 		securityPoolForker = _securityPoolForker;
 		shareTokenFactory = _shareTokenFactory;
 		uniformPriceDualCapBatchAuctionFactory = _uniformPriceDualCapBatchAuctionFactory;
-		priceOracleManagerAndOperatorQueuerFactory = _priceOracleManagerAndOperatorQueuerFactory;
+		openOraclePriceCoordinatorFactory = _openOraclePriceCoordinatorFactory;
 		zoltar = _zoltar;
 		openOracle = _openOracle;
 		escalationGameFactory = _escalationGameFactory;
@@ -96,16 +96,16 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bool hasInheritedForkOutcome =
 			securityPoolHasInheritedForkOutcome[parent] || zoltar.forkQuestionMatches(parent.universeId(), questionId);
 		require(address(parent.shareToken()) == address(shareToken), 'Child share token mismatch');
-		uint256 initialReportPriorityFeeAttoEthPerGas = parent.priceOracleManagerAndOperatorQueuer().initialReportPriorityFeeAttoEthPerGas();
+		uint256 initialReportPriorityFeeAttoEthPerGas = parent.openOraclePriceCoordinator().initialReportPriorityFeeAttoEthPerGas();
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
 		ReputationToken reputationToken = zoltar.getRepToken(universeId);
-		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, initialReportPriorityFeeAttoEthPerGas, securityPoolSalt);
+		OpenOraclePriceCoordinator openOraclePriceCoordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, reputationToken, initialReportPriorityFeeAttoEthPerGas, securityPoolSalt);
 
 		truthAuction = uniformPriceDualCapBatchAuctionFactory.deployUniformPriceDualCapBatchAuction(address(securityPoolForker), securityPoolSalt);
-		securityPool = deploySecurityPool(shareToken, parent, priceOracleManagerAndOperatorQueuer, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, settlementCollateralAttoEth, address(truthAuction));
+		securityPool = deploySecurityPool(shareToken, parent, openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps, currentRetentionRate, settlementCollateralAttoEth, address(truthAuction));
 		_registerSecurityPool(originId, universeId, securityPool, hasInheritedForkOutcome);
-		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, truthAuction, priceOracleManagerAndOperatorQueuer, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, currentRetentionRate, settlementCollateralAttoEth));
+		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, truthAuction, openOraclePriceCoordinator, shareToken, parent, universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, currentRetentionRate, settlementCollateralAttoEth));
 	}
 
 	function deployOriginSecurityPool(uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 initialReportPriorityFeeAttoEthPerGas) external returns (ISecurityPool securityPool) {
@@ -132,16 +132,16 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 		bytes32 originId = getOriginId(universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas);
 		_reserveSecurityPool(originId, universeId);
 		bytes32 securityPoolSalt = keccak256(abi.encode(address(0x0), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas));
-		OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer = priceOracleManagerAndOperatorQueuerFactory.deployPriceOracleManagerAndOperatorQueuer(openOracle, reputationToken, initialReportPriorityFeeAttoEthPerGas, securityPoolSalt);
+		OpenOraclePriceCoordinator openOraclePriceCoordinator = openOraclePriceCoordinatorFactory.deployOpenOraclePriceCoordinator(openOracle, reputationToken, initialReportPriorityFeeAttoEthPerGas, securityPoolSalt);
 
 		// Each origin lineage has its own share token, which is reused by all migrated children.
 		IShareToken shareToken = shareTokenFactory.deployShareToken(originId, questionId);
 		uint256 initialRetentionRate = SecurityPoolUtils.calculateRetentionRate(0, 0);
-		securityPool = deploySecurityPool(shareToken, ISecurityPool(payable(address(0))), priceOracleManagerAndOperatorQueuer, universeId, questionId, statoblastSecurityMultiplierBps, initialRetentionRate, 0, address(0));
+		securityPool = deploySecurityPool(shareToken, ISecurityPool(payable(address(0))), openOraclePriceCoordinator, universeId, questionId, statoblastSecurityMultiplierBps, initialRetentionRate, 0, address(0));
 
 		_registerSecurityPool(originId, universeId, securityPool, false);
 		shareToken.authorize(securityPool);
-		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, UniformPriceDualCapBatchAuction(address(0)), priceOracleManagerAndOperatorQueuer, shareToken, ISecurityPool(payable(address(0))), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, initialRetentionRate, 0));
+		_recordSecurityPoolDeployment(SecurityPoolDeployment(securityPool, UniformPriceDualCapBatchAuction(address(0)), openOraclePriceCoordinator, shareToken, ISecurityPool(payable(address(0))), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas, initialRetentionRate, 0));
 	}
 
 	function _reserveSecurityPool(bytes32 originId, uint248 universeId) private {
@@ -161,13 +161,13 @@ contract SecurityPoolFactory is ISecurityPoolFactory {
 
 	function _recordSecurityPoolDeployment(SecurityPoolDeployment memory deployment) private {
 		securityPoolDeployments.push(deployment);
-		emit DeploySecurityPool(deployment.securityPool, deployment.truthAuction, deployment.priceOracleManagerAndOperatorQueuer, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.statoblastSecurityMultiplierBps, deployment.initialReportPriorityFeeAttoEthPerGas, deployment.currentRetentionRate, deployment.settlementCollateralAttoEth);
+		emit DeploySecurityPool(deployment.securityPool, deployment.truthAuction, deployment.openOraclePriceCoordinator, deployment.shareToken, deployment.parent, deployment.universeId, deployment.questionId, deployment.statoblastSecurityMultiplierBps, deployment.initialReportPriorityFeeAttoEthPerGas, deployment.currentRetentionRate, deployment.settlementCollateralAttoEth);
 	}
 
-	function deploySecurityPool(IShareToken shareToken, ISecurityPool parent, OpenOraclePriceCoordinator priceOracleManagerAndOperatorQueuer, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth, address truthAuction) private returns (ISecurityPool securityPool) {
-		securityPool = securityPoolDeployer.deploy(address(securityPoolForker), questionData, escalationGameFactory, priceOracleManagerAndOperatorQueuer, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, truthAuction);
+	function deploySecurityPool(IShareToken shareToken, ISecurityPool parent, OpenOraclePriceCoordinator openOraclePriceCoordinator, uint248 universeId, uint256 questionId, uint256 statoblastSecurityMultiplierBps, uint256 currentRetentionRate, uint256 settlementCollateralAttoEth, address truthAuction) private returns (ISecurityPool securityPool) {
+		securityPool = securityPoolDeployer.deploy(address(securityPoolForker), questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, truthAuction);
 
-		priceOracleManagerAndOperatorQueuer.setSecurityPool(securityPool);
+		openOraclePriceCoordinator.setSecurityPool(securityPool);
 		securityPool.setStartingParams(currentRetentionRate, settlementCollateralAttoEth);
 	}
 

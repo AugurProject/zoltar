@@ -71,6 +71,18 @@ direct Bun process needs an external supervisor. If the host or state storage is
 lost, restore the complete `.state` directory before resuming live execution with
 the same signer. Do not reuse that signer from incomplete recovery state.
 
+Compose sets `ZOLTAR_BOT_SIGNER_LOCK_ROOT=.state/process-locks` and mounts the fixed
+`zoltar-bot-signer-locks` volume there, so the liquidator, OpenOracle arbitrager, and
+chaos containers on one Docker host share one chain-and-signer lock; it does not fence
+another host. A direct Bun process uses `ZOLTAR_BOT_SIGNER_LOCK_ROOT` when it is set to
+a non-empty path (an operator-owned directory with mode `0700`), otherwise a
+`zoltar-bot-locks` directory under the system temporary directory. Processes that
+share a signer must resolve the same lock root.
+
+`SCAN_BLOCK_TIME_MS` overrides the block interval, in milliseconds, that the scan
+status log uses to report a scan as lagging. Mainnet and Sepolia default to `12000`;
+on other chains the log reports lag only from the observed head distance.
+
 Do not publish the dashboard on a public interface. Loopback RPC URLs refer to
 the container itself, so use a container-reachable RPC address when the node runs
 elsewhere.
@@ -90,7 +102,8 @@ bun run run
 ```
 
 Set `ZOLTAR_LIQUIDATOR_CONFIG` to use another operator file. The bot accepts no
-command-line arguments. The dashboard defaults to
+command-line arguments. It refuses to load a configuration or durable state file that
+is a symbolic link, is not owned by the bot user, or has a mode other than `0600`. The dashboard defaults to
 `http://127.0.0.1:4183`.
 
 The dashboard's **Chain and RPC connectivity** form is the source of network and

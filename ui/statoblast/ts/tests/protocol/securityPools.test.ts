@@ -54,7 +54,7 @@ const createPoolRead = ({
 const createDeployment = (securityPool: Address, { parent = zeroAddress, universeId = 1n }: { parent?: Address; universeId?: bigint } = {}) => ({
 	initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 	parent,
-	priceOracleManagerAndOperatorQueuer: zeroAddress,
+	openOraclePriceCoordinator: zeroAddress,
 	questionId: 1n,
 	statoblastSecurityMultiplierBps: 20_000n,
 	securityPool,
@@ -610,7 +610,7 @@ describe('securityPools protocol client', () => {
 			isPriceValid: true,
 			totalFeesOwedRemainder: 0n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame', 'isPriceValid'])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'openOraclePriceCoordinator', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame', 'isPriceValid'])
 		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
 	})
 })

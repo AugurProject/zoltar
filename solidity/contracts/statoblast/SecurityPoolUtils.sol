@@ -11,7 +11,6 @@ import { SecurityPoolForkerForkData } from './SecurityPoolForkerTypes.sol';
 library SecurityPoolUtils {
 	event VaultBadDebtMigrated(ISecurityPool indexed parentPool, ISecurityPool indexed childPool, address indexed vault, uint256 migratedBadDebtAttoEth, uint256 resultingParentTotalBadDebtAttoEth, uint256 resultingChildTotalBadDebtAttoEth);
 	uint256 constant MIGRATION_TIME = 8 weeks;
-	uint256 constant AUCTION_TIME = 1 weeks;
 
 	// fees
 	uint256 constant PRICE_PRECISION = 1e18;
@@ -149,7 +148,7 @@ library SecurityPoolUtils {
 		if (underwritingLimitAttoEth == 0) return (0, true);
 		uint256 grossOpenInterestAttoEth = Math.mulDiv(settlementCollateralAttoEth, underwritingLimitAttoEth, securityPool.totalUnderwritingLimitAttoEth(), Math.Rounding.Ceil);
 		openInterestAttoEth = grossOpenInterestAttoEth > badDebtAttoEth ? grossOpenInterestAttoEth - badDebtAttoEth : 0;
-		healthy = isVaultHealthyAtFactor(securityPool.backingUnitsToAttoRep(repBackingUnits), 0, underwritingLimitAttoEth, securityPool.priceOracleManagerAndOperatorQueuer().lastPrice(), securityPool.statoblastSecurityMultiplierBps(), BPS_DENOMINATOR);
+		healthy = isVaultHealthyAtFactor(securityPool.backingUnitsToAttoRep(repBackingUnits), 0, underwritingLimitAttoEth, securityPool.openOraclePriceCoordinator().lastPrice(), securityPool.statoblastSecurityMultiplierBps(), BPS_DENOMINATOR);
 	}
 
 	function _isUnassignedPositionHealthy(ISecurityPool securityPool, address securityPoolForker, uint256 settlementCollateralAttoEth) private view returns (bool) {

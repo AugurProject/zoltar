@@ -3,7 +3,6 @@ import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { array, booleanValue, numberValue, object, oneOf, optional, stringValue, union } from '@zoltar/bot-shared/dashboard/response-validation'
 
 const hexValue = (value: unknown): value is `0x${string}` => typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)
-const nullValue = (value: unknown): value is null => value === null
 
 export const isSnapshot = object<PublicOperatorSnapshot>({
 	marketAvailability: optional(
@@ -274,7 +273,7 @@ export const isSnapshot = object<PublicOperatorSnapshot>({
 	),
 	paused: booleanValue,
 	queuedSettings: array(oneOf('connectivity', 'deployment', 'execution', 'markets', 'risk', 'settlement', 'strategy', 'submission', 'universes')),
-	queuedWallet: optional(union(nullValue, hexValue)),
+	queuedSigner: optional(union(object<{ kind: 'apply'; address: `0x${string}` }>({ kind: oneOf('apply'), address: hexValue }), object<{ kind: 'clear' }>({ kind: oneOf('clear') }))),
 	savedWallet: optional(hexValue),
 	status: oneOf('connectivity-degraded', 'error', 'paused', 'running', 'stopped', 'syncing'),
 	submission: object({

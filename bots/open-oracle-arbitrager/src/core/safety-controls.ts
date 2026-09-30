@@ -1,3 +1,5 @@
+import { MAX_PRIORITY_FEE_PER_GAS } from '@zoltar/bot-shared/execution/transaction-submission'
+
 function parseDecimalWeth(value: string) {
 	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
 	const [whole = '0', fraction = ''] = value.split('.')
@@ -18,6 +20,15 @@ export function positionConsumesRisk(status: string) {
 
 export function adjustedNetProfitWeth(parameters: { entryGasCostAttoWeth: bigint; hedgeSlippageReserveAttoWeth: bigint; lifecycleGasReserveAttoWeth: bigint; profitBeforeGasAttoWeth: bigint }) {
 	return parameters.profitBeforeGasAttoWeth - parameters.entryGasCostAttoWeth - parameters.hedgeSlippageReserveAttoWeth - parameters.lifecycleGasReserveAttoWeth
+}
+
+/**
+ * Gas price used to plan entry and lifecycle costs. Doubling the base fee covers the one-block ceiling the dispute is signed
+ * with (base fee plus one 12.5% increase plus the shared priority fee) and leaves headroom for lifecycle transactions signed
+ * later at a then-current base fee. No operator cap applies: the settlement fee cap bounds only settlement submissions.
+ */
+export function plannedGasPriceAttoEth(baseFeePerGas: bigint) {
+	return baseFeePerGas * 2n + MAX_PRIORITY_FEE_PER_GAS
 }
 
 export function projectedLifecycleGasReserveAttoWeth(parameters: { callbackGasLimit: bigint; configuredReserveAttoWeth: bigint; gasPrice: bigint; submissionMode: 'private' | 'public' }) {

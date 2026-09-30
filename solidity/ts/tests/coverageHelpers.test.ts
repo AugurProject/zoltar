@@ -30,7 +30,7 @@ import {
 	ReputationToken_ReputationToken,
 	statoblast_EscalationGameClaimDelegate_EscalationGameClaimDelegate,
 	statoblast_factories_EscalationGameFactory_EscalationGameFactory,
-	statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory,
+	statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeployer,
 	statoblast_factories_SecurityPoolDeployer_SecurityPoolDeploymentWorker,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
@@ -868,7 +868,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					functionName: 'getScalarOutcomeName',
 					args: [[0n, 0n], '', 0n, 0n, 1n],
 				}),
-				expected: /Scalar outcome numTicks must be greater than zero/,
+				expected: /Scalar question numTicks must be positive/,
 			},
 			{
 				data: encodeFunctionData({
@@ -876,7 +876,7 @@ describe('Solidity bytecode coverage helpers', () => {
 					functionName: 'getScalarOutcomeName',
 					args: [[0n, 0n], '', 1n, 1n, 1n],
 				}),
-				expected: /Scalar outcome max value must be greater than min value/,
+				expected: /Scalar question display max must be greater than display min/,
 			},
 			{
 				data: encodeFunctionData({
@@ -1043,7 +1043,7 @@ describe('Solidity bytecode coverage helpers', () => {
 		assert.ok(nextHitCount > priorHitCount, 'historical eth_call coverage should attribute the TokenId source line even when latest code differs')
 	})
 
-	test('traces ERC1155 legacy helper overloads and internal mint, transfer, and burn paths', async () => {
+	test('traces ERC1155 transfer overloads and internal mint and burn paths', async () => {
 		const tokenAddress = await deployErc1155CoverageHelper()
 
 		await transact(
@@ -1101,7 +1101,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			tokenAddress,
 			encodeFunctionData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
-				functionName: 'transferWithLegacyHelper',
+				functionName: 'safeTransferFrom',
 				args: [client.account.address, participantClient.account.address, 1n, 2n],
 			}),
 		)
@@ -1109,15 +1109,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			tokenAddress,
 			encodeFunctionData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
-				functionName: 'internalTransferWithLegacyHelper',
-				args: [participantClient.account.address, client.account.address, 1n, 1n],
-			}),
-		)
-		await transact(
-			tokenAddress,
-			encodeFunctionData({
-				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
-				functionName: 'batchTransferWithLegacyHelper',
+				functionName: 'safeBatchTransferFrom',
 				args: [client.account.address, participantClient.account.address, [2n, 3n], [2n, 3n]],
 			}),
 		)
@@ -1125,15 +1117,7 @@ describe('Solidity bytecode coverage helpers', () => {
 			tokenAddress,
 			encodeFunctionData({
 				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
-				functionName: 'internalBatchTransferWithLegacyHelper',
-				args: [participantClient.account.address, client.account.address, [2n, 3n], [1n, 1n]],
-			}),
-		)
-		await transact(
-			tokenAddress,
-			encodeFunctionData({
-				abi: test_statoblast_CoverageHelpersHarness_ERC1155CoverageHarness.abi,
-				functionName: 'batchTransferWithLegacyHelper',
+				functionName: 'safeBatchTransferFrom',
 				args: [client.account.address, participantClient.account.address, [], []],
 			}),
 		)
@@ -1664,16 +1648,16 @@ describe('Solidity bytecode coverage helpers', () => {
 		const priceOracleFactoryAddress = await deployContract(
 			client,
 			encodeDeployData({
-				abi: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
-				bytecode: applyLibraries(statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.evm.bytecode.object),
+				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
+				bytecode: applyLibraries(statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.evm.bytecode.object),
 				args: [zeroAddress, 100000n, 1000000, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE, OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, 480, 0, 100000, 10000, 115, true, true, client.account.address, 100000n, 30000n, 1000n],
 			}),
 		)
 		await transact(
 			priceOracleFactoryAddress,
 			encodeFunctionData({
-				abi: statoblast_factories_PriceOracleManagerAndOperatorQueuerFactory_PriceOracleManagerAndOperatorQueuerFactory.abi,
-				functionName: 'deployPriceOracleManagerAndOperatorQueuer',
+				abi: statoblast_factories_OpenOraclePriceCoordinatorFactory_OpenOraclePriceCoordinatorFactory.abi,
+				functionName: 'deployOpenOraclePriceCoordinator',
 				args: [zeroAddress, reputationTokenAddress, 10n * 10n ** 9n, ZERO_BYTES32],
 			}),
 		)

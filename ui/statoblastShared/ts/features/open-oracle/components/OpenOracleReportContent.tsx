@@ -213,7 +213,7 @@ export function renderSelectedReportActionSection({
 							guardMessageElementId={sharedApprovalGuardMessage === undefined ? undefined : sharedApprovalGuardMessageId}
 							onApprove={amount => (isToken1 ? onApproveToken1 : onApproveToken2)(amount)}
 							pending={openOracleActiveAction === (isToken1 ? 'approveToken1' : 'approveToken2')}
-							pendingLabel={openOracleCopy.formatApprovingTokenPendingLabel(tokenSymbol)}
+							pendingLabel={commonCopy.formatApprovingToken(tokenSymbol)}
 							requiredAmount={requiredAmount}
 							resetKey={`dispute:${token}:${tokenSymbol}:${requiredAmount?.toString() ?? ''}:${openOracleForm.reportId}`}
 							tokenSymbol={tokenSymbol}

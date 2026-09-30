@@ -16,13 +16,13 @@ describe('Vault standing underwriting limit adjustment', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 	const adjust = async (factor: bigint, client = fixture.client) => {
 		const { securityPoolAddresses } = fixture
-		if (!(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer))) await manipulatePriceOracle(client, fixture.mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
-		const hash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.SetVaultUnderwritingLimit, client.account.address, factor)
+		if (!(await getIsPriceValid(client, securityPoolAddresses.openOraclePriceCoordinator))) await manipulatePriceOracle(client, fixture.mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
+		const hash = await requestPriceIfNeededAndStageOperation(client, securityPoolAddresses.openOraclePriceCoordinator, OperationType.SetVaultUnderwritingLimit, client.account.address, factor)
 		const receipt = await client.waitForTransactionReceipt({ hash })
 		assert.strictEqual(receipt.status, 'success')
-		const operationId = await client.readContract({ address: securityPoolAddresses.priceOracleManagerAndOperatorQueuer, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter' })
+		const operationId = await client.readContract({ address: securityPoolAddresses.openOraclePriceCoordinator, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter' })
 		for (const log of receipt.logs) {
-			if (log.address.toLowerCase() !== securityPoolAddresses.priceOracleManagerAndOperatorQueuer.toLowerCase()) continue
+			if (log.address.toLowerCase() !== securityPoolAddresses.openOraclePriceCoordinator.toLowerCase()) continue
 			try {
 				const decoded = decodeEventLog({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, data: log.data, topics: log.topics })
 				if (decoded.eventName !== 'ExecutedStagedOperation' || decoded.args.operationId !== operationId) continue
@@ -90,7 +90,7 @@ describe('Vault standing underwriting limit adjustment', () => {
 
 	test.each([30n * unit, 2n ** 256n - 1n])('supersedes an older manual limit even if its replacement fails (%s)', async newLimit => {
 		const { client, securityPoolAddresses, mockWindow, repDeposit } = fixture
-		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const manager = securityPoolAddresses.openOraclePriceCoordinator
 		for (let index = 0; index < 4; index++) await requestPriceIfNeededAndStageOperation(client, manager, OperationType.WithdrawRep, client.account.address, repDeposit / 100n)
 		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.SetVaultUnderwritingLimit, client.account.address, 40n * unit)
 		const oldId = await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'stagedOperationCounter' })
@@ -103,7 +103,7 @@ describe('Vault standing underwriting limit adjustment', () => {
 
 	test('replaces an automatic queued limit without occupying another settlement slot', async () => {
 		const { client, securityPoolAddresses, mockWindow } = fixture
-		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const manager = securityPoolAddresses.openOraclePriceCoordinator
 		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.SetVaultUnderwritingLimit, client.account.address, 40n * unit)
 		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.SetVaultUnderwritingLimit, client.account.address, 30n * unit)
 		assert.strictEqual(await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'getActiveStagedOperationCount' }), 1n)
@@ -115,7 +115,7 @@ describe('Vault standing underwriting limit adjustment', () => {
 
 	test('keeps the current limit until an on-chain queued change executes', async () => {
 		const { client, securityPoolAddresses, mockWindow } = fixture
-		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const manager = securityPoolAddresses.openOraclePriceCoordinator
 		await requestPriceIfNeededAndStageOperation(client, manager, OperationType.SetVaultUnderwritingLimit, client.account.address, 40n * unit)
 		assert.ok((await getPendingReportId(client, manager)) > 0n)
 		assert.strictEqual(await readLimit(), 0n)
@@ -141,7 +141,7 @@ describe('Vault standing underwriting limit adjustment', () => {
 		await adjust(40n * unit)
 		await mint(10n * unit)
 		const { client, securityPoolAddresses, mockWindow } = fixture
-		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const manager = securityPoolAddresses.openOraclePriceCoordinator
 		const settledAt = await client.readContract({ address: manager, abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, functionName: 'lastSettlementTimestamp' })
 		await mockWindow.setTime(settledAt + 3601n)
 		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, manager, OperationType.SetVaultUnderwritingLimit, client.account.address, 100n * unit, 300n, 100n * unit, await getRequestPriceCostAttoEth(client, manager))
@@ -164,14 +164,14 @@ describe('Vault standing underwriting limit adjustment', () => {
 
 	test('rejects increases after vault admission closes', async () => {
 		await fixture.mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer, unit)
+		await manipulatePriceOracle(fixture.client, fixture.mockWindow, fixture.securityPoolAddresses.openOraclePriceCoordinator, unit)
 		await assert.rejects(adjust(40n * unit), /Vault admission closed/)
 	})
 
 	test('consumes an empty-vault owner increase with a failed backing check', async () => {
 		const { client, mockWindow, securityPoolAddresses } = fixture
 		const outsider = createWriteClient(mockWindow, TEST_ADDRESSES[1])
-		const manager = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const manager = securityPoolAddresses.openOraclePriceCoordinator
 		await manipulatePriceOracle(client, mockWindow, manager)
 		await assert.rejects(adjust(40n * unit, outsider), /Vault backing insufficient/)
 		assert.strictEqual(await readLimit(outsider), 0n)

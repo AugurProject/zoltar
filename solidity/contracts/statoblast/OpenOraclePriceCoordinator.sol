@@ -14,16 +14,16 @@ contract OpenOraclePriceCoordinator {
 	uint256 public constant MAX_PENDING_SETTLEMENT_OPERATIONS = 4;
 	uint256 public constant OPEN_INTEREST_DIVIDER = 100;
 	string private constant STAGED_OPERATION_EXECUTION_OK = '';
-	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'staged operation expired';
-	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'stale liquidation';
-	string private constant STAGED_OPERATION_ERROR_ZERO_WITHDRAW = 'withdraw amount has no effect';
+	string private constant STAGED_OPERATION_ERROR_EXPIRED = 'Staged operation expired';
+	string private constant STAGED_OPERATION_ERROR_STALE_LIQUIDATION = 'Stale liquidation';
+	string private constant STAGED_OPERATION_ERROR_ZERO_WITHDRAW = 'Withdraw amount has no effect';
 	string private constant STAGED_OPERATION_ERROR_PANIC = 'Panic';
 	string private constant STAGED_OPERATION_ERROR_UNKNOWN = 'Unknown error';
 	uint256 public pendingReportId;
 	address public pendingReportSponsor;
 	uint256 public pendingOperationSlotId;
 	uint256 public lastSettlementTimestamp;
-	uint256 public lastPrice; // (REP * PRICE_PRECISION) / ETH;
+	uint256 public lastPrice; // (REP * SecurityPoolUtils.PRICE_PRECISION) / ETH;
 	ReputationToken public immutable reputationToken;
 	ISecurityPool public securityPool;
 	OpenOracle public immutable openOracle;
@@ -127,6 +127,9 @@ contract OpenOraclePriceCoordinator {
 		liquidationApprovalRegistry = registry;
 	}
 
+	// One-time wiring. SecurityPoolFactory deploys this coordinator (through the coordinator
+	// factory's deployment worker, with a caller-scoped salt) and sets the pool in the same
+	// transaction, so no other caller can reach this before the pool is set.
 	function setSecurityPool(ISecurityPool _securityPool) public {
 		require(address(securityPool) == address(0x0), 'Security pool already set');
 		securityPool = _securityPool;
@@ -215,7 +218,7 @@ contract OpenOraclePriceCoordinator {
 		uint256 minimumWethReportAttoEth = minimumToken1ReportAttoEth();
 		uint256 initialWethReportAttoEth =
 			requestedInitialAttoWeth > minimumWethReportAttoEth ? requestedInitialAttoWeth : minimumWethReportAttoEth;
-		uint256 initialRepReportAttoRep = Math.mulDiv(initialWethReportAttoEth, proposedRepPerEthPrice, PRICE_PRECISION, Math.Rounding.Ceil);
+		uint256 initialRepReportAttoRep = Math.mulDiv(initialWethReportAttoEth, proposedRepPerEthPrice, SecurityPoolUtils.PRICE_PRECISION, Math.Rounding.Ceil);
 		uint256 escalationHaltAttoEth = Math.mulDiv(initialWethReportAttoEth, escalationHaltMultiplierBps, SecurityPoolUtils.BPS_DENOMINATOR);
 		uint256 openInterestEscalationHaltAttoEth = Math.ceilDiv(securityPool.settlementCollateralAttoEth(), OPEN_INTEREST_DIVIDER);
 		if (openInterestEscalationHaltAttoEth > escalationHaltAttoEth)
@@ -269,7 +272,7 @@ contract OpenOraclePriceCoordinator {
 		}
 		// Freshness runs from settlement eligibility: the final report is frozen then, however late settle() is called.
 		lastSettlementTimestamp = priceTimestamp;
-		lastPrice = Math.mulDiv(amount2, PRICE_PRECISION, amount1);
+		lastPrice = Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1);
 		securityPool.updateRetentionRate();
 		emit PriceReported(reportId, lastPrice, lastSettlementTimestamp);
 		if (pendingSettlementOperationIds.length != 0) {
@@ -311,7 +314,7 @@ contract OpenOraclePriceCoordinator {
 		priceTimestamp = uint256(finalReportTimestamp) + settlementTime;
 		if (!_isFreshPriceTimestamp(priceTimestamp)) return ('Report stale', 0);
 		if (amount1 == 0 || amount2 == 0) return ('Empty oracle settlement', 0);
-		if (Math.mulDiv(amount2, PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
+		if (Math.mulDiv(amount2, SecurityPoolUtils.PRICE_PRECISION, amount1) == 0) return ('Oracle price is zero', 0);
 	}
 
 	function _isFinalReportProfitable(uint256 reportId, uint24 numReports, uint256 finalAmount1) private view returns (bool) {
@@ -359,13 +362,13 @@ contract OpenOraclePriceCoordinator {
 		} else {
 			require(receiverVault != targetVault, 'Receiver is target');
 		}
-		require(!securityPool.isEscalationResolved(), 'question already resolved, so staged operations are unavailable');
+		require(!securityPool.isEscalationResolved(), 'Escalation resolved');
 		if (pendingReportId != 0) {
 			require(msg.sender == pendingReportSponsor, 'Only the pending report sponsor can queue more operations until settlement');
 		}
 		if (operation == OperationType.WithdrawRep) {
 			(, uint256 withdrawRepAmountAttoRep) = _previewWithdrawRep(msg.sender, operationValue);
-			require(withdrawRepAmountAttoRep > 0, 'Withdraw amount has no effect');
+			require(withdrawRepAmountAttoRep > 0, STAGED_OPERATION_ERROR_ZERO_WITHDRAW);
 		}
 		stagedOperationCounter++;
 		uint256 operationId = stagedOperationCounter;

@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { privateKeyToAccount } from '../src/ethereum.ts'
 import { acquireBotProcessLocks, createBotShutdownController, runBotMain, throwLockAcquisitionCause, withBotProcessLocks, type BotProcessLockOptions } from '../src/execution/bot-process-locks.ts'
+import { acquireExecutionSignerLock } from '../src/execution/process-lock.ts'
 
 const directories: string[] = []
 const releases: (() => Promise<void>)[] = []
@@ -238,6 +239,27 @@ describe('bot process locks', () => {
 		const first = await acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot: lockRoot, stateFile: await stateFile('durable-first.json') })
 		releases.push(first.release)
 		await expect(acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot: lockRoot, stateFile: await stateFile('durable-second.json') })).rejects.toThrow('already locked')
+	})
+
+	test('places signer locks under ZOLTAR_BOT_SIGNER_LOCK_ROOT when no explicit root is supplied', async () => {
+		const privateKey = `0x${'67'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const parent = await mkdtemp(join(tmpdir(), 'zoltar-env-signer-lock-'))
+		directories.push(parent)
+		const lockRoot = join(parent, 'locks')
+		const previous = process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT']
+		process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'] = lockRoot
+		try {
+			const direct = await acquireExecutionSignerLock(11_155_111, address)
+			expect(direct.path).toBe(join(lockRoot, `11155111-${address.toLowerCase()}.lock`))
+			await direct.release()
+			const locks = await acquireLiquidatorProcessLocks({ chainId: 11_155_111, execute: true, privateKey, stateFile: await stateFile('env-root.json') })
+			releases.push(locks.release)
+			await expect(acquireExecutionSignerLock(11_155_111, address, lockRoot)).rejects.toThrow('already locked')
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT']
+			else process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'] = previous
+		}
 	})
 
 	test('acquires global signer exclusivity when a dry-run process transitions to live execution', async () => {

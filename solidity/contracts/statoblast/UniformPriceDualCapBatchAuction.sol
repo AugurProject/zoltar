@@ -27,10 +27,6 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		uint256 bidIndex;
 	}
 
-	int256 constant MIN_TICK = -524288;
-	int256 constant MAX_TICK = 524288;
-	uint256 constant AUCTION_TIME = 1 weeks;
-	uint256 constant PRICE_PRECISION = 1e18;
 	uint256 constant MIN_BID_SIZE_DIVISOR = 100_000;
 
 	mapping(uint256 => UniformPriceDualCapBatchAuctionStorage.Node) private nodes;
@@ -73,7 +69,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 	modifier isOperational() {
 		require(auctionStarted != 0, 'Auction must be started before accepting bids');
 		require(!finalized, 'Auction has already been finalized');
-		require(block.timestamp < auctionStarted + AUCTION_TIME, 'Auction bidding period has ended');
+		require(block.timestamp < auctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, 'Auction bidding period has ended');
 		_;
 	}
 
@@ -86,19 +82,19 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 
 		maxAttoRepBeingSold = uint88(_maxAttoRepBeingSold);
 		attoEthRaiseCap = uint128(_attoEthRaiseCap);
-		underfundedThreshold = Math.mulDiv(_attoEthRaiseCap, PRICE_PRECISION, _maxAttoRepBeingSold, Math.Rounding.Ceil);
+		underfundedThreshold = Math.mulDiv(_attoEthRaiseCap, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, _maxAttoRepBeingSold, Math.Rounding.Ceil);
 		require(block.timestamp <= type(uint48).max, 'Auction timestamp too high');
 		auctionStarted = uint48(block.timestamp);
 		minBidSizeAttoEth = uint128(_attoEthRaiseCap / MIN_BID_SIZE_DIVISOR);
 		if (minBidSizeAttoEth < 1) minBidSizeAttoEth = 1;
 
-		emit AuctionStarted(auctionStarted, auctionStarted + AUCTION_TIME, _attoEthRaiseCap, _maxAttoRepBeingSold, minBidSizeAttoEth);
+		emit AuctionStarted(auctionStarted, auctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, _attoEthRaiseCap, _maxAttoRepBeingSold, minBidSizeAttoEth);
 	}
 
 	function submitBid(int256 tick) external payable isOperational {
 		require(msg.value >= minBidSizeAttoEth, 'Auction bid is smaller than the minimum bid size');
 		require(msg.value <= type(uint128).max, 'Auction bid too high');
-		require(tick >= MIN_TICK && tick <= MAX_TICK, 'Auction tick is outside the supported price range');
+		require(tick >= UniformPriceDualCapBatchAuctionStorage.MIN_TICK && tick <= UniformPriceDualCapBatchAuctionStorage.MAX_TICK, 'Auction tick is outside the supported price range');
 		require(tickToPrice(tick) > 0, 'Auction tick price rounds down to zero');
 		// Same-price rationing is intentionally time-priority, not pro-rata. Bids at
 		// one tick append in submission order, and any marginal clearing-tick fill
@@ -114,7 +110,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		require(!finalized, 'Auction has already been finalized');
 		require(msg.sender == owner, 'Only the auction owner can finalize');
 		require(auctionStarted != 0, 'Auction must be started before finalization');
-		require(block.timestamp >= auctionStarted + AUCTION_TIME, 'Auction bidding period is still active');
+		require(block.timestamp >= auctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, 'Auction bidding period is still active');
 
 		(
 			bool hitCap,
@@ -159,7 +155,10 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		if (hitCap) {
 			uint256 fundedClearingPrice = tickToPrice(foundTick);
 			finalRepPurchasedAttoRep =
-				fundedClearingPrice > 0 ? (accumulatedBidAttoEth * PRICE_PRECISION) / fundedClearingPrice : 0;
+				fundedClearingPrice > 0
+					? (accumulatedBidAttoEth * UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION) /
+						fundedClearingPrice
+					: 0;
 			return (foundTick, 0, finalRepPurchasedAttoRep, accumulatedBidAttoEth);
 		}
 
@@ -244,7 +243,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 					status = BidSettlementStatus.Losing;
 				} else if (tick > clearingTick) {
 					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, PRICE_PRECISION, clearingPriceLocal);
+					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
 					status = BidSettlementStatus.Winning;
 				} else {
 					uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
@@ -257,7 +256,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 						bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
 					}
 					if (bidUsedAttoEth > bid.bidAmountAttoEth) bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, PRICE_PRECISION, clearingPriceLocal);
+					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
 					refundAttoEth = bid.bidAmountAttoEth - bidUsedAttoEth;
 					if (bidUsedAttoEth == 0) {
 						status = BidSettlementStatus.Losing;
@@ -274,7 +273,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 				uint256 cumulativeRepBeforeAttoRep =
 					underfunded
 						? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
-						: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, PRICE_PRECISION, clearingPriceLocal);
+						: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
 				totalRepBackingUnitsAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
 			}
 			totalFilledAttoRep += attoRepFilled;
@@ -458,8 +457,8 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 	}
 
 	function _priceToCeilingTick(uint256 price) private pure returns (int256) {
-		int256 low = MIN_TICK;
-		int256 high = MAX_TICK;
+		int256 low = UniformPriceDualCapBatchAuctionStorage.MIN_TICK;
+		int256 high = UniformPriceDualCapBatchAuctionStorage.MAX_TICK;
 		while (low < high) {
 			int256 middle = low + (high - low) / 2;
 			if (tickToPrice(middle) >= price) high = middle;

@@ -1,9 +1,10 @@
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { useEffect, useId, useMemo, useState } from 'preact/hooks'
 import type { PublicClient } from '@zoltar/core-shared/evm/ethereum'
-import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatTrimmedUnits, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { collateralAttoEthToAttoShares } from '../lib/shareValue.js'
+import { formatRoundedUnits } from '../lib/format.js'
 import { formatSlippagePercent } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 import { TransactionReview } from '@zoltar/ui-core-shared/components/TransactionReview.js'
@@ -229,7 +230,11 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 				{transaction.quoteState === 'loading' && quote === undefined ? <LoadingText>{settlementCopy.gettingQuote}</LoadingText> : null}
 				{quote?.operation === 'redeem-complete-set' ? (
 					<section className='trade-estimate' aria-label={settlementCopy.quoteHeading} aria-busy={transaction.quoteState === 'loading'}>
-						<TransactionReview variant='inline' primary={[{ label: settlementCopy.youReceive, value: `${formatTrimmedUnits(quote.expectedAttoEth)} ${settlementCopy.eth}` }]} details={[{ label: settlementCopy.minimumReceived, value: `${formatTrimmedUnits(quote.minimumAttoEth)} ${settlementCopy.eth}` }]} />
+						<TransactionReview
+							variant='inline'
+							primary={[{ label: settlementCopy.youReceive, value: formatValueWithUnit(formatRoundedUnits(quote.expectedAttoEth), settlementCopy.eth) }]}
+							details={[{ label: settlementCopy.minimumReceived, value: formatValueWithUnit(formatTrimmedUnits(quote.minimumAttoEth), settlementCopy.eth) }]}
+						/>
 						<p className='detail trade-estimate-note'>{settingsCopy.protectionSummary(formatSlippagePercent(settings.slippageBps), settings.validityMinutes)}</p>
 					</section>
 				) : null}

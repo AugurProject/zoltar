@@ -180,7 +180,7 @@ describe('UI Docker packaging', () => {
 
 	test('excludes every split-package generated tree from the Docker source context', async () => {
 		const source = await readFile(dockerignore, 'utf8')
-		for (const generatedPath of ['ui/*/dist', 'ui/*/js', 'ui/*/vendor', 'ui/*/ts/abis.ts', 'ui/*/ts/contractArtifact.ts', 'ui/*/ts/deploymentArtifacts.ts', 'ui/*/ts/deploymentsArtifacts.ts']) {
+		for (const generatedPath of ['ui/*/dist', 'ui/*/js', 'ui/*/vendor', 'ui/*/ts/abis.ts', 'ui/*/ts/contractArtifact.ts']) {
 			expect(source.split('\n')).toContain(generatedPath)
 		}
 		expect(source).not.toMatch(/^ui\/(?:dist|js|vendor)$/m)

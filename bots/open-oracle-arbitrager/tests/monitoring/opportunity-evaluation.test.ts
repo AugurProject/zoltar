@@ -331,7 +331,7 @@ for (const venue of ['uniswap-v2', 'uniswap-v4'] as const) {
 		const evaluated = await inspectReport(reader.client, undefined, inspection, report, [{ ...pool, spotTick: 1000n }, selected], 100n, marketBlock.hash, 101n, 1n, undefined, { decimals: 18, symbol: 'REP' }, true, true, false, [{ ...report.game, coordinator: reporter, openOracle: oracle }], () => {})
 		expect(evaluated?.opportunity).toMatchObject({ decision: 'dry-run-opportunity', venue })
 		const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
-		const execution = { ...enabled, connectivity: saved.connectivity, quorumRpcUrls: ['https://second.example'], executor: reporter, openOracle: oracle, twapSeconds: 60 }
+		const execution = { ...enabled, connectivity: saved.connectivity, quorumRpcUrls: ['https://second.example'], rpcQuorum: 1 as const, executor: reporter, openOracle: oracle, twapSeconds: 60 }
 		const snapshot = await executionReadQuorum([reader.client, independentClient(venue).client], execution, report, selected, venue, 3000, 100n, reporter)
 		expect(snapshot.v3State).toBeUndefined()
 		expect(snapshot.replacementAmount2).toBe(venue === 'uniswap-v2' ? constantProductExactInput(calculateNextAmount1(report.game), reserveWeth, reserveToken) : replacement)
@@ -350,7 +350,7 @@ for (const venue of ['uniswap-v2', 'uniswap-v4'] as const) {
 
 test('V3 retains its own liquidity and TWAP reads in the final quorum', async () => {
 	const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
-	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: ['https://second.example'], executor: reporter, openOracle: oracle, twapSeconds: 60 }
+	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: ['https://second.example'], rpcQuorum: 1 as const, executor: reporter, openOracle: oracle, twapSeconds: 60 }
 	const reader = independentClient('uniswap-v3')
 	const snapshot = await executionReadQuorum([reader.client, independentClient('uniswap-v3').client], execution, report, pool, 'uniswap-v3', 3000, 100n, reporter)
 	expect(snapshot.v3State).toMatchObject({ liquidity: 10n ** 24n, spotTick: 5n, twapTick: 5n })
@@ -372,7 +372,7 @@ test('a higher-profit sell with a missing buy quote cannot block an executable a
 	expect(raw.replacement).toBe(replacement)
 	expect(raw.buy).toBeUndefined()
 	const saved = parseOperatorSettings(await Bun.file(new URL('../../config/operator.example.json', import.meta.url)).json())
-	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: [], executor: reporter, openOracle: oracle, twapSeconds: 60 }
+	const execution = { ...config, connectivity: saved.connectivity, quorumRpcUrls: [], rpcQuorum: 1 as const, executor: reporter, openOracle: oracle, twapSeconds: 60 }
 	await expect(executionReadQuorum([quoter.client], execution, report, pool, 'uniswap-v3', 3000, 100n, reporter)).rejects.toThrow('Selected venue quote failed')
 	const inspection: ReportInspectionConfiguration = { ...config, execute: false, maxSpotTwapTicks: 100n, minimumProfitAttoWeth: 0n, minimumProfitBps: 0n, minimumRemainingBlocks: 1n, minimumRemainingSeconds: 1n, openOracle: oracle }
 	const alternative: Pool = { venue: 'uniswap-v4', address: v4PoolManager, fee: 3000, token: rep }

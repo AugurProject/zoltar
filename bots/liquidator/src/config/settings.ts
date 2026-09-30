@@ -3,11 +3,11 @@ import { bigintToSafeNumber, getAddress, type Address, type Hex } from '@zoltar/
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, parseDecimalAmount, record, nonemptyString as string } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { parseCentralizedMarketSettings, serializeCentralizedMarketSettings, type CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
-import { validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { presetNetworkChainId, validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { parseApprovedUniverses } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
-import { canonicalDeployment, parseRootMarketSettings } from './canonical-deployment.ts'
+import { canonicalDeployment, parseRootMarketSettings, presetNetwork } from './canonical-deployment.ts'
 
 export type CandidatePriority = 'largest-bonus' | 'largest-debt' | 'lowest-top-up'
 
@@ -51,6 +51,7 @@ export type OperatorSettings = {
 		rpcQuorum: RpcQuorumRequirement
 	}
 	deployment: {
+		multicall3: Address
 		securityPoolFactory: Address
 		weth: Address
 		zoltar: Address
@@ -188,7 +189,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 	const networkConfigured = root['networkConfigured'] === undefined ? root['connectivity'] !== undefined : boolean(root['networkConfigured'], 'networkConfigured')
 	if (networkConfigured && (root['network'] === undefined || root['connectivity'] === undefined)) throw new Error('A configured operator requires network and connectivity')
 	if (!networkConfigured && root['connectivity'] !== undefined) throw new Error('An unconfigured operator cannot retain RPC connectivity')
-	const network = root['network'] === undefined ? { chainId: 1, explorerUrl: 'https://etherscan.io', name: 'mainnet' } : record(root['network'], 'network')
+	const network = root['network'] === undefined ? presetNetwork('mainnet') : record(root['network'], 'network')
 	const chainId = integer(network['chainId'], 'network.chainId', 1, 2 ** 31 - 1)
 	const runtime = record(root['runtime'], 'runtime')
 	const connectivity = networkConfigured ? parseConnectivity(root['connectivity']) : { publicRpcUrls: [], quorumRpcUrls: [], readRpcUrl: 'http://127.0.0.1:1', rpcQuorum: rpcQuorumRequirement() }
@@ -240,7 +241,7 @@ export function parseSettings(value: unknown): OperatorSettings {
 		submission: validateSubmissionSettings(root['submission']),
 		version: 1,
 	}
-	const canonicalChainId = settings.network.name === 'mainnet' ? 1 : 11_155_111
+	const canonicalChainId = presetNetworkChainId(settings.network.name)
 	if (settings.network.chainId !== canonicalChainId) throw new Error('network name and chainId must identify the same supported chain')
 	if (settings.networkConfigured && settings.childMarketConfigurations.some(configuration => configuration.assetChainId !== settings.network.chainId)) throw new Error('Child market configurations must target the configured chain')
 	const marketAssetIds = [settings.centralizedMarkets, ...settings.childMarketConfigurations].map(configuration => configuration.assetAddress.toLowerCase())

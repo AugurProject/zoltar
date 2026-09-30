@@ -1,7 +1,7 @@
 import mainnetManifest from '../../../../docs/mainnet-deployment-addresses.json'
 import example from '../../config/operator.example.json'
 import sepoliaManifest from '../../../../docs/sepolia-deployment-addresses.json'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -120,6 +120,23 @@ describe('liquidator settings', () => {
 			const restoredSepolia = await switchSettingsNetworkProfile(path, 'sepolia', join(import.meta.dir, '..', '..', 'config', 'operator.example.json'))
 			expect(restoredSepolia.settings.connectivity.rpcQuorum).toBe(1)
 			expect((await loadSettings(path)).settings.network.name).toBe('sepolia')
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('loads only an owner-only regular configuration file', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-owner-only-'))
+		try {
+			const path = join(directory, 'operator.json')
+			await saveSettings(path, parseSettings(settings))
+			await chmod(path, 0o644)
+			await expect(loadSettings(path)).rejects.toThrow('must have owner-only mode 0600')
+			await chmod(path, 0o600)
+			const linked = join(directory, 'linked.json')
+			await symlink(path, linked)
+			await expect(loadSettings(linked)).rejects.toThrow('must not be a symbolic link')
+			await expect(loadSettings(join(directory, 'missing.json'))).rejects.toThrow(/Missing liquidator configuration.*install -m 600 config\/operator.example.json/)
 		} finally {
 			await rm(directory, { force: true, recursive: true })
 		}

@@ -1,8 +1,8 @@
 import { isHash32, record } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { configurationRevisionConflict } from '../config/settings.ts'
+import { chaosConfigurationRevisionConflict } from '../config/settings.ts'
 
 export function expectedRevision(value: unknown, current: string) {
-	if (typeof value !== 'string' || value !== current) throw configurationRevisionConflict()
+	if (typeof value !== 'string' || value !== current) throw chaosConfigurationRevisionConflict()
 	return value
 }
 

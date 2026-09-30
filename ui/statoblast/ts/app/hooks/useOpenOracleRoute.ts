@@ -1,6 +1,6 @@
 import { useSettledPoolOracleManagerRefresh } from './useSettledPoolOracleManagerRefresh.js'
 import { useOpenOracleOperations } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
-import { usePriceOracleManager } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/usePriceOracleManager.js'
+import { useOpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js'
 import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
@@ -28,8 +28,8 @@ export function useOpenOracleRoute({
 	urlOpenOracleReportId: string
 	walletScopedHookConfig: WriteOperationsParameters
 }) {
-	const priceOracleManager = usePriceOracleManager(walletScopedHookConfig)
-	const { loadPoolOracleManager, poolOracleManagerDetails } = priceOracleManager
+	const openOraclePriceCoordinator = useOpenOraclePriceCoordinator(walletScopedHookConfig)
+	const { loadPoolOracleManager, poolOracleManagerDetails } = openOraclePriceCoordinator
 	const onReportSettled = useSettledPoolOracleManagerRefresh(poolOracleManagerDetails?.managerAddress, loadPoolOracleManager)
 	const { approveToken1, approveToken2, cancelWithdrawalBalanceCheck, createOpenOracleGame, disputeReport, loadOracleReport, openOracleSectionState, openOracleForm, setOpenOracleCreateForm, setOpenOracleForm, settleReport, withdrawBalance } = useOpenOracleOperations({
 		...walletScopedHookConfig,
@@ -74,7 +74,7 @@ export function useOpenOracleRoute({
 		loadOracleReport,
 		onViewPendingReport,
 		openOracleRouteContentProps,
-		priceOracleManager,
+		openOraclePriceCoordinator,
 		setOpenOracleForm,
 	}
 }

@@ -112,7 +112,7 @@ function getStorage(storage?: Storage) {
 }
 
 function stringifySimulationValue(value: unknown) {
-	const serialized = JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? { [BIGINT_VALUE_TAG]: item.toString() } : (item as never)), 2)
+	const serialized = JSON.stringify(value, (_key, item: unknown) => (typeof item === 'bigint' ? { [BIGINT_VALUE_TAG]: item.toString() } : item), 2)
 	if (serialized === undefined) throw new Error('Saved simulation state could not be serialized')
 	return serialized
 }

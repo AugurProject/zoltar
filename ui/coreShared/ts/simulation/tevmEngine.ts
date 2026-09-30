@@ -330,7 +330,7 @@ export async function createSimulationEngine({ initialization, dependencies }: {
 		return {
 			account: accountAddress,
 			getCode: async (parameters: Parameters<typeof readClient.getCode>[0]) => await readClient.getCode(parameters),
-			readContract: async (parameters: Parameters<typeof readClient.readContract>[0]) => await readClient.readContract(parameters as never),
+			readContract: async (parameters: Parameters<typeof readClient.readContract>[0]) => await readClient.readContract(parameters),
 			sendTransaction,
 			waitForTransactionReceipt: async (parameters: Parameters<typeof readClient.getTransactionReceipt>[0]) => await readClient.getTransactionReceipt({ hash: parameters.hash }),
 			writeContract,

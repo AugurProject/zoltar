@@ -100,7 +100,7 @@ export function ForkZoltarSection({
 	const selectedQuestionHasEnded = selectedQuestion === undefined || effectiveCurrentTimestamp === undefined ? undefined : effectiveCurrentTimestamp >= selectedQuestion.endTime
 	const isSelectedQuestionLookup = normalizedSelectedQuestionId !== undefined && zoltarQuestionLookupId === normalizedSelectedQuestionId
 	let selectedQuestionError: string | undefined
-	if (hasSelectedQuestionId && !hasValidSelectedQuestionId) selectedQuestionError = zoltarCopy.forkQuestionIdInvalid
+	if (hasSelectedQuestionId && !hasValidSelectedQuestionId) selectedQuestionError = commonCopy.invalidQuestionId
 	else if (isSelectedQuestionLookup) selectedQuestionError = zoltarQuestionLookupError
 	const selectedQuestionLookupState = resolveLoadableValueState({
 		isLoading: hasValidSelectedQuestionId && (loadingZoltarQuestions || loadingZoltarQuestion || (hasSelectedQuestionId && selectedQuestion === undefined && !hasLoadedZoltarQuestions && !isSelectedQuestionLookup)),

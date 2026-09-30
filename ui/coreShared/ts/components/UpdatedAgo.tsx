@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks'
 import * as commonCopy from '../copy/common.js'
 import { formatUpdatedAgo, updatedAgoTickMilliseconds } from '../lib/freshness.js'
 import { usePageVisible } from '../hooks/useDataRefresh.js'
+import { formatTimestamp } from '../lib/formatters.js'
 
 type UpdatedAgoProps = {
 	className?: string
@@ -29,7 +30,7 @@ export function UpdatedAgo({ className = '', refreshing = false, updatedAt }: Up
 	if (updatedAt === undefined) return <span className={`freshness-indicator ${className}`.trim()} data-state='pending' aria-hidden='true' />
 	const label = formatUpdatedAgo(updatedAt, Math.max(now, updatedAt))
 	return (
-		<span className={`freshness-indicator ${className}`.trim()} data-state={refreshing ? 'refreshing' : 'idle'} aria-busy={refreshing} title={commonCopy.formatUpdatedAtTitle(new Date(updatedAt).toLocaleTimeString())}>
+		<span className={`freshness-indicator ${className}`.trim()} data-state={refreshing ? 'refreshing' : 'idle'} aria-busy={refreshing} title={commonCopy.formatUpdatedAtTitle(formatTimestamp(BigInt(Math.floor(updatedAt / 1000))))}>
 			<span className='freshness-indicator-dot' aria-hidden='true' />
 			<span>{label}</span>
 			{refreshing ? <span className='visually-hidden'>{commonCopy.refreshingData}</span> : undefined}

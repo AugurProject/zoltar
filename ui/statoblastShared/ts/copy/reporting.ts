@@ -98,7 +98,7 @@ export const continuationFundingHelp = 'Your wallet REP first enters your vault 
 export const continuationMinimumDeposit = (deposit: string, remainder: string) => `This pool requires a ${deposit} REP deposit for this report. Your vault will hold ${remainder} REP afterward.`
 export const yourPositions = 'Your positions'
 export const resultSummary = (outcome: string, amount?: string) => `Resolved as ${outcome}.${amount === undefined ? '' : ` You can claim ${amount} REP.`}`
-export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount} REP from ${outcome}`
+export const claimDeposits = (outcome: string, amount: string) => `Claim ${amount}\u00a0REP from ${outcome}`
 export const clearDeposits = (outcome: string) => `Clear ${outcome} deposits (worth 0 REP)`
 export const results = 'Results'
 

@@ -342,9 +342,9 @@ async function discoverQuestions(context: EcosystemDiscoveryContext, blockNumber
 	return topology.questions.map(question => ({ ...question, outcomeLabels: [...question.outcomeLabels] }))
 }
 
-function cachePoolDeployment(deployment: { parent: Address; priceOracleManagerAndOperatorQueuer: Address; questionId: bigint; securityPool: Address; shareToken: Address; truthAuction: Address; universeId: bigint }): CachedPoolDeployment {
+function cachePoolDeployment(deployment: { parent: Address; openOraclePriceCoordinator: Address; questionId: bigint; securityPool: Address; shareToken: Address; truthAuction: Address; universeId: bigint }): CachedPoolDeployment {
 	return {
-		coordinator: getAddress(deployment.priceOracleManagerAndOperatorQueuer),
+		coordinator: getAddress(deployment.openOraclePriceCoordinator),
 		parent: getAddress(deployment.parent),
 		questionId: deployment.questionId.toString(),
 		securityPool: getAddress(deployment.securityPool),
@@ -533,7 +533,7 @@ async function discoverPools(
 			cachedDeployment ? Promise.resolve(deployments.securityPoolForker) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'securityPoolForker' }),
 			cachedDeployment ? Promise.resolve(deployments.zoltar) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'zoltar' }),
 			cachedDeployment ? Promise.resolve(deployments.questionData) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'questionData' }),
-			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'priceOracleManagerAndOperatorQueuer' }),
+			cachedDeployment ? Promise.resolve(coordinator) : client.readContract({ abi: abis.securityPoolAbi, address, blockNumber, functionName: 'openOraclePriceCoordinator' }),
 			cachedDeployment ? Promise.resolve(address) : client.readContract({ abi: abis.openOraclePriceCoordinatorAbi, address: coordinator, blockNumber, functionName: 'securityPool' }),
 			authenticatePoolProtocolBindings({
 				blockNumber,

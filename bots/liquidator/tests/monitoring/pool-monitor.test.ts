@@ -32,7 +32,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 	const zeroApprovalId = `0x${'00'.repeat(32)}`
 	settings.selectedPools = [pool]
 	const contractReads: Array<{ blockNumber?: bigint; functionName: string }> = []
-	const multicalls: Array<{ blockNumber?: bigint }> = []
+	const multicalls: Array<{ blockNumber?: bigint; multicallAddress?: string }> = []
 	const logReads: Array<{ event?: { name?: string }; fromBlock?: bigint; toBlock?: bigint }> = []
 	let reorgSnapshot = false
 	const networkClient = createPublicClient({
@@ -63,7 +63,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 									currentRetentionRate: 1n,
 									initialReportPriorityFeeAttoEthPerGas: 1n,
 									parent: getAddress('0x0000000000000000000000000000000000000000'),
-									priceOracleManagerAndOperatorQueuer: manager,
+									openOraclePriceCoordinator: manager,
 									questionId: 1n,
 									securityPool: pool,
 									settlementCollateralAttoEth: 10n,
@@ -78,7 +78,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 				}
 			}
 			if (property === 'multicall') {
-				return (parameters: { blockNumber?: bigint; contracts: Array<{ functionName: string }> }) => {
+				return (parameters: { blockNumber?: bigint; contracts: Array<{ functionName: string }>; multicallAddress?: string }) => {
 					multicalls.push(parameters)
 					return Promise.resolve(
 						parameters.contracts.map(contract => {
@@ -163,6 +163,7 @@ test('binds the complete pool scan to one canonical block', async () => {
 	expect(contractReads.every(read => read.blockNumber === 2n)).toBeTrue()
 	expect(multicalls.length).toBe(4)
 	expect(multicalls.every(read => read.blockNumber === 2n)).toBeTrue()
+	expect(multicalls.every(read => read.multicallAddress === settings.deployment.multicall3)).toBeTrue()
 	expect(logReads.find(read => read.event?.name === 'DeploySecurityPool')).toMatchObject({ fromBlock: 0n, toBlock: 2n })
 	expect(logReads.find(read => read.event?.name === 'VaultAccountingCheckpoint')).toMatchObject({ fromBlock: 2n, toBlock: 2n })
 
@@ -328,7 +329,7 @@ test('retains vaults with commitments even when pool-held and dispute-staked REP
 		},
 	})
 	const index = createVaultStateIndex<VaultPosition>()
-	const refresh = await loadCurrentVaults(client, index, pool, escalationGame, BigInt(vaults.length), 100n, 10n, 0n, 0n, { hash: blockHash, number: 2n })
+	const refresh = await loadCurrentVaults(client, getAddress('0xB657B12CD9d80421DBC2bc70c43d6b2ff9409108'), index, pool, escalationGame, BigInt(vaults.length), 100n, 10n, 0n, 0n, { hash: blockHash, number: 2n })
 	expect(refresh.refreshedVaults.map(vault => vault.address)).toEqual(vaults)
 	expect([...index.activeVaults.values()].map(vault => vault.address)).toEqual([backed, disputeStakedOnly, commitmentOnly])
 })

@@ -1,12 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, opendir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { parseJsonDocument } from '@zoltar/bot-shared/config/durable-file'
+import { isExistingTargetError, ownerDirectory, ownerFilesystem, parseJsonDocument, readOwnerFile, syncOwnerDirectory, writeOwnerFile } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { QuestionSnapshot } from '../operations/types.ts'
 import { collectionDigest, manifestWithDigest, sha256 } from '../state/content-digest.ts'
-import { isExistingTargetError, ownerDirectory, ownerFilesystem, readOwnerFile, syncOwnerDirectory, writeOwnerFile } from '../state/owner-files.ts'
 import { assertExactKeys as assertExactRequiredAndOptionalKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 
 export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3

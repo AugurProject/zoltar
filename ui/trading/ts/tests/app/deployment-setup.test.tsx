@@ -95,7 +95,7 @@ async function connectDeploymentWallet(container: HTMLElement) {
 
 async function waitForConnectedWallet(container: HTMLElement) {
 	for (let attempt = 0; attempt < 30; attempt++) {
-		if (container.querySelector('.wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) return
+		if (container.querySelector('.wallet-button')?.getAttribute('aria-label') === `Disconnect ${testWalletAccount}`) return
 		await act(async () => {
 			await Bun.sleep(10)
 		})
@@ -539,7 +539,7 @@ describe('trading deployment setup', () => {
 		await waitForText('Deploy Trading factory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
-		expect(rendered.container.querySelector('.wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
+		expect(rendered.container.querySelector('.wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect ${testWalletAccount}`)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
 		await act(async () => {
@@ -615,12 +615,12 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.querySelector('.header-toolbar .badge')?.textContent).toContain(core.chainName)
 		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.textContent).toContain(testWalletAccount)
 		for (let attempt = 0; attempt < 30; attempt++) {
-			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect wallet ${testWalletAccount}`) break
+			if (rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label') === `Disconnect ${testWalletAccount}`) break
 			await act(async () => {
 				await Bun.sleep(10)
 			})
 		}
-		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect wallet ${testWalletAccount}`)
+		expect(rendered.container.querySelector('.trading-wallet-actions .wallet-button')?.getAttribute('aria-label')).toBe(`Disconnect ${testWalletAccount}`)
 		const action = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.includes('Deploy Trading factory') === true)
 		if (!(action instanceof HTMLButtonElement)) throw new Error('Factory deployment action is unavailable')
 		await act(async () => {

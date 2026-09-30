@@ -66,7 +66,7 @@
 		"generate:abi": "bun run ensure-contract-artifacts && bun ../../tooling/contracts/generate-bot-abis.mts",
 		"format": "bun x @biomejs/biome format --write .",
 		"format:check": "bun x @biomejs/biome format .",
-		"lint": "bun x @biomejs/biome lint package.json tsconfig.json src tests && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
+		"lint": "bun x @biomejs/biome lint package.json tsconfig.json bunfig.toml src tests && bun ../../tooling/repo/lint-no-restricted-import-types.mts .",
 		"test": "bun run ensure-contract-artifacts && bun ../../tooling/testing/bun-test.mts ./tests",
 		"typecheck": "bun run ensure-contract-artifacts && bun x tsc --project tsconfig.json --noEmit"
 	},

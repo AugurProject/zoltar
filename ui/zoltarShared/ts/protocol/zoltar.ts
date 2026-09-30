@@ -2,7 +2,8 @@ import { zeroAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { ReputationToken_ReputationToken, Zoltar_Zoltar, ZoltarQuestionData_ZoltarQuestionData } from '@zoltar/ui-core-shared/contractArtifact.js'
 import type { MarketCreationResult, MarketDetails, MarketDetailsPage, MarketType, QuestionData, ReadClient, WriteClient, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { readRequiredMulticall, writeContractAndWait } from './core.js'
-import { getMarketType, getProtocolPageOffset, getQuestionIdHex, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
+import { getMarketType, getProtocolPageOffset, isStringArray, requireDeployedChildUniverseTupleArray, requireUniverseTupleArray, type UniverseTuple } from './helpers.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { getDeploymentSteps } from './deployment.js'
 import type { UniverseLineageStep } from '@zoltar/ui-core-shared/lib/universeLineage.js'
@@ -153,7 +154,7 @@ export async function loadMarketDetails(client: ReadClient, questionId: bigint):
 		marketType: getMarketType({ title, description, startTime, endTime, numTicks, displayValueMin, displayValueMax, answerUnit }, outcomeLabels),
 		outcomeLabels,
 		numTicks,
-		questionId: getQuestionIdHex(questionId),
+		questionId: formatQuestionIdHex(questionId),
 		startTime,
 		title,
 	}
@@ -418,7 +419,7 @@ export async function createMarket(
 	}))
 
 	return {
-		questionId: getQuestionIdHex(questionId),
+		questionId: formatQuestionIdHex(questionId),
 		createQuestionHash,
 		marketType: parameters.marketType,
 	} satisfies MarketCreationResult

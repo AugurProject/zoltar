@@ -34,7 +34,7 @@ abstract contract EscalationGameCalculations is EscalationGameState {
 				requiredElapsed <= forkElapsedAtStart
 					? forkResumedAt
 					: forkResumedAt + (requiredElapsed - forkElapsedAtStart);
-			uint256 minimumResponseEnd = forkResumedAt + activationDelay;
+			uint256 minimumResponseEnd = forkResumedAt + ACTIVATION_DELAY;
 			return curveEnd > minimumResponseEnd ? curveEnd : minimumResponseEnd;
 		}
 		return activationTime + computeTimeSinceStartFromAttritionCostAttoRep(getBindingCapitalAttoRep());

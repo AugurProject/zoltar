@@ -26,7 +26,7 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 		const victimDepositAttoEth = 1n * 10n ** 18n
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n * PRICE_PRECISION)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, 10n * PRICE_PRECISION)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit)
 
 		strictEqualTypeSafe(await getTotalPoolHeldAttoRep(client, securityPoolAddresses.securityPool), 0n, 'the attacker should escrow every attoREP held by the pool')
@@ -37,10 +37,10 @@ describe('Audit regression: post-escrow complete-set mint fork loss', () => {
 	test('full-limit escrow checks cannot be bypassed by bad debt, and zero-pool-REP repair remains funded', async () => {
 		const { client, mockWindow, questionData, securityPoolAddresses } = fixture
 		const settlementCollateralAttoEth = 1n * 10n ** 18n
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, 10n * PRICE_PRECISION)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, 10n * PRICE_PRECISION)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, settlementCollateralAttoEth)
 
 		// Reconstruct the full-bad-debt accounting boundary so this regression isolates

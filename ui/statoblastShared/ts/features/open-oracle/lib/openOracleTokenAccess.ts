@@ -2,6 +2,7 @@ import { bigintToSafeNumber, type Abi, type AbiValue, type Address } from '@zolt
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
+import { toBigIntReadResult } from '@zoltar/ui-core-shared/lib/optionalReadResult.js'
 
 export type OpenOracleReadClient = {
 	getBalance: (parameters: { address: Address }) => Promise<bigint>
@@ -65,27 +66,6 @@ export function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAm
 	return approvalAmount
 }
 
-export type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
-
-export function toReadError(error: unknown) {
-	return error instanceof Error ? error : new Error('Unknown read error')
-}
-
-export function toBigIntReadResult(result: OpenOracleRawReadResult): OptionalReadResult<bigint> {
-	if (result.status === 'success') {
-		if (typeof result.result !== 'bigint') {
-			return {
-				error: new Error('Unexpected non-bigint OpenOracle token access value'),
-				status: 'failure',
-			}
-		}
-		return {
-			result: result.result,
-			status: 'success',
-		}
-	}
-	return {
-		error: toReadError(result.error),
-		status: 'failure',
-	}
+export function toTokenAccessReadResult(result: OpenOracleRawReadResult) {
+	return toBigIntReadResult(result, 'OpenOracle token access')
 }

@@ -44,7 +44,7 @@ describe('Truth-auction ownership overflow regression', () => {
 		await approveAndDepositRepToVault(attacker, minimumVaultRep, questionId)
 		await approveAndDepositRepToVault(passiveVault, passiveRep, questionId)
 		await approveAndDepositRepToVault(secondPassiveVault, passiveRep, questionId)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
 		await setUnderwritingLimit(attacker, securityPoolAddresses.securityPool, 1n)
 		await createCompleteSet(openInterestHolder, securityPoolAddresses.securityPool, 10n * PRICE_PRECISION)
@@ -91,15 +91,15 @@ describe('Truth-auction ownership overflow regression', () => {
 		assert.ok((await backingUnitsToAttoRep(client, childPool.securityPool, winnerVault.repBackingUnits)) > auctionCap, 'unsolicited REP should make the winner live valuation exceed its snapshot-based purchased REP')
 		const winnerWalletRepBefore = await getERC20Balance(client, childRepToken, auctionWinner.account.address)
 		const winnerVaultBefore = await getSecurityVault(client, childPool.securityPool, auctionWinner.account.address)
-		const operationCounterBefore = await getStagedOperationCounter(client, childPool.priceOracleManagerAndOperatorQueuer)
+		const operationCounterBefore = await getStagedOperationCounter(client, childPool.openOraclePriceCoordinator)
 		const operationLogStartBlock = (await client.getBlockNumber()) + 1n
 
-		await manipulatePriceOracleAndPerformOperation(auctionWinner, mockWindow, childPool.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, auctionWinner.account.address, await backingUnitsToAttoRep(client, childPool.securityPool, winnerVaultBefore.repBackingUnits))
+		await manipulatePriceOracleAndPerformOperation(auctionWinner, mockWindow, childPool.openOraclePriceCoordinator, OperationType.WithdrawRep, auctionWinner.account.address, await backingUnitsToAttoRep(client, childPool.securityPool, winnerVaultBefore.repBackingUnits))
 
 		const operationId = operationCounterBefore + 1n
 		const executionLog = (
 			await client.getLogs({
-				address: childPool.priceOracleManagerAndOperatorQueuer,
+				address: childPool.openOraclePriceCoordinator,
 				fromBlock: operationLogStartBlock,
 			})
 		)
@@ -116,8 +116,8 @@ describe('Truth-auction ownership overflow regression', () => {
 		assert.strictEqual(executionLog.args.operation, BigInt(OperationType.WithdrawRep), 'the failed staged operation should be the requested REP withdrawal')
 		assert.strictEqual(executionLog.args.success, false, 'the bounded ownership conversion should reject rather than overflow when live open interest commits the winner capacity')
 		assert.strictEqual(executionLog.args.errorMessage, 'Vault backing insufficient', 'the failed withdrawal should expose the live-open-interest invariant')
-		assert.strictEqual(await getActiveStagedOperationCount(client, childPool.priceOracleManagerAndOperatorQueuer), 0n, 'the rejected withdrawal should be consumed')
-		assert.strictEqual((await getStagedOperation(client, childPool.priceOracleManagerAndOperatorQueuer, operationId))[1], zeroAddress, 'the consumed withdrawal should clear its initiator')
+		assert.strictEqual(await getActiveStagedOperationCount(client, childPool.openOraclePriceCoordinator), 0n, 'the rejected withdrawal should be consumed')
+		assert.strictEqual((await getStagedOperation(client, childPool.openOraclePriceCoordinator, operationId))[1], zeroAddress, 'the consumed withdrawal should clear its initiator')
 		assert.strictEqual(await getERC20Balance(client, childRepToken, auctionWinner.account.address), winnerWalletRepBefore, 'the rejected withdrawal should not transfer REP')
 		assert.strictEqual((await getSecurityVault(client, childPool.securityPool, auctionWinner.account.address)).repBackingUnits, winnerVaultBefore.repBackingUnits, 'the rejected withdrawal should retain winner ownership')
 	})

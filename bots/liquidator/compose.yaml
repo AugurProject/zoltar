@@ -11,6 +11,8 @@ services:
     environment:
       # Keep this assertion paired with the host-loopback port mapping below.
       ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED: "true"
+      # flock coordinates containers on this Docker host through the shared volume.
+      ZOLTAR_BOT_SIGNER_LOCK_ROOT: .state/process-locks
       ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}
     ports:
       - 127.0.0.1:4183:4183
@@ -22,9 +24,13 @@ services:
       start_period: 10s
     volumes:
       - liquidator-state:/app/bots/liquidator/.state
+      # This fixed-name nested volume fences one signer across every shipped bot Compose project on the host.
+      - signer-locks:/app/bots/liquidator/.state/process-locks
 
 volumes:
   liquidator-state:
+  signer-locks:
+    name: zoltar-bot-signer-locks
 
 networks:
   default:

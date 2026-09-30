@@ -57,6 +57,7 @@ for (const [name, v3, v4] of [
 					uniswapV4Quoter: v4 ? uniswap.v4Quoter : undefined,
 				},
 			}),
+			{ mode: 0o600 },
 		)
 		const config = await loadConfiguration(path)
 		const allowed = new Set([openOracle, network.weth, canonicalSecurityPoolFactory('mainnet'), ...(v3 ? [uniswap.factory, uniswap.quoter, uniswap.router] : []), ...(v4 ? [uniswap.v4PoolManager, uniswap.v4Quoter] : [])].map(address => address.toLowerCase()))

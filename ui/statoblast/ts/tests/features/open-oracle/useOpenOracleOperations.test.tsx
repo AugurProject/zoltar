@@ -212,7 +212,7 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).approveToken1(1n)
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle.')
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {

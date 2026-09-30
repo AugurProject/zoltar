@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { LiveEvent } from '../../src/database.ts'
 import { liveStreamResponse } from '../../src/http.ts'
-import { LiveBus } from '../../src/live.ts'
+import { createLiveBus, type LiveBus } from '../../src/live.ts'
 
 const decoder = new TextDecoder()
 const streamFrom = (bus: LiveBus, lastEventId?: number): ReadableStream<Uint8Array> => {
@@ -45,7 +45,7 @@ test('replays durable events after the browser Last-Event-ID and closes cleanly'
 		{ id: 1, event: 'block', payload: { blockNumber: '1' } },
 		{ id: 2, event: 'reorg', payload: { depth: '1' } },
 	]
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => 2,
 		eventsAfter: async id => events.filter(event => event.id > id),
 	})
@@ -64,7 +64,7 @@ test('replays durable events after the browser Last-Event-ID and closes cleanly'
 
 test('new streams start at the latest durable event without replaying history', async () => {
 	let requestedAfter: number | undefined
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => 41,
 		eventsAfter: async id => {
 			requestedAfter = id
@@ -81,7 +81,7 @@ test('new streams start at the latest durable event without replaying history', 
 test('new streams refresh the durable cursor after an idle period', async () => {
 	let latest = 1
 	const requestedAfter: number[] = []
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => latest,
 		eventsAfter: async id => {
 			requestedAfter.push(id)
@@ -104,7 +104,7 @@ test('new streams refresh the durable cursor after an idle period', async () => 
 
 test('delivers a reset when a reconnect cursor is ahead of the durable event head', async () => {
 	let events: LiveEvent[] = [{ id: 50, event: 'reset', payload: { reason: 'cursor-ahead-of-head', refreshRequired: true } }]
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => 50,
 		eventsAfter: async id => events.filter(event => (event.event === 'reset' ? id > event.id : event.id > id)),
 	})
@@ -122,7 +122,7 @@ test('delivers a reset when a reconnect cursor is ahead of the durable event hea
 
 test('does not enqueue or query more events while a client is backpressured', async () => {
 	let queries = 0
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => 0,
 		eventsAfter: async () => {
 			queries++
@@ -145,7 +145,7 @@ test('does not enqueue or query more events while a client is backpressured', as
 
 test('delivers the current cursor cohort without waiting for a replaying client', async () => {
 	const requested: number[] = []
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => 1_000,
 		eventsAfter: async id => {
 			requested.push(id)
@@ -163,7 +163,7 @@ test('delivers the current cursor cohort without waiting for a replaying client'
 })
 
 test('bounds stream admission and releases capacity when a reader disconnects', async () => {
-	const bus = new LiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1)
+	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1)
 	const first = streamFrom(bus, 0)
 	expect(bus.stream(0)).toBeUndefined()
 	await first.cancel()
@@ -174,7 +174,7 @@ test('bounds stream admission and releases capacity when a reader disconnects', 
 
 test('evicts a client that remains backpressured and releases its admission slot', async () => {
 	let now = 1_000
-	const bus = new LiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1, 50, () => now)
+	const bus = createLiveBus({ latestEventId: async () => 0, eventsAfter: async () => [] }, 1, 50, () => now)
 	const stalled = streamFrom(bus, 0)
 	await Promise.resolve()
 	bus.heartbeat()
@@ -194,7 +194,7 @@ test('coalesces cursor initialization for concurrent new streams', async () => {
 	const latest = new Promise<number>(resolve => {
 		resolveLatest = resolve
 	})
-	const bus = new LiveBus({
+	const bus = createLiveBus({
 		latestEventId: async () => {
 			latestQueries++
 			return await latest

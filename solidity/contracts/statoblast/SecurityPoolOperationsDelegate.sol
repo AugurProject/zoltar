@@ -48,8 +48,6 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
-	event VaultBadDebtRecorded(address indexed targetVault, uint256 badDebtAttoEth, uint256 resultingVaultBadDebtAttoEth, uint256 resultingTotalBadDebtAttoEth);
-	event VaultDepositTargetHealthFactorRecorded(address indexed vault, uint256 depositTargetHealthFactorBps, uint256 underwritingLimitAttoEth, uint256 resultingTotalUnderwritingLimitAttoEth);
 
 	function updateVaultFees(address vault) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
@@ -110,7 +108,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
-		require(msg.sender == address(pool.priceOracleManagerAndOperatorQueuer()), 'Unauthorized');
+		require(msg.sender == address(pool.openOraclePriceCoordinator()), 'Unauthorized');
 		_setUnderwritingLimit(vault, limitAttoEth);
 	}
 
@@ -127,7 +125,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		if (limitAttoEth < oldLimitAttoEth)
 			require(nextTotalAttoEth >= settlementCollateralAttoEth, 'Commitments below collateral');
 		if (limitAttoEth > oldLimitAttoEth) {
-			require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
+			require(pool.openOraclePriceCoordinator().isPriceValid(), 'Stale price');
 			_requireLimitBacked(pool, vault, limitAttoEth);
 		}
 		feeIndexRemainder = 0;
@@ -143,7 +141,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	function _requireLimitBacked(ISecurityPool pool, address vault, uint256 limitAttoEth) private view {
 		uint256 disputeStakedAttoRep =
 			address(escalationGame) == address(0) ? 0 : escalationGame.disputeStakedRepByVaultAttoRep(vault);
-		require(SecurityPoolUtils.isVaultHealthy(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), disputeStakedAttoRep, limitAttoEth, pool.priceOracleManagerAndOperatorQueuer().lastPrice(), statoblastSecurityMultiplierBps), 'Vault backing insufficient');
+		require(SecurityPoolUtils.isVaultHealthy(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), disputeStakedAttoRep, limitAttoEth, pool.openOraclePriceCoordinator().lastPrice(), statoblastSecurityMultiplierBps), 'Vault backing insufficient');
 	}
 
 	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external {
@@ -152,7 +150,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		require(systemState == SystemState.Operational, 'Pool inactive');
 		ISecurityPoolRepDepositContext context = ISecurityPoolRepDepositContext(address(this));
 		require(IZoltarForkState(context.zoltar()).getForkTime(context.universeId()) == 0, 'Forked');
-		require(pool.priceOracleManagerAndOperatorQueuer().isPriceValid(), 'Stale price');
+		require(pool.openOraclePriceCoordinator().isPriceValid(), 'Stale price');
 		_requireLimitBacked(pool, vault, securityVaults[vault].underwritingLimitAttoEth);
 		// The forker checkpointed the recipient before assigning the previously ineligible weight.
 		feeIndexRemainder = 0;
@@ -270,7 +268,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	function redeemShares(IShareToken shareToken, ISecurityPoolForker forker, uint248 universeId, address redeemer) external returns (uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) {
 		BinaryOutcomes.BinaryOutcome outcome = forker.getQuestionOutcome(ISecurityPool(payable(address(this))));
-		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question open');
+		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
 		uint256 tokenId = shareToken.getTokenId(universeId, outcome);
 		(winningSharesBurnedAttoShares, ) = shareToken.burnTokenIdAndGetRemainingSupply(tokenId, redeemer);
 		settlementCollateralRedeemedAttoEth =

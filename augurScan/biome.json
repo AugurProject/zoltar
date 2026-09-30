@@ -3,6 +3,6 @@
 	"root": false,
 	"extends": "//",
 	"files": {
-		"includes": ["**", "!node_modules", "!bun.lock", "!config/abis.json", "!public/app.js"]
+		"includes": ["**", "!node_modules", "!config/abis.json", "!public/app.js"]
 	}
 }

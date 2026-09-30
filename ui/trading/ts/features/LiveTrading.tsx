@@ -6,6 +6,7 @@ import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressV
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
+import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { getTradingRouteHref, isTradingLookupRoute, tradingListKindFor, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -35,7 +36,6 @@ import { MarketTicketSheet } from './MarketTicketSheet.js'
 import { marketOddsPercent } from '../lib/marketListing.js'
 import { hashWithoutTicketSide, readTicketSideParam } from '../lib/ticketSide.js'
 import { liveCopy } from '../copy/live.js'
-import * as availabilityCopy from '../copy/availability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 import { useDownloadedEntities, useFavorites, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { getRememberableMarket, marketDownloadStore, selectBrowseMarkets, selectMarketCacheUpdates } from '../lib/favoriteMarkets.js'
@@ -169,12 +169,12 @@ export function LiveTrading({
 	}
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
 	let walletActionLabel = account === undefined ? appCopy.connectWallet : <ReadOnlyAddressValue address={account} />
-	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
+	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = coreAppCopy.formatSwitchToNetwork(configuration.chainName)
 	// The workflow panels' first step: connect, or switch a connected wallet back to the deployment chain.
 	const ticketWallet = {
 		connected: account !== undefined && walletClient !== undefined,
 		networkMismatchReason,
-		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : availabilityCopy.formatSwitchNetworkAction(configuration.chainName),
+		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : coreAppCopy.formatSwitchToNetwork(configuration.chainName),
 		walletEthAttoEth,
 		connect,
 	}

@@ -4,6 +4,23 @@ import { settledQuorumValue } from './read-quorum.ts'
 import { operationalFailureDisposition } from './resilience.ts'
 import { bigintToSafeNumber, getAddress, isHex, type Address, type Hash } from '../ethereum.ts'
 
+/** Uniswap V2-compatible pair surface the bots read; the pair is an external contract, so it is not in the generated ABI module. */
+export const constantProductPairAbi = [
+	{ type: 'function', name: 'token0', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{ type: 'function', name: 'token1', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
+	{
+		type: 'function',
+		name: 'getReserves',
+		stateMutability: 'view',
+		inputs: [],
+		outputs: [
+			{ name: 'reserve0', type: 'uint112' },
+			{ name: 'reserve1', type: 'uint112' },
+			{ name: 'blockTimestampLast', type: 'uint32' },
+		],
+	},
+] as const
+
 const UNIT = 10n ** 18n
 const BPS = 10_000n
 

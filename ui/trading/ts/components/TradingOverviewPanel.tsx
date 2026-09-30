@@ -35,7 +35,7 @@ export function TradingOverviewPanel({ badges, controls, navigation, onRetryWall
 						{walletSummary.status === 'error' ? (
 							<div className='trading-wallet-error'>
 								<span className='error' role='alert' title={walletSummary.error} aria-label={copy.walletBalanceError(walletSummary.errorLabel, walletSummary.error)}>
-									{walletSummary.errorLabel ?? copy.balancesUnavailable}
+									{walletSummary.errorLabel ?? copy.walletBalancesUnavailable}
 								</span>
 								{onRetryWalletSummary === undefined ? undefined : (
 									<button className='secondary' type='button' onClick={onRetryWalletSummary}>

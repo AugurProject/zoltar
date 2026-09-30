@@ -1,4 +1,5 @@
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
+import { MAINNET_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { appendFile, mkdir, open } from 'node:fs/promises'
@@ -107,7 +108,7 @@ export function createTokenCatalogTracker(discoverAugurTokens: (configured: read
 
 export async function discoverAugurRepTokens(client: BatchReader, multicall3: Address, chainId: number, configured: readonly Address[], observed: readonly Address[]) {
 	const addresses = [...configured, ...observed]
-	if (chainId !== 1) return uniqueAddresses(addresses)
+	if (chainId !== MAINNET_CHAIN_ID) return uniqueAddresses(addresses)
 	const [genesisRep, forkingMarket] = await batchRead(client, multicall3, [
 		{ address: MAINNET_AUGUR_GENESIS_UNIVERSE, abi: augurUniverseAbi, functionName: 'getReputationToken' },
 		{ address: MAINNET_AUGUR_GENESIS_UNIVERSE, abi: augurUniverseAbi, functionName: 'getForkingMarket' },
@@ -193,7 +194,7 @@ export async function discoverTokenPools(
 		}
 	}
 	const fees = factory === undefined ? [] : UNISWAP_V3_FEES
-	const venues = parameters.chainId === 1 ? MAINNET_CONSTANT_PRODUCT_VENUES : []
+	const venues = parameters.chainId === MAINNET_CHAIN_ID ? MAINNET_CONSTANT_PRODUCT_VENUES : []
 	const calls = parameters.tokens.flatMap(token => [
 		...(factory === undefined ? [] : fees.map(fee => ({ address: factory, abi: uniswapV3FactoryAbi, functionName: 'getPool', args: [parameters.weth, token, fee] }) satisfies BatchCall)),
 		...venues.map(venue => ({ address: venue.factory, abi: constantProductFactoryAbi, functionName: 'getPair', args: [token, parameters.weth] }) satisfies BatchCall),

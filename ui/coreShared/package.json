@@ -28,7 +28,6 @@
 		"tsc": "bun x tsc --project tsconfig.json",
 		"build:workers": "bun ../../tooling/ui/workers.mts zoltar && bun ../../tooling/ui/workers.mts statoblast && bun ../../tooling/ui/workers.mts trading"
 	},
-	"types": "./js/index.d.ts",
 	"exports": {
 		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
 		"./tests/testUtils/domEnvironment.js": {

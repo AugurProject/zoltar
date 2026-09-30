@@ -32,6 +32,7 @@ import { getRefreshedOpenOracleApprovalAmount, readCreateTokenDecimals } from '.
 import { defaultUseOpenOracleOperationsDependencies, type OpenOracleProductionWriteClient, type UseOpenOracleOperationsDependencies, type UseOpenOracleOperationsParameters } from './openOracleOperationDependencies.js'
 import { useOpenOracleSelectedReport } from './useOpenOracleSelectedReport.js'
 import { useOpenOracleTokenAccess } from './useOpenOracleTokenAccess.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export type { UseOpenOracleOperationsDependencies } from './openOracleOperationDependencies.js'
 
@@ -168,7 +169,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						openOracleError,
-						'Connect a wallet before operating Open Oracle',
+						commonCopy.formatConnectWalletBefore('operating Open Oracle'),
 						createOpenOracleTransactionIntent(actionName, transactionContext),
 					),
 					formatErrorMessage: options?.formatErrorMessage,
@@ -354,7 +355,7 @@ function useOpenOracleOperationsWithDependencies<TWriteClient>(
 		let token = zeroAddress
 		let preflightCanSubmit = false
 		try {
-			const holder = requireDefined(accountAddress, 'Connect a wallet before withdrawing an Open Oracle balance')
+			const holder = requireDefined(accountAddress, commonCopy.formatConnectWalletBefore('withdrawing an Open Oracle balance'))
 			const details = requireLoadedCurrentSelectedReport()
 			const currentReportIdInput = details.reportId.toString()
 			const balances = await dependencies.loadOpenOracleWithdrawableBalances(attemptOpenOracleAddress, holder, details.token1, details.token2)

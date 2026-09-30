@@ -5,8 +5,8 @@ library ScalarOutcomes {
 	uint256 internal constant DECIMALS = 18;
 
 	function getScalarOutcomeName(uint120[2] memory payoutNumerators, string memory unit, uint256 numTicks, int256 minValue, int256 maxValue) internal pure returns (string memory) {
-		require(numTicks > 0, 'Scalar outcome numTicks must be greater than zero');
-		require(maxValue > minValue, 'Scalar outcome max value must be greater than min value');
+		require(numTicks > 0, 'Scalar question numTicks must be positive');
+		require(maxValue > minValue, 'Scalar question display max must be greater than display min');
 		uint256 payout = uint256(payoutNumerators[1]);
 		uint256 diffU;
 		unchecked {

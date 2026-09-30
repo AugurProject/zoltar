@@ -280,7 +280,7 @@ describe('Contract Test Suite', () => {
 		await createQuestion(client, questionData, outcomes)
 		const questionId = getQuestionId(questionData, outcomes)
 
-		await assert.rejects(forkUniverse(client, missingUniverseId, questionId), /Universe not initialized with a REP token/)
+		await assert.rejects(forkUniverse(client, missingUniverseId, questionId), /Universe REP token missing/)
 
 		const universeData = await getUniverseData(client, missingUniverseId)
 		assert.strictEqual(universeData.forkTime, 0n, 'missing universe should remain unforked')
@@ -347,7 +347,7 @@ describe('Contract Test Suite', () => {
 					args: [999_999n, 1n],
 				}),
 			),
-			/Universe not initialized with a REP token/,
+			/Universe REP token missing/,
 		)
 		await assert.rejects(
 			writeContractAndWait(client, () =>
@@ -382,7 +382,7 @@ describe('Contract Test Suite', () => {
 		await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 		await forkUniverse(client, genesisUniverse, questionId)
 
-		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /Universe has forked already and cannot fork again/)
+		await assert.rejects(forkUniverse(client, genesisUniverse, questionId), /Universe already forked/)
 		await deployChild(client, genesisUniverse, 1n)
 		await assert.rejects(deployChild(client, genesisUniverse, 1n), /Child universe already deployed for this outcome/)
 	})
@@ -568,6 +568,8 @@ describe('Contract Test Suite', () => {
 		await forkUniverse(client, genesisUniverse, questionId)
 
 		const migrationBalance = await getMigrationRepBalanceAttoRep(client, genesisUniverse, client.account.address)
+		await assert.rejects(splitMigrationRep(client, genesisUniverse, migrationBalance, []), /Select at least one outcome universe/)
+		await assert.rejects(splitMigrationRep(client, genesisUniverse, 0n, [0n]), /Split amount must be greater than zero/)
 		const outcomeOrderings: Array<(number | bigint)[]> = [
 			[0n, 1n, 3n],
 			[3n, 1n, 0n],
@@ -1130,7 +1132,7 @@ describe('Contract Test Suite', () => {
 
 		const nonExistentQuestionId = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn
 
-		await assert.rejects(forkUniverse(client, genesisUniverse, nonExistentQuestionId), /Question does not exist in ZoltarQuestionData/)
+		await assert.rejects(forkUniverse(client, genesisUniverse, nonExistentQuestionId), /Question does not exist/)
 	})
 
 	test('forkUniverse rejects before question end and succeeds at and after equality', async () => {

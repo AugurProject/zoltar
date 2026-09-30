@@ -60,7 +60,7 @@ function useStatoblastTestFixture() {
 	const repDeposit = 10_000n * 10n ** 18n
 	let securityPoolAddresses: {
 		securityPool: Address
-		priceOracleManagerAndOperatorQueuer: Address
+		openOraclePriceCoordinator: Address
 		shareToken: Address
 		truthAuction: Address
 		escalationGame: Address

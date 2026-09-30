@@ -1,4 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export const disputeAndSwap = 'Dispute & swap'
 export const disputeAndSwapAction = 'Dispute & swap'
@@ -18,9 +19,6 @@ export const tokenPair = 'Token pair'
 export const baseToken = 'Base token'
 export const quoteToken = 'Quote token'
 export const openOracleGame = 'Standalone oracle report'
-export const formatApprovingTokenPendingLabel = (tokenSymbol: string) => `Approving ${tokenSymbol}…`
-export const formatApproveToken = (tokenSymbol: CopyTemplateValue) => `Approve ${tokenSymbol}`
-export const formatTokenApproved = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} approved`
 export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdrawn`
 export const browseReports = 'Browse reports'
 export const reportDirectory = 'Report directory'
@@ -50,8 +48,8 @@ export const currentReporter = 'Current reporter'
 export const submittingDispute = 'Submitting dispute…'
 export const disputingTheReport = 'disputing the report'
 export const disputeOccurred = 'Dispute occurred'
-export const disputeWalletRequiredReason = 'Connect a wallet before disputing the report.'
-export const settlementWalletRequiredReason = 'Connect a wallet before settling the report.'
+export const disputeWalletRequiredReason = commonCopy.formatConnectWalletBefore('disputing the report')
+export const settlementWalletRequiredReason = commonCopy.formatConnectWalletBefore('settling the report')
 export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
 export const disputeEscalationStopAmountHelpText = 'Base-token amount that ends escalation.'
