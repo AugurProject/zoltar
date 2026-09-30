@@ -27,6 +27,7 @@ type Props = {
 	setSecurityPoolFormMarketId: (marketId: string) => void
 	setTradingFormSecurityPoolAddress: (securityPoolAddress: string) => void
 	tradingResultHash: string | undefined
+	urlVaultAddress?: string | undefined
 	urlOpenOracleReportId: string
 	walletBootstrapComplete: boolean
 }
@@ -71,11 +72,14 @@ export function useAppRouteEffects({
 	setTradingFormSecurityPoolAddress,
 	tradingResultHash,
 	urlOpenOracleReportId,
+	urlVaultAddress,
 	walletBootstrapComplete,
 }: Props) {
 	const loadSecurityPoolsRef = useRef(loadSecurityPools)
 	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
+	const lastVaultAccountAddress = useRef<Address | undefined>(accountAddress)
+	const lastUrlVaultAddress = useRef<string | undefined>(undefined)
 	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
 	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
 
@@ -109,13 +113,17 @@ export function useAppRouteEffects({
 			route,
 			securityPoolAddress,
 		})
-		if (nextSelectedVaultOwner !== undefined) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner)
+		if (route === 'pools' && urlVaultAddress !== undefined && (lastUrlVaultAddress.current !== urlVaultAddress || nextSelectedVaultOwner !== undefined)) setSecurityVaultFormSelectedVaultOwner(urlVaultAddress)
+		else if (route === 'pools' && urlVaultAddress === undefined && (lastUrlVaultAddress.current !== undefined || lastVaultAccountAddress.current !== accountAddress)) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner ?? accountAddress?.toString() ?? '')
+		else if (nextSelectedVaultOwner !== undefined) setSecurityVaultFormSelectedVaultOwner(nextSelectedVaultOwner)
+		lastUrlVaultAddress.current = urlVaultAddress
+		lastVaultAccountAddress.current = accountAddress
 		if (route !== 'pools') {
 			lastSelectedSecurityPoolAddress.current = undefined
 			return
 		}
 		lastSelectedSecurityPoolAddress.current = normalizeAddress(securityPoolAddress) ?? ''
-	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultOwner])
+	}, [accountAddress, route, securityPoolAddress, setSecurityVaultFormSelectedVaultOwner, urlVaultAddress])
 
 	useEffect(() => {
 		const previousEnvironmentNonce = lastSelectedPoolEnvironmentNonce.current

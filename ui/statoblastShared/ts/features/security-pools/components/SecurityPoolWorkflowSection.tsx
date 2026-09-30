@@ -15,8 +15,8 @@ import { useSelectedPoolRefreshEffects } from '../hooks/useSelectedPoolRefreshEf
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../../types.js'
 import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
-import { POOLS_ROUTE_HASH } from '../../../lib/statoblastLocation.js'
+import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { POOLS_ROUTE_HASH, parsePoolsRouteHash, writePoolsLocationSearch } from '../../../lib/statoblastLocation.js'
 import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'
 import { PoolSelectionControl } from './PoolSelectionControl.js'
 import { PoolOracleStatusRow, PoolWorkspaceNavigation } from './PoolWorkspaceNavigation.js'
@@ -63,6 +63,8 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		forkAuction,
 		inlineOracle,
 		initialVaultView,
+		controlledVaultView,
+		onVaultViewChange,
 		liquidationTargetVault,
 		loadingPoolOracleManager,
 		loadingSecurityPools,
@@ -130,6 +132,8 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 		accountAddress: accountState.address,
 		hasLoadedCurrentVault: model.hasLoadedCurrentVault,
 		initialVaultView,
+		controlledVaultView,
+		onVaultViewChange,
 		loadingSecurityVault: securityVault.loadingSecurityVault,
 		onLoadSecurityVault: securityVault.onLoadSecurityVault,
 		onSecurityVaultFormChange: securityVault.onSecurityVaultFormChange,
@@ -204,7 +208,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				<div className='pool-page-toolbar'>
 					<a
 						className='pool-back-link'
-						href={buildRouteHref(POOLS_ROUTE_HASH, getRouteHashSearch())}
+						href={buildRouteHref(POOLS_ROUTE_HASH, writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(getCurrentRouteHash()), { view: 'browse' }))}
 						onClick={event => {
 							if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 							event.preventDefault()

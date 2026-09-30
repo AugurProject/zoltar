@@ -1,12 +1,17 @@
+import { readPoolBrowseState, readVaultSelection, writePoolBrowseState } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
+import type { PoolBrowseState, SelectedVaultView } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { useCallback } from 'preact/hooks'
 import { useUrlSearchState, type UrlHistoryMode } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { readOpenOracleReportIdQueryParam, readOpenOracleViewQueryParam, writeOpenOracleReportIdQueryParam, writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
 import { readSecurityPoolQuestionIdQueryParam, readUniverseQueryParam, updateSearchParams, setOrDeleteSearchParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { buildPoolsRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
+import { buildPoolsRouteHash, mapLegacyStatoblastHash, parsePoolsRouteHash, writePoolsLocationSearch, type PoolsLocation } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 
 type StatoblastUrlState = {
+	poolBrowseState: PoolBrowseState
+	vaultAddress: string | undefined
+	vaultView: SelectedVaultView | undefined
 	activeUniverseId: bigint
 	openOracleView: string
 	openOracleReportId: string
@@ -22,7 +27,9 @@ const QUESTION_ID_QUERY_PARAM = 'questionId'
 function readStatoblastUrlState(search: string, routeHash: string): StatoblastUrlState {
 	const poolsLocation = parsePoolsRouteHash(routeHash)
 	return {
-		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
+		poolBrowseState: readPoolBrowseState(search),
+		...readVaultSelection(search),
+		activeUniverseId: readUniverseQueryParam(search) ?? readUniverseQueryParam(window.location.search) ?? 0n,
 		openOracleView: readOpenOracleViewQueryParam(search) ?? '',
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
 		securityPoolsView: poolsLocation?.view ?? 'open',
@@ -32,15 +39,31 @@ function readStatoblastUrlState(search: string, routeHash: string): StatoblastUr
 	}
 }
 
-function withoutQuestionId(search: string) {
-	return updateSearchParams(search, params => params.delete(QUESTION_ID_QUERY_PARAM))
-}
-
 export function useStatoblastUrlState() {
 	// A legacy `#/security-pools` link is rewritten in place so every reader sees the path-based pool location.
 	const { navigate: navigateUrl, state } = useUrlSearchState(readStatoblastUrlState, { mapLegacyHash: mapLegacyStatoblastHash })
 	const updateSearch = useCallback((update: (search: string) => string, historyMode: UrlHistoryMode = 'push') => navigateUrl(getCurrentRouteHash(), update(getRouteHashSearch()), historyMode), [navigateUrl])
-	const navigatePools = useCallback((location: PoolsLocation, historyMode: UrlHistoryMode = 'push') => navigateUrl(buildPoolsRouteHash(location), location.view === 'create' ? getRouteHashSearch() : withoutQuestionId(getRouteHashSearch()), historyMode), [navigateUrl])
+	const navigatePools = useCallback(
+		(location: PoolsLocation, historyMode: UrlHistoryMode = 'push') => {
+			const current = parsePoolsRouteHash(getCurrentRouteHash())
+			const search = writePoolsLocationSearch(getRouteHashSearch(), current, location)
+			navigateUrl(buildPoolsRouteHash(location), search, historyMode)
+		},
+		[navigateUrl],
+	)
+
+	const setPoolBrowseState = useCallback((update: Partial<PoolBrowseState>) => updateSearch(search => writePoolBrowseState(search, update), update.searchText === undefined ? 'push' : 'replace'), [updateSearch])
+	const setVaultAddress = useCallback((address: string | undefined) => updateSearch(search => updateSearchParams(search, params => setOrDeleteSearchParam(params, 'vault', address)), 'replace'), [updateSearch])
+	const setVaultView = useCallback(
+		(view: SelectedVaultView) =>
+			updateSearch(search =>
+				updateSearchParams(search, params => {
+					params.set('vaultView', view)
+					if (view === 'selected-vault') params.delete('vault')
+				}),
+			),
+		[updateSearch],
+	)
 
 	const setActiveUniverseId = useCallback((universeId: bigint | undefined) => updateSearch(search => writeUniverseQueryParam(search, universeId)), [updateSearch])
 	// Editing keeps one history entry per editing session: moving away from a complete address pushes, and replacing a partial address replaces that entry, so Back returns to the previous pool.
@@ -61,7 +84,7 @@ export function useStatoblastUrlState() {
 				navigateUrl(getCurrentRouteHash(), nextSearch)
 				return
 			}
-			navigateUrl(buildPoolsRouteHash({ view: 'create' }), nextSearch)
+			navigateUrl(buildPoolsRouteHash({ view: 'create' }), writePoolsLocationSearch(nextSearch, parsePoolsRouteHash(getCurrentRouteHash()), { view: 'create' }))
 		},
 		[navigateUrl],
 	)
@@ -91,6 +114,9 @@ export function useStatoblastUrlState() {
 	return {
 		...state,
 		setActiveUniverseId,
+		setPoolBrowseState,
+		setVaultAddress,
+		setVaultView,
 		setOpenOracleReport,
 		setOpenOracleView,
 		setSecurityPoolsView,

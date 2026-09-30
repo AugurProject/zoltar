@@ -1,6 +1,6 @@
 import * as appCopy from '../copy/app.js'
 import { ViewTabs } from './ViewTabs.js'
-import { buildRouteHref, getTopLevelRouteSearch } from '../navigation/routing.js'
+import { getRouteHref } from '../navigation/routing.js'
 import { useDisclosurePopover } from '../hooks/useDisclosurePopover.js'
 import type { RouteTabDefinition, ViewTabOption } from '../types/components.js'
 
@@ -17,7 +17,7 @@ function toTabOption(tab: RouteTabDefinition): ViewTabOption<string> {
 	return {
 		value: tab.route,
 		label: tab.label,
-		href: buildRouteHref(tab.hash, getTopLevelRouteSearch(tab.route)),
+		href: getRouteHref(tab.route, undefined, tab.hash),
 		...(tab.disabled ? { disabled: true } : {}),
 		...(tab.disabled && tab.disabledReason !== undefined ? { reason: tab.disabledReason } : {}),
 	}

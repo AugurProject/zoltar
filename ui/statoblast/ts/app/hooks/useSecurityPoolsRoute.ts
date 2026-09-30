@@ -1,3 +1,4 @@
+import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -29,6 +30,11 @@ export function useSecurityPoolsRoute({
 	currentTimestamp,
 	deploymentStatuses,
 	marketCreation,
+	poolBrowseState,
+	setPoolBrowseState,
+	vaultView,
+	setVaultAddress,
+	setVaultView,
 	onViewPendingReport,
 	inlineOracle,
 	priceOracleManager,
@@ -57,6 +63,11 @@ export function useSecurityPoolsRoute({
 	canReadOnchainData: boolean
 	currentTimestamp: bigint | undefined
 	deploymentStatuses: Parameters<typeof useSecurityPoolCreation>[0]['deploymentStatuses']
+	poolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['browseState']>
+	setPoolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['onBrowseStateChange']>
+	vaultView: SecurityPoolsSectionProps['workflow']['controlledVaultView']
+	setVaultView: NonNullable<SecurityPoolsSectionProps['workflow']['onVaultViewChange']>
+	setVaultAddress: (address: string | undefined) => void
 	marketCreation: ReturnType<typeof useMarketCreation>
 	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
 	onViewPendingReport: (reportId: bigint) => void
@@ -350,6 +361,8 @@ export function useSecurityPoolsRoute({
 		onActiveViewChange: view => setSecurityPoolsView(view),
 		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPools(),
 		overview: {
+			browseState: poolBrowseState,
+			onBrowseStateChange: setPoolBrowseState,
 			activeUniverseId,
 			currentTimestamp,
 			securityPools,
@@ -359,6 +372,8 @@ export function useSecurityPoolsRoute({
 		selectedPoolRepPrice,
 		universeDirectoryPools,
 		workflow: {
+			controlledVaultView: vaultView,
+			onVaultViewChange: setVaultView,
 			accountState,
 			activeUniverseId,
 			checkedSecurityPoolAddress,
@@ -487,7 +502,10 @@ export function useSecurityPoolsRoute({
 				},
 				onRedeemFees: () => void redeemFees(),
 				onRedeemRepFromVault: () => void redeemRepFromVault(),
-				onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
+				onSecurityVaultFormChange: update => {
+					if (update.selectedVaultOwner !== undefined && (update.selectedVaultOwner.trim() === '' || isHexAddressInput(update.selectedVaultOwner))) setVaultAddress(update.selectedVaultOwner)
+					setSecurityVaultForm(current => ({ ...current, ...update }))
+				},
 				onWithdrawRep: proposedRepPerEthPrice => void withdrawRep(proposedRepPerEthPrice),
 				securityVaultActiveAction,
 				securityVaultDetails,

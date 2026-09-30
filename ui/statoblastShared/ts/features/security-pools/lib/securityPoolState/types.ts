@@ -1,6 +1,7 @@
 import type { ReportingStage } from '../../../reporting/lib/reporting.js'
 
-export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
+import type { SecurityPoolLifecycleState } from '../../../../types/app.js'
+export type { SecurityPoolLifecycleState } from '../../../../types/app.js'
 
 export type SecurityPoolReportingStage = ReportingStage
 
