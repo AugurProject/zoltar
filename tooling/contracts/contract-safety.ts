@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readFileSync } from 'node:fs'
 import { contractSafetyPolicy, type ContractReference } from './contract-safety-policy'
 
@@ -212,7 +213,7 @@ export function checkContractSafety(artifact: ContractArtifact): ContractSafetyR
 				errors.push(`${contractId(pair.delegate)} storage layout differs from delegatecall host ${contractId(pair.host)} (${pair.reason})`)
 			}
 		} catch (error) {
-			errors.push(error instanceof Error ? error.message : String(error))
+			errors.push(errorMessage(error))
 		}
 	}
 
@@ -232,7 +233,7 @@ export function checkContractSafety(artifact: ContractArtifact): ContractSafetyR
 				}
 			}
 		} catch (error) {
-			errors.push(error instanceof Error ? error.message : String(error))
+			errors.push(errorMessage(error))
 		}
 	}
 

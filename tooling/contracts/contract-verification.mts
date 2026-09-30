@@ -1,5 +1,6 @@
 import { createApplyLinkedLibrariesHelper } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { getAddress, getCreate2Address, keccak256, toHex, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 const SECURITY_POOL_UTILS_SOURCE_PATH = 'contracts/statoblast/SecurityPoolUtils.sol'
 const ZERO_SALT = toHex(0, { size: 32 })
@@ -420,7 +421,7 @@ function recordOutcome({ log, outcomes }: OutcomeRecorder, job: VerificationJob,
 }
 
 function recordFailure(recorder: OutcomeRecorder, job: VerificationJob, error: unknown) {
-	recordOutcome(recorder, job, 'failed', error instanceof Error ? error.message : String(error))
+	recordOutcome(recorder, job, 'failed', errorMessage(error))
 }
 
 export async function verifyContractsWithExplorer(parameters: { fetchFn: ExplorerFetch; inputs: StandardJsonInputs; jobs: readonly VerificationJob[]; log: (message: string) => void; sleep: (milliseconds: number) => Promise<void>; target: ExplorerTarget }): Promise<VerificationOutcome[]> {

@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readdir, readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import { repositoryRoot } from './root.mts'
@@ -43,7 +44,7 @@ function parseToml(filePath: string, source: string, errors: string[]) {
 		}
 		return value
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error)
+		const message = errorMessage(error)
 		errors.push(`${filePath}: invalid TOML: ${message}`)
 		return undefined
 	}

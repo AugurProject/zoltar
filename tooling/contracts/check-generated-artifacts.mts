@@ -4,6 +4,7 @@ import * as process from 'node:process'
 import * as url from 'node:url'
 import { type GitRunner, runGit as runRepositoryGit } from '../repo/git.mts'
 import { repositoryRoot as defaultRepositoryRoot } from '../repo/root.mts'
+import { untrackedGeneratedPathspecs } from '../repo/generated-artifacts.ts'
 import { augurScanMetadataOutputs } from '../repo/projects.ts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
 
@@ -25,30 +26,8 @@ const explicitlyRequiredGeneratedOutputs = [
 	'ui/trading/ts/generated/contractArtifact.ts',
 ]
 
-const generatedReviewPaths = [
-	...augurScanMetadataOutputs,
-	...sharedPackages.map(entry => `${entry.path}/js`),
-	'solidity/artifacts',
-	'solidity/.contract-hash.json',
-	'solidity/ts/types/contractArtifact.ts',
-	'ui/coreShared/js',
-	'ui/zoltar/dist',
-	'ui/zoltar/js',
-	'ui/statoblast/dist',
-	'ui/statoblast/js',
-	'ui/trading/dist',
-	'ui/trading/js',
-	':(glob)**/*.tsbuildinfo',
-	':(glob)ui/*/ts/**/*.d.ts',
-	':(glob)ui/*/ts/**/*.d.ts.map',
-	'ui/coreShared/ts/abis.ts',
-	'ui/coreShared/ts/contractArtifact.ts',
-	'ui/statoblastShared/ts/contractArtifact.ts',
-	'ui/trading/ts/generated',
-	'ui/zoltar/vendor',
-	'ui/statoblast/vendor',
-	'ui/trading/vendor',
-]
+// Ignored registry outputs plus stray compiler output that must never be committed.
+const generatedReviewPaths = [...untrackedGeneratedPathspecs(), ':(glob)**/*.tsbuildinfo', ':(glob)ui/*/ts/**/*.d.ts', ':(glob)ui/*/ts/**/*.d.ts.map']
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
