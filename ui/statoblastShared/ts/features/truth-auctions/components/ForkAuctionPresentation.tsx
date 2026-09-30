@@ -9,7 +9,6 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
 import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
@@ -94,10 +93,6 @@ export function renderTruthAuctionPriceValue(value: bigint | undefined, fallback
 export function renderAddress(address: string | undefined) {
 	if (address === undefined) return commonCopy.metricUnavailablePlaceholder
 	return <AddressValue address={address} />
-}
-export function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp: bigint | undefined; fallbackText: string }) {
-	if (displayTimestamp === undefined) return fallbackText
-	return <TimestampValue timestamp={displayTimestamp} />
 }
 export function renderTruthAuctionSettlementSelectionSummary({
 	estimatedAssignedUnderwritingLimitAttoEth,
