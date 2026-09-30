@@ -2,7 +2,9 @@ import { expect, spyOn, test } from 'bun:test'
 import { ScannerDatabase } from '../../src/database.ts'
 import { getAddress, toHex, zeroHash } from '../../src/ethereum.ts'
 import type { ContractMetadata } from '../../src/types.ts'
-import { NetworkIndexer } from '../../src/indexer/block-ingestion.ts'
+import { indexBlock } from '../../src/indexer/ingestion-operations.ts'
+import { selectProvider } from '../../src/indexer/network-provider.ts'
+import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
 
 test('discovers and remembers the trace boundary while continuing log indexing', async () => {
 	let floor = 42n
@@ -20,9 +22,9 @@ test('discovers and remembers the trace boundary while continuing log indexing',
 		},
 	})
 	const database = new ScannerDatabase('postgres://unused')
-	const indexer = new NetworkIndexer({ id: 'test', name: 'Test', chainId: 31337, rpcUrls: [server.url.href, server.url.href], startBlock: 10n, confirmationDepth: 0n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal)
+	const indexer = createNetworkIndexer({ id: 'test', name: 'Test', chainId: 31337, rpcUrls: [server.url.href, server.url.href], startBlock: 10n, confirmationDepth: 0n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal)
 	const block = (number: bigint) => ({ number, hash: toHex(number, { size: 32 }), parentHash: zeroHash, timestamp: 1_700_000_000n, transactions: [] })
-	const header = spyOn(indexer, 'getBlockHeader').mockImplementation(async number => block(number))
+	const readBlockHeader = async (_providers: unknown, number: bigint) => block(number)
 	const oracle = getAddress('0x1000000000000000000000000000000000000001')
 	const sender = getAddress('0x2000000000000000000000000000000000000002')
 	const contracts = new Map<string, ContractMetadata>([[oracle.toLowerCase(), { address: oracle, kind: 'openOracle', label: 'Oracle', provenance: 'manifest' }]])
@@ -31,10 +33,10 @@ test('discovers and remembers the trace boundary while continuing log indexing',
 		const hash = toHex(number + 1000n, { size: 32 })
 		const transaction = { blockHash: current.hash, blockNumber: number, from: sender, gas: 100_000n, hash, input: '0x' as const, nonce: 0n, to: oracle, transactionIndex: 0n, value: 0n }
 		const log = { address: oracle, blockHash: current.hash, blockNumber: number, transactionHash: hash, transactionIndex: 0n, logIndex: 0n, topics: [zeroHash], data: '0x' as const }
-		const transactionRead = spyOn(indexer.client, 'getTransaction').mockResolvedValue(transaction)
-		const receiptRead = spyOn(indexer.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: current.hash, blockNumber: number, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to: oracle, transactionHash: hash, transactionIndex: 0n })
+		const transactionRead = spyOn(indexer.providers.client, 'getTransaction').mockResolvedValue(transaction)
+		const receiptRead = spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: current.hash, blockNumber: number, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to: oracle, transactionHash: hash, transactionIndex: 0n })
 		try {
-			return await indexer.indexBlock(number, 100n, contracts, new Map(), undefined, { ...current, transactions: [transaction] }, [log], async () => [])
+			return await indexBlock(indexer, number, 100n, contracts, new Map(), undefined, { ...current, transactions: [transaction] }, [log], async () => [], readBlockHeader)
 		} finally {
 			transactionRead.mockRestore()
 			receiptRead.mockRestore()
@@ -63,15 +65,14 @@ test('discovers and remembers the trace boundary while continuing log indexing',
 		transientFailure = true
 		await expect(scan(61n)).rejects.toMatchObject({ method: 'debug_traceBlockByHash', cause: { message: 'temporary database failure' } })
 		transientFailure = false
-		const alternative = indexer.providers[1]
+		const alternative = indexer.providers.list[1]
 		if (alternative === undefined) throw new Error('Missing alternate provider')
-		indexer.selectProvider(alternative)
+		selectProvider(indexer, alternative)
 		floor = 10n
 		requests.length = 0
 		await scan(11n)
 		expect(requests).toEqual([11n])
 	} finally {
-		header.mockRestore()
 		server.stop(true)
 		await database.close()
 	}
