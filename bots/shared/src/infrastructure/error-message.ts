@@ -1,3 +1,1 @@
-export function errorMessage(error: unknown) {
-	return error instanceof Error ? error.message : String(error)
-}
+export { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
