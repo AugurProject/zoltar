@@ -38,7 +38,12 @@ export function parseGitattributes(text: string): GitattributesRule[] {
 
 const linguistAttribute = (kind: NonNullable<GeneratedArtifact['linguist']>) => `linguist-${kind}`
 const attributePattern = (artifact: GeneratedArtifact) => `/${artifact.pattern}`
-const attributePathspec = (pattern: string) => (pattern.startsWith('/') ? `:(glob)${pattern.slice(1)}` : pattern.includes('/') ? `:(glob)${pattern}` : `:(glob)**/${pattern}`)
+/** Git pathspec for a `.gitattributes` pattern: a leading or inner slash anchors it at the root; otherwise it matches at any depth. */
+function attributePathspec(pattern: string) {
+	if (pattern.startsWith('/')) return `:(glob)${pattern.slice(1)}`
+	if (pattern.includes('/')) return `:(glob)${pattern}`
+	return `:(glob)**/${pattern}`
+}
 /** A concrete path that the registry glob matches, used to probe `.gitignore` rules. */
 const samplePath = (pattern: string) => pattern.replaceAll('**', 'sample').replaceAll('*', 'sample')
 
