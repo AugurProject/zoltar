@@ -17,7 +17,7 @@ runs:
       run: bun ./tooling/repo/query-projects.mts --github-output
 
     - name: Cache component dependencies
-      uses: actions/cache@v5
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
       with:
         path: ~/.bun/install/cache
         key: ${{ runner.os }}-component-${{ inputs.directory }}-${{ env.BUN_VERSION }}-${{ steps.projects.outputs.dependency_cache_key }}

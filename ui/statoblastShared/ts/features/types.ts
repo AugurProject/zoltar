@@ -61,7 +61,7 @@ type RepPerEthPriceProps = {
 	repPerEthSourceUrl: string | undefined
 }
 
-export type SecurityPoolsView = 'open' | 'browse' | 'create' | 'operate' | 'universes'
+export type SecurityPoolsView = 'browse' | 'create' | 'operate' | 'universes'
 
 type SecurityPoolRouteContentProps = {
 	accountState: AccountState
@@ -279,7 +279,6 @@ type TradingRouteContentProps = {
 }
 
 export type TradingSectionProps = TradingRouteContentProps & {
-	oraclePriceUsable: boolean | undefined
 	embedInCard?: boolean
 	poolState?: SecurityPoolStateModel | undefined
 	showSecurityPoolAddressInput?: boolean

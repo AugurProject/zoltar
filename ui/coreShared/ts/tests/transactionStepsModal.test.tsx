@@ -14,11 +14,19 @@ import { createTransactionStepController, transactionSteps } from '../transactio
 
 test('shows funding in plan order with readable amounts and exact values available', async () => {
 	const dom = installDomEnvironment()
-	const rendered = await renderIntoDocument(<TransactionFundingSummary funding={[{ amount: '1.234567890123456789 WETH' }, { amount: '2.423076924773076927 REP' }]} totalAttoEth={137_760_122n} />)
+	const rendered = await renderIntoDocument(
+		<TransactionFundingSummary
+			funding={[
+				{ amount: 1_234_567_890_123_456_789n, tokenSymbol: 'WETH', tokenUnits: 18 },
+				{ amount: 2_423_076_924_773_076_927n, tokenSymbol: 'REP', tokenUnits: 18 },
+			]}
+			totalAttoEth={137_760_122n}
+		/>,
+	)
 	try {
 		const amounts = [...rendered.container.querySelectorAll('.transaction-deposits strong')]
-		expect(amounts.map(amount => amount.textContent)).toEqual(['≈ 1.2346 WETH', '≈ 2.4231 REP'])
-		expect(amounts[1]?.getAttribute('title')).toBe('2.423076924773076927 REP')
+		expect(amounts.map(amount => amount.textContent)).toEqual(['≈ 1.2346\u00a0WETH', '≈ 2.4231\u00a0REP'])
+		expect(amounts[1]?.getAttribute('title')).toBe('2.423076924773076927\u00a0REP')
 		expect(rendered.container.textContent).toContain('≈ 0.00000000014 ETH')
 		expect(rendered.container.querySelector('.currency-value')?.getAttribute('title')).toBe('0.000000000137760122 ETH')
 	} finally {
@@ -95,8 +103,8 @@ test('shows every step, token deposit, expected return and ETH cost before the f
 			description: 'Fund the report.',
 			ethValueAttoEth: 12n,
 			tokenFunding: [
-				{ amount: '3 REP', limit: '6 REP' },
-				{ amount: '1 WETH', limit: '2 WETH' },
+				{ amount: 3n, tokenSymbol: 'REP', tokenUnits: 0 },
+				{ amount: 1n, tokenSymbol: 'WETH', tokenUnits: 0 },
 			],
 			oracleOutcome: { settlerRewardAttoEth: 12n, returnToWallet: true },
 		},
@@ -298,8 +306,8 @@ for (const choice of ['default', 'buffered', 'custom'] as const) {
 				amount: undefined,
 				ethValueAttoEth: 12n,
 				tokenFunding: [
-					{ amount: '3 REP', limit: '6 REP' },
-					{ amount: '1 WETH', limit: '2 WETH' },
+					{ amount: 3n, tokenSymbol: 'REP', tokenUnits: 0 },
+					{ amount: 1n, tokenSymbol: 'WETH', tokenUnits: 0 },
 				],
 				oracleOutcome: { settlerRewardAttoEth: 12n, returnToWallet: true },
 			},
@@ -315,8 +323,8 @@ for (const choice of ['default', 'buffered', 'custom'] as const) {
 			const funding = rendered.container.querySelector('.transaction-funding')
 			const approvalInput = queries.getByRole('textbox')
 			if (funding === null) throw new Error('Missing funding summary')
-			expect(funding.textContent).toContain('3 REP')
-			expect(funding.textContent).toContain('1 WETH')
+			expect(funding.textContent).toContain('3\u00a0REP')
+			expect(funding.textContent).toContain('1\u00a0WETH')
 			expect(queries.getByRole('button', { name: /Request price/ }).hasAttribute('disabled')).toBe(true)
 			if (choice === 'custom') await act(() => fireEvent.input(queries.getByRole('textbox'), { target: { value: '9' } }))
 			expect(queries.queryByRole('button', { name: /Max/ })).toBeNull()

@@ -2,10 +2,12 @@ import { parseCentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/ce
 import mainnet from '../../../../docs/mainnet-deployment-addresses.json'
 import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
+import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { MAINNET_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 
 export function canonicalDeployment(chainId: number) {
-	const core = canonicalCoreDeployment(chainId === 1 ? mainnet : sepolia)
-	return { securityPoolFactory: core.securityPoolFactory, weth: core.weth, zoltar: core.zoltar }
+	const core = canonicalCoreDeployment(chainId === MAINNET_CHAIN_ID ? mainnet : sepolia)
+	return { multicall3: core.multicall3, securityPoolFactory: core.securityPoolFactory, weth: core.weth, zoltar: core.zoltar }
 }
 
 export function parseRootMarketSettings(value: unknown, chainId: number) {
@@ -14,6 +16,11 @@ export function parseRootMarketSettings(value: unknown, chainId: number) {
 }
 
 export function canonicalRootMarketIdentity(chainId: number) {
-	const identity = canonicalNetworkDeployment(chainId === 1 ? mainnet : sepolia)
+	const identity = canonicalNetworkDeployment(chainId === MAINNET_CHAIN_ID ? mainnet : sepolia)
 	return { assetAddress: identity.rep, assetChainId: identity.chainId }
+}
+
+/** Chain identity and block explorer of a preset network profile. */
+export function presetNetwork(name: NetworkName) {
+	return { chainId: presetNetworkChainId(name), explorerUrl: name === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io', name }
 }

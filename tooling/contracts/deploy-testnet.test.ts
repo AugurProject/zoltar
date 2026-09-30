@@ -499,7 +499,7 @@ describe('testnet deployment plan', () => {
 			infrastructure.escalationGameFactory,
 			infrastructure.multicall3,
 			infrastructure.openOracle,
-			infrastructure.priceOracleManagerAndOperatorQueuerFactory,
+			infrastructure.openOraclePriceCoordinatorFactory,
 			infrastructure.securityPoolFactory,
 			infrastructure.securityPoolForker,
 			infrastructure.securityPoolOperationsDelegate,
@@ -527,9 +527,9 @@ describe('testnet deployment plan', () => {
 		expect(new Set(Object.values(bootstrapDescendants)).size).toBe(16)
 		for (const address of Object.values(bootstrapDescendants)) expect(addressSet.has(address)).toBe(false)
 		expect(bootstrapDescendants.escalationGameProofVerifier).toBe(infrastructure.escalationGameProofVerifier)
-		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 1n }))
+		expect(bootstrapDescendants.liquidationApprovalRegistryDeployer).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 1n }))
 		expect(bootstrapDescendants.liquidationApprovalRegistryImplementation).toBe(getCreateAddress({ from: bootstrapDescendants.liquidationApprovalRegistryDeployer, nonce: 1n }))
-		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.priceOracleManagerAndOperatorQueuerFactory, nonce: 2n }))
+		expect(bootstrapDescendants.priceCoordinatorDeploymentWorker).toBe(getCreateAddress({ from: infrastructure.openOraclePriceCoordinatorFactory, nonce: 2n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeFirstChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 1n }))
 		expect(bootstrapDescendants.priceCoordinatorCreationCodeSecondChunk).toBe(getCreateAddress({ from: bootstrapDescendants.priceCoordinatorDeploymentWorker, nonce: 2n }))
 		expect(bootstrapDescendants.securityPoolDeployer).toBe(getCreateAddress({ from: infrastructure.securityPoolFactory, nonce: 1n }))

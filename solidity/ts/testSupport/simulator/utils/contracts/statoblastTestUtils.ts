@@ -45,8 +45,8 @@ export const triggerOwnGameFork = async (client: WriteClient, securityPoolAddres
 	await forkZoltarWithOwnEscalationGame(client, securityPoolAddress)
 }
 
-export const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, forceRepEthPriceTo: bigint) => {
-	const pendingReportId = await getPendingReportId(client, priceOracleManagerAndOperatorQueuer)
+export const handleOracleReporting = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, forceRepEthPriceTo: bigint) => {
+	const pendingReportId = await getPendingReportId(client, openOraclePriceCoordinator)
 	if (pendingReportId === 0n) {
 		// operation already executed
 		return
@@ -62,23 +62,23 @@ export const handleOracleReporting = async (client: WriteClient, mockWindow: Anv
 	assert.strictEqual(reportStatus.currentAmount1, expectedAmount1, 'pending report should preserve the coordinator-selected token1 amount')
 	assert.strictEqual(reportStatus.currentAmount2, expectedAmount2, 'pending report should already encode the forced price before settlement')
 	assert.notStrictEqual(reportStatus.currentReporter, zeroAddress, 'pending report should already have an initial reporter')
-	assert.strictEqual(reportStatus.currentReporter, priceOracleManagerAndOperatorQueuer, 'pending report should use the coordinator as the current reporter')
-	assert.strictEqual(reportStatus.initialReporter, priceOracleManagerAndOperatorQueuer, 'pending report should preserve the coordinator as the initial reporter')
+	assert.strictEqual(reportStatus.currentReporter, openOraclePriceCoordinator, 'pending report should use the coordinator as the current reporter')
+	assert.strictEqual(reportStatus.initialReporter, openOraclePriceCoordinator, 'pending report should preserve the coordinator as the initial reporter')
 	assert.ok(reportStatus.reportTimestamp > 0n, 'pending report should already have a report timestamp')
 
 	await mockWindow.advanceTime(BigInt(reportMeta.settlementTime) + 1n)
 
 	await openOracleSettle(client, pendingReportId)
-	assert.strictEqual(await getLastPrice(client, priceOracleManagerAndOperatorQueuer), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
+	assert.strictEqual(await getLastPrice(client, openOraclePriceCoordinator), expectedSettledPrice, 'settled coordinator price should match the encoded pending report price')
 }
 
-export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	await manipulatePriceOracle(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
+export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+	await manipulatePriceOracle(client, mockWindow, openOraclePriceCoordinator, forceRepEthPriceTo)
 	assert.strictEqual(targetVault, client.account.address, 'capacity target must be the caller vault')
 	const securityPool = requireAddress(
 		await client.readContract({
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-			address: priceOracleManagerAndOperatorQueuer,
+			address: openOraclePriceCoordinator,
 			functionName: 'securityPool',
 			args: [],
 		}),
@@ -112,19 +112,19 @@ export const setVaultCapacityFixture = async (client: WriteClient, mockWindow: A
 	})
 }
 
-export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, operation: Exclude<OperationType, OperationType.PriceRefresh>, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer)
-	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, priceOracleManagerAndOperatorQueuer, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, costAttoEth)
-	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
+export const manipulatePriceOracleAndPerformOperation = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, operation: Exclude<OperationType, OperationType.PriceRefresh>, targetVault: Address, amount: bigint, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+	const costAttoEth = await getRequestPriceCostAttoEth(client, openOraclePriceCoordinator)
+	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, openOraclePriceCoordinator, operation, targetVault, amount, DEFAULT_SELF_OPERATION_VALID_FOR_SECONDS, forceRepEthPriceTo, costAttoEth)
+	await handleOracleReporting(client, mockWindow, openOraclePriceCoordinator, forceRepEthPriceTo)
 }
 
-export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, priceOracleManagerAndOperatorQueuer: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
-	if (await getIsPriceValid(client, priceOracleManagerAndOperatorQueuer)) {
+export const manipulatePriceOracle = async (client: WriteClient, mockWindow: AnvilWindowEthereum, openOraclePriceCoordinator: Address, forceRepEthPriceTo: bigint = PRICE_PRECISION) => {
+	if (await getIsPriceValid(client, openOraclePriceCoordinator)) {
 		await mockWindow.advanceTime(ORACLE_PRICE_VALID_FOR_SECONDS + 1n)
 	}
-	const costAttoEth = await getRequestPriceCostAttoEth(client, priceOracleManagerAndOperatorQueuer)
-	await requestPriceWithValue(client, priceOracleManagerAndOperatorQueuer, costAttoEth, forceRepEthPriceTo)
-	await handleOracleReporting(client, mockWindow, priceOracleManagerAndOperatorQueuer, forceRepEthPriceTo)
+	const costAttoEth = await getRequestPriceCostAttoEth(client, openOraclePriceCoordinator)
+	await requestPriceWithValue(client, openOraclePriceCoordinator, costAttoEth, forceRepEthPriceTo)
+	await handleOracleReporting(client, mockWindow, openOraclePriceCoordinator, forceRepEthPriceTo)
 }
 
 export const canLiquidate = (lastPrice: bigint, underwritingLimitAttoEth: bigint, repClaim: bigint, statoblastSecurityMultiplierBps: bigint) => underwritingLimitAttoEth * lastPrice * statoblastSecurityMultiplierBps > repClaim * PRICE_PRECISION * 10_000n

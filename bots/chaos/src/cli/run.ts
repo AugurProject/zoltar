@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { assertDurableDeploymentFactory, restoreDeploymentForDurableState } from '../config/deployment-state.ts'
+import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
 
 import { getAddress, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createBotShutdownController, runBotMain, withBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
@@ -59,7 +59,7 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 		console.log(JSON.stringify(state.retirement, undefined, 2))
 		return
 	}
-	loaded = { ...loaded, settings: restoreDeploymentForDurableState(loaded.settings, state, loaded.needsDeploymentPin) }
+	assertDurableStateFactories(loaded.settings, state)
 	const profileId = executionProfileId(loaded.settings)
 	if (state.profileId !== profileId) throw new Error(`Durable state belongs to ${state.profileId}, not configured profile ${profileId}`)
 	assertDurableDeploymentFactory(loaded.settings, state, loaded.settings.runtime.stateFile)
@@ -114,7 +114,6 @@ export async function main() {
 			chainId: loaded.settings.network.chainId,
 			execute: loaded.settings.runtime.execute,
 			privateKey: loaded.settings.privateKey,
-			signerLockRoot: process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'],
 			stateFile: loaded.settings.runtime.stateFile,
 		},
 		CHAOS_PROCESS_LOCK_OPTIONS,

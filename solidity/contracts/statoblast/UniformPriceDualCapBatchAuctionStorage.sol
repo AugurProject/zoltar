@@ -28,6 +28,7 @@ library UniformPriceDualCapBatchAuctionStorage {
 		uint256 lastValidBidAtTickAttoEth;
 	}
 
+	uint256 internal constant AUCTION_TIME = 1 weeks;
 	int256 internal constant MIN_TICK = -524288;
 	int256 internal constant MAX_TICK = 524288;
 	uint256 internal constant PRICE_PRECISION = 1e18;

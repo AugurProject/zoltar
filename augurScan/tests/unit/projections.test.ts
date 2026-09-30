@@ -55,7 +55,7 @@ describe('state projections', () => {
 				universeId: '0',
 				questionId: '42',
 				truthAuction: '0x0000000000000000000000000000000000000000',
-				priceOracleManagerAndOperatorQueuer: vault,
+				openOraclePriceCoordinator: vault,
 				shareToken: vault,
 				statoblastSecurityMultiplierBps: '15000',
 				initialReportPriorityFeeAttoEthPerGas: atomic(10_000_000_000n),
@@ -385,12 +385,12 @@ describe('state projections', () => {
 			semanticEventKind: 'InheritedThresholdTieReopened',
 			entityIdentity: pool.toLowerCase(),
 		})
-		expect(projectionsFrom(log('VaultBadDebtRecorded', { targetVault: vault })).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('VaultLiquidated', { receiverVault: pool, targetVault: vault })).at(-1)).toMatchObject({
 			domain: 'risk',
 			entityType: 'vault',
 			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
 		})
-		expect(projectionsFrom(log('VaultDepositTargetHealthFactorRecorded', { vault })).at(-1)).toMatchObject({
+		expect(projectionsFrom(log('RepDepositedToVault', { vault })).at(-1)).toMatchObject({
 			domain: 'risk',
 			entityType: 'vault',
 			entityIdentity: `${pool.toLowerCase()}:${vault.toLowerCase()}`,
@@ -446,7 +446,6 @@ for (const seconds of ['0', '8640000000000', '8640000000001', '281474976710655']
 
 describe('previously raw-only lifecycle evidence', () => {
 	for (const [name, data, kind, entityType, identity] of [
-		['VaultBackingFactorAdjusted', { vault, backingFactorBps: '9000', underwritingLimitAttoEth: String(12n) }, 'securityPool', 'vault', `${pool}:${vault}`],
 		['ReputationTokenInitialized', { universeId: '7', repNumber: '2' }, 'reputationToken', 'reputation-token', pool],
 		['ChildReputationTokenInitialized', { universeId: '7', reputationToken: vault, repNumber: '2' }, 'zoltar', 'fork', '7'],
 		['PositionExitedByTransfer', { owner: vault, pair: vault, completeSetShares: '12' }, 'ammRouter', 'amm', vault],

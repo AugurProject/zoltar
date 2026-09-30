@@ -71,7 +71,7 @@ export const UI_SCREENSHOT_APPS: Partial<Record<UiAppId, UiScreenshotApp>> = {
 }
 
 const openFirstMarket: readonly UiScreenshotStep[] = [{ click: 'Will this resolve?' }, { waitForText: 'Question end' }]
-const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [{ click: 'Create market' }, { waitForText: 'Conditional YES price' }, { fill: 'ETH amount', value: '0.01' }, { fill: 'Conditional YES price', value: '70' }, { waitForText: 'Expected to receive' }, { waitForEnabled: 'Initialize pool' }]
+const initializeAtSeventyPercent: readonly UiScreenshotStep[] = [{ click: 'Create market' }, { waitForText: 'Conditional YES price' }, { fill: 'ETH amount', value: '0.01' }, { fill: 'Conditional YES price', value: '70' }, { waitForText: 'You receive ≈' }, { waitForEnabled: 'Initialize pool' }]
 const travelOneYear: readonly UiScreenshotStep[] = [{ click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+1 year' }, { waitForEnabled: '+1 year' }, { click: 'Hide details' }]
 // The trade panel scrolls inside the viewport, so panel shots use a taller window.
 const tradePanel: UiScreenshotCrop = { selector: '.market-ticket__panel' }
@@ -127,7 +127,7 @@ export const UI_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		steps: [...initializeAtSeventyPercent, { click: 'Initialize pool' }, { waitForText: 'TRADING OPEN' }, { click: 'Portfolio' }, { waitForText: 'LP' }],
 		expectText: ['Portfolio', 'INVALID', 'LP'],
 		viewport: pageViewport,
-		crop: { selector: '.entity-card', containing: 'Position details' },
+		crop: { selector: '.portfolio-positions' },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{
@@ -158,7 +158,7 @@ export const UI_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		scenario: 'deployed',
 		route: '#/create-market',
 		steps: initializeAtSeventyPercent,
-		expectText: ['PAIR NOT CREATED', 'Initialize', 'ETH amount', 'Conditional YES price', 'You provide', 'Expected to receive', 'Initialize pool'],
+		expectText: ['PAIR NOT CREATED', 'Initialize', 'ETH amount', 'Conditional YES price', 'You provide', 'You receive ≈', 'Initialize pool'],
 		viewport: pageViewport,
 		crop: { selector: '.section-block', containing: 'Conditional YES price' },
 		usedBy: ['tutorials/trading-first-market.html'],
@@ -168,7 +168,7 @@ export const UI_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		app: 'trading',
 		scenario: 'trading-funded',
 		steps: [...openFirstMarket, { click: 'Liquidity' }, { click: 'Remove' }, { waitForText: 'LP tokens' }, { fill: 'LP tokens', value: '0.001' }, { waitForEnabled: 'Remove liquidity' }],
-		expectText: ['Remove', 'LP tokens', 'Expected to receive', 'Remove liquidity'],
+		expectText: ['Remove', 'LP tokens', 'You receive ≈', 'Remove liquidity'],
 		viewport: tallViewport,
 		crop: tradePanel,
 		usedBy: ['how-to/trading-remove-liquidity.html'],

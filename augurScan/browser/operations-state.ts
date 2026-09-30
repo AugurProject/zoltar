@@ -35,7 +35,7 @@ const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]
 
 export interface OperationsRouteState {
 	requestVersion: number
-	loadState: { promise?: Promise<boolean>; context?: string }
+	loadState: { promise?: Promise<boolean> | undefined; context?: string | undefined }
 	catalogState: CatalogState | undefined
 	riskCatalogState: RiskCatalogState | undefined
 	detailState: DetailState | undefined

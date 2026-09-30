@@ -27,7 +27,7 @@
 					<li>Select <strong>Details</strong> on the SecurityPool you want.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-create-market" aria-labelledby="fig-trading-create-market-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/create-market.png"><img width="405" height="480" src="../assets/screenshots/trading/create-market.png" alt="A security pool card on the Create new market page for Will this resolve?, closing in 364 days, with Create market and Details buttons." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/create-market.png"><img width="410" height="223" src="../assets/screenshots/trading/create-market.png" alt="A security pool card on the Create new market page for Will this resolve?, closing in 364 days, with Create market and Details buttons." loading="lazy" /></a>
 					<figcaption id="fig-trading-create-market-caption"><span class="figure-label">Pools without a market.</span> <strong>Create market</strong> skips the details page and opens the form directly.</figcaption>
 				</figure>
 				<p>The details page tells you whether the SecurityPool can take a market. A <strong>Deploy trading pool</strong> button means it can; a disabled <strong>Initialize trading pool</strong> button names the reason it cannot, such as <em>Question ended — pair initialization unavailable</em>. <strong>Minting capacity</strong> shows the collateral already minted against the pool's ceiling (used / ceiling); your deposit must fit in the difference.</p>
@@ -41,11 +41,11 @@
 				<ol>
 					<li>Select <strong>Deploy trading pool</strong>. The form opens with the badge <strong>PAIR NOT CREATED</strong> and <strong>Initialize</strong> selected.</li>
 					<li>Enter <code>0.01</code> in <strong>ETH amount</strong> and <code>70</code> in <strong>Conditional YES price</strong>.</li>
-					<li>Read the quote: <strong>You provide</strong> 0.01 ETH, <strong>Expected to receive</strong> LP tokens, 0.01 Invalid, and the Yes shares the pool did not need. If the <strong>REP/ETH oracle price</strong> is not current, select <strong>Request price update</strong> first; a SecurityPool cannot accept collateral on a stale price.</li>
+					<li>Read the quote: <strong>You provide</strong> 0.01 ETH, <strong>You receive ≈</strong> LP tokens, 0.01 Invalid, and the Yes shares the pool did not need.</li>
 					<li>Select <strong>Initialize pool</strong> and confirm the one transaction that creates and seeds the pool. It reverts if it would mint fewer LP tokens than the quote allows after your slippage tolerance, which you set under <strong>Settings</strong>.</li>
 				</ol>
 				<figure class="screenshot" id="fig-trading-initialize" aria-labelledby="fig-trading-initialize-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="790" height="1313" src="../assets/screenshots/trading/initialize-pool.png" alt="The Create new market form with Initialize selected, 0.01 ETH and a 70% conditional Yes price entered, a current REP/ETH oracle price, and a quote of 0.0043 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Initialize pool button." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/initialize-pool.png"><img width="790" height="983" src="../assets/screenshots/trading/initialize-pool.png" alt="The Create new market form with Initialize selected, 0.01 ETH and a 70% conditional Yes price entered, and a quote of 0.0043 LP, 0.01 Invalid, and 0.0057 Yes, above an enabled Initialize pool button." loading="lazy" /></a>
 					<figcaption id="fig-trading-initialize-caption"><span class="figure-label">Seeding at 70% Yes.</span> The LP tokens represent only the Yes and No left in the pool; the Invalid and spare Yes return to your wallet.</figcaption>
 				</figure>
 			</section>
@@ -53,7 +53,7 @@
 				<h2>Check the result</h2>
 				<p>Open the <strong>Markets</strong> tab. The market is listed with the badge <strong>TRADING OPEN</strong> and conditional odds of 70% Yes. Then open <strong>Portfolio</strong>: the market shows your LP tokens, your Invalid, and the spare Yes as separate holdings.</p>
 				<figure class="screenshot" id="fig-trading-portfolio" aria-labelledby="fig-trading-portfolio-caption">
-					<a class="screenshot-link" href="../assets/screenshots/trading/portfolio.png"><img width="800" height="533" src="../assets/screenshots/trading/portfolio.png" alt="The Portfolio page with one market card listing 0.0057 Yes, 0.01 Invalid, and 0.0042 LP, each outcome balance with its payout if that outcome wins." loading="lazy" /></a>
+					<a class="screenshot-link" href="../assets/screenshots/trading/portfolio.png"><img width="800" height="485" src="../assets/screenshots/trading/portfolio.png" alt="The Portfolio page with one market card listing 0.0057 Yes, 0.01 Invalid, and 0.0042 LP, each outcome balance with its payout if that outcome wins." loading="lazy" /></a>
 					<figcaption id="fig-trading-portfolio-caption"><span class="figure-label">Portfolio after seeding.</span> The 0.01 ETH deposit returned 0.01 Invalid, 0.0057 spare Yes, and the LP tokens.</figcaption>
 				</figure>
 				<p>At 70% Yes, the trading pool holds roughly 30 Yes for every 70 No. The No reserve is the larger one because in a constant-product pool the <em>opposite</em> reserve sets the price; <a href="../explanation/trading/pricing.html">Conditional pricing</a> explains why.</p>

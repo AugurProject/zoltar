@@ -1,11 +1,12 @@
 import { formatNetworkRequiredReason, positiveAmountRequired, walletConnectionRequired } from '@zoltar/ui-core-shared/copy/common.js'
 import { conditionalYesPriceValidation } from './liquidity.js'
+import { walletBalancesUnavailable } from './app.js'
 
 export { formatNetworkRequiredReason }
 export const connectWalletReason = walletConnectionRequired
 export const marketClosedReason = 'Market closed to new positions.'
 export const balancesLoadingReason = 'Loading wallet balances…'
-export const balancesUnavailableReason = 'Wallet balances unavailable.'
+export const balancesUnavailableReason = `${walletBalancesUnavailable}.`
 export const amountRequiredReason = positiveAmountRequired
 export const insufficientEthReason = 'Insufficient ETH balance.'
 export const insufficientLpReason = 'Insufficient LP balance.'
@@ -18,6 +19,9 @@ export function formatInsufficientOutcomeReason(outcome: 'YES' | 'NO') {
 	return `Insufficient ${outcome} balance.`
 }
 
-export function formatSwitchNetworkAction(networkName: string) {
-	return `Switch to ${networkName}`
-}
+export const holdingFeesBoundsReason = 'Holding fees exceed these limits before expiry. Increase slippage or shorten validity in Settings.'
+export const holdingFeesUnavailableReason = 'Holding fee projection unavailable. Refresh the market before submitting.'
+
+export const submissionTimingUnavailableReason = 'Market timing is unavailable. Refresh before submitting.'
+export const questionClosingSoonReason = 'This question closes in 60 seconds or less. New trades and liquidity deposits are paused.'
+export const submissionTimingChangedReason = 'Transaction timing changed. Refresh the quote before submitting.'

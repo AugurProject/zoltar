@@ -67,13 +67,13 @@ function createChildUniverse(parentUniverseId: bigint, outcomeIndex: bigint, out
 
 function createMintCapacity(overrides: Partial<MintCapacity> = {}): MintCapacity {
 	return {
+		currentTimestamp: 100n,
 		settlementCollateralAttoEth: ATTO_ETH_PER_ETH,
 		feeEligibleUnderwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH,
 		mintingCapacityAttoEth: 2n * ATTO_ETH_PER_ETH,
 		shareTokenSupplyAttoShares: ATTO_ETH_PER_ETH,
 		totalPoolHeldAttoRep: 20n * ATTO_ETH_PER_ETH,
 		totalUnderwritingLimitAttoEth: 2n * ATTO_ETH_PER_ETH,
-		isPriceValid: true,
 		...overrides,
 	}
 }

@@ -73,10 +73,6 @@ function securityPoolRefreshFailed(refreshError: string) {
 
 const forkedAt = 'Forked'
 
-function priorityFeePerGas(amount: string) {
-	return `${amount}\u00a0nanoETH per gas`
-}
-
 const securityPoolDiscoveryFailedLead = 'Security pool discovery failed'
 const universeDiscoveryFailedLead = 'Universe discovery failed'
 
@@ -154,6 +150,7 @@ export const liveCopy = {
 	discoveringSecurityPools,
 	marketCreated: (title: string) => `Market created: ${title}`,
 	noEligiblePools: 'No security pools on this page are available for a new market.',
+	noEligiblePoolsDetail: 'Create a security pool in Statoblast, then open it here.',
 	noMarkets: 'No trading markets in this universe.',
 	marketList: 'Markets',
 	favoriteMarkets: 'Favorites',
@@ -185,7 +182,6 @@ export const liveCopy = {
 	securityPoolDetailsUnavailable,
 	securityPoolRefreshFailed,
 	forkedAt,
-	priorityFeePerGas,
 	securityPoolDiscoveryFailed,
 	securityPoolFactoryDiscoveryFailed,
 	discoveryFailureLead,

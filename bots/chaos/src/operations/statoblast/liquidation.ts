@@ -60,7 +60,7 @@ export function stagedObligation(mode: 'execute' | 'expire'): OperationDefinitio
 			evidence.push({
 				abi: successEvidence.abi,
 				emitter: staged.coordinator,
-				equals: 'staged operation expired',
+				equals: 'Staged operation expired',
 				field: 'errorMessage',
 				indexed: { operationId: staged.id },
 				kind: 'decoded-event-field',

@@ -59,7 +59,7 @@ export async function createSettlementJournal(config: Pick<Configuration, 'posit
 
 type SettlementJournal = Awaited<ReturnType<typeof createSettlementJournal>>
 
-export type SettlementStageConfiguration = Pick<Configuration, 'connectivity' | 'execute' | 'openOracle' | 'pollMilliseconds' | 'quorumRpcUrls' | 'riskLimits' | 'settlement' | 'submission'> & { network: Pick<Configuration['network'], 'chain'> }
+export type SettlementStageConfiguration = Pick<Configuration, 'connectivity' | 'execute' | 'openOracle' | 'pollMilliseconds' | 'quorumRpcUrls' | 'riskLimits' | 'rpcQuorum' | 'settlement' | 'submission'> & { network: Pick<Configuration['network'], 'chain'> }
 
 type SettlementStageParameters = {
 	block: { baseFeePerGas: bigint; number: bigint; timestamp: bigint }

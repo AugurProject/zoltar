@@ -6,6 +6,7 @@ import { createTradingPublicClient, simulateEntry, simulateExit, simulateLiquidi
 import { tradingContracts } from '../../generated/contractArtifact.js'
 import { receiveRequestParameter } from '@zoltar/trading-shared/trading/receiveRequest'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
+import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
 import { smallReserveMarketFixture } from '../support/liveMarketFixture.js'
 
 const account = `0x${'11'.repeat(20)}` as Address
@@ -60,8 +61,16 @@ function blockTwoWalletClient(handle: (method: string, params: unknown) => Promi
 		account,
 		transport: custom({
 			async request({ method, params }) {
+				if (method === 'eth_chainId') return '0x1'
 				if (method === 'eth_blockNumber') return '0x2'
 				if (method === 'eth_getBlockByNumber') return { hash: blockHash, number: '0x2', parentHash: `0x${'aa'.repeat(32)}`, timestamp: '0x1', transactions: [] }
+				if (method === 'eth_call' && Array.isArray(params)) {
+					const transaction = params[0]
+					if (typeof transaction === 'object' && transaction !== null && 'to' in transaction && 'data' in transaction && typeof transaction.to === 'string' && transaction.to.toLowerCase() === pool.toLowerCase() && typeof transaction.data === 'string') {
+						const response = feeAccountingRpcResult(transaction.data as Hex, market, 1n)
+						if (response !== undefined) return response
+					}
+				}
 				return await handle(method, params)
 			},
 		}),
@@ -153,18 +162,18 @@ describe('live guarded transaction writes', () => {
 		}
 	})
 
-	test('never opens the wallet when liquidity revalidation reverts with a stale oracle price', async () => {
+	test('never opens the wallet when liquidity revalidation reverts because the pool is over capacity', async () => {
 		for (const scenario of [
 			{ operation: 'initialize', market: { ...market, pair: undefined } },
 			{ operation: 'initialize', market },
 			{ operation: 'add', market },
 		] as const) {
-			let stale = false
+			let overCapacity = false
 			let sends = 0
 			let signatures = 0
 			const client = blockTwoWalletClient(async method => {
 				if (method === 'eth_call') {
-					if (stale) throw new Error('execution reverted: Stale price')
+					if (overCapacity) throw new Error('execution reverted: Over capacity')
 					return encodeAbiParameters([{ type: 'tuple', components: [address, uint256, uint256, uint256, uint256, uint256, uint256, uint256] }], [[pair, 10n, 5n, 5n, 5n, 5n, 10n, 10n]])
 				}
 				if (method === 'eth_sendTransaction') {
@@ -174,13 +183,13 @@ describe('live guarded transaction writes', () => {
 				throw new Error(`Unexpected RPC method ${method}`)
 			})
 			const quote = await simulateLiquidity(client, configuration, scenario.market, account, scenario.operation, 10n)
-			stale = true
+			overCapacity = true
 			await expect(
 				submitFreshLiquidity(client, configuration, account, quote, async write => {
 					signatures += 1
 					return await write()
 				}),
-			).rejects.toThrow('Stale price')
+			).rejects.toThrow('Over capacity')
 			expect(signatures).toBe(0)
 			expect(sends).toBe(0)
 		}

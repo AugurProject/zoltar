@@ -4,6 +4,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import { BackingDetails } from './BackingDetails.js'
 import { formatMultiplier, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { formatEthAmountPair } from '../lib/format.js'
+import { formatInitialReportPriorityFee } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/priorityFee.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
@@ -130,7 +131,7 @@ export function LiveSecurityPoolDetails({
 							<ReadOnlyDetailAccordion title={liveCopy.capacity}>
 								<DataGrid dense>
 									<MetricField label={liveCopy.securityMultiplier}>{formatMultiplier(market.statoblastSecurityMultiplierBps, 4)}</MetricField>
-									<MetricField label={liveCopy.initialReportPriorityFee}>{liveCopy.priorityFeePerGas(formatTrimmedUnits(market.initialReportPriorityFeeAttoEthPerGas, 9))}</MetricField>
+									<MetricField label={liveCopy.initialReportPriorityFee}>{formatInitialReportPriorityFee(market.initialReportPriorityFeeAttoEthPerGas)}</MetricField>
 									<MetricField label={liveCopy.registeredVaults}>{market.vaultCount.toString()}</MetricField>
 									<MetricField label={liveCopy.perSecondRetentionMultiplier}>{formatMultiplier(market.currentRetentionRate, 18, 12)}</MetricField>
 									<MetricField label={liveCopy.totalAndFeeEligibleUnderwritingLimits}>{formatEthAmountPair(market.totalUnderwritingLimitAttoEth, market.feeEligibleUnderwritingLimitAttoEth)}</MetricField>

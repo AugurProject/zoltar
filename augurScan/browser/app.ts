@@ -288,8 +288,8 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		const classified = classifyLiveRecords(
 			previous,
 			nodes.flatMap(node => {
-				const key = node.dataset.liveKey
-				return key === undefined ? [] : [{ key, signature: node.dataset.liveSignature ?? '' }]
+				const key = node.dataset['liveKey']
+				return key === undefined ? [] : [{ key, signature: node.dataset['liveSignature'] ?? '' }]
 			}),
 		)
 		for (const [index, record] of classified.entries()) {
@@ -389,7 +389,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 
 	const updateFreshness = () => {
 		if (canonicalState.recovery !== undefined) return
-		delete $('#freshness-banner').dataset.status
+		delete $('#freshness-banner').dataset['status']
 		if (canonicalState.refreshRequired) {
 			const banner = $('#freshness-banner')
 			banner.hidden = false
@@ -444,7 +444,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		updateFreshness()
 	}
 
-	const selectedChainId = () => (globalNetworkFilter.dataset.restored === 'true' ? globalNetworkFilter.value : initialChainId)
+	const selectedChainId = () => (globalNetworkFilter.dataset['restored'] === 'true' ? globalNetworkFilter.value : initialChainId)
 
 	const requiredChainId = () => {
 		const chainId = selectedChainId()
@@ -752,7 +752,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 	})
 	const loadRichList = richListRoute.loadRichList
 
-	const renderAddressProfile = (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' } = {}) =>
+	const renderAddressProfile = (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined } = {}) =>
 		renderAddressProfilePage(
 			{
 				lookup: $,
@@ -1033,7 +1033,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		if (!document.querySelector('.event-detail-drawer')) return
 		handleActivityDetailDrawerEscape(event, () => {
 			const drawer = eventDrawers().find(item => item.contains(document.activeElement)) ?? eventDrawers().at(-1)
-			closeEventDrawer({ restoreFocus: true, ...(drawer?.dataset.triggerKey === undefined ? {} : { key: drawer.dataset.triggerKey }) })
+			closeEventDrawer({ restoreFocus: true, ...(drawer?.dataset['triggerKey'] === undefined ? {} : { key: drawer.dataset['triggerKey'] }) })
 		})
 	})
 
@@ -1097,7 +1097,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 
 	for (const tab of stateTabs) {
 		tab.addEventListener('click', () => {
-			if (isStateTab(tab.dataset.stateTab)) setStateTab(tab.dataset.stateTab)
+			if (isStateTab(tab.dataset['stateTab'])) setStateTab(tab.dataset['stateTab'])
 		})
 		tab.addEventListener('keydown', event => {
 			if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
@@ -1107,7 +1107,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 			const nextTab = stateTabs[next]
 			if (nextTab === undefined) return
 			nextTab.focus()
-			if (isStateTab(nextTab.dataset.stateTab)) setStateTab(nextTab.dataset.stateTab)
+			if (isStateTab(nextTab.dataset['stateTab'])) setStateTab(nextTab.dataset['stateTab'])
 		})
 	}
 
@@ -1299,7 +1299,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 	if (initialChainId) {
 		globalNetworkFilter.replaceChildren(new Option(knownNetworkName(initialChainId), initialChainId))
 		globalNetworkFilter.value = initialChainId
-		globalNetworkFilter.dataset.restored = 'true'
+		globalNetworkFilter.dataset['restored'] = 'true'
 		syncNetworkUrl()
 		updateNetworkLabels()
 	}
@@ -1356,7 +1356,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		liveState.lastTimeTickAt = now
 		// A large gap between ticks means timers were suspended (system sleep with the tab visible); hidden tabs resume via visibilitychange instead.
 		if (!document.hidden && tickGapMs > suspendedTimersThresholdMs) void refreshResumedPage()
-		for (const node of document.querySelectorAll<HTMLElement>('[data-time]')) node.textContent = node.classList.contains('cell-time') ? `${time(node.dataset.time)} · ${age(node.dataset.time)}` : age(node.dataset.time)
+		for (const node of document.querySelectorAll<HTMLElement>('[data-time]')) node.textContent = node.classList.contains('cell-time') ? `${time(node.dataset['time'])} · ${age(node.dataset['time'])}` : age(node.dataset['time'])
 	}, 1000)
 
 	setInterval(() => {
@@ -1396,7 +1396,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		return isAddress ? '#address-profile' : '#activity'
 	}
 
-	const systemRouteSelection = (): { tab: StateTab; entity?: string } => {
+	const systemRouteSelection = (): { tab: StateTab; entity?: string | undefined } => {
 		const parts = location.pathname.split('/').filter(Boolean)
 		const mapping: Record<string, StateTab> = { question: 'questions', universe: 'universes' }
 		const tab = mapping[parts[0] ?? '']
@@ -1556,7 +1556,7 @@ export async function startScanner(demoFactory?: DemoFactory) {
 		if (routeChainId === null || routeChainId === selectedChainId() || ![...globalNetworkFilter.options].some(option => option.value === routeChainId)) return
 		const routeUrl = new URL(location.href)
 		globalNetworkFilter.value = routeChainId
-		globalNetworkFilter.dataset.restored = 'true'
+		globalNetworkFilter.dataset['restored'] = 'true'
 		resetSelectedNetworkContext()
 		history.replaceState(null, '', routeUrl)
 		pageUrl = routeUrl

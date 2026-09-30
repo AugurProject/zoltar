@@ -7,12 +7,16 @@ import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
+import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
+import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
+import { buildPoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 
 const STATOBLAST_NOT_FOUND_LINKS = [
-	{ href: '#/pools', label: statoblastAppCopy.pools },
-	{ href: '#/pools/universes', label: commonCopy.universe },
-	{ href: '#/open-oracle', label: statoblastAppCopy.openOracle },
-	{ href: '#/deploy', label: commonCopy.deploy },
+	{ href: statoblastRouting.getHash('pools'), label: statoblastAppCopy.pools },
+	{ href: buildPoolsRouteHash({ view: 'universes' }), label: zoltarCopy.universesTitle },
+	{ href: statoblastRouting.getHash('open-oracle'), label: statoblastAppCopy.openOracle },
+	{ href: statoblastRouting.getHash('deploy'), label: commonCopy.deploy },
 ] as const
 
 type Props = {
@@ -40,6 +44,6 @@ export function AppRouteContent({ deploy, openOracle, readBackendMessage, route,
 		case 'not-found':
 			return <NotFoundSection links={STATOBLAST_NOT_FOUND_LINKS} />
 		default:
-			return <NotFoundSection links={STATOBLAST_NOT_FOUND_LINKS} />
+			return assertNever(route)
 	}
 }

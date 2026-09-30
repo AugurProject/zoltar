@@ -104,7 +104,7 @@ function startLiquidator(configurationPath: string) {
 
 async function startLiquidatorWith(directory: string, configuration: Record<string, unknown>) {
 	const configurationPath = join(directory, 'operator.json')
-	await writeFile(configurationPath, JSON.stringify(configuration), 'utf8')
+	await writeFile(configurationPath, JSON.stringify(configuration), { encoding: 'utf8', mode: 0o600 })
 	return { child: startLiquidator(configurationPath), configurationPath }
 }
 
@@ -205,7 +205,7 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	Reflect.set(incompatibleMarket, 'assetChainId', 11_155_111)
 	Reflect.set(incompatibleRuntime, 'stateFile', join(directory, 'sepolia-state.json'))
 	Reflect.set(incompatibleRuntime, 'uiPort', uiPort + 1)
-	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), { encoding: 'utf8', mode: 0o600 })
 
 	const rejected = await putJson(origin, '/api/network-profile', { network: 'sepolia' })
 	expect(rejected.status, await rejected.clone().text()).toBe(400)
@@ -217,7 +217,7 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 
 	Reflect.set(incompatibleRuntime, 'uiPort', uiPort)
 	Reflect.set(incompatibleProfile, 'connectivity', { publicRpcUrls: [rpcUrl], quorumRpcUrls: [], readRpcUrl: rpcUrl, rpcQuorum: 1 })
-	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), { encoding: 'utf8', mode: 0o600 })
 	const activeBeforeLockedSwitch = await Bun.file(configurationPath).text()
 	/** Requests the incompatible dormant profile and proves the active operator and its configuration are untouched. */
 	const expectRejectedSwitch = async () => {
@@ -235,7 +235,7 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	}
 
 	Reflect.set(incompatibleProfile, 'networkConfigured', true)
-	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), { encoding: 'utf8', mode: 0o600 })
 	await expectRejectedSwitch()
 
 	const targetPrivateKey = `0x${'22'.repeat(32)}` as const
@@ -243,7 +243,7 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	const wrongBoundState = initialRuntimeState(true, targetAccount.address, 1)
 	await saveDurableState(join(directory, 'sepolia-state.json'), wrongBoundState)
 	Reflect.set(incompatibleProfile, 'networkConfigured', false)
-	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), 'utf8')
+	await writeFile(`${configurationPath}.sepolia.profile`, JSON.stringify(incompatibleProfile), { encoding: 'utf8', mode: 0o600 })
 	await expectRejectedSwitch()
 
 	const wrongChainTransaction = await targetAccount.signTransaction({ chainId: 1, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0n, to: '0x0000000000000000000000000000000000000020', value: 0n })
@@ -266,7 +266,7 @@ test('keeps the active operator running and unpaused when a dormant profile is i
 	Reflect.set(incompatibleProfile, 'privateKey', targetPrivateKey)
 	Reflect.set(incompatibleRuntime, 'execute', true)
 	const wrongIntentProfile = JSON.stringify(incompatibleProfile)
-	await writeFile(`${configurationPath}.sepolia.profile`, wrongIntentProfile, 'utf8')
+	await writeFile(`${configurationPath}.sepolia.profile`, wrongIntentProfile, { encoding: 'utf8', mode: 0o600 })
 	await expectRejectedSwitch()
 	expect(await Bun.file(`${configurationPath}.sepolia.profile`).text()).toBe(wrongIntentProfile)
 })

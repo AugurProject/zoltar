@@ -3,7 +3,7 @@ import { canReuseNetworkStatusPresentation, indexerHeadFreshness, indexerHeadFre
 
 export interface NetworkRenderState {
 	latestNetworks: NetworkRecord[]
-	progressSamples: Map<string, { indexedBlock: number; sampledAt: number; blocksPerSecond?: number }>
+	progressSamples: Map<string, { indexedBlock: number; sampledAt: number; blocksPerSecond?: number | undefined }>
 	headFreshnessTimer: number | undefined
 	polledReorgRefreshTimer: number | undefined
 }
@@ -73,7 +73,7 @@ export const createNetworkRenderer = (deps: NetworkRendererDeps) => {
 			previouslySelectedNetwork !== undefined &&
 			selectedNetwork !== undefined &&
 			selectedHeadFreshness !== undefined &&
-			canReuseNetworkStatusPresentation(previouslySelectedNetwork, selectedNetwork, renderedNetworkCard?.dataset.liveKey, renderedNetworkCard?.dataset.headFreshness, String(selectedNetwork.chain_id), selectedHeadFreshness.stale ? 'stale' : 'current')
+			canReuseNetworkStatusPresentation(previouslySelectedNetwork, selectedNetwork, renderedNetworkCard?.dataset['liveKey'], renderedNetworkCard?.dataset['headFreshness'], String(selectedNetwork.chain_id), selectedHeadFreshness.stale ? 'stale' : 'current')
 		) {
 			networkCards.setAttribute('aria-busy', 'false')
 			updateConnectionStatus()
@@ -93,8 +93,8 @@ export const createNetworkRenderer = (deps: NetworkRendererDeps) => {
 				phase: network.phase,
 				failures: network.consecutive_failures,
 			})
-			card.dataset.phase = network.phase
-			card.dataset.headFreshness = getAwaitingResumedStatus() ? 'refreshing' : headFreshnessState(headFreshness.stale)
+			card.dataset['phase'] = network.phase
+			card.dataset['headFreshness'] = getAwaitingResumedStatus() ? 'refreshing' : headFreshnessState(headFreshness.stale)
 			const title = element('div', 'network-title')
 			const badge = element('span', 'badge', networkBadgeLabel(network.phase, headFreshness.stale))
 			title.append(badge)
@@ -108,7 +108,7 @@ export const createNetworkRenderer = (deps: NetworkRendererDeps) => {
 			if (network.indexed_timestamp) indexedTime.dateTime = exactTimestamp(network.indexed_timestamp)
 			indexedTime.title = exactTimestamp(network.indexed_timestamp)
 			const ageNode = element('span', 'age', age(network.indexed_timestamp))
-			ageNode.dataset.time = network.indexed_timestamp ?? ''
+			ageNode.dataset['time'] = network.indexed_timestamp ?? ''
 			ageNode.title = exactTimestamp(network.indexed_timestamp)
 			const lag = indexerLagLabel(network)
 			const displaySyncDetails = showIndexerSyncDetails(network, currentTime)

@@ -140,6 +140,10 @@
 			"bun": "./ts/features/security-pools/lib/poolBrowse.ts",
 			"default": "./js/features/security-pools/lib/poolBrowse.js"
 		},
+		"./features/security-pools/lib/priorityFee.js": {
+			"bun": "./ts/features/security-pools/lib/priorityFee.ts",
+			"default": "./js/features/security-pools/lib/priorityFee.js"
+		},
 		"./features/security-pools/lib/repPriceSource.js": {
 			"bun": "./ts/features/security-pools/lib/repPriceSource.tsx",
 			"default": "./js/features/security-pools/lib/repPriceSource.js"
@@ -312,13 +316,13 @@
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleOperations.ts",
 			"default": "./js/features/open-oracle/hooks/useOpenOracleOperations.js"
 		},
+		"./features/open-oracle/hooks/useOpenOraclePriceCoordinator.js": {
+			"bun": "./ts/features/open-oracle/hooks/useOpenOraclePriceCoordinator.ts",
+			"default": "./js/features/open-oracle/hooks/useOpenOraclePriceCoordinator.js"
+		},
 		"./features/open-oracle/hooks/useOpenOracleRouteSync.js": {
 			"bun": "./ts/features/open-oracle/hooks/useOpenOracleRouteSync.ts",
 			"default": "./js/features/open-oracle/hooks/useOpenOracleRouteSync.js"
-		},
-		"./features/open-oracle/hooks/usePriceOracleManager.js": {
-			"bun": "./ts/features/open-oracle/hooks/usePriceOracleManager.ts",
-			"default": "./js/features/open-oracle/hooks/usePriceOracleManager.js"
 		},
 		"./features/open-oracle/hooks/useRepPrices.js": {
 			"bun": "./ts/features/open-oracle/hooks/useRepPrices.ts",

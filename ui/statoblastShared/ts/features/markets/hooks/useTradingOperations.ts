@@ -21,6 +21,7 @@ import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from 
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TradingFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {
 	deploymentStatuses: DeploymentStatus[]
@@ -175,7 +176,7 @@ export function useTradingOperations(
 					...buildWriteActionConfig(
 						{ accountAddress, onTransactionCanceled, onTransactionFailed, onTransactionFinished, onTransactionPresented, onTransactionPrepared, onTransactionRequested, refreshState },
 						tradingError,
-						'Connect a wallet before trading',
+						commonCopy.formatConnectWalletBefore('trading'),
 						createTradingTransactionIntent(actionName, transactionContext),
 					),
 					onRefreshError: (message, hash) => {
@@ -222,7 +223,6 @@ export function useTradingOperations(
 							settlementCollateralAttoEth: mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? latestMintCapacity.settlementCollateralAttoEth,
 							ethBalanceAttoEth: walletBalanceAttoEth,
 							mintingCapacityAttoEth: latestMintCapacity.mintingCapacityAttoEth,
-							isPriceValid: latestMintCapacity.isPriceValid,
 							hasSelectedPool: true,
 							isOnActiveAppChain,
 							mintAmountInput: currentForm.completeSetAmount,

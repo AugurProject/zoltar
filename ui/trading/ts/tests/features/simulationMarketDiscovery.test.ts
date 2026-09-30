@@ -160,7 +160,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 							// Lookup routes are list-first: they show their workflow's candidates above the address lookup.
 							const listsSecurityPools = route === 'create-market'
 							const expectedMarkets = listsSecurityPools === (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) ? 1 : 0
-							expect(rendered.container.querySelector('.open-pool-form')).not.toBeNull()
+							expect(rendered.container.querySelector(listsSecurityPools ? '.open-pool-form' : 'form.market-list-search')).not.toBeNull()
 							expect(rendered.container.querySelectorAll('.market-record')).toHaveLength(expectedMarkets)
 							expect(rendered.container.textContent).not.toContain('Pair not created')
 							expect(rendered.container.textContent).not.toContain('Conditional prices only')

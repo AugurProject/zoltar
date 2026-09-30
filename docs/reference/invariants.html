@@ -278,7 +278,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>deployChild</code> and <code>splitRepInternal</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>deployChild</code> and <code>_splitRep</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -326,7 +326,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>splitRepInternal</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/Zoltar.sol"><code>_splitRep</code></a
 										>,
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/ReputationToken.sol"><code>ReputationToken</code></a>
 									</dd>
@@ -710,12 +710,12 @@
 								<ul>
 									<li><strong>Obligation.</strong> With positive <code>T</code>, a vault's obligation is <code>L × X / T</code>, rounded upward to the next atomic unit with full-precision arithmetic. For <code>L ≤ T</code>, each rounded obligation is at most <code>X</code>; independently rounded obligations need not sum exactly to <code>L</code>.</li>
 									<li><strong>Authorization.</strong> REP deposits do not increase <code>X</code>. Redemptions and fees reduce <code>L</code> without reducing <code>X</code>, empty settlement epochs do not revoke it, and price or backing changes leave it unchanged.</li>
-									<li><strong>Minting.</strong> Minting requires <code>L + deposit ≤ T</code>, a valid oracle price, no escalation or fork-continuation game, and enough pool-held REP to back all of <code>T</code> under both protocol backing constraints. The pool checks its actual REP balance at the current price directly, without scanning vaults. When aggregate backing does not cover <code>T</code>, the usable collateral ceiling is zero until REP deposits or commitment reductions restore it. Unassigned migration and auction positions retain their full-commitment health check.</li>
+									<li><strong>Minting.</strong> Minting requires <code>L + deposit ≤ T</code> and no escalation or fork-continuation game. It reads no oracle price and checks no REP backing: every vault already answers for its full commitment, so collateral within <code>T</code> adds no REP exposure. Minters therefore accept the current backing of the pool's commitments; minting is not blocked when that backing is insufficient. The usable collateral ceiling equals <code>T</code>.</li>
 									<li><strong>Withdrawal.</strong> A REP withdrawal must preserve aggregate backing for all of <code>T</code> and the withdrawing vault's full-commitment backing.</li>
-									<li><strong>Individual health.</strong> Each vault remains subject to full-commitment backing requirements and liquidation even when aggregate backing permits minting; aggregate health does not imply that every vault is healthy. Liquidation transfers commitment and backing to an authorized, sufficiently backed receiver without writing off collateral or changing <code>T</code>, so recovery depends on an eligible receiver.</li>
+									<li><strong>Individual health.</strong> Each vault remains subject to full-commitment backing requirements and liquidation; aggregate health does not imply that every vault is healthy. Liquidation transfers commitment and backing to an authorized, sufficiently backed receiver without writing off collateral or changing <code>T</code>, so recovery depends on an eligible receiver.</li>
 								</ul>
 							</div>
-							<p class="invariant-example"><strong>Example:</strong> A has a 10 ETH underwriting commitment and the pool holds 10 ETH settlement collateral. B separately deposits sufficient REP and commits 5 ETH. Their obligations become 6.666666666666666667 ETH and 3.333333333333333334 ETH. At 15 ETH settlement collateral, both obligations equal their commitments. Changing REP prices leaves the commitments unchanged but can invalidate mint authorization.</p>
+							<p class="invariant-example"><strong>Example:</strong> A has a 10 ETH underwriting commitment and the pool holds 10 ETH settlement collateral. B separately deposits sufficient REP and commits 5 ETH. Their obligations become 6.666666666666666667 ETH and 3.333333333333333334 ETH. At 15 ETH settlement collateral, both obligations equal their commitments. Changing REP prices leaves the commitments and the 15 ETH collateral ceiling unchanged but can make a vault liquidatable.</p>
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
@@ -733,7 +733,7 @@
 										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerVaultMigrationDelegate.sol"><code>finalizeTruthAuctionRepair</code></a
 										>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForkerAuctionSettlementBase.sol"><code>_creditAuctionProceeds</code></a
 										>,
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code> and unassigned-position health checks</a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolUtils.sol"><code>creditForkAuctionVault</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -1059,7 +1059,7 @@
 									<li><strong>Award.</strong> The nominal REP award includes the configured bonus and is capped by available target backing; a sufficiently backed receiver can take the full commitment even when that award is not fully funded.</li>
 									<li><strong>Receiver backing.</strong> Both backing constraints apply to the receiver's entire resulting commitment.</li>
 									<li><strong>Residual commitment.</strong> Residual target commitment remains visible and can be taken over later; liquidation does not write it off.</li>
-									<li><strong>Fees and stake.</strong> Earned fees and dispute stake stay with their owners, with fees checkpointed before the transfer. Underbacked commitments continue earning fees; aggregate backing checks affect mint authorization, not fee entitlement.</li>
+									<li><strong>Fees and stake.</strong> Earned fees and dispute stake stay with their owners, with fees checkpointed before the transfer. Underbacked commitments continue earning fees; backing health affects liquidation eligibility, not fee entitlement.</li>
 									<li><strong>Delegated route.</strong> A delegated route bounds the transferred commitment by the receiver's signed reservation and consumes or releases that reservation exactly once.</li>
 								</ul>
 							</div>
@@ -1419,7 +1419,7 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>setTotalSharesAttoShares</code> during auction preparation</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol"><code>setShareTokenSupplyAttoShares</code> during auction preparation</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>attoSharesToAttoEth</code>, <code>redeemCompleteSet</code>, and <code>redeemShares</code></a
 										>,
 										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/tokens/ShareToken.sol"><code>mintCompleteSets</code> and persistent migration accounting</a>
 									</dd>

@@ -1,4 +1,5 @@
-export { openOracleAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+export { erc20Abi, openOracleAbi, openOraclePriceCoordinatorAbi } from '@zoltar/bot-shared/contracts/abi'
+export { constantProductPairAbi } from '@zoltar/bot-shared/monitoring/constant-product-markets'
 
 export const constantProductFactoryAbi = [
 	{
@@ -10,22 +11,6 @@ export const constantProductFactoryAbi = [
 			{ name: 'tokenB', type: 'address' },
 		],
 		outputs: [{ name: 'pair', type: 'address' }],
-	},
-] as const
-
-export const constantProductPairAbi = [
-	{ type: 'function', name: 'token0', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
-	{ type: 'function', name: 'token1', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'address' }] },
-	{
-		type: 'function',
-		name: 'getReserves',
-		stateMutability: 'view',
-		inputs: [],
-		outputs: [
-			{ name: 'reserve0', type: 'uint112' },
-			{ name: 'reserve1', type: 'uint112' },
-			{ name: 'blockTimestampLast', type: 'uint32' },
-		],
 	},
 ] as const
 
@@ -55,39 +40,6 @@ export const poolAbi = [
 			{ name: 'tickCumulatives', type: 'int56[]' },
 			{ name: 'secondsPerLiquidityCumulativeX128s', type: 'uint160[]' },
 		],
-	},
-] as const
-
-export const erc20Abi = [
-	{ type: 'function', name: 'decimals', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint8' }] },
-	{ type: 'function', name: 'name', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },
-	{ type: 'function', name: 'symbol', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'string' }] },
-	{
-		type: 'function',
-		name: 'balanceOf',
-		stateMutability: 'view',
-		inputs: [{ name: 'account', type: 'address' }],
-		outputs: [{ name: 'balance', type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'allowance',
-		stateMutability: 'view',
-		inputs: [
-			{ name: 'owner', type: 'address' },
-			{ name: 'spender', type: 'address' },
-		],
-		outputs: [{ name: '', type: 'uint256' }],
-	},
-	{
-		type: 'function',
-		name: 'approve',
-		stateMutability: 'nonpayable',
-		inputs: [
-			{ name: 'spender', type: 'address' },
-			{ name: 'amount', type: 'uint256' },
-		],
-		outputs: [{ name: '', type: 'bool' }],
 	},
 ] as const
 

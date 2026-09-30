@@ -19,12 +19,12 @@
 			</section>
 			<section id="rate">
 				<h2>How the rate moves</h2>
-				<p>The rate depends on utilization: settlement collateral divided by live minting capacity, which equals the pool's total underwriting commitments while aggregate backing covers them at a fresh price. The per-second retention rate declines linearly as utilization rises and stops declining at a dip point, so the annualized fee rises from its floor to its ceiling and then holds. Security therefore becomes more expensive as open interest consumes underwriting slack.</p>
+				<p>The rate depends on utilization: settlement collateral divided by minting capacity, which equals the pool's total underwriting commitments, independent of price and backing. The per-second retention rate declines linearly as utilization rises and stops declining at a dip point, so the annualized fee rises from its floor to its ceiling and then holds. Security therefore becomes more expensive as open interest consumes underwriting slack.</p>
 				<figure class="diagram" id="fig-statoblast-retention-utilization">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across live ETH minting-capacity utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from its minimum at zero utilization to its maximum at the dip point, then remains flat.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across minting-capacity utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from its minimum at zero utilization to its maximum at the dip point, then remains flat.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Annualized fee against utilization.</span> Past the dip point the per-second retention rate is already at its minimum, so the fee stops rising.</p>
 				</figure>
-				<p>Live minting capacity is zero while the price is stale, once an Escalation Game has opened, or while aggregate backing does not cover total commitments. The rate then resets to its floor (<code>MAX_RETENTION_RATE</code>, the lowest fee) instead of treating the pool as fully utilized. The <a href="../reference/contracts/securitypool.html#retention-rate-and-annualized-fee">SecurityPool reference</a> lists the constants, the dip point, and the formula clients use to annualize the rate.</p>
+				<p>Minting capacity is zero when the pool has no commitments or once an Escalation Game has opened. The rate then resets to its floor (<code>MAX_RETENTION_RATE</code>, the lowest fee) instead of treating the pool as fully utilized. The <a href="../reference/contracts/securitypool.html#retention-rate-and-annualized-fee">SecurityPool reference</a> lists the constants, the dip point, and the formula clients use to annualize the rate.</p>
 			</section>
 			<section id="earning-and-cutoff">
 				<h2>Who earns and when accrual stops</h2>

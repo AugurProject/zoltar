@@ -50,7 +50,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 4n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			const originalWinningDeposit = reportBond + 1n
 			const originalLosingDeposit = reportBond
 			const triggerWinningDeposit = forkThresholdAttoRep - originalWinningDeposit
@@ -83,7 +83,7 @@ describe('Statoblast: fork migration', () => {
 		test('claimForkedEscalationDeposits rejects unresolved deposits after an unrelated external fork', async () => {
 			const endTime = await getQuestionEndDate(client, questionId)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, repDeposit / 10n)
 
 			const forkSourceQuestionData = {
@@ -110,7 +110,7 @@ describe('Statoblast: fork migration', () => {
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
-			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
+			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, securityPoolUnderwritingLimitAttoEth)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
@@ -204,7 +204,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 
@@ -241,7 +241,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 			await depositToEscalationGame(attackerClient, securityPoolAddresses.securityPool, QuestionOutcome.No, winningDeposit)
 
@@ -282,7 +282,7 @@ describe('Statoblast: fork migration', () => {
 			const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, await getRepToken(client, securityPoolAddresses.securityPool))) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 			await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 			await mockWindow.setTime(endTime + 10000n)
-			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+			await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 			await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, winningDeposit)
 
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())

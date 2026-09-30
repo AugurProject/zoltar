@@ -36,7 +36,7 @@ export const renderActivityRow = (deps: ActivityRowDeps, log: ActivityRecord) =>
 	chain.append(blockLink, openCue)
 	const timestamp = element('time', 'cell cell-time')
 	timestamp.append(element('span', '', time(log.block_timestamp)), element('span', 'activity-age', `· ${age(log.block_timestamp)}`))
-	timestamp.dataset.time = log.block_timestamp
+	timestamp.dataset['time'] = log.block_timestamp
 	timestamp.dateTime = exactTimestamp(log.block_timestamp)
 	timestamp.title = exactTimestamp(log.block_timestamp)
 	const contractLink = element('a')

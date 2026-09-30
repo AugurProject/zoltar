@@ -93,32 +93,24 @@ void describe('SecurityPoolsSection', () => {
 		},
 	})
 
-	void test('opens a pool by address without reading the registry on the landing page', async () => {
+	void test('opens a pasted pool address from the browse search without reading the registry', async () => {
 		const calls: string[] = []
 		const props = createSecurityPoolsSectionProps({
-			activeView: 'open',
+			activeView: 'browse',
 			onLoadUniverseDirectoryPools: () => calls.push('universes'),
+			onOpenSecurityPool: address => calls.push(address),
 			overview: createOverviewProps(),
-			workflow: createSecurityPoolWorkflowProps({ onSecurityPoolAddressChange: address => calls.push(address), onRefreshSelectedPoolData: () => calls.push('refresh') }),
 		})
 		const renderedComponent = await renderIntoDocument(h(SecurityPoolsSection, props))
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const page = within(document.body)
-		const input = page.getByRole('textbox', { name: 'Security pool address' })
+		const input = page.getByRole('textbox', { name: 'Search or paste a pool address' })
 		expect(calls).toEqual([])
-		const form = input.closest('form')
-		if (form === null) throw new Error('Expected the pool address form')
 		await act(() => fireEvent.input(input, { target: { value: '0x123' } }))
-		await act(() => {
-			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-		})
-		expect(calls).toEqual([])
-		expect(page.getByText('Enter a valid pool address.')).toBeDefined()
+		expect(page.queryByRole('button', { name: 'Open pool at this address' })).toBeNull()
 		const address = '0x1111111111111111111111111111111111111111'
 		await act(() => fireEvent.input(input, { target: { value: address } }))
-		await act(() => {
-			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-		})
+		await act(() => fireEvent.click(page.getByRole('button', { name: 'Open pool at this address' })))
 		expect(calls).toEqual([address])
 	})
 
@@ -138,24 +130,6 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Next step')).toBeNull()
 		expect(document.body.textContent?.includes('Use the state badge and the guidance line on each card to decide whether you are browsing an active pool, a reporting state, or a fork workflow.')).toBe(false)
 		expect(document.body.textContent?.includes('Filters apply only to the currently loaded page. Use pagination to inspect other pools.')).toBe(false)
-	})
-
-	void test('links the landing actions to browse and create', async () => {
-		const views: string[] = []
-		const rendered = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open', onActiveViewChange: view => views.push(view) })))
-		cleanupRenderedComponent = rendered.cleanup
-		const page = within(document.body)
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Browse pools' })))
-		await act(() => fireEvent.click(page.getByRole('button', { name: 'Create pool' })))
-		expect(views).toEqual(['browse', 'create'])
-	})
-
-	void test('opens creation from the browse header', async () => {
-		const views: string[] = []
-		const rendered = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ onActiveViewChange: view => views.push(view) })))
-		cleanupRenderedComponent = rendered.cleanup
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Create pool' })))
-		expect(views).toEqual(['create'])
 	})
 
 	void test('opens the browse view with only favorites and no discovery controls', async () => {
@@ -264,7 +238,7 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(document.body).getByRole('button', { name: 'universe' }).getAttribute('aria-expanded')).toBe('false')
 	})
 
-	void test('shows the role guide on browse and entry views until it is dismissed', async () => {
+	void test('shows the role guide on browse until it is dismissed', async () => {
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
 		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'browse' })))
 		cleanupRenderedComponent = firstRender.cleanup
@@ -283,13 +257,6 @@ void describe('SecurityPoolsSection', () => {
 		cleanupRenderedComponent = secondRender.cleanup
 		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
-
-		const openRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
-		await secondRender.cleanup()
-		cleanupRenderedComponent = openRender.cleanup
-		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' }) === null).toBe(false)
-		await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'Dismiss the role guide' })))
-		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 	})
 
 	void test('renders one route heading in create and empty pool page modes', async () => {

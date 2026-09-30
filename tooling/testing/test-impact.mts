@@ -77,13 +77,15 @@ const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
 		matches: filePath =>
 			filePath.startsWith('workflow/') ||
 			filePath === '.github/actions/setup-ci/action.yml' ||
-			filePath === 'tooling/testing/reviewable-github-path.ts' ||
+			filePath === '.github/actions/setup-component/action.yml' ||
 			filePath === '.github/workflows/ci.yml' ||
 			filePath === '.github/workflows/browser-workflow.yml' ||
 			filePath === '.github/workflows/coverage.yml' ||
 			filePath === '.github/workflows/test-domains.yml' ||
 			filePath === '.github/workflows/test-stability.yml' ||
-			filePath === 'workflow/coverage.yml',
+			filePath === '.github/workflows/deploy-testnet.yml' ||
+			filePath === '.github/workflows/ipfs-deploy.yml' ||
+			filePath === '.github/workflows/version-deploy.yml',
 	},
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/ui/ui-split-workflows.test.ts',

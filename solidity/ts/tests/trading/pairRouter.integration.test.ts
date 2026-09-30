@@ -10,6 +10,7 @@ import { TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { compileArtifactsForTests } from './compileArtifactsForTests'
 import { PERMIT_TYPES, splitSignature } from '../../testSupport/simulator/utils/typedDataSignatures'
 import { flushSolidityBytecodeCoverageForTest, getSolidityBytecodeCoverageProfileHitCountForTest } from '../../testSupport/coverage/traceToSource'
+import { ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 
 type TradingContracts = Awaited<ReturnType<typeof compileArtifactsForTests>>
 const rate = 10n ** 18n
@@ -53,7 +54,7 @@ describe('factory, pair, and router integration', () => {
 	async function measuredTransaction(label: string, execute: () => Promise<Hex>) {
 		const hash = await writeContractAndWait(client, execute)
 		const receipt = await client.getTransactionReceipt({ hash })
-		if (process.env.TRADING_REPORT_GAS === '1') console.log(`gas:${label}=${receipt.gasUsed}`)
+		if (process.env['TRADING_REPORT_GAS'] === '1') console.log(`gas:${label}=${receipt.gasUsed}`)
 		return receipt.gasUsed
 	}
 
@@ -548,12 +549,13 @@ describe('factory, pair, and router integration', () => {
 		expect(await client.readContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'isApprovedForAll', args: [account, currentRouter] })).toBe(false)
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'safeBatchTransferFrom', args: [account, currentRouter, ids, [redeemAmount, redeemAmount, redeemAmount], requestData] }))
 		expect((await client.getBalance({ address: recipient })) - recipientEthBefore).toBe(1n)
-		for (const outcome of [0n, 1n, 2n] as const) expect(await tokenBalance(account, outcome)).toBe(sharesBeforeRedeem[Number(outcome)] - redeemAmount)
+		for (const outcome of [0n, 1n, 2n] as const) expect(await tokenBalance(account, outcome)).toBe(ensureDefined(sharesBeforeRedeem[Number(outcome)], 'missing share balance before redeem') - redeemAmount)
 		expect(await shareBalances(currentRouter)).toEqual([0n, 0n, 0n])
 		expect(await client.getBalance({ address: currentRouter })).toBe(0n)
 
 		const routerResidue: [bigint, bigint, bigint] = [7n, 11n, 13n]
-		for (const [outcome, amount] of routerResidue.entries()) await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'forceMintWithoutCallback', args: [currentRouter, ids[outcome], amount] }))
+		for (const [outcome, amount] of routerResidue.entries())
+			await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingMockShareToken.abi, address: token, functionName: 'forceMintWithoutCallback', args: [currentRouter, ensureDefined(ids[outcome], 'missing share token id for router residue'), amount] }))
 		const forcedEth = await deploy(mocks.TradingForceEth, [], 7n)
 		await writeContractAndWait(client, () => client.writeContract({ abi: mocks.TradingForceEth.abi, address: forcedEth, functionName: 'force', args: [currentRouter] }))
 		expect(await shareBalances(currentRouter)).toEqual(routerResidue)

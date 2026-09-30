@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 
 export type RichListSort = 'eth' | 'weth' | 'rep' | 'transactions'
 
-export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: string; readonly chainId?: number; readonly address?: string; readonly limit: number; readonly offset: number; readonly sort: RichListSort }) => {
+export const richListRows = async (sql: SQL, query: { readonly snapshotBlock?: string | undefined; readonly chainId?: number | undefined; readonly address?: string | undefined; readonly limit: number; readonly offset: number; readonly sort: RichListSort }) => {
 	const { chainId, address, limit, offset, snapshotBlock } = query
 	const orderBy = {
 		eth: 'native_balance DESC, transaction_count DESC',

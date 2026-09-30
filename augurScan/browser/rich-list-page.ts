@@ -44,8 +44,8 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 	})
 	const rows = $('#richlist-rows')
 	const isInitialRender = rows.childElementCount === 0
-	const openDetailKeys = new Set([...rows.querySelectorAll<HTMLElement>('details[open][data-detail-key]')].map(details => details.dataset.detailKey))
-	const focusedDetailKey = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('details[data-detail-key]')?.dataset.detailKey : undefined
+	const openDetailKeys = new Set([...rows.querySelectorAll<HTMLElement>('details[open][data-detail-key]')].map(details => details.dataset['detailKey']))
+	const focusedDetailKey = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('details[data-detail-key]')?.dataset['detailKey'] : undefined
 	rows.replaceChildren()
 	for (const item of richListItems) {
 		const itemKey = `${item.chain_id}:${item.address}`
@@ -94,8 +94,8 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		const poolAssociations = Array.isArray(item.pool_associations) ? item.pool_associations : []
 		const vaultPositions = Array.isArray(item.vault_positions) ? item.vault_positions : []
 		const involvement = element('details', 'rich-assets rich-involvement')
-		involvement.dataset.detailKey = `${itemKey}:involvement`
-		involvement.open = openDetailKeys.has(involvement.dataset.detailKey) || (isInitialRender && isDemo && pageUrl.searchParams.get('expandRich') === '1' && item === richListItems[0])
+		involvement.dataset['detailKey'] = `${itemKey}:involvement`
+		involvement.open = openDetailKeys.has(involvement.dataset['detailKey']) || (isInitialRender && isDemo && pageUrl.searchParams.get('expandRich') === '1' && item === richListItems[0])
 		involvement.append(element('summary', '', `${counted(item.pool_count, 'pool association')} · ${counted(item.vault_count, 'vault position')}`))
 		const involvementGrid = element('div', 'rich-position-grid')
 		for (const pool of poolAssociations) {
@@ -127,7 +127,7 @@ export const renderRichListPage = (deps: RichListPageDeps) => {
 		rows.append(article)
 	}
 	if (focusedDetailKey) {
-		const focusedDetails = [...rows.querySelectorAll<HTMLElement>('details[data-detail-key]')].find(details => details.dataset.detailKey === focusedDetailKey)
+		const focusedDetails = [...rows.querySelectorAll<HTMLElement>('details[data-detail-key]')].find(details => details.dataset['detailKey'] === focusedDetailKey)
 		focusedDetails?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
 	}
 	rows.setAttribute('aria-busy', 'false')

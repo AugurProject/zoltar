@@ -5,9 +5,9 @@ export type StateSnapshotTarget = {
 	readonly entityType: 'auction' | 'escalation' | 'pool' | 'vault'
 	readonly entityIdentity: string
 	readonly address: Address
-	readonly poolAddress?: Address
-	readonly coordinatorAddress?: Address
-	readonly escalationAddress?: Address
+	readonly poolAddress?: Address | undefined
+	readonly coordinatorAddress?: Address | undefined
+	readonly escalationAddress?: Address | undefined
 }
 
 export type EntityStateSnapshot = {

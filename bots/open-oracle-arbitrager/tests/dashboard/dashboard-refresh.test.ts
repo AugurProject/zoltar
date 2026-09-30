@@ -127,7 +127,7 @@ test('keeps all mutations locked and ignores deferred old-chain responses until 
 			network,
 			networkConfigured,
 			openOracle: address,
-			queuedWallet: undefined,
+			queuedSigner: undefined,
 			savedWallet: undefined,
 			wallet: undefined,
 		})
@@ -411,7 +411,7 @@ test('pending executor deployment recovery owns the overview notice, the executo
 			network: 'sepolia',
 			networkConfigured: true,
 			openOracle: settings.deployment.openOracle,
-			queuedWallet: undefined,
+			queuedSigner: undefined,
 			savedWallet: undefined,
 			wallet: address,
 		})
@@ -600,7 +600,7 @@ test('lists skipped reports beside priced ones with their scan reason and token'
 			network: 'sepolia',
 			networkConfigured: true,
 			openOracle: settings.deployment.openOracle,
-			queuedWallet: undefined,
+			queuedSigner: undefined,
 			savedWallet: undefined,
 			wallet: undefined,
 		})
@@ -652,7 +652,7 @@ test('deployment form saves venue switches without configurable Uniswap addresse
 			network: 'sepolia',
 			networkConfigured: true,
 			openOracle: settings.deployment.openOracle,
-			queuedWallet: undefined,
+			queuedSigner: undefined,
 			savedWallet: undefined,
 			wallet: undefined,
 		})
@@ -746,7 +746,7 @@ test('focused risk, settlement, execution, and market forms load the saved confi
 				network: 'sepolia',
 				networkConfigured: true,
 				openOracle: settings.deployment.openOracle,
-				queuedWallet: undefined,
+				queuedSigner: undefined,
 				savedWallet: undefined,
 				wallet: undefined,
 			},
@@ -1049,7 +1049,7 @@ test('go-live checklist unlocks the switch once every prerequisite holds, report
 				network: 'sepolia',
 				networkConfigured: true,
 				openOracle: settings.deployment.openOracle,
-				queuedWallet: undefined,
+				queuedSigner: undefined,
 				savedWallet: undefined,
 				wallet: address,
 			},

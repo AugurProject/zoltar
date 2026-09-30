@@ -11,7 +11,7 @@ import {
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
 
 abstract contract EscalationGameStorage {
-	uint256 internal constant activationDelay = 3 days;
+	uint256 internal constant ACTIVATION_DELAY = 3 days;
 	uint256 public activationTime;
 	uint256 public nonDecisionThresholdAttoRep;
 	uint256 public startBondAttoRep;
@@ -55,7 +55,7 @@ abstract contract EscalationGameStorage {
 			(forkContinuation &&
 				fixedQuestionOutcome == BinaryOutcomes.BinaryOutcome.None &&
 				forkResumedAt != 0 &&
-				block.timestamp <= forkResumedAt + activationDelay);
+				block.timestamp <= forkResumedAt + ACTIVATION_DELAY);
 	}
 
 	function _claimEscrowedRepByVault(address vault) internal view returns (uint256 amountAttoRep) {

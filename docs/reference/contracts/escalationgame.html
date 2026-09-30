@@ -169,7 +169,7 @@
 				</table>
 				<h2 id="accounting-examples">Accounting examples</h2>
 				<h3 id="required-support-threshold">Required support threshold</h3>
-				<p>The contract waits <code>activationDelay</code> (3 days) after <code>start()</code> before the escalation clock begins. From day 3 the cumulative binding-capital requirement rises from the configured start bond <code>S</code> to the non-decision threshold <code>T</code> over the 49-day <code>ESCALATION_TIME_LENGTH</code>, reaching <code>T</code> on day 52. The contract evaluates a fixed-point curve; this expression is its readable idealization.</p>
+				<p>The contract waits <code>ACTIVATION_DELAY</code> (3 days) after <code>start()</code> before the escalation clock begins. From day 3 the cumulative binding-capital requirement rises from the configured start bond <code>S</code> to the non-decision threshold <code>T</code> over the 49-day <code>ESCALATION_TIME_LENGTH</code>, reaching <code>T</code> on day 52. The contract evaluates a fixed-point curve; this expression is its readable idealization.</p>
 				<div class="equation" id="eq-escalation-required-support">
 					<math display="block" aria-label="required support is zero before day 3, the start bond on day 3, an exponential interpolation from the start bond to the non-decision threshold between days 3 and 52, and the threshold from day 52 onward" data-source="A(d) = 0 for 0 ≤ d &lt; 3; S for d = 3; S × exp(ln(T / S) × (d − 3) / 49) for 3 &lt; d &lt; 52; T for d ≥ 52"
 						><mtable

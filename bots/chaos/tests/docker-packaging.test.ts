@@ -113,10 +113,10 @@ describe('chaos Docker packaging', () => {
 		expect(entrypointSource).toContain('bun "$script_directory/../src/cli/doctor.ts" --if-live-capable')
 		expect(entrypointSource.indexOf('--if-live-capable')).toBeLessThan(entrypointSource.indexOf('exec "$@"'))
 		expect(service.environment?.['ZOLTAR_BOT_SIGNER_LOCK_ROOT']).toBe('.state/process-locks')
-		expect(service.volumes).toEqual(expect.arrayContaining(['chaos-state:/app/bots/chaos/.state', 'chaos-signer-locks:/app/bots/chaos/.state/process-locks']))
+		expect(service.volumes).toEqual(expect.arrayContaining(['chaos-state:/app/bots/chaos/.state', 'signer-locks:/app/bots/chaos/.state/process-locks']))
 		expect(service.healthcheck?.test?.map(String).join(' ') ?? '').not.toContain('/readyz')
 		const compose: unknown = Bun.YAML.parse(await readFile(composeFile, 'utf8'))
-		expect(compose).toMatchObject({ volumes: { 'chaos-signer-locks': { name: 'zoltar-chaos-signer-locks' } } })
+		expect(compose).toMatchObject({ volumes: { 'signer-locks': { name: 'zoltar-bot-signer-locks' } } })
 	})
 
 	test('creates a private paused dry-run operator configuration on first start', async () => {

@@ -54,7 +54,7 @@ const createPoolRead = ({
 const createDeployment = (securityPool: Address, { parent = zeroAddress, universeId = 1n }: { parent?: Address; universeId?: bigint } = {}) => ({
 	initialReportPriorityFeeAttoEthPerGas: 10_000_000_000n,
 	parent,
-	priceOracleManagerAndOperatorQueuer: zeroAddress,
+	openOraclePriceCoordinator: zeroAddress,
 	questionId: 1n,
 	statoblastSecurityMultiplierBps: 20_000n,
 	securityPool,
@@ -585,8 +585,8 @@ describe('securityPools protocol client', () => {
 					if (typeof address !== 'string') throw new Error('Expected security pool address')
 					requestedAddresses.push(getAddress(address))
 				}
-				if (request.contracts.length === 8) return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, zeroAddress, 88n, feeEndTimestamp, zeroAddress]
-				return getContractFunctionName(request.contracts[0]) === 'isPriceValid' ? [true] : [77n]
+				if (request.contracts.length !== 7) throw new Error('Expected one mint-capacity multicall')
+				return [createPoolAccountingSnapshot(11n, 44n, 17n), 22n, 33n, 55n, 88n, feeEndTimestamp, zeroAddress]
 			}),
 			readContract: async () => {
 				throw new Error('readContract should not be called')
@@ -607,10 +607,9 @@ describe('securityPools protocol client', () => {
 			shareTokenSupplyAttoShares: 22n,
 			totalPoolHeldAttoRep: 33n,
 			totalUnderwritingLimitAttoEth: 44n,
-			isPriceValid: true,
 			totalFeesOwedRemainder: 0n,
 		})
-		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'priceOracleManagerAndOperatorQueuer', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame', 'isPriceValid'])
-		expect(requestedAddresses).toEqual([securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, securityPoolAddress, zeroAddress])
+		expect(requestedFunctionNames).toEqual(['getPoolAccountingSnapshot', 'shareTokenSupplyAttoShares', 'getTotalPoolHeldAttoRep', 'getCurrentMintingCapacityAttoEth', 'currentRetentionRate', 'getFeeEpochEndTime', 'escalationGame'])
+		expect(requestedAddresses).toEqual(Array.from({ length: 7 }, () => securityPoolAddress))
 	})
 })

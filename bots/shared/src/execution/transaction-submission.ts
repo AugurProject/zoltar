@@ -128,8 +128,14 @@ export function paddedTransactionGas(gasEstimate: bigint) {
 }
 
 const MAX_UINT256 = (1n << 256n) - 1n
-const MAX_PRIORITY_FEE_PER_GAS = 2n * 10n ** 9n
+export const MAX_PRIORITY_FEE_PER_GAS = 2n * 10n ** 9n
 export const DEFAULT_TRANSACTION_VALIDITY_BLOCKS = 25n
+
+/** The last block a transaction signed at `currentBlockNumber` may land in: the signed horizon, shortened by an earlier caller deadline. */
+export function transactionMaxBlockNumber(currentBlockNumber: bigint, lastValidBlockNumber: bigint | undefined) {
+	const defaultMaxBlockNumber = currentBlockNumber + DEFAULT_TRANSACTION_VALIDITY_BLOCKS
+	return lastValidBlockNumber === undefined || lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : lastValidBlockNumber
+}
 
 function maximumBaseFeePerGas(baseFeePerGas: bigint, validityBlocks = DEFAULT_TRANSACTION_VALIDITY_BLOCKS) {
 	if (baseFeePerGas < 0n || baseFeePerGas > MAX_UINT256) throw new Error('baseFeePerGas must be an unsigned uint256')
@@ -179,8 +185,7 @@ export async function prepareSignedTransaction(parameters: {
 }): Promise<SignedTransaction> {
 	assertSubmissionWindowOpen(parameters.lastValidBlockNumber, parameters.blockNumber)
 	const gas = paddedTransactionGas(parameters.gasEstimate)
-	const defaultMaxBlockNumber = parameters.blockNumber + DEFAULT_TRANSACTION_VALIDITY_BLOCKS
-	const maxBlockNumber = parameters.lastValidBlockNumber === undefined || parameters.lastValidBlockNumber > defaultMaxBlockNumber ? defaultMaxBlockNumber : parameters.lastValidBlockNumber
+	const maxBlockNumber = transactionMaxBlockNumber(parameters.blockNumber, parameters.lastValidBlockNumber)
 	const validityBlocks = maxBlockNumber - parameters.blockNumber
 	const maxFeePerGas = parameters.maxFeePerGasCap === undefined ? maximumFeePerGas(parameters.baseFeePerGas, validityBlocks) : cappedMaximumFeePerGas(parameters.baseFeePerGas, parameters.maxFeePerGasCap, validityBlocks)
 	// EIP-1559 rejects a priority fee above the fee ceiling, so a cap below the default tip lowers the tip with it.

@@ -883,6 +883,25 @@ describe('OpenOracleSection route create view', () => {
 		expect(document.body.querySelectorAll('.field-error')).toHaveLength(0)
 	})
 
+	test('automatically disables the dispute launcher when its submission reserve starts', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<OpenOracleSection
+					{...createOpenOracleSectionProps({
+						activeView: 'selected-report',
+						openOracleReportDetails: createOpenOracleReportDetails({ currentReporter: '0x3000000000000000000000000000000000000000', currentTime: 100n, disputeDelay: 0n, reportTimestamp: 100n, settlementTime: 61n, timeType: true }),
+					})}
+				/>,
+			)
+		).cleanup
+		const page = within(document.body)
+		expectTransactionButtonEnabled(document.body, 'Dispute & swap')
+		await act(async () => await new Promise(resolve => setTimeout(resolve, 1150)))
+		expectTransactionButtonDisabled(document.body, 'Dispute & swap')
+		expect(getDescriptionTexts(page.getByRole('button', { name: 'Dispute & swap' })).join(' ')).toContain('Dispute window ends too soon')
+		expectTransactionButtonDisabled(document.body, 'Settle report')
+	})
+
 	test('uses the exact shared live settlement timestamp to switch a selected report into settle mode', async () => {
 		const renderedComponent = await renderIntoDocument(
 			<ChainTimestampContext.Provider value={160n}>

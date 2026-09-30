@@ -201,7 +201,7 @@ interface GraphOverrides {
 	outcomeLabelsByQuestion?: Readonly<Record<string, readonly string[]>>
 	poolDeployments?: readonly {
 		parent: Address
-		priceOracleManagerAndOperatorQueuer: Address
+		openOraclePriceCoordinator: Address
 		questionId: bigint
 		securityPool: Address
 		shareToken: Address
@@ -377,7 +377,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 		poolDeployments: [
 			{
 				parent: address(0),
-				priceOracleManagerAndOperatorQueuer: coordinator,
+				openOraclePriceCoordinator: coordinator,
 				questionId: 101n,
 				securityPool: pool,
 				shareToken,
@@ -485,7 +485,7 @@ function refundBackfillClient(pendingRefundAttoEth: bigint, walletVaultRegistere
 					return address(5)
 				case 'questionData':
 					return address(3)
-				case 'priceOracleManagerAndOperatorQueuer':
+				case 'openOraclePriceCoordinator':
 					return coordinator
 				case 'securityPool':
 					return pool
@@ -911,7 +911,7 @@ describe('anchored ecosystem discovery', () => {
 		const questionIds = Array.from({ length: 11 }, (_, index) => BigInt(100 + index))
 		const poolDeployments = Array.from({ length: 11 }, (_, index) => ({
 			parent: address(0),
-			priceOracleManagerAndOperatorQueuer: address(1_000 + index),
+			openOraclePriceCoordinator: address(1_000 + index),
 			questionId: questionIds[index] ?? 0n,
 			securityPool: address(2_000 + index),
 			shareToken: address(3_000 + index),

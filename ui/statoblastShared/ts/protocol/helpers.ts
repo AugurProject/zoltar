@@ -6,7 +6,7 @@ type SecurityVaultTuple = readonly [bigint, bigint, bigint, bigint] | readonly [
 export type SecurityPoolDeploymentTuple = {
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
-	priceOracleManagerAndOperatorQueuer: Address
+	openOraclePriceCoordinator: Address
 	questionId: bigint
 	statoblastSecurityMultiplierBps: bigint
 	securityPool: Address
@@ -19,7 +19,7 @@ function isSecurityPoolDeploymentTuple(value: unknown): value is SecurityPoolDep
 		isObjectRecord(value) &&
 		typeof value['initialReportPriorityFeeAttoEthPerGas'] === 'bigint' &&
 		typeof value['parent'] === 'string' &&
-		typeof value['priceOracleManagerAndOperatorQueuer'] === 'string' &&
+		typeof value['openOraclePriceCoordinator'] === 'string' &&
 		typeof value['questionId'] === 'bigint' &&
 		typeof value['statoblastSecurityMultiplierBps'] === 'bigint' &&
 		typeof value['securityPool'] === 'string' &&

@@ -35,6 +35,7 @@ export type CreateWriteClientCallbacks = {
 
 export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'> &
 	Partial<TransactionRequestPreview> & {
+		validateBeforeSubmit?: () => Promise<void>
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean
 		oracleOutcome?: { settlerRewardAttoEth: bigint; returnToWallet: boolean }

@@ -1,3 +1,4 @@
+import { walletBalancesUnavailable } from './app.js'
 export const balanceRefreshFallback = 'balance refresh failed'
 export const operationLabel = 'Liquidity operation'
 export const initializeAction = 'Initialize'
@@ -26,7 +27,7 @@ export const closedToAdditions = 'This market no longer accepts new liquidity. R
 export { eth, invalid, no, percent, yes } from './outcomes.js'
 
 export function balancesUnavailable(reason: string) {
-	return `Wallet balances are unavailable: ${reason}.`
+	return `${walletBalancesUnavailable}: ${reason}.`
 }
 
 export function walletEth(amount: string) {
@@ -38,7 +39,7 @@ export function lpHeld(amount: string) {
 }
 
 export const youProvide = 'You provide'
-export const youReceive = 'Expected to receive'
+export { youReceiveEstimate as youReceive } from './tradeTicket.js'
 export const previewDetails = 'Liquidity breakdown'
 
 export const retryQuote = 'Retry quote'

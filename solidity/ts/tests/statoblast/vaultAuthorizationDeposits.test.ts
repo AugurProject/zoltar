@@ -50,7 +50,7 @@ describe('Vault authorization deposit accounting', () => {
 			await depositRepToVault(ownerClient, pool, amount, target)
 		}
 		if (committed) {
-			await manipulatePriceOracle(client, mockWindow, addresses.priceOracleManagerAndOperatorQueuer, 10n ** 18n)
+			await manipulatePriceOracle(client, mockWindow, addresses.openOraclePriceCoordinator, 10n ** 18n)
 			await client.waitForTransactionReceipt({ hash: await client.writeContract({ address: pool, abi: statoblast_interfaces_ISecurityPool_ISecurityPool.abi, functionName: 'setUnderwritingLimit', args: [amount / 2n] }) })
 			if (existingOwner) {
 				const ownerClient = createWriteClient(mockWindow, BigInt(owner))

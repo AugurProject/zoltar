@@ -6,6 +6,7 @@ export const transactionErrorMessages = {
 	confirmationUnavailable: 'Could not confirm the transaction. Check its status before retrying.',
 	insufficientApproval: 'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.',
 	reviewCanceled: 'Remaining transactions canceled. Transactions already sent are unchanged.',
+	walletRejected: 'Action canceled in wallet.',
 }
 
 /** True when the user closed or backed out of a transaction review, which is a cancellation rather than a failure. */
@@ -245,7 +246,7 @@ function rewriteWriteFallbackMessage(fallbackMessage: string) {
 }
 
 export function formatWriteErrorMessage(error: unknown, fallbackMessage: string) {
-	if (isWalletRejection(error)) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return transactionErrorMessages.walletRejected
 
 	const detail = getErrorDetail(error, fallbackMessage)
 	if (detail !== undefined && (isTransactionErrorMessage(detail) || shouldUseStandaloneWriteMessage(detail))) return detail
@@ -254,12 +255,12 @@ export function formatWriteErrorMessage(error: unknown, fallbackMessage: string)
 }
 
 export function formatRefreshErrorMessage(error: unknown, fallbackMessage: string) {
-	if (isWalletRejection(error)) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return transactionErrorMessages.walletRejected
 	return appendReason(fallbackMessage, getErrorDetail(error, fallbackMessage))
 }
 
 export function getErrorMessage(error: unknown, fallbackMessage: string) {
-	if (isWalletRejection(error)) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return transactionErrorMessages.walletRejected
 	const detail = getErrorDetail(error, fallbackMessage)
 	if (detail !== undefined && isTransactionErrorMessage(detail)) return detail
 	return appendReason(fallbackMessage, detail)

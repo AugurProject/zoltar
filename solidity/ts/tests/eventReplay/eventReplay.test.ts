@@ -344,7 +344,7 @@ describe('event-only replay', () => {
 				args: {
 					securityPool: pool,
 					truthAuction: zeroAddress,
-					priceOracleManagerAndOperatorQueuer: coordinator,
+					openOraclePriceCoordinator: coordinator,
 					shareToken,
 					parent: zeroAddress,
 					universeId: 1n,
@@ -504,16 +504,11 @@ describe('event-only replay', () => {
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 11n,
 					snapshotTargetUnderwritingLimitAttoEth: 12n,
+					snapshotTargetDisputeStakedAttoRep: 112n,
 					snapshotTotalPoolHeldAttoRep: 13n,
 					snapshotTotalRepBackingUnits: 14n,
 					isPendingSlot: true,
 				},
-			}),
-			createReplayLog({
-				emitter: coordinator,
-				eventName: 'PendingOperationRecoveryConsumed',
-				logIndex: 12,
-				args: { operationId: 7n, operation: 2n },
 			}),
 		]
 
@@ -537,7 +532,9 @@ describe('event-only replay', () => {
 		if (coordinatorState.reports.get(2n)?.status !== 'Reported') throw new Error('reported coordinator report mismatch')
 		if (coordinatorState.reports.get(3n)?.status !== 'Recovered') throw new Error('recovered coordinator report mismatch')
 		if (coordinatorState.pendingReportId !== 0n || coordinatorState.lastPrice !== 15n) throw new Error('coordinator resulting state mismatch')
-		if (replayed.coordinatorOperations.get(coordinator)?.get(7n)?.status !== 'Recovered') throw new Error('recovered operation mismatch')
+		const queuedOperation = replayed.coordinatorOperations.get(coordinator)?.get(7n)
+		if (queuedOperation?.status !== 'Queued') throw new Error('queued operation status mismatch')
+		if (queuedOperation.snapshotTargetDisputeStakedAttoRep !== 112n) throw new Error('queued dispute-staked REP snapshot mismatch')
 	})
 
 	test('contract-local escalation and coordinator counters remain isolated by emitter', () => {
@@ -574,6 +571,7 @@ describe('event-only replay', () => {
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
 					snapshotTargetUnderwritingLimitAttoEth: 6n,
+					snapshotTargetDisputeStakedAttoRep: 106n,
 					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
@@ -593,6 +591,7 @@ describe('event-only replay', () => {
 					validForSeconds: 600n,
 					snapshotTargetBackingUnits: 9n,
 					snapshotTargetUnderwritingLimitAttoEth: 10n,
+					snapshotTargetDisputeStakedAttoRep: 110n,
 					snapshotTotalPoolHeldAttoRep: 11n,
 					snapshotTotalRepBackingUnits: 12n,
 					isPendingSlot: false,
@@ -958,7 +957,7 @@ describe('event-only replay', () => {
 				args: {
 					securityPool: pool,
 					truthAuction: zeroAddress,
-					priceOracleManagerAndOperatorQueuer: zeroAddress,
+					openOraclePriceCoordinator: zeroAddress,
 					shareToken: zeroAddress,
 					parent,
 					universeId: 1n,
@@ -1226,7 +1225,7 @@ describe('event-only replay', () => {
 				args: {
 					securityPool: pool,
 					truthAuction: auction,
-					priceOracleManagerAndOperatorQueuer: coordinator,
+					openOraclePriceCoordinator: coordinator,
 					shareToken: repToken,
 					parent: zeroAddress,
 					universeId: 9n,
@@ -1318,6 +1317,7 @@ describe('event-only replay', () => {
 					validForSeconds: 300n,
 					snapshotTargetBackingUnits: 5n,
 					snapshotTargetUnderwritingLimitAttoEth: 6n,
+					snapshotTargetDisputeStakedAttoRep: 106n,
 					snapshotTotalPoolHeldAttoRep: 7n,
 					snapshotTotalRepBackingUnits: 8n,
 					isPendingSlot: true,
@@ -1423,7 +1423,7 @@ describe('event-only replay', () => {
 				getContractReplayLogs(factory, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.securityPool, statoblast_SecurityPool_SecurityPool.abi, blockNumber, blockNumber),
 				getContractReplayLogs(addresses.shareToken, statoblast_tokens_ShareToken_ShareToken.abi, blockNumber, blockNumber),
-				getContractReplayLogs(addresses.priceOracleManagerAndOperatorQueuer, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
+				getContractReplayLogs(addresses.openOraclePriceCoordinator, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, blockNumber, blockNumber),
 			])
 		)
 			.flat()
@@ -1442,7 +1442,7 @@ describe('event-only replay', () => {
 		const replayed = replayZoltarEvents(replayLogs, new Set(), new Set([factory]))
 		if (replayed.poolDeployments.get(addresses.securityPool)?.shareToken !== addresses.shareToken) throw new Error('origin deployment relationship mismatch')
 		const storedOriginPriorityFee = await client.readContract({
-			address: addresses.priceOracleManagerAndOperatorQueuer,
+			address: addresses.openOraclePriceCoordinator,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 			functionName: 'initialReportPriorityFeeAttoEthPerGas',
 			args: [],
@@ -1450,13 +1450,13 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(replayed.poolDeployments.get(addresses.securityPool)?.initialReportPriorityFeeAttoEthPerGas, storedOriginPriorityFee, 'origin priority fee replay mismatch')
 		if (replayed.authorizations.get(addresses.shareToken)?.get(addresses.securityPool) !== true) throw new Error('origin pool authorization was not replayed')
 		if (replayed.pools.get(addresses.securityPool)?.reason !== 5n) throw new Error('origin pool initialization checkpoint was not replayed')
-		if (replayed.coordinators.get(addresses.priceOracleManagerAndOperatorQueuer)?.securityPool !== addresses.securityPool) {
+		if (replayed.coordinators.get(addresses.openOraclePriceCoordinator)?.securityPool !== addresses.securityPool) {
 			throw new Error('origin coordinator setup checkpoint was not replayed')
 		}
 	})
 
 	test('actual queued coordinator operation replays every governing field and pending membership', async () => {
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 		const validForSeconds = 300n
 		const transactionHash = await requestPriceIfNeededAndStageOperation(client, coordinator, OperationType.WithdrawRep, client.account.address, fixture.reportBond, validForSeconds)
 		const receipt = await client.getTransactionReceipt({ hash: transactionHash })
@@ -1482,6 +1482,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(operation.validForSeconds, storedOperation[6], 'queued validity replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetBackingUnits, storedOperation[7], 'queued backingUnits snapshot replay mismatch')
 		strictEqualTypeSafe(operation.snapshotTargetUnderwritingLimitAttoEth, storedOperation[8], 'capacity ownership')
+		strictEqualTypeSafe(operation.snapshotTargetDisputeStakedAttoRep, queuedLog.args['snapshotTargetDisputeStakedAttoRep'], 'queued dispute-staked REP snapshot replay mismatch')
 		const pendingOperationIds = await client.readContract({
 			address: coordinator,
 			abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
@@ -1494,7 +1495,7 @@ describe('event-only replay', () => {
 
 	test('actual first escalation deposit pre-discovers the game before its lifecycle event', async () => {
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
 		const depositHash = await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		const receipt = await client.getTransactionReceipt({ hash: depositHash })
 		const factory = getInfraContractAddresses().securityPoolFactory
@@ -1525,7 +1526,7 @@ describe('event-only replay', () => {
 	test('actual child continuation replays its inherited carry checkpoint and storage', async () => {
 		const fromBlock = (await client.getBlockNumber()) + 1n
 		await mockWindow.setTime(fixture.questionData.endTime + 1n)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, fixture.reportBond)
 		await fixture.triggerExternalForkForSecurityPool(undefined, 'event replay child continuation')
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
@@ -1564,7 +1565,7 @@ describe('event-only replay', () => {
 		const [storedStatoblastSecurityMultiplierBps, storedPriorityFee, storedCurrentRetentionRate, storedCollateral, storedSystemState, storedCarryRoots, storedCarrySnapshot] = await Promise.all([
 			client.readContract({ address: child.securityPool, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'statoblastSecurityMultiplierBps', args: [] }),
 			client.readContract({
-				address: child.priceOracleManagerAndOperatorQueuer,
+				address: child.openOraclePriceCoordinator,
 				abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
 				functionName: 'initialReportPriorityFeeAttoEthPerGas',
 				args: [],
@@ -1591,7 +1592,7 @@ describe('event-only replay', () => {
 		strictEqualTypeSafe(deployment.universeId, childUniverseId, 'child universe replay mismatch')
 		strictEqualTypeSafe(deployment.questionId, fixture.questionId, 'child question replay mismatch')
 		strictEqualTypeSafe(deployment.truthAuction, child.truthAuction, 'child auction replay mismatch')
-		strictEqualTypeSafe(deployment.coordinator, child.priceOracleManagerAndOperatorQueuer, 'child coordinator replay mismatch')
+		strictEqualTypeSafe(deployment.coordinator, child.openOraclePriceCoordinator, 'child coordinator replay mismatch')
 		strictEqualTypeSafe(deployment.shareToken, child.shareToken, 'child share token replay mismatch')
 		strictEqualTypeSafe(deployment.statoblastSecurityMultiplierBps, storedStatoblastSecurityMultiplierBps, 'child security multiplier replay mismatch')
 		strictEqualTypeSafe(deployment.initialReportPriorityFeeAttoEthPerGas, storedPriorityFee, 'child priority fee replay mismatch')

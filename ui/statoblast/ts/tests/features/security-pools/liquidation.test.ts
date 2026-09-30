@@ -98,8 +98,8 @@ describe('liquidation execution failure details', () => {
 		['Receiver bad debt', liquidationCopy.receiverBadDebtReason],
 		['Target backingUnits changed', liquidationCopy.targetSnapshotChangedError],
 		['Target commitment changed', liquidationCopy.targetSnapshotChangedError],
-		['stale liquidation', liquidationCopy.stagedLiquidationStaleError],
-		['staged operation expired', liquidationCopy.stagedLiquidationExpiredError],
+		['Stale liquidation', liquidationCopy.stagedLiquidationStaleError],
+		['Staged operation expired', liquidationCopy.stagedLiquidationExpiredError],
 	])('maps the %s revert to plain language', (revert, detail) => {
 		expect(getLiquidationExecutionFailureDetail(revert)).toBe(detail)
 	})

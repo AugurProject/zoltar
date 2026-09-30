@@ -6,7 +6,7 @@ export const discoveries: Readonly<Record<string, readonly Discovery[]>> = {
 	DeploySecurityPool: [
 		{ argument: 'securityPool', kind: 'securityPool', label: 'Security Pool' },
 		{ argument: 'truthAuction', kind: 'truthAuction', label: 'Truth Auction' },
-		{ argument: 'priceOracleManagerAndOperatorQueuer', kind: 'priceCoordinator', label: 'Price Coordinator' },
+		{ argument: 'openOraclePriceCoordinator', kind: 'priceCoordinator', label: 'Price Coordinator' },
 		{ argument: 'shareToken', kind: 'shareToken', label: 'Share Token' },
 	],
 	DeployChild: [{ argument: 'childReputationToken', kind: 'reputationToken', label: 'Child REP' }],

@@ -6,7 +6,7 @@ import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
 import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { parseJsonDocument, serializeWritesToPath, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
+import { parseJsonDocument, readOwnerFile, serializeWritesToPath, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
@@ -16,7 +16,6 @@ import { assertSafeRetirementRecipient, initialRetirementState, parseRetirementS
 import { parsePendingTransactionObservation, type PendingTransactionObservation } from './pending-transaction-observation.ts'
 import { serializedScheduler } from './state-serialization.ts'
 import { assertExactKeys, dataHex, hash, identifier, nonemptyString, optionalString, optionalTimestamp, positiveIntegerString, requiredRecord, timestamp, uint256String, unsignedIntegerString } from './validators.ts'
-import { readOwnerFile } from './owner-files.ts'
 import { loadPersistedProtocolIndex, parseProtocolIndexReference, persistProtocolIndexGeneration, pruneProtocolIndexGenerations, snapshotProtocolIndex, type ProtocolIndexFilesystem, type ProtocolIndexReference } from './protocol-index-store.ts'
 
 export const MAXIMUM_LIFECYCLE_PRESENCE_BLOCKER_COUNT = 1_000_000

@@ -3,13 +3,14 @@ import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transa
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
 import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export function getTargetHealthFactorGuardMessage(targetHealthFactor: string, minimumBps?: bigint) {
 	try {
 		parseTargetHealthFactorBps(targetHealthFactor, undefined, minimumBps)
 		return undefined
 	} catch (error) {
-		return error instanceof Error ? error.message : 'Enter a valid deposit target factor.'
+		return error instanceof Error ? error.message : 'Enter a valid target backing ratio.'
 	}
 }
 
@@ -111,7 +112,7 @@ export function getVaultRequestPriceGuardMessage({
 	requiredCostAttoEth: bigint | undefined
 	walletBalanceAttoEth: bigint | undefined
 }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before requesting a new price.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('requesting a new price') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedSelectedPool) return 'Select a security pool before requesting a new price.'
 	if (pendingReportId !== undefined && pendingReportId > 0n) return 'A pending price report already exists for this pool.'
@@ -139,7 +140,7 @@ export function getVaultExecutePendingOperationGuardMessage({
 	isPriceValid: boolean | undefined
 	resolvedPendingOperationId: bigint | undefined
 }) {
-	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: 'Connect a wallet before executing a staged operation.' })
+	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('executing a staged operation') })
 	if (walletGuardState.blocked) return walletGuardState.reason
 	if (!hasLoadedOracleManager) return 'Loading price oracle details.'
 	if (isPriceValid === false) return 'Request a new price in Price oracle before executing this operation.'

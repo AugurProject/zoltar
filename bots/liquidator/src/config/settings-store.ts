@@ -1,16 +1,16 @@
-import { contentRevision, readFileIfPresent, writeRevisionedFile } from '@zoltar/bot-shared/config/durable-file'
+import { contentRevision, readOwnerFileIfPresent, writeRevisionedFile } from '@zoltar/bot-shared/config/durable-file'
 import { assertProfileCandidates, chainSpecificPath, networkProfilePath, storedNetworkProfileCandidates, switchNetworkProfile, type ProfileCandidate } from '@zoltar/bot-shared/config/profiles'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import type { NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
-import { canonicalDeployment, canonicalRootMarketIdentity } from './canonical-deployment.ts'
+import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { canonicalDeployment, canonicalRootMarketIdentity, presetNetwork } from './canonical-deployment.ts'
 import { parseSettings, serializedSettings, type OperatorSettings } from './settings.ts'
 
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
 
 export async function loadSettings(path = resolve(process.env['ZOLTAR_LIQUIDATOR_CONFIG'] ?? defaultSettingsPath)) {
-	const contents = await readFileIfPresent(path)
-	if (contents === undefined) throw new Error(`Missing liquidator configuration at ${path}. Copy config/operator.example.json there and edit it.`)
+	const contents = await readOwnerFileIfPresent(path, 'Liquidator configuration')
+	if (contents === undefined) throw new Error(`Missing liquidator configuration at ${path}. Create it with \`install -m 600 config/operator.example.json ${path}\` and edit it.`)
 	return { path, revision: contentRevision(contents), settings: parseSettings(JSON.parse(contents)) }
 }
 
@@ -65,12 +65,12 @@ export async function switchSettingsNetworkProfile(path: string, network: Networ
 		assertCandidates: candidates => assertSettingsProfileCandidates(path, candidates),
 		createProfile: async network => {
 			const template = parseSettings(JSON.parse(await readFile(examplePath, 'utf8')))
-			const chainId = network === 'mainnet' ? 1 : 11_155_111
+			const chainId = presetNetworkChainId(network)
 			return {
 				...template,
 				deployment: canonicalDeployment(chainId),
 				centralizedMarkets: { ...template.centralizedMarkets, ...canonicalRootMarketIdentity(chainId) },
-				network: { chainId, explorerUrl: network === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io', name: network },
+				network: presetNetwork(network),
 				networkConfigured: false,
 				paused: true,
 				privateKey: undefined,

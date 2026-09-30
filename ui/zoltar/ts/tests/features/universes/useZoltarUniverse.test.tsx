@@ -278,7 +278,7 @@ describe('useZoltarUniverse', () => {
 		})
 		expect(loadMarketDetails).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).zoltarQuestionLookupId).toBeUndefined()
-		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Enter a valid hexadecimal question ID')
+		expect(requireHookState(hookState).zoltarQuestionLookupError).toBe('Enter a valid hexadecimal question ID.')
 	})
 
 	test('attributes loading and errors only to the current exact question request', async () => {

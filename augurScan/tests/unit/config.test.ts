@@ -6,6 +6,8 @@ import mainnetManifest from '../../config/manifests/mainnet.json'
 import sepoliaManifest from '../../config/manifests/sepolia.json'
 import { loadNetworks } from '../../src/config.ts'
 import { parseManifestValue } from '../../src/manifest.ts'
+import networkDefinitions from '../../config/networks.json'
+import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
 
 const projectRoot = path.resolve(import.meta.dir, '..', '..')
 
@@ -104,13 +106,45 @@ describe('network configuration', () => {
 		expect(networks.map(({ rpcUrls }) => rpcUrls)).toEqual([['https://mainnet.gateway.tenderly.co'], ['https://sepolia.gateway.tenderly.co']])
 	})
 
-	test('registers canonical Uniswap activity sources and allows a default venue to be disabled', async () => {
+	test('registers canonical Uniswap activity sources, treats an empty override as the default, and disables a venue only on request', async () => {
 		process.env['NETWORKS'] = 'mainnet'
 		process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS'] = ''
 		const [network] = await loadNetworks()
-		expect(network?.contracts.some(([, , kind]) => kind === 'uniswapV2Factory')).toBeFalse()
+		expect(network?.contracts).toContainEqual(['0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f', 'Uniswap V2 Factory', 'uniswapV2Factory'])
 		expect(network?.contracts.some(([, , kind]) => kind === 'uniswapV3Factory')).toBeTrue()
 		expect(network?.contracts.some(([, , kind]) => kind === 'uniswapV4PoolManager')).toBeTrue()
+		process.env['MAINNET_UNISWAP_V2_FACTORY_ADDRESS'] = 'none'
+		expect((await loadNetworks())[0]?.contracts.some(([, , kind]) => kind === 'uniswapV2Factory')).toBeFalse()
+	})
+
+	test('indexes the published Sepolia Uniswap V4 PoolManager by default', async () => {
+		process.env['NETWORKS'] = 'sepolia'
+		for (const configured of [undefined, '', '  ']) {
+			if (configured === undefined) delete process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS']
+			else process.env['SEPOLIA_UNISWAP_V4_POOL_MANAGER_ADDRESS'] = configured
+			expect((await loadNetworks())[0]?.contracts).toContainEqual([getUniswapNetworkDeployment(11_155_111).uniswapV4PoolManagerAddress, 'Uniswap V4 PoolManager', 'uniswapV4PoolManager'])
+		}
+	})
+
+	test('defaults Uniswap V3 and V4 activity sources to the shared Uniswap registry', async () => {
+		const sourceEnvironmentNames = networkDefinitions.flatMap(({ uniswapV3FactoryAddressEnv, uniswapV4PoolManagerAddressEnv }) => [uniswapV3FactoryAddressEnv, uniswapV4PoolManagerAddressEnv])
+		const originalSources = sourceEnvironmentNames.map(name => [name, process.env[name]] as const)
+		try {
+			for (const name of sourceEnvironmentNames) delete process.env[name]
+			process.env['NETWORKS'] = networkDefinitions.map(({ id }) => id).join(',')
+			const networks = await loadNetworks()
+			expect(networks).toHaveLength(networkDefinitions.length)
+			for (const network of networks) {
+				const registry = getUniswapNetworkDeployment(network.chainId)
+				expect(network.contracts).toContainEqual([registry.uniswapV3FactoryAddress, 'Uniswap V3 Factory', 'uniswapV3Factory'])
+				expect(network.contracts).toContainEqual([registry.uniswapV4PoolManagerAddress, 'Uniswap V4 PoolManager', 'uniswapV4PoolManager'])
+			}
+		} finally {
+			for (const [name, value] of originalSources) {
+				if (value === undefined) delete process.env[name]
+				else process.env[name] = value
+			}
+		}
 	})
 
 	test('accepts a configured testnet V4 PoolManager and rejects malformed values', async () => {

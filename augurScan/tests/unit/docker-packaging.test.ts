@@ -95,7 +95,12 @@ describe('Docker packaging', () => {
 			// Resolve the workspace package from image contents, never the checkout.
 			await mkdir(join(workspace, 'augurScan/node_modules/@zoltar'), { recursive: true })
 			await symlink(join(workspace, 'shared/core'), join(workspace, 'augurScan/node_modules/@zoltar/core-shared'), 'dir')
-			const result = Bun.spawnSync([process.execPath, '-e', "for (const source of ['ethereum', 'operations', 'error-chain', 'rpc-request-queue', 'indexer/ownership-status', 'indexer/network-synchronization']) await import('./augurScan/src/' + source + '.ts')"], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })
+			await symlink(join(workspace, 'shared/statoblast'), join(workspace, 'augurScan/node_modules/@zoltar/statoblast-shared'), 'dir')
+			const result = Bun.spawnSync([process.execPath, '-e', "for (const source of ['ethereum', 'config', 'operations', 'error-chain', 'rpc-request-queue', 'indexer/ownership-status', 'indexer/network-synchronization']) await import('./augurScan/src/' + source + '.ts')"], {
+				cwd: workspace,
+				stdout: 'pipe',
+				stderr: 'pipe',
+			})
 			expect(result.stderr.toString()).toBe('')
 			expect(result.exitCode).toBe(0)
 			const report = Bun.spawnSync([process.execPath, 'augurScan/scripts/report-abi-coverage.ts', '--help'], { cwd: workspace, stdout: 'pipe', stderr: 'pipe' })

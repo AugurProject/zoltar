@@ -38,7 +38,7 @@ describe('Own-fork continuation residual settlement regression', () => {
 		}
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10n * DAY)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		strictEqualTypeSafe(parentVaultRep, totalEscrowTarget, 'the sole vault should own exactly the three planned escalation deposits')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, extraLosingPrincipal)

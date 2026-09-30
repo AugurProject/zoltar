@@ -306,6 +306,17 @@ void describe('fork auction helpers', () => {
 		).toBe('Enter a valid bid amount.')
 	})
 
+	void test('reserves bid inclusion time without allowing early finalization', () => {
+		for (const currentTimestamp of [9_940n, 9_999n]) {
+			expect(getTruthAuctionBidGuardMessage({ accountAddress: zeroAddress, currentTimestamp, isOnActiveAppChain: true, submitBidAmountInput: '1', truthAuction: createTruthAuction(), walletBalanceAttoEth: 10n ** 18n })).toBe('Truth auction ends too soon to submit a bid.')
+			expect(getFinalizeTruthAuctionGuardMessage({ currentTimestamp, truthAuction: createTruthAuction(), truthAuctionEndsAt: 10_000n })).toBe('Truth auction is still ongoing.')
+		}
+		expect(getTruthAuctionBidGuardMessage({ accountAddress: zeroAddress, currentTimestamp: 9_939n, isOnActiveAppChain: true, submitBidAmountInput: '1', truthAuction: createTruthAuction(), walletBalanceAttoEth: 10n ** 18n })).toBeUndefined()
+		for (const currentTimestamp of [undefined, 10n]) {
+			expect(getTruthAuctionBidGuardMessage({ accountAddress: zeroAddress, currentTimestamp, isOnActiveAppChain: true, submitBidAmountInput: '1', truthAuction: createTruthAuction({ auctionEndsAt: currentTimestamp === undefined ? 10_000n : undefined }), walletBalanceAttoEth: 10n ** 18n })).toMatch(/Loading/)
+		}
+	})
+
 	void test('reports minimum and balance errors for too-small bids', () => {
 		expect(
 			getTruthAuctionBidGuardMessage({

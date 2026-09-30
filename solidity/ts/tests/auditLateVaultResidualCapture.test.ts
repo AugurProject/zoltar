@@ -104,7 +104,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 	const startOrdinaryGame = async () => {
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		return await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
 	}
@@ -187,7 +187,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(questionEnd + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		await depositOrdinaryEscalationPrincipals(escalationDepositor, securityPoolAddresses.securityPool)
 		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
@@ -285,7 +285,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await assert.rejects(depositRepToVault(attacker, childPool.securityPool, attackerDeposit, (1n << 256n) - 1n))
 		strictEqualTypeSafe((await getSecurityVault(client, childPool.securityPool, attacker.account.address)).repBackingUnits, 0n, 'the unrelated-fork child must not mint residual-eligible units after question end')
 
-		await manipulatePriceOracle(attacker, mockWindow, childPool.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(attacker, mockWindow, childPool.openOraclePriceCoordinator)
 		await depositOrdinaryEscalationPrincipals(escalationDepositor, childPool.securityPool)
 
 		const childGame = await advancePastOrdinaryEscalationDeadline(client, mockWindow, childPool.securityPool)
@@ -366,7 +366,7 @@ describe('Ordinary escalation vault-deposit freeze', () => {
 		await expectWalletDepositRejectionWithoutStateChange(forkInitiator, childPool.securityPool, childEscalationGame, childRepToken, /Fork game/)
 		await assert.rejects(depositWalletRep(forkInitiator, childPool.securityPool), /Fork game/)
 
-		await manipulatePriceOracle(forkInitiator, mockWindow, childPool.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(forkInitiator, mockWindow, childPool.openOraclePriceCoordinator)
 		const [acceptedReport] = await client.readContract({ address: childEscalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'previewDepositOnOutcome', args: [QuestionOutcome.No, reportBond] })
 		const quote = getWalletVaultFundingQuote(
 			{

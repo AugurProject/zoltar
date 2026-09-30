@@ -127,6 +127,9 @@ contract LiquidationApprovalRegistry {
 		emit LiquidationApprovalReserved(approvalId, operationId, reservedDebtAttoEth, approval.availableDebtAttoEth, approval.reservedDebtAttoEth);
 	}
 
+	// Release is intentionally idempotent: the coordinator calls it on every staged-operation
+	// cleanup path, including operations that never reserved quota or were already settled.
+	// Consume, by contrast, records moved debt and must revert on a settled reservation.
 	function release(uint256 operationId) external onlyCoordinator {
 		LiquidationReservation storage reservation = liquidationReservations[operationId];
 		if (reservation.approvalId == bytes32(0) || reservation.settled) return;

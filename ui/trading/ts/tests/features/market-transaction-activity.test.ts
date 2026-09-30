@@ -28,7 +28,7 @@ describe('market transaction activity', () => {
 		const activity = createMarketTransactionActivity(market, 'Trade · Will this resolve?')
 		activity.broadcast(hash)
 		activity.replaced(cancellationHash)
-		activity.stopped(createTransactionFailureError('replaced', 'Transaction was cancelled in the wallet before confirmation.'), true)
+		activity.stopped(createTransactionFailureError('replaced', 'Transaction was canceled in the wallet before confirmation.'), true)
 		expect(transactionActivity.value.entries).toHaveLength(1)
 		expect(transactionActivity.value.entries[0]).toMatchObject({ hash: cancellationHash, status: 'failed', failureKind: 'replaced' })
 		expect(isMarketTransactionPending(market)).toBeFalse()

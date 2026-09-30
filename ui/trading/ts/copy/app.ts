@@ -4,7 +4,8 @@ export const markets = 'Markets'
 export const create = 'Create'
 export const liquidity = 'Liquidity'
 export const portfolio = 'Portfolio'
-export { changeWallet } from '@zoltar/ui-core-shared/copy/app.js'
+export { changeWallet, disconnectWallet } from '@zoltar/ui-core-shared/copy/app.js'
+import { disconnectWallet } from '@zoltar/ui-core-shared/copy/app.js'
 export { securityPools, universe } from '@zoltar/ui-core-shared/copy/common.js'
 export { connectWallet, deploy, loadingWithEllipsis, retry, unavailable } from '@zoltar/ui-core-shared/copy/common.js'
 export const help = 'Help'
@@ -15,13 +16,13 @@ export function universeNotFound(label: string) {
 }
 export const securityPool = 'Security pool'
 export const notFound = 'Not found'
-export const disconnectWallet = 'Disconnect wallet'
 export const loadingBalances = 'Loading balances…'
-export const balancesUnavailable = 'Balances unavailable'
+/** The one phrase every Trading surface uses when wallet balances cannot be read. */
+export const walletBalancesUnavailable = 'Wallet balances unavailable'
 const walletBalanceReadFailed = 'wallet balance read failed'
 export const loadingWalletBalances = 'Loading wallet ETH balance'
 export const loadingContracts = 'Loading trading contracts'
-export const marketRouteDescription = 'Open a market by security pool address or pick one from the list.'
+export const marketRouteDescription = 'Trade conditional YES and NO shares backed by Statoblast security pools.'
 export const liquidityRouteDescription = 'Open a market by security pool address to initialize, add, or remove liquidity.'
 export const createMarketRouteDescription = 'Open a security pool without a trading market to deploy its pair and seed liquidity.'
 export const securityPoolRouteDescription = 'Identity, lifecycle, and capacity of the security pool that backs this market.'
@@ -82,7 +83,7 @@ export function disconnectWalletLabel(account: string) {
 }
 
 export function walletBalanceError(errorLabel: string | undefined, error: string | undefined) {
-	return `${errorLabel ?? balancesUnavailable}: ${error ?? walletBalanceReadFailed}`
+	return `${errorLabel ?? walletBalancesUnavailable}: ${error ?? walletBalanceReadFailed}`
 }
 
 export function openSecurityPoolLabel(address: string) {

@@ -1,3 +1,4 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { useSignal } from '@preact/signals'
 import type { TransactionRequestKey } from '@zoltar/ui-core-shared/types/app.js'
 import { getTransactionFailureKind } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
@@ -42,7 +43,7 @@ export function useDeploymentFlow({ accountAddress, deploymentStatuses, environm
 			!requireWallet(
 				accountAddress,
 				message => {
-					const resolvedMessage = message ?? 'Connect wallet to continue.'
+					const resolvedMessage = message ?? commonCopy.walletConnectionRequired
 					errorMessage.value = resolvedMessage
 					deploymentFeedback.value = createErrorActionFeedback(feedbackAction, 'Deployment failed', resolvedMessage)
 				},

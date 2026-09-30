@@ -152,7 +152,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolSummaryMetrics pool={pool} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const label = within(document.body).getByText('Pool-held REP per committed ETH')
-		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6 REP per ETH')
+		expect(label.parentElement?.querySelector('.metric-field-value')?.textContent).toBe('6\u00a0REP per ETH')
 	})
 
 	test('renders standing ETH commitments separately from REP backing', async () => {
@@ -432,7 +432,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const searchInput = documentQueries.getByLabelText('Search pools')
+		const searchInput = documentQueries.getByLabelText('Search or paste a pool address')
 		expect(searchInput.getAttribute('placeholder')).toBe('Address, question ID, or text')
 		expect(documentQueries.queryByText(/pools? match/)).toBeNull()
 		const systemStateSelect = documentQueries.getByLabelText('System state')
@@ -640,7 +640,7 @@ describe('SecurityPoolsOverviewSection', () => {
 	}
 
 	async function typeSearch(value: string) {
-		const input = within(document.body).getByLabelText('Search pools')
+		const input = within(document.body).getByLabelText('Search or paste a pool address')
 		if (!(input instanceof window.HTMLInputElement)) throw new Error('Expected search input')
 		input.value = value
 		await act(() => {
@@ -713,7 +713,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [pool] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const rowText = (document.querySelector('.pool-directory-row .pool-capacity-summary.is-prominent')?.textContent ?? '').replace(/\s+/g, ' ')
-		expect(rowText).toContain('25.0% used')
+		expect(rowText).toContain('25% used')
 		expect(rowText).toContain('3.00 ETH remaining')
 	})
 
@@ -813,13 +813,13 @@ describe('SecurityPoolsOverviewSection', () => {
 		const { container, cleanup } = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} />)
 		cleanupRenderedComponent = cleanup
 		const query = within(document.body)
-		expect(query.getByRole('textbox', { name: 'Search pools' }).value).toBe('saved query')
+		expect(query.getByRole('textbox', { name: 'Search or paste a pool address' }).value).toBe('saved query')
 		expect(query.getByRole('combobox', { name: 'System state' }).value).toBe('ended')
 		expect(query.getByRole('combobox', { name: 'Sort' }).value).toBe('endTime')
-		await act(() => fireEvent.input(query.getByRole('textbox', { name: 'Search pools' }), { target: { value: 'new query' } }))
+		await act(() => fireEvent.input(query.getByRole('textbox', { name: 'Search or paste a pool address' }), { target: { value: 'new query' } }))
 		expect(updates).toContainEqual({ searchText: 'new query' })
 		await act(() => render(<SecurityPoolsOverviewSection {...props} browseState={{ searchText: '', sortKey: 'recent', stateFilter: 'all' }} />, container))
-		expect(query.getByRole('textbox', { name: 'Search pools' }).value).toBe('')
+		expect(query.getByRole('textbox', { name: 'Search or paste a pool address' }).value).toBe('')
 		expect(query.getByRole('combobox', { name: 'System state' }).value).toBe('all')
 		expect(query.getByRole('combobox', { name: 'Sort' }).value).toBe('recent')
 	})

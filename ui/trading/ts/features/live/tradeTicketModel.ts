@@ -1,3 +1,4 @@
+import { capSubmissionDeadline, submissionWindowBlocker } from '../../protocol/submissionWindow.js'
 import { largestExitForLongShares, maximumInsuredExit, quoteEnterPosition, quoteExitPosition, type EnterPositionQuote, type ExitPositionQuote } from '@zoltar/trading-shared/trading/positions'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { createActionAvailability } from '@zoltar/ui-core-shared/transactions/actionAvailability.js'
@@ -8,6 +9,7 @@ import type { LiveBalances, LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage } from '../../protocol/tradeQuote.js'
 import * as availabilityCopy from '../../copy/availability.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
+import { sellHoldingFeeBlocker } from '../../protocol/holdingFees.js'
 import type { BalanceState } from './liveTradingTypes.js'
 import type { TradeMode } from './useTransactionWorkflow.js'
 
@@ -105,13 +107,6 @@ function estimateSell(market: LiveMarket, side: Side, requestedShares: bigint, s
 	}
 }
 
-/** Plain decimal text for an input field: no digit grouping, trailing zeros trimmed. */
-export function formatAmountInput(value: bigint, decimals: number) {
-	const base = 10n ** BigInt(decimals)
-	const fraction = (value % base).toString().padStart(decimals, '0').replace(/0+$/, '')
-	return fraction === '' ? (value / base).toString() : `${(value / base).toString()}.${fraction}`
-}
-
 function amountDecimals(mode: TradeMode) {
 	return mode === 'entry' ? 18 : SHARE_QUANTITY_DECIMALS
 }
@@ -175,6 +170,7 @@ export type TradeTicketInputs = Readonly<{
 	networkMismatchReason: string | undefined
 	walletEthAttoEth: bigint | undefined
 	marketClosed: boolean
+	nowSeconds: bigint
 	/** The price impact the user accepted, if any; it covers only estimates at or below that impact. */
 	acknowledgedImpactBps: bigint | undefined
 	workflowLocked: boolean
@@ -201,12 +197,14 @@ export function tradeTicketModel(inputs: TradeTicketInputs) {
 	const availability: ActionAvailability = createActionAvailability(
 		inputs.networkMismatchReason,
 		inputs.marketClosed ? availabilityCopy.marketClosedReason : undefined,
+		submissionWindowBlocker(market, mode, inputs.nowSeconds),
 		balanceReason,
 		parsed.value === undefined || parsed.value === 0n ? (parsed.error ?? availabilityCopy.amountRequiredReason) : undefined,
 		inputs.amountSettling ? ticketCopy.updatingEstimate : undefined,
 		problem,
 		insufficient,
 		shortfall === undefined ? undefined : ticketCopy.invalidCoverageReason,
+		estimate?.kind === 'exit' ? sellHoldingFeeBlocker(market, estimate.quote.completeSetShares, estimate.minimumAttoEth, capSubmissionDeadline(market, mode, inputs.nowSeconds + settings.validityMinutes * 60n)) : undefined,
 		impactTier === 'blocked' ? ticketCopy.priceImpactBlockedReason : undefined,
 		needsAcknowledgment && !impactAcknowledged ? ticketCopy.acknowledgeImpactReason : undefined,
 		inputs.workflowLocked ? availabilityCopy.transactionInProgressReason : undefined,

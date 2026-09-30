@@ -26,7 +26,7 @@ describe('Statoblast REP authorization entry points', () => {
 	const initializeEscalationGame = async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
 		await mockWindow.setTime(endTime + 10_000n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
 		return securityPoolAddresses.escalationGame
 	}

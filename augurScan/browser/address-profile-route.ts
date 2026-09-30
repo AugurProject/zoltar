@@ -7,7 +7,7 @@ import { isCurrentCanonicalGeneration, isCurrentContextRequest, mergeUniqueRecor
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioItemKey, portfolioPage } from './portfolio-helpers.ts'
 
 interface AddressProfileRouteDeps {
-	renderAddressProfile: (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options?: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' }) => void
+	renderAddressProfile: (item: RichListRecord, transactions: AccountTransaction[], interactions: AccountTransaction[], options?: { live?: boolean; portfolioFocusKind?: 'forks' | 'lp' | 'reports' | undefined }) => void
 	lookup: {
 		(selector: '#address-back'): HTMLAnchorElement
 		(selector: string): HTMLElement

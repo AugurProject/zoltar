@@ -49,7 +49,7 @@ export const CONSERVATIVE_DEPLOYMENT_GAS: Readonly<Record<string, bigint>> = {
 	zoltarQuestionData: 2_750_000n,
 	zoltar: 4_250_000n,
 	shareTokenFactory: 5_500_000n,
-	priceOracleManagerAndOperatorQueuerFactory: 12_250_000n,
+	openOraclePriceCoordinatorFactory: 12_250_000n,
 	securityPoolForker: 16_250_000n,
 	escalationGameClaimDelegate: 1_250_000n,
 	escalationGameFactory: 14_250_000n,

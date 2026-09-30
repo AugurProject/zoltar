@@ -93,7 +93,7 @@ function createOpenOracleReportDetails(overrides: Partial<OpenOracleReportDetail
 		protocolFeeRecipient: zeroAddress,
 		reportId: REPORT_ID,
 		reportTimestamp: 0n,
-		settlementTime: 10n,
+		settlementTime: 100n,
 		settlementTimestamp: 0n,
 		settlerRewardAttoEth: 0n,
 		stateHash: STATE_HASH,
@@ -212,7 +212,7 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).approveToken1(1n)
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle.')
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {
@@ -880,12 +880,14 @@ describe('useOpenOracleOperations', () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails({
 			currentTime: 11n,
+			settlementTime: 10n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: REPORT_ID,
 			reportTimestamp: 1n,
 		})
 		const secondReportDetails = createOpenOracleReportDetails({
 			currentTime: 11n,
+			settlementTime: 10n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: secondReportId,
 			reportTimestamp: 1n,
@@ -962,12 +964,14 @@ describe('useOpenOracleOperations', () => {
 		const secondReportId = 2n
 		const firstReportDetails = createOpenOracleReportDetails({
 			currentTime: 11n,
+			settlementTime: 10n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: REPORT_ID,
 			reportTimestamp: 1n,
 		})
 		const secondReportDetails = createOpenOracleReportDetails({
 			currentTime: 11n,
+			settlementTime: 10n,
 			currentReporter: WALLET_ADDRESS,
 			reportId: secondReportId,
 			reportTimestamp: 1n,
@@ -1673,6 +1677,38 @@ describe('useOpenOracleOperations', () => {
 		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
 		expect(submittedStateHash).toBe(refreshedStateHash)
 	})
+
+	for (const timeType of [true, false]) {
+		test(`blocks a refreshed report one ${timeType ? 'second' : 'block'} before dispute expiry without sending`, async () => {
+			const disputeOracleReport = mock(async () => ({ action: 'dispute' as const, hash: '0x00000000000000000000000000000000000000000000000000000000000000d3' as const }))
+			let loadCount = 0
+			const dependencies = createOpenOracleOperationsDependencies({
+				disputeOracleReport,
+				loadOpenOracleReportDetails: mock(async () => {
+					loadCount += 1
+					return createOpenOracleReportDetails({ currentReporter: WALLET_ADDRESS, reportTimestamp: 1n, settlementTime: 100n, timeType, currentTime: loadCount === 1 ? 10n : 100n, currentBlockNumber: loadCount === 1 ? 10n : 100n })
+				}),
+			})
+			let hookState: UseOpenOracleOperationsState | undefined
+			const Harness = createHarness(dependencies, state => {
+				hookState = state
+			})
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(renderedComponent.cleanup)
+			await act(async () => {
+				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+			})
+			await act(async () => {
+				requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '20', disputeTokenToSwap: 'token1', reportId: REPORT_ID.toString(), stateHash: STATE_HASH }))
+			})
+			await act(async () => {
+				await requireHookState(hookState).disputeReport()
+			})
+			expect(disputeOracleReport).not.toHaveBeenCalled()
+			expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('error')
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toMatch(/ends too soon/)
+		})
+	}
 
 	test('scales decimal dispute inputs before calling the protocol boundary', async () => {
 		const tokenUnits = 10n ** 18n

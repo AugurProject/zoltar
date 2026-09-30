@@ -186,7 +186,7 @@ describe('file-only startup configuration', () => {
 		const directory = await temporaryDirectory()
 		const result = await runToExit(join(directory, 'missing.json'))
 		expect(result.exitCode).toBe(1)
-		expect(result.output).toContain('Missing operator configuration')
+		expect(result.output).toMatch(/Missing operator configuration.*install -m 600 config\/operator.example.json/)
 		expect(result.output).toContain('config/operator.example.json')
 	})
 
@@ -239,32 +239,23 @@ describe('file-only startup configuration', () => {
 		})
 	})
 
-	test('makes the saved quorum authoritative for runtime reads despite a conflicting environment', async () => {
+	test('keeps the saved quorum authoritative without rewriting the process environment', async () => {
 		const directory = await temporaryDirectory()
-		for (const [rpcQuorum, environmentQuorum, expectedStatus] of [
-			[1, '2', 'resolved'],
-			[2, '1', 'rejected'],
+		for (const [rpcQuorum, environmentQuorum] of [
+			[1, '2'],
+			[2, '1'],
 		] as const) {
 			const path = join(directory, `operator-${rpcQuorum.toString()}.json`)
 			await saveOperatorSettings(path, { ...settings('https://saved.example/', 4173), rpcQuorum })
-			const child = Bun.spawn(
-				[
-					executable,
-					'-e',
-					"const { loadConfiguration } = await import('./src/config/configuration.ts'); const { settledQuorumValue } = await import('@zoltar/bot-shared/monitoring/read-quorum'); await loadConfiguration(); try { const value = await settledQuorumValue('saved quorum', [Promise.resolve({ endpoint: 'one', value: 7 })]); console.log(JSON.stringify({ status: 'resolved', value })) } catch (error) { console.log(JSON.stringify({ status: 'rejected', message: error instanceof Error ? error.message : String(error) })) }",
-				],
-				{
-					cwd: join(import.meta.dir, '..', '..'),
-					env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path, ZOLTAR_BOT_RPC_QUORUM: environmentQuorum },
-					stderr: 'pipe',
-					stdout: 'pipe',
-				},
-			)
+			const child = Bun.spawn([executable, '-e', "const { loadConfiguration } = await import('./src/config/configuration.ts'); const value = await loadConfiguration(); console.log(JSON.stringify({ environment: process.env['ZOLTAR_BOT_RPC_QUORUM'], rpcQuorum: value.rpcQuorum }))"], {
+				cwd: join(import.meta.dir, '..', '..'),
+				env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path, ZOLTAR_BOT_RPC_QUORUM: environmentQuorum },
+				stderr: 'pipe',
+				stdout: 'pipe',
+			})
 			const [exitCode, stderr, stdout] = await Promise.all([child.exited, new Response(child.stderr).text(), new Response(child.stdout).text()])
 			expect(exitCode, stderr).toBe(0)
-			const result = JSON.parse(stdout) as { message?: string; status: string }
-			expect(result.status).toBe(expectedStatus)
-			if (rpcQuorum === 2) expect(result.message).toContain('two available independent RPC endpoints')
+			expect(JSON.parse(stdout)).toEqual({ environment: environmentQuorum, rpcQuorum })
 		}
 	})
 
@@ -334,7 +325,7 @@ describe('file-only startup configuration', () => {
 		await saveOperatorSettings(path, value)
 		const document = JSON.parse(await Bun.file(path).text()) as { runtime: { maxHedgeSlippageBps: string } }
 		document.runtime.maxHedgeSlippageBps = '1001'
-		await writeFile(path, JSON.stringify(document), 'utf8')
+		await writeFile(path, JSON.stringify(document), { encoding: 'utf8', mode: 0o600 })
 		const result = await runToExit(path)
 		expect(result.exitCode).toBe(1)
 		expect(result.output).toContain('maxHedgeSlippageBps must be from 0 to 1000')
@@ -388,7 +379,7 @@ describe('file-only startup configuration', () => {
 		Reflect.set(strategy, 'pollMilliseconds', 1_000)
 		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
 		const path = join(directory, 'operator.json')
-		await writeFile(path, JSON.stringify(configuration), 'utf8')
+		await writeFile(path, JSON.stringify(configuration), { encoding: 'utf8', mode: 0o600 })
 		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
 		children.push(child)
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`
@@ -511,7 +502,7 @@ describe('file-only startup configuration', () => {
 		const incompatibleMainnetRuntime = Reflect.get(incompatibleMainnetProfile, 'runtime')
 		if (typeof incompatibleMainnetRuntime !== 'object' || incompatibleMainnetRuntime === null || Array.isArray(incompatibleMainnetRuntime)) throw new Error('Mainnet profile runtime is missing')
 		Reflect.set(incompatibleMainnetRuntime, 'uiPort', dashboardPort + 1)
-		await writeFile(mainnetProfilePath, JSON.stringify(incompatibleMainnetProfile), 'utf8')
+		await writeFile(mainnetProfilePath, JSON.stringify(incompatibleMainnetProfile), { encoding: 'utf8', mode: 0o600 })
 		const incompatibleSwitch = await fetch(`${origin}/api/network-profile`, {
 			body: JSON.stringify({ network: 'mainnet' }),
 			headers: { 'content-type': 'application/json', origin },
@@ -527,7 +518,7 @@ describe('file-only startup configuration', () => {
 			method: 'PUT',
 		})
 		expect(mutationAfterRejectedSwitch.status, await mutationAfterRejectedSwitch.clone().text()).toBe(200)
-		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
+		await writeFile(mainnetProfilePath, compatibleMainnetProfile, { encoding: 'utf8', mode: 0o600 })
 		await savePositionJournal(join(directory, 'positions.json'), [], 11_155_111)
 		const wrongStateSwitch = await fetch(`${origin}/api/network-profile`, {
 			body: JSON.stringify({ network: 'mainnet' }),
@@ -568,7 +559,7 @@ describe('file-only startup configuration', () => {
 			if (typeof invalidDeployment !== 'object' || invalidDeployment === null || Array.isArray(invalidDeployment)) throw new Error('Executable deployment fixture is missing')
 			if (missingValue === undefined) Reflect.deleteProperty(invalidDeployment, field)
 			else Reflect.set(invalidDeployment, field, missingValue)
-			await writeFile(mainnetProfilePath, JSON.stringify(invalidProfile), 'utf8')
+			await writeFile(mainnetProfilePath, JSON.stringify(invalidProfile), { encoding: 'utf8', mode: 0o600 })
 			const rejectedExecutableSwitch = await fetch(`${origin}/api/network-profile`, {
 				body: JSON.stringify({ network: 'mainnet' }),
 				headers: { 'content-type': 'application/json', origin },
@@ -579,9 +570,9 @@ describe('file-only startup configuration', () => {
 			expect((await waitForJson(origin, '/api/state'))['paused']).toBe(false)
 			expect(child.exitCode).toBeNull()
 		}
-		await writeFile(mainnetProfilePath, compatibleMainnetProfile, 'utf8')
+		await writeFile(mainnetProfilePath, compatibleMainnetProfile, { encoding: 'utf8', mode: 0o600 })
 		const mainnetIntentPath = executorDeploymentIntentPath(path, 'mainnet')
-		await writeFile(mainnetIntentPath, '{', 'utf8')
+		await writeFile(mainnetIntentPath, '{', { encoding: 'utf8', mode: 0o600 })
 		const malformedIntentSwitch = await fetch(`${origin}/api/network-profile`, {
 			body: JSON.stringify({ network: 'mainnet' }),
 			headers: { 'content-type': 'application/json', origin },
@@ -712,7 +703,7 @@ describe('file-only startup configuration', () => {
 		Reflect.set(runtime, 'uiPort', dashboardPort)
 		Reflect.set(configuration, 'submission', { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] })
 		const path = join(directory, 'operator.json')
-		await writeFile(path, JSON.stringify(configuration), 'utf8')
+		await writeFile(path, JSON.stringify(configuration), { encoding: 'utf8', mode: 0o600 })
 		const child = Bun.spawn([executable, runSource], { env: { ...process.env, OPEN_ORACLE_ARBITRAGER_CONFIG: path }, stderr: 'pipe', stdout: 'pipe' })
 		children.push(child)
 		const origin = `http://127.0.0.1:${dashboardPort.toString()}`

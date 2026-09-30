@@ -1,10 +1,10 @@
 import type { CandidatePriority, StrategySettings } from '#config/settings'
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { getLiquidationMigrationSecurityMultiplierBps, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 
 export const PRICE_PRECISION = 10n ** 18n
 export const BPS_DENOMINATOR = 10_000n
-export const LIQUIDATION_REP_BONUS_BPS = 500n
 
 export function liquidationExecutionAllowed(coordinatorPrice: bigint, centralizedPriceAllowed: boolean) {
 	return coordinatorPrice > 0n && centralizedPriceAllowed
@@ -59,11 +59,6 @@ function mulDivUp(left: bigint, right: bigint, denominator: bigint) {
 	return ceilDiv(left * right, denominator)
 }
 
-function migrationMultiplierBps(multiplierBps: bigint) {
-	const migrationMultiplier = BPS_DENOMINATOR + (multiplierBps - BPS_DENOMINATOR) / 2n
-	return migrationMultiplier > BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS ? migrationMultiplier : BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS
-}
-
 export function repForBackingUnits(backingUnits: bigint, totalAttoRep: bigint, denominator: bigint) {
 	if (backingUnits === 0n || denominator === 0n) return 0n
 	return (backingUnits * totalAttoRep) / denominator
@@ -79,7 +74,7 @@ export function requiredRepForOpenInterest(openInterestAttoEth: bigint, multipli
 	const baseRequiredAttoRep = mulDivUp(openInterestAttoEth, price, PRICE_PRECISION)
 	const totalAssociatedRequiredAttoRep = mulDivUp(mulDivUp(baseRequiredAttoRep, multiplierBps, BPS_DENOMINATOR), healthBps, BPS_DENOMINATOR)
 	const associatedRequiredAttoRep = totalAssociatedRequiredAttoRep > disputeStakedAttoRep ? totalAssociatedRequiredAttoRep - disputeStakedAttoRep : 0n
-	const freeRequiredAttoRep = mulDivUp(mulDivUp(baseRequiredAttoRep, migrationMultiplierBps(multiplierBps), BPS_DENOMINATOR), healthBps, BPS_DENOMINATOR)
+	const freeRequiredAttoRep = mulDivUp(mulDivUp(baseRequiredAttoRep, getLiquidationMigrationSecurityMultiplierBps(multiplierBps), BPS_DENOMINATOR), healthBps, BPS_DENOMINATOR)
 	return associatedRequiredAttoRep > freeRequiredAttoRep ? associatedRequiredAttoRep : freeRequiredAttoRep
 }
 
@@ -87,7 +82,7 @@ export function vaultHealthBps(vaultAttoRepBacking: bigint, openInterestAttoEth:
 	if (openInterestAttoEth === 0n || price === 0n) return undefined
 	const baseRequiredAttoRep = mulDivUp(openInterestAttoEth, price, PRICE_PRECISION)
 	const associatedAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, multiplierBps, BPS_DENOMINATOR)
-	const freeAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, migrationMultiplierBps(multiplierBps), BPS_DENOMINATOR)
+	const freeAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, getLiquidationMigrationSecurityMultiplierBps(multiplierBps), BPS_DENOMINATOR)
 	const associatedHealth = associatedAtProtocolMinimum === 0n ? BPS_DENOMINATOR : ((vaultAttoRepBacking + disputeStakedAttoRep) * BPS_DENOMINATOR) / associatedAtProtocolMinimum
 	const freeHealth = freeAtProtocolMinimum === 0n ? BPS_DENOMINATOR : (vaultAttoRepBacking * BPS_DENOMINATOR) / freeAtProtocolMinimum
 	return associatedHealth < freeHealth ? associatedHealth : freeHealth
@@ -97,7 +92,7 @@ function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint, openI
 	if (openInterestAttoEth === 0n || price === 0n) return 0n
 	const valueScale = PRICE_PRECISION * BPS_DENOMINATOR
 	const associatedThreshold = ((targetVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) / (openInterestAttoEth * multiplierBps)
-	const freeThreshold = (targetVaultRepBackingAttoRep * valueScale) / (openInterestAttoEth * migrationMultiplierBps(multiplierBps))
+	const freeThreshold = (targetVaultRepBackingAttoRep * valueScale) / (openInterestAttoEth * getLiquidationMigrationSecurityMultiplierBps(multiplierBps))
 	const thresholdPrice = associatedThreshold < freeThreshold ? associatedThreshold : freeThreshold
 	if (price <= thresholdPrice) return 0n
 	return ((price - thresholdPrice) * BPS_DENOMINATOR) / price
@@ -116,7 +111,7 @@ function calculateLiquidationTransfer(parameters: { currentPoolHeldAttoRepBalanc
 	const debtToMoveAttoEth = parameters.requestedDebtAttoEth < parameters.snapshotTargetUnderwritingLimitAttoEth ? parameters.requestedDebtAttoEth : parameters.snapshotTargetUnderwritingLimitAttoEth
 	if (debtToMoveAttoEth === 0n) return zero
 	const underwritingLimitToMoveAttoEth = debtToMoveAttoEth
-	const grossRepAwardAttoRep = mulDivUp(debtToMoveAttoEth, parameters.price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS), PRICE_PRECISION * BPS_DENOMINATOR)
+	const grossRepAwardAttoRep = getLiquidationVaultRepBackingToTransfer(debtToMoveAttoEth, parameters.price)
 	const nominalBackingUnits = backingUnitsForRep(grossRepAwardAttoRep, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits, true)
 	const backingUnitsToTransfer = nominalBackingUnits < transferableBackingUnits ? nominalBackingUnits : transferableBackingUnits
 	const vaultAttoRepBackingToTransfer = parameters.currentTotalRepBackingUnits === 0n ? backingUnitsToTransfer / PRICE_PRECISION : repForBackingUnits(backingUnitsToTransfer, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
@@ -124,7 +119,7 @@ function calculateLiquidationTransfer(parameters: { currentPoolHeldAttoRepBalanc
 }
 
 export function conservativeLiquidationRep(candidate: Pick<LiquidationCandidate, 'debtToMoveAttoEth' | 'target'>, price: bigint) {
-	const nominalAttoRep = mulDivUp(candidate.debtToMoveAttoEth, price * (BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS), PRICE_PRECISION * BPS_DENOMINATOR)
+	const nominalAttoRep = getLiquidationVaultRepBackingToTransfer(candidate.debtToMoveAttoEth, price)
 	return candidate.target.vaultAttoRepBacking < nominalAttoRep ? candidate.target.vaultAttoRepBacking : nominalAttoRep
 }
 

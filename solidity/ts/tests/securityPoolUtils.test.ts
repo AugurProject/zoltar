@@ -87,14 +87,6 @@ describe('SecurityPoolUtils', () => {
 		strictEqualTypeSafe(await calculateRetentionRate(aboveDipCollateral, underwritingLimitAttoEth), MIN_RETENTION_RATE, 'above 80% utilization should stay capped at the min retention rate')
 	})
 
-	test('backing-derived limits account for the live price without changing standing commitments', async () => {
-		const backingAttoRep = 200n * PRICE_PRECISION
-		const capacityAtOneRepPerEth = await client.readContract({ ...utils(), functionName: 'calculateBackingSupportedLimitAttoEth', args: [backingAttoRep, PRICE_PRECISION, 20_000n] })
-		const capacityAfterRepPriceDoubles = await client.readContract({ ...utils(), functionName: 'calculateBackingSupportedLimitAttoEth', args: [backingAttoRep, 2n * PRICE_PRECISION, 20_000n] })
-		strictEqualTypeSafe(capacityAtOneRepPerEth, 100n * PRICE_PRECISION, 'initial capacity')
-		strictEqualTypeSafe(capacityAfterRepPriceDoubles, 50n * PRICE_PRECISION, 'live price conversion')
-	})
-
 	test('initial escalation deposit uses a one-REP floor below the supply fraction', async () => {
 		for (const [theoreticalSupplyAttoRep, expectedDepositAttoRep] of [
 			[0n, PRICE_PRECISION],

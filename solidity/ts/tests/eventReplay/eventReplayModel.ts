@@ -129,7 +129,7 @@ export type CoordinatorOperationReplay = {
 	snapshotTotalPoolHeldAttoRep: bigint
 	snapshotTotalRepBackingUnits: bigint
 	isPendingSlot: boolean
-	status: 'Queued' | 'Succeeded' | 'Failed' | 'Recovered'
+	status: 'Queued' | 'Succeeded' | 'Failed'
 	errorMessage?: string
 }
 
@@ -279,7 +279,7 @@ export type EscalationHaircutReplay = {
 }
 
 export type ReplayState = {
-	chainId?: bigint
+	chainId?: bigint | undefined
 	identities: Set<string>
 	questions: Map<bigint, QuestionReplay>
 	universes: Map<string, UniverseReplay>
@@ -773,7 +773,7 @@ export function reducePoolFactoryEvent(state: ReplayState, log: ReplayLog) {
 		universeId: requireBigInt(log.args, 'universeId'),
 		questionId: requireBigInt(log.args, 'questionId'),
 		truthAuction: requireAddress(log.args, 'truthAuction'),
-		coordinator: requireAddress(log.args, 'priceOracleManagerAndOperatorQueuer'),
+		coordinator: requireAddress(log.args, 'openOraclePriceCoordinator'),
 		shareToken: requireAddress(log.args, 'shareToken'),
 		statoblastSecurityMultiplierBps: requireBigInt(log.args, 'statoblastSecurityMultiplierBps'),
 		initialReportPriorityFeeAttoEthPerGas: requireBigInt(log.args, 'initialReportPriorityFeeAttoEthPerGas'),
@@ -1019,7 +1019,11 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		if (totalDisputeStakedAttoRep !== undefined) state.escalationTotalEscrowedRep.set(log.emitter, (totalDisputeStakedAttoRep * repRemaining) / repBefore)
 		const outcomeBalances = state.escalationResolutionBalances.get(log.emitter)
 		if (outcomeBalances !== undefined) {
-			for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) outcomeBalances[outcomeIndex] = (outcomeBalances[outcomeIndex] * repRemaining) / repBefore
+			for (let outcomeIndex = 0; outcomeIndex < 3; outcomeIndex += 1) {
+				const outcomeBalance = outcomeBalances[outcomeIndex]
+				if (outcomeBalance === undefined) throw new Error('escalation resolution balance outcome is out of range')
+				outcomeBalances[outcomeIndex] = (outcomeBalance * repRemaining) / repBefore
+			}
 		}
 		return
 	}
@@ -1145,10 +1149,14 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 		const unresolvedByVault = getOrCreateNestedMap(state.escalationLocalUnresolvedByVault, log.emitter)
 		const vaultTotals = unresolvedByVault.get(deposit.depositor) ?? [0n, 0n, 0n]
 		const outcomeIndex = Number.parseInt(outcome.toString(), 10)
-		vaultTotals[outcomeIndex] += deposit.attoRepAmount
+		const vaultOutcomeTotal = vaultTotals[outcomeIndex]
+		if (vaultOutcomeTotal === undefined) throw new Error('escalation deposit outcome is out of range')
+		vaultTotals[outcomeIndex] = vaultOutcomeTotal + deposit.attoRepAmount
 		unresolvedByVault.set(deposit.depositor, vaultTotals)
 		const unresolvedTotals = state.escalationUnresolvedTotals.get(log.emitter) ?? [0n, 0n, 0n]
-		unresolvedTotals[outcomeIndex] += deposit.attoRepAmount
+		const unresolvedOutcomeTotal = unresolvedTotals[outcomeIndex]
+		if (unresolvedOutcomeTotal === undefined) throw new Error('escalation deposit outcome is out of range')
+		unresolvedTotals[outcomeIndex] = unresolvedOutcomeTotal + deposit.attoRepAmount
 		state.escalationUnresolvedTotals.set(log.emitter, unresolvedTotals)
 		const resolutionBalancesAttoRep = state.escalationResolutionBalances.get(log.emitter) ?? [0n, 0n, 0n]
 		resolutionBalancesAttoRep[outcomeIndex] = deposit.cumulativeRepAmountAttoRep
@@ -1213,8 +1221,10 @@ export function reduceEscalationEvent(state: ReplayState, log: ReplayLog) {
 			const unresolvedByVault = state.escalationLocalUnresolvedByVault.get(log.emitter)
 			const vaultTotals = unresolvedByVault?.get(depositor)
 			if (vaultTotals !== undefined) {
-				if (vaultTotals[index] < attoRepAmount) throw new Error('vault unresolved REP cannot become negative')
-				vaultTotals[index] -= attoRepAmount
+				const vaultOutcomeTotal = vaultTotals[index]
+				if (vaultOutcomeTotal === undefined) throw new Error('carry consumption outcome is out of range')
+				if (vaultOutcomeTotal < attoRepAmount) throw new Error('vault unresolved REP cannot become negative')
+				vaultTotals[index] = vaultOutcomeTotal - attoRepAmount
 			}
 			const leaves = state.escalationCarryLeaves.get(log.emitter)?.[index]
 			if (leaves !== undefined) {
@@ -1352,19 +1362,7 @@ export function reduceAuctionEvent(state: ReplayState, log: ReplayLog) {
 }
 
 export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
-	const coordinatorEventNames = new Set([
-		'SecurityPoolSet',
-		'RepEthPriceSet',
-		'PriceRequested',
-		'PriceReported',
-		'PriceReportRejected',
-		'PendingReportRecovered',
-		'PendingOperationRecoveryConsumed',
-		'StagedOperationQueued',
-		'StagedOperationDisputeStakedRepSnapshotted',
-		'ExecutedStagedOperation',
-		'CoordinatorStateCheckpoint',
-	])
+	const coordinatorEventNames = new Set(['SecurityPoolSet', 'RepEthPriceSet', 'PriceRequested', 'PriceReported', 'PriceReportRejected', 'PendingReportRecovered', 'StagedOperationQueued', 'ExecutedStagedOperation', 'CoordinatorStateCheckpoint'])
 	if (!coordinatorEventNames.has(log.eventName)) return
 	let coordinator = state.coordinators.get(log.emitter)
 	if (coordinator === undefined) {
@@ -1448,17 +1446,6 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 		state.coordinatorOperations.set(log.emitter, operations)
 	}
 	const operationId = requireBigInt(log.args, 'operationId')
-	if (log.eventName === 'PendingOperationRecoveryConsumed') {
-		const queued = operations.get(operationId)
-		if (queued === undefined) return
-		operations.set(operationId, {
-			...queued,
-			operation: requireBigInt(log.args, 'operation'),
-			isPendingSlot: false,
-			status: 'Recovered',
-		})
-		return
-	}
 	if (log.eventName === 'StagedOperationQueued') {
 		operations.set(operationId, {
 			operation: requireBigInt(log.args, 'operation'),
@@ -1469,20 +1456,11 @@ export function reduceCoordinatorEvent(state: ReplayState, log: ReplayLog) {
 			validForSeconds: requireBigInt(log.args, 'validForSeconds'),
 			snapshotTargetBackingUnits: requireBigInt(log.args, 'snapshotTargetBackingUnits'),
 			snapshotTargetUnderwritingLimitAttoEth: requireBigInt(log.args, 'snapshotTargetUnderwritingLimitAttoEth'),
-			snapshotTargetDisputeStakedAttoRep: 0n,
+			snapshotTargetDisputeStakedAttoRep: requireBigInt(log.args, 'snapshotTargetDisputeStakedAttoRep'),
 			snapshotTotalPoolHeldAttoRep: requireBigInt(log.args, 'snapshotTotalPoolHeldAttoRep'),
 			snapshotTotalRepBackingUnits: requireBigInt(log.args, 'snapshotTotalRepBackingUnits'),
 			isPendingSlot: requireBoolean(log.args, 'isPendingSlot'),
 			status: 'Queued',
-		})
-		return
-	}
-	if (log.eventName === 'StagedOperationDisputeStakedRepSnapshotted') {
-		const queued = operations.get(operationId)
-		if (queued === undefined) throw new Error('coordinator dispute-staked REP snapshot was not queued')
-		operations.set(operationId, {
-			...queued,
-			snapshotTargetDisputeStakedAttoRep: requireBigInt(log.args, 'snapshotTargetDisputeStakedAttoRep'),
 		})
 		return
 	}
@@ -1583,7 +1561,7 @@ export function replayZoltarEvents(logs: readonly ReplayLog[], orphanedBlockHash
 			shareTokens.add(requireAddress(log.args, 'shareToken'))
 			const truthAuction = requireAddress(log.args, 'truthAuction')
 			if (truthAuction !== ZERO_ADDRESS) auctions.add(truthAuction)
-			coordinators.add(requireAddress(log.args, 'priceOracleManagerAndOperatorQueuer'))
+			coordinators.add(requireAddress(log.args, 'openOraclePriceCoordinator'))
 		}
 		for (const log of orderedLogs) {
 			if (log.eventName !== 'EscalationGameSet' || !pools.has(getAddress(log.emitter))) continue

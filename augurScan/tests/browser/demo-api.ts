@@ -1200,7 +1200,7 @@ export function createDemoApi(context: DemoContext) {
 					history: {
 						stateSnapshots: [historyRecord('TaggedStateRead', 0)],
 						accountingSnapshots: [historyRecord('VaultAccountingCheckpoint', 1)],
-						lifecycleEvents: [historyRecord(offset === 0 ? 'VaultHealthChecked' : 'VaultDepositTargetHealthFactorRecorded', 2)],
+						lifecycleEvents: [historyRecord(offset === 0 ? 'VaultHealthChecked' : 'RepDepositedToVault', 2)],
 						liquidations: offset === 0 ? [] : [historyRecord('VaultLiquidated', 3)],
 						limit: 100,
 						offset,

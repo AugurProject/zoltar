@@ -6,11 +6,11 @@ import type { DeploymentSettings } from '#config/deployment-settings'
 import type { NetworkConfiguration } from '#config/network'
 import { authenticateConfiguredDeployments, loadCoordinatorPolicies, refreshIncompleteCanonicalDeployments, retainReportsAndLogs } from '#config/runtime-deployment'
 import type { ExecutionCandidate } from '#core/operator-types'
-import { positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
+import { plannedGasPriceAttoEth, positionConsumesRisk, utcDayGasSpentWeth } from '#core/safety-controls'
 import { executeDispute } from '#execution/dispute-execution'
 import { loadBalances } from '#execution/balances'
 import type { ExecutionLockManager } from '#execution/execution-locks'
-import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, selectBestExecution } from '#execution/execution-orchestration'
+import { canonicalBlockHashWithQuorum, executionFailureDecision, executionTokenAllowed, isExecutionPausedError, REORG_OVERLAP_BLOCKS, selectBestExecution } from '#execution/execution-orchestration'
 import { executorDeploymentIntentPath } from '#execution/executor-deployment-store'
 import { processPositionLifecycle, reconcileExpiredAttemptsWithQuorum } from '#execution/position-lifecycle'
 import { dateFromBlockTimestamp, pendingCoordinatorReports, pendingCoordinatorReportsWithQuorum } from '#execution/recovery-support'
@@ -23,7 +23,7 @@ import { candidateRiskMismatch } from '#monitoring/opportunity-evaluation'
 import { poolsForTokens } from '#monitoring/execution-pools'
 import { applyCoordinatorReports, applyLogs, compareLogs, logBlockNumber, reportId, type ActiveReport } from '#monitoring/oracle-log-state'
 import { inspectReport } from '#monitoring/report-inspection'
-import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState } from '#state/operator-state'
+import { appendExecutionHistoryIfMissing, decimalSignedEth, ensureExecutionHistoryWritable, gameCapitalSnapshot, loadExecutionHistory, recordOperation, type OperatorState, type QueuedSigner } from '#state/operator-state'
 import { countOpportunities, type OpportunitySnapshot } from '#state/opportunity-snapshot'
 import { archivedUtcDayGasSpentWeth, loadPositionJournalState, savePositionJournalState, type ExclusiveProcessLock, type PositionRecord } from '#state/position-store'
 import { bigintToSafeNumber, createContextualPublicClient, createRpcEndpointPool, createWalletClient, privateKeyToAccount, zeroAddress, type Address, type Chain, type PublicClient, type TransactionLog, type Transport } from '@zoltar/bot-shared/ethereum'
@@ -60,7 +60,6 @@ import { selectQuorumChainClient, selectQuorumHead } from './quorum-head.ts'
 import { acquireScanSignerOperation } from './signer-operations.ts'
 import { createDeploymentRecoveryReconciliation, loadDeploymentRecovery } from './deployment-recovery.ts'
 
-const REORG_OVERLAP_BLOCKS = 12n
 const MAX_LOG_SCAN_RANGE = 256n
 /** A failing scan retries within this bound (or the poll interval when that is longer) so a transient fault never leaves the operator blind for minutes. */
 const MAXIMUM_SCAN_RETRY_DELAY_MILLISECONDS = 30_000
@@ -154,7 +153,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		network: NetworkConfiguration['name']
 		networkConfigured: boolean
 		openOracle: Address
-		queuedWallet: Address | null | undefined
+		queuedSigner: QueuedSigner | undefined
 		savedWallet: Address | undefined
 		wallet: Address | undefined
 	} = {
@@ -166,7 +165,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 		network: config.network.name,
 		networkConfigured: config.networkConfigured,
 		openOracle: config.openOracle,
-		queuedWallet: undefined,
+		queuedSigner: undefined,
 		savedWallet: config.persistedPrivateKey === undefined ? undefined : privateKeyToAccount(config.persistedPrivateKey).address,
 		wallet: wallet?.account.address,
 	}
@@ -380,7 +379,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					})
 					if (!startupValidated) {
 						if (config.execute) {
-							const selected = await selectQuorumChainClient(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], config.network, contextualRpcRead)
+							const selected = await selectQuorumChainClient(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], config.network, contextualRpcRead, config.rpcQuorum)
 							client = selected.client
 							clientRpcUrl = selected.rpcUrl
 						}
@@ -410,7 +409,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 					}
 					let quorumHead: Awaited<ReturnType<typeof selectQuorumHead>>['block'] | undefined
 					if (config.execute) {
-						const selected = await selectQuorumHead(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], contextualRpcRead)
+						const selected = await selectQuorumHead(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], contextualRpcRead, config.rpcQuorum)
 						client = selected.client
 						clientRpcUrl = selected.rpcUrl
 						quorumHead = selected.block
@@ -575,7 +574,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock,
 								}
 					const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
-						canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'previous market head', previousBlockNumber),
+						canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'previous market head', previousBlockNumber, config.rpcQuorum),
 					)
 					const scanCursor = cursorForHeadScan(cursor, blockNumber, blockHash, REORG_OVERLAP_BLOCKS)
 					if (scanCursor === undefined) {
@@ -674,7 +673,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (stopHead()) return
 						state.tokenMarkets = tokenMarkets
 						state.marketAvailability = pools.length === 0 ? { kind: 'no-execution-pools', chainId: config.network.chain.id } : undefined
-						const gasPrice = (block.baseFeePerGas ?? 0n) * 2n + 2n * 10n ** 9n
+						const gasPrice = plannedGasPriceAttoEth(block.baseFeePerGas ?? 0n)
 						const opportunities: OpportunitySnapshot[] = []
 						const candidates: ExecutionCandidate[] = []
 						const cycleDexObservations: MarketConsensusObservation[] = []
@@ -714,7 +713,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 						if (stopHead()) return
 						// One canonical-hash check after all pinned reads confirms none of them straddled a head replacement.
 						const [, headFinalityAnchor] = await Promise.all([
-							requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber)).catch(discardDexEvidence),
+							requireCanonicalBlock(blockNumber, blockHash, async canonicalBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market snapshot final revalidation', canonicalBlockNumber, config.rpcQuorum)).catch(discardDexEvidence),
 							finalityAnchorForHead(),
 						])
 						if (stopHead()) return
@@ -862,7 +861,7 @@ export async function runOperator(config: Configuration, lockManager: ExecutionL
 									selected.marketConsensus,
 									async () => {
 										try {
-											await requireCanonicalDexEvidence(selected.marketConsensus, evidenceBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market evidence', evidenceBlockNumber))
+											await requireCanonicalDexEvidence(selected.marketConsensus, evidenceBlockNumber => canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'market evidence', evidenceBlockNumber, config.rpcQuorum))
 											await requireCurrentConstantProductMarketEvidence(config.centralizedMarkets, selected.report.game.token2, config.network.weth, selected.marketConsensus, readConfiguredDexPair)
 											return true
 										} catch (error) {

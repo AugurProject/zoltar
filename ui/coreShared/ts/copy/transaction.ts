@@ -87,9 +87,8 @@ export const paidFrom = 'Paid from'
 export const walletRep = 'Wallet REP'
 export const vaultBackedRep = 'Pool vault REP'
 export const completedAction = (title: string) => formatActionTense(title, 'completed')
-export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount} REP`
+export const reportingAction = (outcome: string, amount: string) => `Report ${outcome} · ${amount}\u00a0REP`
 export const settleReportNumber = (id: string) => `Settle report #${id}`
-export const approveTokenAmount = (amount: string) => `Approve ${amount}`
 
 export const amount = 'Amount'
 export const settleEscalationDeposits = 'Settle escalation deposits'

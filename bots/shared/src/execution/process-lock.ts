@@ -159,7 +159,19 @@ export function acquireFileProcessLock(path: string, label: string, filesystem?:
 	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `${label} ${resolvedPath}`, { file: resolvedPath }, filesystem)
 }
 
-function executionSignerLockPath(chainId: number, account: Address, lockRoot = join(tmpdir(), 'zoltar-bot-locks')) {
+const EXECUTION_SIGNER_LOCK_ROOT_ENVIRONMENT_VARIABLE = 'ZOLTAR_BOT_SIGNER_LOCK_ROOT'
+
+/**
+ * Every bot resolves the signer lock root here so processes that share a signer coordinate through the same directory. An
+ * unset or empty `ZOLTAR_BOT_SIGNER_LOCK_ROOT` falls back to a per-host temporary directory.
+ */
+function configuredExecutionSignerLockRoot(environment: Readonly<Record<string, string | undefined>> = process.env) {
+	const configured = environment[EXECUTION_SIGNER_LOCK_ROOT_ENVIRONMENT_VARIABLE]
+	if (configured === undefined || configured.trim() === '') return join(tmpdir(), 'zoltar-bot-locks')
+	return configured
+}
+
+function executionSignerLockPath(chainId: number, account: Address, lockRoot = configuredExecutionSignerLockRoot()) {
 	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
 	const signer = getAddress(account)
 	if (lockRoot.trim() === '') throw new Error('Execution signer lock root cannot be empty')

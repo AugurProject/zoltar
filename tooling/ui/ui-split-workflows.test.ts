@@ -20,7 +20,7 @@ const coverageWorkflowPath = workflowDefinitionPath('coverage.yml')
 const testDomainsWorkflowPath = workflowDefinitionPath('test-domains.yml')
 const testStabilityWorkflowPath = workflowDefinitionPath('test-stability.yml')
 const deployTestnetWorkflowPath = join(repositoryRoot, '.github', 'workflows/deploy-testnet.yml')
-const setupActionPath = existsSync(join(repositoryRoot, 'workflow/actions/setup-ci/action.yml')) ? join(repositoryRoot, 'workflow/actions/setup-ci/action.yml') : join(repositoryRoot, '.github/actions/setup-ci/action.yml')
+const setupActionPath = join(repositoryRoot, '.github', 'actions/setup-ci/action.yml')
 const setupComponentActionPath = join(repositoryRoot, '.github', 'actions/setup-component/action.yml')
 const ipfsDeployWorkflowPath = workflowDefinitionPath('ipfs-deploy.yml')
 const versionDeployWorkflowPath = workflowDefinitionPath('version-deploy.yml')
@@ -48,6 +48,7 @@ const workflowSteps = (job: unknown) => {
 	if (!Array.isArray(steps)) throw new Error('workflow job steps must be a sequence')
 	return steps.map((step, index) => requireRecord(step, `workflow step ${index.toString()}`))
 }
+const usesAction = (step: Record<string, unknown>, action: string) => typeof step['uses'] === 'string' && step['uses'].startsWith(`${action}@`)
 const workflowTestPaths = (workflow: Record<string, unknown>) =>
 	Object.values(workflowJobs(workflow)).flatMap(job =>
 		workflowSteps(job).flatMap(step => {
@@ -85,13 +86,27 @@ describe('split UI workflow definitions (pending updates when present)', () => {
 		expect(job['if']).toBe("always() && !cancelled() && (needs.prepare.result == 'success' || (inputs.prepared && needs.prepare.result == 'skipped'))")
 		const prepare = requireRecord(jobs['prepare'], 'standalone browser preparation')
 		expect(prepare['if']).toBe('inputs.prepared != true')
-		const upload = workflowSteps(prepare).find(step => step['uses'] === 'actions/upload-artifact@v4')
+		const upload = workflowSteps(prepare).find(step => usesAction(step, 'actions/upload-artifact'))
 		expect(requireRecord(upload?.['with'], 'standalone production artifact')).toMatchObject({ name: 'domain-production-ui', path: '${{ steps.projects.outputs.ui_artifact_outputs }}' })
 		const scripts = requireRecord(requireRecord(JSON.parse(await readFile(rootPackagePath, 'utf8')), 'root package')['scripts'], 'root scripts')
 		expect(scripts['test:browser:workflow']).toContain("--test-name-pattern '^production workflow:'")
 	})
 
-	test('workflows have no time-based triggers after staged updates are activated', async () => {
+	test('workflows and composite actions pin every external action to a full commit SHA', async () => {
+		const definitionPaths = [...(await readdir(join(repositoryRoot, '.github', 'workflows'))).filter(name => /\.ya?ml$/u.test(name)).map(workflowDefinitionPath), ...(await readdir(join(repositoryRoot, '.github', 'actions'))).map(name => join(repositoryRoot, '.github', 'actions', name, 'action.yml'))]
+		const unpinned = []
+		for (const definitionPath of definitionPaths) {
+			const source = await readFile(definitionPath, 'utf8')
+			for (const match of source.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gmu)) {
+				const reference = match[1] ?? ''
+				if (reference.startsWith('./')) continue
+				if (!/^[^@\s]+@[0-9a-f]{40}$/u.test(reference)) unpinned.push(`${definitionPath}: ${reference}`)
+			}
+		}
+		expect(unpinned).toEqual([])
+	})
+
+	test('workflows have no time-based triggers', async () => {
 		const directory = join(repositoryRoot, '.github', 'workflows')
 		const scheduled = []
 		for (const name of await readdir(directory)) {
@@ -221,7 +236,7 @@ ${command}`,
 		const workflow = await readWorkflow(testDomainsWorkflowPath)
 		const jobs = workflowJobs(workflow)
 		const prepareSteps = workflowSteps(jobs['prepare'])
-		const upload = prepareSteps.find(step => step['uses'] === 'actions/upload-artifact@v4')
+		const upload = prepareSteps.find(step => usesAction(step, 'actions/upload-artifact'))
 		const uploadOptions = requireRecord(upload?.['with'], 'production UI artifact upload options')
 		expect(uploadOptions['path']).toBe('${{ steps.projects.outputs.ui_artifact_outputs }}')
 		expect((await projectQuery()).uiArtifactOutputs).toEqual(['ui/coreShared/js', 'ui/zoltarShared/js', 'ui/statoblastShared/js', 'ui/zoltar/js', 'ui/zoltar/dist', 'ui/statoblast/js', 'ui/statoblast/dist', 'ui/trading/js', 'ui/trading/dist'])
@@ -230,7 +245,7 @@ ${command}`,
 		expect(uploadOptions['if-no-files-found']).toBe('error')
 
 		const applicationSteps = workflowSteps(jobs['application-tests'])
-		const downloadIndex = applicationSteps.findIndex(step => step['uses'] === 'actions/download-artifact@v5')
+		const downloadIndex = applicationSteps.findIndex(step => usesAction(step, 'actions/download-artifact'))
 		const downloadOptions = requireRecord(applicationSteps[downloadIndex]?.['with'], 'production UI artifact download options')
 		expect(downloadOptions).toMatchObject({ name: uploadOptions['name'], path: 'ui' })
 
@@ -291,7 +306,7 @@ ${command}`,
 		expect(steps.some(step => step['run'] === 'bun run coverage:full')).toBe(true)
 		const publisher = steps.find(step => typeof step['run'] === 'string' && step['run'].includes('coverage/coverage-summary.md'))
 		expect(publisher).toBeDefined()
-		const upload = steps.find(step => step['uses'] === 'actions/upload-artifact@v4')
+		const upload = steps.find(step => usesAction(step, 'actions/upload-artifact'))
 		expect(requireRecord(upload?.['with'], 'coverage upload options')['name']).toBe('coverage-report')
 	})
 
@@ -358,15 +373,15 @@ ${command}`,
 		const jobs = workflowJobs(await readWorkflow(testDomainsWorkflowPath))
 		const input = requireRecord(jobs['timing-history-input'], 'timing history input')
 		const inputSteps = workflowSteps(input)
-		expect(inputSteps.some(step => step['uses'] === 'actions/cache/restore@v5')).toBe(true)
-		expect(inputSteps.some(step => step['uses'] === 'actions/upload-artifact@v4')).toBe(true)
+		expect(inputSteps.some(step => usesAction(step, 'actions/cache/restore'))).toBe(true)
+		expect(inputSteps.some(step => usesAction(step, 'actions/upload-artifact'))).toBe(true)
 
 		for (const jobName of ['application-tests', 'solidity-tests', 'timing-history']) {
 			const job = requireRecord(jobs[jobName], jobName)
 			expect(requireRecord(job, jobName)['needs']).toContain('timing-history-input')
 			const steps = workflowSteps(job)
-			expect(steps.some(step => step['uses'] === 'actions/cache/restore@v5')).toBe(false)
-			const download = steps.find(step => step['uses'] === 'actions/download-artifact@v5' && String(requireRecord(step['with'], `${jobName} timing input`)['name']).includes('test-timing-history-input'))
+			expect(steps.some(step => usesAction(step, 'actions/cache/restore'))).toBe(false)
+			const download = steps.find(step => usesAction(step, 'actions/download-artifact') && String(requireRecord(step['with'], `${jobName} timing input`)['name']).includes('test-timing-history-input'))
 			expect(requireRecord(download?.['with'], `${jobName} timing input`)).toMatchObject({ path: '.ci' })
 		}
 	})
@@ -456,7 +471,7 @@ ${command}`,
 		const smoke = requireRecord(jobs['browser-smoke'], 'CI smoke consumer')
 		expect(smoke['needs']).toEqual(['changes', 'prepare'])
 		const smokeSteps = workflowSteps(smoke)
-		const download = smokeSteps.find(step => step['uses'] === 'actions/download-artifact@v5')
+		const download = smokeSteps.find(step => usesAction(step, 'actions/download-artifact'))
 		expect(requireRecord(download?.['with'], 'smoke build artifact')).toMatchObject({ name: 'domain-production-ui', path: 'ui' })
 		const smokeTest = smokeSteps.find(step => step['run'] === 'bun run test:browser:smoke')
 		expect(requireRecord(smokeTest?.['env'], 'smoke environment')).toMatchObject({ ZOLTAR_USE_EXISTING_PRODUCTION_BUILD: '1', ZOLTAR_RUN_PRODUCTION_REBUILD_INVARIANTS: '1' })

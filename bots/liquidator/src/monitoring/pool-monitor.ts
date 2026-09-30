@@ -19,7 +19,7 @@ type PoolDeployment = {
 	currentRetentionRate: bigint
 	initialReportPriorityFeeAttoEthPerGas: bigint
 	parent: Address
-	priceOracleManagerAndOperatorQueuer: Address
+	openOraclePriceCoordinator: Address
 	questionId: bigint
 	securityPool: Address
 	statoblastSecurityMultiplierBps: bigint
@@ -33,7 +33,7 @@ function candidateScreeningPrice(lastPrice: bigint, fallbackPrice: bigint) {
 async function loadPool(client: ReadClient, settings: OperatorSettings, deployment: PoolDeployment, wallet: Address | undefined, monitorIndex: PoolMonitorIndex, block: Readonly<{ hash: `0x${string}`; number: bigint }>) {
 	const blockNumber = block.number
 	const address = getAddress(deployment.securityPool)
-	const manager = getAddress(deployment.priceOracleManagerAndOperatorQueuer)
+	const manager = getAddress(deployment.openOraclePriceCoordinator)
 	const [
 		knownVaultCount,
 		currentRetentionRate,
@@ -86,7 +86,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		vaultIndex = createVaultStateIndex<VaultPosition>()
 		monitorIndex.vaultsByPool.set(address.toLowerCase(), vaultIndex)
 	}
-	const vaultRefresh = await loadCurrentVaults(client, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalUnderwritingLimitAttoEth, { hash: block.hash, number: blockNumber })
+	const vaultRefresh = await loadCurrentVaults(client, settings.deployment.multicall3, vaultIndex, address, normalizedEscalationGame, knownVaultCount, totalAttoRep, denominator, poolAccountingSnapshot.settlementCollateralAttoEth, totalUnderwritingLimitAttoEth, { hash: block.hash, number: blockNumber })
 	const vaults = vaultRefresh.vaults
 	const [stagedOperationCount, pendingSettlementOperationIds] = await Promise.all([
 		client.readContract({ abi: openOraclePriceCoordinatorAbi, address: manager, args: [], blockNumber, functionName: 'getActiveStagedOperationCount' }),
@@ -103,7 +103,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 			const targetAddress = getAddress(operation.targetVault)
 			let target = stagedTargetVaults.get(targetAddress.toLowerCase())
 			if (target === undefined) {
-				const loadedTarget = (await loadVaultPage(client, address, normalizedEscalationGame, [targetAddress], blockNumber))[0]
+				const loadedTarget = (await loadVaultPage(client, settings.deployment.multicall3, address, normalizedEscalationGame, [targetAddress], blockNumber))[0]
 				if (loadedTarget === undefined) throw new Error('Security pool returned no staged-operation target state')
 				target = currentVaultPositionForPoolAccounting(loadedTarget, totalAttoRep, denominator, settlementCollateralAttoEth, totalUnderwritingLimitAttoEth)
 				stagedTargetVaults.set(targetAddress.toLowerCase(), target)
@@ -130,7 +130,7 @@ async function loadPool(client: ReadClient, settings: OperatorSettings, deployme
 		}
 	}
 	const botVault = await resolveOperatorVault(monitorIndex, address, wallet, vaultRefresh, { denominator, settlementCollateralAttoEth, totalAttoRep, totalUnderwritingLimitAttoEth }, async operator => {
-		const position = (await loadVaultPage(client, address, normalizedEscalationGame, [operator], blockNumber))[0]
+		const position = (await loadVaultPage(client, settings.deployment.multicall3, address, normalizedEscalationGame, [operator], blockNumber))[0]
 		if (position === undefined) throw new Error('Security pool returned no operator vault state')
 		return position
 	})
@@ -204,7 +204,7 @@ function deploymentFromLog(log: Readonly<{ args?: unknown }>): PoolDeployment {
 	if (typeof args !== 'object' || args === null) throw new Error('SecurityPool deployment event is missing its arguments')
 	const securityPool = Reflect.get(args, 'securityPool')
 	const parent = Reflect.get(args, 'parent')
-	const manager = Reflect.get(args, 'priceOracleManagerAndOperatorQueuer')
+	const manager = Reflect.get(args, 'openOraclePriceCoordinator')
 	const universeId = Reflect.get(args, 'universeId')
 	const questionId = Reflect.get(args, 'questionId')
 	const multiplier = Reflect.get(args, 'statoblastSecurityMultiplierBps')
@@ -218,7 +218,7 @@ function deploymentFromLog(log: Readonly<{ args?: unknown }>): PoolDeployment {
 		currentRetentionRate: retentionRate,
 		initialReportPriorityFeeAttoEthPerGas: priorityFee,
 		parent: getAddress(parent),
-		priceOracleManagerAndOperatorQueuer: getAddress(manager),
+		openOraclePriceCoordinator: getAddress(manager),
 		questionId,
 		securityPool: getAddress(securityPool),
 		settlementCollateralAttoEth: settlementCollateral,

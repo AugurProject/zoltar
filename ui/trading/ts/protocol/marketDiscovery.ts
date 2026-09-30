@@ -47,7 +47,7 @@ async function loadCanonicalPoolDeployment(client: PublicClient, configuration: 
 	const [questionId, statoblastSecurityMultiplierBps, manager] = await Promise.all([
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'questionId' }),
 		client.readContract({ abi: poolAbi, address: pool, functionName: 'statoblastSecurityMultiplierBps' }),
-		client.readContract({ abi: poolAbi, address: pool, functionName: 'priceOracleManagerAndOperatorQueuer' }),
+		client.readContract({ abi: poolAbi, address: pool, functionName: 'openOraclePriceCoordinator' }),
 	])
 	const initialReportPriorityFeeAttoEthPerGas = await client.readContract({ abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi, address: getAddress(manager), functionName: 'initialReportPriorityFeeAttoEthPerGas' })
 	return { securityPool: pool, shareToken: getAddress(shareToken), universeId, questionId, statoblastSecurityMultiplierBps, initialReportPriorityFeeAttoEthPerGas }

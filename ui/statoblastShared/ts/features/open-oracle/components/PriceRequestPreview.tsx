@@ -8,9 +8,10 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as copy from '@zoltar/ui-core-shared/copy/transactionSteps.js'
 import * as priceRequestCopy from '../../../copy/priceRequest.js'
 import { EthAmount, TransactionFundingSummary } from '@zoltar/ui-core-shared/components/TransactionFundingSummary.js'
+import type { TokenFundingAmount } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 export type FailedPricePlan = {
-	funding: readonly { amount: string }[]
+	funding: readonly TokenFundingAmount[]
 	totalAttoEth: bigint
 	outcome: { returnToWallet: boolean; settlerRewardAttoEth: bigint | undefined } | undefined
 }

@@ -49,7 +49,7 @@ describe('Audit: pre-escalation residual capture', () => {
 		const questionEnd = await getQuestionEndDate(client, questionId)
 		await approveToken(attacker, addressString(GENESIS_REPUTATION_TOKEN), securityPoolAddresses.securityPool)
 		await mockWindow.setTime(questionEnd - 600n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		// The next transaction is mined exactly at the question end timestamp.
 		await mockWindow.setTime(questionEnd - 1n)
 

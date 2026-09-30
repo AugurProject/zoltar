@@ -1,5 +1,4 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
-import { LiveLiquidityWorkspace } from './LiveLiquidityWorkspace.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
 import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
@@ -7,6 +6,7 @@ import { ReadOnlyAddressValue } from '@zoltar/ui-core-shared/components/AddressV
 import type { DeploymentConfiguration } from '../protocol/config.js'
 import { marketAcceptsNewRisk, type LiveMarket } from '../protocol/live.js'
 import * as appCopy from '../copy/app.js'
+import * as coreAppCopy from '@zoltar/ui-core-shared/copy/app.js'
 import { getTradingRouteHref, isTradingLookupRoute, tradingListKindFor, tradingWorkflowRoute, type TradingRoute } from '../lib/routing.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
@@ -21,7 +21,7 @@ import { liveTradingControllerServices } from './liveTradingControllerHelpers.js
 import type { LiveTradingControllerServices, LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { LivePortfolio } from './LivePortfolio.js'
 import { LivePositionControls } from './LivePositionControls.js'
-import { liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
+import { LiveLiquidityControls, liveLiquidityServices, type LiveLiquidityServices } from './LiveLiquidityControls.js'
 import { LiveSettlementControls, liveSettlementServices, type LiveSettlementServices } from './LiveSettlementControls.js'
 import { DEFAULT_TRADE_SETTINGS, type TradeSettings } from '../lib/tradeSettings.js'
 import type { WalletSummaryState } from '../lib/walletSummaryState.js'
@@ -31,12 +31,12 @@ import { UniverseDirectory } from './UniverseDirectory.js'
 import type { LoadUniverseSummary } from './useUniverseSummary.js'
 import type { UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { LiveMarketBrowser } from './LiveMarketBrowser.js'
-import { MarketContracts, MarketFacts, MarketOverview } from './MarketOverview.js'
+import { MarketContracts, MarketFacts, MarketOverview, MarketPageHeader } from './MarketOverview.js'
+import { MarketPosition } from './MarketPosition.js'
 import { MarketTicketSheet } from './MarketTicketSheet.js'
 import { marketOddsPercent } from '../lib/marketListing.js'
 import { hashWithoutTicketSide, readTicketSideParam } from '../lib/ticketSide.js'
 import { liveCopy } from '../copy/live.js'
-import * as availabilityCopy from '../copy/availability.js'
 import { useFocusOnKeyChange } from './live/useFocusOnKeyChange.js'
 import { useDownloadedEntities, useFavorites, useRememberOpenedEntity } from '@zoltar/ui-core-shared/hooks/useLocalEntities.js'
 import { getRememberableMarket, marketDownloadStore, selectBrowseMarkets, selectMarketCacheUpdates } from '../lib/favoriteMarkets.js'
@@ -170,12 +170,12 @@ export function LiveTrading({
 	}
 	// Connecting re-requests the deployment chain first, so the same action switches a wallet that is on another network.
 	let walletActionLabel = account === undefined ? appCopy.connectWallet : <ReadOnlyAddressValue address={account} />
-	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = availabilityCopy.formatSwitchNetworkAction(configuration.chainName)
+	if (account === undefined && networkMismatchReason !== undefined) walletActionLabel = coreAppCopy.formatSwitchToNetwork(configuration.chainName)
 	// The workflow panels' first step: connect, or switch a connected wallet back to the deployment chain.
 	const ticketWallet = {
 		connected: account !== undefined && walletClient !== undefined,
 		networkMismatchReason,
-		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : availabilityCopy.formatSwitchNetworkAction(configuration.chainName),
+		actionLabel: networkMismatchReason === undefined ? appCopy.connectWallet : coreAppCopy.formatSwitchToNetwork(configuration.chainName),
 		walletEthAttoEth,
 		connect,
 	}
@@ -289,11 +289,13 @@ export function LiveTrading({
 					},
 				}
 			: undefined
-	// The route header names the workflow; the object header below carries the market question, status, and facts, so
-	// neither repeats the other. Focus lands on the object header when the addressed market changes.
+	// A loaded market's trade and liquidity pages are titled by the market question itself, with a way back to the list;
+	// other states name the workflow and let the object header below carry the question. Focus lands on whichever
+	// heading names the market when the addressed market changes.
+	const showsMarketPage = selected !== undefined && !creatingMarket && selected.loadError === undefined
 	return (
 		<div className='route-view-flow'>
-			<RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />
+			{showsMarketPage ? <MarketPageHeader market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} actions={walletAction} /> : <RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />}
 			<ErrorNotice message={connectionMessage} />
 			{createdMarketTitle === undefined ? null : (
 				<UserMessage
@@ -360,7 +362,7 @@ export function LiveTrading({
 						return (
 							<SectionBlock key={selected.pool} title={appCopy.liquidity}>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<LiveLiquidityWorkspace
+								<LiveLiquidityControls
 									{...workflowPanelProps}
 									walletEthAttoEth={walletEthAttoEth}
 									nowSeconds={nowSeconds}
@@ -377,7 +379,7 @@ export function LiveTrading({
 							<ViewTabs ariaLabel={appCopy.marketWorkspaceViews} semantics='tabs' size='compact' value={activeView} onChange={openView} options={viewOptions} />
 							<div className='market-workspace-panel' role='tabpanel' id={MARKET_WORKSPACE_PANEL_ID} aria-labelledby={viewTabId(activeView)}>
 								{activeView === 'settlement' ? <LiveSettlementControls {...workflowPanelProps} services={settlementServices} /> : null}
-								{activeView === 'liquidity' ? <LiveLiquidityWorkspace {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
+								{activeView === 'liquidity' ? <LiveLiquidityControls {...workflowPanelProps} walletEthAttoEth={walletEthAttoEth} nowSeconds={nowSeconds} services={liquidityServices} /> : null}
 								{activeView === 'trade' && !selectedPairInitialized ? <PairInitializationAction market={selected} nowSeconds={nowSeconds} /> : null}
 								{activeView === 'trade' && selectedPairInitialized ? <LivePositionControls market={selected} nowSeconds={nowSeconds} settings={tradeSettings} ticket={position} wallet={ticketWallet} holdings={ticketHoldings} externallyLocked={ticketLocked} /> : null}
 							</div>
@@ -386,7 +388,7 @@ export function LiveTrading({
 					return (
 						<div key={selected.pool} className='market-layout'>
 							<SectionBlock className='market-layout__main' variant='plain'>
-								<MarketOverview market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
+								<MarketOverview market={selected} position={<MarketPosition market={selected} holdings={ticketHoldings} wallet={ticketWallet} disabled={workflowLocked} ownsBalanceError={activeView === 'trade'} />} />
 							</SectionBlock>
 							<MarketTicketSheet viewLabel={viewOptions.find(option => option.value === activeView)?.label ?? appCopy.trade} quickPick={quickPick} openRequested={ticketOpenRequested} onOpenRequestHandled={handleTicketOpenRequest}>
 								{ticket}

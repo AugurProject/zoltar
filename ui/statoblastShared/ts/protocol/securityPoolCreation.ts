@@ -5,7 +5,7 @@ import { isIgnorableLogDecodeError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import type { QuestionData, SecurityPoolCreationResult, WriteClient, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import { writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
-import { getQuestionIdHex } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { formatQuestionIdHex } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { getMulticall3Address } from '@zoltar/ui-zoltar-shared/protocol/zoltarDeploymentHelpers.js'
 import { getDeploymentSteps } from './deployment.js'
@@ -156,7 +156,7 @@ export async function createSecurityPool(
 		...(questionData === undefined ? {} : { questionCreatedAt: getQuestionCreatedAtFromReceipt(receipt, parameters.questionId) }),
 		deployPoolHash,
 		initialReportPriorityFeeAttoEthPerGas: parameters.initialReportPriorityFeeAttoEthPerGas,
-		questionId: getQuestionIdHex(parameters.questionId),
+		questionId: formatQuestionIdHex(parameters.questionId),
 		securityPoolAddress: getSecurityPoolAddressFromReceipt(receipt),
 		statoblastSecurityMultiplierBps: parameters.statoblastSecurityMultiplierBps,
 		universeId: 0n,

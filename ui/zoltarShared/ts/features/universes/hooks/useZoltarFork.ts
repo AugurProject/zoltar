@@ -18,7 +18,7 @@ import { formatRefreshErrorMessage, formatWriteErrorMessage, getErrorMessage } f
 import { createErrorActionFeedback, createPendingActionFeedback, createSuccessActionFeedback, createWarningActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import type { ActionFeedback } from '@zoltar/ui-core-shared/transactions/actionFeedback.js'
 import { createZoltarForkSuccessPresentation, createZoltarForkTransactionIntent, createZoltarForkWarningPresentation } from '../../zoltarTransactionPresentations.js'
-import { parseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
+import { formatQuestionIdHex, parseQuestionIdInput } from '@zoltar/ui-core-shared/lib/questionId.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getGenesisReputationTokenAddress } from '../../../protocol/activeProtocolAddresses.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
@@ -27,6 +27,7 @@ import type { TransactionLifecycleParameters, WriteOperationContext } from '../.
 import type { CreateWriteClientCallbacks } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import type { ZoltarForkActionResult, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import { createActiveEnvironmentGuard } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
+import { toBigIntReadResult, toReadError, type OptionalReadResult, type RawOptionalReadResult } from '@zoltar/ui-core-shared/lib/optionalReadResult.js'
 
 type UseZoltarForkParameters = TransactionLifecycleParameters &
 	WriteOperationContext & {
@@ -38,7 +39,6 @@ type UseZoltarForkParameters = TransactionLifecycleParameters &
 		zoltarUniverse: ZoltarUniverseSummary | undefined
 	}
 
-type OptionalReadResult<TResult> = { result: TResult; status: 'success' } | { error: Error; result?: undefined; status: 'failure' }
 type ZoltarForkAccessChildUniverse = ZoltarUniverseSummary['childUniverses'][number]
 
 export type UseZoltarForkDependencies = {
@@ -53,7 +53,7 @@ const defaultUseZoltarForkDependencies: UseZoltarForkDependencies = {
 		return {
 			action: 'approveForkRep',
 			hash: approval.hash,
-			questionId: formatQuestionId(questionId),
+			questionId: formatQuestionIdHex(questionId),
 			universeId,
 		}
 	},
@@ -89,39 +89,16 @@ const defaultUseZoltarForkDependencies: UseZoltarForkDependencies = {
 		])
 		const historyResult = results.at(-1)
 		const historyAmounts = historyResult?.status === 'success' && Array.isArray(historyResult.result) && historyResult.result.length === childUniverses.length ? historyResult.result : undefined
-		return [...results.slice(0, 3 + childUniverses.length).map(toBigIntReadResult), ...childUniverses.map((_, index) => toBigIntReadResult(historyResult?.status === 'failure' ? historyResult : { status: 'success', result: historyAmounts?.[index] }))]
+		return [...results.slice(0, 3 + childUniverses.length).map(toForkAccessReadResult), ...childUniverses.map((_, index) => toForkAccessReadResult(historyResult?.status === 'failure' ? historyResult : { status: 'success', result: historyAmounts?.[index] }))]
 	},
 }
 
-function toReadError(error: unknown) {
-	return error instanceof Error ? error : new Error('Unknown read error')
-}
-
-function toBigIntReadResult(result: { error?: unknown; result?: unknown; status: 'failure' | 'success' }): OptionalReadResult<bigint> {
-	if (result.status === 'success') {
-		if (typeof result.result === 'bigint') {
-			return {
-				result: result.result,
-				status: 'success',
-			}
-		}
-		return {
-			error: new Error('Unexpected non-bigint universe fork access value'),
-			status: 'failure',
-		}
-	}
-	return {
-		error: toReadError(result.error),
-		status: 'failure',
-	}
-}
-
-function formatQuestionId(questionId: bigint) {
-	return `0x${questionId.toString(16)}`
+function toForkAccessReadResult(result: RawOptionalReadResult) {
+	return toBigIntReadResult(result, 'universe fork access')
 }
 
 function resolveSubmittedForkQuestionId(submittedQuestionId: string) {
-	return parseBigIntInput(submittedQuestionId, 'Fork question ID')
+	return parseQuestionIdInput(submittedQuestionId, 'Fork question ID')
 }
 
 function resolveForkQuestionId(submittedQuestionId: string, universe: ZoltarUniverseSummary) {
@@ -243,7 +220,7 @@ export function useZoltarFork(
 			}
 			const nextChildBalances: Record<string, bigint | undefined> = {}
 			for (const [index, child] of childUniverses.entries()) {
-				const childBalanceResult = childBalanceResults[index] as OptionalReadResult<bigint> | undefined
+				const childBalanceResult = childBalanceResults[index]
 				if (childBalanceResult?.status !== 'success') continue
 				nextChildBalances[child.universeId.toString()] = childBalanceResult.result
 			}

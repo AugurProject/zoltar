@@ -100,7 +100,7 @@ contract PriceCoordinatorDeploymentWorker {
 	}
 }
 
-contract PriceOracleManagerAndOperatorQueuerFactory {
+contract OpenOraclePriceCoordinatorFactory {
 	LiquidationApprovalRegistryDeployer private immutable liquidationApprovalRegistryDeployer;
 	PriceCoordinatorDeploymentWorker private immutable priceCoordinatorDeploymentWorker;
 	IWeth9 public immutable weth;
@@ -143,7 +143,7 @@ contract PriceOracleManagerAndOperatorQueuerFactory {
 		minLiquidationPriceDistanceBps = _minLiquidationPriceDistanceBps;
 	}
 
-	function deployPriceOracleManagerAndOperatorQueuer(OpenOracle _openOracle, ReputationToken _reputationToken, uint256 _initialReportPriorityFeeAttoEthPerGas, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
+	function deployOpenOraclePriceCoordinator(OpenOracle _openOracle, ReputationToken _reputationToken, uint256 _initialReportPriorityFeeAttoEthPerGas, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
 		bytes32 deploymentSalt = keccak256(abi.encode(msg.sender, salt));
 		OpenOraclePriceCoordinator coordinator = priceCoordinatorDeploymentWorker.deploy(abi.encode(_openOracle, _reputationToken, weth, gasConsumedOpenOracleReportPrice, gasConsumedSettlement, gasUnitsForOneDispute, _initialReportPriorityFeeAttoEthPerGas, targetPriceErrorForDispute, openOracleSecurityMultiplierBps, settlementTime, disputeDelay, protocolFee, feePercentage, multiplier, timeType, trackDisputes, protocolFeeRecipient, escalationHaltMultiplierBps, maxSettlementBaseFeeMultiplierBps, minLiquidationPriceDistanceBps), deploymentSalt);
 		LiquidationApprovalRegistry registry = liquidationApprovalRegistryDeployer.deploy(address(coordinator), deploymentSalt);

@@ -23,14 +23,14 @@ services:
       start_period: 10s
     volumes:
       - chaos-state:/app/bots/chaos/.state
-      # This fixed-name nested volume fences every shipped Compose project on the host,
+      # This fixed-name nested volume fences every shipped bot Compose project on the host,
       # even when a different project name uses a separate runtime-state volume.
-      - chaos-signer-locks:/app/bots/chaos/.state/process-locks
+      - signer-locks:/app/bots/chaos/.state/process-locks
 
 volumes:
   chaos-state:
-  chaos-signer-locks:
-    name: zoltar-chaos-signer-locks
+  signer-locks:
+    name: zoltar-bot-signer-locks
 
 networks:
   default:

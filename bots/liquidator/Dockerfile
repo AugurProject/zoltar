@@ -55,7 +55,8 @@ COPY bots/liquidator/tsconfig.json ./bots/liquidator/tsconfig.json
 COPY ui/coreShared/ts/ ./ui/coreShared/ts/
 COPY ui/coreShared/css/tokens.css ./ui/coreShared/css/tokens.css
 RUN chmod 0755 bots/liquidator/scripts/docker-entrypoint.sh \
-	&& install -d -m 0700 -o bun -g bun bots/liquidator/.state
+	&& install -d -m 0700 -o bun -g bun bots/liquidator/.state \
+	&& install -d -m 0700 -o bun -g bun bots/liquidator/.state/process-locks
 
 USER bun
 WORKDIR /app/bots/liquidator

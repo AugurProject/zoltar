@@ -1,10 +1,15 @@
-import { isWalletRejection } from '@zoltar/ui-core-shared/lib/errors.js'
+import { getErrorDetail, isWalletRejection, transactionErrorMessages } from '@zoltar/ui-core-shared/lib/errors.js'
 
+const PROVIDER_IDENTIFIER_PATTERN = /(?<![0-9a-f])0x[0-9a-f]{40}(?![0-9a-f])|share[ -]?token|token[ _-]?id|contract address|call (?:arguments?|args)|\bargs?:/i
+
+/** Shared error cleanup, except that details naming provider identifiers (addresses, token IDs, call arguments) fall back to generic copy. */
 export function publicErrorMessage(error: unknown, fallback: string) {
-	if (isWalletRejection(error)) return 'Action canceled in wallet.'
+	if (isWalletRejection(error)) return transactionErrorMessages.walletRejected
+	// Only thrown errors carry provider text worth showing; other values are unknown and fall back to generic copy.
 	if (!(error instanceof Error)) return fallback
-	const detail = error.message.trim()
-	if (detail.length === 0) return fallback
-	if (/(?<![0-9a-f])0x[0-9a-f]{40}(?![0-9a-f])|share[ -]?token|token[ _-]?id|contract address|call (?:arguments?|args)|\bargs?:/i.test(detail)) return fallback
+	const detail = getErrorDetail(error, fallback)
+	if (detail === undefined || PROVIDER_IDENTIFIER_PATTERN.test(detail)) return fallback
+	// The shared cleanup shortens long details, which could cut an identifier below the pattern's length; check the original text too.
+	if (PROVIDER_IDENTIFIER_PATTERN.test(error.message)) return fallback
 	return detail
 }

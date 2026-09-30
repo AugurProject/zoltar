@@ -12,7 +12,7 @@ const QUESTION_ID_QUERY_PARAM = 'questionId'
 const LEGACY_POOL_QUERY_PARAMS = ['securityPool', 'securityPoolsView', 'selectedPoolView'] as const
 
 /** A location inside the Pools route: the address entry, browse list, create and universe views, or one pool page with an optional tab. */
-export type PoolsLocation = { view: 'open' } | { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'operate'; securityPoolAddress: string; tab: string }
+export type PoolsLocation = { view: 'browse' } | { view: 'create' } | { view: 'universes' } | { view: 'operate'; securityPoolAddress: string; tab: string }
 
 function decodeSegment(segment: string) {
 	try {
@@ -25,16 +25,16 @@ function decodeSegment(segment: string) {
 }
 
 /** Path segments that name a list view (or the pool page itself) and are never read as a pool address. */
-const RESERVED_POOLS_SEGMENTS = new Set(['browse', 'create', 'open', 'operate', 'universes'])
+const RESERVED_POOLS_SEGMENTS = new Set(['browse', 'create', 'operate', 'universes'])
 
-/** Parses `#/pools`, `#/pools/browse`, `#/pools/open`, `#/pools/create`, `#/pools/universes`, and `#/pools/<address>[/<tab>]`; returns `undefined` for any other hash. */
+/** Parses `#/pools`, `#/pools/browse`, `#/pools/create`, `#/pools/universes`, and `#/pools/<address>[/<tab>]`; returns `undefined` for any other hash. */
 export function parsePoolsRouteHash(routeHash: string): PoolsLocation | undefined {
 	if (routeHash === POOLS_ROUTE_HASH || routeHash === POOLS_PATH_PREFIX) return { view: 'browse' }
 	if (!routeHash.startsWith(POOLS_PATH_PREFIX)) return undefined
 	const segments = routeHash.slice(POOLS_PATH_PREFIX.length).replace(/\/$/, '').split('/').map(decodeSegment)
 	if (segments.length > 2 || segments.some(segment => segment === undefined || segment.trim() === '')) return undefined
 	const [first = '', tab = ''] = segments.map(segment => segment?.trim() ?? '')
-	if (first === 'open' || first === 'browse' || first === 'create' || first === 'universes') return tab === '' ? { view: first } : undefined
+	if (first === 'browse' || first === 'create' || first === 'universes') return tab === '' ? { view: first } : undefined
 	// `operate` is the pool page's internal view name, not an address; a hand-written `#/pools/operate` link is unroutable.
 	if (RESERVED_POOLS_SEGMENTS.has(first)) return undefined
 	return { securityPoolAddress: first, tab, view: 'operate' }
@@ -44,7 +44,6 @@ export function buildPoolsRouteHash(location: PoolsLocation) {
 	switch (location.view) {
 		case 'browse':
 			return POOLS_ROUTE_HASH
-		case 'open':
 		case 'create':
 		case 'universes':
 			return `${POOLS_PATH_PREFIX}${location.view}`

@@ -2,7 +2,14 @@ import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as pricingCopy from '../../../copy/pricing.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 
-export type UiPriceOracle = 'uniswap' | 'open-oracle' | 'open-oracle-fallback'
+const UI_PRICE_ORACLES = ['uniswap', 'open-oracle', 'open-oracle-fallback'] as const
+
+export type UiPriceOracle = (typeof UI_PRICE_ORACLES)[number]
+
+/** Narrows untrusted text, such as a stored setting or select value, to a known price oracle setting. */
+export function parseUiPriceOracle(value: string | null | undefined) {
+	return UI_PRICE_ORACLES.find(priceOracle => priceOracle === value)
+}
 
 type RepPriceSource = 'uniswap' | 'open-oracle'
 

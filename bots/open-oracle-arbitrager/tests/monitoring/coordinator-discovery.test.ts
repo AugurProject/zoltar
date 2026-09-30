@@ -15,7 +15,7 @@ const pool = getAddress('0x0000000000000000000000000000000000000011')
 const coordinator = getAddress('0x0000000000000000000000000000000000000022')
 const other = getAddress('0x0000000000000000000000000000000000000033')
 const hash: Hex = `0x${'ab'.repeat(32)}`
-const entry = { securityPool: pool, truthAuction: other, priceOracleManagerAndOperatorQueuer: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n, currentRetentionRate: 1n, settlementCollateralAttoEth: 0n }
+const entry = { securityPool: pool, truthAuction: other, openOraclePriceCoordinator: coordinator, shareToken: other, parent: other, universeId: 0n, questionId: 1n, statoblastSecurityMultiplierBps: 20_000n, initialReportPriorityFeeAttoEthPerGas: 1n, currentRetentionRate: 1n, settlementCollateralAttoEth: 0n }
 
 function reader(options: { wrongCoordinator?: boolean; missingCode?: boolean; wrongBlock?: boolean; unapproved?: boolean; shortPage?: boolean; unsafePolicy?: boolean; registryCount?: bigint; reorg?: boolean } = {}) {
 	let blockReads = 0
@@ -72,6 +72,7 @@ async function configuration() {
 		execute: true,
 		connectivity: settings.connectivity,
 		quorumRpcUrls: ['https://second.example'],
+		rpcQuorum: 1 as const,
 	}
 }
 
@@ -83,18 +84,11 @@ test('trusts coordinators through the authenticated pool registry without indivi
 })
 
 test('dry-run discovery completes with one reader when execution quorum is two', async () => {
-	const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
-	process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-	try {
-		const config = await configuration()
-		const policies = await discoverCoordinatorPolicies([reader().client], { ...config, execute: false }, 10n, hash)
-		expect(policies.map(policy => policy.coordinator)).toEqual([coordinator])
-		await expect(discoverCoordinatorPolicies([reader().client], config, 10n, hash)).rejects.toThrow('two available independent RPC endpoints')
-		expect((await discoverCoordinatorPolicies([reader().client, reader().client], config, 10n, hash)).map(policy => policy.coordinator)).toEqual([coordinator])
-	} finally {
-		if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
-		else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
-	}
+	const config = { ...(await configuration()), rpcQuorum: 2 as const }
+	const policies = await discoverCoordinatorPolicies([reader().client], { ...config, execute: false }, 10n, hash)
+	expect(policies.map(policy => policy.coordinator)).toEqual([coordinator])
+	await expect(discoverCoordinatorPolicies([reader().client], config, 10n, hash)).rejects.toThrow('two available independent RPC endpoints')
+	expect((await discoverCoordinatorPolicies([reader().client, reader().client], config, 10n, hash)).map(policy => policy.coordinator)).toEqual([coordinator])
 })
 
 test('only discovers approved universes and removes coordinators after approval changes', async () => {

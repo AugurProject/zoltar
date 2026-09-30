@@ -1,10 +1,11 @@
 import { getAddress, isAddress } from './ethereum.ts'
 import type { ManifestContract } from './types.ts'
 
-export const parseManifestValue = (value: { contracts?: unknown }, filename: string): readonly ManifestContract[] => {
-	if (!Array.isArray(value.contracts)) throw new Error(`${filename} must contain a contracts array`)
+export const parseManifestValue = (value: unknown, filename: string): readonly ManifestContract[] => {
+	const contracts: unknown = typeof value === 'object' && value !== null && !Array.isArray(value) ? Reflect.get(value, 'contracts') : undefined
+	if (!Array.isArray(contracts)) throw new Error(`${filename} must contain a contracts array`)
 	const addresses = new Set<string>()
-	return value.contracts.map((entry, index) => {
+	return contracts.map((entry, index) => {
 		if (!Array.isArray(entry) || (entry.length !== 3 && entry.length !== 4) || typeof entry[0] !== 'string' || !isAddress(entry[0]) || typeof entry[1] !== 'string' || typeof entry[2] !== 'string' || (entry[3] !== undefined && (typeof entry[3] !== 'string' || !/^\d+$/.test(entry[3])))) {
 			throw new Error(`${filename} contract ${index} is invalid`)
 		}

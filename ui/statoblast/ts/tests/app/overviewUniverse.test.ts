@@ -8,7 +8,7 @@ const unforkedUniverse = { forkTime: 0n, hasForked: false, totalTheoreticalSuppl
 
 describe('Statoblast top bar universe', () => {
 	installDomTestLifecycle({
-		url: 'http://localhost/#/pools/open?universe=7',
+		url: 'http://localhost/#/pools/create?universe=7',
 		beforeTest: installStatoblastRouting,
 		afterTest: resetRoutingForTesting,
 	})

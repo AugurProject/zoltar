@@ -37,7 +37,7 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Required support threshold',
 				blocks: [
 					paragraph(
-						`The contract waits \`activationDelay\` (${activationDay} days) after \`start()\` before the escalation clock begins. From day ${activationDay} the cumulative binding-capital requirement rises from the configured start bond \`S\` to the non-decision threshold \`T\` over the ${escalationDays}-day \`ESCALATION_TIME_LENGTH\`, reaching \`T\` on day ${finalDay}. The contract evaluates a fixed-point curve; this expression is its readable idealization.`,
+						`The contract waits \`ACTIVATION_DELAY\` (${activationDay} days) after \`start()\` before the escalation clock begins. From day ${activationDay} the cumulative binding-capital requirement rises from the configured start bond \`S\` to the non-decision threshold \`T\` over the ${escalationDays}-day \`ESCALATION_TIME_LENGTH\`, reaching \`T\` on day ${finalDay}. The contract evaluates a fixed-point curve; this expression is its readable idealization.`,
 					),
 					equation(
 						'eq-escalation-required-support',
@@ -76,7 +76,7 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Retention rate and annualized fee',
 				blocks: [
 					paragraph(
-						`\`SecurityPoolUtils.calculateRetentionRate\` returns a per-second retention factor scaled by \`PRICE_PRECISION\` (\`1e18\`). It equals \`MAX_RETENTION_RATE\` at zero utilization, declines linearly until utilization reaches \`RETENTION_RATE_DIP\` (${retentionRules.dipUtilizationPercent}% of live minting capacity), and stays at \`MIN_RETENTION_RATE\` above that. Zero live minting capacity selects \`MAX_RETENTION_RATE\`.`,
+						`\`SecurityPoolUtils.calculateRetentionRate\` returns a per-second retention factor scaled by \`PRICE_PRECISION\` (\`1e18\`). It equals \`MAX_RETENTION_RATE\` at zero utilization, declines linearly until utilization reaches \`RETENTION_RATE_DIP\` (${retentionRules.dipUtilizationPercent}% of minting capacity, which is total standing ETH commitments outside an escalation game), and stays at \`MIN_RETENTION_RATE\` above that. Zero minting capacity selects \`MAX_RETENTION_RATE\`.`,
 					),
 					list(
 						`\`MAX_RETENTION_RATE = ${formatUnderscored(retentionRules.maxRetentionRate)}\`, about a ${percent(annualizedFeePercent(retentionRules.maxRetentionRate))} yearly fee.`,

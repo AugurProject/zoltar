@@ -102,7 +102,7 @@ export async function escrowParentVaultBelowNonDecisionThreshold(fixture: Statob
 	await approveAndDepositRepToVault(client, totalPrincipal - parentRepBeforeTopUp, questionId)
 	const questionEnd = await getQuestionEndDate(client, questionId)
 	await mockWindow.setTime(questionEnd + 10_000n)
-	await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+	await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 	await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Invalid, invalidPrincipal)
 	await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.No, noPrincipal)

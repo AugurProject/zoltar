@@ -1,4 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export {
 	initiallyDepositedLead,
 	worthNowLead,
@@ -43,7 +44,6 @@ export const zeroEth = '0\u00a0ETH'
 export const truthAuctionVisibleDepthChart = 'Truth auction visible depth chart'
 export const formatSelectPriceValueEthRepFromDepthChart = (price: CopyTemplateValue) => `Select price ${price}\u00a0ETH per REP from depth chart`
 export const formatMissingOutcomePoolDetail = (outcomeLabel: CopyTemplateValue) => `Security pool for ${outcomeLabel} universe does not exist.`
-export const forkUnavailablePlaceholder = '-'
 export const migration = 'Migration'
 export const forkReadiness = 'Fork readiness'
 export const notChosen = 'Not chosen'
@@ -77,6 +77,7 @@ export const childSecurityPools = 'Child security pools'
 export const pendingOutcome = 'Pending outcome'
 export const openSecurityPool = 'Open security pool'
 export const truthAuctionMigrationPendingDetail = 'Migration is still active. Truth auction can start once migration ends.'
+export const migrationWindowEndsTooSoon = 'Migration window ends too soon to submit.'
 export const parentMigrationExpiredDetail = 'Migration window has closed for this parent pool.'
 export const truthAuctionNoCollateralDetail = 'No parent settlement collateral remains to auction, so this step immediately bypasses bidding and finalizes the child pool.'
 export const truthAuctionNoRepDetail = 'No REP was present at fork, so no truth auction is needed for this child universe.'
@@ -106,8 +107,9 @@ export const winningBidBatchSettlementDetail = 'Select your winning bids to clai
 export const refundableBidBatchSettlementDetail = 'Select your refundable bids to get their ETH back.'
 export const mixedBidBatchSettlementDetail = 'Select bids to settle. Winning bids add REP backing units to your vault, with a matching share of the auctioned underwriting commitments. Refundable bids return their ETH.'
 export const submittingSettlementTransactionTruncated = 'Submitting settlement transaction…'
-export const forkActionWalletRequired = 'Connect a wallet before using fork and auction actions.'
+export const forkActionWalletRequired = commonCopy.formatConnectWalletBefore('using fork and auction actions')
 export const auctionEndedStatus = 'Truth auction has ended.'
+export const auctionEndsTooSoonToBid = 'Truth auction ends too soon to submit a bid.'
 export const finalizedSettlementDetail = 'The result is final.'
 export const openSettlement = 'Open settlement'
 export const truthAuctionFinalizationRequiredDetail = 'Finalize it to lock in the clearing price. Bids can be settled afterwards.'

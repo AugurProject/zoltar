@@ -1,6 +1,7 @@
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 export const childUniverseDeployedReason = 'Child universe already deployed.'
 export const childUniversesNotForkedReason = 'Child universes are unavailable because this universe has not forked.'
-export const childDeploymentWalletRequiredReason = 'Connect a wallet before deploying a child universe.'
+export const childDeploymentWalletRequiredReason = commonCopy.formatConnectWalletBefore('deploying a child universe')
 export const deployingUniverse = 'Deploying universe…'
 export const deployUniverse = 'Deploy universe'
 export const noQuestions = 'No questions'
@@ -63,7 +64,7 @@ export const questionTitlePlaceholder = 'Will event X happen?'
 export const title = 'Title'
 export const useForFork = 'Use for fork'
 export const formatUseForForkLabel = (questionTitle: string, questionId: string) => `Use for fork: ${questionTitle} (${questionId})`
-export const questionCreationWalletRequired = 'Connect a wallet before creating a question.'
+export const questionCreationWalletRequired = commonCopy.formatConnectWalletBefore('creating a question')
 export const binaryQuestionDescription = 'Yes or no, settled from one public source.'
 export const binaryQuestionExample = 'e.g. Will ETH close above $5,000 on 31 Dec?'
 export const categoricalQuestionDescription = 'One winner from a list of exclusive outcomes.'

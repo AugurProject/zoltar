@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { useDisclosurePopover } from '../../hooks/useDisclosurePopover.js'
 import { getActiveNetworkProfile } from '../../lib/activeEnvironment.js'
 import { MAINNET_NETWORK_PROFILE, SEPOLIA_NETWORK_PROFILE } from '../../wallet/networkProfile.js'
-import { readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../wallet/rpcConfig.js'
+import { parseRpcNetworkId, readNetworkRpcUrls, saveNetworkRpcUrl, type RpcNetworkId } from '../../wallet/rpcConfig.js'
 import * as appCopy from '../../copy/app.js'
 import type { ComponentChildren } from 'preact'
 import { ThemeSetting } from './ThemeSetting.js'
@@ -55,7 +55,9 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 							ref={firstControlRef}
 							value={selectedNetwork}
 							onChange={event => {
-								setSelectedNetwork(event.currentTarget.value as RpcNetworkId)
+								const networkId = parseRpcNetworkId(event.currentTarget.value)
+								if (networkId === undefined) return
+								setSelectedNetwork(networkId)
 								setError(undefined)
 								setSaveState('idle')
 							}}

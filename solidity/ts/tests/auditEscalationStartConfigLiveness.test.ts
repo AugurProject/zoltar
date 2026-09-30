@@ -47,7 +47,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		assert.ok(reportBond > 10n ** 18n, 'the supply-based floor must exceed the one-REP minimum in this fixture')
 		assert.ok((await readNonDecisionThreshold()) > reportBond, 'the unmodified production configuration must allow the game to start')
 
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, underwritingLimitAttoEth, reportedRepEthPrice)
 		await createCompleteSet(client, securityPoolAddresses.securityPool, openInterestAmount)
 
 		const vaultBeforeResolution = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
@@ -87,7 +87,7 @@ describe('Audit regression: escalation start configuration liveness', () => {
 		await deployOriginSecurityPool(client, genesisUniverse, fixture.questionId, statoblastSecurityMultiplierBps + 1n)
 
 		await mockWindow.setTime(questionData.endTime + 1n)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, reportedRepEthPrice)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, reportedRepEthPrice)
 		assert.strictEqual(await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool), zeroAddress, 'the first-deposit path must begin without a game')
 
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)

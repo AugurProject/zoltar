@@ -241,8 +241,8 @@ test('prepares approval and request actions alongside editable price controls in
 				title: 'Request new price',
 				proposedRepPerEthPrice: request.proposedRepPerEthPrice ?? 2n * 10n ** 18n,
 				tokenFunding: [
-					{ amount: '2 REP', limit: undefined },
-					{ amount: '1 WETH', limit: undefined },
+					{ amount: 2n, tokenSymbol: 'REP', tokenUnits: 0 },
+					{ amount: 1n, tokenSymbol: 'WETH', tokenUnits: 0 },
 				],
 			},
 		])
@@ -679,8 +679,8 @@ test('keeps submitted funding and pool details beside the original action after 
 				...step,
 				title: 'Request new price',
 				tokenFunding: [
-					{ amount: '2 REP', limit: undefined },
-					{ amount: '1 WETH', limit: undefined },
+					{ amount: 2n, tokenSymbol: 'REP', tokenUnits: 0 },
+					{ amount: 1n, tokenSymbol: 'WETH', tokenUnits: 0 },
 				],
 				oracleOutcome: { returnToWallet: true, settlerRewardAttoEth: 12n },
 			},
@@ -1204,7 +1204,7 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 						attempts += 1
 						if (attempts > 1) return
 						controller = createTransactionStepController(signal)
-						controller.setPlan([{ ...step, title: 'Request new price', tokenFunding: [{ amount: '2 REP', limit: undefined }] }])
+						controller.setPlan([{ ...step, title: 'Request new price', tokenFunding: [{ amount: 2n, tokenSymbol: 'REP', tokenUnits: 0 }] }])
 						await controller.review()
 						controller.submitted(hash)
 						presentation.value = { tone: 'pending', title: 'Requesting new price…', hash }
@@ -1244,7 +1244,7 @@ test.each(['success', 'reverted'] as const)('tracks a %s receipt after confirm r
 					.getByRole('button', { name: /^Request new price/ })
 					.hasAttribute('disabled'),
 			).toBe(false)
-			expect(form.textContent).toContain('2 REP')
+			expect(form.textContent).toContain('2\u00a0REP')
 		}
 	} finally {
 		await rendered.cleanup()

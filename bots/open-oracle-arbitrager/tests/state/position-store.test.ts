@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
@@ -25,7 +25,7 @@ async function saveTerminalJournal(path: string, positions: PositionRecord[]) {
 
 async function expectRawJournalRejected(positions: readonly unknown[], message: string) {
 	const path = await journalPath()
-	await Bun.write(path, JSON.stringify({ chainId: 1, positions, version: 2 }))
+	await writeFile(path, JSON.stringify({ chainId: 1, positions, version: 2 }), { mode: 0o600 })
 	await expect(loadPositionJournal(path, 1)).rejects.toThrow(message)
 }
 
@@ -197,9 +197,9 @@ describe('durable OpenOracle position journal', () => {
 		}
 		await savePositionJournal(path, [position, pendingFinality], 1)
 		expect(await loadPositionJournal(path, 1)).toEqual([position, pendingFinality])
-		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 2 }))
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleSettlerRewardEth: undefined }], version: 2 }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
-		await Bun.write(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 2 }))
+		await writeFile(path, JSON.stringify({ chainId: 1, positions: [{ ...pendingFinality, lifecycleTransactionIntent: undefined }], version: 2 }), { mode: 0o600 })
 		await expect(loadPositionJournal(path, 1)).rejects.toThrow('pending lifecycle finality recovery journal is incomplete')
 	})
 

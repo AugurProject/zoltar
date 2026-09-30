@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
 import { startDashboardServer } from '#dashboard/dashboard-server'
-import { operatorSnapshot, type MutableStrategy } from '#state/operator-state'
+import { operatorSnapshot, queuedSignerChange, type MutableStrategy, type QueuedSigner } from '#state/operator-state'
 import { updateStrategyFromRequest } from '#state/strategy-request'
 import { validateSubmissionSettings } from '#execution/transaction-submission'
 import { EndpointCheckFailure } from '#monitoring/connectivity'
@@ -66,11 +66,11 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	let connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' }
 	let connectivityFailure: Error | undefined
 	let submissionFailure: Error | undefined
-	let queuedWallet: Address | null | undefined
+	let queuedSigner: QueuedSigner | undefined
 	let savedWallet: Address | undefined
-	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }).deployment
+	let deployment = operatorSnapshot(state, strategy, submission, connectivity, { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner, savedWallet, wallet: undefined }).deployment
 	const { origin } = startServer({
-		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedWallet, savedWallet, wallet: undefined }),
+		getSnapshot: () => operatorSnapshot(state, strategy, submission, connectivity, { deployment, execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner, savedWallet, wallet: undefined }),
 		isNetworkConfigured: () => true,
 		setPaused: paused => {
 			state.paused = paused
@@ -110,7 +110,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 				return { wallet: address }
 			}
 			const clear = typeof value === 'object' && value !== null && 'privateKey' in value && value['privateKey'] === null
-			queuedWallet = clear ? null : address
+			queuedSigner = queuedSignerChange(clear ? undefined : address)
 			savedWallet = clear ? undefined : address
 			return { wallet: clear ? undefined : address }
 		},
@@ -460,7 +460,7 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 		},
 	]
 	const reloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
-	expect(reloadedState).toMatchObject({ queuedWallet: address })
+	expect(reloadedState).toMatchObject({ queuedSigner: { address, kind: 'apply' } })
 	expect(reloadedState).toMatchObject({ savedWallet: address })
 	const serializedState = JSON.stringify(reloadedState)
 	for (const protectedMarker of [credentialMarker, endpointCredentialMarker, endpointPathMarker, entryCalldataMarker, lifecycleCalldataMarker, protectedSettingsFile]) expect(serializedState).not.toContain(protectedMarker)
@@ -549,12 +549,12 @@ test('serves dashboard state and protects mutable controls with same-origin JSON
 	const forgetSigner = await jsonRequest(origin, '/api/signer', 'PUT', { forgetSavedSigner: true })
 	expect(forgetSigner.status).toBe(200)
 	const forgottenState = (await fetch(`${origin}/api/state`).then(response => response.json())) as Record<string, unknown>
-	expect(forgottenState).toMatchObject({ queuedWallet: address })
+	expect(forgottenState).toMatchObject({ queuedSigner: { address, kind: 'apply' } })
 	expect(forgottenState['savedWallet']).toBeUndefined()
 	const signerClear = await jsonRequest(origin, '/api/signer', 'PUT', { privateKey: null, rememberSigner: false })
 	expect(signerClear.status).toBe(200)
 	const clearReloadedState = await fetch(`${origin}/api/state`).then(response => response.json())
-	expect(clearReloadedState).toMatchObject({ queuedWallet: null })
+	expect(clearReloadedState).toMatchObject({ queuedSigner: { kind: 'clear' } })
 })
 
 test('returns a structured unavailable response when the initial state read fails', async () => {

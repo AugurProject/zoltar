@@ -1,4 +1,3 @@
-import { PoolEntrySection } from './PoolEntrySection.js'
 import { SecurityPoolSection } from './SecurityPoolSection.js'
 import { SecurityPoolWorkflowSection } from './SecurityPoolWorkflowSection.js'
 import { SecurityPoolsOverviewSection } from './SecurityPoolsOverviewSection.js'
@@ -17,7 +16,6 @@ import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
 
 function getSecurityPoolsRouteHeader(view: SecurityPoolsView) {
-	if (view === 'open') return { description: undefined, title: securityPoolCopy.openPool }
 	if (view === 'browse') return { description: undefined, title: commonCopy.browsePools }
 	if (view === 'create')
 		return {
@@ -50,27 +48,8 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
 
 	return (
-		<div className={`route-view-flow${view === 'open' ? ' pool-entry-route' : ''}`}>
-			{view === 'operate' && hasSelectedPool ? undefined : (
-				<RouteHeader
-					actions={
-						view === 'browse' ? (
-							<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
-								{commonCopy.createPool}
-							</button>
-						) : undefined
-					}
-					description={routeHeader.description}
-					eyebrow={statoblastAppCopy.pools}
-					title={routeHeader.title}
-				/>
-			)}
-			{view === 'open' ? (
-				<div className='pool-entry-layout'>
-					<PoolEntrySection onBrowsePools={() => onActiveViewChange('browse')} onCreatePool={() => onActiveViewChange('create')} onOpenPool={workflow.onSecurityPoolAddressChange} />
-					<FirstRunRoleGuide />
-				</div>
-			) : undefined}
+		<div className='route-view-flow'>
+			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
 			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'browse' ? <SecurityPoolsOverviewSection {...overview} onSelectSecurityPool={onOpenSecurityPool} /> : undefined}
 

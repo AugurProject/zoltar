@@ -164,8 +164,8 @@ contract TruthAuctionAliasAttackChildMock {
 		return configuredRepToken;
 	}
 
-	function setTotalRepBackingUnits(uint256 newDenominator) external {
-		backingUnitsDenominator = newDenominator;
+	function setTotalRepBackingUnits(uint256 newTotalRepBackingUnits) external {
+		backingUnitsDenominator = newTotalRepBackingUnits;
 	}
 
 	function totalRepBackingUnits() external view returns (uint256) {
@@ -176,7 +176,7 @@ contract TruthAuctionAliasAttackChildMock {
 		currentSystemState = newState;
 	}
 
-	function setTotalSharesAttoShares(uint256) external pure {}
+	function setShareTokenSupplyAttoShares(uint256) external pure {}
 
 	function setPoolFinancials(uint256, uint256, uint256, uint256) external pure {}
 

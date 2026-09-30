@@ -17,7 +17,7 @@ type CreateCarryProofParameters = {
 	merkleMountainRangeSiblings: readonly Hex[]
 	nullifierSiblings: readonly Hex[]
 	parentDepositIndex: bigint
-	sourceNodeId?: bigint
+	sourceNodeId?: bigint | undefined
 }
 
 const zeroHash = () => `0x${'0'.repeat(64)}` as Hex
@@ -39,8 +39,10 @@ export const computeForkContinuationParentDepositIndex = (escalationGameAddress:
 
 const buildZeroHashes = () => {
 	const zeroHashes: Hex[] = [zeroHash()]
+	let previousZeroHash = zeroHash()
 	for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
-		zeroHashes.push(hashParent(zeroHashes[depth], zeroHashes[depth]))
+		previousZeroHash = hashParent(previousZeroHash, previousZeroHash)
+		zeroHashes.push(previousZeroHash)
 	}
 	return zeroHashes
 }
@@ -49,7 +51,13 @@ export class SparseNullifierTree {
 	private readonly zeroHashes = buildZeroHashes()
 	private readonly nodes = new Map<string, Hex>()
 	private readonly pathMask = NULLIFIER_PATH_MASK
-	root: Hex = this.zeroHashes[NULLIFIER_DEPTH]
+	root: Hex = this.zeroHashAt(NULLIFIER_DEPTH)
+
+	private zeroHashAt(depth: number) {
+		const hash = this.zeroHashes[depth]
+		if (hash === undefined) throw new Error(`Missing nullifier zero hash at depth ${depth.toString()}`)
+		return hash
+	}
 
 	private getPath(parentDepositIndex: bigint) {
 		return BigInt(keccak256(encodeAbiParameters([{ type: 'uint256' }], [parentDepositIndex]))) & this.pathMask
@@ -61,7 +69,7 @@ export class SparseNullifierTree {
 		let nodeIndex = path
 		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
 			const siblingIndex = nodeIndex ^ 1n
-			const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
+			const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashAt(depth)
 			siblings.push(siblingHash)
 			nodeIndex >>= 1n
 		}
@@ -76,7 +84,7 @@ export class SparseNullifierTree {
 		for (let depth = 0; depth < NULLIFIER_DEPTH; depth += 1) {
 			const isRightNode = (nodeIndex & 1n) === 1n
 			const siblingIndex = nodeIndex ^ 1n
-			const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashes[depth]
+			const siblingHash = this.nodes.get(`${depth}:${siblingIndex}`) ?? this.zeroHashAt(depth)
 			nodeHash = isRightNode ? hashParent(siblingHash, nodeHash) : hashParent(nodeHash, siblingHash)
 			nodeIndex >>= 1n
 			this.nodes.set(`${depth + 1}:${nodeIndex}`, nodeHash)

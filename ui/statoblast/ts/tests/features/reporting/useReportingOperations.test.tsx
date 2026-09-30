@@ -321,6 +321,29 @@ describe('useReportingOperations', () => {
 		expect(requireHookState(hookState).reportingFeedback?.status.detail).toBe('Only 20 REP remains before the selected side reaches the threshold')
 	})
 
+	test('reportOutcome refresh blocks a newly closing response window before writing', async () => {
+		const pool = getAddress('0x00000000000000000000000000000000000000d0')
+		const reportOutcomeInSecurityPool = mock(async () => {
+			throw new Error('Must not write')
+		})
+		let state: UseReportingOperationsState | undefined
+		const Harness = createHarness(
+			useReportingOperations,
+			next => {
+				state = next
+			},
+			createReportingOperationsDependencies({
+				loadReportingDetails: mock(async () => createReportingDetails(pool, { currentTime: 299n, escalationEndTime: 300n })),
+				reportOutcomeInSecurityPool,
+			}),
+		)
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		await act(() => requireHookState(state).setReportingForm(current => ({ ...current, securityPoolAddress: pool, selectedOutcome: 'yes', reportAmount: '5' })))
+		await act(async () => await requireHookState(state).onReportOutcome())
+		expect(reportOutcomeInSecurityPool).not.toHaveBeenCalled()
+		expect(requireHookState(state).reportingFeedback?.status.detail).toContain('response window ends too soon')
+	})
+
 	test('reportOutcome blocks writes while the pool is not operational', async () => {
 		const securityPoolAddress = getAddress('0x00000000000000000000000000000000000000d0')
 		const loadReportingDetails = mock(async () =>
@@ -723,6 +746,8 @@ describe('useReportingOperations', () => {
 				},
 				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
+			currentTime: 301n,
+			escalationEndTime: 300n,
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})
@@ -732,6 +757,8 @@ describe('useReportingOperations', () => {
 				{ balance: 3n, deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [{ amountAttoRep: 2n, cumulativeAmountAttoRep: 3n, depositIndex: 1n, depositor: zeroAddress }] },
 				{ balance: 2n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
 			],
+			currentTime: 301n,
+			escalationEndTime: 300n,
 			settlementState: 'resolved',
 			parentWithdrawalEnabled: true,
 		})

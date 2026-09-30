@@ -277,10 +277,10 @@ export function marketAvailabilityPresentation(notice: PublicOperatorSnapshot['m
 }
 
 /** The Execution wallet summary: the active signer, whether it is saved, and any queued change to it. */
-export function signerSummaryLabel(snapshot: { queuedWallet?: string | null | undefined; savedWallet?: string | undefined; wallet?: string | undefined }) {
+export function signerSummaryLabel(snapshot: { queuedSigner?: { readonly kind: 'apply'; readonly address: string } | { readonly kind: 'clear' } | undefined; savedWallet?: string | undefined; wallet?: string | undefined }) {
 	const activeSigner = snapshot.wallet === undefined ? 'no active signer' : `active ${shorten(snapshot.wallet)}`
-	if (snapshot.queuedWallet === null) return `Clearing signer · ${activeSigner}`
-	if (typeof snapshot.queuedWallet === 'string') return `Applying ${shorten(snapshot.queuedWallet)} · ${activeSigner}`
+	if (snapshot.queuedSigner?.kind === 'clear') return `Clearing signer · ${activeSigner}`
+	if (snapshot.queuedSigner?.kind === 'apply') return `Applying ${shorten(snapshot.queuedSigner.address)} · ${activeSigner}`
 	if (snapshot.wallet === undefined) return snapshot.savedWallet === undefined ? 'Locked · no signer' : `Locked · ${shorten(snapshot.savedWallet)} available`
 	if (snapshot.savedWallet === undefined) return `Unlocked · ${shorten(snapshot.wallet)} · memory only`
 	if (snapshot.savedWallet.toLowerCase() === snapshot.wallet.toLowerCase()) return `Unlocked · ${shorten(snapshot.wallet)} · saved`

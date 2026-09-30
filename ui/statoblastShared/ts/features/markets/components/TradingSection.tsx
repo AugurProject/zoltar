@@ -33,7 +33,6 @@ import {
 	getShareSettlementBalances,
 	getTradingMigrateSharesGuardMessage,
 	getTradingMintGuardMessage,
-	getTradingOraclePriceGuardMessage,
 	getTradingRedeemCompleteSetGuardMessage,
 	getTradingRedeemSharesGuardMessage,
 	convertAttoSharesToSettlementCollateralAttoEth,
@@ -60,7 +59,6 @@ export function TradingSection({
 	poolState,
 	tradingDetails,
 	selectedPool,
-	oraclePriceUsable,
 	tradingActiveAction,
 	tradingError,
 	tradingForm,
@@ -116,20 +114,17 @@ export function TradingSection({
 	const estimatedSettlementCollateralAttoEth = mintCheckpoint?.settlementCollateralAfterFeesAttoEth ?? selectedPool?.settlementCollateralAttoEth
 	const remainingMintCapacity = getRemainingMintCapacity(mintingCapacityAttoEth, estimatedSettlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares)
 	const maximumMintAmount = getMaximumMintAmount(accountState.ethBalanceAttoEth, remainingMintCapacity)
-	const oraclePriceGuardMessage = getTradingOraclePriceGuardMessage(oraclePriceUsable)
-	const mintGuardMessage =
-		oraclePriceGuardMessage ??
-		getTradingMintGuardMessage({
-			accountAddress: accountState.address,
-			settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
-			ethBalanceAttoEth: accountState.ethBalanceAttoEth,
-			mintingCapacityAttoEth,
-			hasSelectedPool,
-			isOnActiveAppChain,
-			mintAmountInput: tradingForm.completeSetAmount,
-			shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
-			totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
-		})
+	const mintGuardMessage = getTradingMintGuardMessage({
+		accountAddress: accountState.address,
+		settlementCollateralAttoEth: estimatedSettlementCollateralAttoEth,
+		ethBalanceAttoEth: accountState.ethBalanceAttoEth,
+		mintingCapacityAttoEth,
+		hasSelectedPool,
+		isOnActiveAppChain,
+		mintAmountInput: tradingForm.completeSetAmount,
+		shareTokenSupplyAttoShares: selectedPool?.shareTokenSupplyAttoShares,
+		totalPoolHeldAttoRep: selectedPool?.totalPoolHeldAttoRep,
+	})
 	const redeemCompleteSetGuardMessage = getTradingRedeemCompleteSetGuardMessage({
 		accountAddress: accountState.address,
 		settlementCollateralAttoEth: selectedPool?.settlementCollateralAttoEth,
@@ -157,7 +152,6 @@ export function TradingSection({
 		if (accountState.address === undefined) return tradingCopy.completeSetMintWalletRequiredReason
 		if (!isOnActiveAppChain) return getWrongNetworkReason()
 		if (selectedPool?.questionOutcome !== 'none') return tradingCopy.marketFinalizedReason
-		if (oraclePriceGuardMessage !== undefined) return oraclePriceGuardMessage
 		if (remainingMintCapacity === undefined) return tradingCopy.mintCapacityUnavailable
 		if (hasUndefinedCompleteSetExchangeRate(selectedPool?.settlementCollateralAttoEth, selectedPool?.shareTokenSupplyAttoShares) === true) return UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE
 		if (remainingMintCapacity === 0n) {
@@ -215,10 +209,10 @@ export function TradingSection({
 		if (!actionEnabled) return tradingCopy.actionUnavailableReason
 		return guardMessage
 	}
-	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled and no reason precedes the guard (the mint dialog checks the oracle price first).
+	// For a selected pool the trading guards check the wallet first, so a blocking wallet is the reason whenever the pool action is enabled.
 	const walletBlocker = getActiveAppChainWalletBlocker({ accountAddress: accountState.address, isOnActiveAppChain })
-	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined, precedingReason?: string) =>
-		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool && precedingReason === undefined) ? walletBlocker : undefined)
+	const getModalActionAvailability = (actionEnabled: boolean, guardMessage: string | undefined) =>
+		withWalletBlocker({ disabled: !isOnActiveAppChain || !actionEnabled || guardMessage !== undefined, reason: getModalActionReason(actionEnabled, guardMessage) }, !isOnActiveAppChain || (actionEnabled && hasSelectedPool) ? walletBlocker : undefined)
 	const shareMigrationSelectionDisabled = poolUniverseHasForked !== true
 	const setAllTargetOutcomeIndexes = () => {
 		onTradingFormChange({ targetOutcomeIndexes: getDefaultShareMigrationTargetOutcomeIndexes(tradingForkUniverse) })
@@ -308,59 +302,62 @@ export function TradingSection({
 				</SectionBlock>
 			)}
 
-			{selectedPool === undefined ? undefined : (
-				<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
-					<div className='trading-holdings-stage'>
-						<div className='trading-holdings-hero'>
-							<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
-							<strong className='trading-holdings-value'>
-								<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} />
-								{displayMaxRedeemableCompleteSets === undefined ? undefined : (
-									<span className='trading-holdings-backing'>
-										(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
-									</span>
-								)}
-							</strong>
-							<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
+			{/* Holdings beside the share actions, the same details-and-actions split as the Vaults tab. */}
+			<div className={selectedPool === undefined ? 'trading-workspace-layout is-single' : 'trading-workspace-layout'}>
+				{selectedPool === undefined ? undefined : (
+					<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
+						<div className='trading-holdings-stage'>
+							<div className='trading-holdings-hero'>
+								<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
+								<strong className='trading-holdings-value'>
+									<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} />
+									{displayMaxRedeemableCompleteSets === undefined ? undefined : (
+										<span className='trading-holdings-backing'>
+											(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
+										</span>
+									)}
+								</strong>
+								<UserMessage className='detail' detail={tradingCopy.completeSetBalanceLimitDetail} />
+							</div>
+							<div className='trading-holdings-layout'>
+								<RankedBarList
+									className='trading-share-distribution'
+									emptyMessage={tradingCopy.walletBalancesUnavailable}
+									items={[
+										{
+											key: 'yes',
+											label: commonCopy.yes,
+											valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
+											...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
+										},
+										{
+											key: 'no',
+											label: commonCopy.no,
+											valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
+											...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
+										},
+										{
+											key: 'invalid',
+											label: commonCopy.invalid,
+											valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
+											...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
+										},
+									]}
+								/>
+								<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
+							</div>
 						</div>
-						<div className='trading-holdings-layout'>
-							<RankedBarList
-								className='trading-share-distribution'
-								emptyMessage={tradingCopy.walletBalancesUnavailable}
-								items={[
-									{
-										key: 'yes',
-										label: commonCopy.yes,
-										valueText: renderShareMetricValue(shareBalances?.yesAttoShares, outcomeBacking('yes')),
-										...(shareBalances === undefined ? {} : { value: shareBalances.yesAttoShares }),
-									},
-									{
-										key: 'no',
-										label: commonCopy.no,
-										valueText: renderShareMetricValue(shareBalances?.noAttoShares, outcomeBacking('no')),
-										...(shareBalances === undefined ? {} : { value: shareBalances.noAttoShares }),
-									},
-									{
-										key: 'invalid',
-										label: commonCopy.invalid,
-										valueText: renderShareMetricValue(shareBalances?.invalidAttoShares, outcomeBacking('invalid')),
-										...(shareBalances === undefined ? {} : { value: shareBalances.invalidAttoShares }),
-									},
-								]}
-							/>
-							<UserMessage className='detail' detail={tradingCopy.shareBackingDetail} />
-						</div>
+					</SectionBlock>
+				)}
+
+				<SectionBlock title={tradingCopy.shares} variant='embedded'>
+					<div className='vault-action-launcher-grid'>
+						{tradingLaunchers.map(action => (
+							<ActionLauncherCard key={action.key} action={action} pending={action.key === 'redeem-shares' && tradingActiveAction === 'redeemShares'} pendingLabel={tradingCopy.redeemingShares} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
+						))}
 					</div>
 				</SectionBlock>
-			)}
-
-			<SectionBlock title={tradingCopy.shares} variant='embedded'>
-				<div className='vault-action-launcher-grid'>
-					{tradingLaunchers.map(action => (
-						<ActionLauncherCard key={action.key} action={action} pending={action.key === 'redeem-shares' && tradingActiveAction === 'redeemShares'} pendingLabel={tradingCopy.redeemingShares} walletBlocksFirst={hasSelectedPool ? { accountAddress: accountState.address, isOnActiveAppChain } : undefined} />
-					))}
-				</div>
-			</SectionBlock>
+			</div>
 
 			<ErrorNotice message={tradingError} />
 
@@ -382,7 +379,7 @@ export function TradingSection({
 					value={tradingForm.completeSetAmount}
 				/>
 				<div className='actions'>
-					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage, oraclePriceGuardMessage)} />
+					<TransactionActionButton idleLabel={tradingCopy.mintCompleteSetsActionLabel} pendingLabel={tradingCopy.mintingCompleteSets} onClick={onCreateCompleteSet} pending={tradingActiveAction === 'createCompleteSet'} availability={getModalActionAvailability(mintEnabled, mintGuardMessage)} />
 				</div>
 			</OperationModal>
 

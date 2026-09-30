@@ -5,7 +5,7 @@ import { sameAddress as addressesMatch } from '@zoltar/core-shared/evm/address'
 import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
 import { encodeReceiveRequest } from '@zoltar/trading-shared/trading/receiveRequest'
 import { trading_TwoWayConstantProductFactory_TwoWayConstantProductFactory, trading_TwoWayConstantProductRouter_TwoWayConstantProductRouter } from '../../../../solidity/ts/types/contractArtifact.ts'
-import { GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
+import { CANONICAL_PROXY_DEPLOYER, GENESIS_UNISWAP_FEE, GENESIS_UNISWAP_SQRT_PRICE_X96, GENESIS_UNISWAP_TICK_LOWER, GENESIS_UNISWAP_TICK_UPPER, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
 import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { inputInteger, inputMatches, inputSpend } from './input-values.ts'
 import { allowance, amount, cappedSpend, choose, disabled, eligible, encodeStep, erc1155WalletDebit, erc20AllowanceEvidence, erc20WalletDebit, eventEvidence, mixSeed, optionAmount, planBase, planningDeadline, randomDeadline, tokenInventory } from './planning.ts'
@@ -17,7 +17,6 @@ const shareForPool = (snapshot: EcosystemSnapshot, pool: PoolSnapshot) => snapsh
 export const poolForPair = (snapshot: EcosystemSnapshot, pair: PairSnapshot) => snapshot.pools.find(pool => pool.address.toLowerCase() === pair.pool.toLowerCase())
 const shareTokenId = (universeId: string, outcome: number) => (amount(universeId) << 8n) | BigInt(outcome)
 const BPS_DENOMINATOR = 10_000n
-const CANONICAL_PROXY_DEPLOYER = getAddress('0x7a0d94f55792c434d74a40883c6ed8545e406d12')
 const ZERO_SALT = toHex(0, { size: 32 })
 const GENESIS_TRADING_FEE_BPS = 30
 
@@ -552,7 +551,6 @@ const seedUniverseUniswapPool: OperationDefinition = {
 }
 const TRADING_SLIPPAGE_BPS = 100n
 const FORK_MIGRATION_WINDOW_SECONDS = 8n * 7n * 24n * 60n * 60n
-const ORACLE_PRICE_VALIDITY_SECONDS = 300n
 
 export function minimumAfterSlippage(value: bigint) {
 	if (value <= 0n) return 0n
@@ -591,22 +589,10 @@ function questionDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, seed:
 	return (randomized < protocolLastSecond ? randomized : protocolLastSecond).toString()
 }
 
-function oraclePriceExpiry(pool: PoolSnapshot) {
-	return amount(pool.lastOracleSettlementTimestamp) + ORACLE_PRICE_VALIDITY_SECONDS
-}
-
-function ethRouterOraclePriceIsSafe(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions) {
-	return pool.oraclePriceValid && timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), oraclePriceExpiry(pool), options)
-}
-
 function ethRouterDeadline(snapshot: EcosystemSnapshot, pool: PoolSnapshot, options: PlanningOptions, seed: number) {
 	const question = questionDeadline(snapshot, pool, seed)
 	if (question === undefined) return undefined
-	const questionBound = BigInt(question)
-	const oracleBound = oraclePriceExpiry(pool)
-	const bound = questionBound < oracleBound ? questionBound : oracleBound
-	const deadline = inputInteger(options, 'deadline', bound, 0n, amount(poolQuestion(snapshot, pool)?.endTime ?? '0') - 1n)
-	if (deadline > oracleBound) return undefined
+	const deadline = inputInteger(options, 'deadline', BigInt(question), 0n, amount(poolQuestion(snapshot, pool)?.endTime ?? '0') - 1n)
 	return timestampDeadlineHasRequiredSafety(amount(snapshot.anchor.timestamp), deadline, options) ? deadline.toString() : undefined
 }
 
@@ -1242,10 +1228,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 			const pool =
 				kind === 'create-and-initialize'
 					? choose(
-							snapshot.pools.filter(
-								candidate =>
-									inputMatches(options, 'target', candidate.address) && !paired.has(candidate.address.toLowerCase()) && poolLifecycleOpen(snapshot, candidate, options) && ethRouterOraclePriceIsSafe(snapshot, candidate, options) && canCreateCompleteSet(candidate, spend) && ethToShares(candidate, spend) > 1_000n,
-							),
+							snapshot.pools.filter(candidate => inputMatches(options, 'target', candidate.address) && !paired.has(candidate.address.toLowerCase()) && poolLifecycleOpen(snapshot, candidate, options) && canCreateCompleteSet(candidate, spend) && ethToShares(candidate, spend) > 1_000n),
 							mixSeed(options.seed, id),
 						)
 					: undefined
@@ -1258,7 +1241,7 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 								if (options.genesisInitializationTarget?.pair !== undefined && candidate.address.toLowerCase() !== options.genesisInitializationTarget.pair.toLowerCase()) return false
 								if (candidate.status !== (kind === 'initialize' ? 6 : 0)) return false
 								const candidatePool = poolForPair(snapshot, candidate)
-								if (candidatePool === undefined || !poolLifecycleOpen(snapshot, candidatePool, options) || !ethRouterOraclePriceIsSafe(snapshot, candidatePool, options) || !canCreateCompleteSet(candidatePool, spend)) return false
+								if (candidatePool === undefined || !poolLifecycleOpen(snapshot, candidatePool, options) || !canCreateCompleteSet(candidatePool, spend)) return false
 								const minted = ethToShares(candidatePool, spend)
 								if (kind === 'initialize') return minted > 1_000n && amount(candidate.effectiveYesReserve) === 0n && amount(candidate.effectiveNoReserve) === 0n
 								if (kind === 'add') return proportionalLiquidity(candidate, minted, minted) !== undefined
@@ -1315,11 +1298,11 @@ function routerEthDefinition(kind: 'create-and-initialize' | 'initialize' | 'add
 			const paired = new Set(snapshot.pairs.map(pair => pair.pool.toLowerCase()))
 			const target =
 				kind === 'create-and-initialize'
-					? snapshot.pools.some(pool => !paired.has(pool.address.toLowerCase()) && poolLifecycleOpen(snapshot, pool, options) && ethRouterOraclePriceIsSafe(snapshot, pool, options) && canCreateCompleteSet(pool, spend) && ethToShares(pool, spend) > 1_000n)
+					? snapshot.pools.some(pool => !paired.has(pool.address.toLowerCase()) && poolLifecycleOpen(snapshot, pool, options) && canCreateCompleteSet(pool, spend) && ethToShares(pool, spend) > 1_000n)
 					: snapshot.pairs.some(pair => {
 							if (pair.status !== (kind === 'initialize' ? 6 : 0)) return false
 							const pool = poolForPair(snapshot, pair)
-							if (pool === undefined || !poolLifecycleOpen(snapshot, pool, options) || !ethRouterOraclePriceIsSafe(snapshot, pool, options) || !canCreateCompleteSet(pool, spend)) return false
+							if (pool === undefined || !poolLifecycleOpen(snapshot, pool, options) || !canCreateCompleteSet(pool, spend)) return false
 							const minted = ethToShares(pool, spend)
 							if (kind === 'initialize') return minted > 1_000n && amount(pair.effectiveYesReserve) === 0n && amount(pair.effectiveNoReserve) === 0n
 							if (kind === 'add') return proportionalLiquidity(pair, minted, minted) !== undefined

@@ -92,7 +92,7 @@ describe('security regression coverage', () => {
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		await migrateRepToZoltar(client, securityPoolAddresses.securityPool, [QuestionOutcome.Yes])
 		return getChildUniverseId(genesisUniverse, QuestionOutcome.Yes)
@@ -112,19 +112,24 @@ describe('security regression coverage', () => {
 		return contractAddress
 	}
 
-	test('complete-set minting rejects an expired cached REP price', async () => {
+	test('complete-set minting within standing commitments does not require a fresh REP price', async () => {
 		const mockWindow = getAnvilWindowEthereum()
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n)
+		const limitAttoEth = 30n * 10n ** 18n
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, limitAttoEth)
 		await mockWindow.advanceTime(5n * 60n)
 
-		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, 1n, true), /Stale price/)
+		const mintingCapacityAttoEth = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getCurrentMintingCapacityAttoEth', args: [] })
+		assert.strictEqual(mintingCapacityAttoEth, limitAttoEth, 'an expired price must not close minting capacity')
+		await createCompleteSet(client, securityPoolAddresses.securityPool, limitAttoEth)
+		assert.strictEqual(await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool), limitAttoEth, 'minting should fill the standing commitments')
+		await assert.rejects(createCompleteSet(client, securityPoolAddresses.securityPool, limitAttoEth), /Over capacity/)
 	})
 
 	test('nested complete-set checkpoints fold in callback log order', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const initialValue = 6n * 10n ** 18n
 		const reentrantValue = 6n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 30n * 10n ** 18n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 30n * 10n ** 18n)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
 		assert.equal(
 			await client.readContract({
@@ -180,7 +185,7 @@ describe('security regression coverage', () => {
 	test('complete-set capacity is enforced across ERC1155 receiver reentrancy', async () => {
 		const mockWindow = getAnvilWindowEthereum()
 		const capacity = 10n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, capacity)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, capacity)
 		const receiver = await deployCompleteSetReentrantReceiver(securityPoolAddresses.securityPool)
 		const blockBeforeAttack = await client.getBlockNumber()
 
@@ -216,8 +221,8 @@ describe('security regression coverage', () => {
 		const forkThresholdAttoRep = (((await getTotalTheoreticalSupply(client, repToken)) / 20n) * 10_000n) / statoblastSecurityMultiplierBps
 		await depositRepToVault(client, securityPoolAddresses.securityPool, 2n * forkThresholdAttoRep)
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, 0n)
-		await setVaultCapacityFixture(attacker, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, attacker.account.address, 0n)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, 0n)
+		await setVaultCapacityFixture(attacker, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, attacker.account.address, 0n)
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 		const { vaultRepAtForkAttoRep } = await getOwnForkRepBuckets(client, securityPoolAddresses.securityPool)
 
@@ -349,38 +354,38 @@ describe('security regression coverage', () => {
 		await mockWindow.setTime(questionEndDate + 10n * DAY)
 		const targetUnderwritingLimitAttoEth = repDeposit / 4n
 		const forcedLiquidationPrice = 10n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, targetUnderwritingLimitAttoEth)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, targetUnderwritingLimitAttoEth)
 
 		await mockWindow.advanceTime(2n * 60n * 60n)
 
 		await requestPriceIfNeededAndStageOperationWithInitialReportPrice(
 			liquidator,
-			securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
+			securityPoolAddresses.openOraclePriceCoordinator,
 			OperationType.WithdrawRep,
 			liquidator.account.address,
 			1n * 10n ** 18n,
 			5n * 60n,
 			forcedLiquidationPrice,
-			await getRequestPriceCostAttoEth(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer),
+			await getRequestPriceCostAttoEth(liquidator, securityPoolAddresses.openOraclePriceCoordinator),
 		)
 		for (let index = 1; index < 4; index++) {
-			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.WithdrawRep, liquidator.account.address, BigInt(index + 1) * 10n ** 18n)
+			await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.openOraclePriceCoordinator, OperationType.WithdrawRep, liquidator.account.address, BigInt(index + 1) * 10n ** 18n)
 		}
-		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, OperationType.Liquidation, client.account.address, targetUnderwritingLimitAttoEth)
-		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer)
+		await requestPriceIfNeededAndStageOperation(liquidator, securityPoolAddresses.openOraclePriceCoordinator, OperationType.Liquidation, client.account.address, targetUnderwritingLimitAttoEth)
+		const liquidationOperationId = await getStagedOperationCounter(client, securityPoolAddresses.openOraclePriceCoordinator)
 
-		await handleOracleReporting(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, forcedLiquidationPrice)
+		await handleOracleReporting(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, forcedLiquidationPrice)
 		// An authorized reduction changes the queued target snapshot while L is zero.
 		await writeContractAndWait(client, () => client.writeContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'setUnderwritingLimit', args: [targetUnderwritingLimitAttoEth / 2n] }))
 		const expectedTargetUnderwritingLimitAttoEth = (await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)).underwritingLimitAttoEth
 		const expectedLiquidatorUnderwritingLimitAttoEth = (await getSecurityVault(client, securityPoolAddresses.securityPool, liquidator.account.address)).underwritingLimitAttoEth
 		const expectedTotalUnderwritingLimitAttoEth = await getTotalUnderwritingLimitAttoEth(client, securityPoolAddresses.securityPool)
-		const staleExecutionHash = await executeStagedOperation(liquidator, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
+		const staleExecutionHash = await executeStagedOperation(liquidator, securityPoolAddresses.openOraclePriceCoordinator, liquidationOperationId)
 
 		const targetVault = await getSecurityVault(client, securityPoolAddresses.securityPool, client.account.address)
 		const liquidatorVault = await getSecurityVault(client, securityPoolAddresses.securityPool, liquidator.account.address)
 		const totalUnderwritingLimitAttoEth = await getTotalUnderwritingLimitAttoEth(client, securityPoolAddresses.securityPool)
-		const stagedOperation = await getStagedOperation(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, liquidationOperationId)
+		const stagedOperation = await getStagedOperation(client, securityPoolAddresses.openOraclePriceCoordinator, liquidationOperationId)
 		const staleExecutionReceipt = await liquidator.waitForTransactionReceipt({ hash: staleExecutionHash })
 		const executionLog = staleExecutionReceipt.logs
 			.map(log => {
@@ -405,7 +410,7 @@ describe('security regression coverage', () => {
 		assert.equal(executionLog.args.operationId, liquidationOperationId)
 		assert.equal(executionLog.args.operation, BigInt(OperationType.Liquidation))
 		assert.equal(executionLog.args.success, false)
-		assert.equal(executionLog.args.errorMessage, 'stale liquidation')
+		assert.equal(executionLog.args.errorMessage, 'Stale liquidation')
 	})
 
 	test.each([
@@ -414,12 +419,12 @@ describe('security regression coverage', () => {
 	])('$name escalation deposits reject stale oracle prices while capacity ownership is active', async ({ depositAttoRep }) => {
 		const mockWindow = getAnvilWindowEthereum()
 		const underwritingLimitAttoEth = 100n * 10n ** 18n
-		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, underwritingLimitAttoEth)
-		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), true)
+		await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator, client.account.address, underwritingLimitAttoEth)
+		assert.equal(await getIsPriceValid(client, securityPoolAddresses.openOraclePriceCoordinator), true)
 
 		await mockWindow.setTime(questionEndDate + 1n)
-		assert.equal(await getIsPriceValid(client, securityPoolAddresses.priceOracleManagerAndOperatorQueuer), false)
+		assert.equal(await getIsPriceValid(client, securityPoolAddresses.openOraclePriceCoordinator), false)
 
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAttoRep), /Oracle price is stale|Stale price/)
+		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, depositAttoRep), /Stale price/)
 	})
 })

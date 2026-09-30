@@ -1,3 +1,4 @@
+import { protectionSummary } from '../../copy/tradeSettings.js'
 import { describe, expect, test } from 'bun:test'
 import { act } from 'preact/test-utils'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
@@ -12,6 +13,12 @@ function storedSettings(raw: string | undefined) {
 	else window.localStorage.setItem(STORAGE_KEY, raw)
 	return loadTradeSettings()
 }
+
+test('discloses only the cutoffs that apply to the operation', () => {
+	expect(protectionSummary('0.5', 20n, 'question')).toContain('question close')
+	expect(protectionSummary('0.5', 20n, 'question')).not.toContain('oracle')
+	expect(protectionSummary('0.5', 20n)).not.toContain('ends sooner')
+})
 
 describe('trade settings storage', () => {
 	installDomTestLifecycle()

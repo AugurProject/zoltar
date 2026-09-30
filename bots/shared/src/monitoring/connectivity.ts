@@ -4,10 +4,15 @@ import type { SubmissionSettings } from '../execution/transaction-submission.ts'
 import { authenticatedRelayHeaders, type RelayAuthentication } from '../execution/relay-authentication.ts'
 import { boundedJsonResponse, DEFAULT_RPC_RESPONSE_BYTES } from '../infrastructure/bounded-json.ts'
 import { flashbotsPrivateTransactionCompatibilityProfileAllowed } from './relay-compatibility.ts'
+import { MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 
 export type { RelayAuthentication } from '../execution/relay-authentication.ts'
 
 export type NetworkName = 'mainnet' | 'sepolia'
+
+export function presetNetworkChainId(network: NetworkName) {
+	return network === 'mainnet' ? MAINNET_CHAIN_ID : SEPOLIA_CHAIN_ID
+}
 
 export type ConnectivitySettings = {
 	publicRpcUrls: readonly string[]

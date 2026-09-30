@@ -69,6 +69,7 @@ export type LiquidityAvailabilityInputs = WalletInputs &
 	Readonly<{
 		operation: LiquidityOperation
 		marketClosed: boolean
+		submissionBlocker?: string | undefined
 		/** Initialize and add: ETH to deposit. Remove: LP tokens to burn. */
 		requestedAmount: bigint | undefined
 		walletEthAttoEth: bigint | undefined
@@ -82,6 +83,7 @@ export function resolveLiquidityAvailability(inputs: LiquidityAvailabilityInputs
 		createActionAvailability(
 			walletReason(inputs),
 			inputs.operation !== 'remove' && inputs.marketClosed ? copy.marketClosedReason : undefined,
+			inputs.submissionBlocker,
 			balanceReason(inputs),
 			amountReason(inputs.requestedAmount),
 			insufficient,

@@ -39,7 +39,7 @@ const decodeCoordinatorLogs = (logs: TransactionReceiptLogs) =>
 const readLastSettlementTimestamp = async (fixture: Fixture) =>
 	await fixture.client.readContract({
 		abi: statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator.abi,
-		address: fixture.securityPoolAddresses.priceOracleManagerAndOperatorQueuer,
+		address: fixture.securityPoolAddresses.openOraclePriceCoordinator,
 		functionName: 'lastSettlementTimestamp',
 		args: [],
 	})
@@ -53,7 +53,7 @@ const getVaultRep = async (fixture: Fixture) => {
 // Stages a REP withdrawal that opens a report, then returns the report's settlement eligibility time.
 const stageWithdrawalBehindPendingReport = async (fixture: Fixture, withdrawAttoRep: bigint) => {
 	const { client, reportedRepEthPrice, securityPoolAddresses } = fixture
-	const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+	const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 	const bountyAttoEth = await getRequestPriceCostAttoEth(client, coordinator)
 	await requestPriceIfNeededAndStageOperationWithInitialReportPrice(client, coordinator, OperationType.WithdrawRep, client.account.address, withdrawAttoRep, OPERATION_VALID_FOR_SECONDS, reportedRepEthPrice, bountyAttoEth)
 	const reportId = await getPendingReportId(client, coordinator)
@@ -74,7 +74,7 @@ describe('Audit PoC: late OpenOracle settlement installs a stale price as fresh'
 
 	test('a report settled after its freshness window is rejected and cannot execute attached or new operations', async () => {
 		const { client, mockWindow, reportedRepEthPrice, securityPoolAddresses } = fixture
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 		const withdrawAttoRep = 10n ** 18n
 		const repBefore = await getVaultRep(fixture)
 		const { reportId, settleableAt } = await stageWithdrawalBehindPendingReport(fixture, withdrawAttoRep)
@@ -103,7 +103,7 @@ describe('Audit PoC: late OpenOracle settlement installs a stale price as fresh'
 
 	test('a slightly late settlement is accepted but its freshness runs from settlement eligibility', async () => {
 		const { client, mockWindow, reportedRepEthPrice, securityPoolAddresses } = fixture
-		const coordinator = securityPoolAddresses.priceOracleManagerAndOperatorQueuer
+		const coordinator = securityPoolAddresses.openOraclePriceCoordinator
 		const withdrawAttoRep = 10n ** 18n
 		const repBefore = await getVaultRep(fixture)
 		const { reportId, settleableAt } = await stageWithdrawalBehindPendingReport(fixture, withdrawAttoRep)

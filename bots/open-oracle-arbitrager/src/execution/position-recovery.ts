@@ -1,6 +1,6 @@
 import { bigintToSafeNumber, formatUnits, parseUnits, type Hex } from '@zoltar/bot-shared/ethereum'
 import { endpointLabel } from '#monitoring/connectivity'
-import { attemptHasFinality, assertReceiptSnapshotBlockHash, canonicalBlockHashWithQuorum, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
+import { attemptHasFinality, assertReceiptSnapshotBlockHash, canonicalBlockHashWithQuorum, REORG_OVERLAP_BLOCKS, transactionHashBySenderNonceWithQuorum, transactionReceiptsOrMissingWithQuorum, transactionReceiptsWithQuorum } from '#execution/execution-orchestration'
 import { decimalSignedEth, decimalWeth, parseDecimalWeth, parseSignedDecimalEth } from '#state/operator-state'
 import type { ExecutionRecord } from '#state/execution-record'
 import { formatTokenAmount } from '#monitoring/market-monitor'
@@ -12,7 +12,6 @@ import { receiptGasCost } from '#execution/transaction-tracker'
 import type { ReadClient, RecoveryConfiguration } from '#core/operator-types'
 import { confirmedGasExpenditures, confirmedNonceWithQuorum, hedgeExecutionFromLogs, lifecycleExecutionFromLogs, recoveredTransactionIntentMismatchWithQuorum, replacementCreditExecutionFromLogs } from '#execution/recovery-support'
 import { confirmCanonicalReceiptFinality } from '@zoltar/bot-shared/execution/canonical-finality'
-const REORG_OVERLAP_BLOCKS = 12n
 
 export function tokenDecimalsFromSnapshot(snapshot: { tokenDecimals: bigint }, reportId: string) {
 	const tokenDecimals = bigintToSafeNumber(snapshot.tokenDecimals, `Position ${reportId} token decimals`)
@@ -43,7 +42,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		throw new Error('Private entry target block does not match the durable journal')
 	}
 	const privateTargetBlockNumber = expectedBlockNumber ?? journaledPrivateTargetBlockNumber
-	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, position.entryTransactionHashes)
+	const receipts = await transactionReceiptsWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, position.entryTransactionHashes, config.rpcQuorum)
 	const firstReceipt = receipts[0]
 	const executorReceipt = receipts.at(-1)
 	if (firstReceipt === undefined || executorReceipt === undefined) throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
@@ -53,7 +52,7 @@ export async function recoverPendingEntryWithQuorum(readClients: readonly ReadCl
 		? firstReceipt.status === 'success' && firstReceipt.blockNumber !== privateTargetBlockNumber
 		: !publicEntry && receipts.some(receipt => receipt.status !== 'success' || receipt.blockNumber !== firstReceipt.blockNumber || receipt.blockHash.toLowerCase() !== firstReceipt.blockHash.toLowerCase() || (privateTargetBlockNumber !== undefined && receipt.blockNumber !== privateTargetBlockNumber))
 	if (invalidPrivateReceipt) throw new Error('Entry bundle receipts are missing, reverted, or split across blocks')
-	const canonicalReceiptBlockHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, firstReceipt.blockNumber)
+	const canonicalReceiptBlockHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending entry ${position.reportId}`, firstReceipt.blockNumber, config.rpcQuorum)
 	assertReceiptSnapshotBlockHash(firstReceipt.blockHash, canonicalReceiptBlockHash, 'Entry')
 	for (const [index, receipt] of receipts.entries()) {
 		const expectedHash = position.entryTransactionHashes[index]
@@ -144,7 +143,7 @@ export async function expireEntryWithQuorum(readClients: readonly ReadClient[], 
 	if (!attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw new Error('Entry target block is not sufficiently confirmed')
 	const finalityDescendantBlockNumber = targetBlockNumber + REORG_OVERLAP_BLOCKS
 	await fixedBlockHashWithQuorum(readClients, config, `expired entry ${position.reportId} finality descendant`, finalityDescendantBlockNumber)
-	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, position.entryTransactionHashes)
+	const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `expired entry ${position.reportId}`, position.entryTransactionHashes, config.rpcQuorum)
 	const executorReceipt = optionalReceipts.at(-1)
 	if (executorReceipt !== undefined) throw new Error('Entry executor receipt exists and requires normal recovery')
 	const transactionHash = position.entryTransactionHashes[0]
@@ -182,6 +181,7 @@ export async function reconcileExpiredAttemptsWithQuorum(readClients: readonly R
 		[config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
 		`expired atomic attempts ${position.reportId}`,
 		attempts.map(attempt => attempt.transactionHash),
+		config.rpcQuorum,
 	)
 	const found = attempts.flatMap((attempt, index) => {
 		const receipt = receipts[index]
@@ -279,12 +279,12 @@ export async function recoverPendingLifecycleWithQuorum(readClients: readonly Re
 	const targetBlockNumber = BigInt(position.lifecycleTargetBlockNumber)
 	let receipts
 	try {
-		receipts = await transactionReceiptsWithQuorum(readClients, endpoints, `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
+		receipts = await transactionReceiptsWithQuorum(readClients, endpoints, `pending lifecycle ${position.reportId}`, position.lifecycleTransactionHashes, config.rpcQuorum)
 	} catch (error) {
 		if (currentBlockNumber === undefined || !attemptHasFinality(currentBlockNumber, targetBlockNumber)) throw error
 		const finalityDescendantBlockNumber = targetBlockNumber + REORG_OVERLAP_BLOCKS
 		await fixedBlockHashWithQuorum(readClients, config, `expired lifecycle ${position.reportId} finality descendant`, finalityDescendantBlockNumber)
-		const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `expired lifecycle ${position.reportId}`, position.lifecycleTransactionHashes)
+		const optionalReceipts = await transactionReceiptsOrMissingWithQuorum(readClients, endpoints, `expired lifecycle ${position.reportId}`, position.lifecycleTransactionHashes, config.rpcQuorum)
 		if (optionalReceipts.some(receipt => receipt !== undefined)) throw error
 		return {
 			...withoutLifecycleAttempt(rollbackProvisionalLifecycleAccounting(position), true),
@@ -409,6 +409,7 @@ async function fixedBlockHashWithQuorum(readClients: readonly ReadClient[], conf
 			if (block.hash == null) throw new Error(`${label} block is missing its canonical hash`)
 			return { endpoint: endpointLabel(endpoints[index] ?? ''), value: block.hash }
 		}),
+		config.rpcQuorum,
 	)
 }
 
@@ -432,6 +433,7 @@ export async function finalizeLifecycleAfterFinalityWithQuorum(readClients: read
 			},
 			REORG_OVERLAP_BLOCKS,
 			currentBlockNumber,
+			config.rpcQuorum,
 		))
 	)
 		return refreshed
@@ -462,12 +464,18 @@ export async function discoverPublicReplacementWithQuorum(readClients: readonly 
 	const submissionBlockNumber = kind === 'entry' ? position.entrySubmissionBlockNumber : position.lifecycleSubmissionBlockNumber
 	const transactionNonce = kind === 'entry' ? position.entryTransactionNonce : position.lifecycleTransactionNonce
 	if (submissionBlockNumber === undefined || transactionNonce === undefined) return position
-	const discoveredHash = await transactionHashBySenderNonceWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], `pending public ${kind} ${position.reportId}`, {
-		account: position.account,
-		fromBlockNumber: BigInt(submissionBlockNumber),
-		nonce: BigInt(transactionNonce),
-		toBlockNumber: blockNumber,
-	})
+	const discoveredHash = await transactionHashBySenderNonceWithQuorum(
+		readClients,
+		[config.connectivity.readRpcUrl, ...config.quorumRpcUrls],
+		`pending public ${kind} ${position.reportId}`,
+		{
+			account: position.account,
+			fromBlockNumber: BigInt(submissionBlockNumber),
+			nonce: BigInt(transactionNonce),
+			toBlockNumber: blockNumber,
+		},
+		config.rpcQuorum,
+	)
 	if (discoveredHash === undefined) return position
 	const currentHashes = kind === 'entry' ? position.entryTransactionHashes : position.lifecycleTransactionHashes
 	if (currentHashes.length === 1 && currentHashes[0]?.toLowerCase() === discoveredHash.toLowerCase()) return position

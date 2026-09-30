@@ -400,7 +400,7 @@ test('keeps a single-action review by default for other app dialogs', async () =
 	try {
 		await act(() => {
 			controller = createTransactionStepController()
-			controller.setPlan([{ ...step, title: 'Queue liquidation', amount: '2 REP', tokenFunding: [{ amount: '2 REP', limit: undefined }] }])
+			controller.setPlan([{ ...step, title: 'Queue liquidation', amount: '2 REP', tokenFunding: [{ amount: 2n, tokenSymbol: 'REP', tokenUnits: 0 }] }])
 			review = controller.review().catch(() => undefined)
 		})
 		const dialog = within(document.body).getByRole('dialog', { name: 'Queue liquidation' })

@@ -1,15 +1,18 @@
+import { registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from 'bun:test'
-import { decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createWalletClient, custom, publicActions, decodeFunctionData, getAddress, toHex, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_TRACK_DISPUTES, OPEN_ORACLE_FLAG_TIME_TYPE, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
-import { loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
+import { createOpenOracleReportInstance, disputeOracleReport, loadOpenOracleReportDetails, loadOpenOracleWithdrawableBalances, loadOpenOracleReportSummaries, settleOracleReport, withdrawOpenOracleBalance } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import { loadOracleManagerDetails } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { getOpenOracleAddress } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { loadLiquidationApproval, type LiquidationApprovalParams } from '@zoltar/ui-statoblast-shared/protocol/liquidationApprovals.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { SEPOLIA_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
-import { createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
 import { getOpenOracleDisputeSwapTokenKey } from '@zoltar/ui-statoblast-shared/protocol/openOracleMath.js'
 
 const vaultAddress = getAddress('0x00000000000000000000000000000000000000c1')
@@ -63,6 +66,81 @@ function readStoredOracleFixture(functionName: string, preimage: OpenOracleState
 }
 
 describe('openOracle protocol client', () => {
+	for (const timeType of [true, false]) {
+		for (const remaining of [0n, 1n, timeType ? 60n : 2n, timeType ? 61n : 3n]) {
+			test(`dispute checks ${remaining} remaining ${timeType ? 'seconds' : 'blocks'} before sending`, async () => {
+				const preimage = createOpenOraclePreimage()
+				preimage.game.reportTimestamp = 100n
+				preimage.game.settlementTime = 1_000n
+				if (!timeType) preimage.game.flags &= ~OPEN_ORACLE_FLAG_TIME_TYPE
+				let sent = 0
+				const writer = createMockWriteClient(
+					() => sent++,
+					async request => readStoredOracleFixture(request.functionName, preimage),
+				)
+				const reader = createMockLoaderClient({ getBlock: async () => ({ timestamp: timeType ? 1_100n - remaining : 1n, number: timeType ? 1n : 1_100n - remaining }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+				const wallet = createWalletClient({
+					account: initialReporter,
+					chain: SEPOLIA_NETWORK_PROFILE.chain,
+					transport: custom({
+						request: async () => {
+							throw new Error('Unexpected RPC')
+						},
+					}),
+				}).extend(publicActions)
+				const attempt = disputeOracleReport({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account }, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
+				if (remaining > (timeType ? 60n : 2n)) {
+					await attempt
+					expect(sent).toBe(1)
+				} else {
+					await expect(attempt).rejects.toThrow('Dispute window ends too soon')
+					expect(sent).toBe(0)
+				}
+			})
+		}
+	}
+
+	for (const timeType of [true, false]) {
+		const reserve = timeType ? 60n : 2n
+		for (const remaining of [1n, reserve, reserve + 1n]) {
+			test(`rechecks dispute after wallet review with ${remaining} ${timeType ? 'seconds' : 'blocks'} remaining`, async () => {
+				const preimage = createOpenOraclePreimage()
+				preimage.game.reportTimestamp = 100n
+				preimage.game.settlementTime = 1_000n
+				if (!timeType) preimage.game.flags &= ~OPEN_ORACLE_FLAG_TIME_TYPE
+				let currentClock = 1_000n
+				let sent = 0
+				let validations = 0
+				const writer = createMockWriteClient(
+					() => sent++,
+					async request => readStoredOracleFixture(request.functionName, preimage),
+				)
+				const reader = createMockLoaderClient({ getBlock: async () => ({ timestamp: timeType ? currentClock : 1n, number: timeType ? 1n : currentClock }), multicall: async () => [], readContract: async request => readStoredOracleFixture(request.functionName, preimage) })
+				const wallet = createWalletClient({
+					account: initialReporter,
+					chain: SEPOLIA_NETWORK_PROFILE.chain,
+					transport: custom({
+						request: async () => {
+							throw new Error('Unexpected RPC')
+						},
+					}),
+				}).extend(publicActions)
+				const reviewed = createReviewedClient({ ...wallet, ...asWriteClient(writer), ...reader, account: wallet.account, call: async () => ({ data: toHex(0n) }) }, async () => {
+					if (++validations === 2) currentClock = 1_100n - remaining
+				})
+				const attempt = disputeOracleReport(reviewed, getOpenOracleAddress(), 1n, token2Address, 101n, 11n, 10n, hashOpenOracleStatePreimage(preimage))
+				if (remaining > reserve) {
+					await attempt
+					expect(sent).toBe(1)
+				} else {
+					await expect(attempt).rejects.toThrow('Dispute window ends too soon')
+					expect(sent).toBe(0)
+				}
+				expect(validations).toBe(2)
+			})
+		}
+	}
+
 	test('normalizes displayed report prices for different token decimals', async () => {
 		const preimage = createOpenOraclePreimage()
 		preimage.game.currentAmount1 = 10n ** 18n
@@ -478,3 +556,75 @@ describe('openOracle protocol client', () => {
 		await expect(loadLiquidationApproval(approvalReadClient, coordinatorAddress, approvalId)).resolves.toEqual({ registryAddress, ...approvalState, minimumValidNonce: 9n })
 	})
 })
+
+for (const change of ['settlement preimage', 'settled report', 'withdraw balance', 'create ETH', 'settlement unchanged', 'withdraw unchanged', 'create unchanged'] as const) {
+	test(`refreshes OpenOracle ${change} after application review`, async () => {
+		const preimage = createOpenOraclePreimage()
+		let changed = false
+		let submitted = 0
+		const writer = createMockWriteClient(
+			() => {
+				submitted += 1
+			},
+			async request => {
+				if (request.functionName === 'tokenHolder') return changed && change === 'withdraw balance' ? 1n : 1000n
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 1000n
+				if (request.functionName === 'symbol') return 'REP'
+				if (request.functionName === 'decimals') return 18
+				return readStoredOracleFixture(request.functionName, preimage)
+			},
+		)
+		const wallet = createWalletClient({
+			account: initialReporter,
+			chain: SEPOLIA_NETWORK_PROFILE.chain,
+			transport: custom({
+				request: async () => {
+					throw new Error('Unexpected RPC')
+				},
+			}),
+		}).extend(publicActions)
+		const scope = new AbortController()
+		const unregister = registerTransactionPreparationScope(scope.signal)
+		const reviewed = createReviewedClient({ ...wallet, ...asWriteClient(writer), account: wallet.account, getBlock: async () => createBlockWithTimestamp(1000n), getBalance: async () => (changed && change === 'create ETH' ? 0n : 1000n) }, undefined, scope.signal)
+		try {
+			const execute = () => {
+				if (change.startsWith('withdraw')) return withdrawOpenOracleBalance(reviewed, getOpenOracleAddress(), token1Address, 7n, initialReporter)
+				if (change.startsWith('create'))
+					return createOpenOracleReportInstance(reviewed, {
+						disputeDelay: 0,
+						escalationHalt: 1000n,
+						exactToken1Report: 1n,
+						initialToken2Amount: 1n,
+						ethValueAttoEth: 1n,
+						feePercentage: 0,
+						multiplier: 100,
+						protocolFee: 0,
+						settlementTime: 1000,
+						settlerRewardAttoEth: 1n,
+						token1Address,
+						token2Address,
+					})
+				return settleOracleReport(reviewed, getOpenOracleAddress(), 1n)
+			}
+			const action = execute().catch(error => error)
+			for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
+			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
+			changed = true
+			if (change === 'settlement preimage') preimage.game.currentAmount1 = 101n
+			if (change === 'settled report') preimage.game.settlementTimestamp = 1000n
+			transactionSteps.value?.confirm()
+			const result = await action
+			if (change.endsWith('unchanged')) {
+				expect(result).toHaveProperty('hash')
+				expect(submitted).toBe(1)
+			} else {
+				expect(result).toBeInstanceOf(Error)
+				expect(submitted).toBe(0)
+			}
+		} finally {
+			scope.abort()
+			unregister()
+			transactionSteps.value?.cancel()
+		}
+	})
+}

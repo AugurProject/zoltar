@@ -1,5 +1,6 @@
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 /** Execution protection shared by every Trading transaction: how far the price may move, and how long a signed transaction stays valid. */
 export type TradeSettings = Readonly<{ slippageBps: bigint; validityMinutes: bigint }>
@@ -25,10 +26,9 @@ export function parseValidityMinutes(value: string) {
 	return parsed >= 1n && parsed <= MAXIMUM_VALIDITY_MINUTES ? parsed : undefined
 }
 
+/** Slippage as plain percent text without the sign, e.g. `0.5`; it also seeds the editable slippage input, so it is never digit-grouped. */
 export function formatSlippagePercent(slippageBps: bigint) {
-	const whole = slippageBps / 100n
-	const fraction = (slippageBps % 100n).toString().padStart(2, '0').replace(/0+$/, '')
-	return fraction === '' ? whole.toString() : `${whole.toString()}.${fraction}`
+	return formatCurrencyInputBalance(slippageBps, 2)
 }
 
 /** Stored settings are user-editable browser state, so anything malformed or out of range falls back to the defaults field by field. */

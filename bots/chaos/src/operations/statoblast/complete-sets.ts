@@ -2,7 +2,7 @@ import { OperationDefinition, OperationWalletAssetDebit } from '../types.ts'
 
 import { inputInteger, inputMatches } from '../input-values.ts'
 
-import { BINARY_OUTCOME_NONE, operationalPools, safeOraclePriceDeadline, shareTokenId, sharesToEth, walletShares } from './planning.ts'
+import { BINARY_OUTCOME_NONE, operationalPools, shareTokenId, sharesToEth, walletShares } from './planning.ts'
 
 import { canCreateCompleteSet } from '../pool-economics.ts'
 
@@ -32,7 +32,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		buildPlan(snapshot, options) {
 			const candidates = snapshot.pools.filter(pool => {
 				if (!inputMatches(options, 'pool', pool.address)) return false
-				if (kind === 'create') return operationalPools(snapshot).includes(pool) && safeOraclePriceDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
+				if (kind === 'create') return operationalPools(snapshot).includes(pool) && canCreateCompleteSet(pool, ethSpend(snapshot, options, id))
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)
 				if (shares === undefined) return false
 				if (kind === 'redeem') {
@@ -56,8 +56,6 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 			const args = kind === 'redeem' ? [spend] : undefined
 			const shares = walletShares(snapshot, pool)
 			if (kind !== 'create' && shares === undefined) return undefined
-			const oracleDeadline = kind === 'create' ? safeOraclePriceDeadline(snapshot, pool, options) : undefined
-			if (kind === 'create' && oracleDeadline === undefined) return undefined
 			let walletAssetDebits: OperationWalletAssetDebit[] = []
 			if (kind === 'redeem') walletAssetDebits = [0, 1, 2].map(outcome => erc1155WalletDebit(pool.shareToken, shareTokenId(pool.universeId, outcome), spend))
 			if (kind === 'winning' && shares !== undefined) {
@@ -66,7 +64,6 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 				walletAssetDebits = [erc1155WalletDebit(pool.shareToken, shareTokenId(pool.universeId, pool.questionOutcome), amount(winningBalance))]
 			}
 			return planBase({
-				...(oracleDeadline === undefined ? {} : { deadlineTimestamp: oracleDeadline.toString() }),
 				definitionId: id,
 				ecosystem: 'statoblast',
 				label: actionLabel,
@@ -85,10 +82,7 @@ export function completeSetDefinition(kind: 'create' | 'redeem' | 'winning'): Op
 		evaluate(snapshot, options) {
 			if (kind === 'create') {
 				const spend = ethSpend(snapshot, options, id)
-				return eligible(
-					operationalPools(snapshot).some(pool => safeOraclePriceDeadline(snapshot, pool, options) !== undefined && canCreateCompleteSet(pool, spend)) ? undefined : 'No operational pool has a safely fresh price and minting capacity for the spend',
-					spend === 0n ? 'No spendable ETH above reserve' : undefined,
-				)
+				return eligible(operationalPools(snapshot).some(pool => canCreateCompleteSet(pool, spend)) ? undefined : 'No operational pool has minting capacity for the spend', spend === 0n ? 'No spendable ETH above reserve' : undefined)
 			}
 			const possible = snapshot.pools.some(pool => {
 				const shares = snapshot.wallet.shares.find(candidate => candidate.shareToken.toLowerCase() === pool.shareToken.toLowerCase() && candidate.universeId === pool.universeId)

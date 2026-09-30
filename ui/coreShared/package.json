@@ -28,7 +28,6 @@
 		"tsc": "bun x tsc --project tsconfig.json",
 		"build:workers": "bun ../../tooling/ui/workers.mts zoltar && bun ../../tooling/ui/workers.mts statoblast && bun ../../tooling/ui/workers.mts trading"
 	},
-	"types": "./js/index.d.ts",
 	"exports": {
 		"./tests/simulationTestUtils.js": "./ts/tests/simulation/testUtils.ts",
 		"./tests/testUtils/domEnvironment.js": {
@@ -250,6 +249,10 @@
 		"./tests/requestGuard.test.js": {
 			"bun": "./ts/tests/requestGuard.test.tsx",
 			"default": "./js/tests/requestGuard.test.js"
+		},
+		"./tests/routeHeader.test.js": {
+			"bun": "./ts/tests/routeHeader.test.tsx",
+			"default": "./js/tests/routeHeader.test.js"
 		},
 		"./tests/sectionBlock.test.js": {
 			"bun": "./ts/tests/sectionBlock.test.tsx",

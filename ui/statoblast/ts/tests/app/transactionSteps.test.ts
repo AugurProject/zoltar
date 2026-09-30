@@ -1,7 +1,7 @@
 import { createCompleteSetInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { requestOraclePrice } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
+import { requestOraclePrice, queueOracleManagerOperation } from '@zoltar/ui-statoblast-shared/protocol/oracleCoordinator.js'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
-import { createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import { createBlockWithTimestamp, createMockLoaderClient, createReadContractStub } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
 import { afterEach, expect, mock, test } from 'bun:test'
 import { createWalletClient, custom, publicActions, encodeFunctionData, decodeFunctionData, maxUint256, type Hash, type TransactionReceipt, type ReplacementReason } from '@zoltar/core-shared/evm/ethereum'
 import { MAINNET_NETWORK_PROFILE } from '@zoltar/ui-core-shared/wallet/networkProfile.js'
@@ -12,7 +12,7 @@ import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/revi
 import { withTransactionReviews } from '@zoltar/ui-statoblast-shared/protocol/reviewedBackend.js'
 import { runWriteAction } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { createInitialTransactionTrayState, markTransactionCanceled, markTransactionFailed, markTransactionFinished, markTransactionRequested } from '@zoltar/ui-core-shared/transactions/transactionTray.js'
-import { registerTransactionReviewScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
+import { registerTransactionReviewScope, registerTransactionPreparationScope } from '@zoltar/ui-core-shared/transactions/transactionReviewScope.js'
 import { createTransactionStepController, transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 
 const account = '0x0000000000000000000000000000000000000001'
@@ -175,13 +175,12 @@ test('titles transaction status from the prepared transaction labels instead of 
 })
 
 for (const [functionName, title, args] of [
-	['depositToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
-	['depositWalletRepToEscalationGame', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
-	['depositRepOnOutcome', 'Report No · 2 REP', [2n, 2n * 10n ** 18n]],
+	['depositToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
+	['depositWalletRepToEscalationGame', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
+	['depositRepOnOutcome', 'Report No · 2\u00a0REP', [2n, 2n * 10n ** 18n]],
 	['settle', 'Settle report #7', [7n]],
 	['withdrawFromEscalationGame', 'Settle escalation deposits', []],
 	['report', 'Create oracle report', []],
-	['dispute', 'Dispute report', []],
 	['withdrawTo', 'Withdraw oracle balance', []],
 ] satisfies Array<[string, string, bigint[]]>) {
 	test(`uses explicit reporting copy for ${functionName}`, async () => {
@@ -191,6 +190,23 @@ for (const [functionName, title, args] of [
 		if (functionName === 'depositWalletRepToEscalationGame') expect(step?.paidFrom).toBe('Wallet REP')
 	})
 }
+
+test('keeps explicit dispute copy when its planned guard prevents broadcasting', async () => {
+	const { reviewed, client, sendTransaction } = setup()
+	reviewed.onTransactionPlan?.([
+		{
+			functionName: 'dispute',
+			contractAddress: account,
+			validateBeforeSubmit: async () => {
+				throw new Error('Missing oracle dispute details. Review the action again.')
+			},
+		},
+	])
+	reviewed.onTransactionPrepared?.({ account, chainName: client.chain.name, functionName: 'dispute', contractAddress: account, args: [], data: '0x', value: undefined })
+	await expect(reviewed.sendTransaction({ to: account, data: '0x' })).rejects.toThrow('Missing oracle dispute details')
+	expect(transactionSteps.value?.steps[0]?.title).toBe('Dispute report')
+	expect(sendTransaction).not.toHaveBeenCalled()
+})
 
 test('leaves the description empty for an unlabeled contract function instead of narrating the submission', async () => {
 	const step = await sendPreparedTransaction({ functionName: 'depositRepToVault', contractAddress: account, contractLabel: 'Zoltar', args: [1n] })
@@ -720,7 +736,7 @@ test('describes a standalone unlimited approval as Max REP', async () => {
 	const sending = reviewed.sendTransaction({ to: account, data })
 	await waitForStarted()
 	try {
-		expect(transactionSteps.value?.steps[0]?.amount).toBe('Max REP')
+		expect(transactionSteps.value?.steps[0]?.amount).toBe('Max\u00a0REP')
 	} finally {
 		await sending
 	}
@@ -929,9 +945,15 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	const reviewed = createReviewedClient({
 		...client,
 		sendTransaction,
+		estimateGas: async () => 100000n,
+		getBalance: async () => 10n ** 18n,
+		getBlock: async () => createBlockWithTimestamp(1n),
 		readContract: createReadContractStub(request => {
 			if (request.functionName === 'escalationGame') return '0x0000000000000000000000000000000000000000'
 			if (request.functionName === 'universeId') return 0n
+			if (request.functionName === 'openOraclePriceCoordinator') return account
+			if (request.functionName === 'lastSettlementTimestamp') return 1n
+			if (request.functionName === 'getCurrentMintingCapacityAttoEth') return 10n ** 18n
 			throw new Error(`Unexpected read: ${request.functionName}`)
 		}),
 		waitForTransactionReceipt: async () => ({ ...receipt, transactionHash: hash }),
@@ -942,3 +964,48 @@ test('minting complete sets sends the transaction directly and tracks its receip
 	expect(transactionSteps.value?.showReviewDialog).toBe(false)
 	expect(transactionSteps.value?.steps[0]?.phase).toBe('confirmed')
 })
+
+for (const change of ['fresh price', 'pending request', 'queue fee'] as const) {
+	test(`blocks oracle ${change} after application review`, async () => {
+		const { client, sendTransaction, receipt } = setup()
+		const reads = createCoordinatorFundingReads(() => 1000n)
+		let changed = false
+		const scope = new AbortController()
+		const unregister = registerTransactionPreparationScope(scope.signal)
+		const reviewed = createReviewedClient(
+			{
+				...client,
+				...reads,
+				sendTransaction,
+				readContract: createReadContractStub(request => {
+					if (request.functionName === 'isPriceValid') return change === 'queue fee' ? !changed : changed && change === 'fresh price'
+					if (request.functionName === 'pendingReportId') return changed && change === 'pending request' ? 1n : 0n
+					if (request.functionName === 'lastSettlementTimestamp') return 1n
+					if (request.functionName === 'lastPrice') return 10n ** 18n
+					if (request.functionName === 'getPendingSettlementOperationIds') return []
+					if (request.functionName === 'MAX_PENDING_SETTLEMENT_OPERATIONS') return 4n
+					if (request.functionName === 'getQueuedOperationCostAttoEth') return 2n
+					return reads.readContract(request)
+				}),
+				getGasPrice: async () => 1n,
+				estimateGas: async () => 100000n,
+				getBalance: async () => 1000n,
+				waitForTransactionReceipt: async () => receipt,
+			},
+			undefined,
+			scope.signal,
+		)
+		try {
+			const action = (change === 'queue fee' ? queueOracleManagerOperation(reviewed, account, 'withdrawRep', account, 1n, 60n, 10n ** 18n) : requestOraclePrice(reviewed, account, 10n ** 18n, 0n, 122n)).catch(error => error)
+			for (let attempt = 0; attempt < 100 && transactionSteps.value?.steps.at(-1)?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 1))
+			expect(transactionSteps.value?.steps.at(-1)?.phase).toBe('review')
+			changed = true
+			confirm()
+			expect(await action).toBeInstanceOf(Error)
+			expect(sendTransaction).not.toHaveBeenCalled()
+		} finally {
+			scope.abort()
+			unregister()
+		}
+	})
+}

@@ -58,7 +58,7 @@ function createForkAuctionDetails(overrides: Partial<ForkAuctionDetails> = {}): 
 function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {}): TruthAuctionMetrics {
 	return {
 		accumulatedBidAttoEth: 1n * 10n ** 18n,
-		auctionEndsAt: 300n,
+		auctionEndsAt: 400n,
 		clearingPrice: undefined,
 		clearingTick: undefined,
 		bidAtClearingTickAttoEth: 0n,
@@ -69,7 +69,7 @@ function createTruthAuctionMetrics(overrides: Partial<TruthAuctionMetrics> = {})
 		maxAttoRepBeingSold: 100n * 10n ** 18n,
 		minBidSizeAttoEth: 1n * 10n ** 18n,
 		attoRepPurchasableAtBid: 1n * 10n ** 18n,
-		timeRemaining: 50n,
+		timeRemaining: 150n,
 		totalAttoRepPurchased: 0n,
 		underfunded: false,
 		underfundedThreshold: undefined,
@@ -175,6 +175,29 @@ function createHarness(dependencies: UseForkAuctionOperationsDependencies<TestFo
 
 describe('useForkAuctionOperations', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
+
+	for (const remaining of [0n, 1n, 60n, 61n]) {
+		test(`unresolved migration rechecks the loaded deadline before calling the writer (${remaining})`, async () => {
+			const onTransactionFailed = mock(() => undefined)
+			const migrateVaultWithUnresolvedEscalation = mock(async () => createForkAuctionResult('migrateUnresolvedEscalation'))
+			const dependencies = createForkAuctionOperationsDependencies({ loadForkAuctionDetails: async () => createForkAuctionDetails({ currentTime: 1000n, migrationEndsAt: 1000n + remaining }), migrateVaultWithUnresolvedEscalation })
+			let hookState: UseForkAuctionOperationsState | undefined
+			const Harness = createHarness(
+				dependencies,
+				state => {
+					hookState = state
+				},
+				onTransactionFailed,
+			)
+			const rendered = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(rendered.cleanup)
+			await act(async () => {
+				await requireHookState(hookState).migrateUnresolvedEscalation('yes')
+			})
+			expect(migrateVaultWithUnresolvedEscalation).toHaveBeenCalledTimes(remaining > 60n ? 1 : 0)
+			expect(onTransactionFailed).toHaveBeenCalledTimes(remaining > 60n ? 0 : 1)
+		})
+	}
 
 	for (const action of ['startTruthAuction', 'claimAuctionProceeds'] as const)
 		for (const outcome of ['failure', 'cancel'] as const) {
@@ -726,100 +749,108 @@ describe('useForkAuctionOperations', () => {
 		expect(transactionState.entries.length).toBe(0)
 	})
 
-	test('submitBid snapshots the submitted form values before the balance preflight resolves', async () => {
-		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fa')
-		const walletBalance = createDeferred<bigint>()
-		const initialBidAmount = '1'
-		const initialBidPrice = '1'
-		const editedBidAmount = '3'
-		const editedBidPrice = '2'
-		const expectedBidTick = getTruthAuctionTickAtPrice(parseTruthAuctionPriceInput(initialBidPrice, 'Bid price'))
-		if (expectedBidTick === undefined) throw new Error('Expected initial bid price to map to a valid truth auction tick')
-		const expectedBidAmount = parseTruthAuctionAmountInput(initialBidAmount, 'Bid amount')
-		const details = createForkAuctionDetails({
-			securityPoolAddress: firstPoolAddress,
-			truthAuction: createTruthAuctionMetrics(),
-		})
-		const onTransactionFailed = mock(() => undefined)
-		const loadForkAuctionDetails = mock(async () => details)
-		const submitTruthAuctionBid = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) => {
-			expect(securityPoolAddress).toBe(firstPoolAddress)
-			expect(universeId).toBe(1n)
-			expect(truthAuctionAddress).toBe(TRUTH_AUCTION_ADDRESS)
-			expect(tick).toBe(expectedBidTick)
-			expect(amount).toBe(expectedBidAmount)
-			return createForkAuctionResult('submitBid')
-		})
-		const readClient = {
-			getBalance: mock(async () => await walletBalance.promise),
-		}
-		const dependencies = createForkAuctionOperationsDependencies({
-			createConnectedReadClient: mock(() => readClient),
-			loadForkAuctionDetails,
-			submitTruthAuctionBid,
-		})
-
-		let hookState: UseForkAuctionOperationsState | undefined
-		function Harness() {
-			const state = useForkAuctionOperations(
-				{
-					accountAddress: WALLET_ADDRESS,
-					onTransactionFailed,
-					onTransactionFinished: () => undefined,
-					onTransactionPresented: () => undefined,
-					onTransactionPrepared: () => undefined,
-					onTransactionRequested: () => undefined,
-					onTransactionSubmitted: () => undefined,
-					refreshState: async () => undefined,
-				},
-				dependencies,
-			)
-			hookState = state
-			return <div />
-		}
-
-		const renderedComponent = await renderIntoDocument(h(Harness, {}))
-		trackCleanup(renderedComponent.cleanup)
-
-		await act(async () => {
-			requireHookState(hookState).setForkAuctionForm(current => ({
-				...current,
+	for (const nearDeadline of [false, true]) {
+		test(`submitBid ${nearDeadline ? 'blocks refreshed deadline before sending' : 'snapshots the submitted form values before the balance preflight resolves'}`, async () => {
+			const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fa')
+			const walletBalance = createDeferred<bigint>()
+			const initialBidAmount = '1'
+			const initialBidPrice = '1'
+			const editedBidAmount = '3'
+			const editedBidPrice = '2'
+			const expectedBidTick = getTruthAuctionTickAtPrice(parseTruthAuctionPriceInput(initialBidPrice, 'Bid price'))
+			if (expectedBidTick === undefined) throw new Error('Expected initial bid price to map to a valid truth auction tick')
+			const expectedBidAmount = parseTruthAuctionAmountInput(initialBidAmount, 'Bid amount')
+			const details = createForkAuctionDetails({
 				securityPoolAddress: firstPoolAddress,
-				submitBidAmount: initialBidAmount,
-				submitBidPrice: initialBidPrice,
-			}))
+				truthAuction: createTruthAuctionMetrics(),
+			})
+			const onTransactionFailed = mock(() => undefined)
+			const loadForkAuctionDetails = mock(async () => (loadForkAuctionDetails.mock.calls.length > 1 && nearDeadline ? { ...details, currentTime: 399n } : details))
+			const submitTruthAuctionBid = mock(async (_client: unknown, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, amount: bigint) => {
+				expect(securityPoolAddress).toBe(firstPoolAddress)
+				expect(universeId).toBe(1n)
+				expect(truthAuctionAddress).toBe(TRUTH_AUCTION_ADDRESS)
+				expect(tick).toBe(expectedBidTick)
+				expect(amount).toBe(expectedBidAmount)
+				return createForkAuctionResult('submitBid')
+			})
+			const readClient = {
+				getBalance: mock(async () => await walletBalance.promise),
+			}
+			const dependencies = createForkAuctionOperationsDependencies({
+				createConnectedReadClient: mock(() => readClient),
+				loadForkAuctionDetails,
+				submitTruthAuctionBid,
+			})
+
+			let hookState: UseForkAuctionOperationsState | undefined
+			function Harness() {
+				const state = useForkAuctionOperations(
+					{
+						accountAddress: WALLET_ADDRESS,
+						onTransactionFailed,
+						onTransactionFinished: () => undefined,
+						onTransactionPresented: () => undefined,
+						onTransactionPrepared: () => undefined,
+						onTransactionRequested: () => undefined,
+						onTransactionSubmitted: () => undefined,
+						refreshState: async () => undefined,
+					},
+					dependencies,
+				)
+				hookState = state
+				return <div />
+			}
+
+			const renderedComponent = await renderIntoDocument(h(Harness, {}))
+			trackCleanup(renderedComponent.cleanup)
+
+			await act(async () => {
+				requireHookState(hookState).setForkAuctionForm(current => ({
+					...current,
+					securityPoolAddress: firstPoolAddress,
+					submitBidAmount: initialBidAmount,
+					submitBidPrice: initialBidPrice,
+				}))
+			})
+
+			await act(async () => {
+				await requireHookState(hookState).loadForkAuction()
+			})
+
+			await waitFor(() => expect(requireHookState(hookState).forkAuctionDetails?.securityPoolAddress).toBe(firstPoolAddress))
+
+			let submitBidPromise = Promise.resolve()
+			await act(() => {
+				submitBidPromise = requireHookState(hookState).submitBid()
+			})
+
+			await waitFor(() => expect(readClient.getBalance).toHaveBeenCalledTimes(1))
+
+			await act(async () => {
+				requireHookState(hookState).setForkAuctionForm(current => ({
+					...current,
+					submitBidAmount: editedBidAmount,
+					submitBidPrice: editedBidPrice,
+				}))
+			})
+
+			await act(async () => {
+				walletBalance.resolve(2n * 10n ** 18n)
+				await submitBidPromise
+			})
+
+			if (nearDeadline) {
+				expect(submitTruthAuctionBid).not.toHaveBeenCalled()
+				expect(onTransactionFailed).toHaveBeenCalledTimes(1)
+				expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Truth auction ends too soon to submit a bid')
+			} else {
+				expect(submitTruthAuctionBid).toHaveBeenCalledTimes(1)
+				expect(requireHookState(hookState).forkAuctionResult?.action).toBe('submitBid')
+				expect(onTransactionFailed).not.toHaveBeenCalled()
+			}
 		})
-
-		await act(async () => {
-			await requireHookState(hookState).loadForkAuction()
-		})
-
-		await waitFor(() => expect(requireHookState(hookState).forkAuctionDetails?.securityPoolAddress).toBe(firstPoolAddress))
-
-		let submitBidPromise = Promise.resolve()
-		await act(() => {
-			submitBidPromise = requireHookState(hookState).submitBid()
-		})
-
-		await waitFor(() => expect(readClient.getBalance).toHaveBeenCalledTimes(1))
-
-		await act(async () => {
-			requireHookState(hookState).setForkAuctionForm(current => ({
-				...current,
-				submitBidAmount: editedBidAmount,
-				submitBidPrice: editedBidPrice,
-			}))
-		})
-
-		await act(async () => {
-			walletBalance.resolve(2n * 10n ** 18n)
-			await submitBidPromise
-		})
-
-		expect(submitTruthAuctionBid).toHaveBeenCalledTimes(1)
-		expect(requireHookState(hookState).forkAuctionResult?.action).toBe('submitBid')
-		expect(onTransactionFailed).not.toHaveBeenCalled()
-	})
+	}
 
 	test('claimParentEscalation snapshots the submitted form values before details reload resolves', async () => {
 		const firstPoolAddress = getAddress('0x00000000000000000000000000000000000000fb')

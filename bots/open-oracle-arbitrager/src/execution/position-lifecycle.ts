@@ -295,7 +295,7 @@ export async function processPositionLifecycle(
 		isPaused,
 		async () => {
 			if ((await currentBlockNumberWithQuorum(readClients, config, 'lifecycle submission head')) !== blockNumber) throw new Error('Position lifecycle bundle quote expired before submission')
-			const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'lifecycle submission', blockNumber)
+			const canonicalHash = await canonicalBlockHashWithQuorum(readClients, [config.connectivity.readRpcUrl, ...config.quorumRpcUrls], 'lifecycle submission', blockNumber, config.rpcQuorum)
 			if (canonicalHash.toLowerCase() !== storedSnapshot.blockHash.toLowerCase()) throw new Error('Position lifecycle canonical parent changed before submission')
 		},
 		() =>

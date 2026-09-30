@@ -4,7 +4,7 @@ import { runtimeConfig } from './config.ts'
 import { readIndexerHealth, ScannerDatabase } from './database.ts'
 import { createFixedWindowRateLimiter, createRequestMetrics, indexerHealthUnavailableResponse, liveStreamResponse, metricRoute, requestAccessGuard, staticAssetResponse } from './http.ts'
 import { createConcurrencyGate } from './limits.ts'
-import { LiveBus } from './live.ts'
+import { createLiveBus } from './live.ts'
 import { installConsoleTimestamps } from './logging.ts'
 import { initializeProcessContext, recordProcessStop } from './process-bootstrap.ts'
 
@@ -16,7 +16,7 @@ const healthDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2)
 const apiDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, API_DATABASE_CONNECTIONS, 1)
 const liveDatabase = new ScannerDatabase(runtimeConfig.postgresUrl, 2, 1)
 
-const bus = new LiveBus(liveDatabase, undefined, runtimeConfig.liveBackpressureTimeoutMs)
+const bus = createLiveBus(liveDatabase, undefined, runtimeConfig.liveBackpressureTimeoutMs)
 let prunePromise: Promise<void> | undefined
 const pruneLiveEvents = (): Promise<void> => {
 	prunePromise ??= database

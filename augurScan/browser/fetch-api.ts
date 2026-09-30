@@ -1,7 +1,7 @@
 import { isRecord } from './api-validation.ts'
 import './browser-types.ts'
 
-export const fetchApi = async (path: string, { signal }: { signal?: AbortSignal } = {}): Promise<unknown> => {
+export const fetchApi = async (path: string, { signal }: { signal?: AbortSignal | undefined } = {}): Promise<unknown> => {
 	const timeout = AbortSignal.timeout(15_000)
 	const response = await fetch(path, { signal: signal === undefined ? timeout : AbortSignal.any([signal, timeout]) })
 	const payload: unknown = await response.json().catch(() => ({}))

@@ -1,4 +1,5 @@
 import type { CopyTemplateValue } from '@zoltar/ui-core-shared/copy/types.js'
+import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export const createPoolDescriptionLead = 'Set up a '
 export const createPoolDescriptionTail = ' for one question. Vaults secure it with REP; traders mint its shares with ETH.'
@@ -30,7 +31,6 @@ export const formatDepositingRep = (tokenSymbol: CopyTemplateValue) => `Depositi
 export const depositRepToVaultDescription = 'Increase the vault’s collateral.'
 export const loadingVault = 'Loading vault details…'
 export const openPool = 'Open pool'
-export const invalidPoolAddress = 'Enter a valid pool address.'
 export const formatOpenPoolLabel = (questionTitle: string, securityPoolAddress: string) => `Open pool: ${questionTitle} (${securityPoolAddress})`
 export const priceValidUntil = 'Price valid until'
 export const refreshing = 'Refreshing…'
@@ -49,7 +49,7 @@ export const totalPoolHeldAttoRep = 'Pool-held REP'
 export const vaultCount = 'Known vaults'
 export const loadingSecurityPools = 'Loading security pools…'
 export const retryLoadingPools = 'Retry'
-export const searchPools = 'Search pools'
+export const searchPools = 'Search or paste a pool address'
 export const sortPools = 'Sort'
 export const remainingCapacity = 'Remaining capacity'
 export const noFavoritePools = 'No favorite pools yet'
@@ -165,10 +165,10 @@ export const claimingFees = 'Claiming fees…'
 export const missingVaultDepositDetail = 'This vault does not exist. Deposit REP to create it.'
 export const repBackingLabel = 'REP backing'
 export const formatInsufficientRepBalanceDetail = (amount: string) => `Insufficient REP balance. Deposit amount exceeds your wallet balance by ${amount}\u00a0REP.`
-export const connectWalletBeforeClaimingFees = 'Connect a wallet before claiming fees.'
-export const connectWalletBeforeDepositingRep = 'Connect a wallet before depositing REP.'
-export const connectWalletBeforeRedeemingRep = 'Connect a wallet before redeeming REP.'
-export const connectWalletBeforeWithdrawingRep = 'Connect a wallet before withdrawing REP.'
+export const connectWalletBeforeClaimingFees = commonCopy.formatConnectWalletBefore('claiming fees')
+export const connectWalletBeforeDepositingRep = commonCopy.formatConnectWalletBefore('depositing REP')
+export const connectWalletBeforeRedeemingRep = commonCopy.formatConnectWalletBefore('redeeming REP')
+export const connectWalletBeforeWithdrawingRep = commonCopy.formatConnectWalletBefore('withdrawing REP')
 export const selectOwnVaultToClaimFees = 'Select your own vault to claim fees.'
 export const selectOwnVaultToDepositRep = 'Select your own vault to deposit REP.'
 export const selectOwnVaultToRedeemRep = 'Select your own vault to redeem REP.'
@@ -288,3 +288,7 @@ export const questionEndedReason = 'This question has already ended.'
 
 export const commitmentNeedsOracleReport = 'A new Open Oracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.'
 export const openPriceOracle = 'Open price oracle'
+
+export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires too soon. Retry after it expires and review report funding.'
+export const oracleOperationFundingChanged = 'Oracle funding requirements changed. Review funding again before sending.'
+export const oracleOperationTimingUnavailable = 'Checking oracle price validity.'

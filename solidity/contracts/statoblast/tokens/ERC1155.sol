@@ -133,17 +133,6 @@ contract ERC1155 is IERC1155 {
 	}
 
 	/**
-		@dev Legacy helper preserved for existing internal call sites that do not pass data.
-	*/
-	function _transferFrom(address from, address to, uint256 id, uint256 value) internal {
-		_transferFrom(from, to, id, value, '');
-	}
-
-	function _internalTransferFrom(address from, address to, uint256 id, uint256 value) internal virtual {
-		_internalTransferFrom(from, to, id, value, '');
-	}
-
-	/**
 		@dev Transfers `values` amount(s) of `ids` from the `from` address to the
 		`to` address specified. Caller must be approved to manage the tokens being
 		transferred out of the `from` account. If `to` is a smart contract, will
@@ -183,17 +172,6 @@ contract ERC1155 is IERC1155 {
 
 		emit TransferBatch(msg.sender, from, to, ids, values);
 		_doSafeBatchTransferAcceptanceCheck(msg.sender, from, to, ids, values, data);
-	}
-
-	/**
-		@dev Legacy helper preserved for existing internal call sites that do not pass data.
-	*/
-	function _batchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values) internal {
-		_batchTransferFrom(from, to, ids, values, '');
-	}
-
-	function _internalBatchTransferFrom(address from, address to, uint256[] memory ids, uint256[] memory values) internal virtual {
-		_internalBatchTransferFrom(from, to, ids, values, '');
 	}
 
 	/**

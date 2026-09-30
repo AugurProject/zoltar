@@ -5,10 +5,9 @@ import type { ReadClient } from '#core/operator-types'
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import { rpcFailureWithContext, type Hex } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { rpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { endpointLabel } from '#monitoring/connectivity'
 
-type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls'>
+type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>
 
 /** The canonical factory registry authenticates pool provenance; the pool binds its coordinator immutably. */
 export async function discoverCoordinatorPolicies(clients: readonly ReadClient[], config: DiscoveryConfiguration, blockNumber: bigint, blockHash: Hex) {
@@ -40,10 +39,10 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 					for (const deployment of deployments) {
 						if (!approved.includes(deployment.universeId)) continue
 						const [coordinator, universeId] = await Promise.all([
-							client.readContract({ address: deployment.securityPool, abi: securityPoolAbi, functionName: 'priceOracleManagerAndOperatorQueuer', blockNumber }),
+							client.readContract({ address: deployment.securityPool, abi: securityPoolAbi, functionName: 'openOraclePriceCoordinator', blockNumber }),
 							client.readContract({ address: deployment.securityPool, abi: securityPoolAbi, functionName: 'universeId', blockNumber }),
 						])
-						if (universeId !== deployment.universeId || coordinator.toLowerCase() !== deployment.priceOracleManagerAndOperatorQueuer.toLowerCase()) throw new Error('Registered security pool has an inconsistent coordinator or universe')
+						if (universeId !== deployment.universeId || coordinator.toLowerCase() !== deployment.openOraclePriceCoordinator.toLowerCase()) throw new Error('Registered security pool has an inconsistent coordinator or universe')
 						coordinators.add(coordinator)
 					}
 				}
@@ -54,6 +53,6 @@ export async function discoverCoordinatorPolicies(clients: readonly ReadClient[]
 				throw rpcFailureWithContext(error, endpoint, 'coordinator discovery')
 			}
 		}),
-		config.execute ? rpcQuorumRequirement() : 1,
+		config.execute ? config.rpcQuorum : 1,
 	)
 }

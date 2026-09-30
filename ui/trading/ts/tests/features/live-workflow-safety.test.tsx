@@ -263,7 +263,8 @@ describe('live workflow safety boundary', () => {
 		discoveredLoadError = undefined
 		await rerouteForRefresh(marketRoute)
 		await waitForDom(() => document.body.textContent?.includes('Invalid timestamp') === true, 'recovered market details')
-		discoveredEndTime = now + 2n
+		// Keep the wallet-uncertainty exercise outside the bounded submission cutoff.
+		discoveredEndTime = now + 600n
 
 		const unmountedConnectionChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())
 		const summariesBeforeUnmountedConnectionResolution = walletSummaries.length
@@ -298,8 +299,8 @@ describe('live workflow safety boundary', () => {
 		await show('market')
 		await settleAsyncWorkflow()
 		await flush()
-		// The lookup route is list-first: the address form sits above the same rows the browse alias shows.
-		expect(document.querySelector('.open-pool-form')).not.toBeNull()
+		// The lookup route is list-first: the search that also opens a pool address sits above the same rows the browse alias shows.
+		expect(document.querySelector('form.market-list-search')).not.toBeNull()
 		await waitForDom(() => document.querySelectorAll('.market-record').length === 2, 'lookup route rows')
 		const discoveriesBeforeMidConnectUniverseChange = discoveredUniverseIds.length
 		const midConnectChainRead = await startWalletChainRead(() => buttonByLabel('Connect wallet').click())

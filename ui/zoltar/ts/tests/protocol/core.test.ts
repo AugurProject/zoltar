@@ -264,7 +264,7 @@ describe('contract core helpers', () => {
 				address: getAddress('0x7777777777777777777777777777777777777777'),
 				functionName: 'cancelled',
 			})),
-		).rejects.toThrow('Transaction was cancelled in the wallet before confirmation.')
+		).rejects.toThrow('Transaction was canceled in the wallet before confirmation.')
 		expect(onTransactionSubmitted).toHaveBeenCalledWith(cancellationHash, 'pending', expect.any(String))
 	})
 
