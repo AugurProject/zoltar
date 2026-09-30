@@ -16,7 +16,7 @@ export type RuntimeResources = SubmissionPreflightResources & {
 }
 
 /** Topology cache reused across scans while the state file and deployment profile stay unchanged. */
-export type TopologyCacheBinding = {
+type TopologyCacheBinding = {
 	cache: CanonicalImmutableTopologyCache | undefined
 	profileId: string | undefined
 	stateFile: string | undefined
