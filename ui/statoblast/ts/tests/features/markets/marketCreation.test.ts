@@ -440,7 +440,7 @@ void describe('market creation helpers', () => {
 		expect(parameters.statoblastSecurityMultiplierBps).toBe(25_000n)
 	})
 
-	test('parses the initial report priority fee from ETH and rejects zero', () => {
+	test('parses the initial report priority fee from nanoETH per gas into attoETH per gas and rejects zero', () => {
 		expect(
 			createSecurityPoolParameters({
 				initialReportPriorityFeeNanoEth: '10.5',
