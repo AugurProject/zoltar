@@ -782,7 +782,7 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), 0n, 'repeat winning redemption should preserve zero resolved share supply')
 		})
 
-		test('redeemShares and redeemRepFromVault stay available after an unrelated late fork once the question has finalized', async () => {
+		test.each([{ checkpointBeforeFork: false }, { checkpointBeforeFork: true }])('redeemShares and redeemRepFromVault stay available after an unrelated late fork once the question has finalized (checkpoint before fork: $checkpointBeforeFork)', async ({ checkpointBeforeFork }) => {
 			const securityPoolUnderwritingLimitAttoEth = repDeposit / 4n
 			await setVaultCapacityFixture(client, mockWindow, securityPoolAddresses.priceOracleManagerAndOperatorQueuer, client.account.address, securityPoolUnderwritingLimitAttoEth)
 
@@ -791,6 +791,15 @@ describe('Statoblast: fork migration', () => {
 			await finalizeQuestionAsYesWithoutFork()
 
 			const attackerClient = createWriteClient(mockWindow, TEST_ADDRESSES[1])
+			const finalizedFeeEnd = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getFeeEpochEndTime' })
+			if (checkpointBeforeFork) await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
+			const checkpointedAccounting = checkpointBeforeFork
+				? {
+						collateral: await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool),
+						fees: await getTotalAccruedFees(client, securityPoolAddresses.securityPool),
+					}
+				: undefined
+			await mockWindow.advanceTime(30n * DAY)
 			const repToken = await getRepToken(client, securityPoolAddresses.securityPool)
 			const repTotalSupplySlot = formatStorageSlot(REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT)
 			await mockWindow.addStateOverrides({
@@ -810,6 +819,14 @@ describe('Statoblast: fork migration', () => {
 			await createQuestion(attackerClient, lateForkQuestionData, outcomes)
 			await approveToken(attackerClient, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
 			await forkUniverse(attackerClient, genesisUniverse, lateForkQuestionId)
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getFeeEpochEndTime' }), finalizedFeeEnd, 'a late unrelated fork must preserve the finalized fee cutoff with or without a checkpoint')
+			await updateSettlementCollateral(client, securityPoolAddresses.securityPool)
+			const finalizedCollateral = await getSettlementCollateralAttoEth(client, securityPoolAddresses.securityPool)
+			const finalizedFees = await getTotalAccruedFees(client, securityPoolAddresses.securityPool)
+			if (checkpointedAccounting !== undefined) {
+				strictEqualTypeSafe(finalizedCollateral, checkpointedAccounting.collateral, 'a late unrelated fork must preserve collateral checkpointed before the fork')
+				strictEqualTypeSafe(finalizedFees, checkpointedAccounting.fees, 'a late unrelated fork must preserve fees checkpointed before the fork')
+			}
 
 			strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'late unrelated fork should not erase finalized market outcome')
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'late unrelated Zoltar fork should not initiate this security pool fork')
@@ -831,7 +848,10 @@ describe('Statoblast: fork migration', () => {
 			await mockWindow.setTime(migrationDeadline)
 			await assertFinalizedMarketMigrationRejected('after the universe-level migration period', /Resolved|resolved before fork/i)
 			const walletRepBeforeClaims = await getERC20Balance(client, addressString(GENESIS_REPUTATION_TOKEN), client.account.address)
+			const holderEthBeforeRedemption = await getETHBalance(client, openInterestHolder.account.address)
 			await redeemShares(openInterestHolder, securityPoolAddresses.securityPool)
+			strictEqualTypeSafe((await getETHBalance(client, openInterestHolder.account.address)) - holderEthBeforeRedemption, finalizedCollateral, 'a late unrelated fork must not reduce the finalized winning payout')
+			strictEqualTypeSafe(await getTotalAccruedFees(client, securityPoolAddresses.securityPool), finalizedFees, 'a late unrelated fork must not reopen the finalized fee epoch')
 			strictEqualTypeSafe(await getShareTokenSupplyAttoShares(client, securityPoolAddresses.securityPool), 0n, 'winning redemption should still complete after the unrelated fork')
 
 			await withdrawFromEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, [0n])
