@@ -51,6 +51,24 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		return hook
 	}
 
+	void test('does not scan the registry on mount and waits for readiness for universe statistics', async () => {
+		const ready = createDeferred<void>()
+		const loadSecurityPoolPage = mock(async () => createSecurityPoolPageFromLoadedPools([createListedSecurityPool('0x01')], 0, 100))
+		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolPage, waitForSecurityPoolReadBackend: () => ready.promise }))
+		expect(loadSecurityPoolPage).not.toHaveBeenCalled()
+		let pending: Promise<boolean> | undefined
+		await act(() => {
+			pending = state().loadUniverseDirectoryPools()
+		})
+		expect(loadSecurityPoolPage).not.toHaveBeenCalled()
+		await act(async () => {
+			ready.resolve()
+			await pending
+		})
+		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
+		expect(state().universeDirectoryPools?.map(pool => pool.questionId)).toEqual(['0x01'])
+	})
+
 	void test('loads only the checked pool lineage for workflow details', async () => {
 		const selectedAddress = getAddress('0x0000000000000000000000000000000000000001')
 		const selectedPools = [createListedSecurityPool('0x01', selectedAddress)]
@@ -144,113 +162,6 @@ void describe('useSecurityPoolsOverview helpers', () => {
 		await pending
 		expect(followupReads).toBe(0)
 		appQueryCache.clear()
-	})
-
-	void test('a slow background browse response survives repeated block invalidations', async () => {
-		const firstPage = { pageIndex: 0, pageSize: 10, poolCount: 0n, pools: [] }
-		const newerPage = { ...firstPage, poolCount: 2n }
-		const olderRead = createDeferred<typeof firstPage>()
-		let reads = 0
-		const { state } = await renderHook(
-			createSecurityPoolsOverviewDependencies({
-				loadSecurityPoolPage: mock(async () => {
-					reads += 1
-					if (reads === 1) return firstPage
-					if (reads === 2) return await olderRead.promise
-					return newerPage
-				}),
-			}),
-		)
-		await act(async () => await state().loadBrowseSecurityPoolPage(0, 10, 'page'))
-		let pending: Promise<void> | undefined
-		await act(() => {
-			appQueryCache.invalidateAll('block')
-			pending = state().refreshBrowseSecurityPoolPage()
-		})
-		await act(async () => {
-			appQueryCache.invalidateAll('block')
-			void state().refreshBrowseSecurityPoolPage()
-		})
-		expect(reads).toBe(2)
-		await act(async () => {
-			olderRead.resolve(newerPage)
-			await pending
-		})
-		expect(state().securityPoolPage?.poolCount).toBe(2n)
-		appQueryCache.clear()
-	})
-
-	for (const cancellation of ['page replacement', 'environment change', 'unmount'] as const)
-		void test(`stops background browse follow-up RPC reads after ${cancellation}`, async () => {
-			const page = { pageIndex: 0, pageSize: 10, poolCount: 0n, pools: [] }
-			const firstRead = createDeferred<void>()
-			let loads = 0
-			let followupReads = 0
-			const dependencies = createSecurityPoolsOverviewDependencies({
-				loadSecurityPoolPage: mock(async (_pageIndex, _pageSize, _account, operation) => {
-					if (++loads !== 2) return page
-					if (operation === undefined) throw new Error('Missing read operation')
-					await operation.read(() => firstRead.promise)
-					await operation.read(async () => ++followupReads)
-					return page
-				}),
-			})
-			const rendered = await renderHook(dependencies)
-			const { state } = rendered
-			await act(async () => await state().loadBrowseSecurityPoolPage(0, 10, 'page'))
-			let pending: Promise<void> | undefined
-			await act(() => {
-				pending = state().refreshBrowseSecurityPoolPage()
-			})
-			expect(loads).toBe(2)
-			if (cancellation === 'page replacement') await act(async () => await state().loadBrowseSecurityPoolPage(1, 10, 'next-page'))
-			else if (cancellation === 'environment change') await rendered.rerender({ environmentRefreshKey: 1 })
-			else {
-				await rendered.cleanup()
-				cleanupRenderedComponent = undefined
-			}
-			await act(async () => {
-				firstRead.resolve()
-				await pending
-			})
-			expect(followupReads).toBe(0)
-			appQueryCache.clear()
-		})
-
-	void test('waits for active backend readiness before loading the registry page', async () => {
-		let backendReady = false
-		const readyPromise = Promise.resolve().then(() => {
-			backendReady = true
-		})
-		installActiveEnvironmentForTesting({
-			...createFakeBackend(),
-			waitUntilReady: async () => {
-				await readyPromise
-			},
-		})
-		const loadSecurityPoolPage = mock(async () => {
-			if (!backendReady) throw new Error('loadSecurityPoolPage ran before backend readiness')
-			return createSecurityPoolPageFromLoadedPools([createListedSecurityPool('0x01')], 0, 2)
-		})
-		const { state } = await renderHook(
-			createSecurityPoolsOverviewDependencies({
-				createWalletWriteClient: unexpectedCall('createWalletWriteClient'),
-				loadSecurityPoolLineage: unexpectedAsyncCall('loadSecurityPoolLineage'),
-				loadSecurityPoolPage,
-				queueSecurityPoolLiquidation: unexpectedAsyncCall('queueSecurityPoolLiquidation'),
-				waitForSecurityPoolReadBackend: async () => {
-					await readyPromise
-				},
-			}),
-		)
-
-		await act(async () => {
-			await state().loadBrowseSecurityPoolPage(0, 2, 'ready-request')
-		})
-
-		expect(loadSecurityPoolPage).toHaveBeenCalledTimes(1)
-		expect(state().securityPoolOverviewError).toBeUndefined()
-		expect(state().securityPoolPage?.pools.map(pool => pool.questionId)).toEqual(['0x01'])
 	})
 
 	void test('marks prior-environment pool results stale until the current environment loads', async () => {

@@ -1,3 +1,4 @@
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import * as workspaceCopy from '../../../copy/poolWorkspace.js'
 import { VaultExposureValue } from './VaultExposureValue.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -19,6 +20,8 @@ type SelectedVaultSummarySectionProps = Pick<SecurityVaultSectionProps, 'repPerE
 }
 
 export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, repPerEthSourceUrl, underwritingLimitAttoEth, currentVaultIsHealthy, securityVaultDetails, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount, variant = 'record' }: SelectedVaultSummarySectionProps) {
+	const requiredBaseAttoRep = repPerEthPrice === undefined || repPerEthPrice <= 0n ? undefined : ceilDiv(underwritingLimitAttoEth * repPerEthPrice, 10n ** 18n)
+	const associatedRepPerCapacityBps = requiredBaseAttoRep === undefined || requiredBaseAttoRep === 0n ? undefined : ((securityVaultDetails.vaultAttoRepBacking + securityVaultDetails.disputeStakedAttoRep) * 10_000n) / requiredBaseAttoRep
 	const summaryTitle = <span>{securityPoolCopy.vaultSummary}</span>
 	const embeddedContent = (
 		<div className='security-pool-selected-vault-summary security-pool-browse-vault-list'>
@@ -64,7 +67,7 @@ export function SelectedVaultSummarySection({ repPerEthPrice, repPerEthSource, r
 	const gridContent = (
 		<VaultMetricGrid
 			openInterestAttoEth={securityVaultDetails.openInterestAttoEth}
-			associatedRepPerCapacityBps={securityVaultDetails.associatedRepPerCapacityBps}
+			associatedRepPerCapacityBps={associatedRepPerCapacityBps}
 			badDebtAttoEth={securityVaultDetails.badDebtAttoEth}
 			layout='grid'
 			disputeStakedAttoRep={securityVaultDetails.disputeStakedAttoRep}

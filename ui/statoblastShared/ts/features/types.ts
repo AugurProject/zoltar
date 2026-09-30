@@ -17,7 +17,6 @@ import type {
 	ReadClient,
 	ReportingDetails,
 	ReportingOutcomeKey,
-	SecurityPoolBrowsePage,
 	SecurityPoolCreationResult,
 	SecurityPoolOverviewActionResult,
 	SecurityPoolVaultSummary,
@@ -140,19 +139,9 @@ type LiquidationModalStateProps = {
 }
 
 type SecurityPoolsOverviewRouteContentProps = {
-	accountState: AccountState
 	activeUniverseId: bigint
 	currentTimestamp: bigint | undefined
-	environmentRefreshKey: number
-	loadingSecurityPoolPage: boolean
-	onCreateSecurityPool?: () => void
-	onLoadSecurityPoolPage: (pageIndex: number, pageSize: number, requestKey: string) => void
-	/** Re-reads the visible page in place on each new block. */
-	onRefreshSecurityPoolPage?: (() => void) | undefined
 	onSelectSecurityPool?: (securityPoolAddress: string, universeId: bigint) => void
-	securityPoolOverviewError: string | undefined
-	securityPoolPage: SecurityPoolBrowsePage | undefined
-	securityPoolPageFreshness?: DataFreshness | undefined
 	securityPools: ListedSecurityPool[]
 }
 
