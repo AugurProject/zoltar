@@ -323,7 +323,7 @@ describe('trading header', () => {
 		expect(Array.from(rendered.container.querySelectorAll('.tab-nav .view-tabs a')).map(anchor => anchor.textContent)).toEqual(['Markets', 'Portfolio', 'Create'])
 		expect(rendered.container.querySelector('.tab-nav a[aria-current="page"]')?.textContent).toBe('Markets')
 		await act(() => moreMenuButton(rendered.container).click())
-		expect(Array.from(rendered.container.querySelectorAll('.tab-nav-more-menu a')).map(anchor => anchor.textContent)).toEqual(['Liquidity', 'Universe', 'Help'])
+		expect(Array.from(rendered.container.querySelectorAll('.tab-nav-more-menu a')).map(anchor => anchor.textContent)).toEqual(['Universe', 'Help'])
 		const helpLink = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Help')
 		if (helpLink === undefined) throw new Error('Shared route navigation is missing')
 		await act(() => {

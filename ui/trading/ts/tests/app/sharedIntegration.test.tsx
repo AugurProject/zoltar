@@ -278,10 +278,10 @@ test('the removed demo query cannot select a parallel simulated-data application
 	dom.cleanup()
 })
 
-test('shared header navigation preserves hash settings once and keeps addressed liquidity context', async () => {
+test("shared header navigation preserves hash settings once and files a market's liquidity view under its Markets tab", async () => {
 	const pool = '0x1111111111111111111111111111111111111111'
 	const search = 'universe=1&network=sepolia&simulate=1&simScenario=trading-funded'
-	const dom = installDomEnvironment(`http://localhost/#/market/${pool}?${search}`)
+	const dom = installDomEnvironment(`http://localhost/#/liquidity/${pool}?${search}`)
 	const rendered = await renderIntoDocument(
 		<App
 			initializeEnvironment={async () => undefined}
@@ -291,22 +291,20 @@ test('shared header navigation preserves hash settings once and keeps addressed 
 		/>,
 	)
 	try {
-		const moreButton = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('.tab-nav button')).find(button => button.textContent === 'More')
-		if (moreButton === undefined) throw new Error('The More menu is missing')
-		await act(() => moreButton.click())
-		const link = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav-more-menu a')).find(anchor => anchor.textContent === 'Liquidity')
-		if (link === undefined) throw new Error('Liquidity link is unavailable')
+		const link = Array.from(rendered.container.querySelectorAll<HTMLAnchorElement>('.tab-nav .view-tabs a')).find(anchor => anchor.textContent === 'Markets')
+		if (link === undefined) throw new Error('Markets link is unavailable')
+		expect(link.getAttribute('aria-current')).toBe('page')
 		const href = link.getAttribute('href')
-		expect(href).toBe(`#/liquidity/${pool}?${search}`)
-		if (href === null) throw new Error('Liquidity link has no destination')
+		expect(href).toBe(`#/market/${pool}?${search}`)
+		if (href === null) throw new Error('Markets link has no destination')
 		await act(() => {
 			link.click()
 			window.location.hash = href
 			window.dispatchEvent(new Event('hashchange'))
 		})
-		expect(tradingRouting.resolve(window.location.hash)).toBe(`liquidity/${pool}`)
+		expect(tradingRouting.resolve(window.location.hash)).toBe(`market/${pool}`)
 		expect(rendered.container.querySelector('.header-toolbar-navigation select')).toBeNull()
-		expect(window.location.hash).toBe(`#/liquidity/${pool}?${search}`)
+		expect(window.location.hash).toBe(`#/market/${pool}?${search}`)
 		const parameters = new URLSearchParams(window.location.hash.split('?')[1])
 		for (const [key, value] of new URLSearchParams(search)) expect(parameters.getAll(key)).toEqual([value])
 	} finally {

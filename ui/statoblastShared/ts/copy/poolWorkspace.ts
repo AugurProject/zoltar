@@ -2,7 +2,6 @@ export const poolDetails = 'Pool details'
 export const moreTools = 'More tools'
 export const moreToolsShort = 'More'
 export const poolAddressAndRefresh = 'Pool address / refresh'
-export const openPoolDescription = 'Open its vaults, shares, and reporting workspace.'
 export const moreActions = 'More actions'
 export const capacityLabel = 'Collateral in use / capacity'
 export const capacityUnavailable = 'Capacity needs a current price.'
@@ -29,7 +28,7 @@ export const lifecycleStepLabels = {
 	settled: 'Settled',
 	truthAuction: 'Truth auction',
 } as const
-export const lifecycleStepProgress = (step: number, total: number, label: string) => `Stage ${step.toString()} of ${total.toString()} · ${label}`
+export const lifecycleStepPosition = (step: number, total: number) => `${step.toString()} of ${total.toString()}`
 export const nextActions = 'Next actions'
 export const nothingToDoNow = 'Nothing needs your action on this pool right now.'
 export const deadlineLabel = 'By'

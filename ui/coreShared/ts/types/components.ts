@@ -118,6 +118,10 @@ export type RouteHeaderProps = {
 	eyebrow?: ComponentChildren
 	summary?: ComponentChildren
 	title: ComponentChildren
+	/** Sits beside the title on the same row, for an object page whose title is the object's own name (favorite toggle, status badge). */
+	titleAside?: ComponentChildren
+	/** When provided, the title heading becomes a programmatic focus target (`tabIndex={-1}`) so callers can move focus to a changed object. */
+	titleRef?: RefObject<HTMLHeadingElement>
 }
 
 export type SectionBlockProps = {

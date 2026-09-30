@@ -129,7 +129,7 @@ describe('opening a pool from Browse pools', () => {
 
 	test('opens a pasted pool from another universe with one history entry that Back undoes', async () => {
 		const counts = await renderPools('http://localhost/#/pools?universe=1', createSelectedPool({ hasLoadedVaults: false, securityPoolAddress: POOL_ADDRESS, universeId: 11n }))
-		const search = within(document.body).getByLabelText('Search pools')
+		const search = within(document.body).getByLabelText('Search or paste a pool address')
 		if (!(search instanceof window.HTMLInputElement)) throw new Error('Expected the pool search input')
 		search.value = POOL_ADDRESS
 		await act(() => {

@@ -3,10 +3,15 @@ import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components
 import * as appCopy from '../copy/app.js'
 
 type TradingNavigationState = {
-	/** The security pool the current route addresses; market and liquidity links keep it. */
+	/** The security pool the current route addresses; the market link keeps it. */
 	addressedPool: string | undefined
 	displayedRoute: string
 	liveDeploymentStatus: 'loading' | 'verified' | 'missing' | 'unreachable'
+}
+
+/** The navigation entry a workflow route belongs to: a market's liquidity view sits under Markets. */
+export function tradingNavigationRoute(workflowRoute: string) {
+	return workflowRoute === 'liquidity' ? 'market' : workflowRoute
 }
 
 /**
@@ -20,8 +25,8 @@ export function tradingNavigationTabs({ addressedPool, displayedRoute, liveDeplo
 		{ route: 'portfolio', hash: '#/portfolio', label: appCopy.portfolio },
 		{ route: 'create-market', hash: '#/create-market', label: appCopy.create },
 	]
+	// Liquidity is a view of a market, reached from its ticket tab or its card, so it has no navigation entry of its own.
 	const secondaryTabs: RouteTabDefinition[] = [
-		{ route: 'liquidity', hash: addressedPool === undefined ? '#/liquidity' : `#/liquidity/${addressedPool}`, label: appCopy.liquidity },
 		{ route: 'universe', hash: '#/universe', label: appCopy.universe },
 		{ route: 'help', hash: '#/help', label: appCopy.help },
 	]

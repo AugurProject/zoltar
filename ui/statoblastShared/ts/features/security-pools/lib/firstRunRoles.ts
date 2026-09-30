@@ -6,7 +6,6 @@ const FIRST_RUN_CARD_STORAGE_KEY = 'statoblast.firstRunRoleGuideDismissed'
 type FirstRunStorage = Pick<Storage, 'getItem' | 'setItem'>
 
 type FirstRunRole = {
-	detail: string
 	guideHref: string
 	guideLabel: string
 	id: 'reporter' | 'trader' | 'vault-provider'
@@ -14,9 +13,9 @@ type FirstRunRole = {
 }
 
 export const firstRunRoles: readonly FirstRunRole[] = [
-	{ id: 'vault-provider', title: firstRunCopy.vaultProviderRole, detail: firstRunCopy.vaultProviderDetail, guideLabel: firstRunCopy.vaultProviderGuide, guideHref: getProtocolDocsHref('explanation/statoblast.html#participants-assets') },
-	{ id: 'trader', title: firstRunCopy.traderRole, detail: firstRunCopy.traderDetail, guideLabel: firstRunCopy.traderGuide, guideHref: getProtocolDocsHref('explanation/trading.html') },
-	{ id: 'reporter', title: firstRunCopy.reporterRole, detail: firstRunCopy.reporterDetail, guideLabel: firstRunCopy.reporterGuide, guideHref: getProtocolDocsHref('explanation/escalation-game.html') },
+	{ id: 'vault-provider', title: firstRunCopy.vaultProviderRole, guideLabel: firstRunCopy.vaultProviderGuide, guideHref: getProtocolDocsHref('explanation/statoblast.html#participants-assets') },
+	{ id: 'trader', title: firstRunCopy.traderRole, guideLabel: firstRunCopy.traderGuide, guideHref: getProtocolDocsHref('explanation/trading.html') },
+	{ id: 'reporter', title: firstRunCopy.reporterRole, guideLabel: firstRunCopy.reporterGuide, guideHref: getProtocolDocsHref('explanation/escalation-game.html') },
 ]
 
 // Blocked or full storage only costs the persisted dismissal; the guide still works for the session.
