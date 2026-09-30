@@ -14,10 +14,15 @@ describe('statoblast route validation', () => {
 		}
 	})
 
-	test('rejects empty, misplaced, and unknown Open Oracle views', () => {
+	test('rejects empty and unknown Open Oracle views', () => {
 		expect(getInvalidStatoblastRouteState({ openOracleView: '', resolvedRoute: 'open-oracle', search: '?openOracleView=', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(true)
-		expect(getInvalidStatoblastRouteState({ openOracleView: 'browse', resolvedRoute: 'pools', search: '?openOracleView=browse', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(true)
+		expect(getInvalidStatoblastRouteState({ openOracleView: 'browse', resolvedRoute: 'pools', search: '?openOracleView=browse', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(false)
 		expect(getInvalidStatoblastRouteState({ openOracleView: 'invalid', resolvedRoute: 'open-oracle', search: '?openOracleView=invalid', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(true)
 		expect(getInvalidStatoblastRouteState({ openOracleView: 'selected-report', resolvedRoute: 'open-oracle', search: '?openOracleView=selected-report&openOracleReportId=9', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(false)
+	})
+	test('accepts a remembered Advanced view while visiting Pools or Deploy', () => {
+		for (const resolvedRoute of ['pools', 'deploy'] as const) {
+			expect(getInvalidStatoblastRouteState({ openOracleView: 'selected-report', resolvedRoute, search: '?openOracleView=selected-report&openOracleReportId=9', selectedPoolView: '' }).hasInvalidOpenOracleView).toBe(false)
+		}
 	})
 })

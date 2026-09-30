@@ -44,3 +44,13 @@ export type ForkAuctionFormState = {
 	submitBidPrice: string
 	vaultAddress: string
 }
+
+export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
+export type SecurityPoolLifecycleState = 'operational' | 'ended' | 'poolForked' | 'forkMigration' | 'forkTruthAuction'
+export type PoolSortKey = 'recent' | 'remainingCapacity' | 'endTime' | 'state'
+export type PoolStateFilter = 'all' | SecurityPoolLifecycleState
+export type PoolBrowseState = {
+	searchText: string
+	sortKey: PoolSortKey
+	stateFilter: PoolStateFilter
+}
