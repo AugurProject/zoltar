@@ -1,3 +1,4 @@
+import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { retryDelayMilliseconds, type PollResult } from '@zoltar/bot-shared/monitoring/resilience'
 import { scanBlockTimeMs, startScanReport } from '@zoltar/core-shared/monitoring/scanStatus'
 import { executionProfileId } from '../config/execution-profile.ts'
@@ -409,7 +410,7 @@ async function runCyclePhases(operator: OperatorState, cycle: OperatorCycle, dep
 	// Submission evidence is refreshed in every mode so the go-live checklist can be satisfied before arming.
 	const submissionReadiness = await refreshSubmissionReadiness(currentResources(operator), settings)
 	if (submissionReadiness !== 'current') refreshEndpointHealth(operator)
-	if (submissionReadiness === 'failed') console.error('chaosBot=submission readiness refresh failed in dry run; the recorded endpoint evidence stays visible until the next refresh')
+	if (submissionReadiness === 'failed') logEvent('chaos', 'submissionReadinessRefreshFailed', { detail: 'the recorded endpoint evidence stays visible until the next refresh' }, 'error')
 	const continuation = await advanceContinuationWorkflow(operator, cycle, deps, completed)
 	if (continuation !== undefined) return continuation
 	const obstructions = lifecycleObstructions(state)
@@ -456,7 +457,7 @@ export async function runOperatorCycle(operator: OperatorState, deps: OperatorDe
 		scanCompleted: false,
 		scanReport: startScanReport({
 			network: settings.network,
-			blockTimeMs: scanBlockTimeMs(settings.network.chainId, process.env['SCAN_BLOCK_TIME_MS']),
+			blockTimeMs: deps.environment.scanBlockTimeMs ?? scanBlockTimeMs(settings.network.chainId),
 			readHead: async () => (operator.resources === undefined || settings.connectivity === undefined ? undefined : await chaosReadClients(settings, operator.resources.pool)[0]?.client.getBlockNumber()),
 		}),
 		settings,
@@ -488,8 +489,8 @@ export async function waitForNextCycle(operator: OperatorState, deps: OperatorDe
 /** Pending transactions are routine recovery progress; every other cycle failure is an error. */
 export function logCycleFailure(error: unknown) {
 	if (error instanceof TransactionAwaitingRecovery && error.severity === 'pending') {
-		console.log(`chaosBot=${errorMessage(error)}`)
+		logEvent('chaos', 'cyclePending', { reason: errorMessage(error) })
 		return
 	}
-	console.error(`chaosBot=${errorMessage(error)}`)
+	logEvent('chaos', 'cycleFailed', { error: errorMessage(error) }, 'error')
 }

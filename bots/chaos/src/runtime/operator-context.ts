@@ -1,3 +1,4 @@
+import type { BotEnvironment } from '@zoltar/bot-shared/config/environment'
 import { privateKeyToAccount, type Address } from '@zoltar/bot-shared/ethereum'
 import type { BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
@@ -37,6 +38,8 @@ export type OperatorState = {
 }
 
 export type OperatorDependencies = {
+	/** The shared bot environment, read once at startup. */
+	environment: BotEnvironment
 	gate: SignerOperationGate
 	shutdown: BotShutdownController
 }

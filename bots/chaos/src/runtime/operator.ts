@@ -1,5 +1,6 @@
 import { preflightOperationPreview } from '../execution/operation-preview.ts'
 import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../config/deployment-state.ts'
+import { readBotEnvironment } from '@zoltar/bot-shared/config/environment'
 import { botDashboardLifecycle, type BotShutdownController } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { createSignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { pollUntilStopped } from '@zoltar/bot-shared/monitoring/resilience'
@@ -132,7 +133,7 @@ function createOperatorDashboard(operator: OperatorState, deps: OperatorDependen
 		gate: deps.gate,
 		hostname: configuration.settings.runtime.uiHost,
 		locks,
-		loopbackPublished: process.env['ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED'] === 'true',
+		loopbackPublished: deps.environment.dashboard.loopbackPublished,
 		onConnectivityUpdated: (settings, checks) => {
 			operator.resources = createRuntimeResources(settings, checks)
 		},
@@ -154,8 +155,9 @@ function createOperatorDashboard(operator: OperatorState, deps: OperatorDependen
 }
 
 export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
+	const environment = readBotEnvironment()
 	const operator = await startOperator(loaded)
-	const deps: OperatorDependencies = { gate: createSignerOperationGate(), shutdown }
+	const deps: OperatorDependencies = { environment, gate: createSignerOperationGate(), shutdown }
 	const { dashboardController, manualOperations } = createOperatorDashboard(operator, deps, locks)
 	await using _manualOperations = manualOperations
 	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined

@@ -127,7 +127,7 @@ type BoundedWriteOptions = AtomicWriteOptions & {
 }
 
 /** `writeFileAtomically`, refusing contents above `maximumBytes` before anything touches the disk. */
-async function writeBoundedFileAtomically(path: string, contents: string, { label, maximumBytes, ...options }: BoundedWriteOptions) {
+export async function writeBoundedFileAtomically(path: string, contents: string, { label, maximumBytes, ...options }: BoundedWriteOptions) {
 	if (Buffer.byteLength(contents, 'utf8') > maximumBytes) throw new Error(`${label} exceeds the ${maximumBytes.toString()}-byte safety limit`)
 	await writeFileAtomically(path, contents, options)
 }
