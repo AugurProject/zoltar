@@ -2,7 +2,7 @@
 
 ## Scope and startup
 
-These instructions apply repository-wide. Nested `AGENTS.md` files add or override guidance for their subtree.
+These instructions apply repository-wide. Nested `AGENTS.md` files add or override guidance for their subtree. [README.md](./README.md) explains the commands and [ARCHITECTURE.md](./ARCHITECTURE.md) maps the layers and where code belongs.
 
 Do not install dependencies for read-only inspection, planning, or prose review. Before running Bun-based commands or changing executable files, check root dependencies:
 
@@ -20,8 +20,7 @@ On a fresh checkout, use `bun install --frozen-lockfile && bun run setup` for a 
 
 ## Working boundaries
 
-- Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists.
-- Never edit `ui/*/js/**` or `shared/*/js/**` directly.
+- Treat TypeScript as source. Never inspect or edit a generated `js/` file when a corresponding TypeScript source exists, and never edit `ui/*/js/**`, `shared/*/js/**`, or any other generated output directly.
 - Do not modify imported compatibility contracts:
   - `solidity/contracts/statoblast/openOracle/OpenOracle.sol`
   - `solidity/contracts/statoblast/WETH9.sol`
@@ -84,7 +83,7 @@ Run tests for behavior changes, bug fixes, tests or helpers, contracts, dependen
 bun run ensure-contract-artifacts && bun run test:run -- --bail=1
 ```
 
-If selected tests require Anvil and `anvil` is missing, run `bun run install:anvil`.
+If selected tests require Anvil and `anvil` is missing, run `bun install --frozen-lockfile`; the root install provides the pinned Anvil binary.
 
 When the task changes tests themselves, run the changed tests and any production tests needed to prove the behavior under test; do not require unrelated tests to test those tests. Skip tests for non-executable documentation, instructions, formatting, and agent-prompt changes.
 
@@ -102,7 +101,7 @@ Skip the repository formatter when every changed file is outside its configured 
 
 ### 4. Lint and repository checks
 
-- Use `bun run check:changed` for ordinary scoped changes covered by Biome, UI string linting, or agent configuration validation.
+- Use `bun run check:changed` for ordinary scoped changes covered by Biome, UI string linting, agent configuration validation, or the generated-output policy.
 - Use full `bun run check` for package scripts, lint/check scripts, docs tooling, Solidity, broad cross-project changes, or CI-parity validation. This broad command also runs documentation and generation-dependent checks.
 - For files outside those scopes, run a file-appropriate check.
 
@@ -114,54 +113,11 @@ Run `bun run knip` when imports, exports, tests, package scripts or dependencies
 
 Run `bun run check:generated-clean` only for CI/release freshness work or when contracts, generation scripts, shared build output, UI contract artifacts, or artifact policy change.
 
-Generated outputs are intentionally untracked, except for the documentation outputs, the
-shared bot ABI module, the arbitrager generated TypeScript, and the vendored deployment input
-listed below. The documentation outputs are tracked because the static documentation site loads them directly;
-`bun run docs:check-charts`, `bun run docs:check-runtime`, `bun run docs:check-contract-reference`, and
-`bun run docs:check-index` enforce their freshness. `bun run check:uniswap-deployment-artifact`
-pins the deployment input and prevents its large upstream packages from entering the lockfile.
-The shared bot ABI module is tracked so the liquidator and arbitrager container images resolve it
-without Solidity artifacts (local `typecheck` and `test` scripts still ensure the artifacts first);
-`cd bots/shared && bun run check:generated` enforces its freshness.
-AugurScan ABI catalogs, contract routes, and network manifests are ignored build outputs.
-`cd augurScan && bun run metadata:build` generates them from Solidity sources, deployment metadata,
-and vendored dependency ABIs. Build, typecheck, and test entry points prepare these outputs
-automatically; Docker generates them in a build stage and copies them into the runtime image.
-Dependency ABIs are tracked in `augurScan/config/dependency-abis.json`; builds verify their
-checksums against the tracked source pins and never download replacements. `bun run metadata:check` checks the generated results without changing them.
+`tooling/repo/generated-artifacts.ts` is the canonical registry of generated outputs: each entry records whether Git tracks it, the command that recreates it, and, for tracked outputs, why it is committed and which command enforces its freshness. `bun run check:generated-policy` keeps `.gitattributes`, `.gitignore`, and the Git index consistent with it.
 
-| Output | Source or command |
-| --- | --- |
-| `shared/*/js/**` | `bun run shared:build` |
-| `solidity/artifacts/<app>/Contracts.json` | `bun tooling/contracts/build-app-contracts.mts <app>` |
-| `solidity/artifacts/Contracts.json` | `bun run compile-contracts` |
-| `solidity/ts/types/contractArtifact.ts` | `bun run compile-contracts` |
-| `ui/coreShared/ts/contractArtifact.ts`, `ui/coreShared/ts/abis.ts`, and `ui/statoblastShared/ts/contractArtifact.ts` | `bun run generate` or `bun run ui:build` |
-| `ui/*/js/**` | UI TypeScript builds per package |
-| `bots/shared/src/contracts/abi.generated.ts` | `bun tooling/contracts/generate-bot-abis.mts` (or `cd bots/shared && bun run generate:abi`); validate with `cd bots/shared && bun run check:generated` |
-| `ui/trading/ts/generated/contractArtifact.ts` | `bun ./tooling/ui/vendor.mts trading`, `bun run ui:vendor`, or `bun run trading:compile` |
-| `ui/*/vendor/**` | `bun run ui:vendor` |
-| `docs/assets/js/chartRuntime.js` | `bun run docs:build-charts` |
-| `docs/assets/js/auctionClearing.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/deploymentMaskDecoder.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/docsShell.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/responsiveDocs.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/interactiveTools.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/invariantExplorer.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/mmrProofPlanner.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/openOracleTools.js` | `bun run docs:build-runtime` |
-| `docs/assets/js/docsData.js` | `bun run docs:build-index` |
-| `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
-| `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
-| `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
-| `bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts` and `bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts` | `cd bots/open-oracle-arbitrager && bun run compile-contracts`; validate with `bun run check:generated` |
-| `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |
-| `scripts/artifacts/uniswap-deployment.json` | Pinned Permit2, SwapRouter, and Uniswap V3/V4 bytecode from the upstream package versions recorded in the artifact (Permit2 and the SwapRouter deploy on every chain; the rest on deterministic testnets), plus Uniswap's published Sepolia WETH, V3 factory, QuoterV2, V4 PoolManager, and V4 Quoter creation transactions vendored byte for byte with their runtime code hashes; validate with `bun run check:uniswap-deployment-artifact` |
-| `augurScan/config/abis.json`, `augurScan/config/manifests/*.json`, and `augurScan/config/system-contracts.generated.ts` | `cd augurScan && bun run metadata:build`; validate with `bun run metadata:check` in that package |
-| `augurScan/public/app.js` | `cd augurScan && bun run build:browser` (also run by `bun run build`) |
-| `augurScan/config/dependency-abis.json` | Vendored dependency ABIs, updated manually with reviewed source URLs and SHA-256 pins in `config/dependency-abi-sources.json`; validate with `cd augurScan && bun run metadata:check`. Builds must not rewrite or download this file. |
-
-Do not regenerate or commit these outputs unless the task requires them or a required check reports a missing expected artifact. A deployment workflow that adds another tracked generated artifact must update this policy and add a dirty-diff freshness check in the same change.
+- Generated outputs are ignored unless the registry marks them tracked. Never commit an ignored output.
+- Do not regenerate or commit outputs unless the task requires them or a required check reports a missing expected artifact.
+- A change that adds a tracked generated output must register it with its freshness check, mark it in `.gitattributes`, and add a dirty-diff freshness check in the same change.
 
 ### 7. UI manual QA
 
@@ -208,7 +164,7 @@ Automated formatters and linters enforce only part of this policy. Review the re
 ## Documentation
 
 - Documentation under `docs/` uses HTML as its canonical source format.
-- Do not create standalone tests that asserts text in the documentation
+- Do not create standalone tests that assert text in the documentation.
 - Validate documentation with direct scripts such as `bun run docs:check-html`, formatting/linting, or a targeted executable check.
 - Runtime tests are appropriate for JavaScript embedded in documentation when that JavaScript has behavior.
 
@@ -234,9 +190,7 @@ When creating a pull request:
 
 ## Review gates
 
-`.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy.
-
-Apply the review-context isolation rule in `.codex/review-contract.md` to every required reviewer.
+`.codex/review-contract.md` is the canonical review handoff, severity, output, scoring, and closure policy. Apply its review-context isolation rule to every required reviewer.
 
 ### Visual reviewer
 
@@ -252,10 +206,7 @@ Disposition every finding using the contract. After material fixes, rerun affect
 
 ### Documentation reviewer
 
-When published documentation changes, spawn the project-scoped reviewer from
-`.codex/agents/textReview.toml` before the visual and final reviewers.
-
-Supply:
+When published documentation changes, spawn the project-scoped reviewer from `.codex/agents/textReview.toml` before the visual and final reviewers. Supply:
 
 - changed documentation files;
 - primary Diátaxis mode of each changed page;
@@ -268,19 +219,9 @@ Supply:
 - validation performed;
 - when the change set is split, the section this run owns and the sections other runs own.
 
-When more than about fifteen pages change, spawn the reviewer once per `sections`
-entry in `docs/manifest.json` that contains a changed page, with the same handoff and
-the owned section stated; the landing page `docs/documentation.html` joins the
-start-here run. Disposition the union of the findings. One run cannot finish both
-verification passes over a large corpus.
+When more than about fifteen pages change, spawn the reviewer once per `sections` entry in `docs/manifest.json` that contains a changed page, with the same handoff and the owned section stated; the landing page `docs/documentation.html` joins the start-here run. Disposition the union of the findings. One run cannot finish both verification passes over a large corpus.
 
-Ask the reviewer to assess reader-purpose completion, mode purity, concision,
-canonical ownership, accuracy of claims actually made, rendered correctness,
-and deletion opportunities.
-
-Do not ask it to build protocol-wide documentation coverage or require examples,
-diagrams, formulas, edge cases, and security analysis that are outside the
-stated reader job.
+Ask the reviewer to assess reader-purpose completion, mode purity, concision, canonical ownership, accuracy of claims actually made, rendered correctness, and deletion opportunities. Do not ask it to build protocol-wide documentation coverage or require examples, diagrams, formulas, edge cases, and security analysis that are outside the stated reader job.
 
 ### Final response
 
