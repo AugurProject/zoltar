@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ActionLauncherButton } from '@zoltar/ui-core-shared/components/ActionLauncherButton.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { BackingDetails } from './BackingDetails.js'
@@ -24,7 +25,7 @@ export function PairInitializationAction({ market, nowSeconds }: { market: LiveM
 	if (blocker !== undefined)
 		return (
 			<div className='pair-initialization'>
-				<p className='detail'>{liveCopy.conditionalPriceUnavailable}</p>
+				<UserMessage className='detail' detail={liveCopy.conditionalPriceUnavailable} />
 				<div className='actions'>
 					<ActionLauncherButton idleLabel={liveCopy.initializeTradingPool} pendingLabel={liveCopy.initializeTradingPool} availability={{ disabled: true, reason: liveCopy.pairInitializationUnavailable(blocker) }} onClick={() => undefined} />
 				</div>
@@ -32,7 +33,7 @@ export function PairInitializationAction({ market, nowSeconds }: { market: LiveM
 		)
 	return (
 		<div className='pair-initialization'>
-			<p className='detail'>{market.pair === undefined ? liveCopy.undeployedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2))}</p>
+			<UserMessage className='detail' detail={market.pair === undefined ? liveCopy.undeployedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2)) : liveCopy.uninitializedPairDescription(formatTrimmedUnits(market.feeBps, 2, 2))} />
 			<div className='actions'>
 				<a className='button-link primary' href={getTradingRouteHref(`#/${market.pair === undefined ? 'create-market' : 'liquidity'}/${market.pool}`)}>
 					{market.pair === undefined ? liveCopy.deployTradingPool : liveCopy.initializeTradingPool}
@@ -82,11 +83,7 @@ export function LiveSecurityPoolDetails({
 			<ErrorNotice message={connectionMessage} />
 			<SectionBlock title={liveCopy.marketFacts}>
 				<div className='security-pool-details' aria-busy={refreshing}>
-					{refreshMessage === undefined ? null : (
-						<p className='detail' role='status'>
-							{refreshMessage}
-						</p>
-					)}
+					{refreshMessage === undefined ? null : <UserMessage className='detail' announcement='polite' detail={refreshMessage} />}
 					<RetryableNotice disabled={workflowLocked} message={errorMessage} onRetry={refreshing ? undefined : retry} retryLabel={hasLoadedDetails ? liveCopy.retryRefresh : liveCopy.retrySecurityPool} />
 
 					{market.loadError !== undefined ? (

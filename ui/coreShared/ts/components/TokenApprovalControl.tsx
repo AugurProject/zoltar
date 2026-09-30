@@ -1,3 +1,4 @@
+import { UserMessage } from './UserMessage.js'
 import { formatUnits } from '@zoltar/core-shared/evm/ethereum'
 import type { ComponentChildren } from 'preact'
 import * as commonCopy from '../copy/common.js'
@@ -222,11 +223,7 @@ export function TokenApprovalControl({
 					{amountField}
 				</details>
 			)}
-			{renderActions !== undefined || amountValidationMessage === undefined ? undefined : (
-				<p className='field-error' id={amountValidationMessageId} role='alert'>
-					{amountValidationMessage}
-				</p>
-			)}
+			{renderActions !== undefined || amountValidationMessage === undefined ? undefined : <UserMessage placement='field' tone='error' announcement='assertive' id={amountValidationMessageId} detail={amountValidationMessage} />}
 
 			{renderActions === undefined ? <div className='actions'>{approvalButton}</div> : renderActions({ button: approvalButton, notice: allowanceMessage ?? amountValidationMessage ?? visibleStatusMessage ?? guardMessage, noticeId: amountValidationMessageId })}
 

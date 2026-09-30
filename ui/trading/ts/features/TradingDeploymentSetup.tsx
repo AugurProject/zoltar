@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { WalletConnectionControl } from '@zoltar/ui-core-shared/components/WalletConnectionControl.js'
 import { createPublicClient, http, type Hash, type PublicClient } from '@zoltar/core-shared/evm/ethereum'
 import { getActiveBackend, getActiveNetworkProfile } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
@@ -545,11 +546,7 @@ export function TradingDeploymentSetup({
 				<ErrorNotice id={networkNoticeId} message={wrongNetworkNotice} />
 				<ErrorNotice message={walletConnectionMessage} />
 				<ErrorNotice message={inspectionError} />
-				{actionMessage === undefined || actionError ? null : (
-					<p className='detail' role='status'>
-						{actionMessage}
-					</p>
-				)}
+				{actionMessage === undefined || actionError ? null : <UserMessage className='detail' announcement='polite' detail={actionMessage} />}
 				<ErrorNotice message={actionError ? actionMessage : undefined} />
 				<div className='actions'>
 					{deploymentComplete ? null : (

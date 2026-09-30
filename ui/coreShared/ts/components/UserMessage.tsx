@@ -24,13 +24,13 @@ type MessageOptions = {
 
 type UserMessageProps = MessageOptions &
 	(
-		| { placement: 'field'; detail: ComponentChildren; title?: never; actionHint?: never; actions?: never; expandableDetail?: never; dismiss?: never }
-		| (UserMessageContent & { placement?: Exclude<UserMessagePlacement, 'field' | 'page'>; dismiss?: never })
-		| (UserMessageContent & { placement: 'page'; dismiss?: { label: string; onDismiss(): void } | undefined })
+		| { placement: 'field'; as?: 'p' | 'span'; detail: ComponentChildren; title?: never; actionHint?: never; actions?: never; expandableDetail?: never; dismiss?: never }
+		| (UserMessageContent & { placement?: Exclude<UserMessagePlacement, 'field' | 'page'>; dismiss?: never; as?: never })
+		| (UserMessageContent & { placement: 'page'; dismiss?: { label: string; onDismiss(): void } | undefined; as?: never })
 	)
 
 /** Tone describes meaning, placement controls hierarchy, and announcement is explicitly opt-in. */
-export function UserMessage({ actions, actionHint, announcement, ariaLabel, className = '', detail, dismiss, expandableDetail, id, loading = false, placement = 'inline', title, tone = 'neutral' }: UserMessageProps) {
+export function UserMessage({ actions, actionHint, as: FieldTag = 'p', announcement, ariaLabel, className = '', detail, dismiss, expandableDetail, id, loading = false, placement = 'inline', title, tone = 'neutral' }: UserMessageProps) {
 	let role: 'alert' | 'status' | 'note' | undefined
 	if (announcement === 'assertive') role = 'alert'
 	else if (announcement === 'polite') role = 'status'
@@ -47,9 +47,9 @@ export function UserMessage({ actions, actionHint, announcement, ariaLabel, clas
 	const detailContent = loading ? <LoadingText announce={announcement === undefined}>{detail}</LoadingText> : detail
 	if (placement === 'field')
 		return (
-			<p {...attributes} className={`${tone === 'error' ? 'field-error' : 'field-hint'} ${className}`.trim()}>
+			<FieldTag {...attributes} className={`${tone === 'error' ? 'field-error' : 'field-hint'} ${className}`.trim()}>
 				{detailContent}
-			</p>
+			</FieldTag>
 		)
 	let placementClass = 'notice notice-stack-item'
 	if (placement === 'inline') placementClass = 'tx-action-notice'

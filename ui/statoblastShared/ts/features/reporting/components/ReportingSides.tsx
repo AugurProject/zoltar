@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -61,7 +62,7 @@ export function ReportingSides({
 					</div>
 				) : undefined}
 			</div>
-			{!finalized && displayBindingCapital !== undefined && displayBindingCapital > 0n ? <p className='detail'>{reportingCopy.bindingCapitalHelp}</p> : undefined}
+			{!finalized && displayBindingCapital !== undefined && displayBindingCapital > 0n ? <UserMessage className='detail' detail={reportingCopy.bindingCapitalHelp} /> : undefined}
 			<div className='escalation-sides' role={finalized ? undefined : 'radiogroup'} aria-label={reportingCopy.reportOutcomeAriaLabel}>
 				{outcomeSides.map((side, index) => (
 					<EscalationSide
