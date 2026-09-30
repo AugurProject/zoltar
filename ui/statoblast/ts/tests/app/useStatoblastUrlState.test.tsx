@@ -163,6 +163,8 @@ describe('useStatoblastUrlState', () => {
 
 	test('opens a pool in another universe with one history entry', async () => {
 		const state = await renderHarness()
+		await act(() => state().setVaultAddress(POOL_C))
+		await act(() => state().setVaultView('vault-by-address'))
 		const originalPushState = window.history.pushState.bind(window.history)
 		let pushes = 0
 		window.history.pushState = (...parameters: Parameters<History['pushState']>) => {
@@ -173,6 +175,8 @@ describe('useStatoblastUrlState', () => {
 			await act(() => state().openSecurityPoolInUniverse(3n, POOL_B))
 			expect(pushes).toBe(1)
 			expect(window.location.hash).toBe(`#/pools/${POOL_B}?universe=3`)
+			expect(state().vaultAddress).toBeUndefined()
+			expect(state().vaultView).toBeUndefined()
 			expect(state().activeUniverseId).toBe(3n)
 			expect(state().securityPoolAddress).toBe(POOL_B)
 			await act(() => {
@@ -198,5 +202,62 @@ describe('useStatoblastUrlState', () => {
 		await act(() => state().setOpenOracleReport('555', 'replace'))
 		expect(window.location.hash).toBe('#/open-oracle?openOracleView=selected-report&openOracleReportId=555')
 		expect(state().openOracleReportId).toBe('555')
+	})
+	test('restores browser and vault selections through history and clears vaults for another pool', async () => {
+		const state = await renderHarness()
+		await act(() => state().setPoolBrowseState({ searchText: 'pool one', sortKey: 'endTime', stateFilter: 'ended' }))
+		await act(() => state().setVaultAddress(POOL_B))
+		await act(() => state().setVaultView('vault-by-address'))
+		expect(state().poolBrowseState).toEqual({ searchText: 'pool one', sortKey: 'endTime', stateFilter: 'ended' })
+		expect(state().vaultAddress).toBe(POOL_B)
+		expect(state().vaultView).toBe('vault-by-address')
+		const savedHash = window.location.hash
+		await act(() => state().setSecurityPoolAddress(POOL_C))
+		expect(state().vaultAddress).toBeUndefined()
+		expect(state().vaultView).toBeUndefined()
+		expect(state().poolBrowseState.searchText).toBe('pool one')
+		await act(() => {
+			window.history.replaceState({}, '', savedHash)
+			window.dispatchEvent(new Event('popstate'))
+		})
+		expect(state().vaultAddress).toBe(POOL_B)
+		expect(state().vaultView).toBe('vault-by-address')
+		await act(() => state().setVaultView('selected-vault'))
+		expect(state().vaultAddress).toBeUndefined()
+		await act(() => state().setPoolBrowseState({ searchText: '', stateFilter: 'all', sortKey: 'recent' }))
+		expect(new URLSearchParams(window.location.hash.split('?')[1]).has('poolSearch')).toBe(false)
+	})
+
+	test('reads universe from page parameters and permits a hash override', async () => {
+		window.history.replaceState({}, '', '/?universe=7#/pools')
+		const state = await renderHarness()
+		expect(state().activeUniverseId).toBe(7n)
+		await act(() => state().setActiveUniverseId(9n))
+		expect(state().activeUniverseId).toBe(9n)
+		await act(() => {
+			window.history.replaceState({}, '', '/?universe=7#/pools?universe=7')
+			window.dispatchEvent(new Event('popstate'))
+		})
+		expect(state().activeUniverseId).toBe(7n)
+	})
+
+	test('ignores invalid enum and address parameters', async () => {
+		window.history.replaceState({}, '', '#/pools?poolFilter=bad&poolSort=bad&vault=0x123&vaultView=bad')
+		const state = await renderHarness()
+		expect(state().poolBrowseState).toEqual({ searchText: '', sortKey: 'recent', stateFilter: 'all' })
+		expect(state().vaultAddress).toBeUndefined()
+		expect(state().vaultView).toBeUndefined()
+	})
+	test('opens an address-only vault link in By address and keeps My vault wallet-relative', async () => {
+		window.history.replaceState({}, '', '#/pools/' + POOL_A + '?vault=' + POOL_B)
+		const state = await renderHarness()
+		expect(state().vaultAddress).toBe(POOL_B)
+		expect(state().vaultView).toBe('vault-by-address')
+		await act(() => {
+			window.history.replaceState({}, '', '#/pools/' + POOL_A + '?vault=' + POOL_B + '&vaultView=selected-vault')
+			window.dispatchEvent(new Event('popstate'))
+		})
+		expect(state().vaultAddress).toBeUndefined()
+		expect(state().vaultView).toBe('selected-vault')
 	})
 })

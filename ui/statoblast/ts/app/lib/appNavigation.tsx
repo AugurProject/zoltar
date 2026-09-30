@@ -3,11 +3,10 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTab } from '@zoltar/ui-core-shared/navigation/appNavigation.js'
-import { buildRouteHref, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
+import { buildRouteHref, getRouteHashSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeOpenOracleViewQueryParam } from '@zoltar/ui-core-shared/navigation/openOracleUrlParams.js'
-import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
-import { buildPoolsRouteHash } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
+import { buildPoolsRouteHash, parsePoolsRouteHash, writePoolsLocationSearch } from '@zoltar/ui-statoblast-shared/lib/statoblastLocation.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { RouteTabDefinition, ViewTabOption } from '@zoltar/ui-core-shared/types/components.js'
@@ -23,9 +22,7 @@ function getOpenOracleViewOptions(routeHash: string, search: string): ViewTabOpt
 }
 
 function getPoolsViewHref(view: PoolsListView) {
-	const search = updateSearchParams(getRouteHashSearch(), params => {
-		if (view !== 'create') params.delete('questionId')
-	})
+	const search = writePoolsLocationSearch(getRouteHashSearch(), parsePoolsRouteHash(parseRouteHash(window.location.hash).routeHash), { view })
 	return buildRouteHref(buildPoolsRouteHash({ view }), search)
 }
 

@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { normalizeAddress, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 
-export type SelectedVaultView = 'browse-vaults' | 'selected-vault' | 'vault-by-address'
+import type { SelectedVaultView } from '../../../types/app.js'
+export type { SelectedVaultView } from '../../../types/app.js'
 
 type UseSelectedVaultWorkflowStateParams = {
+	controlledVaultView?: SelectedVaultView | undefined
+	onVaultViewChange?: ((view: SelectedVaultView) => void) | undefined
 	accountAddress: Address | undefined
 	hasLoadedCurrentVault: boolean
 	initialVaultView: SelectedVaultView | undefined
@@ -21,6 +24,8 @@ type UseSelectedVaultWorkflowStateParams = {
 
 export function useSelectedVaultWorkflowState({
 	accountAddress,
+	controlledVaultView,
+	onVaultViewChange,
 	hasLoadedCurrentVault,
 	initialVaultView,
 	loadingSecurityVault,
@@ -33,7 +38,11 @@ export function useSelectedVaultWorkflowState({
 	showSelectedPoolWorkflowDetails,
 	view,
 }: UseSelectedVaultWorkflowStateParams) {
-	const [vaultView, updateVaultView] = useState<SelectedVaultView>(initialVaultView ?? (accountAddress === undefined ? 'browse-vaults' : 'selected-vault'))
+	const [localVaultView, updateVaultView] = useState<SelectedVaultView>(initialVaultView ?? (accountAddress === undefined ? 'browse-vaults' : 'selected-vault'))
+	const defaultVaultView = accountAddress === undefined ? 'browse-vaults' : 'selected-vault'
+	const requestedVaultView = controlledVaultView ?? defaultVaultView
+	const availableVaultView = requestedVaultView === 'selected-vault' && accountAddress === undefined ? 'browse-vaults' : requestedVaultView
+	const vaultView = onVaultViewChange === undefined ? localVaultView : availableVaultView
 	const appliedDefaultKey = useRef<string | undefined>(undefined)
 	const userSelectedView = useRef(false)
 	const defaultResolved = useRef(false)
@@ -44,9 +53,10 @@ export function useSelectedVaultWorkflowState({
 	const setVaultView = (nextView: SelectedVaultView) => {
 		userSelectedView.current = true
 		updateVaultView(nextView)
+		onVaultViewChange?.(nextView)
 	}
 	useEffect(() => {
-		if (selectedPoolAddress === undefined) return
+		if (onVaultViewChange !== undefined || selectedPoolAddress === undefined) return
 		if (appliedDefaultKey.current !== selectedPoolVaultDefaultKey) {
 			const hadPreviousScope = appliedDefaultKey.current !== undefined
 			appliedDefaultKey.current = selectedPoolVaultDefaultKey
@@ -66,18 +76,18 @@ export function useSelectedVaultWorkflowState({
 		if (!hasLoadedCurrentVault) return
 		defaultResolved.current = true
 		updateVaultView(accountAddress === undefined ? 'browse-vaults' : 'selected-vault')
-	}, [accountAddress, hasLoadedCurrentVault, initialVaultView, onSecurityVaultFormChange, selectedPoolAddress, selectedVaultOwnerInput, selectedPoolVaultDefaultKey, vaultView])
+	}, [accountAddress, hasLoadedCurrentVault, initialVaultView, onVaultViewChange, onSecurityVaultFormChange, selectedPoolAddress, selectedVaultOwnerInput, selectedPoolVaultDefaultKey, vaultView])
 
 	useEffect(() => {
 		if (!showSelectedPoolWorkflowDetails || view !== 'vaults') return
-		if (accountAddress === undefined) return
+		if (accountAddress === undefined && vaultView !== 'vault-by-address') return
 		if (selectedPoolAddress === undefined || selectedVaultOwner === '') return
 		if (!sameAddress(selectedVaultSecurityPoolAddress, selectedPoolAddress)) return
 		if (hasLoadedCurrentVault || loadingSecurityVault) return
 		if (lastSelectedVaultAutoLoadKey.current === selectedVaultAutoLoadKey) return
 		lastSelectedVaultAutoLoadKey.current = selectedVaultAutoLoadKey
 		void onLoadSecurityVault()
-	}, [accountAddress, hasLoadedCurrentVault, loadingSecurityVault, onLoadSecurityVault, selectedPoolAddress, selectedVaultOwner, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, view])
+	}, [accountAddress, hasLoadedCurrentVault, loadingSecurityVault, onLoadSecurityVault, selectedPoolAddress, selectedVaultOwner, selectedVaultAutoLoadKey, selectedVaultSecurityPoolAddress, showSelectedPoolWorkflowDetails, vaultView, view])
 
 	return {
 		setVaultView,

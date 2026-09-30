@@ -1,4 +1,4 @@
-import { RequestPriceModal } from '../transactions/RequestPriceModal.js'
+import { RequestPriceModal } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/RequestPriceModal.js'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useForkAuctionOperations } from '@zoltar/ui-statoblast-shared/features/truth-auctions/hooks/useForkAuctionOperations.js'
@@ -30,6 +30,11 @@ export function useSecurityPoolsRoute({
 	currentTimestamp,
 	deploymentStatuses,
 	marketCreation,
+	poolBrowseState,
+	setPoolBrowseState,
+	vaultView,
+	setVaultAddress,
+	setVaultView,
 	onViewPendingReport,
 	inlineOracle,
 	openSecurityPoolInUniverse,
@@ -58,6 +63,11 @@ export function useSecurityPoolsRoute({
 	canReadOnchainData: boolean
 	currentTimestamp: bigint | undefined
 	deploymentStatuses: Parameters<typeof useSecurityPoolCreation>[0]['deploymentStatuses']
+	poolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['browseState']>
+	setPoolBrowseState: NonNullable<SecurityPoolsSectionProps['overview']['onBrowseStateChange']>
+	vaultView: SecurityPoolsSectionProps['workflow']['controlledVaultView']
+	setVaultView: NonNullable<SecurityPoolsSectionProps['workflow']['onVaultViewChange']>
+	setVaultAddress: (address: string | undefined) => void
 	marketCreation: ReturnType<typeof useMarketCreation>
 	inlineOracle?: SecurityPoolsSectionProps['workflow']['inlineOracle']
 	onViewPendingReport: (reportId: bigint) => void
@@ -363,6 +373,8 @@ export function useSecurityPoolsRoute({
 		onLoadUniverseDirectoryPools: () => void loadUniverseDirectoryPoolsForContext(),
 		onOpenSecurityPool: (poolAddress, universeId) => openPoolInUniverse(universeId, poolAddress),
 		overview: {
+			browseState: poolBrowseState,
+			onBrowseStateChange: setPoolBrowseState,
 			activeUniverseId,
 			currentTimestamp,
 			securityPools,
@@ -372,6 +384,8 @@ export function useSecurityPoolsRoute({
 		selectedPoolRepPrice,
 		universeDirectoryPools: universeDirectoryLoadedForContext ? universeDirectoryPools : undefined,
 		workflow: {
+			controlledVaultView: vaultView,
+			onVaultViewChange: setVaultView,
 			accountState,
 			activeUniverseId,
 			checkedSecurityPoolAddress,
@@ -496,7 +510,10 @@ export function useSecurityPoolsRoute({
 				},
 				onRedeemFees: () => void redeemFees(),
 				onRedeemRepFromVault: () => void redeemRepFromVault(),
-				onSecurityVaultFormChange: update => setSecurityVaultForm(current => ({ ...current, ...update })),
+				onSecurityVaultFormChange: update => {
+					if (update.selectedVaultOwner !== undefined && (update.selectedVaultOwner.trim() === '' || isHexAddressInput(update.selectedVaultOwner))) setVaultAddress(update.selectedVaultOwner)
+					setSecurityVaultForm(current => ({ ...current, ...update }))
+				},
 				onWithdrawRep: proposedRepPerEthPrice => void withdrawRep(proposedRepPerEthPrice),
 				securityVaultActiveAction,
 				securityVaultDetails,
