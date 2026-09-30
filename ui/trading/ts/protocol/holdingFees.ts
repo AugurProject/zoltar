@@ -43,11 +43,11 @@ function projectedCollateral(market: LiveMarket, deadline: bigint) {
 }
 
 /** A minimum approved today must remain payable through the signed transaction's validity, without other state changes. */
-export function sellHoldingFeeBlocker(market: LiveMarket, completeSets: bigint, minimumEth: bigint, deadline: bigint) {
+export function sellHoldingFeeBlocker(market: LiveMarket, completeSets: bigint, minimumAttoEth: bigint, deadline: bigint) {
 	const collateral = projectedCollateral(market, deadline)
 	if (collateral === undefined) return copy.holdingFeesUnavailableReason
 	const payout = market.shareTokenSupplyAttoShares === 0n ? completeSets : (completeSets * collateral) / market.shareTokenSupplyAttoShares
-	return payout === 0n || payout < minimumEth ? copy.holdingFeesBoundsReason : undefined
+	return payout === 0n || payout < minimumAttoEth ? copy.holdingFeesBoundsReason : undefined
 }
 
 /** Fee accrual increases complete sets minted per ETH, so both directional deposit ceilings need time coverage. */
