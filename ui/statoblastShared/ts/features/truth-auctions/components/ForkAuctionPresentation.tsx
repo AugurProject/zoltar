@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { Fragment, type ComponentChildren } from 'preact'
@@ -391,7 +392,7 @@ export function ForkAuctionOutcomeStage({
 	if (selectedStage === 'auction') {
 		return (
 			<fieldset aria-labelledby='fork-workflow-stage-auction' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-auction' role='tabpanel'>
-				{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
+				{selectedStageAheadMessage === undefined ? undefined : <UserMessage className='detail' detail={selectedStageAheadMessage} />}
 				{auctionOutcomeSelector}
 				{renderSelectedOutcomeChildPoolNotice()}
 				{truthAuctionEndedNotice}
@@ -425,7 +426,7 @@ export function ForkAuctionOutcomeStage({
 	if (selectedStage !== 'settlement') return undefined
 	return (
 		<fieldset aria-labelledby='fork-workflow-stage-settlement' className='fork-stage-panel' disabled={disabled} id='fork-workflow-stage-panel-settlement' role='tabpanel'>
-			{selectedStageAheadMessage === undefined ? undefined : <p className='detail'>{selectedStageAheadMessage}</p>}
+			{selectedStageAheadMessage === undefined ? undefined : <UserMessage className='detail' detail={selectedStageAheadMessage} />}
 			{truthAuctionEndedNotice}
 			{shouldShowVisualization ? (
 				<>

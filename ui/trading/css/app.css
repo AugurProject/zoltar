@@ -202,7 +202,7 @@
 	background: var(--accent-soft);
 	color: var(--text);
 }
-.trade-settings .field-help,
+.trade-settings .field-hint,
 .trade-settings .field-error {
 	margin: 0;
 }

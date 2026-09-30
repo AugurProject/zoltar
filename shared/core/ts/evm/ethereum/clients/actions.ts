@@ -132,12 +132,21 @@ function normalizeAccountAddress(account: Account | Address | undefined) {
 	return typeof account === 'string' ? getAddress(account) : account.address
 }
 
-async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
+function resolveBlockSelector(parameters: { blockHash?: Hash | undefined; blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined }) {
 	const selectedBlocks = [parameters.blockHash, parameters.blockNumber, parameters.blockTag].filter(value => value !== undefined)
-	if (selectedBlocks.length > 1) throw new Error('Contract reads accept only one block selector')
-	let blockSelector: BlockTag | Hex | Readonly<{ blockHash: Hash; requireCanonical: true }> = parameters.blockTag ?? 'latest'
-	if (parameters.blockNumber !== undefined) blockSelector = hexQuantity(parameters.blockNumber)
-	if (parameters.blockHash !== undefined) blockSelector = { blockHash: parameters.blockHash, requireCanonical: true }
+	if (selectedBlocks.length > 1) throw new Error('RPC reads accept only one block selector')
+	if (parameters.blockHash !== undefined) return { blockHash: parameters.blockHash, requireCanonical: true } as const
+	return parameters.blockTag ?? normalizeBlockTag(parameters.blockNumber)
+}
+
+function resolveBlockTag(parameters: { blockNumber?: bigint | undefined; blockTag?: BlockTag | undefined } = {}) {
+	const selector = resolveBlockSelector(parameters)
+	if (typeof selector !== 'string') throw new Error('RPC method requires a block number or tag')
+	return selector
+}
+
+async function readContractRaw<TAbi extends Abi, TFunctionName extends string>(transport: Transport, parameters: ContractReadParameters<TAbi, TFunctionName>) {
+	const blockSelector = resolveBlockSelector(parameters)
 	const abiItem = getNamedFunctionAbi(parameters.abi, parameters.functionName, parameters.args)
 	const method = getContractMethod(abiItem)
 	const data = ensure0x(nobleBytesToHex(method.encodeInput(normalizeCodecArguments(abiItem.inputs, parameters.args))))
@@ -239,7 +248,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 		const result = normalizeRpcHex(
 			await requestTransportWithRateLimitRetries<string>(transport, {
 				method: 'eth_getCode',
-				params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
+				params: [parameters.address, resolveBlockTag(parameters)],
 			}),
 		)
 		return result === '0x' ? undefined : result
@@ -280,13 +289,13 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getBalance',
-					params: [parameters.address, parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
+					params: [parameters.address, resolveBlockTag(parameters)],
 				}),
 				'balance',
 			),
 		getBlock: async parameters => {
 			const includeTransactions = parameters?.includeTransactions === true
-			const blockTag = parameters?.blockNumber === undefined ? (parameters?.blockTag ?? 'latest') : normalizeBlockTag(parameters.blockNumber)
+			const blockTag = resolveBlockTag(parameters)
 			const block = await requestTransportWithRateLimitRetries<JsonValue>(transport, {
 				method: 'eth_getBlockByNumber',
 				params: [blockTag, includeTransactions],
@@ -306,7 +315,7 @@ export function buildPublicClientActions<TTransport extends Transport, TChain ex
 			normalizeRequiredRpcBigInt(
 				await requestTransportWithRateLimitRetries<string>(transport, {
 					method: 'eth_getTransactionCount',
-					params: [getAddress(parameters.address), parameters.blockNumber === undefined ? (parameters.blockTag ?? 'latest') : hexQuantity(parameters.blockNumber)],
+					params: [getAddress(parameters.address), resolveBlockTag(parameters)],
 				}),
 				'transaction count',
 			),
@@ -534,8 +543,13 @@ export function publicActions<TTransport extends Transport, TChain extends Chain
 		chain: client.chain,
 		transport: client.transport,
 	})
-	const defaultAccount = getClientDefaultAccountAddress(client)
+	return withDefaultAccount(actions, getClientDefaultAccountAddress(client))
+}
+
+export function withDefaultAccount(actions: PublicClientActions, defaultAccount: Address | undefined) {
 	if (defaultAccount === undefined) return actions
+	const estimateGas: typeof actions.estimateGas = async parameters => await actions.estimateGas({ ...parameters, account: parameters.account ?? defaultAccount })
+	const readContract: typeof actions.readContract = async parameters => await actions.readContract({ ...parameters, account: parameters.account ?? defaultAccount })
 	const estimateContractGas: typeof actions.estimateContractGas = async parameters =>
 		await actions.estimateContractGas({
 			...parameters,
@@ -549,6 +563,8 @@ export function publicActions<TTransport extends Transport, TChain extends Chain
 	return {
 		...actions,
 		estimateContractGas,
+		estimateGas,
+		readContract,
 		simulateContract,
 	}
 }

@@ -67,7 +67,7 @@ export function SecurityPoolObjectHeader(props: SecurityPoolObjectHeaderProps) {
 	)
 }
 
-/** `showOraclePrice` is false while the page's price row already shows the Open Oracle price, so the details do not repeat it. */
+/** `showOraclePrice` is false while the page's price row already shows the Open Oracle price, so the details do not repeat it, and in ended pools, where no action reads the price. */
 export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProps & { showOraclePrice: boolean }) {
 	const { currentPoolOracleManagerDetails, currentPoolOraclePrice, currentPoolOracleSettlementTimestamp, currentTimestamp, marketDetails, selectedPoolParentPool, selectedPoolView, showOraclePrice } = props
 	const summaryPool = getSummaryPool(props)

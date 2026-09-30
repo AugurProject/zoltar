@@ -8,10 +8,9 @@ import { getTestImpactRecommendations } from '../testing/test-impact.mts'
 
 test('changed-files combines committed, staged, unstaged, and untracked paths', () => {
 	const changedFiles = getChangedFiles(args => {
-		if (args.join(' ') === 'diff --name-only --diff-filter=ACMRTUXB origin/main...HEAD') return 'ui/zoltar/ts/components/Committed.tsx\nshared/core/ts/Shared.ts\n'
-		if (args.join(' ') === 'diff --name-only --diff-filter=ACMRTUXB') return 'ui/zoltar/ts/components/Unstaged.tsx\nshared/core/ts/Shared.ts\n'
-		if (args.join(' ') === 'diff --cached --name-only --diff-filter=ACMRTUXB') return 'ui/zoltar/ts/components/Staged.tsx\n'
-		if (args.join(' ') === 'ls-files --others --exclude-standard') return 'scripts/NewScript.mts\n'
+		if (args.join(' ') === 'merge-base origin/main HEAD') return 'baseline'
+		if (args.join(' ') === 'diff --name-status -z --find-renames --diff-filter=ACMRTUXBD baseline') return 'M\0ui/zoltar/ts/components/Committed.tsx\0M\0shared/core/ts/Shared.ts\0M\0ui/zoltar/ts/components/Unstaged.tsx\0M\0ui/zoltar/ts/components/Staged.tsx\0'
+		if (args.join(' ') === 'ls-files -z --others --exclude-standard') return 'scripts/NewScript.mts\0'
 		return ''
 	})
 
@@ -21,7 +20,7 @@ test('changed-files combines committed, staged, unstaged, and untracked paths', 
 test('changed-files surfaces branch diff failures instead of silently skipping them', () => {
 	expect(() =>
 		getChangedFiles(args => {
-			if (args.join(' ') === 'diff --name-only --diff-filter=ACMRTUXB origin/main...HEAD') {
+			if (args.join(' ') === 'merge-base origin/main HEAD') {
 				throw new Error('missing origin/main')
 			}
 			return ''
@@ -82,11 +81,12 @@ test('test planning resolves committed, staged, unstaged, and untracked paths ag
 		git(['init'])
 		git(['config', 'user.email', 'tests@example.com'])
 		git(['config', 'user.name', 'Test Runner'])
-		for (const filePath of ['delete-restore.test.ts', 'deleted.test.ts', 'modified-revert.test.ts', 'modified.test.ts', 'rename.test.ts', 'reverse.test.ts']) await writeFile(join(repositoryRoot, filePath), `${filePath} baseline\n`)
+		for (const filePath of ['committed.test.ts', 'delete-restore.test.ts', 'deleted.test.ts', 'modified-revert.test.ts', 'modified.test.ts', 'rename.test.ts', 'reverse.test.ts']) await writeFile(join(repositoryRoot, filePath), `${filePath} baseline\n`)
 		git(['add', '.'])
 		git(['commit', '-m', 'baseline'])
 		git(['update-ref', 'refs/remotes/origin/main', 'HEAD'])
 
+		await writeFile(join(repositoryRoot, 'committed.test.ts'), 'committed change\n')
 		git(['mv', 'reverse.test.ts', 'reverse-intermediate.test.ts'])
 		git(['rm', 'delete-restore.test.ts'])
 		await writeFile(join(repositoryRoot, 'modified-revert.test.ts'), 'committed change\n')
@@ -102,7 +102,10 @@ test('test planning resolves committed, staged, unstaged, and untracked paths ag
 		await writeFile(join(repositoryRoot, 'modified.test.ts'), 'unstaged change\n')
 		await writeFile(join(repositoryRoot, 'untracked.test.ts'), 'untracked\n')
 
+		expect(getChangedFiles(git)).toEqual(['committed.test.ts', 'deleted.test.ts', 'modified.test.ts', 'rename.test.ts', 'renamed.test.ts', 'untracked.test.ts'])
+
 		expect(getChangedFileEntries(git)).toEqual([
+			{ path: 'committed.test.ts', status: 'modified' },
 			{ path: 'deleted.test.ts', status: 'deleted' },
 			{ path: 'modified.test.ts', status: 'modified' },
 			{ path: 'renamed.test.ts', previousPath: 'rename.test.ts', status: 'renamed' },

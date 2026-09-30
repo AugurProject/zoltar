@@ -110,6 +110,9 @@ describe('ScalarOutcomePicker', () => {
 		const slider = documentQueries.getByRole('slider', { name: 'Select scalar target' }) as HTMLInputElement
 		const scalarValueInput = documentQueries.getByRole('textbox', { name: 'Scalar value' }) as HTMLInputElement
 		expect(scalarValueInput.value).toBe('20')
+		const scalarHelp = document.getElementById(scalarValueInput.getAttribute('aria-describedby') ?? '')
+		expect(scalarHelp?.getAttribute('data-message-placement')).toBe('field')
+		expect(scalarHelp?.tagName).toBe('SPAN')
 		expect(scalarValueInput.closest('strong')).toBeNull()
 		expect(documentQueries.getByText('Enter a value on an increment.')).not.toBeNull()
 

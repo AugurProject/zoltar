@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { getDisplayedLeadingEscalationOutcome } from '../lib/reporting.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ActiveReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -16,9 +17,13 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 		<>
 			{positions.map(position => (
 				<div key={position.side.key}>
-					<p>
-						<strong>{position.lead}</strong> {position.detail}
-					</p>
+					<UserMessage
+						detail={
+							<>
+								<strong>{position.lead}</strong> {position.detail}
+							</>
+						}
+					/>
 					{positions.length > 1 || position.leading || position.minimum === undefined ? undefined : (
 						<button
 							className='secondary'
@@ -47,19 +52,27 @@ export function ReportingViewerStatus({ details, onTakeLead, disabled }: { detai
 		)
 	else if (details.sides.every(side => side.balance === 0n))
 		detail = (
-			<p>
-				<strong>{copy.tieStatusLead}</strong> {copy.zeroBalanceStatusDetail}
-			</p>
+			<UserMessage
+				detail={
+					<>
+						<strong>{copy.tieStatusLead}</strong> {copy.zeroBalanceStatusDetail}
+					</>
+				}
+			/>
 		)
 	else if (tied)
 		detail = (
-			<p>
-				<strong>{copy.tieStatusLead}</strong> {copy.tieStatusDetail(formatReportingDeadline(details.escalationEndTime, details.currentTime))}
-				<a href={escalationExplanationHref} target='_blank' rel='noreferrer'>
-					{copy.tiesResolve}
-				</a>
-				{copy.tieStatusEnd}
-			</p>
+			<UserMessage
+				detail={
+					<>
+						<strong>{copy.tieStatusLead}</strong> {copy.tieStatusDetail(formatReportingDeadline(details.escalationEndTime, details.currentTime))}
+						<a href={escalationExplanationHref} target='_blank' rel='noreferrer'>
+							{copy.tiesResolve}
+						</a>
+						{copy.tieStatusEnd}
+					</>
+				}
+			/>
 		)
 	return (
 		<SectionBlock className='reporting-viewer-status' title={copy.yourPositions} variant='plain'>

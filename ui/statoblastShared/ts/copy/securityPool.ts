@@ -275,6 +275,7 @@ export const withdrawalUnavailableReason = 'REP withdrawal is unavailable in thi
 export const noWithdrawableRepReason = 'No REP is available to withdraw.'
 
 export const maximumHealthyCommitment = 'Maximum before liquidation'
+export const commitmentUnchanged = 'Enter a commitment limit different from the current one.'
 export const commitmentPriceUnavailable = 'The selected UI price is unavailable. A liquidation-safe maximum cannot be estimated.'
 export const commitmentRiskWarning = 'This limit would make your vault liquidatable at the selected UI price. The execution price may differ.'
 export const commitmentRiskAcknowledgement = 'I understand that my vault could be liquidated immediately.'

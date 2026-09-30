@@ -1,3 +1,4 @@
+import { UserMessage } from '../../components/UserMessage.js'
 import { MAINNET_ENABLED } from '../../wallet/networkAvailability.js'
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { useDisclosurePopover } from '../../hooks/useDisclosurePopover.js'
@@ -82,24 +83,12 @@ export function AppSettingsMenu({ onEnvironmentChanged, settingsContent }: { onE
 							}}
 						/>
 					</label>
-					{selectedNetwork === 'simulation' ? (
-						<p id='fallback-rpc-help' className='field-help'>
-							{appCopy.simulationRpcDetail}
-						</p>
-					) : undefined}
-					{error === undefined ? undefined : (
-						<p id='fallback-rpc-error' className='field-error' role='alert'>
-							{error}
-						</p>
-					)}
+					{selectedNetwork === 'simulation' ? <UserMessage placement='field' id='fallback-rpc-help' detail={appCopy.simulationRpcDetail} /> : undefined}
+					{error === undefined ? undefined : <UserMessage placement='field' id='fallback-rpc-error' tone='error' announcement='assertive' detail={error} />}
 					<button type='button' className='secondary-button' disabled={selectedNetwork === 'simulation' || saveState === 'saving'} aria-busy={saveState === 'saving'} onClick={() => void saveRpc()}>
 						{saveState === 'saving' ? appCopy.savingRpc : appCopy.saveRpc}
 					</button>
-					{saveState === 'saved' ? (
-						<p className='field-help' role='status'>
-							{appCopy.rpcSaved}
-						</p>
-					) : undefined}
+					{saveState === 'saved' ? <UserMessage placement='field' tone='success' announcement='polite' detail={appCopy.rpcSaved} /> : undefined}
 					<ThemeSetting />
 					{settingsContent}
 				</div>

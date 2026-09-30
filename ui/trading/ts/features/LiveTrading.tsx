@@ -1,3 +1,4 @@
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { LiveLiquidityWorkspace } from './LiveLiquidityWorkspace.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
@@ -295,9 +296,15 @@ export function LiveTrading({
 			<RouteHeader title={routePresentation.title} description={selected === undefined ? routePresentation.description : undefined} actions={walletAction} />
 			<ErrorNotice message={connectionMessage} />
 			{createdMarketTitle === undefined ? null : (
-				<p className='detail' role='status'>
-					{liveCopy.marketCreated(createdMarketTitle)} <a href={getTradingRouteHref(routePool === undefined ? '#/liquidity' : `#/liquidity/${routePool}`)}>{appCopy.liquidity}</a>
-				</p>
+				<UserMessage
+					className='detail'
+					announcement='polite'
+					detail={
+						<>
+							{liveCopy.marketCreated(createdMarketTitle)} <a href={getTradingRouteHref(routePool === undefined ? '#/liquidity' : `#/liquidity/${routePool}`)}>{appCopy.liquidity}</a>
+						</>
+					}
+				/>
 			)}
 			<ErrorNotice message={selected !== undefined && discoveryState === 'error' ? liveCopy.securityPoolRefreshFailed(discoveryError ?? liveCopy.unknownDiscovery) : undefined} />
 			<div className='market-stack'>
@@ -312,9 +319,14 @@ export function LiveTrading({
 						return (
 							<SectionBlock variant='plain'>
 								<MarketFacts market={selected} nowSeconds={nowSeconds} headingRef={marketHeadingRef} />
-								<p className='detail'>
-									{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
-								</p>
+								<UserMessage
+									className='detail'
+									detail={
+										<>
+											{liveCopy.poolAlreadyExists} <a href={getTradingRouteHref(`#/liquidity/${selected.pool}`)}>{appCopy.liquidity}</a>
+										</>
+									}
+								/>
 								<MarketContracts market={selected} />
 							</SectionBlock>
 						)

@@ -51,5 +51,6 @@ describe('TruthAuctionMarketViewSection', () => {
 		expect(ladderRow.textContent).not.toContain('Clearing level')
 		const loadMoreButton = within(document.body).getByRole('button', { name: 'Show more price levels' }) as HTMLButtonElement
 		expect(loadMoreButton.disabled).toBe(true)
+		expect(document.querySelectorAll('[data-message-placement] .loading-value[role="status"]')).toHaveLength(2)
 	})
 })

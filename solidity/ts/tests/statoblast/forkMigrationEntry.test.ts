@@ -33,6 +33,7 @@ import {
 	statoblast_EscalationGame_EscalationGame,
 	statoblast_factories_SecurityPoolFactory_SecurityPoolFactory,
 	statoblast_SecurityPoolForker_SecurityPoolForker,
+	statoblast_SecurityPool_SecurityPool,
 	test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerAlternatingChildGameMock,
 	test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackFactoryMock,
 	test_statoblast_SecurityPoolForkerAttackMocks_SecurityPoolForkerAttackParentMock,
@@ -143,6 +144,7 @@ describe('Statoblast: fork migration', () => {
 			await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
 
 			strictEqualTypeSafe((await getUniverseData(client, genesisUniverse)).forkTime, escalationGameEndDate, 'the external fork should occur exactly at escalation resolution')
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getFeeEpochEndTime' }), escalationGameEndDate, 'a fork at the unresolved escalation deadline must use the fork-time fee cutoff')
 			await mockWindow.setTime(escalationGameEndDate + 1n)
 			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve after the universe fork')
 			strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.None, 'the local outcome should remain unavailable after a fork-time-unresolved escalation game')
@@ -165,21 +167,24 @@ describe('Statoblast: fork migration', () => {
 			strictEqualTypeSafe(childYesState.currentCarryTotalAttoRep, reportBond, 'delayed initialization should preserve the unresolved principal in aggregate carry')
 		})
 
-		test('rejects delayed fork initialization for an escalation game resolved before the universe fork', async () => {
+		test.each([{ forkOffset: 1n }, { forkOffset: DAY }])('rejects delayed fork initialization for an escalation game resolved before the universe fork (fork offset: $forkOffset)', async ({ forkOffset }) => {
 			const escalationGameEndDate = await startYesEscalationAfterQuestionEnd()
-			await mockWindow.setTime(escalationGameEndDate + 1n)
-			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve before the universe fork')
+			const questionEndDate = await getQuestionEndDate(client, questionId)
 
 			const forkSourceQuestionData = {
 				...questionData,
 				title: 'resolved before initialization fork source',
-				endTime: (await mockWindow.getTime()) + DAY,
+				endTime: escalationGameEndDate - 1n,
 			}
 			const forkSourceQuestionId = getQuestionId(forkSourceQuestionData, outcomes)
 			await createQuestion(client, forkSourceQuestionData, outcomes)
-			await mockWindow.setTime(forkSourceQuestionData.endTime + 1n)
 			await approveToken(client, addressString(GENESIS_REPUTATION_TOKEN), getZoltarAddress())
+			await mockWindow.setTime(escalationGameEndDate + forkOffset - 1n)
 			await forkUniverse(client, genesisUniverse, forkSourceQuestionId)
+			strictEqualTypeSafe((await getUniverseData(client, genesisUniverse)).forkTime, escalationGameEndDate + forkOffset, 'the external fork should occur at the requested offset after the escalation deadline')
+			strictEqualTypeSafe(await getQuestionResolution(client, securityPoolAddresses.escalationGame), QuestionOutcome.Yes, 'the escalation game should resolve before the universe fork')
+			strictEqualTypeSafe(await getQuestionOutcome(client, securityPoolAddresses.securityPool), QuestionOutcome.Yes, 'a fork after the escalation deadline must preserve the finalized outcome')
+			strictEqualTypeSafe(await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPoolAddresses.securityPool, functionName: 'getFeeEpochEndTime' }), questionEndDate, 'a fork after escalation finalization must preserve the original question-end fee cutoff')
 
 			await assert.rejects(initiateSecurityPoolFork(client, securityPoolAddresses.securityPool), /Resolved/)
 			strictEqualTypeSafe(await getSystemState(client, securityPoolAddresses.securityPool), SystemState.Operational, 'a pre-fork-resolved game should leave the pool operational')
