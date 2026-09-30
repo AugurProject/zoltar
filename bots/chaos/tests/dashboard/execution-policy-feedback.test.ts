@@ -1,11 +1,8 @@
-import { expect, test } from 'bun:test'
-import { existsSync } from 'node:fs'
+import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../../src/runtime/configuration-commit.ts'
-import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
+import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
 
-const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('chromium') ?? '/usr/bin/chromium'
-const browserTest = existsSync(chromium) ? test : test.skip
 const wallet = `0x${'ab'.repeat(20)}`
 const repToken = `0x${'e1'.repeat(20)}`
 
@@ -101,7 +98,7 @@ browserTest(
 			setSigner: () => {},
 			setWorkflow: () => {},
 		})
-		const session = await startChromiumSession(chromium, { evaluationDefaults: { attempts: 200, exceptions: 'ignore', intervalMilliseconds: 25 } })
+		const session = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { attempts: 200, exceptions: 'ignore', intervalMilliseconds: 25 } })
 		await session.send('Runtime.enable')
 		await session.send('Page.enable')
 		const cdp = { command: session.send, close: session.close, issues: session.issues, evaluate: session.evaluate }

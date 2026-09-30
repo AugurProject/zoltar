@@ -11,7 +11,7 @@ import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { resolve } from 'node:path'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
 import { MINIMUM_WORKFLOW_VALIDITY_BLOCKS } from '../operations/timing.ts'
-import { assertExactKeys as assertExactRequiredAndOptionalKeys, requiredRecord, uint256String } from '../state/validators.ts'
+import { assertExactKeys, requiredRecord, uint256String } from '../state/validators.ts'
 import { assertSepoliaUniswapFactory, canonicalDeployment } from './canonical-deployment.ts'
 import { deploymentFactoryId, executionProfileId } from './execution-profile.ts'
 
@@ -108,17 +108,11 @@ export type OperatorSettings = {
 	version: 1
 }
 
-type JsonRecord = Record<string, unknown>
-
 export type SettingsFilesystem = Omit<RevisionedFileFilesystem, 'open'> & {
 	open: (path: string, flags: 'r' | 'wx' | number, mode?: number) => Promise<OwnerFileHandle>
 }
 
 const defaultSettingsPath = resolve(import.meta.dir, '..', '..', '.state', 'operator.json')
-
-function assertExactKeys(value: JsonRecord, keys: readonly string[], label: string) {
-	assertExactRequiredAndOptionalKeys(value, keys, [], label)
-}
 
 function customNetworkName(value: unknown) {
 	const name = nonemptyString(value, 'network.name')
@@ -146,7 +140,7 @@ function filePath(value: unknown, label: string) {
 function parseNetwork(value: unknown): OperatorSettings['network'] {
 	const network = requiredRecord(value, 'network')
 	if ('kind' in network) {
-		assertExactKeys(network, ['chainId', 'explorerUrl', 'kind', 'maximumBlockIntervalSeconds', 'name'], 'custom network')
+		assertExactKeys(network, ['chainId', 'explorerUrl', 'kind', 'maximumBlockIntervalSeconds', 'name'], [], 'custom network')
 		if (network['kind'] !== 'custom') throw new Error('network.kind must be custom when provided')
 		const chainId = customNetworkChainId(network['chainId'])
 		return {
@@ -178,7 +172,7 @@ function parseNetwork(value: unknown): OperatorSettings['network'] {
 
 function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connectivity']> {
 	const connectivity = requiredRecord(value, 'connectivity')
-	assertExactKeys(connectivity, ['publicRpcUrls', 'quorumRpcUrls', 'readRpcUrl', 'rpcQuorum'], 'connectivity')
+	assertExactKeys(connectivity, ['publicRpcUrls', 'quorumRpcUrls', 'readRpcUrl', 'rpcQuorum'], [], 'connectivity')
 	const parsed = validateConnectivitySettings({
 		publicRpcUrls: connectivity['publicRpcUrls'],
 		readRpcUrl: connectivity['readRpcUrl'],
@@ -197,7 +191,7 @@ function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connec
 function parseDiscovery(value: unknown): DiscoverySettings {
 	const discovery = requiredRecord(value, 'discovery')
 	const keys = ['maxPools', 'maxQuestions', 'maxStagedOperationsPerPool', 'maxUniverses', 'maxVaultsPerPool'] as const
-	assertExactKeys(discovery, keys, 'discovery')
+	assertExactKeys(discovery, keys, [], 'discovery')
 	const parsed = {
 		maxPools: integer(discovery['maxPools'], 'discovery.maxPools', 1, 10_000),
 		maxQuestions: integer(discovery['maxQuestions'], 'discovery.maxQuestions', 1, 10_000),
@@ -213,7 +207,7 @@ function parseDiscovery(value: unknown): DiscoverySettings {
 
 function parseRuntime(value: unknown): RuntimeSettings {
 	const runtime = requiredRecord(value, 'runtime')
-	assertExactKeys(runtime, ['execute', 'lifecyclePollMilliseconds', 'once', 'protocolLogBlockSpan', 'protocolStartBlock', 'stateFile', 'ui', 'uiHost', 'uiPort'], 'runtime')
+	assertExactKeys(runtime, ['execute', 'lifecyclePollMilliseconds', 'once', 'protocolLogBlockSpan', 'protocolStartBlock', 'stateFile', 'ui', 'uiHost', 'uiPort'], [], 'runtime')
 	if (runtime['uiHost'] !== '127.0.0.1' && runtime['uiHost'] !== '0.0.0.0') throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
 	const once = boolean(runtime['once'], 'runtime.once')
 	const ui = boolean(runtime['ui'], 'runtime.ui')
@@ -233,7 +227,7 @@ function parseRuntime(value: unknown): RuntimeSettings {
 
 function parseScheduler(value: unknown): SchedulerSettings {
 	const scheduler = requiredRecord(value, 'scheduler')
-	assertExactKeys(scheduler, ['maximumDelaySeconds', 'minimumDelaySeconds'], 'scheduler')
+	assertExactKeys(scheduler, ['maximumDelaySeconds', 'minimumDelaySeconds'], [], 'scheduler')
 	const minimumDelaySeconds = integer(scheduler['minimumDelaySeconds'], 'scheduler.minimumDelaySeconds', 60, 3_599)
 	const maximumDelaySeconds = integer(scheduler['maximumDelaySeconds'], 'scheduler.maximumDelaySeconds', minimumDelaySeconds + 1, 3_600)
 	return { maximumDelaySeconds, minimumDelaySeconds }
@@ -269,7 +263,7 @@ function parseStrategy(value: unknown): StrategySettings {
 	const strategy = requiredRecord(value, 'strategy')
 	const requiredKeys = ['allowHighRiskOperations', 'allowIrreversibleOperations', 'enabledEcosystems', 'maximumEthPerOperation', 'maximumGasCostEth', 'maximumRepPerOperation', 'minimumEthReserve', 'minimumRepReserve', 'workflowValidForBlocks'] as const
 	const optionalKeys = [...('selectableOperationAllowlist' in strategy ? ['selectableOperationAllowlist'] : []), ...('initializeGenesisUniverse' in strategy ? ['initializeGenesisUniverse'] : [])]
-	assertExactKeys(strategy, [...requiredKeys, ...optionalKeys], 'strategy')
+	assertExactKeys(strategy, [...requiredKeys, ...optionalKeys], [], 'strategy')
 	const maximumEthPerOperationAttoEth = parseDecimalAmount(strategy['maximumEthPerOperation'], 'strategy.maximumEthPerOperation')
 	const maximumGasCostAttoEth = parseDecimalAmount(strategy['maximumGasCostEth'], 'strategy.maximumGasCostEth')
 	const maximumRepPerOperationAttoRep = parseDecimalAmount(strategy['maximumRepPerOperation'], 'strategy.maximumRepPerOperation')
@@ -296,7 +290,7 @@ function parseStrategy(value: unknown): StrategySettings {
 function parseDeploymentPin(value: unknown, network: OperatorSettings['network']): DeploymentSettings {
 	const pin = requiredRecord(value, 'deploymentPin')
 	const addressKeys = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'uniswapV3Factory', 'weth', 'zoltar'] as const
-	assertExactKeys(pin, ['factoryId', 'profileId', ...addressKeys], 'deploymentPin')
+	assertExactKeys(pin, ['factoryId', 'profileId', ...addressKeys], [], 'deploymentPin')
 	const address = (key: (typeof addressKeys)[number]) => {
 		const value = pin[key]
 		if (typeof value !== 'string') throw new Error(`deploymentPin.${key} must be an address`)
@@ -324,7 +318,7 @@ function parseDeploymentPin(value: unknown, network: OperatorSettings['network']
 export function parseSettings(value: unknown, preservedPrivateKey?: Hex): OperatorSettings {
 	const root = requiredRecord(value, 'operator settings')
 	// Accept the obsolete field so existing saved configurations can migrate; never use its addresses.
-	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), ...('deploymentPin' in root ? ['deploymentPin'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], 'operator settings')
+	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), ...('deploymentPin' in root ? ['deploymentPin'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], [], 'operator settings')
 	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const networkConfigured = boolean(root['networkConfigured'], 'networkConfigured')
 	const connectivity = root['connectivity'] === null ? undefined : parseConnectivity(root['connectivity'])

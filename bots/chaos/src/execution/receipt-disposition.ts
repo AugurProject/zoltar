@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 import type { DurableWorkflow, PendingTransactionIntent } from '../state/operator-state.ts'
 import type { ExecutionEnvironment } from './execution-context.ts'
@@ -26,7 +27,7 @@ export async function commitReceiptDisposition(environment: ExecutionEnvironment
 		} catch (failure) {
 			restorationError = failure
 		}
-		const failure = error instanceof Error ? error.message : String(error)
+		const failure = errorMessage(error)
 		const restoration = restorationError === undefined ? '' : `; restoring the submitted journal also failed: ${String(restorationError)}`
 		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `receipt disposition was not durably committed: ${failure}${restoration}`)
 	}

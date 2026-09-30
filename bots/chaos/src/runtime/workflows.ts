@@ -1,4 +1,6 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { randomUUID } from 'node:crypto'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { canonicalizeOperationMetadata } from '../operations/planning.ts'
 import type { OperationPlan } from '../operations/types.ts'
@@ -31,13 +33,11 @@ function stepRequiresCanonicalLifecycleConfirmation(step: Pick<DurableWorkflowSt
 	return step.evidence.some(evidence => evidence.kind === 'decoded-event-field' && evidence.canonicalLifecycleConfirmation === true)
 }
 
-const MAXIMUM_UINT256 = (1n << 256n) - 1n
-
 export function assertTerminalSubmissionBoundary(plan: Pick<OperationPlan, 'id' | 'steps' | 'terminalSubmission'>) {
 	const submission = plan.terminalSubmission
 	if (submission === undefined) return
 	if (submission.kind !== 'private-next-block') throw new Error(`Plan ${plan.id} has an unsupported terminal submission kind`)
-	if (!/^(?:0|[1-9]\d*)$/.test(submission.maximumFeePerGas) || BigInt(submission.maximumFeePerGas) > MAXIMUM_UINT256) {
+	if (!/^(?:0|[1-9]\d*)$/.test(submission.maximumFeePerGas) || BigInt(submission.maximumFeePerGas) > maxUint256) {
 		throw new Error(`Plan ${plan.id} terminal maximum fee per gas must be a canonical uint256`)
 	}
 	if (plan.steps.at(-1) === undefined) throw new Error(`Plan ${plan.id} terminal submission constraint requires a terminal step`)
@@ -362,7 +362,7 @@ export function completeWorkflowFromCanonicalConfirmation(workflow: DurableWorkf
 export function markWorkflowFailed(workflow: DurableWorkflow, stepId: string, error: unknown, failureKind: DurableWorkflowFailureKind) {
 	const timestamp = now()
 	const step = requireWorkflowStep(workflow, stepId)
-	step.failure = error instanceof Error ? error.message : String(error)
+	step.failure = errorMessage(error)
 	step.failureKind = failureKind
 	step.status = 'failed'
 	workflow.completedAt = timestamp
@@ -462,7 +462,7 @@ export function markWorkflowForRediscovery(workflow: DurableWorkflow, error: unk
 	const timestamp = now()
 	const incomplete = workflow.steps.find(step => step.status !== 'confirmed')
 	if (incomplete !== undefined) {
-		incomplete.failure = error instanceof Error ? error.message : String(error)
+		incomplete.failure = errorMessage(error)
 		incomplete.status = 'blocked'
 	}
 	if (workflow.steps.some(step => step.status === 'confirmed')) {

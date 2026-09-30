@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { withRetirementSweepBarrier } from './signing.ts'
 import { assertIncludedTransactionsCanonical } from './inclusion-journal.ts'
 import { commitReceiptDisposition } from './receipt-disposition.ts'
@@ -39,7 +40,7 @@ async function assertSignedIntentBroadcastReadiness(environment: ExecutionEnviro
 	try {
 		assertSubmissionWindowOpen(intent.maxBlockNumber, anchor.number)
 	} catch (error) {
-		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `signed submission window closed before broadcast: ${error instanceof Error ? error.message : String(error)}`)
+		throw new TransactionAwaitingRecovery(intent.label, intent.hash, `signed submission window closed before broadcast: ${errorMessage(error)}`)
 	}
 	if (!sameCanonicalExecutionAnchor(anchor, signingAnchor)) {
 		throw new TransactionAwaitingRecovery(intent.label, intent.hash, 'canonical signing anchor or its attester set changed after signed intent journaling')
@@ -147,7 +148,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 			step,
 		})
 	} catch (error) {
-		throw new OperationRediscoveryRequired(error instanceof Error ? error.message : String(error), error)
+		throw new OperationRediscoveryRequired(errorMessage(error), error)
 	}
 	assertExecutionActive(environment)
 	environment.assertSubmissionReady?.()
@@ -201,7 +202,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 		})
 		await persist(environment)
 		if (error instanceof TransactionAwaitingRecovery) throw error
-		throw new TransactionAwaitingRecovery(step.label, intent.hash, error instanceof Error ? error.message : String(error))
+		throw new TransactionAwaitingRecovery(step.label, intent.hash, errorMessage(error))
 	}
 	try {
 		await submitSignedTransaction({
@@ -224,7 +225,7 @@ async function executeStep(environment: ExecutionEnvironment, plan: OperationPla
 			type: 'recovery',
 		})
 		await persist(environment)
-		throw new TransactionAwaitingRecovery(step.label, intent.hash, error instanceof Error ? error.message : String(error))
+		throw new TransactionAwaitingRecovery(step.label, intent.hash, errorMessage(error))
 	}
 	intent.status = 'submitted'
 	intent.submissionBlock = block.number
@@ -328,7 +329,7 @@ async function assertRemainingWorkflowEthFunding(environment: ExecutionEnvironme
 			environment.settings.strategy,
 		)
 	} catch (error) {
-		throw new OperationRediscoveryRequired(error instanceof Error ? error.message : String(error), error)
+		throw new OperationRediscoveryRequired(errorMessage(error), error)
 	}
 }
 
@@ -363,7 +364,7 @@ export async function executeOperationPlan(environment: ExecutionEnvironment, pl
 		if (error instanceof TransactionAwaitingRecovery) throw error
 		const pending = environment.state.pendingTransactions.find(intent => intent.workflowId === workflow.id)
 		if (pending !== undefined) {
-			throw new TransactionAwaitingRecovery(pending.label, pending.hash, error instanceof Error ? error.message : String(error))
+			throw new TransactionAwaitingRecovery(pending.label, pending.hash, errorMessage(error))
 		}
 		if (workflow.status !== 'failed') {
 			markWorkflowForRediscovery(workflow, error)

@@ -1,14 +1,14 @@
 import { assertStepSafety } from '../../src/execution/safety.ts'
 import { publicFailureReason } from '../../src/execution/preflight-failure.ts'
-import { getChromiumPath } from '../../../../tooling/ui/chromiumPath.js'
 import { expect, test } from 'bun:test'
+import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
 import { evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import { planningOptions } from '../../src/runtime/canonical-scan.ts'
 import { serializedSettings } from '../../src/config/settings.ts'
 import { manualOperationFixture } from '../runtime/manual-operation-fixture.ts'
-import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
+import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
 
 function seedStepStatus(index: number, included: number) {
 	if (index < included) return 'confirmed'
@@ -154,9 +154,8 @@ test(
 			setSigner: () => undefined,
 			setWorkflow: () => undefined,
 		})
-		const chromium = process.env['CHROMIUM_PATH'] ?? getChromiumPath()
-		if (chromium === undefined) throw new Error('Chromium or Chrome is required for the operation dialog test')
-		const session = await startChromiumSession(chromium)
+		if (!existsSync(chromiumExecutable)) throw new Error('Chromium or Chrome is required for the operation dialog test')
+		const session = await startChromiumSession(chromiumExecutable)
 		const { evaluate } = session
 		// A condition that throws is not yet true: right after a navigation the previous document still answers
 		// evaluations and its selectors resolve to null, so the poll keeps going until the timeout instead of failing once.

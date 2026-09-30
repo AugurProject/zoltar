@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { MAXIMUM_PUBLIC_FIELD_LENGTH, safeString } from '../dashboard/public-fields.ts'
 import type { OperationPlan } from '../operations/types.ts'
 import { recordActivity, type RuntimeState } from '../state/operator-state.ts'
@@ -10,7 +11,7 @@ function bounded(value: string) {
 }
 
 export function publicFailureReason(error: unknown) {
-	const message = error instanceof Error ? error.message : String(error)
+	const message = errorMessage(error)
 	// Check the full message before truncating so a sensitive suffix cannot escape filtering.
 	return safeString(message) === undefined ? withheld : bounded(message.trim() || 'No error message was provided.')
 }

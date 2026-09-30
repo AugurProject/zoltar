@@ -1,6 +1,7 @@
 import { repSpend } from './input-funding.ts'
 import { inputInteger, inputMatches, inputText, inputList } from './input-values.ts'
 import { encodeAbiParameters, getAddress, keccak256 } from '@zoltar/bot-shared/ethereum'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 import { erc20Abi, zoltarQuestionDataAbi, zoltarAbi } from '@zoltar/bot-shared/contracts/abi'
 import { sortStringArrayByKeccak } from '@zoltar/core-shared/serialization/sortStringArrayByKeccak'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
@@ -10,7 +11,7 @@ import { validForkOutcomeRoutes } from './fork-outcomes.ts'
 import { configuredImmutableTopologyCapacity, INVALID_IMMUTABLE_TOPOLOGY_CAPACITY_BLOCKER, topologyMutationCapacityBlocker } from './topology-capacity.ts'
 
 const QUESTION_DISCOVERY_RESIDENT_UTF8_BYTES = 32 * 1024 * 1024
-const MAXIMUM_UINT256_DECIMAL = ((1n << 256n) - 1n).toString()
+const MAXIMUM_UINT256_DECIMAL = maxUint256.toString()
 const utf8Encoder = new TextEncoder()
 
 function questionCreationCapacityBlocker(snapshot: EcosystemSnapshot, options: PlanningOptions, plannedQuestion: QuestionSnapshot) {

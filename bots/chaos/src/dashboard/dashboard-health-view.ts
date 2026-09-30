@@ -1,198 +1,164 @@
 import type { createRetirementDashboard } from './retirement-dashboard.js'
 import { type Workflow } from './workflow-history.js'
 import { fullIdentifier, formatDate, node, setBadge } from './dom.js'
-import { type Snapshot, type Configuration, type OperationEvaluation, type SubmissionHealth, type RepBalance, type PendingTransaction } from './dashboard-data.ts'
+import { type Snapshot, type OperationEvaluation, type SubmissionHealth, type RepBalance, type PendingTransaction } from './dashboard-data.ts'
+import type { DashboardElements } from './dashboard-elements.ts'
+import { formatDuration, formatRelative, operationIsIndependentlyExecutable, parsePositiveNumber, recoveryItemCount } from './dashboard-format.ts'
+import type { DashboardState } from './dashboard-state.ts'
 import { formatAtomicAmount } from '@zoltar/bot-shared/dashboard/amount'
 import { renderOperatorHealth } from '@zoltar/bot-shared/dashboard/health-panel'
 import { element } from '@zoltar/bot-shared/dashboard/dom'
 
 type DashboardHealthViewContext = {
-	lastBlock: HTMLSpanElement
-	lastScan: HTMLSpanElement
-	formatRelative: (value: string | undefined) => string
-	modeBadge: HTMLSpanElement
-	snapshotStale: boolean
-	configuration: Configuration | undefined
-	networkBadge: HTMLSpanElement
-	signerBadge: HTMLSpanElement
-	recoveryItemCount: (value: Snapshot) => number
-	recoveryBadge: HTMLAnchorElement
-	pauseMutationPending: boolean
-	pauseButton: HTMLButtonElement
-	pauseMutationUnreconciled: boolean
-	configurationCommitIndeterminate: boolean
-	nextRun: HTMLElement
-	parsePositiveNumber: (value: string | number | undefined) => number | undefined
-	lastDelay: HTMLElement
-	formatDuration: (totalSeconds: number) => string
-	operationIsIndependentlyExecutable: (value: OperationEvaluation) => boolean
-	eligibleCount: HTMLElement
-	selectedOperation: HTMLElement
-	walletShort: HTMLSpanElement
-	balanceEth: HTMLElement
-	balanceWeth: HTMLElement
-	balanceRepTotal: HTMLElement
-	repBalances: HTMLDivElement
+	state: DashboardState
+	elements: DashboardElements
 	renderWorkflow: (value: Workflow | undefined, pendingTransactions: readonly PendingTransaction[]) => void
 	renderWorkflowHistory: (workflows: readonly Workflow[], explorerUrl: string | undefined, paused: boolean) => void
 	renderCoverage: (values: OperationEvaluation[]) => void
 	retirementDashboard: ReturnType<typeof createRetirementDashboard>
-	rpcHealthRetryButton: HTMLButtonElement
-	rpcHealthStatus: HTMLSpanElement
-	rpcConfiguredTotal: HTMLElement
-	rpcHealthyCount: HTMLElement
-	rpcRequiredQuorum: HTMLElement
-	rpcChainReadiness: HTMLElement
-	rpcLastCheck: HTMLElement
-	submissionHealthStatus: HTMLSpanElement
-	submissionMode: HTMLElement
-	submissionHealthyCount: HTMLElement
-	submissionRequiredThreshold: HTMLElement
-	submissionFreshness: HTMLElement
-	submissionSignerProof: HTMLElement
-	submissionLastCheck: HTMLElement
 }
 
 export function createDashboardHealthView(context: DashboardHealthViewContext) {
+	const { state, elements } = context
 	function renderHeader(value: Snapshot) {
 		const checkedBlock = value.lastDeploymentCheckedBlock ?? value.lastScannedBlock
-		context.lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
-		context.lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? context.formatRelative(value.lastScanAt) : context.formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
-		if (value.execute === true) setBadge(context.modeBadge, 'Live armed', 'warning')
-		else setBadge(context.modeBadge, 'Dry run', 'info')
+		elements.lastBlock.textContent = checkedBlock === undefined ? 'Block —' : `Block ${String(checkedBlock)}`
+		elements.lastScan.textContent = value.lastDeploymentCheckedBlock === undefined ? formatRelative(value.lastScanAt) : formatRelative(value.lastDeploymentCheckAt).replace('Scanned', 'Deployments checked')
+		if (value.execute === true) setBadge(elements.modeBadge, 'Live armed', 'warning')
+		else setBadge(elements.modeBadge, 'Dry run', 'info')
 		renderHealth(value)
-		const networkName = value.network ?? context.configuration?.network ?? 'Network unknown'
-		const chainId = value.chainId ?? context.configuration?.chainId
-		setBadge(context.networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && context.configuration?.network === undefined ? 'warning' : 'neutral')
+		const networkName = value.network ?? state.configuration?.network ?? 'Network unknown'
+		const chainId = value.chainId ?? state.configuration?.chainId
+		setBadge(elements.networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && state.configuration?.network === undefined ? 'warning' : 'neutral')
 		let signerLabel = 'Signer missing'
 		if (value.signerReady === true) signerLabel = 'Signer ready'
 		else if (value.wallet !== undefined) signerLabel = 'Read-only — signer not loaded'
-		setBadge(context.signerBadge, signerLabel, value.signerReady === true ? 'success' : 'warning')
-		const recoveryItems = context.recoveryItemCount(value)
-		setBadge(context.recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
-		context.recoveryBadge.classList.toggle('hidden', recoveryItems === 0)
+		setBadge(elements.signerBadge, signerLabel, value.signerReady === true ? 'success' : 'warning')
+		const recoveryItems = recoveryItemCount(value)
+		setBadge(elements.recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
+		elements.recoveryBadge.classList.toggle('hidden', recoveryItems === 0)
 		let pauseLabel = value.paused === true ? 'Resume' : 'Pause'
-		if (context.pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
-		context.pauseButton.textContent = pauseLabel
-		context.pauseButton.disabled = context.pauseMutationPending || context.pauseMutationUnreconciled || context.configurationCommitIndeterminate
+		if (state.pauseMutationPending) pauseLabel = value.paused === true ? 'Resuming…' : 'Pausing…'
+		elements.pauseButton.textContent = pauseLabel
+		elements.pauseButton.disabled = state.pauseMutationPending || state.pauseMutationUnreconciled || state.configurationCommitIndeterminate
 	}
 
 	function renderHealth(value: Snapshot) {
 		renderOperatorHealth(element('operator-health', HTMLDivElement), {
 			mode: value.execute === true ? 'Live armed' : 'Dry run',
 			lastScanAt: value.lastScanAt,
-			capitalAtRisk: context.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Unknown / ${context.configuration.maximumEthPerOperation} ETH per operation`,
-			recoveryItems: context.recoveryItemCount(value),
+			capitalAtRisk: state.configuration?.maximumEthPerOperation === undefined ? 'Unavailable' : `Unknown / ${state.configuration.maximumEthPerOperation} ETH per operation`,
+			recoveryItems: recoveryItemCount(value),
 			lastAction: value.activities[0]?.label ?? value.activities[0]?.summary ?? 'No action yet',
 			paused: value.paused === true || value.safetyPaused === true,
-			stale: context.snapshotStale,
+			stale: state.snapshotStale,
 		})
 	}
 
 	function renderOverview(value: Snapshot) {
-		context.nextRun.textContent = formatDate(value.scheduler.nextRunAt)
-		const delay = context.parsePositiveNumber(value.scheduler.lastDelaySeconds)
-		context.lastDelay.textContent = delay === undefined ? '—' : context.formatDuration(delay)
-		const executable = value.operationEvaluations.filter(context.operationIsIndependentlyExecutable)
+		elements.nextRun.textContent = formatDate(value.scheduler.nextRunAt)
+		const delay = parsePositiveNumber(value.scheduler.lastDelaySeconds)
+		elements.lastDelay.textContent = delay === undefined ? '—' : formatDuration(delay)
+		const executable = value.operationEvaluations.filter(operationIsIndependentlyExecutable)
 		const eligible = executable.filter(operation => operation.enabled !== false && operation.eligible === true)
-		context.eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
+		elements.eligibleCount.textContent = `${eligible.length.toString()} of ${executable.length.toString()}`
 		const selected = value.operationEvaluations.find(operation => operation.id === value.scheduler.selectedOperationId)
-		context.selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
-		context.walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
-		context.walletShort.removeAttribute('title')
+		elements.selectedOperation.textContent = selected?.label ?? value.scheduler.selectedOperationId ?? 'None'
+		elements.walletShort.replaceChildren(value.wallet === undefined ? document.createTextNode('No execution account configured') : fullIdentifier(value.wallet, 'wallet address'))
+		elements.walletShort.removeAttribute('title')
 		if (value.wallet !== undefined && value.inventoryAvailable === true) {
-			context.balanceEth.textContent = formatAtomicAmount(value.inventory.eth, 'ETH')
-			context.balanceWeth.textContent = formatAtomicAmount(value.inventory.weth, 'WETH')
-			context.balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
+			elements.balanceEth.textContent = formatAtomicAmount(value.inventory.eth, 'ETH')
+			elements.balanceWeth.textContent = formatAtomicAmount(value.inventory.weth, 'WETH')
+			elements.balanceRepTotal.textContent = value.inventory.rep.length === 0 ? '—' : `${value.inventory.rep.length.toString()} token${value.inventory.rep.length === 1 ? '' : 's'}`
 			renderRepBalances(value.inventory.rep)
 		} else {
-			context.balanceEth.textContent = '—'
-			context.balanceWeth.textContent = '—'
-			context.balanceRepTotal.textContent = '—'
-			context.repBalances.className = 'token-list empty-state'
-			context.repBalances.textContent = value.wallet === undefined ? '—' : 'Inventory unavailable until this account is scanned.'
+			elements.balanceEth.textContent = '—'
+			elements.balanceWeth.textContent = '—'
+			elements.balanceRepTotal.textContent = '—'
+			elements.repBalances.className = 'token-list empty-state'
+			elements.repBalances.textContent = value.wallet === undefined ? '—' : 'Inventory unavailable until this account is scanned.'
 		}
 		renderRpcHealth(value)
 		renderSubmissionHealth(value.submissionHealth)
 		context.renderWorkflow(value.currentWorkflow, value.pendingTransactions)
-		context.renderWorkflowHistory(value.workflows, context.configuration?.explorerUrl, value.paused === true)
+		context.renderWorkflowHistory(value.workflows, state.configuration?.explorerUrl, value.paused === true)
 		context.renderCoverage(value.operationEvaluations)
 		context.retirementDashboard.render(value)
 	}
 
 	function renderRpcHealth(value: Snapshot) {
-		context.rpcHealthRetryButton.classList.add('hidden')
+		elements.rpcHealthRetryButton.classList.add('hidden')
 		const health = value.rpcHealth
-		if (health.status === 'ready') setBadge(context.rpcHealthStatus, 'Quorum ready', 'success')
-		else if (health.status === 'degraded') setBadge(context.rpcHealthStatus, 'Quorum blocked', 'error')
-		else if (health.status === 'not-checked') setBadge(context.rpcHealthStatus, 'Awaiting health check', 'warning')
-		else setBadge(context.rpcHealthStatus, 'Health unavailable', 'warning')
+		if (health.status === 'ready') setBadge(elements.rpcHealthStatus, 'Quorum ready', 'success')
+		else if (health.status === 'degraded') setBadge(elements.rpcHealthStatus, 'Quorum blocked', 'error')
+		else if (health.status === 'not-checked') setBadge(elements.rpcHealthStatus, 'Awaiting health check', 'warning')
+		else setBadge(elements.rpcHealthStatus, 'Health unavailable', 'warning')
 		const configured = health.configuredReadEndpointCount
-		context.rpcConfiguredTotal.textContent = configured === undefined ? '—' : `${configured.toString()} endpoint${configured === 1 ? '' : 's'}`
+		elements.rpcConfiguredTotal.textContent = configured === undefined ? '—' : `${configured.toString()} endpoint${configured === 1 ? '' : 's'}`
 		const healthy = health.healthyReadEndpointCount
-		if (healthy === undefined) context.rpcHealthyCount.textContent = '—'
-		else context.rpcHealthyCount.textContent = configured === undefined ? healthy.toString() : `${healthy.toString()} of ${configured.toString()}`
+		if (healthy === undefined) elements.rpcHealthyCount.textContent = '—'
+		else elements.rpcHealthyCount.textContent = configured === undefined ? healthy.toString() : `${healthy.toString()} of ${configured.toString()}`
 		const quorum = health.requiredReadQuorum
-		context.rpcRequiredQuorum.textContent = quorum === undefined ? '—' : `${quorum.toString()} endpoint${quorum === 1 ? '' : 's'}`
+		elements.rpcRequiredQuorum.textContent = quorum === undefined ? '—' : `${quorum.toString()} endpoint${quorum === 1 ? '' : 's'}`
 		const chain = value.chainId === undefined ? 'configured chain' : `chain ${String(value.chainId)}`
-		if (health.chainReady === true) context.rpcChainReadiness.textContent = `Ready for ${chain}`
-		else if (health.chainReady === false) context.rpcChainReadiness.textContent = `Not ready for ${chain}`
-		else context.rpcChainReadiness.textContent = 'Not yet verified'
-		context.rpcLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
+		if (health.chainReady === true) elements.rpcChainReadiness.textContent = `Ready for ${chain}`
+		else if (health.chainReady === false) elements.rpcChainReadiness.textContent = `Not ready for ${chain}`
+		else elements.rpcChainReadiness.textContent = 'Not yet verified'
+		elements.rpcLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
 	}
 
 	function renderUnavailableRpcHealth(previousResultIsStale: boolean) {
-		context.rpcHealthRetryButton.classList.remove('hidden')
-		setBadge(context.rpcHealthStatus, 'Health unavailable', 'warning')
-		context.rpcConfiguredTotal.textContent = '—'
-		context.rpcHealthyCount.textContent = '—'
-		context.rpcRequiredQuorum.textContent = '—'
-		context.rpcChainReadiness.textContent = 'Unavailable until state refresh succeeds'
-		context.rpcLastCheck.textContent = previousResultIsStale ? 'Previous health result is stale' : 'No current health result'
+		elements.rpcHealthRetryButton.classList.remove('hidden')
+		setBadge(elements.rpcHealthStatus, 'Health unavailable', 'warning')
+		elements.rpcConfiguredTotal.textContent = '—'
+		elements.rpcHealthyCount.textContent = '—'
+		elements.rpcRequiredQuorum.textContent = '—'
+		elements.rpcChainReadiness.textContent = 'Unavailable until state refresh succeeds'
+		elements.rpcLastCheck.textContent = previousResultIsStale ? 'Previous health result is stale' : 'No current health result'
 	}
 
 	function renderSubmissionHealth(health: SubmissionHealth) {
-		if (health.status === 'ready') setBadge(context.submissionHealthStatus, 'Path ready', 'success')
-		else if (health.status === 'degraded') setBadge(context.submissionHealthStatus, 'Path blocked', 'error')
-		else if (health.status === 'stale') setBadge(context.submissionHealthStatus, 'Evidence stale', 'warning')
-		else if (health.status === 'not-checked') setBadge(context.submissionHealthStatus, 'Awaiting path check', 'warning')
-		else setBadge(context.submissionHealthStatus, 'Path not configured', 'neutral')
-		if (health.mode === 'private') context.submissionMode.textContent = 'Private relay'
-		else if (health.mode === 'public') context.submissionMode.textContent = 'Public RPC'
-		else context.submissionMode.textContent = '—'
+		if (health.status === 'ready') setBadge(elements.submissionHealthStatus, 'Path ready', 'success')
+		else if (health.status === 'degraded') setBadge(elements.submissionHealthStatus, 'Path blocked', 'error')
+		else if (health.status === 'stale') setBadge(elements.submissionHealthStatus, 'Evidence stale', 'warning')
+		else if (health.status === 'not-checked') setBadge(elements.submissionHealthStatus, 'Awaiting path check', 'warning')
+		else setBadge(elements.submissionHealthStatus, 'Path not configured', 'neutral')
+		if (health.mode === 'private') elements.submissionMode.textContent = 'Private relay'
+		else if (health.mode === 'public') elements.submissionMode.textContent = 'Public RPC'
+		else elements.submissionMode.textContent = '—'
 		const configured = health.configuredOriginCount
 		const healthy = health.healthyOriginCount
-		if (healthy === undefined) context.submissionHealthyCount.textContent = '—'
-		else if (configured === undefined) context.submissionHealthyCount.textContent = originCount(healthy)
-		else context.submissionHealthyCount.textContent = `${healthy.toString()} of ${configured.toString()} origins`
-		context.submissionRequiredThreshold.textContent = originCount(health.requiredHealthyOriginCount)
+		if (healthy === undefined) elements.submissionHealthyCount.textContent = '—'
+		else if (configured === undefined) elements.submissionHealthyCount.textContent = originCount(healthy)
+		else elements.submissionHealthyCount.textContent = `${healthy.toString()} of ${configured.toString()} origins`
+		elements.submissionRequiredThreshold.textContent = originCount(health.requiredHealthyOriginCount)
 		const checked = health.checkedOriginCount
 		const fresh = health.freshOriginCount
-		context.submissionFreshness.textContent = checked === undefined || fresh === undefined ? 'Not yet verified' : `${fresh.toString()} fresh of ${checked.toString()} checked`
-		if (health.mode !== 'private') context.submissionSignerProof.textContent = 'Not required'
-		else if (health.proofMatchesSigner === true) context.submissionSignerProof.textContent = 'Matches current signer'
-		else if (health.proofMatchesSigner === false) context.submissionSignerProof.textContent = 'Does not match current signer'
-		else context.submissionSignerProof.textContent = 'Not yet proven'
-		context.submissionLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
+		elements.submissionFreshness.textContent = checked === undefined || fresh === undefined ? 'Not yet verified' : `${fresh.toString()} fresh of ${checked.toString()} checked`
+		if (health.mode !== 'private') elements.submissionSignerProof.textContent = 'Not required'
+		else if (health.proofMatchesSigner === true) elements.submissionSignerProof.textContent = 'Matches current signer'
+		else if (health.proofMatchesSigner === false) elements.submissionSignerProof.textContent = 'Does not match current signer'
+		else elements.submissionSignerProof.textContent = 'Not yet proven'
+		elements.submissionLastCheck.textContent = health.lastCheckedAt === undefined ? 'No completed check' : formatDate(health.lastCheckedAt)
 	}
 
 	function renderUnavailableSubmissionHealth(previousResultIsStale: boolean) {
-		setBadge(context.submissionHealthStatus, 'Path unavailable', 'warning')
-		context.submissionMode.textContent = '—'
-		context.submissionHealthyCount.textContent = '—'
-		context.submissionRequiredThreshold.textContent = '—'
-		context.submissionFreshness.textContent = previousResultIsStale ? 'Previous readiness is stale' : 'Unavailable until state refresh succeeds'
-		context.submissionSignerProof.textContent = 'Not yet proven'
-		context.submissionLastCheck.textContent = 'No current path result'
+		setBadge(elements.submissionHealthStatus, 'Path unavailable', 'warning')
+		elements.submissionMode.textContent = '—'
+		elements.submissionHealthyCount.textContent = '—'
+		elements.submissionRequiredThreshold.textContent = '—'
+		elements.submissionFreshness.textContent = previousResultIsStale ? 'Previous readiness is stale' : 'Unavailable until state refresh succeeds'
+		elements.submissionSignerProof.textContent = 'Not yet proven'
+		elements.submissionLastCheck.textContent = 'No current path result'
 	}
 
 	function renderRepBalances(values: RepBalance[]) {
 		if (values.length === 0) {
-			context.repBalances.className = 'token-list empty-state'
-			context.repBalances.textContent = 'No REP inventory observed.'
+			elements.repBalances.className = 'token-list empty-state'
+			elements.repBalances.textContent = 'No REP inventory observed.'
 			return
 		}
-		context.repBalances.className = 'token-list'
+		elements.repBalances.className = 'token-list'
 		const rows = values.map(value => {
 			const row = node('div', 'token-row')
 			const identity = node('div')
@@ -201,7 +167,7 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 			row.append(identity, node('strong', 'mono', formatAtomicAmount(value.balance, value.symbol ?? 'REP')))
 			return row
 		})
-		context.repBalances.replaceChildren(...rows)
+		elements.repBalances.replaceChildren(...rows)
 	}
 
 	function originCount(value: number | undefined) {

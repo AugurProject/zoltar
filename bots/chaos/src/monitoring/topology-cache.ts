@@ -4,9 +4,10 @@ import { resolve } from 'node:path'
 import { isExistingTargetError, ownerDirectory, ownerFilesystem, parseJsonDocument, readOwnerFile, syncOwnerDirectory, writeOwnerFile } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { getAddress, zeroAddress, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
+import { compareUnsignedStrings } from '../core/units.ts'
 import type { QuestionSnapshot } from '../operations/types.ts'
 import { collectionDigest, manifestWithDigest, sha256 } from '../state/content-digest.ts'
-import { assertExactKeys as assertExactRequiredAndOptionalKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
+import { assertExactKeys, normalizedHash32 as hash, requiredRecord, uint256String as unsignedIntegerString } from '../state/validators.ts'
 
 export const IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION = 3
 const IMMUTABLE_TOPOLOGY_SEGMENT_BYTES = 32 * 1024 * 1024
@@ -165,10 +166,6 @@ type TopologyPointer = {
 	schemaVersion: 1
 }
 
-function assertExactKeys(record: Record<string, unknown>, required: readonly string[], label: string) {
-	assertExactRequiredAndOptionalKeys(record, required, [], label)
-}
-
 function boundedString(value: unknown, label: string, maximumLength: number) {
 	if (typeof value !== 'string' || value.length > maximumLength) throw new Error(`${label} must be a string of at most ${maximumLength.toString()} characters`)
 	return value
@@ -190,7 +187,7 @@ function address(value: unknown, label: string) {
 
 function parseCountedRegistryCursor(value: unknown, label: string): CountedRegistryCursor {
 	const cursor = requiredRecord(value, label)
-	assertExactKeys(cursor, ['canonicalCount', 'commitment', 'nextIndex', 'residentLimit', 'retentionMode'], label)
+	assertExactKeys(cursor, ['canonicalCount', 'commitment', 'nextIndex', 'residentLimit', 'retentionMode'], [], label)
 	const canonicalCount = unsignedIntegerString(cursor['canonicalCount'], `${label}.canonicalCount`)
 	const nextIndex = unsignedIntegerString(cursor['nextIndex'], `${label}.nextIndex`)
 	if (BigInt(nextIndex) > BigInt(canonicalCount)) throw new Error(`${label}.nextIndex exceeds its canonical count`)
@@ -206,7 +203,7 @@ function parseCountedRegistryCursor(value: unknown, label: string): CountedRegis
 
 function parseDiscoveryCursors(value: unknown, label: string): ImmutableTopologyDiscoveryCursors {
 	const cursors = requiredRecord(value, label)
-	assertExactKeys(cursors, ['poolDeployments', 'questions', 'vaultsByPool'], label)
+	assertExactKeys(cursors, ['poolDeployments', 'questions', 'vaultsByPool'], [], label)
 	const rawVaults = requiredRecord(cursors['vaultsByPool'], `${label}.vaultsByPool`)
 	const vaultsByPool: Record<string, CountedRegistryCursor> = {}
 	for (const rawPool of Object.keys(rawVaults).sort((left, right) => left.localeCompare(right))) {
@@ -223,7 +220,7 @@ function parseDiscoveryCursors(value: unknown, label: string): ImmutableTopology
 
 function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestDiscoveryCursors {
 	const cursors = requiredRecord(value, label)
-	assertExactKeys(cursors, ['poolDeployments', 'questions'], label)
+	assertExactKeys(cursors, ['poolDeployments', 'questions'], [], label)
 	return {
 		poolDeployments: parseCountedRegistryCursor(cursors['poolDeployments'], `${label}.poolDeployments`),
 		questions: parseCountedRegistryCursor(cursors['questions'], `${label}.questions`),
@@ -233,7 +230,7 @@ function parseManifestDiscoveryCursors(value: unknown, label: string): ManifestD
 function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity {
 	const identity = requiredRecord(value, label)
 	const addressFields = ['openOracle', 'questionData', 'securityPoolFactory', 'securityPoolForker', 'tradingFactory', 'tradingRouter', 'weth', 'zoltar'] as const
-	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], label)
+	assertExactKeys(identity, ['chainId', ...addressFields, ...('uniswapV3Factory' in identity ? ['uniswapV3Factory'] : [])], [], label)
 	if (typeof identity['chainId'] !== 'number' || !Number.isSafeInteger(identity['chainId']) || identity['chainId'] <= 0) throw new Error(`${label}.chainId must be a positive safe integer`)
 	return {
 		chainId: identity['chainId'],
@@ -252,7 +249,7 @@ function parseIdentity(value: unknown, label: string): ImmutableTopologyIdentity
 function parseQuestion(value: unknown, index: number): QuestionSnapshot {
 	const label = `immutable topology question ${index.toString()}`
 	const question = requiredRecord(value, label)
-	assertExactKeys(question, ['createdAt', 'endTime', 'id', 'kind', 'numTicks', 'outcomeLabels', 'startTime'], label)
+	assertExactKeys(question, ['createdAt', 'endTime', 'id', 'kind', 'numTicks', 'outcomeLabels', 'startTime'], [], label)
 	if (question['kind'] !== 'binary' && question['kind'] !== 'categorical' && question['kind'] !== 'scalar') throw new Error(`${label}.kind is unsupported`)
 	if (!Array.isArray(question['outcomeLabels'])) throw new Error(`${label}.outcomeLabels must be an array`)
 	const outcomeLabels = question['outcomeLabels'].map((outcome, outcomeIndex) => boundedUtf8String(outcome, `${label}.outcomeLabels[${outcomeIndex.toString()}]`, IMMUTABLE_TOPOLOGY_MAXIMUM_QUESTION_LABEL_UTF8_BYTES))
@@ -276,7 +273,7 @@ function parseQuestion(value: unknown, index: number): QuestionSnapshot {
 function parsePoolDeployment(value: unknown, index: number): CachedPoolDeployment {
 	const label = `immutable topology pool deployment ${index.toString()}`
 	const deployment = requiredRecord(value, label)
-	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'truthAuction', 'universeId'], label)
+	assertExactKeys(deployment, ['coordinator', 'parent', 'questionId', 'securityPool', 'shareToken', 'truthAuction', 'universeId'], [], label)
 	return {
 		coordinator: address(deployment['coordinator'], `${label}.coordinator`),
 		parent: address(deployment['parent'], `${label}.parent`),
@@ -288,21 +285,13 @@ function parsePoolDeployment(value: unknown, index: number): CachedPoolDeploymen
 	}
 }
 
-function compareUnsignedStrings(left: string, right: string) {
-	const leftValue = BigInt(left)
-	const rightValue = BigInt(right)
-	if (leftValue < rightValue) return -1
-	if (leftValue > rightValue) return 1
-	return 0
-}
-
 function parseTopologyCache(value: unknown): CanonicalImmutableTopologyCache {
 	const cache = requiredRecord(value, 'immutable topology cache')
-	assertExactKeys(cache, ['anchor', 'discoveryCursors', 'pairsByPool', 'poolDeployments', 'questions', 'schemaVersion', 'universeChildren', 'vaultsByPool'], 'immutable topology cache')
+	assertExactKeys(cache, ['anchor', 'discoveryCursors', 'pairsByPool', 'poolDeployments', 'questions', 'schemaVersion', 'universeChildren', 'vaultsByPool'], [], 'immutable topology cache')
 	if (cache['schemaVersion'] !== IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION) throw new Error('Immutable topology cache schema is unsupported')
 	const discoveryCursors = parseDiscoveryCursors(cache['discoveryCursors'], 'immutable topology cache.discoveryCursors')
 	const anchor = requiredRecord(cache['anchor'], 'immutable topology cache.anchor')
-	assertExactKeys(anchor, ['blockHash', 'blockNumber'], 'immutable topology cache.anchor')
+	assertExactKeys(anchor, ['blockHash', 'blockNumber'], [], 'immutable topology cache.anchor')
 	if (!Array.isArray(cache['questions'])) throw new Error('immutable topology cache.questions must be an array')
 	const questions = cache['questions'].map((question, index) => parseQuestion(question, index))
 	if (new Set(questions.map(question => question.id)).size !== questions.length) throw new Error('Immutable topology cache contains duplicate question IDs')
@@ -314,7 +303,7 @@ function parseTopologyCache(value: unknown): CanonicalImmutableTopologyCache {
 	for (const universeId of Object.keys(rawChildren).sort(compareUnsignedStrings)) {
 		unsignedIntegerString(universeId, `immutable topology cache.universeChildren key ${universeId}`)
 		const children = requiredRecord(rawChildren[universeId], `immutable topology cache.universeChildren.${universeId}`)
-		assertExactKeys(children, ['childUniverseIds', 'outcomeIndexes'], `immutable topology cache.universeChildren.${universeId}`)
+		assertExactKeys(children, ['childUniverseIds', 'outcomeIndexes'], [], `immutable topology cache.universeChildren.${universeId}`)
 		if (!Array.isArray(children['childUniverseIds']) || !Array.isArray(children['outcomeIndexes'])) throw new Error(`immutable topology cache.universeChildren.${universeId} routes must be arrays`)
 		const childUniverseIds = children['childUniverseIds'].map((child, index) => unsignedIntegerString(child, `immutable topology cache.universeChildren.${universeId}.childUniverseIds[${index.toString()}]`))
 		const outcomeIndexes = children['outcomeIndexes'].map((outcome, index) => unsignedIntegerString(outcome, `immutable topology cache.universeChildren.${universeId}.outcomeIndexes[${index.toString()}]`))
@@ -444,14 +433,14 @@ function chunkFilename(kind: CollectionKind, ordinal: number, digest: Hex) {
 
 function parsePointer(value: unknown): TopologyPointer {
 	const pointer = requiredRecord(value, 'immutable topology pointer')
-	assertExactKeys(pointer, ['manifestDigest', 'schemaVersion'], 'immutable topology pointer')
+	assertExactKeys(pointer, ['manifestDigest', 'schemaVersion'], [], 'immutable topology pointer')
 	if (pointer['schemaVersion'] !== TOPOLOGY_POINTER_SCHEMA_VERSION) throw new Error('Immutable topology pointer schema is unsupported')
 	return { manifestDigest: hash(pointer['manifestDigest'], 'immutable topology pointer.manifestDigest'), schemaVersion: TOPOLOGY_POINTER_SCHEMA_VERSION }
 }
 
 function parseCollectionCommitment(value: unknown, label: string): CollectionCommitment {
 	const commitment = requiredRecord(value, label)
-	assertExactKeys(commitment, ['chunkCount', 'chunksDigest', 'committedBytes', 'itemCount', 'recordCount'], label)
+	assertExactKeys(commitment, ['chunkCount', 'chunksDigest', 'committedBytes', 'itemCount', 'recordCount'], [], label)
 	const chunkCount = unsignedIntegerString(commitment['chunkCount'], `${label}.chunkCount`)
 	const committedBytes = unsignedIntegerString(commitment['committedBytes'], `${label}.committedBytes`)
 	const itemCount = unsignedIntegerString(commitment['itemCount'], `${label}.itemCount`)
@@ -470,14 +459,14 @@ function parseCollectionCommitment(value: unknown, label: string): CollectionCom
 
 function parseManifest(value: unknown, expectedDigest: Hex): TopologyManifest {
 	const manifest = requiredRecord(value, 'immutable topology manifest')
-	assertExactKeys(manifest, ['anchor', 'collections', 'discoveryCursors', 'identity', 'manifestDigest', 'manifestSchemaVersion', 'payloadSchemaVersion', 'storeSchemaVersion'], 'immutable topology manifest')
+	assertExactKeys(manifest, ['anchor', 'collections', 'discoveryCursors', 'identity', 'manifestDigest', 'manifestSchemaVersion', 'payloadSchemaVersion', 'storeSchemaVersion'], [], 'immutable topology manifest')
 	if (manifest['manifestSchemaVersion'] !== TOPOLOGY_MANIFEST_SCHEMA_VERSION || manifest['payloadSchemaVersion'] !== IMMUTABLE_TOPOLOGY_CACHE_SCHEMA_VERSION || manifest['storeSchemaVersion'] !== TOPOLOGY_STORE_SCHEMA_VERSION) {
 		throw new Error('Immutable topology manifest schema is unsupported')
 	}
 	const anchor = requiredRecord(manifest['anchor'], 'immutable topology manifest.anchor')
-	assertExactKeys(anchor, ['blockHash', 'blockNumber'], 'immutable topology manifest.anchor')
+	assertExactKeys(anchor, ['blockHash', 'blockNumber'], [], 'immutable topology manifest.anchor')
 	const rawCollections = requiredRecord(manifest['collections'], 'immutable topology manifest.collections')
-	assertExactKeys(rawCollections, COLLECTION_KINDS, 'immutable topology manifest.collections')
+	assertExactKeys(rawCollections, COLLECTION_KINDS, [], 'immutable topology manifest.collections')
 	const collections = Object.fromEntries(COLLECTION_KINDS.map(kind => [kind, parseCollectionCommitment(rawCollections[kind], `immutable topology manifest.collections.${kind}`)])) as Record<CollectionKind, CollectionCommitment>
 	const payload = manifestPayload({
 		anchor: {
@@ -609,27 +598,27 @@ function appendLoadedRecord(
 	}
 	const record = requiredRecord(value, `immutable topology ${kind} record`)
 	if (kind === 'pairs') {
-		assertExactKeys(record, ['pair', 'pool'], `immutable topology ${kind} record`)
+		assertExactKeys(record, ['pair', 'pool'], [], `immutable topology ${kind} record`)
 		const pool = boundedString(record['pool'], 'immutable topology pair pool', 42)
 		if (pool in loaded.pairsByPool) throw new Error(`Immutable topology pairs contain duplicate pool ${pool}`)
 		loaded.pairsByPool[pool] = record['pair']
 		return
 	}
 	if (kind === 'universe-children') {
-		assertExactKeys(record, ['childUniverseIds', 'outcomeIndexes', 'universeId'], `immutable topology ${kind} record`)
+		assertExactKeys(record, ['childUniverseIds', 'outcomeIndexes', 'universeId'], [], `immutable topology ${kind} record`)
 		const universeId = unsignedIntegerString(record['universeId'], 'immutable topology universe-children universeId')
 		if (universeId in loaded.universeChildren) throw new Error(`Immutable topology universe children contain duplicate universe ${universeId}`)
 		loaded.universeChildren[universeId] = { childUniverseIds: record['childUniverseIds'], outcomeIndexes: record['outcomeIndexes'] }
 		return
 	}
 	if (kind === 'vault-cursors') {
-		assertExactKeys(record, ['cursor', 'pool'], `immutable topology ${kind} record`)
+		assertExactKeys(record, ['cursor', 'pool'], [], `immutable topology ${kind} record`)
 		const pool = boundedString(record['pool'], 'immutable topology vault-cursor pool', 42)
 		if (pool in loaded.vaultCursors) throw new Error(`Immutable topology vault cursors contain duplicate pool ${pool}`)
 		loaded.vaultCursors[pool] = record['cursor']
 		return
 	}
-	assertExactKeys(record, ['pool', 'vaults'], `immutable topology ${kind} record`)
+	assertExactKeys(record, ['pool', 'vaults'], [], `immutable topology ${kind} record`)
 	const pool = boundedString(record['pool'], 'immutable topology vault-registry pool', 42)
 	if (pool in loaded.vaultsByPool) throw new Error(`Immutable topology vault registries contain duplicate pool ${pool}`)
 	loaded.vaultsByPool[pool] = record['vaults']
@@ -656,7 +645,7 @@ function loadedRecordItemCount(kind: CollectionKind, value: unknown) {
 
 function parseChunkRecords(contents: string, kind: CollectionKind, ordinal: number) {
 	const chunk = requiredRecord(parseJsonDocument(contents, `Immutable topology ${kind} chunk ${ordinal.toString()}`), `immutable topology ${kind} chunk ${ordinal.toString()}`)
-	assertExactKeys(chunk, ['kind', 'ordinal', 'records', 'schemaVersion'], `immutable topology ${kind} chunk ${ordinal.toString()}`)
+	assertExactKeys(chunk, ['kind', 'ordinal', 'records', 'schemaVersion'], [], `immutable topology ${kind} chunk ${ordinal.toString()}`)
 	if (chunk['schemaVersion'] !== TOPOLOGY_CHUNK_SCHEMA_VERSION || chunk['kind'] !== kind || chunk['ordinal'] !== ordinal.toString()) throw new Error(`Immutable topology ${kind} chunk ${ordinal.toString()} identity is invalid`)
 	if (!Array.isArray(chunk['records']) || chunk['records'].length === 0 || chunk['records'].length > TOPOLOGY_CHUNK_RECORDS) {
 		throw new Error(`Immutable topology ${kind} chunk ${ordinal.toString()} must contain between 1 and ${TOPOLOGY_CHUNK_RECORDS.toString()} records`)

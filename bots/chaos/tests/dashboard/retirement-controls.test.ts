@@ -1,10 +1,7 @@
-import { existsSync } from 'node:fs'
-import { expect, test } from 'bun:test'
+import { expect } from 'bun:test'
 import { startDashboardServer } from '../../src/dashboard/dashboard-server.ts'
-import { CHROMIUM_STARTUP_BUDGET_MILLISECONDS, startChromiumSession } from './chromium-session.ts'
+import { browserTest, CHROMIUM_STARTUP_BUDGET_MILLISECONDS, chromiumExecutable, startChromiumSession } from '../support/chromium.ts'
 
-const chromium = process.env['CHROMIUM_PATH'] ?? Bun.which('google-chrome') ?? Bun.which('chromium') ?? '/usr/bin/chromium'
-const browserTest = existsSync(chromium) ? test : test.skip
 const wallet = `0x${'ab'.repeat(20)}`
 const profileId = `profile:v1:${'12'.repeat(32)}`
 const idleState = { activities: [], evaluations: [], inventory: { rep: [] }, obligations: [], paused: true, pendingTransactions: [], profileId }
@@ -54,7 +51,7 @@ browserTest(
 			}),
 			...inertControls,
 		})
-		const browser = await startChromiumSession(chromium, { evaluationDefaults: { exceptions: 'ignore' } })
+		const browser = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { exceptions: 'ignore' } })
 		const { evaluate } = browser
 		try {
 			await browser.send('Runtime.enable')
@@ -156,7 +153,7 @@ browserTest(
 			...inertControls,
 			setRetirement: value => requests.push(value),
 		})
-		const browser = await startChromiumSession(chromium, { evaluationDefaults: { attempts: 120, exceptions: 'ignore', intervalMilliseconds: 25 } })
+		const browser = await startChromiumSession(chromiumExecutable, { evaluationDefaults: { attempts: 120, exceptions: 'ignore', intervalMilliseconds: 25 } })
 		const { evaluate } = browser
 		const waitFor = async (expression: string) => await browser.waitFor(expression, { message: `Timed out waiting for ${expression}` })
 		const review = () => evaluate("[...document.querySelectorAll('.operator-review-row')].map(row => [row.querySelector('strong')?.textContent, row.querySelectorAll('span')[2]?.textContent])")
