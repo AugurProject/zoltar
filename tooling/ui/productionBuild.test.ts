@@ -2,6 +2,10 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import { bytesToHex, decodeFunctionResult, encodeFunctionData, getAddress, hexToBytes, zeroAddress, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { createSimulationProfile } from '../../ui/coreShared/ts/wallet/networkProfile.js'
+import { getInfraContractAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.js'
+import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory } from '../../ui/statoblastShared/ts/contractArtifact.js'
 import * as securityPoolCopy from '../../ui/statoblastShared/ts/copy/securityPool.js'
 import { UI_APP_IDS, featureStylesheets, getUiAppPaths, getUiCoreSharedPaths, isUiAppId, type UiAppId } from './appPaths.mts'
 import { launchChromium } from './chromiumDevTools.mts'
@@ -239,6 +243,7 @@ type ProductionBrowserDriver = {
 	captureScreenshot: (screenshotPath: string) => Promise<void>
 	clickButton: (label: string, occurrence?: number) => Promise<void>
 	evaluate: (expression: string) => Promise<unknown>
+	evaluateAsync: (expression: string) => Promise<unknown>
 	navigate: (url: string) => Promise<void>
 	pressTab: () => Promise<void>
 	resize: (viewport: { height: number; width: number }) => Promise<void>
@@ -318,6 +323,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 				if (clicked !== true) throw new Error(`Unable to click enabled browser button ${label} at occurrence ${occurrence.toString()}`)
 			},
 			evaluate,
+			evaluateAsync: expression => page.evaluate(expression),
 			navigate: async url => {
 				await send('Page.navigate', { url: new URL(url, pageUrl).href })
 			},
@@ -455,21 +461,64 @@ function createWorkflowActions(driver: ProductionBrowserDriver) {
 		}
 		if (!selected) throw new Error(`Unable to select pool tool ${label}: ${String(await driver.evaluate('document.body.innerText'))}`)
 	}
-	// Pool browsing lists favorites and downloaded pools only; scanning the registry is an explicit action.
-	const discoverPools = async () => {
+	// Read fixture addresses from the seeded chain, then use the same address-entry flow as a user.
+	const openSeededPool = async (kind: 'origin' | 'auction' = 'origin') => {
 		await driver.waitForBodyWithoutText('BOOTSTRAPPING')
-		// A scan started while the simulation environment is still settling is discarded when the environment changes, so retry until one completes.
-		await driver.evaluate('window.__zoltarDiscoveryClicked = false')
-		for (let attempt = 0; attempt < 2400; attempt += 1) {
-			const state = await driver.evaluate(
-				`(() => { const button = [...document.querySelectorAll('.discovery-control button')].find(candidate => ['Discover pools', 'Discover more', 'Scan again', 'Discovering…'].includes(candidate.textContent?.trim() ?? '')); if (!(button instanceof HTMLButtonElement)) return 'missing'; const label = button.textContent?.trim(); if (window.__zoltarDiscoveryClicked && label !== 'Discover pools' && !button.disabled) return 'scanned'; if (button.disabled || (window.__zoltarDiscoveryClicked && label !== 'Discover pools')) return 'waiting'; window.__zoltarDiscoveryClicked = true; button.click(); return 'clicked' })()`,
-			)
-			if (state === 'scanned') return
-			await Bun.sleep(state === 'clicked' ? 250 : 50)
+		const genesisRepTokenAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.genesisRepTokenAddress')
+		const wethAddress = await driver.evaluate('window.__zoltarRuntimeNetworkProfile__?.wethAddress')
+		if (typeof genesisRepTokenAddress !== 'string' || typeof wethAddress !== 'string') throw new Error('Simulation network profile was not available')
+		const profile = createSimulationProfile({ genesisRepTokenAddress: getAddress(genesisRepTokenAddress), wethAddress: getAddress(wethAddress) })
+		const { securityPoolFactory } = getInfraContractAddresses(profile)
+		const abi = statoblast_factories_SecurityPoolFactory_SecurityPoolFactory.abi
+		const readFixtureContract = async (data: Hex) => {
+			const result = await driver.evaluateAsync(`new Promise((resolve, reject) => {
+				const worker = window.__zoltarProductionWorkers?.at(-1)
+				if (!(worker instanceof Worker)) { reject(new Error('Simulation worker was not available')); return }
+				// App RPC IDs are positive; fixture reads use negative IDs to avoid consuming app responses.
+				const id = window.__zoltarFixtureRequestId = (window.__zoltarFixtureRequestId ?? 0) - 1
+				const timeout = setTimeout(() => { worker.removeEventListener('message', receive); reject(new Error('Seeded pool registry read timed out')) }, 10000)
+				function receive(event) {
+					const message = event.data
+					if (message.id !== id) return
+					clearTimeout(timeout)
+					worker.removeEventListener('message', receive)
+					if (message.type === 'error') reject(new Error(message.message))
+					else resolve(message.value)
+				}
+				worker.addEventListener('message', receive)
+				worker.postMessage({ id, type: 'rpc', method: 'eth_call', params: [{ to: ${JSON.stringify(securityPoolFactory)}, data: ${JSON.stringify(data)} }, 'latest'] })
+			})`)
+			if (typeof result !== 'string') throw new Error('Seeded pool registry returned invalid call data')
+			return bytesToHex(hexToBytes(result))
 		}
-		throw new Error(`Unable to discover pools: ${String(await driver.evaluate('document.body.innerText'))}`)
+		const count = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentCount', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentCount' })) })
+		expect(count > 0n && count <= 10n).toBe(true)
+		const pools = decodeFunctionResult({ abi, functionName: 'securityPoolDeploymentsRange', data: await readFixtureContract(encodeFunctionData({ abi, functionName: 'securityPoolDeploymentsRange', args: [0n, count] })) })
+		const universe = await driver.evaluate("new URLSearchParams(location.hash.split('?')[1] ?? '').get('universe') ?? '0'")
+		if (typeof universe !== 'string') throw new Error('Pool route universe was not available')
+		const pool = pools.find(pool => pool.universeId === BigInt(universe) && (kind === 'origin' ? pool.parent === zeroAddress : pool.parent !== zeroAddress && pool.truthAuction !== zeroAddress))
+		if (pool === undefined) throw new Error(`Seeded ${kind} pool was not found`)
+		expect(await driver.evaluate("document.querySelector('.discovery-control') === null")).toBe(true)
+		await driver.setInputByLabel('Search pools', pool.securityPool)
+		await driver.waitForButtonEnabled('Open pool at this address')
+		await driver.clickButton('Open pool at this address')
+		await driver.waitForBodyText('All pools')
+		await driver.waitForBodyWithoutText('Loading vault details…')
+		let favorited = false
+		for (let attempt = 0; attempt < 600 && !favorited; attempt += 1) {
+			favorited = (await driver.evaluate(`document.querySelector('button[aria-label^="Favorite:"][aria-pressed="true"]') !== null`)) === true
+			if (!favorited) await Bun.sleep(50)
+		}
+		expect(favorited).toBe(true)
+		// Opening the address must save it to Favorites and expose a working pool link there.
+		const returnedToFavorites = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.includes('All pools')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+		expect(returnedToFavorites).toBe(true)
+		await driver.waitForBodyText('Favorites (1)')
+		await driver.waitForBodyText(pool.securityPool)
+		const reopened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
+		expect(reopened).toBe(true)
 	}
-	return { completeTransactionReview, selectPoolTool, discoverPools }
+	return { completeTransactionReview, selectPoolTool, openSeededPool }
 }
 
 function productionInteractionTest(scenario: ProductionWorkflowScenario, route: string, viewport: { height: number; width: number }, interact: (driver: ProductionBrowserDriver) => Promise<void>) {
@@ -486,11 +535,8 @@ function productionInteractionTest(scenario: ProductionWorkflowScenario, route: 
 }
 
 productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&simScenario=security-pool', { height: 844, width: 390 }, async driver => {
-	const { completeTransactionReview, discoverPools } = createWorkflowActions(driver)
-	await discoverPools()
-	await driver.waitForBodyText('Will this resolve?')
-	const poolOpened = await driver.evaluate(`(() => { const link = document.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
-	expect(poolOpened).toBe(true)
+	const { completeTransactionReview, openSeededPool } = createWorkflowActions(driver)
+	await openSeededPool()
 	await driver.waitForBodyWithoutText('Loading vault details…')
 	await driver.waitForButtonEnabled('Deposit REP')
 	await driver.clickButton('Deposit REP')
@@ -524,13 +570,9 @@ productionInteractionTest('pool-recovery', '?workflow=pool#/pools?simulate=1&sim
 })
 
 productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?simulate=1&simScenario=securitypoolx2', { height: 900, width: 1440 }, async driver => {
-	const { completeTransactionReview, discoverPools, selectPoolTool } = createWorkflowActions(driver)
-	await discoverPools()
+	const { completeTransactionReview, openSeededPool, selectPoolTool } = createWorkflowActions(driver)
+	await openSeededPool()
 	await driver.waitForBodyText('Will this resolve? (securitypoolx2 #1)')
-	const reportingPoolOpened = await driver.evaluate(
-		`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.includes('Will this resolve? (securitypoolx2 #1)')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-	)
-	expect(reportingPoolOpened).toBe(true)
 	await driver.waitForBodyWithoutText('Loading vault details…')
 	await driver.waitForButtonEnabled('Deposit REP')
 	await driver.clickButton('Deposit REP')
@@ -745,9 +787,9 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	expect(deployedBody).not.toContain('Failed to initialize the app environment')
 	// Keep the lightweight deployment boot before the expensive auction fixture, as in the original workflow.
 	await driver.navigate('?workflow=auction#/pools?simulate=1&simScenario=securitypoolx2-auction')
-	const { completeTransactionReview, discoverPools, selectPoolTool } = createWorkflowActions(driver)
-	await discoverPools()
-	await driver.waitForBodyText('Will this resolve?')
+	await driver.waitForBodyText('Browse pools')
+	await driver.waitForBodyWithoutText('BOOTSTRAPPING')
+	const { completeTransactionReview, openSeededPool, selectPoolTool } = createWorkflowActions(driver)
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
 	await driver.waitForBodyText('Child universes')
@@ -758,17 +800,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(childPoolBrowserOpened).toBe(true)
 	await driver.clickButton('+1 month')
-	// Downloaded summaries are snapshots, so scan again after time travel to list the pools' current states.
-	await discoverPools()
-	let auctionPoolOpened = false
-	for (let attempt = 0; attempt < 600 && !auctionPoolOpened; attempt += 1) {
-		auctionPoolOpened =
-			(await driver.evaluate(
-				`(() => { const record = [...document.querySelectorAll('article')].find(candidate => candidate.textContent?.toLowerCase().includes('truth auction')); const link = record?.querySelector('a[aria-label^="Open pool:"]'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`,
-			)) === true
-		if (!auctionPoolOpened) await Bun.sleep(50)
-	}
-	expect(auctionPoolOpened).toBe(true)
+	await openSeededPool('auction')
 	const auctionPoolBody = await driver.waitForBodyText('All pools')
 	if (auctionPoolBody.includes('Universe mismatch')) {
 		const childUniverseOpened = await driver.evaluate(`(() => { const link = document.querySelector('section.tone-critical a.universe-link'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
