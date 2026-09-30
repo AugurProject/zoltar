@@ -83,6 +83,11 @@ Keep cleanup bounded to the edited component, route, and directly shared primiti
 - Use consistent empty, loading, success, warning, and error grammar.
 - Keep important state visible without hover and preserve action placement while content changes state.
 
+## State management
+
+- Signals internally, plain values out: feature and app hooks keep their Preact signals private and return the values read during render plus callbacks. Only low-level building blocks such as `useFormState` and `useLoadController` hand signals to the hook that owns them; never pass signals, signal getters, or lazy signal proxies to components.
+- Hooks return view models (plain data and callbacks); components own JSX.
+
 ## Accessibility
 
 - Use native semantic elements before ARIA and give every control an accessible name.
