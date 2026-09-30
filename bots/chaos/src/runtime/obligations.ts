@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { createHash } from 'node:crypto'
 import { isoTimestampFromSeconds } from '../core/units.ts'
 import type { CanonicalLifecyclePresence, EvaluatedOperation, OperationPlan } from '../operations/types.ts'
@@ -534,7 +535,7 @@ export function abandonLifecycleObligation(state: Pick<RuntimeState, 'lastScanne
 
 export function failLifecycleObligation(obligation: DurableObligation, error: unknown, recoverable: boolean) {
 	const timestamp = now()
-	obligation.lastError = error instanceof Error ? error.message : String(error)
+	obligation.lastError = errorMessage(error)
 	obligation.status = recoverable ? 'pending' : 'failed'
 	obligation.updatedAt = timestamp
 }

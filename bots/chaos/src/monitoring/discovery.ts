@@ -5,7 +5,7 @@ import { requireDeployedContracts } from '@zoltar/bot-shared/monitoring/deployed
 import { sameAddress } from '@zoltar/core-shared/evm/address'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { CANONICAL_PROXY_DEPLOYER, GENESIS_UNISWAP_FEE, genesisUniswapSeederDeployment } from '../core/genesis-uniswap.ts'
-import { canonicalUintString, type CanonicalUintString } from '../core/units.ts'
+import { canonicalUintString, compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { validForkOutcomeRoutes } from '../operations/fork-outcomes.ts'
 import { assertAnchoredOracleRequestFunding } from '../operations/oracle-request-funding.ts'
 import type { AuctionSnapshot, ChildRepSplitProgressSnapshot, EcosystemSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot, PairSnapshot, PoolSnapshot, QuestionSnapshot, StagedOperationSnapshot, TokenInventory, UniverseSnapshot } from '../operations/types.ts'
@@ -74,14 +74,6 @@ export function discoveryCoverageIsComplete(warnings: readonly string[]) {
 
 function canonicalDiscoveryWarnings(warnings: readonly string[]) {
 	return [...new Set(warnings)].sort((left, right) => left.localeCompare(right))
-}
-
-function compareUnsignedStrings(left: string, right: string) {
-	const leftValue = BigInt(left)
-	const rightValue = BigInt(right)
-	if (leftValue < rightValue) return -1
-	if (leftValue > rightValue) return 1
-	return 0
 }
 
 async function authenticateConfiguredGraph(context: EcosystemDiscoveryContext, blockNumber: bigint) {

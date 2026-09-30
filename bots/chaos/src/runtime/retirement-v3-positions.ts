@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { getAddress, type Address, type PublicClient } from '@zoltar/bot-shared/ethereum'
 import { retirementUniswapV3PositionAbi } from '../contracts/retirement-abi.ts'
 import { encodeStep, planBase } from '../operations/planning.ts'
@@ -148,7 +149,7 @@ function updateV3PositionStatus(observation: V3PositionObservation, blockNumber:
 
 export function recordV3ScanFailure(state: Pick<RuntimeState, 'retirement'>, position: RuntimeState['retirement']['positions'][number], error: unknown) {
 	if (position.status !== 'pending-confirmation') position.status = 'blocked'
-	const details = error instanceof Error ? error.message : String(error)
+	const details = errorMessage(error)
 	state.retirement.blockers = [...state.retirement.blockers.filter(blocker => blocker.id !== position.id), { category: 'ambiguous-position', details, id: position.id }]
 }
 
