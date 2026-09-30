@@ -354,6 +354,19 @@ contract OpenOraclePriceCoordinator {
 	}
 
 	function _requestPriceIfNeededAndStageOperation(OperationType operation, address targetVault, address receiverVault, bytes32 approvalId, uint256 operationValue, uint256 validForSeconds, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private {
+		_validateStageRequest(operation, targetVault, receiverVault, approvalId, operationValue, validForSeconds);
+		(uint256 operationId, HistoricalQueueSnapshot memory snapshot) = _recordStagedOperation(operation, targetVault, receiverVault, approvalId, operationValue, validForSeconds);
+		uint256 retained = _executeOrQueueStagedOperation(operationId, snapshot, proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth);
+
+		// Refund the excess of msg.value that was not retained
+		uint256 refund = msg.value - retained;
+		if (refund > 0) {
+			(bool sent, ) = payable(msg.sender).call{value: refund}('');
+			require(sent, 'Oracle coordinator failed to return unused ETH');
+		}
+	}
+
+	function _validateStageRequest(OperationType operation, address targetVault, address receiverVault, bytes32 approvalId, uint256 operationValue, uint256 validForSeconds) private view {
 		require(operationValue > 0 || operation == OperationType.SetVaultUnderwritingLimit, 'Staged operation amount must be non-zero');
 		require(validForSeconds > 0, 'Staged operation timeout must be positive');
 		require(validForSeconds <= MAX_OPERATION_VALID_FOR_SECONDS, 'Staged operation timeout exceeds the maximum allowed');
@@ -371,8 +384,11 @@ contract OpenOraclePriceCoordinator {
 			(, uint256 withdrawRepAmountAttoRep) = _previewWithdrawRep(msg.sender, operationValue);
 			require(withdrawRepAmountAttoRep > 0, STAGED_OPERATION_ERROR_ZERO_WITHDRAW);
 		}
+	}
+
+	function _recordStagedOperation(OperationType operation, address targetVault, address receiverVault, bytes32 approvalId, uint256 operationValue, uint256 validForSeconds) private returns (uint256 operationId, HistoricalQueueSnapshot memory snapshot) {
 		stagedOperationCounter++;
-		uint256 operationId = stagedOperationCounter;
+		operationId = stagedOperationCounter;
 		if (operation == OperationType.SetVaultUnderwritingLimit) {
 			uint256 previousId = latestBackingTargetOperationIds[targetVault];
 			if (stagedOperations[previousId].operator != address(0))
@@ -382,7 +398,7 @@ contract OpenOraclePriceCoordinator {
 		// Liquidations snapshot the complete collateral bundle, including committed REP.
 		// Backing or capacity mutations invalidate the quote, protecting rescue deposits.
 		// Other operations retain this observation only for history and event context.
-		HistoricalQueueSnapshot memory snapshot = _captureHistoricalQueueSnapshot(operation, targetVault);
+		snapshot = _captureHistoricalQueueSnapshot(operation, targetVault);
 		uint256 reservedLiquidationDebtAttoEth;
 		if (operation == OperationType.Liquidation && receiverVault != msg.sender) {
 			reservedLiquidationDebtAttoEth = liquidationApprovalRegistry.reserve(operationId, approvalId, receiverVault, targetVault, msg.sender, operationValue, snapshot.targetUnderwritingLimitAttoEth, block.timestamp + uint256(settlementTime) + validForSeconds);
@@ -394,29 +410,24 @@ contract OpenOraclePriceCoordinator {
 		if (operation == OperationType.Liquidation) {
 			emit LiquidationRouteStaged(operationId, msg.sender, receiverVault, targetVault, approvalId, operationValue, reservedLiquidationDebtAttoEth);
 		}
+	}
 
-		uint256 retained = 0; // amount to retain from msg.value (cost incurred)
-
+	/// @dev Executes immediately under a valid price; otherwise joins the pending settlement set and,
+	/// when it opens that set, requests a price. Returns the bounty retained from `msg.value`.
+	function _executeOrQueueStagedOperation(uint256 operationId, HistoricalQueueSnapshot memory snapshot, uint256 proposedRepPerEthPrice, uint256 requestedInitialAttoWeth, uint256 bountyAttoEth) private returns (uint256 retained) {
 		if (isPriceValid()) {
 			_emitStagedOperationQueued(operationId, snapshot, false);
 			executeStagedOperation(operationId);
 			// no cost when price is valid
-		} else {
-			bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds.length == 0;
-			bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
-			_emitStagedOperationQueued(operationId, snapshot, isPendingSettlementOperationId);
-			if (shouldRequestPrice && isPendingSettlementOperationId) {
-				_requireRequestBounty(bountyAttoEth);
-				retained += bountyAttoEth;
-				_requestPrice(msg.sender, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
-			}
+			return 0;
 		}
-
-		// Refund the excess of msg.value that was not retained
-		uint256 refund = msg.value - retained;
-		if (refund > 0) {
-			(bool sent, ) = payable(msg.sender).call{value: refund}('');
-			require(sent, 'Oracle coordinator failed to return unused ETH');
+		bool shouldRequestPrice = pendingReportId == 0 && pendingSettlementOperationIds.length == 0;
+		bool isPendingSettlementOperationId = _trackPendingSettlementOperation(operationId);
+		_emitStagedOperationQueued(operationId, snapshot, isPendingSettlementOperationId);
+		if (shouldRequestPrice && isPendingSettlementOperationId) {
+			_requireRequestBounty(bountyAttoEth);
+			retained = bountyAttoEth;
+			_requestPrice(msg.sender, bountyAttoEth, proposedRepPerEthPrice, requestedInitialAttoWeth);
 		}
 	}
 

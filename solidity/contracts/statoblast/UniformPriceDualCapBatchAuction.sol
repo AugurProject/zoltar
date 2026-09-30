@@ -223,59 +223,14 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			uint256 cumulativeWinningBidBeforeAttoEth =
 				UniformPriceDualCapBatchAuctionStorage.getActiveBidAttoEthAboveTick(nodes, root, tick) +
 					activeCumulativeBidBeforeAttoEth;
-			uint256 bidUsedAttoEth;
-			uint256 attoRepFilled;
-			uint256 refundAttoEth;
-			BidSettlementStatus status;
-
-			if (underfunded) {
-				if (underfundedWinningAttoEth > 0 && tick >= clearingTick) {
-					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth);
-					status = BidSettlementStatus.Winning;
-				} else {
-					refundAttoEth = bid.bidAmountAttoEth;
-					status = BidSettlementStatus.Losing;
-				}
-			} else {
-				if (tick < clearingTick) {
-					refundAttoEth = bid.bidAmountAttoEth;
-					status = BidSettlementStatus.Losing;
-				} else if (tick > clearingTick) {
-					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
-					status = BidSettlementStatus.Winning;
-				} else {
-					uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
-					uint256 cumulativeBidAttoEth = previousCumulativeBidAttoEth + bid.bidAmountAttoEth;
-					if (ethFilledAtClearingAttoEth <= previousCumulativeBidAttoEth) {
-						bidUsedAttoEth = 0;
-					} else if (ethFilledAtClearingAttoEth >= cumulativeBidAttoEth) {
-						bidUsedAttoEth = bid.bidAmountAttoEth;
-					} else {
-						bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
-					}
-					if (bidUsedAttoEth > bid.bidAmountAttoEth) bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
-					refundAttoEth = bid.bidAmountAttoEth - bidUsedAttoEth;
-					if (bidUsedAttoEth == 0) {
-						status = BidSettlementStatus.Losing;
-					} else if (bidUsedAttoEth == bid.bidAmountAttoEth) {
-						status = BidSettlementStatus.Winning;
-					} else {
-						status = BidSettlementStatus.PartiallyFilled;
-					}
-				}
-			}
-			if (attoRepFilled > 0) {
-				// Use the same REP interval as the fill calculation, fixed by tick and FIFO
-				// position. Cumulative floors telescope to the entire backing-unit budget.
-				uint256 cumulativeRepBeforeAttoRep =
-					underfunded
-						? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
-						: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
-				totalRepBackingUnitsAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
-			}
+			(
+				uint256 bidUsedAttoEth,
+				uint256 attoRepFilled,
+				uint256 refundAttoEth,
+				BidSettlementStatus status
+			) = _computeBidFill(tick, bid.bidAmountAttoEth, activeCumulativeBidBeforeAttoEth, cumulativeWinningBidBeforeAttoEth, clearingPriceLocal);
+			if (attoRepFilled > 0)
+				totalRepBackingUnitsAllocation += _allocateRepBackingUnits(cumulativeWinningBidBeforeAttoEth, attoRepFilled, repBackingUnitsTotal, clearingPriceLocal);
 			totalFilledAttoRep += attoRepFilled;
 			totalProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, proRataTotal, attoEthRaised);
 			totalSecondaryProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, secondaryProRataTotal, attoEthRaised);
@@ -285,6 +240,58 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		}
 
 		_creditRefund(withdrawFor, totalRefundAttoEth);
+	}
+
+	/// @dev Splits one bid into used ETH, REP filled, and refund under the finalized clearing state.
+	/// Underfunded auctions fill every bid at or above the clearing tick against the whole REP sale cap;
+	/// funded auctions fill ticks above clearing fully and ration the clearing tick in FIFO order.
+	function _computeBidFill(int256 tick, uint256 bidAmountAttoEth, uint256 activeCumulativeBidBeforeAttoEth, uint256 cumulativeWinningBidBeforeAttoEth, uint256 clearingPriceLocal)
+		private
+		view
+		returns (uint256 bidUsedAttoEth, uint256 attoRepFilled, uint256 refundAttoEth, BidSettlementStatus status)
+	{
+		if (underfunded) {
+			if (underfundedWinningAttoEth > 0 && tick >= clearingTick) {
+				attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidAmountAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth);
+				return (bidAmountAttoEth, attoRepFilled, 0, BidSettlementStatus.Winning);
+			}
+			return (0, 0, bidAmountAttoEth, BidSettlementStatus.Losing);
+		}
+		if (tick < clearingTick) return (0, 0, bidAmountAttoEth, BidSettlementStatus.Losing);
+		if (tick > clearingTick) {
+			attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidAmountAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
+			return (bidAmountAttoEth, attoRepFilled, 0, BidSettlementStatus.Winning);
+		}
+		uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
+		uint256 cumulativeBidAttoEth = previousCumulativeBidAttoEth + bidAmountAttoEth;
+		if (ethFilledAtClearingAttoEth <= previousCumulativeBidAttoEth) {
+			bidUsedAttoEth = 0;
+		} else if (ethFilledAtClearingAttoEth >= cumulativeBidAttoEth) {
+			bidUsedAttoEth = bidAmountAttoEth;
+		} else {
+			bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
+		}
+		if (bidUsedAttoEth > bidAmountAttoEth) bidUsedAttoEth = bidAmountAttoEth;
+		attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
+		refundAttoEth = bidAmountAttoEth - bidUsedAttoEth;
+		if (bidUsedAttoEth == 0) {
+			status = BidSettlementStatus.Losing;
+		} else if (bidUsedAttoEth == bidAmountAttoEth) {
+			status = BidSettlementStatus.Winning;
+		} else {
+			status = BidSettlementStatus.PartiallyFilled;
+		}
+	}
+
+	/// @dev Uses the same REP interval as the fill calculation, fixed by tick and FIFO
+	/// position. Cumulative floors telescope to the entire backing-unit budget.
+	function _allocateRepBackingUnits(uint256 cumulativeWinningBidBeforeAttoEth, uint256 attoRepFilled, uint256 repBackingUnitsTotal, uint256 clearingPriceLocal) private view returns (uint256) {
+		uint256 cumulativeRepBeforeAttoRep =
+			underfunded
+				? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
+				: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, SecurityPoolUtils.PRICE_PRECISION, clearingPriceLocal);
+		return
+			UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
 	}
 
 	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
