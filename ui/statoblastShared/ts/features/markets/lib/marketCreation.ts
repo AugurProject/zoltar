@@ -4,6 +4,7 @@ import { normalizeQuestionId } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { createQuestionParameters } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { parseStatoblastSecurityMultiplierBpsInput } from './marketForm.js'
+import { NANO_ETH_DECIMALS } from '../../security-pools/lib/priorityFee.js'
 
 export function createMarketParameters(form: MarketFormState) {
 	return createQuestionParameters(form)
@@ -21,7 +22,7 @@ export function createSecurityPoolParameters(form: SecurityPoolFormState) {
 	const questionId = parseQuestionIdInput(form.marketId)
 	const statoblastSecurityMultiplierBps = parseStatoblastSecurityMultiplierBpsInput(form.statoblastSecurityMultiplierBps)
 	if (statoblastSecurityMultiplierBps <= 10_001n) throw new Error('Security multiplier must be at least 1.0002')
-	const initialReportPriorityFeeAttoEthPerGas = parseDecimalInput(form.initialReportPriorityFeeEth, 'Initial report priority fee', 18)
+	const initialReportPriorityFeeAttoEthPerGas = parseDecimalInput(form.initialReportPriorityFeeNanoEth, 'Initial report priority fee', NANO_ETH_DECIMALS)
 	if (initialReportPriorityFeeAttoEthPerGas <= 0n) throw new Error('Initial report priority fee must be greater than 0')
 	if (initialReportPriorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) throw new Error('Initial-report priority fee is too large for Open Oracle report limits.')
 	return {

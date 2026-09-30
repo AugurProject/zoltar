@@ -19,7 +19,7 @@ import { formatInitialReportPriorityFee, formatInitialReportPriorityFeeInput } f
 import { getLiquidationExecutionFailureDetail } from './security-pools/lib/liquidation.js'
 
 type SecurityPoolCreationTransactionContext = {
-	initialReportPriorityFeeEth?: string | undefined
+	initialReportPriorityFeeNanoEth?: string | undefined
 	questionId?: string | undefined
 	questionTitle?: string | undefined
 	statoblastSecurityMultiplierBps?: bigint | undefined
@@ -33,7 +33,7 @@ function getSecurityPoolCreationTransactionRows(context: SecurityPoolCreationTra
 		...(context.questionTitle === undefined || context.questionTitle.trim() === '' ? [] : [{ label: commonCopy.question, value: context.questionTitle.trim() }]),
 		...(context.questionId === undefined || context.questionId.trim() === '' ? [] : [{ label: commonCopy.questionId, value: <IdentifierValue value={context.questionId.trim()} /> }]),
 		...(context.statoblastSecurityMultiplierBps === undefined ? [] : [{ label: statoblastAppCopy.statoblastSecurityMultiplierBps, value: formatStatoblastSecurityMultiplier(context.statoblastSecurityMultiplierBps) }]),
-		...(context.initialReportPriorityFeeEth === undefined || context.initialReportPriorityFeeEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatInitialReportPriorityFeeInput(context.initialReportPriorityFeeEth) }]),
+		...(context.initialReportPriorityFeeNanoEth === undefined || context.initialReportPriorityFeeNanoEth.trim() === '' ? [] : [{ label: commonCopy.initialReportPriorityFee, value: formatInitialReportPriorityFeeInput(context.initialReportPriorityFeeNanoEth) }]),
 	]
 }
 

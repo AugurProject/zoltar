@@ -35,7 +35,7 @@ function createCreatePoolProps(): SecurityPoolRouteContentProps {
 		securityPools: [],
 		securityPoolCreating: false,
 		securityPoolError: undefined,
-		securityPoolForm: { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '' },
+		securityPoolForm: { initialReportPriorityFeeNanoEth: '10', marketId: '', statoblastSecurityMultiplierBps: '' },
 		securityPoolResult: undefined,
 		zoltarUniverseHasForked: false,
 	}

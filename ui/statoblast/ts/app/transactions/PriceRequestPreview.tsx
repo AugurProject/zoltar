@@ -55,10 +55,11 @@ export function PriceRequestPreview({
 		visibleFeedback = <InlineHint id={reasonId} message={reason} />
 	}
 	// The prompt stands in for a hidden reason; a visible reason or error already says why the action waits.
-	const visiblePrompt = failedPlan === undefined && onRetry === undefined && visibleFeedback === undefined ? prompt : undefined
+	const visiblePrompt = visibleFeedback === undefined ? prompt : undefined
 	return (
 		<>
-			{visiblePrompt === undefined ? undefined : <p className='detail price-request-estimate-prompt'>{visiblePrompt}</p>}
+			{/* The prompt row keeps its slot while empty so the dialog does not change height as the request state changes. */}
+			{failedPlan === undefined && onRetry === undefined ? <p className='detail price-request-estimate-prompt'>{visiblePrompt}</p> : undefined}
 			{failedPlan === undefined ? undefined : (
 				<div className='transaction-step-content'>
 					<TransactionFundingSummary funding={failedPlan.funding} totalAttoEth={failedPlan.totalAttoEth} outcome={failedPlan.outcome ?? { returnToWallet: true, settlerRewardAttoEth: undefined }} />

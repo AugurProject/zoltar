@@ -671,7 +671,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		await act(() => {
-			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeEth: '0.00000002', marketId: '0xb', statoblastSecurityMultiplierBps: '3' }))
+			requireState(state).setSecurityPoolForm(current => ({ ...current, initialReportPriorityFeeNanoEth: '20', marketId: '0xb', statoblastSecurityMultiplierBps: '3' }))
 			requireState(state).loadMarketById('0xb')
 		})
 		await waitFor(() => {
@@ -679,7 +679,7 @@ describe('useSecurityPoolCreation', () => {
 		})
 
 		await act(async () => {
-			await requireState(state).createPool('0xb', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+			await requireState(state).createPool('0xb', { initialReportPriorityFeeNanoEth: '10', marketId: '', statoblastSecurityMultiplierBps: '2' })
 		})
 
 		expect(requireState(state).securityPoolResult?.questionId).toBe('0x0b')
@@ -719,7 +719,7 @@ describe('useSecurityPoolCreation', () => {
 		)
 		cleanupRenderedComponent = (await renderIntoDocument(<Harness />)).cleanup
 		await act(async () => {
-			await requireState(state).createPool('0xb', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+			await requireState(state).createPool('0xb', { initialReportPriorityFeeNanoEth: '10', marketId: '', statoblastSecurityMultiplierBps: '2' })
 		})
 		expect(requireState(state).securityPoolError).toContain('This question has already ended')
 		expect(createSecurityPool).not.toHaveBeenCalled()
@@ -766,7 +766,7 @@ describe('useSecurityPoolCreation', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 		try {
 			await act(async () => {
-				await requireState(state).createPool('0xb', { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' })
+				await requireState(state).createPool('0xb', { initialReportPriorityFeeNanoEth: '10', marketId: '', statoblastSecurityMultiplierBps: '2' })
 			})
 
 			expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('error')
@@ -834,7 +834,7 @@ describe('useSecurityPoolCreation', () => {
 
 		await act(async () => {
 			// A stale existing-question ID left in the form must not leak into the review rows for a new question.
-			await requireState(state).createPool(undefined, { initialReportPriorityFeeEth: '0.00000001', marketId: '0x99', statoblastSecurityMultiplierBps: '2' }, { ...getDefaultMarketFormState(), endTime: '2026-07-02T00:00:00.000Z', title: 'Batched question' })
+			await requireState(state).createPool(undefined, { initialReportPriorityFeeNanoEth: '10', marketId: '0x99', statoblastSecurityMultiplierBps: '2' }, { ...getDefaultMarketFormState(), endTime: '2026-07-02T00:00:00.000Z', title: 'Batched question' })
 		})
 
 		expect(requireState(state).securityPoolCreationFeedback?.status.tone).toBe('success')

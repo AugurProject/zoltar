@@ -39,7 +39,7 @@ function createProps(overrides: Partial<SecurityPoolSectionProps> = {}): Securit
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			initialReportPriorityFeeEth: '0.00000001',
+			initialReportPriorityFeeNanoEth: '10',
 			marketId: '0x01',
 			statoblastSecurityMultiplierBps: '2',
 		},
@@ -278,7 +278,7 @@ describe('SecurityPoolSection', () => {
 	})
 
 	test('defaults to creating a new question and switches to an existing question ID on request', async () => {
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ marketDetails: undefined, onCreateQuestionAndSecurityPool: () => undefined, securityPoolForm: { initialReportPriorityFeeEth: '0.00000001', marketId: '', statoblastSecurityMultiplierBps: '2' } })))
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ marketDetails: undefined, onCreateQuestionAndSecurityPool: () => undefined, securityPoolForm: { initialReportPriorityFeeNanoEth: '10', marketId: '', statoblastSecurityMultiplierBps: '2' } })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
@@ -307,8 +307,8 @@ describe('SecurityPoolSection', () => {
 		expect((statoblastSecurityMultiplierBpsInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Up to four decimal places; higher values require more REP.', 'times'])
 		expect((statoblastSecurityMultiplierBpsInput as HTMLInputElement).inputMode).toBe('decimal')
 		const priorityFeeInput = documentQueries.getByRole('textbox', { name: 'Initial report priority fee' })
-		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'ETH per gas'])
-		expect((priorityFeeInput as HTMLInputElement).value).toBe('0.00000001')
+		expect((priorityFeeInput.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)).toEqual(['Fixed gas-price premium added to Open Oracle report security.', 'nanoETH per gas'])
+		expect((priorityFeeInput as HTMLInputElement).value).toBe('10')
 	})
 
 	test('associates invalid priority-fee guidance and disables creation', async () => {
@@ -317,7 +317,7 @@ describe('SecurityPoolSection', () => {
 				SecurityPoolSection,
 				createProps({
 					securityPoolForm: {
-						initialReportPriorityFeeEth: '0',
+						initialReportPriorityFeeNanoEth: '0',
 						marketId: '0x01',
 						statoblastSecurityMultiplierBps: '2',
 					},
@@ -326,7 +326,7 @@ describe('SecurityPoolSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		const message = 'Initial-report priority fee must be greater than 0\u00a0ETH.'
+		const message = 'Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.'
 		const priorityFeeInput = within(document.body).getByRole('textbox', { name: 'Initial report priority fee' })
 		expect(priorityFeeInput.getAttribute('aria-invalid')).toBeNull()
 		expect(document.getElementById('security-pool-initial-report-priority-fee-error')).toBeNull()
@@ -356,7 +356,7 @@ describe('SecurityPoolSection', () => {
 					SecurityPoolSection,
 					createProps({
 						securityPoolForm: {
-							initialReportPriorityFeeEth: '0.00000001',
+							initialReportPriorityFeeNanoEth: '10',
 							marketId: '0x01',
 							statoblastSecurityMultiplierBps: value,
 						},
@@ -392,7 +392,7 @@ describe('SecurityPoolSection', () => {
 				SecurityPoolSection,
 				createProps({
 					securityPoolForm: {
-						initialReportPriorityFeeEth: '0.00000001',
+						initialReportPriorityFeeNanoEth: '10',
 						marketId: '0x01',
 						statoblastSecurityMultiplierBps: '2.0001',
 					},

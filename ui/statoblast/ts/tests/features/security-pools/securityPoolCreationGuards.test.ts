@@ -13,7 +13,7 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails({ endTime: 100n }),
 				securityPoolCreating: false,
@@ -31,7 +31,7 @@ describe('security pool creation guards', () => {
 				accountAddress: undefined,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
@@ -45,7 +45,7 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: false,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
@@ -59,7 +59,7 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: true,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
@@ -73,7 +73,7 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: true,
 				marketDetails: undefined,
 				securityPoolCreating: false,
@@ -87,7 +87,7 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails({ marketType: 'categorical' }),
 				securityPoolCreating: false,
@@ -101,7 +101,7 @@ describe('security pool creation guards', () => {
 				accountAddress: zeroAddress,
 				checkingDuplicateOriginPool: false,
 				duplicateOriginPoolExists: false,
-				initialReportPriorityFeeEth: '0.00000001',
+				initialReportPriorityFeeNanoEth: '10',
 				isOnActiveAppChain: true,
 				marketDetails: createMarketDetails(),
 				securityPoolCreating: false,
@@ -121,12 +121,12 @@ describe('security pool creation guards', () => {
 	})
 
 	test('validates the initial-report priority fee before submission', () => {
-		expect(getInitialReportPriorityFeeValidationMessage('')).toBe('Enter an initial-report priority fee in ETH.')
-		expect(getInitialReportPriorityFeeValidationMessage('abc')).toBe('Enter an ETH value with at most 18 decimal places.')
-		expect(getInitialReportPriorityFeeValidationMessage('0.0000000000000000001')).toBe('Enter an ETH value with at most 18 decimal places.')
-		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial-report priority fee must be greater than 0\u00a0ETH.')
+		expect(getInitialReportPriorityFeeValidationMessage('')).toBe('Enter an initial-report priority fee in nanoETH per gas.')
+		expect(getInitialReportPriorityFeeValidationMessage('abc')).toBe('Enter a nanoETH value with at most 9 decimal places.')
+		expect(getInitialReportPriorityFeeValidationMessage('0.0000000001')).toBe('Enter a nanoETH value with at most 9 decimal places.')
+		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.')
 		expect(getInitialReportPriorityFeeValidationMessage('0.000000001')).toBeUndefined()
-		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 18n).toString())).toBeUndefined()
-		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 18n + 1n).toString())).toBe('Initial-report priority fee is too large for Open Oracle report limits.')
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())).toBeUndefined()
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for Open Oracle report limits.')
 	})
 })

@@ -164,7 +164,7 @@ export const poolAddressLabel = 'Pool address'
 export const poolAlreadyExists = 'Pool already exists'
 export const statoblastSecurityMultiplierBpsHelpText = 'Up to four decimal places; higher values require more REP.'
 export const initialReportPriorityFeeHelpText = 'Fixed gas-price premium added to Open Oracle report security.'
-export const initialReportPriorityFeeUnit = 'ETH per gas'
+export const initialReportPriorityFeeUnit = 'nanoETH per gas'
 // A word rather than a lone ×, which reads as a clear-field button at the end of the input.
 export const securityMultiplierInputUnit = 'times'
 export const stagedOperationFailedDetail = 'The staged operation did not execute.'

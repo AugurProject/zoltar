@@ -95,7 +95,7 @@ describe('transaction presentations', () => {
 
 	test('orders security pool creation rows like the success presentation and leads with a new question title', () => {
 		const intent = createSecurityPoolCreationTransactionIntent({
-			initialReportPriorityFeeEth: '0.00000001',
+			initialReportPriorityFeeNanoEth: '10',
 			questionTitle: ' Will it rain? ',
 			statoblastSecurityMultiplierBps: 20_000n,
 		})
@@ -111,9 +111,9 @@ describe('transaction presentations', () => {
 		expect(intent.rows?.[0]).toEqual({ label: 'Question', value: 'Will it rain?' })
 		expect(intent.rows?.slice(1).map(row => row.label)).toEqual(['Security multiplier', 'Initial report priority fee'])
 		expect(success.rows?.map(row => row.label)).toEqual(['Pool', 'Question ID', 'Security multiplier', 'Initial report priority fee'])
-		// The fee is a per-gas price: review and success state it the same way, in ETH per gas.
-		expect(intent.rows?.at(-1)?.value).toBe('0.00000001\u00a0ETH per gas')
-		expect(success.rows?.at(-1)?.value).toBe('0.00000001\u00a0ETH per gas')
+		// The fee is a per-gas price: review and success state it the same way, in nanoETH per gas.
+		expect(intent.rows?.at(-1)?.value).toBe('10\u00a0nanoETH per gas')
+		expect(success.rows?.at(-1)?.value).toBe('10\u00a0nanoETH per gas')
 	})
 
 	test('does not present a failed staged execution as a success', () => {

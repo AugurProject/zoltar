@@ -3,7 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
-import { tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
+import { tryParseInitialReportPriorityFeeInput } from './priorityFee.js'
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { tryParseStatoblastSecurityMultiplierBpsInput } from '../../markets/lib/marketForm.js'
 
@@ -18,12 +18,12 @@ export function getStatoblastSecurityMultiplierValidationMessage(statoblastSecur
 	return undefined
 }
 
-export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeEth: string) {
-	const input = initialReportPriorityFeeEth.trim()
-	if (input === '') return 'Enter an initial-report priority fee in ETH.'
-	const priorityFeeAttoEthPerGas = tryParseDecimalInput(input, 18)
-	if (priorityFeeAttoEthPerGas === undefined) return 'Enter an ETH value with at most 18 decimal places.'
-	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0ETH.'
+export function getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeNanoEth: string) {
+	const input = initialReportPriorityFeeNanoEth.trim()
+	if (input === '') return 'Enter an initial-report priority fee in nanoETH per gas.'
+	const priorityFeeAttoEthPerGas = tryParseInitialReportPriorityFeeInput(input)
+	if (priorityFeeAttoEthPerGas === undefined) return 'Enter a nanoETH value with at most 9 decimal places.'
+	if (priorityFeeAttoEthPerGas <= 0n) return 'Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.'
 	if (priorityFeeAttoEthPerGas > MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS) return 'Initial-report priority fee is too large for Open Oracle report limits.'
 	return undefined
 }
@@ -33,7 +33,7 @@ export function getSecurityPoolCreateDisabledReason({
 	currentTimestamp,
 	checkingDuplicateOriginPool,
 	duplicateOriginPoolExists,
-	initialReportPriorityFeeEth,
+	initialReportPriorityFeeNanoEth,
 	isOnActiveAppChain,
 	marketDetails,
 	securityPoolCreating,
@@ -44,7 +44,7 @@ export function getSecurityPoolCreateDisabledReason({
 	currentTimestamp?: bigint | undefined
 	checkingDuplicateOriginPool: boolean
 	duplicateOriginPoolExists: boolean
-	initialReportPriorityFeeEth: string
+	initialReportPriorityFeeNanoEth: string
 	isOnActiveAppChain: boolean
 	marketDetails: MarketDetails | undefined
 	securityPoolCreating: boolean
@@ -62,5 +62,5 @@ export function getSecurityPoolCreateDisabledReason({
 	if (marketDetails.marketType !== 'binary') return 'Security pools can only be created for exact binary Yes / No questions.'
 	if (currentTimestamp !== undefined && marketDetails.endTime <= currentTimestamp) return securityPoolCopy.questionEndedReason
 	if (zoltarUniverseHasForked) return 'Security pools cannot be created after this universe has forked.'
-	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeEth)
+	return getInitialReportPriorityFeeValidationMessage(initialReportPriorityFeeNanoEth)
 }

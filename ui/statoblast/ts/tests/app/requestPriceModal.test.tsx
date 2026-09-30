@@ -1028,7 +1028,8 @@ test('does not show a price prompt that contradicts a visible waiting reason', a
 	const dom = installDomEnvironment()
 	const rendered = await renderIntoDocument(<PriceRequestPreview requestValue={12n} prompt='Waiting for the current request to finish.' reason='Waiting for the current request to finish.' error={undefined} preparing={false} hideReason={false} onClose={() => undefined} />)
 	try {
-		expect(rendered.container.querySelector('.price-request-estimate-prompt')).toBeNull()
+		// The prompt row keeps its slot for a stable dialog height but stays empty, so it cannot contradict the reason.
+		expect(rendered.container.querySelector('.price-request-estimate-prompt')?.textContent).toBe('')
 		expect(rendered.container.textContent).not.toContain('Enter a starting price.')
 		expect(rendered.container.textContent?.split('Waiting for the current request to finish.').length).toBe(2)
 	} finally {
@@ -1060,7 +1061,7 @@ test('keeps the preview while satisfied approvals are skipped before the final r
 		expect(rendered.container.querySelectorAll('.approval-amount-field')).toHaveLength(0)
 		expect(queries.getByRole('button', { name: /Preparing funding and approvals/ }).hasAttribute('disabled')).toBe(true)
 		// The busy button carries the preparing state; the prompt paragraph does not repeat it.
-		expect(rendered.container.querySelector('.price-request-estimate-prompt')).toBeNull()
+		expect(rendered.container.querySelector('.price-request-estimate-prompt')?.textContent).toBe('')
 		expect(queries.queryByRole('button', { name: /Request new price/ })).toBeNull()
 		ready.resolve()
 		await settle()

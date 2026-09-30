@@ -90,7 +90,7 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			initialReportPriorityFeeEth: '0.00000001',
+			initialReportPriorityFeeNanoEth: '10',
 			marketId: '',
 			statoblastSecurityMultiplierBps: '',
 		},
