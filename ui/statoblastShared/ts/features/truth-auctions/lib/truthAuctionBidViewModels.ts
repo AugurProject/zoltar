@@ -91,7 +91,7 @@ export function buildViewerTruthAuctionBidRows({
 		const inSessionSettlementResult = settlementResultByKey[settlementBidKey]
 		const isSettlementBidActions = selectedStage === 'settlement' && isSettlementBid && inSessionSettlementResult === undefined && !isSettlementInProgress
 		const isSettlementBidSelectable = inSessionSettlementResult === undefined && !isSettlementInProgress
-		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatValueWithUnit(formatCurrencyInputBalance(bid.bidAmountAttoEth), 'ETH')} at ${formatValueWithUnit(formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick)), 'ETH/REP')}`
+		const settlementControlLabel = `Select ${disposition.label.toLowerCase()} bid ${bid.bidIndex.toString()}: ${formatValueWithUnit(formatCurrencyInputBalance(bid.bidAmountAttoEth), 'ETH')} at ${formatValueWithUnit(formatCurrencyInputBalance(getTruthAuctionPriceAtTick(bid.tick)), 'ETH per REP')}`
 		const statusLabel = (() => {
 			if (inSessionSettlementResult === 'claimed') return 'Claimed'
 			if (inSessionSettlementResult === 'refunded') return 'Refunded'

@@ -377,8 +377,12 @@ describe('useReportingOperations', () => {
 			viewerWalletRepBalanceAttoRep: contributionFunding === 'wallet' ? 10n * ATTO_REP : 0n,
 		})
 		let submittedFunding: 'wallet' | 'vault' | undefined
+		let submittedMaximumAttoRep: bigint | undefined
+		let submittedReviewAttoRep: bigint | undefined
 		const loadReportingDetails = mock(async () => walletFundingDetails)
 		const reportOutcomeInSecurityPool = mock(async (...args: Parameters<UseReportingOperationsDependencies['reportOutcomeInSecurityPool']>) => {
+			submittedMaximumAttoRep = args[4]
+			submittedReviewAttoRep = args[5]
 			submittedFunding = args[6]
 			return {
 				action: 'reportOutcome' as const,
@@ -415,6 +419,10 @@ describe('useReportingOperations', () => {
 
 		expect(reportOutcomeInSecurityPool).toHaveBeenCalledTimes(1)
 		expect(submittedFunding).toBe(contributionFunding)
+		// The typed 5 REP exceeds the remaining threshold room, so the previewed accepted amount is smaller.
+		expect(submittedReviewAttoRep ?? 0n).toBeLessThan(5n * ATTO_REP)
+		// Wallet deposits pull the accepted amount with transferFrom, so the maximum must not exceed the reviewed and approved amount.
+		expect(submittedMaximumAttoRep).toBe(contributionFunding === 'wallet' ? submittedReviewAttoRep : 5n * ATTO_REP)
 		expect(requireHookState(hookState).reportingResult?.action).toBe('reportOutcome')
 	})
 

@@ -60,8 +60,8 @@ export function getReportingReportGuardMessage({
 		if (viewerWalletRepBalanceAttoRep === undefined) return 'Loading wallet REP balance.'
 		if (walletDepositAmount > viewerWalletRepBalanceAttoRep) return `Add ${formatAdditionalCurrencyBalance(walletDepositAmount - viewerWalletRepBalanceAttoRep, 'REP')} to this wallet before reporting.`
 		if (!requireAllowance) return undefined
-		if (viewerWalletRepAllowanceAttoRep === undefined) return 'Loading escalation-game REP allowance.'
-		if (walletDepositAmount > viewerWalletRepAllowanceAttoRep) return 'Approve REP for this escalation game before reporting.'
+		if (viewerWalletRepAllowanceAttoRep === undefined) return 'Loading REP allowance for the security pool.'
+		if (walletDepositAmount > viewerWalletRepAllowanceAttoRep) return 'Approve REP for this security pool before reporting.'
 		return undefined
 	}
 	if (walletFundingAvailable && (!viewerVaultExists || (viewerPoolHeldVaultRepBackingAttoRep ?? 1n) === 0n)) return reportingCopy.noVaultRepSelectWallet

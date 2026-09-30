@@ -4,6 +4,7 @@ import { getOracleLastPriceDisplay, getOraclePriceValidityPresentation } from '.
 import { useEffect, useMemo, useState } from 'preact/hooks'
 import { usePageVisible } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { formatPendingPriceAvailability } from '../../../copy/pricing.js'
+import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 
 type OpenOraclePriceValueProps = {
 	currentTimestamp?: bigint | undefined
@@ -23,15 +24,18 @@ export function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettleme
 		const wallTime = Date.now()
 		return { timestamp: resolvedCurrentTimestamp ?? BigInt(Math.floor(wallTime / 1000)), wallTime }
 	}, [resolvedCurrentTimestamp])
+	const hasSettledPrice = lastPrice !== undefined && lastSettlementTimestamp > 0n
+	const validUntilTimestamp = hasSettledPrice ? (priceValidUntilTimestamp ?? getOracleManagerPriceValidUntilTimestamp(lastSettlementTimestamp)) : undefined
+	// Tick while a pending report counts down or the settled price is still valid, so both labels follow the estimated chain time.
+	const shouldTick = pendingReportReadyAtTimestamp !== undefined || (resolvedCurrentTimestamp !== undefined && validUntilTimestamp !== undefined && estimatedTimestamp <= validUntilTimestamp)
 	useEffect(() => {
 		const update = () => setEstimatedTimestamp(anchor.timestamp + BigInt(Math.floor((Date.now() - anchor.wallTime) / 1000)))
 		update()
-		if (pendingReportReadyAtTimestamp === undefined || !visible) return
+		if (!shouldTick || !visible) return
 		const interval = setInterval(update, 1000)
 		return () => clearInterval(interval)
-	}, [anchor, pendingReportReadyAtTimestamp, visible])
+	}, [anchor, shouldTick, visible])
 	const remaining = pendingReportReadyAtTimestamp === undefined ? undefined : pendingReportReadyAtTimestamp - estimatedTimestamp
-	const hasSettledPrice = lastPrice !== undefined && lastSettlementTimestamp > 0n
 	const pendingLabel = remaining === undefined ? undefined : formatPendingPriceAvailability(remaining, hasSettledPrice)
 	if (!hasSettledPrice) return pendingLabel ?? commonCopy.unavailable
 
@@ -39,7 +43,7 @@ export function OpenOraclePriceValue({ currentTimestamp, lastPrice, lastSettleme
 		resolvedCurrentTimestamp === undefined
 			? undefined
 			: getOraclePriceValidityPresentation({
-					currentTimestamp: resolvedCurrentTimestamp,
+					currentTimestamp: estimatedTimestamp,
 					lastSettlementTimestamp,
 					priceValidUntilTimestamp,
 				})

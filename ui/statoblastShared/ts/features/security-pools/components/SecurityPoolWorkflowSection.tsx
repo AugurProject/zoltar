@@ -221,7 +221,7 @@ export function SecurityPoolWorkflowSection(props: SecurityPoolWorkflowSectionPr
 				{model.oracleStatus === undefined ? undefined : <PoolOracleStatusRow needsPrice={model.needsPrice} oracle={{ ...model.oracleStatus, requestPending: poolOracleActiveAction === 'requestPrice' }} onRequestPrice={openRequestPriceReview} onViewReport={onViewPendingReport} />}
 				{showSelectedPoolWorkflowDetails ? <PoolLifecycleStepper step={model.lifecycleStep} /> : undefined}
 				{showSelectedPoolWorkflowDetails ? <PoolActionCard currentTimestamp={currentTimestamp} currentView={view} items={model.actionItems} onChange={onSelectedPoolViewChange} /> : undefined}
-				{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} />}
+				{objectHeaderProps === undefined ? undefined : <SecurityPoolReferenceDetails {...objectHeaderProps} showOraclePrice={model.oracleStatus === undefined} />}
 			</div>
 
 			{selectedPool === undefined || !model.selectedPoolUniverseMismatch ? undefined : <SecurityPoolUniverseMismatchNotice activeUniverseId={activeUniverseId} onReturnToCurrentUniverse={onReturnToCurrentUniverse} onSwitchToPoolUniverse={onSwitchToPoolUniverse} selectedPool={selectedPool} />}

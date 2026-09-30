@@ -46,9 +46,27 @@ export function doesLoadedSecurityVaultMatchSelection({ accountAddress, security
 	return sameAddress(securityVaultDetails.securityPoolAddress, securityPoolAddress) && sameAddress(securityVaultDetails.vaultAddress, effectiveSelectedVaultOwner)
 }
 
-export function isSecurityVaultDepositBelowMinimum(currentVaultRepBackingAttoRep: bigint | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP) {
+/** The vault read supplies the backing and both pool totals from one block, so the unit conversion never mixes reads. */
+type SecurityVaultDepositState = Pick<SecurityVaultDetails, 'totalPoolHeldRepBalanceAttoRep' | 'totalRepBackingUnits' | 'vaultAttoRepBacking'>
+
+/**
+ * Mirrors how a deposit is credited: REP converts to backing units with a floor, and the vault minimum is checked after
+ * converting those units back to REP against the post-deposit pool. The round trip can lose attoREP whenever the pool's
+ * REP per backing unit is not exact, so a deposit of exactly the minimum can still fall short.
+ */
+function getCreditedVaultDepositAttoRep(depositAmount: bigint, vault: SecurityVaultDepositState | undefined) {
+	const totalPoolHeldAttoRep = vault?.totalPoolHeldRepBalanceAttoRep
+	const totalRepBackingUnits = vault?.totalRepBackingUnits
+	if (depositAmount <= 0n || totalPoolHeldAttoRep === undefined || totalRepBackingUnits === undefined) return depositAmount
+	if (totalRepBackingUnits === 0n || totalPoolHeldAttoRep === 0n) return depositAmount
+	const creditedBackingUnits = (depositAmount * totalRepBackingUnits) / totalPoolHeldAttoRep
+	return (creditedBackingUnits * (totalPoolHeldAttoRep + depositAmount)) / (totalRepBackingUnits + creditedBackingUnits)
+}
+
+export function isSecurityVaultDepositBelowMinimum(vault: SecurityVaultDepositState | undefined, depositAmount: bigint | undefined, minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP) {
 	if (depositAmount === undefined || depositAmount <= 0n) return false
-	return (currentVaultRepBackingAttoRep ?? 0n) === 0n && depositAmount < minimumVaultRepDepositAttoRep
+	// The contract checks the whole vault after every deposit, so an existing vault below the minimum must also reach it.
+	return (vault?.vaultAttoRepBacking ?? 0n) + getCreditedVaultDepositAttoRep(depositAmount, vault) < minimumVaultRepDepositAttoRep
 }
 
 export function doesSecurityVaultExistOnchain(securityVaultDetails: SecurityVaultDetails | undefined) {
@@ -76,6 +94,7 @@ export function getSecurityVaultWithdrawableRepAmount({
 	statoblastSecurityMultiplierBps,
 	totalPoolHeldAttoRep,
 	totalUnderwritingLimitAttoEth,
+	minimumVaultRepDepositAttoRep,
 }: {
 	vaultAttoRepBacking: bigint | undefined
 	disputeStakedAttoRep?: bigint | undefined
@@ -84,6 +103,8 @@ export function getSecurityVaultWithdrawableRepAmount({
 	statoblastSecurityMultiplierBps: bigint | undefined
 	totalPoolHeldAttoRep?: bigint | undefined
 	totalUnderwritingLimitAttoEth?: bigint | undefined
+	/** A withdrawal leaving less than this withdraws the entire vault, so a partial maximum must keep it. */
+	minimumVaultRepDepositAttoRep?: bigint | undefined
 }) {
 	if (vaultAttoRepBacking === undefined) return undefined
 	if (disputeStakedAttoRep > 0n) return 0n
@@ -103,7 +124,26 @@ export function getSecurityVaultWithdrawableRepAmount({
 		const maxGlobalWithdrawal = totalPoolHeldAttoRep > requiredPoolRep ? totalPoolHeldAttoRep - requiredPoolRep : 0n
 		maxWithdrawableAttoRep = maxWithdrawableAttoRep < maxGlobalWithdrawal ? maxWithdrawableAttoRep : maxGlobalWithdrawal
 	}
-	return maxWithdrawableAttoRep
+	return capWithdrawalAtVaultMinimum(maxWithdrawableAttoRep, vaultAttoRepBacking, minimumVaultRepDepositAttoRep)
+}
+
+/**
+ * `withdrawRepFromVault` withdraws the entire vault when the remainder would fall below the vault minimum. A full exit
+ * is only possible when coverage allows the whole backing to leave; otherwise the largest partial withdrawal keeps the minimum.
+ * Partial amounts at or below this cap never revert on rounding: the contract floors both unit conversions, so the vault keeps
+ * at least the requested remainder.
+ */
+function capWithdrawalAtVaultMinimum(coverageMaximumAttoRep: bigint, vaultAttoRepBacking: bigint, minimumVaultRepDepositAttoRep: bigint | undefined) {
+	if (minimumVaultRepDepositAttoRep === undefined || coverageMaximumAttoRep >= vaultAttoRepBacking) return coverageMaximumAttoRep
+	const partialMaximumAttoRep = vaultAttoRepBacking > minimumVaultRepDepositAttoRep ? vaultAttoRepBacking - minimumVaultRepDepositAttoRep : 0n
+	return coverageMaximumAttoRep < partialMaximumAttoRep ? coverageMaximumAttoRep : partialMaximumAttoRep
+}
+
+/** True when the requested withdrawal leaves less than the vault minimum, so the contract withdraws the whole vault instead. */
+export function doesVaultWithdrawalExitEntireVault(withdrawAmount: bigint | undefined, vaultAttoRepBacking: bigint | undefined, minimumVaultRepDepositAttoRep: bigint | undefined) {
+	if (withdrawAmount === undefined || withdrawAmount <= 0n || vaultAttoRepBacking === undefined || minimumVaultRepDepositAttoRep === undefined) return false
+	if (withdrawAmount >= vaultAttoRepBacking) return true
+	return vaultAttoRepBacking - withdrawAmount < minimumVaultRepDepositAttoRep
 }
 
 export function getStagedOperationTimeoutSeconds(timeoutMinutes: bigint | undefined) {

@@ -57,7 +57,7 @@ export type PoolViewModelInput = Pick<
 function toAccountVault(vault: Pick<SecurityPoolVaultSummary, 'underwritingLimitAttoEth' | 'claimableFeesAttoEth' | 'disputeStakedAttoRep' | 'vaultAttoRepBacking'> | undefined): PoolAccountVault | undefined {
 	if (vault === undefined) return undefined
 	if (vault.underwritingLimitAttoEth === 0n && vault.vaultAttoRepBacking === 0n && vault.claimableFeesAttoEth === 0n && vault.disputeStakedAttoRep === 0n) return undefined
-	return { claimableFeesAttoEth: vault.claimableFeesAttoEth, disputeStakedAttoRep: vault.disputeStakedAttoRep, repAttoRep: vault.vaultAttoRepBacking }
+	return { claimableFeesAttoEth: vault.claimableFeesAttoEth, disputeStakedAttoRep: vault.disputeStakedAttoRep, repAttoRep: vault.vaultAttoRepBacking, underwritingLimitAttoEth: vault.underwritingLimitAttoEth }
 }
 
 function getReportingLockedReason({ marketEndTime, now, reportingReady, systemState }: { marketEndTime: bigint | undefined; now: bigint | undefined; reportingReady: boolean | undefined; systemState: string | undefined }) {

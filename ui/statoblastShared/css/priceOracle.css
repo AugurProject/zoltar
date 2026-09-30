@@ -41,6 +41,7 @@
 }
 
 .price-request-estimate-prompt {
+	min-block-size: 1lh;
 	margin: 0;
 }
 

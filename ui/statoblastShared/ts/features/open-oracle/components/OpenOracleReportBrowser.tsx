@@ -18,7 +18,7 @@ import { useLocalBrowseDirectory } from '@zoltar/ui-core-shared/hooks/useLocalBr
 import type { DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleReportSummary, OpenOracleReportSummaryPage } from '@zoltar/ui-core-shared/types/contracts.js'
-import { getOpenOracleReportStatus, getOpenOracleReportStatusTone } from '../lib/openOracle.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleReportStatus, getOpenOracleReportStatusTone } from '../lib/openOracle.js'
 import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, toCachedOpenOracleReportSummary, type BrowseStatusFilter } from '../lib/reportBrowse.js'
 import { BROWSE_PAGE_SIZE, getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
 
@@ -45,7 +45,7 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 				</button>
 			}
 			metrics={[
-				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={openOracleCopy.formatTokenPairSuffix(report.token1Symbol, report.token2Symbol)} units={OPEN_ORACLE_PRICE_UNITS} /> },
+				{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={report.price} suffix={formatOpenOracleReportPriceUnit(report)} units={OPEN_ORACLE_PRICE_UNITS} /> },
 				{ label: openOracleCopy.formatCurrentAmount1Label(report.token1Symbol), value: <CurrencyValue value={report.currentAmount1} suffix={report.token1Symbol} units={report.token1Decimals} /> },
 				{ label: openOracleCopy.formatCurrentAmount2Label(report.token2Symbol), value: <CurrencyValue value={report.currentAmount2} suffix={report.token2Symbol} units={report.token2Decimals} /> },
 				{ label: getOpenOracleClockLabel(report.timeType, openOracleCopy.reportTimestamp, openOracleCopy.reportBlock), value: <OpenOracleClockValue timeType={report.timeType} value={report.reportTimestamp} /> },

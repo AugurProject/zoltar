@@ -15,6 +15,11 @@ import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openO
 import { requireBigintValue } from './decoders.js'
 
 const OPEN_ORACLE_PRICE_UNITS = 30n
+// Flags mirrored from OpenOracle.sol that the shared package does not export.
+const OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT = 1n << 5n
+const OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION = 1n << 6n
+const OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT = 5_000_000n
+const OPEN_ORACLE_SETTLE_OVERHEAD_GAS = 300_000n
 const OPEN_ORACLE_REPORT_MISSING_ERROR_NAME = 'OpenOracleReportMissingError'
 
 function createOpenOracleReportMissingError(reportId: bigint) {
@@ -49,8 +54,18 @@ function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: 
 	return { decimals, symbol }
 }
 
+// Quote tokens per base token (token2 per token1), for example REP per WETH for Statoblast price reports.
 function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decimals1: number, decimals2: number) {
-	return amount2 === 0n ? 0n : (amount1 * 10n ** (OPEN_ORACLE_PRICE_UNITS + BigInt(decimals2))) / (amount2 * 10n ** BigInt(decimals1))
+	return amount1 === 0n ? 0n : (amount2 * 10n ** (OPEN_ORACLE_PRICE_UNITS + BigInt(decimals1))) / (amount1 * 10n ** BigInt(decimals2))
+}
+
+// settle forwards exactly callbackGasLimit to the callback. EIP-150 lets a call forward at most 63/64 of the remaining gas,
+// and settle reverts with InvalidGasLimit unless callbackGasLimit / 63 remains afterwards, so budget both plus settle overhead.
+function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'], 'callbackContract' | 'callbackGasLimit'>) {
+	if (game.callbackContract === zeroAddress) return OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
+	const callbackGasLimit = game.callbackGasLimit
+	const required = (callbackGasLimit * 64n + 62n) / 63n + callbackGasLimit / 63n + OPEN_ORACLE_SETTLE_OVERHEAD_GAS
+	return required > OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT ? required : OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
 }
 
 export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('@zoltar/ui-core-shared/types/contracts.js').OpenOracleReportDetails> {
@@ -130,6 +145,8 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		callbackGasLimit: bigintToSafeNumber(game.callbackGasLimit, 'Callback gas limit'),
 		protocolFeeRecipient: game.protocolFeeRecipient,
 		trackDisputes: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TRACK_DISPUTES),
+		feesOnlyAtHalt: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_FEES_ONLY_AT_HALT),
+		flexibleEscalation: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_FLEXIBLE_ESCALATION),
 		lastReportOppoTime: game.lastReportOppoTime,
 		token1Decimals: token1Metadata.decimals,
 		token2Decimals: token2Metadata.decimals,
@@ -457,7 +474,7 @@ export async function settleOracleReport<TReceipt extends Pick<TransactionReceip
 		address: openOracleAddress,
 		abi: statoblast_openOracle_OpenOracle_OpenOracle.abi,
 		functionName: 'settle',
-		gas: 5000000n,
+		gas: getOpenOracleSettleGasLimit(resolvedPreimage.game),
 		args: [reportId, getOpenOracleGameTuple(resolvedPreimage.game), getOpenOracleHelperTuple(resolvedPreimage.helper)],
 	}))
 	return {

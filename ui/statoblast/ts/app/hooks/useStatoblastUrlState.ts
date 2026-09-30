@@ -25,7 +25,7 @@ function readStatoblastUrlState(search: string, routeHash: string): StatoblastUr
 		activeUniverseId: readUniverseQueryParam(search) ?? 0n,
 		openOracleView: readOpenOracleViewQueryParam(search) ?? '',
 		openOracleReportId: readOpenOracleReportIdQueryParam(search) ?? '',
-		securityPoolsView: poolsLocation?.view ?? 'open',
+		securityPoolsView: poolsLocation?.view ?? 'browse',
 		selectedPoolView: poolsLocation?.view === 'operate' ? poolsLocation.tab : '',
 		securityPoolAddress: poolsLocation?.view === 'operate' ? poolsLocation.securityPoolAddress : '',
 		securityPoolQuestionId: readSecurityPoolQuestionIdQueryParam(search) ?? '',
@@ -54,14 +54,28 @@ export function useStatoblastUrlState() {
 		},
 		[navigatePools],
 	)
+	// Opening a pool in another universe moves both in one history entry, so Back returns to the previous pool and universe together.
+	const openSecurityPoolInUniverse = useCallback(
+		(universeId: bigint, securityPoolAddress: string) => {
+			const nextAddress = securityPoolAddress.trim()
+			const location: PoolsLocation = nextAddress === '' ? { view: 'browse' } : { securityPoolAddress: nextAddress, tab: '', view: 'operate' }
+			navigateUrl(buildPoolsRouteHash(location), writeUniverseQueryParam(withoutQuestionId(getRouteHashSearch()), universeId))
+		},
+		[navigateUrl],
+	)
+	// Like the pool address, typing a question ID keeps one history entry: the first keystroke pushes the create view, and later edits of that entry replace it.
 	const setSecurityPoolQuestionId = useCallback(
 		(questionId: string | undefined) => {
-			const nextSearch = updateSearchParams(getRouteHashSearch(), params => setOrDeleteSearchParam(params, QUESTION_ID_QUERY_PARAM, questionId))
+			const currentSearch = getRouteHashSearch()
+			const nextSearch = updateSearchParams(currentSearch, params => setOrDeleteSearchParam(params, QUESTION_ID_QUERY_PARAM, questionId))
+			const currentHash = getCurrentRouteHash()
+			const editingQuestionId = parsePoolsRouteHash(currentHash)?.view === 'create' && (readSecurityPoolQuestionIdQueryParam(currentSearch) ?? '') !== ''
+			const historyMode: UrlHistoryMode = editingQuestionId ? 'replace' : 'push'
 			if ((questionId?.trim() ?? '') === '') {
-				navigateUrl(getCurrentRouteHash(), nextSearch)
+				navigateUrl(currentHash, nextSearch, historyMode)
 				return
 			}
-			navigateUrl(buildPoolsRouteHash({ view: 'create' }), nextSearch)
+			navigateUrl(buildPoolsRouteHash({ view: 'create' }), nextSearch, historyMode)
 		},
 		[navigateUrl],
 	)
@@ -90,6 +104,7 @@ export function useStatoblastUrlState() {
 
 	return {
 		...state,
+		openSecurityPoolInUniverse,
 		setActiveUniverseId,
 		setOpenOracleReport,
 		setOpenOracleView,

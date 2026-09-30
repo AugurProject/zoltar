@@ -99,7 +99,6 @@ export function TradingSection({
 	}
 	const selectedTargetOutcomeIndexes = tryParseBigIntListInput(tradingForm.targetOutcomeIndexes) ?? []
 	const selectedTargetOutcomeIndexSet = new Set(selectedTargetOutcomeIndexes.map(value => value.toString()))
-	const totalShareCount = shareBalances === undefined ? undefined : shareBalances.invalidAttoShares + shareBalances.noAttoShares + shareBalances.yesAttoShares
 	const walletOnWrongNetwork = accountState.address !== undefined && !isOnActiveAppChain
 	const mintingCapacityAttoEth = selectedPool === undefined ? 0n : getPoolMintingCapacityAttoEth(selectedPool)
 	const mintCheckpoint = estimateMintCheckpoint({
@@ -191,7 +190,8 @@ export function TradingSection({
 			if (loadingTradingForkUniverse) return tradingCopy.loadingForkTargetUniversesReason
 
 			return (() => {
-				if (tradingForkUniverse === undefined || !tradingForkUniverse.hasForked) return tradingCopy.forkTargetsRefreshRequired
+				if (tradingForkUniverse?.hasForked === false || (tradingForkUniverse === undefined && !poolUniverseHasForked)) return tradingCopy.shareMigrationRequiresFork
+				if (tradingForkUniverse === undefined) return tradingCopy.forkTargetsRefreshRequired
 				if (loadingTradingDetails) return tradingCopy.loadingWalletShareBalances
 
 				return (() => {
@@ -311,8 +311,15 @@ export function TradingSection({
 				<SectionBlock title={tradingCopy.yourHoldings} variant='embedded'>
 					<div className='trading-holdings-stage'>
 						<div className='trading-holdings-hero'>
-							<span>{tradingCopy.redeemableCompleteSets}</span>
-							<strong>{renderShareMetricValue(maxRedeemableCompleteSetsAttoShares, displayMaxRedeemableCompleteSets)}</strong>
+							<span className='trading-holdings-label'>{tradingCopy.redeemableCompleteSets}</span>
+							<strong className='trading-holdings-value'>
+								<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={maxRedeemableCompleteSetsAttoShares} />
+								{displayMaxRedeemableCompleteSets === undefined ? undefined : (
+									<span className='trading-holdings-backing'>
+										(<CurrencyValue exactWhenRoundedToZero decimals={4} value={displayMaxRedeemableCompleteSets} suffix={commonCopy.eth} />)
+									</span>
+								)}
+							</strong>
 							<p className='detail'>{tradingCopy.completeSetBalanceLimitDetail}</p>
 						</div>
 						<div className='trading-holdings-layout'>
@@ -341,12 +348,6 @@ export function TradingSection({
 								]}
 							/>
 							<p className='detail'>{tradingCopy.shareBackingDetail}</p>
-							<div className='trading-share-callouts'>
-								<div className='trading-share-callouts-total'>
-									<span>{tradingCopy.totalAcrossOutcomes}</span>
-									<strong>{renderShareMetricValue(totalShareCount)}</strong>
-								</div>
-							</div>
 						</div>
 					</div>
 				</SectionBlock>
@@ -386,6 +387,7 @@ export function TradingSection({
 
 			<OperationModal closeOnSuccessKey={tradingResult?.action === 'redeemCompleteSet' ? tradingResult.hash : undefined} context={getTransactionContext('Complete set · Yes + No + Invalid')} isOpen={activeModal === 'redeem-complete-sets'} onClose={() => setActiveModal(undefined)} title={tradingCopy.redeemCompleteSets}>
 				<AmountField fillMax={{ amount: displayMaxRedeemableCompleteSets }} label={tradingCopy.redeemCompleteSetsAmount} onChange={redeemAmount => onTradingFormChange({ redeemAmount })} unit={commonCopy.eth} value={tradingForm.redeemAmount} />
+				<p className='detail'>{tradingCopy.redeemCompleteSetsFeeDetail}</p>
 				<div className='actions'>
 					<TransactionActionButton
 						idleLabel={tradingCopy.redeemCompleteSetsActionLabel}

@@ -49,7 +49,7 @@ function createCreatePoolProps(overrides: Partial<SecurityPoolRouteContentProps>
 		securityPoolCreating: false,
 		securityPoolError: undefined,
 		securityPoolForm: {
-			initialReportPriorityFeeEth: '0.00000001',
+			initialReportPriorityFeeNanoEth: '10',
 			marketId: '',
 			statoblastSecurityMultiplierBps: '',
 		},
@@ -147,10 +147,11 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(document.body).queryByRole('button', { name: /Discover|Downloaded/ })).toBeNull()
 	})
 
-	void test('openView opens and refreshes selected pool data when navigating from create mode', async () => {
+	void test('opens a created pool through the single pool navigation and returns to browse without a refresh', async () => {
 		const createdPoolAddress = getAddress('0x00000000000000000000000000000000000000a4')
 		const activeViewChanges: string[] = []
 		const refreshCalls: string[] = []
+		const openedPools: Array<[string, bigint]> = []
 
 		const renderedComponent = await renderIntoDocument(
 			h(
@@ -159,6 +160,9 @@ void describe('SecurityPoolsSection', () => {
 					activeView: 'create',
 					onActiveViewChange: activeView => {
 						activeViewChanges.push(activeView)
+					},
+					onOpenSecurityPool: (securityPoolAddress, universeId) => {
+						openedPools.push([securityPoolAddress, universeId])
 					},
 					createPool: createCreatePoolProps({
 						securityPoolResult: {
@@ -184,12 +188,13 @@ void describe('SecurityPoolsSection', () => {
 
 		const documentQueries = within(document.body)
 		fireEvent.click(documentQueries.getByRole('button', { name: /^Open pool:/ }))
-		expect(activeViewChanges).toEqual(['operate'])
-		expect(refreshCalls).toEqual([createdPoolAddress])
+		expect(openedPools).toEqual([[createdPoolAddress, 1n]])
+		expect(activeViewChanges).toEqual([])
+		expect(refreshCalls).toEqual([])
 
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Return to browse' }))
-		expect(activeViewChanges).toEqual(['operate', 'browse'])
-		expect(refreshCalls).toEqual([createdPoolAddress])
+		expect(activeViewChanges).toEqual(['browse'])
+		expect(refreshCalls).toEqual([])
 	})
 
 	void test('Create another pool button is wired in create mode', async () => {
@@ -241,9 +246,9 @@ void describe('SecurityPoolsSection', () => {
 		expect(within(document.body).getByRole('button', { name: 'universe' }).getAttribute('aria-expanded')).toBe('false')
 	})
 
-	void test('shows the role guide on the open-pool landing view until it is dismissed', async () => {
+	void test('shows the role guide on the browse-pools landing view until it is dismissed', async () => {
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
-		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
+		const firstRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'browse' })))
 		cleanupRenderedComponent = firstRender.cleanup
 		const documentQueries = within(document.body)
 		expect(documentQueries.getByRole('heading', { name: 'New here? Start with your role' })).not.toBeNull()
@@ -256,10 +261,15 @@ void describe('SecurityPoolsSection', () => {
 		await cleanupRenderedComponent()
 		cleanupRenderedComponent = undefined
 
-		const secondRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
+		const secondRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'browse' })))
 		cleanupRenderedComponent = secondRender.cleanup
 		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 		window.localStorage.removeItem('statoblast.firstRunRoleGuideDismissed')
+
+		const openRender = await renderIntoDocument(h(SecurityPoolsSection, createSecurityPoolsSectionProps({ activeView: 'open' })))
+		await secondRender.cleanup()
+		cleanupRenderedComponent = openRender.cleanup
+		expect(within(document.body).queryByRole('heading', { name: 'New here? Start with your role' })).toBeNull()
 	})
 
 	void test('renders one route heading in create and empty pool page modes', async () => {
@@ -300,7 +310,8 @@ void describe('SecurityPoolsSection', () => {
 		expect(documentQueries.queryByText('Selected pool')).toBeNull()
 		expect(documentQueries.queryByText('Pool status')).toBeNull()
 		expect(documentQueries.queryByText('Next step')).toBeNull()
-		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' }) !== null).toBe(true)
+		expect(documentQueries.queryByRole('textbox', { name: 'Security pool address' })).toBeNull()
+		expect(document.body.querySelector('.pool-address-display')).not.toBeNull()
 		expect(document.body.querySelector('.selected-pool-context-details')).toBeNull()
 		const objectHeader = document.body.querySelector('.selected-pool-object-header')
 		if (!(objectHeader instanceof HTMLElement)) throw new Error('Expected the selected-pool object header')

@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { deriveHasForkActivity, getForkAuctionStageLabel, getForkAuctionStageView } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/forkAuction.js'
+import { getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionPresentation.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBidViewModels.js'
 import {
 	buildTruthAuctionDepthPoints,
@@ -17,6 +18,7 @@ import {
 	getTruthAuctionWinningThresholdPrice,
 	getTruthAuctionOverviewProgress,
 	getTruthAuctionPriceAtTick,
+	getTruthAuctionReservePrice,
 	getTruthAuctionTickAtPrice,
 	sortTruthAuctionBidsByPriority,
 	sortTruthAuctionTickSummariesDescending,
@@ -196,8 +198,9 @@ void describe('fork auction helpers', () => {
 		expect(smallestSupportedPositiveTick).not.toBeUndefined()
 		expect(getTruthAuctionTickAtPrice(maxSupportedPrice)).toBe(TRUTH_AUCTION_MAX_TICK)
 		expect(getTruthAuctionTickAtPrice(maxSupportedPrice + 1n)).toBeUndefined()
-		expect(getTruthAuctionBidPriceValidationMessage((maxSupportedPrice + 1n).toString())).toBe('Bid price is outside the supported auction range.')
-		expect(getTruthAuctionBidPriceValidationMessage('9'.repeat(2_048))).toBe('Bid price is outside the supported auction range.')
+		const rangeMessage = `Bid price must be between ${formatCurrencyInputBalance(getTruthAuctionPriceAtTick(findTruthAuctionMinSupportedTick()))} and ${formatCurrencyInputBalance(maxSupportedPrice)} ETH per REP.`
+		expect(getTruthAuctionBidPriceValidationMessage((maxSupportedPrice + 1n).toString())).toBe(rangeMessage)
+		expect(getTruthAuctionBidPriceValidationMessage('9'.repeat(2_048))).toBe(rangeMessage)
 		expect(getTruthAuctionBidPreview('9'.repeat(2_048))).toBeUndefined()
 	})
 
@@ -883,11 +886,11 @@ void describe('fork auction helpers', () => {
 		expect(rowsViewModel.rows.map(row => row.statusLabel)).toEqual(['Refunded', 'Winning', 'Winning'])
 		expect(rowsViewModel.rows[0]?.settlementControl?.disabled).toBe(true)
 		expect(rowsViewModel.rows[1]?.settlementControl).toEqual({
-			ariaLabel: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
+			ariaLabel: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH per REP',
 			bidKey: winningBidKey,
 			checked: true,
 			disabled: false,
-			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH/REP',
+			title: 'Select winning bid 2: 1\u00a0ETH at 1.001100550165033004\u00a0ETH per REP',
 		})
 		expect(rowsViewModel.rows[2]?.settlementControl?.ariaLabel).toBe('Bid is not settlement-eligible')
 		expect(rowsViewModel.rows[0]?.estimate).toBeUndefined()
@@ -912,5 +915,35 @@ void describe('fork auction helpers', () => {
 		expect(getRepPerEthPrice(2n * TRUTH_AUCTION_PRICE_PRECISION)).toBe(TRUTH_AUCTION_PRICE_PRECISION / 2n)
 		expect(getRepPerEthPrice(3n * TRUTH_AUCTION_PRICE_PRECISION)).toBe(333_333_333_333_333_333n)
 		expect(getRepPerEthPrice(0n)).toBeUndefined()
+	})
+})
+
+describe('fork auction contract time boundaries', () => {
+	test('finalizing opens exactly at the auction end, matching block.timestamp >= auctionStarted + AUCTION_TIME', () => {
+		const truthAuction = createTruthAuction({ finalized: false })
+		expect(getFinalizeTruthAuctionGuardMessage({ currentTimestamp: 999n, truthAuction, truthAuctionEndsAt: 1_000n })).toBe('Truth auction is still ongoing.')
+		expect(getFinalizeTruthAuctionGuardMessage({ currentTimestamp: 1_000n, truthAuction, truthAuctionEndsAt: 1_000n })).toBeUndefined()
+	})
+
+	test('migration stays open through its end timestamp, matching block.timestamp <= forkActivationTime + MIGRATION_TIME', () => {
+		expect(getMigrationStateBadge({ currentTimestamp: 1_000n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('pending')
+		expect(getMigrationStateBadge({ currentTimestamp: 1_001n, effectiveTruthAuctionStartedAt: 0n, migrationEndsAt: 1_000n }).tone).toBe('ok')
+	})
+})
+
+describe('live underfunded truth auction reserve', () => {
+	const liveAuction = createTruthAuction({ attoEthRaiseCap: 10n * ONE_UNIT, hitCap: false, maxAttoRepBeingSold: 10n * ONE_UNIT })
+
+	test('derives the reserve price implied by both caps', () => {
+		expect(getTruthAuctionReservePrice(liveAuction)).toBe(ONE_UNIT)
+		expect(getTruthAuctionReservePrice(createTruthAuction({ maxAttoRepBeingSold: 0n }))).toBeUndefined()
+	})
+
+	test('labels ticks and bids below the reserve instead of counting them as in the book', () => {
+		const tickSummaries = sortTruthAuctionTickSummariesDescending([createTickSummary({ active: true, currentTotalBidAttoEth: ONE_UNIT, submissionCount: 1n, tick: 5n }), createTickSummary({ active: true, currentTotalBidAttoEth: ONE_UNIT, submissionCount: 1n, tick: -5n })])
+		const depthPoints = buildTruthAuctionDepthPoints({ enteredBidTick: undefined, selectedBookTick: undefined, tickSummaries, truthAuction: liveAuction })
+		expect(depthPoints.map(point => point.disposition.label)).toEqual(['In book', 'Below reserve'])
+		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 0n, tick: 0n }), liveAuction).label).toBe('In book')
+		expect(getTruthAuctionBidDisposition(createBid({ bidIndex: 1n, tick: -1n }), liveAuction).label).toBe('Below reserve')
 	})
 })

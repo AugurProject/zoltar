@@ -1,6 +1,7 @@
 import * as liquidationCopy from '../../../copy/liquidation.js'
 import { LIQUIDATION_BPS_DENOMINATOR, LIQUIDATION_PRICE_PRECISION, LIQUIDATION_REP_BONUS_BPS, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 import { DEFAULT_PROTOCOL_CONFIG } from '@zoltar/core-shared/deployment/protocolConfig'
+import { formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
 const DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH = DEFAULT_PROTOCOL_CONFIG.minimumSecurityBondDebtAttoEth
@@ -14,15 +15,6 @@ function requireVaultOpenInterestAttoEth(vault: SecurityPoolVaultSummary) {
 	const openInterestAttoEth = getVaultOpenInterestAttoEth(vault)
 	if (openInterestAttoEth === undefined) throw new Error('Vault live open interest is still loading')
 	return openInterestAttoEth
-}
-
-function requireVaultBadDebtAttoEth(vault: SecurityPoolVaultSummary) {
-	if (vault.badDebtAttoEth === undefined) throw new Error('Vault bad debt is still loading')
-	return vault.badDebtAttoEth
-}
-
-function calculateLiveVaultOpenInterestAfterOwnershipChange({ underwritingLimitAfterAttoEth }: { underwritingLimitAfterAttoEth: bigint; totalUnderwritingLimitAttoEth: bigint; settlementCollateralAttoEth: bigint; vaultBadDebtAttoEth: bigint; vaultBadDebtIncreaseAttoEth?: bigint | undefined }) {
-	return underwritingLimitAfterAttoEth
 }
 
 function mulDivCeil(value: bigint, multiplier: bigint, denominator: bigint) {
@@ -57,9 +49,84 @@ export function isVaultHealthyAtFactor({
 	return poolHeldVaultRepBackingAttoRep >= freeRequiredAttoRep
 }
 
+/**
+ * Mirrors `SecurityPoolUtils._isLiquidationBeyondMinPriceDistance`, including its integer rounding.
+ * @internal Exported for regression tests of the contract port.
+ */
+export function isLiquidationBeyondMinPriceDistance({
+	currentPrice,
+	disputeStakedAttoRep,
+	minPriceDistanceBps,
+	openInterestAttoEth,
+	poolHeldVaultRepBackingAttoRep,
+	poolSecurityMultiplierBps,
+}: {
+	currentPrice: bigint
+	disputeStakedAttoRep: bigint
+	minPriceDistanceBps: bigint
+	openInterestAttoEth: bigint
+	poolHeldVaultRepBackingAttoRep: bigint
+	poolSecurityMultiplierBps: bigint
+}) {
+	if (minPriceDistanceBps === 0n) return true
+	if (openInterestAttoEth === 0n || currentPrice === 0n) return false
+	// The contract reverts on these inputs, so the liquidation cannot pass the check.
+	if (poolSecurityMultiplierBps < LIQUIDATION_BPS_DENOMINATOR) return false
+	const valueScale = LIQUIDATION_PRICE_PRECISION * LIQUIDATION_BPS_DENOMINATOR
+	const associatedRepThreshold = ((poolHeldVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) / (openInterestAttoEth * poolSecurityMultiplierBps)
+	const configuredMigrationMultiplierBps = LIQUIDATION_BPS_DENOMINATOR + (poolSecurityMultiplierBps - LIQUIDATION_BPS_DENOMINATOR) / 2n
+	const liquidationReserveMultiplierBps = LIQUIDATION_BPS_DENOMINATOR + LIQUIDATION_REP_BONUS_BPS
+	const migrationSecurityMultiplierBps = configuredMigrationMultiplierBps < liquidationReserveMultiplierBps ? liquidationReserveMultiplierBps : configuredMigrationMultiplierBps
+	const migrationThreshold = (poolHeldVaultRepBackingAttoRep * valueScale) / (openInterestAttoEth * migrationSecurityMultiplierBps)
+	const thresholdPrice = associatedRepThreshold < migrationThreshold ? associatedRepThreshold : migrationThreshold
+	if (currentPrice <= thresholdPrice) return false
+	return ((currentPrice - thresholdPrice) * LIQUIDATION_BPS_DENOMINATOR) / currentPrice >= minPriceDistanceBps
+}
+
 function isVaultLiquidatable(lastPrice: bigint | undefined, openInterestAttoEth: bigint | undefined, vaultAttoRepBacking: bigint | undefined, disputeStakedAttoRep: bigint | undefined, statoblastSecurityMultiplierBps: bigint | undefined) {
 	if (lastPrice === undefined || openInterestAttoEth === undefined || vaultAttoRepBacking === undefined || statoblastSecurityMultiplierBps === undefined) return false
 	return !isVaultHealthyAtFactor({ disputeStakedAttoRep, healthFactorBps: LIQUIDATION_BPS_DENOMINATOR, openInterestAttoEth, poolHeldVaultRepBackingAttoRep: vaultAttoRepBacking, poolSecurityMultiplierBps: statoblastSecurityMultiplierBps, repPerEthPrice: lastPrice })
+}
+
+/**
+ * Explains why the protocol would reject liquidating the target at this price before any amount is considered,
+ * following the contract's target-safe and minimum price distance checks. An undefined
+ * `minLiquidationPriceDistanceBps` means the coordinator value has not loaded, so only the health check applies.
+ */
+function getTargetLiquidatabilityReason({
+	minLiquidationPriceDistanceBps,
+	openInterestAttoEth,
+	repPerEthPrice,
+	statoblastSecurityMultiplierBps,
+	targetVaultSummary,
+}: {
+	minLiquidationPriceDistanceBps: bigint | undefined
+	openInterestAttoEth: bigint
+	repPerEthPrice: bigint
+	statoblastSecurityMultiplierBps: bigint
+	targetVaultSummary: SecurityPoolVaultSummary
+}) {
+	if (!isVaultLiquidatable(repPerEthPrice, openInterestAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return 'This vault is not undercollateralized at the current Open Oracle price.'
+	if (
+		minLiquidationPriceDistanceBps !== undefined &&
+		!isLiquidationBeyondMinPriceDistance({
+			currentPrice: repPerEthPrice,
+			disputeStakedAttoRep: targetVaultSummary.disputeStakedAttoRep,
+			minPriceDistanceBps: minLiquidationPriceDistanceBps,
+			openInterestAttoEth,
+			poolHeldVaultRepBackingAttoRep: targetVaultSummary.vaultAttoRepBacking,
+			poolSecurityMultiplierBps: statoblastSecurityMultiplierBps,
+		})
+	) {
+		return liquidationCopy.formatLiquidationDistanceTooLowReason(formatScaledPercentage(minLiquidationPriceDistanceBps, 2))
+	}
+	return undefined
+}
+
+function getBadDebtReason(targetVaultSummary: SecurityPoolVaultSummary, receiverVaultSummary: SecurityPoolVaultSummary | undefined) {
+	if (targetVaultSummary.badDebtAttoEth !== undefined && targetVaultSummary.badDebtAttoEth > 0n) return liquidationCopy.targetBadDebtReason
+	if (receiverVaultSummary?.badDebtAttoEth !== undefined && receiverVaultSummary.badDebtAttoEth > 0n) return liquidationCopy.receiverBadDebtReason
+	return undefined
 }
 
 function getPartialLiquidationTransfer(commitmentAttoEth: bigint, target: SecurityPoolVaultSummary, repPerEthPrice: bigint, minimumVaultRepDepositAttoRep: bigint) {
@@ -106,8 +173,19 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 			return liquidationCopy.executableCapacityOwnershipUnavailable
 		case 'Receiver bad':
 			return liquidationCopy.callerVaultHealthOrIdentityError
-		case 'Target REP':
-			return liquidationCopy.targetMinimumCollateralError
+		case 'Liquidation distance too low':
+			return liquidationCopy.liquidationDistanceTooLowError
+		case 'Target bad debt':
+			return liquidationCopy.targetBadDebtReason
+		case 'Receiver bad debt':
+			return liquidationCopy.receiverBadDebtReason
+		case 'Target backingUnits changed':
+		case 'Target commitment changed':
+			return liquidationCopy.targetSnapshotChangedError
+		case 'stale liquidation':
+			return liquidationCopy.stagedLiquidationStaleError
+		case 'staged operation expired':
+			return liquidationCopy.stagedLiquidationExpiredError
 		case 'Target commitment':
 			return liquidationCopy.targetMinimumDebtError
 		case 'Receiver REP':
@@ -119,14 +197,23 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 	}
 }
 
-export function getMaxLiquidationAmount({ repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary }: { repPerEthPrice: bigint | undefined; statoblastSecurityMultiplierBps: bigint | undefined; targetVaultSummary: SecurityPoolVaultSummary | undefined }) {
+export function getMaxLiquidationAmount({
+	minLiquidationPriceDistanceBps,
+	repPerEthPrice,
+	statoblastSecurityMultiplierBps,
+	targetVaultSummary,
+}: {
+	minLiquidationPriceDistanceBps?: bigint | undefined
+	repPerEthPrice: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
+	targetVaultSummary: SecurityPoolVaultSummary | undefined
+}) {
 	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || targetVaultSummary === undefined) return undefined
 	if (repPerEthPrice <= 0n || statoblastSecurityMultiplierBps <= 0n) return 0n
-	const targetRepDeposit = targetVaultSummary.vaultAttoRepBacking
 	const targetOpenInterestAttoEth = getVaultOpenInterestAttoEth(targetVaultSummary)
 	if (targetOpenInterestAttoEth === undefined) return undefined
 	if (targetOpenInterestAttoEth === 0n) return 0n
-	if (!isVaultLiquidatable(repPerEthPrice, targetOpenInterestAttoEth, targetRepDeposit, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) return 0n
+	if (getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, openInterestAttoEth: targetOpenInterestAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary }) !== undefined) return 0n
 	return targetOpenInterestAttoEth
 }
 
@@ -243,6 +330,7 @@ export function getDeterministicLiquidationFailureReason({
 	requestedDebtAttoEth,
 	totalUnderwritingLimitAttoEth,
 	maxLiquidationDebtAttoEth,
+	minLiquidationPriceDistanceBps,
 	minimumSecurityBondDebtAttoEth = DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH,
 	minimumVaultRepDepositAttoRep = DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP,
 	repPerEthPrice,
@@ -254,6 +342,7 @@ export function getDeterministicLiquidationFailureReason({
 	requestedDebtAttoEth: bigint | undefined
 	totalUnderwritingLimitAttoEth?: bigint | undefined
 	maxLiquidationDebtAttoEth?: bigint | undefined
+	minLiquidationPriceDistanceBps?: bigint | undefined
 	minimumSecurityBondDebtAttoEth?: bigint | undefined
 	minimumVaultRepDepositAttoRep?: bigint | undefined
 	repPerEthPrice?: bigint | undefined
@@ -267,8 +356,11 @@ export function getDeterministicLiquidationFailureReason({
 	const targetOpenInterestAttoEth = getVaultOpenInterestAttoEth(targetVaultSummary)
 	if (targetOpenInterestAttoEth === undefined) return 'Target vault live open interest is still loading.'
 	if (targetOpenInterestAttoEth === 0n) return 'This vault has no open interest to liquidate.'
-	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && !isVaultLiquidatable(repPerEthPrice, targetOpenInterestAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)) {
-		return 'This vault is not undercollateralized at the current Open Oracle price.'
+	const badDebtReason = getBadDebtReason(targetVaultSummary, callerVaultSummary)
+	if (badDebtReason !== undefined) return badDebtReason
+	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined) {
+		const targetReason = getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, openInterestAttoEth: targetOpenInterestAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary })
+		if (targetReason !== undefined) return targetReason
 	}
 	const targetMaxLiquidationDebtAttoEth = maxLiquidationDebtAttoEth === undefined || maxLiquidationDebtAttoEth > targetOpenInterestAttoEth ? targetOpenInterestAttoEth : maxLiquidationDebtAttoEth
 	const boundedRequestedDebtAttoEth = requestedDebtAttoEth < targetMaxLiquidationDebtAttoEth ? requestedDebtAttoEth : targetMaxLiquidationDebtAttoEth
@@ -277,13 +369,8 @@ export function getDeterministicLiquidationFailureReason({
 	if ((debtMovedAttoEth <= 0n || underwritingLimitMovedAttoEth === 0n) && badDebtAttoEth <= 0n) return liquidationCopy.executableCapacityOwnershipUnavailable
 	const transfer = getPartialLiquidationTransfer(debtMovedAttoEth, targetVaultSummary, repPerEthPrice, minimumVaultRepDepositAttoRep)
 	const remainingTargetUnderwritingLimitAttoEth = targetVaultSummary.underwritingLimitAttoEth - underwritingLimitMovedAttoEth
-	const remainingTargetDebtAttoEth = calculateLiveVaultOpenInterestAfterOwnershipChange({
-		underwritingLimitAfterAttoEth: remainingTargetUnderwritingLimitAttoEth,
-		totalUnderwritingLimitAttoEth,
-		settlementCollateralAttoEth,
-		vaultBadDebtAttoEth: requireVaultBadDebtAttoEth(targetVaultSummary),
-		vaultBadDebtIncreaseAttoEth: badDebtAttoEth,
-	})
+	// Liquidation writes off nothing, so the target's remaining commitment is its remaining underwriting limit.
+	const remainingTargetDebtAttoEth = remainingTargetUnderwritingLimitAttoEth
 	const callerAfterRepDeposit = receiverBackingAfterTransfer(callerVaultSummary, targetVaultSummary, transfer)
 	const resultingCallerUnderwritingLimitAttoEth = (callerVaultSummary?.underwritingLimitAttoEth ?? 0n) + underwritingLimitMovedAttoEth
 	const callerOpenInterestAttoEth = callerVaultSummary === undefined ? 0n : getVaultOpenInterestAttoEth(callerVaultSummary)
@@ -301,6 +388,7 @@ export function getLiquidationFailureReason({
 	requestedDebtAttoEth,
 	totalUnderwritingLimitAttoEth,
 	minimumReceiverHealthFactorBps = LIQUIDATION_BPS_DENOMINATOR,
+	minLiquidationPriceDistanceBps,
 	minimumSecurityBondDebtAttoEth = DEFAULT_MINIMUM_SECURITY_BOND_DEBT_ATTO_ETH,
 	minimumVaultRepDepositAttoRep = DEFAULT_MINIMUM_VAULT_REP_DEPOSIT_ATTO_REP,
 	repPerEthPrice,
@@ -312,6 +400,7 @@ export function getLiquidationFailureReason({
 	requestedDebtAttoEth: bigint | undefined
 	totalUnderwritingLimitAttoEth: bigint
 	minimumReceiverHealthFactorBps?: bigint | undefined
+	minLiquidationPriceDistanceBps?: bigint | undefined
 	minimumSecurityBondDebtAttoEth?: bigint | undefined
 	minimumVaultRepDepositAttoRep?: bigint | undefined
 	repPerEthPrice: bigint | undefined
@@ -320,27 +409,21 @@ export function getLiquidationFailureReason({
 	targetVaultSummary: SecurityPoolVaultSummary | undefined
 }) {
 	const targetOpenInterestAttoEth = targetVaultSummary === undefined ? undefined : getVaultOpenInterestAttoEth(targetVaultSummary)
-	if (
-		repPerEthPrice !== undefined &&
-		statoblastSecurityMultiplierBps !== undefined &&
-		targetVaultSummary !== undefined &&
-		targetOpenInterestAttoEth !== undefined &&
-		!isVaultLiquidatable(repPerEthPrice, targetOpenInterestAttoEth, targetVaultSummary.vaultAttoRepBacking, targetVaultSummary.disputeStakedAttoRep, statoblastSecurityMultiplierBps)
-	) {
-		return 'This vault is not undercollateralized at the current Open Oracle price.'
+	if (repPerEthPrice !== undefined && statoblastSecurityMultiplierBps !== undefined && targetVaultSummary !== undefined && targetOpenInterestAttoEth !== undefined) {
+		const targetReason = getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, openInterestAttoEth: targetOpenInterestAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary })
+		if (targetReason !== undefined) return targetReason
 	}
 	const deterministicFailureReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary,
 		requestedDebtAttoEth,
 		totalUnderwritingLimitAttoEth,
-		maxLiquidationDebtAttoEth: (() => {
-			const computedMaxLiquidationDebtAttoEth = getMaxLiquidationAmount({
-				repPerEthPrice,
-				statoblastSecurityMultiplierBps,
-				targetVaultSummary,
-			})
-			return computedMaxLiquidationDebtAttoEth
-		})(),
+		maxLiquidationDebtAttoEth: getMaxLiquidationAmount({
+			minLiquidationPriceDistanceBps,
+			repPerEthPrice,
+			statoblastSecurityMultiplierBps,
+			targetVaultSummary,
+		}),
+		minLiquidationPriceDistanceBps,
 		minimumSecurityBondDebtAttoEth,
 		minimumVaultRepDepositAttoRep,
 		repPerEthPrice,

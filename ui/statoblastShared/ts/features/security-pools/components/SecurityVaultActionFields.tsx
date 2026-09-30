@@ -157,6 +157,7 @@ export function VaultDepositApprovalControl({
 		<TokenApprovalControl
 			renderActions={({ button, notice, noticeId }) => renderDepositActions(button, notice, noticeId)}
 			actionLabel={depositRepActionLabel}
+			customAmountDisclosureLabel={securityPoolCopy.customApprovalAmountDisclosure}
 			allowanceError={securityVaultRepApproval.error}
 			allowanceLoading={securityVaultRepApproval.loading}
 			approvedAmount={securityVaultRepApproval.value}
@@ -164,7 +165,8 @@ export function VaultDepositApprovalControl({
 			onApprove={amount => onApproveRep(amount)}
 			pending={securityVaultActiveAction === 'approveRep'}
 			pendingLabel={commonCopy.formatApprovingToken(repTokenSymbol)}
-			requiredAmount={depositAmount}
+			// Without a positive deposit nothing is required yet, so the approved amount is not shown as satisfying it.
+			requiredAmount={hasPositiveDepositAmount ? depositAmount : undefined}
 			resetKey={`${currentSelectedVaultDetails?.repToken ?? ''}:${currentSelectedVaultDetails?.securityPoolAddress ?? ''}:${depositAmount?.toString() ?? ''}`}
 			tokenSymbol={repTokenSymbol}
 			tokenUnits={18}

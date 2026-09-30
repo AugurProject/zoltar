@@ -41,7 +41,8 @@ export function isPoolQuestionFinalized(details: Pick<ReportingDetails, 'questio
 export function getEscalationPhase(details: ActiveReportingDetails): EscalationPhase {
 	if (isPoolQuestionFinalized(details)) return 'Resolved'
 	if (details.hasReachedNonDecision) return 'Fork Triggered'
-	if (details.currentTime < details.activationTime) return 'Pending Start'
+	// The contract attrition clock only advances once block.timestamp is strictly past activationTime.
+	if (details.currentTime <= details.activationTime) return 'Pending Start'
 	if (hasEscalationTimedOut(details)) return 'Timed Out'
 	return 'Active'
 }

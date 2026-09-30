@@ -756,7 +756,7 @@ describe('ReportingSection', () => {
 		expectTransactionButtonEnabled(document.body, reportingButtonLabel('Yes'))
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Wallet REP' }))
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
 	})
 
 	test('offers wallet funding through the child vault after a fork', async () => {
@@ -834,7 +834,7 @@ describe('ReportingSection', () => {
 		expect(document.body.textContent).toContain('Paid from: wallet REP')
 		expect(document.body.textContent).not.toContain('Paid from: pool vault REP (no approval needed)')
 		expectTransactionButtonEnabled(document.body, 'Approve 5 REP')
-		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this escalation game before reporting.')
+		expectTransactionButtonDisabled(document.body, reportingButtonLabel('Yes'), 'Approve REP for this security pool before reporting.')
 		const reportButton = within(document.body).getByRole('button', { name: /^Report Yes ·/ })
 		const reportAction = reportButton.closest('.tx-action')
 		const actionRow = reportButton.closest('.actions')

@@ -24,7 +24,7 @@ import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
-import { renderRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
+import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
 import { getStatoblastOverviewUniverse } from './lib/overviewUniverse.js'
 import { useOpenOracleRoute } from './hooks/useOpenOracleRoute.js'
@@ -35,6 +35,7 @@ export function App() {
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
 	const {
 		activeUniverseId,
+		openSecurityPoolInUniverse,
 		openOracleReportId: urlOpenOracleReportId,
 		openOracleView,
 		securityPoolsView,
@@ -107,24 +108,7 @@ export function App() {
 		urlOpenOracleReportId,
 		walletScopedHookConfig,
 	})
-	const {
-		activeSecurityPoolsView,
-		loadSecurityPools,
-		resetSecurityPoolCreation,
-		securityPoolResult,
-		securityPoolsRouteContentProps,
-		selectedPool,
-		setForkAuctionForm,
-		setSecurityPoolForm,
-		setSecurityVaultForm,
-		setTradingForm,
-		tradingResult,
-		uiRepPerEthPrice,
-		uiRepPerEthSource,
-		uiRepPerEthSourceUrl,
-		uiUsesOpenOraclePrice,
-		updateReportingForm,
-	} = useSecurityPoolsRoute({
+	const { activeSecurityPoolsView, loadSecurityPools, resetSecurityPoolCreation, securityPoolResult, securityPoolsRouteContentProps, selectedPool, selectedPoolRepPrice, setForkAuctionForm, setSecurityPoolForm, setSecurityVaultForm, setTradingForm, tradingResult, updateReportingForm } = useSecurityPoolsRoute({
 		inlineOracle: openOracleRouteContentProps,
 		accountState,
 		activeEnvironmentNonce,
@@ -134,6 +118,7 @@ export function App() {
 		deploymentStatuses,
 		marketCreation,
 		onViewPendingReport,
+		openSecurityPoolInUniverse,
 		priceOracleManager,
 		repPerEthPrice,
 		repPerEthSource,
@@ -143,7 +128,6 @@ export function App() {
 		securityPoolsView,
 		selectedPoolRefreshNonce,
 		selectedPoolView,
-		setActiveUniverseId,
 		setSecurityPoolAddress,
 		setSecurityPoolQuestionId,
 		setSecurityPoolsView,
@@ -163,11 +147,7 @@ export function App() {
 			isLoading: isLoadingRepPrices,
 			isRefreshing: isRefreshingRepPrices,
 			onRefresh: refreshRepPrices,
-			repPerEthFailure,
-			repPerEthPrice: uiRepPerEthPrice,
-			repPerEthSource: uiUsesOpenOraclePrice ? undefined : repPerEthSource,
-			repPerEthSourceLabel: renderRepPriceSourceLabel(uiRepPerEthSource, uiRepPerEthSourceUrl),
-			repPerEthSourceUrl: uiRepPerEthSourceUrl,
+			...getHeaderRepPerEthPrice({ currentTimestamp, hasSelectedPool: selectedPool !== undefined, repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repPrice: selectedPoolRepPrice }),
 			repUsdcFailure,
 			repUsdcPrice,
 			repUsdcSource,
