@@ -135,3 +135,26 @@ test('opens an exact owner in By address and returns to the wallet vault', async
 	expect(document.querySelector('.vault-detail-hero')?.textContent).toContain('5.00')
 	expect(page.queryByRole('textbox', { name: 'Vault owner address' })).toBeNull()
 })
+
+test('follows URL-controlled vault views instead of resetting them to the wallet default', async () => {
+	const selectedViews: string[] = []
+	const props = createSecurityPoolWorkflowProps({
+		accountState: createAccountState({ address: zeroAddress }),
+		securityPoolAddress: zeroAddress,
+		selectedPoolView: 'vaults',
+		securityPools: [createSelectedPool({ hasLoadedVaults: true, vaults: [createSecurityVaultDetails(), createSecurityVaultDetails({ vaultAddress: otherOwner })] })],
+		controlledVaultView: 'vault-by-address',
+		onVaultViewChange: view => selectedViews.push(view),
+		securityVault: createSecurityVaultProps({
+			securityVaultForm: { depositAmount: '', repWithdrawAmount: '', targetHealthFactor: '', securityPoolAddress: zeroAddress, selectedVaultOwner: otherOwner },
+		}),
+	})
+	const rendered = await renderHarness(<SecurityPoolWorkflowSection {...props} />)
+	expect(within(document.body).getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
+	await act(() => fireEvent.click(within(document.body).getByRole('button', { name: 'All vaults' })))
+	expect(selectedViews).toEqual(['browse-vaults'])
+	await act(() => render(<SecurityPoolWorkflowSection {...props} controlledVaultView='browse-vaults' />, rendered.container))
+	expect(within(document.body).getByRole('button', { name: 'All vaults' }).getAttribute('aria-pressed')).toBe('true')
+	await act(() => render(<SecurityPoolWorkflowSection {...props} controlledVaultView='vault-by-address' />, rendered.container))
+	expect(within(document.body).getByRole('button', { name: 'By address' }).getAttribute('aria-pressed')).toBe('true')
+})

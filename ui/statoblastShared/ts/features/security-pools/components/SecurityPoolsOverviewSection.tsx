@@ -37,10 +37,16 @@ function parseOption<TValue extends string>(options: readonly TValue[], value: s
 }
 
 /** The pool directory shows only favorites saved in this browser. */
-export function SecurityPoolsOverviewSection({ activeUniverseId, currentTimestamp, onSelectSecurityPool }: SecurityPoolsOverviewSectionProps) {
-	const [stateFilter, setStateFilter] = useState<PoolStateFilter>('all')
-	const [sortKey, setSortKey] = useState<PoolSortKey>('recent')
-	const [searchText, setSearchText] = useState('')
+export function SecurityPoolsOverviewSection({ browseState, onBrowseStateChange, activeUniverseId, currentTimestamp, onSelectSecurityPool }: SecurityPoolsOverviewSectionProps) {
+	const [localStateFilter, setLocalStateFilter] = useState<PoolStateFilter>('all')
+	const [localSortKey, setLocalSortKey] = useState<PoolSortKey>('recent')
+	const [localSearchText, setLocalSearchText] = useState('')
+	const stateFilter = browseState?.stateFilter ?? localStateFilter
+	const sortKey = browseState?.sortKey ?? localSortKey
+	const searchText = browseState?.searchText ?? localSearchText
+	const setStateFilter = (value: PoolStateFilter) => (onBrowseStateChange === undefined ? setLocalStateFilter(value) : onBrowseStateChange({ stateFilter: value }))
+	const setSortKey = (value: PoolSortKey) => (onBrowseStateChange === undefined ? setLocalSortKey(value) : onBrowseStateChange({ sortKey: value }))
+	const setSearchText = (value: string) => (onBrowseStateChange === undefined ? setLocalSearchText(value) : onBrowseStateChange({ searchText: value }))
 	const favorites = useFavorites('statoblast', 'pool')
 	const downloaded = useDownloadedEntities('statoblast', 'pool', securityPoolDownloadStore)
 	const entries = buildLocalBrowseEntries(downloaded.entries, favorites.entries, 'favorites')

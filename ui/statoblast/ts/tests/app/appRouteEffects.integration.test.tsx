@@ -574,4 +574,34 @@ describe('app route effects integration', () => {
 		await cleanup()
 		dom.cleanup()
 	})
+	test('restores a URL vault owner and resets it when the URL selection clears or the wallet changes', async () => {
+		const dom = installDomEnvironment('http://localhost/#/pools')
+		const updates: string[] = []
+		const owner = '0x2222222222222222222222222222222222222222'
+		const account = '0x1111111111111111111111111111111111111111'
+		const props = createDefaultProps({
+			accountAddress: account,
+			route: 'pools',
+			securityPoolAddress: '0x3333333333333333333333333333333333333333',
+			urlVaultAddress: owner,
+			setSecurityVaultFormSelectedVaultOwner: value => updates.push(value),
+		})
+		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...props} />)
+		try {
+			expect(updates).toEqual([owner])
+			await act(() => render(<RouteEffectsHarness {...props} />, container))
+			expect(updates).toEqual([owner])
+			await act(() => render(<RouteEffectsHarness {...props} setSecurityVaultFormSelectedVaultOwner={value => updates.push(value)} />, container))
+			expect(updates).toEqual([owner])
+			await act(() => render(<RouteEffectsHarness {...props} urlVaultAddress={undefined} />, container))
+			expect(updates.at(-1)).toBe(account)
+			await act(() => render(<RouteEffectsHarness {...props} urlVaultAddress={undefined} accountAddress={owner} />, container))
+			expect(updates.at(-1)).toBe(owner)
+			await act(() => render(<RouteEffectsHarness {...props} />, container))
+			expect(updates.at(-1)).toBe(owner)
+		} finally {
+			await cleanup()
+			dom.cleanup()
+		}
+	})
 })
