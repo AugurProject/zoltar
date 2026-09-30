@@ -69,10 +69,12 @@ export function VaultBackingFactorForm({
 	} catch (cause) {
 		error = cause instanceof Error ? cause.message : commonCopy.metricUnavailablePlaceholder
 	}
-	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
+	const unchangedLimit = limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth === currentLimit ? securityPoolCopy.commitmentUnchanged : undefined
+	const prerequisite = blocker ?? (limitAttoEth !== undefined && currentLimit !== undefined && limitAttoEth > currentLimit ? increaseBlocker : undefined) ?? unchangedLimit ?? getVaultBackingFactorAdjustmentGuard(details, limitAttoEth, executionRepPerEthPrice, poolSecurityMultiplierBps)
 	// The increase guard checks the execution oracle price, so Max and the risk warning use it too; the UI price is only a fallback estimate.
 	const maximumRepPerEthPrice = executionRepPerEthPrice ?? repPerEthPrice
-	const maximum = getMaximumHealthyCommitment(details, maximumRepPerEthPrice, minimumBps)
+	// After resolution the commitment can only be lowered, so no healthy maximum is offered or reported.
+	const maximum = directExecution ? undefined : getMaximumHealthyCommitment(details, maximumRepPerEthPrice, minimumBps)
 	const riskKey = `${details?.securityPoolAddress}:${details?.vaultAddress}:${limitAttoEth}:${maximumRepPerEthPrice}:${maximum}`
 	const [acknowledgedRisk, setAcknowledgedRisk] = useState<string | undefined>(undefined)
 	const unsafe = maximum !== undefined && limitAttoEth !== undefined && limitAttoEth > maximum && (currentLimit === undefined || limitAttoEth > currentLimit)
@@ -87,7 +89,7 @@ export function VaultBackingFactorForm({
 			{needsInitialPrice ? <InlineHint message={securityPoolCopy.commitmentNeedsOracleReport} /> : undefined}
 			{needsInitialPrice ? <OracleInitialPriceFields managerAddress={details?.managerAddress} value={initialPrice} onChange={setInitialPrice} disabled={busy} fieldId={priceFieldId} /> : undefined}
 			<AmountField
-				fillMax={{ amount: maximum }}
+				fillMax={directExecution ? undefined : { amount: maximum }}
 				allowZero
 				disabled={busy}
 				error={error}
@@ -101,19 +103,22 @@ export function VaultBackingFactorForm({
 				value={limit}
 			/>
 			<MetricGrid>
-				<MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>
+				{directExecution ? undefined : <MetricField label={securityPoolCopy.minimumBackingRatio}>{minimumBps === undefined ? commonCopy.metricUnavailablePlaceholder : formatMultiplier(minimumBps, 4)}</MetricField>}
 				<MetricField label={securityPoolCopy.currentCapacity}>
 					<VaultExposureValue capacity={details?.underwritingLimitAttoEth} />
 				</MetricField>
 				<MetricField label={securityPoolCopy.resultingCapacity}>
 					<VaultExposureValue capacity={nextLimit} />
 				</MetricField>
-				<MetricField label={securityPoolCopy.maximumHealthyCommitment}>
-					<CurrencyValue precision='exact' value={maximum} suffix={commonCopy.eth} />
-					{executionRepPerEthPrice === undefined ? <RepPriceStatusLabel /> : undefined}
-				</MetricField>
+				{directExecution ? undefined : (
+					<MetricField label={securityPoolCopy.maximumHealthyCommitment}>
+						{/* Rounded down so typing the shown figure back never crosses the healthy limit; Max still fills the exact value. */}
+						<CurrencyValue rounding='down' value={maximum} suffix={commonCopy.eth} />
+						{executionRepPerEthPrice === undefined ? <RepPriceStatusLabel /> : undefined}
+					</MetricField>
+				)}
 			</MetricGrid>
-			{maximum === undefined ? <p className='detail'>{securityPoolCopy.commitmentPriceUnavailable}</p> : undefined}
+			{maximum === undefined && !directExecution ? <p className='detail'>{securityPoolCopy.commitmentPriceUnavailable}</p> : undefined}
 			{unsafe ? (
 				<>
 					<p className='detail'>{securityPoolCopy.commitmentRiskWarning}</p>
