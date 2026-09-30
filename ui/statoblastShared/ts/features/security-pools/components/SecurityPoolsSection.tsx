@@ -50,10 +50,27 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 	const hasSelectedPool = workflow.securityPools.some(pool => sameCaseInsensitiveText(pool.securityPoolAddress, workflow.securityPoolAddress))
 
 	return (
-		<div className='route-view-flow'>
-			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
-			{view === 'open' ? <PoolEntrySection onOpenPool={workflow.onSecurityPoolAddressChange} /> : undefined}
-			{/* Browse pools is the landing route, so first-time visitors meet the role guide there. */}
+		<div className={`route-view-flow${view === 'open' ? ' pool-entry-route' : ''}`}>
+			{view === 'operate' && hasSelectedPool ? undefined : (
+				<RouteHeader
+					actions={
+						view === 'browse' ? (
+							<button className='secondary' type='button' onClick={() => onActiveViewChange('create')}>
+								{commonCopy.createPool}
+							</button>
+						) : undefined
+					}
+					description={routeHeader.description}
+					eyebrow={statoblastAppCopy.pools}
+					title={routeHeader.title}
+				/>
+			)}
+			{view === 'open' ? (
+				<div className='pool-entry-layout'>
+					<PoolEntrySection onBrowsePools={() => onActiveViewChange('browse')} onCreatePool={() => onActiveViewChange('create')} onOpenPool={workflow.onSecurityPoolAddressChange} />
+					<FirstRunRoleGuide />
+				</div>
+			) : undefined}
 			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
 			{view === 'browse' ? <SecurityPoolsOverviewSection {...overview} onSelectSecurityPool={onOpenSecurityPool} /> : undefined}
 

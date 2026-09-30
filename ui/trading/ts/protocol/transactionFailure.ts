@@ -8,6 +8,7 @@ type RevertExplanation = TransactionFailureExplanation & Readonly<{ reasons: rea
 
 // Contracts revert with plain strings (see solidity/contracts/trading and SecurityPool); each group shares one explanation.
 const REVERT_EXPLANATIONS: readonly RevertExplanation[] = [
+	{ reasons: ['Stale price'], cause: 'The pool’s REP/ETH oracle price is stale.', nextStep: 'Request a price update in the liquidity panel, then retry after the report settles.' },
 	{
 		// The last reason is the client-side check that the pre-signing simulation still meets the quoted limits.
 		reasons: ['Minimum long shares', 'Maximum long shares', 'Minimum ETH output', 'Swap slippage', 'Liquidity slippage', 'Liquidity price slippage', 'Minimum liquidity', 'Refreshed quote no longer satisfies'],

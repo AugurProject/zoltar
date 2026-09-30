@@ -151,7 +151,8 @@ export function SecurityVaultSection({
 	const executionRepPerEthPrice = hasValidOraclePrice ? oracleManagerDetails?.lastPrice : undefined
 	const withdrawalPrice = getVaultWithdrawalRepPerEthPrice({ executionRepPerEthPrice, estimateRepPerEthPrice: repPerEthPrice })
 	// After resolution the coordinator rejects staged operations, but the pool still accepts a direct commitment reduction.
-	const commitmentChangeIsDirect = poolState?.lifecycleState === 'ended'
+	const poolEnded = poolState?.lifecycleState === 'ended'
+	const commitmentChangeIsDirect = poolEnded
 	const oraclePriceValidUntilTimestamp = hasValidOraclePrice ? oracleManagerDetails?.priceValidUntilTimestamp : undefined
 	const currentVaultIsHealthy =
 		currentSelectedVaultDetails === undefined || currentSelectedVaultDetails.openInterestAttoEth === undefined || repPerEthPrice === undefined || selectedPoolStatoblastSecurityMultiplierBps === undefined
@@ -418,7 +419,7 @@ export function SecurityVaultSection({
 			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 		/>
 	)
-	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
+	const selectedVaultSummaryProps = { repPerEthPrice, repPerEthSource, repPerEthSourceUrl, currentVaultIsHealthy, poolEnded, selectedPoolStatoblastSecurityMultiplierBps, selectedVaultIsOwnedByAccount }
 	const actionSections = modalFirst ? (
 		<>
 			{currentSelectedVaultDetails !== undefined && !commitmentChangeIsDirect && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice) ? (
@@ -538,6 +539,13 @@ export function SecurityVaultSection({
 			walletRepBalanceError={walletRepBalanceError}
 		/>
 	)
+	const summarySection = showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} /> : undefined
+	const vaultActions = (
+		<>
+			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />
+			{actionSections}
+		</>
+	)
 	const sections = (
 		<>
 			{showLookupSection ? (
@@ -563,11 +571,17 @@ export function SecurityVaultSection({
 				</SectionBlock>
 			) : undefined}
 
-			{showSummarySection && currentSelectedVaultDetails !== undefined && vaultExistsOnchain ? <SelectedVaultSummarySection {...selectedVaultSummaryProps} underwritingLimitAttoEth={underwritingLimitAttoEth} securityVaultDetails={currentSelectedVaultDetails} /> : undefined}
-
-			<VaultQueuedOperationStatusCards {...operationStatusProps} directExecution={commitmentChangeIsDirect} operation='setVaultUnderwritingLimit' />
-
-			{actionSections}
+			{compactLayout && modalFirst && summarySection !== undefined ? (
+				<div className='vault-detail-layout'>
+					{summarySection}
+					<div className='vault-detail-actions'>{vaultActions}</div>
+				</div>
+			) : (
+				<>
+					{summarySection}
+					{vaultActions}
+				</>
+			)}
 		</>
 	)
 	if (compactLayout) return sections
