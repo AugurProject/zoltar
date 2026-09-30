@@ -342,10 +342,6 @@ export type SecurityPoolPage = {
 	pools: ListedSecurityPool[]
 }
 
-export type SecurityPoolBrowsePage = SecurityPoolPage & {
-	requestKey: string
-}
-
 export type SecurityPoolVaultSummary = {
 	badDebtAttoEth?: bigint
 	openInterestAttoEth?: bigint
