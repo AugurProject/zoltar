@@ -1,5 +1,6 @@
 import type { Address, Hash, WalletClient } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
+import { getReportingOutcomeKey } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import type { DeploymentConfiguration } from './config.js'
 import type { LiveBalances, LiveMarket, MarketLifecycle } from './liveMarket.js'
 import { latestBlockIdentity, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMinimum, simulateWithDeadline, stableSimulation, UI_SLIPPAGE_BPS, type GuardedWalletWrite, type TransactionExpiry } from './tradeQuote.js'
@@ -36,17 +37,18 @@ type SettlementBalances = Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefin
 
 export type SettlementUnavailableReason = Readonly<{ code: 'market-data-unavailable' | 'universe-not-forked' | 'no-shares-to-migrate' | 'universe-forked' | 'pool-not-operational' | 'no-complete-sets' | 'question-not-resolved' }> | Readonly<{ code: 'no-winning-shares'; outcome: ShareOutcome }>
 
-function resolvedOutcome(questionOutcome: number): ShareOutcome | undefined {
-	if (questionOutcome === 0) return 'INVALID'
-	if (questionOutcome === 1) return 'YES'
-	if (questionOutcome === 2) return 'NO'
-	return undefined
+const SHARE_OUTCOME_BY_KEY = { invalid: 'INVALID', yes: 'YES', no: 'NO' } as const satisfies Record<'invalid' | 'yes' | 'no', ShareOutcome>
+
+/** The winning share for a resolved question, or undefined while the question is unresolved. */
+export function resolvedShareOutcome(questionOutcome: number): ShareOutcome | undefined {
+	const key = getReportingOutcomeKey(questionOutcome)
+	return key === 'none' ? undefined : SHARE_OUTCOME_BY_KEY[key]
 }
 
 function settlementHoldings(market: SettlementLifecycle, balances: SettlementBalances) {
 	if (balances === undefined) return { completeSets: 0n, winningBalance: 0n, directionalBalance: 0n }
 	const completeSets = [balances.invalid, balances.yes, balances.no].reduce((minimum, balance) => (balance < minimum ? balance : minimum))
-	const outcome = resolvedOutcome(market.questionOutcome)
+	const outcome = resolvedShareOutcome(market.questionOutcome)
 	let winningBalance = 0n
 	if (outcome === 'INVALID') winningBalance = balances.invalid
 	else if (outcome === 'YES') winningBalance = balances.yes
@@ -68,7 +70,7 @@ export function settlementUnavailability(operation: SettlementOperation, market:
 		return holdings.completeSets === 0n ? { code: 'no-complete-sets' } : undefined
 	}
 	if (market.systemState !== 0) return { code: 'pool-not-operational' }
-	const outcome = resolvedOutcome(market.questionOutcome)
+	const outcome = resolvedShareOutcome(market.questionOutcome)
 	if (outcome === undefined) return { code: 'question-not-resolved' }
 	return holdings.winningBalance === 0n ? { code: 'no-winning-shares', outcome } : undefined
 }

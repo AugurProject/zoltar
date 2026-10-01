@@ -16,7 +16,7 @@ import { loadForkMigrationContext, type ForkMigrationContext, type ForkTarget } 
 import { createTradingPublicClient, publicErrorMessage, settlementAvailability, simulateSettlement, submitFreshSettlement, type SettlementOperation, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
 import * as workflowCopy from '../copy/workflows.js'
-import { resolvedShareOutcome } from '../lib/marketLabels.js'
+import { resolvedShareOutcome } from '../protocol/settlement.js'
 import { EnumDropdown } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
