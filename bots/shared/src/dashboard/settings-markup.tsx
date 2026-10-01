@@ -12,7 +12,7 @@ import type { ComponentChildren } from 'preact'
  * source pragma keeps the module working in bot images that do not ship a tsconfig.
  */
 
-export type SettingsStep = { id: string; label: string; step?: number | undefined }
+type SettingsStep = { id: string; label: string; step?: number | undefined }
 
 function StepMark({ step }: { step: number | undefined }) {
 	return step === undefined ? null : <span class='settings-step'>{step.toString()}</span>
