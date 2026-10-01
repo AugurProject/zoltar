@@ -63,17 +63,41 @@ describe('forks protocol client', () => {
 		expect(capturedValue).toBeUndefined()
 	})
 
-	test('irreversible fork and migration actions explain their effect in the review step', async () => {
+	test('irreversible fork and migration actions explain their effect and amounts in the review step', async () => {
+		const previews: TransactionRequestPreview[] = []
+		const repTokenAddress = getAddress('0x00000000000000000000000000000000000000e7')
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => undefined,
+				async request => {
+					if (request.functionName === 'getTotalPoolHeldAttoRep') return 4n * 10n ** 18n
+					if (request.functionName === 'escalationGame') return escalationGameAddress
+					if (request.functionName === 'repToken') return repTokenAddress
+					if (request.functionName === 'balanceOf' && request.address === repTokenAddress && Array.isArray(request.args) && request.args[0] === escalationGameAddress) return 2n * 10n ** 18n
+					throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				},
+			),
+		)
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await forkZoltarWithOwnEscalation(client, securityPoolAddress, 12n)
+		await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, 12n, ['yes', 'no'], 5n * 10n ** 18n)
+		await migrateSecurityVault(client, securityPoolAddress, 12n, 'invalid', { repAttoRep: 3n * 10n ** 18n, underwritingLimitAttoEth: 2n * 10n ** 18n })
+		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([
+			['Trigger universe fork · 6\u00a0REP', 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and 6\u00a0REP held by the pool and its escalation game moves into fork migration. This can’t be undone.'],
+			['Migrate pool REP to Yes, No · 5\u00a0REP', 'Moves this pool’s 5\u00a0REP attributed to Yes, No into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
+			['Migrate vault to Invalid · 3\u00a0REP', 'Moves all your vault REP (3\u00a0REP) and underwriting commitments (2\u00a0ETH) from this pool to the Invalid universe. This can’t be undone or split across outcomes.'],
+		])
+	})
+
+	test('migration reviews omit amounts the caller could not supply', async () => {
 		const previews: TransactionRequestPreview[] = []
 		const client = asWriteClient(createMockWriteClient(() => undefined))
 		client.onTransactionPrepared = preview => previews.push(preview)
-		await forkZoltarWithOwnEscalation(client, securityPoolAddress, 12n)
-		await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, 12n, ['yes', 'no'])
-		await migrateSecurityVault(client, securityPoolAddress, 12n, 'invalid')
+		await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, 12n, ['yes'])
+		await migrateSecurityVault(client, securityPoolAddress, 12n, 'no')
 		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([
-			['Trigger universe fork', 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and its REP moves into fork migration. This can’t be undone.'],
-			['Migrate pool REP to Yes, No', 'Moves this pool’s REP attributed to Yes, No into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
-			['Migrate vault to Invalid', 'Moves all your vault REP and underwriting commitments from this pool to the Invalid universe. This can’t be undone or split across outcomes.'],
+			['Migrate pool REP to Yes', 'Moves this pool’s REP attributed to Yes into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
+			['Migrate vault to No', 'Moves all your vault REP and underwriting commitments from this pool to the No universe. This can’t be undone or split across outcomes.'],
 		])
 	})
 

@@ -408,7 +408,8 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	}
 	const onMigrateVaultSubmit = () => {
 		beginVaultMigrationProgress()
-		context.onMigrateVault()
+		const vault = context.connectedWalletVaultSummary
+		context.onMigrateVault(vault === undefined ? undefined : { repAttoRep: vault.vaultAttoRepBacking, underwritingLimitAttoEth: vault.underwritingLimitAttoEth })
 	}
 	const onMigrateSelectedOutcomeRepToZoltar = () => {
 		context.onMigrateRepToZoltar([context.forkAuctionForm.selectedOutcome])

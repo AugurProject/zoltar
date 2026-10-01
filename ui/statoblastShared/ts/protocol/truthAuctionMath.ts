@@ -47,3 +47,22 @@ export function getTruthAuctionTickAtPrice(price: bigint): bigint | undefined {
 	}
 	return lowerTick
 }
+
+export function formatTruthAuctionValidationPrice(price: bigint) {
+	const wholePart = (price / TRUTH_AUCTION_PRICE_PRECISION).toString()
+	const fractionalDigits = (price % TRUTH_AUCTION_PRICE_PRECISION).toString().padStart(18, '0').replace(/0+$/, '')
+	return fractionalDigits === '' ? wholePart : `${wholePart}.${fractionalDigits}`
+}
+
+const MIN_TICK_PRICE_INPUT_DECIMALS = 6
+
+/** The shortest bid-price input, with at least six decimals, that maps back to `tick`; it rounds up so it never falls to the tick below. */
+export function formatTruthAuctionTickPriceInput(tick: bigint) {
+	const price = getTruthAuctionPriceAtTick(tick)
+	for (let decimals = MIN_TICK_PRICE_INPUT_DECIMALS; decimals < 18; decimals += 1) {
+		const step = 10n ** BigInt(18 - decimals)
+		const roundedUpPrice = ((price + step - 1n) / step) * step
+		if (getTruthAuctionTickAtPrice(roundedUpPrice) === tick) return formatTruthAuctionValidationPrice(roundedUpPrice)
+	}
+	return formatTruthAuctionValidationPrice(price)
+}

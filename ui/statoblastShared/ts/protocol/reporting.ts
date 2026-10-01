@@ -446,6 +446,17 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 }
 
+/** Review text for an escalation report; vault-funded and direct reports share it so a fork-triggering report always warns. */
+export function getReportReviewText(outcome: ReportingOutcomeKey, amountAttoRep: bigint, triggersFork: boolean) {
+	const outcomeLabel = getEscalationSideLabel(outcome)
+	const amount = formatCurrencyBalance(amountAttoRep)
+	return {
+		reviewTitle: triggersFork ? reportingCopy.reportForkReviewTitle(outcomeLabel, amount) : transactionCopy.reportingAction(outcomeLabel, amount),
+		reviewDescription: triggersFork ? reportingCopy.reportForkReviewDescription(outcomeLabel) : reportingCopy.reportReviewDescription(outcomeLabel),
+		reviewAmount: formatCurrencyBalanceWithUnit(amountAttoRep, commonCopy.rep),
+	}
+}
+
 export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet', triggersFork = false) {
 	const [universeId, escalationGameAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
@@ -476,9 +487,7 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
-		reviewTitle: triggersFork ? reportingCopy.reportForkReviewTitle(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)) : transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)),
-		reviewDescription: triggersFork ? reportingCopy.reportForkReviewDescription(getEscalationSideLabel(outcome)) : reportingCopy.reportReviewDescription(getEscalationSideLabel(outcome)),
-		reviewAmount: formatCurrencyBalanceWithUnit(reviewAmountAttoRep, commonCopy.rep),
+		...getReportReviewText(outcome, reviewAmountAttoRep, triggersFork),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
 	client.onTransactionPlan?.([

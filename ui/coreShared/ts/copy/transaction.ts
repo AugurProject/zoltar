@@ -105,7 +105,6 @@ export const reviewedActions: Record<string, { title: string; description?: stri
 	depositToEscalationGame: { title: 'Report outcome', description: reportOutcomeReviewDescription },
 	depositRepOnOutcome: { title: 'Report outcome', description: reportOutcomeReviewDescription },
 	depositWalletRepToEscalationGame: { title: 'Report outcome', description: reportOutcomeReviewDescription },
-	submitBid: { title: 'Submit truth auction bid', description: 'Locks the ETH shown below in the truth auction at your bid price. Bids can’t be cancelled: the ETH stays locked until the bid wins REP backing in the child pool or is refunded as a losing bid.' },
 	withdrawFromEscalationGame: { title: 'Settle escalation deposits', description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', description: 'Settle the completed oracle report.' },
 	dispute: { title: 'Dispute report', description: 'Fund the counter-report and swap against the current report.' },
