@@ -1,6 +1,6 @@
 import type { Configuration, MarketSourceRow, Snapshot } from './api-validation.ts'
 
-export type NetworkProfile = 'mainnet' | 'sepolia'
+type NetworkProfile = 'mainnet' | 'sepolia'
 
 /** The dashboard page's mutable data and request latches; every view and controller reads and writes this one record. */
 export type DashboardState = {

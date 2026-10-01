@@ -75,12 +75,7 @@ export function createMarketPanels(state: DashboardState, elements: DashboardEle
 			for (const pool of token.pools) {
 				const poolLink = poolAnchor(pool.url, `token:${token.address}:pool:${pool.address}`, pool.address)
 				const strategyUse = marketPoolStrategyUse(executableTokens.has(token.address.toLowerCase()), pool.venue)
-				body.append(
-					row(
-						[token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity],
-						TOKEN_MARKET_LABELS,
-					),
-				)
+				body.append(row([token.symbol, link(token.address, 'address', `token:${token.address}:address:${pool.address}`), amount(token.balance, token.symbol), pool.venue, strategyUse, poolLink, `${(pool.fee / 10_000).toString()}%`, amount(pool.priceWeth, 'WETH'), pool.liquidity], TOKEN_MARKET_LABELS))
 			}
 		}
 		elements.tokenMarketsEmpty.hidden = snapshot.tokenMarkets.length !== 0
