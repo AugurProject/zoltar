@@ -11,7 +11,7 @@ import { LiveTrading } from '../features/LiveTrading.js'
 import { TradingBalanceGroup, TradingOverviewPanel } from '../components/TradingOverviewPanel.js'
 import { TradingConnectionError } from '../features/TradingConnectionError.js'
 import { useUrlSearchState } from '@zoltar/ui-core-shared/app/hooks/useUrlSearchState.js'
-import { readStringQueryParam, readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
+import { readUniverseQueryParam, writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { resolveUniverseSelection, type LiveUniverses, type UniverseDiscoveryScope } from '../lib/universeSelection.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
 import { useUniverseSummary, type LoadUniverseSummary } from '../features/useUniverseSummary.js'
@@ -74,7 +74,8 @@ function failedDeploymentStatus(error: unknown): LiveDeploymentStatus {
 }
 
 function readTradingUrlState(search: string) {
-	return { universeId: readUniverseQueryParam(search), present: readStringQueryParam(search, 'universe') !== undefined }
+	// An empty `universe=` counts as present, so it is rewritten like any other malformed value.
+	return { universeId: readUniverseQueryParam(search), present: new URLSearchParams(search).has('universe') }
 }
 
 async function resolveCanonicalLiveDeployment(coreDeployments: readonly CoreDeployment[], createPublicClient: (configuration: DeploymentConfiguration) => PublicClient = createTradingPublicClient) {

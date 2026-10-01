@@ -244,7 +244,7 @@ describe('live guarded transaction writes', () => {
 			expect(call.args.at(-1)).toBe(86_401n)
 		}
 		const callsBeforeRejectedSlippage = calls.length
-		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, validityMinutes, 501n)).rejects.toThrow('between 0% and 5%')
+		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, validityMinutes, 501n)).rejects.toThrow('between 0.01% and 5%')
 		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 0n, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
 		await expect(simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 1_441n, slippageBps)).rejects.toThrow('between 1 and 1440 minutes')
 		expect(calls).toHaveLength(callsBeforeRejectedSlippage)
