@@ -7,7 +7,7 @@ This page maps the repository for contributors. Protocol behavior is explained i
 | Layer | What it is | Contracts | Off-chain code |
 | --- | --- | --- | --- |
 | Zoltar | The forkable oracle base layer: questions, universes, REP, and forks. It never judges which answer is true. | `solidity/contracts/*.sol` | `shared/zoltar`, `ui/zoltarShared`, `ui/zoltar` |
-| Statoblast | The prediction-market layer: one SecurityPool per question and universe, the Escalation Game, fork migration, and Truth Auctions. | `solidity/contracts/statoblast/` | `shared/statoblast`, `ui/statoblastShared`, `ui/statoblast` |
+| Statoblast | The prediction-market layer: one SecurityPool per question, universe, and pool configuration, the Escalation Game, fork migration, and Truth Auctions. | `solidity/contracts/statoblast/` | `shared/statoblast`, `ui/statoblastShared`, `ui/statoblast` |
 | OpenOracle | A contestable REP/ETH price feed used for solvency checks, never for market outcomes. The imported contract is a fixed compatibility contract. | `solidity/contracts/statoblast/openOracle/` | `shared/openOracle`, `ui/statoblastShared` |
 | Trading | An AMM exchange for Statoblast outcome shares; one possible venue, with no role in market creation or resolution. | `solidity/contracts/trading/` | `shared/trading`, `ui/trading` |
 | augurScan | A read-only explorer and PostgreSQL indexer for every layer. | none | `augurScan/` |

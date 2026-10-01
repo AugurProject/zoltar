@@ -143,7 +143,7 @@ export const securityPoolContractReference: ContractReference = {
 			signals: '`EscalationGameSet` on first deposit; game emits `LocalDepositAppended` and `DepositOnOutcome`',
 		},
 		{
-			call: '`depositToEscalationGame(outcome, maxAmount)`',
+			call: '`depositToEscalationGame(outcome, maximumDepositAttoRep)`',
 			caller: 'Vault owner',
 			effect:
 				"Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses `nonDecisionThresholdAttoRep - 1` instead. Repeat deposits use the existing game's stored `startBondAttoRep` and `nonDecisionThresholdAttoRep`. Every accepted deposit removes enough REP backing units and escrows dispute-staked REP on the selected outcome.",
@@ -176,7 +176,7 @@ export const securityPoolContractReference: ContractReference = {
 			effect:
 				'For an initial pool, accrues elapsed fees through question end while its universe remains unforked; if its question remains unresolved when the universe forks, the fork timestamp replaces question end as the cutoff, including a later question-end-to-fork interval. A question finalized before the fork retains its question-end cutoff. Finalizing an activated child starts a separate epoch at that finalization timestamp, which runs until the child game resolves or the child universe subsequently forks. An inherited fixed-outcome child without a continuation game fixes its cutoff at finalization and accrues no later fees. Accumulator timestamps prevent charging an interval twice. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible underwriting commitment it clears denominator-specific remainder and advances the timestamp without charging fees.',
 			declarations: [{ name: 'updateSettlementCollateral' }],
-			preconditions: 'No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.',
+			preconditions: 'No caller or lifecycle restriction. When the accumulator is already at or beyond the clamped timestamp, it leaves the accumulator unchanged and emits no event, though it still caches the current fee-epoch cutoff.',
 			signals: '`PoolAccountingCheckpoint` whenever positive elapsed time is processed, including the zero-commitment branch; no event for an unchanged timestamp',
 		},
 		{

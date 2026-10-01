@@ -34,7 +34,8 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-On Windows, run `start.bat` from this directory to start the same Compose command.
+On Windows, run `start.bat` from this directory. It stops the stack, rebuilds the image,
+and recreates the container with `docker compose up --no-build --force-recreate`.
 
 On first start, the container creates a paused, dry-run configuration in its named
 volume. Open `http://127.0.0.1:4183`; the dashboard does not require a username or

@@ -37,7 +37,7 @@ The arbitrager is an independent project inside the monorepo:
   execution, monitoring, infrastructure, and durable state.
 - `tests/` mirrors the runtime areas and contains the executor contract suite.
 
-Its own `package.json`, lockfile, TypeScript configuration, test configuration, and
+Its own `package.json`, TypeScript configuration, test configuration, and
 generated contract artifacts define its build. The executor imports unchanged
 protocol ERC-20 utilities from the monorepo's top-level `solidity/` project; it is
 not compiled into the protocol statoblast artifact set.
@@ -186,7 +186,8 @@ docker network inspect zoltar >/dev/null 2>&1 || docker network create zoltar
 docker compose up --build --force-recreate
 ```
 
-On Windows, run `start.bat` from this directory to start the same Compose command.
+On Windows, run `start.bat` from this directory; it stops the stack, rebuilds the image,
+and recreates the containers.
 
 Compose restarts the container only while Docker and the host remain available; a
 direct Bun process needs an external supervisor. If the host or named volume is
@@ -226,7 +227,7 @@ URLs, and save so every endpoint is checked against that chain. The Settings pag
 grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 ·
 Markets** (approved universes, venues and the executor, REP market sources), **3 ·
 Trading policy** (strategy, risk limits, settlement), **4 · Go live** (wallet,
-submission, execution mode), and **Advanced** (the complete configuration file, collapsed by default). Chain-specific history, price, and
+submission, execution mode), and **Advanced** (a read-only copy of the complete configuration file, collapsed by default). Chain-specific history, price, and
 position paths are process-fixed and can only be edited in the file while the bot is
 stopped. OpenOracle, genesis REP, and WETH
 come from `docs/mainnet-deployment-addresses.json` or
@@ -414,8 +415,8 @@ deployment data. The bot inspects the executor deployment and the canonical cont
 contracts) on its first scan and keeps re-checking each scan until all of them are
 present; live execution refuses to start until they hold.
 
-Execution mode can be changed in the dashboard's **Execution mode** form or the
-complete JSON editor and applies at the next scan boundary. The form shows a
+Execution mode can be changed in the dashboard's **Execution mode** form and applies
+at the next scan boundary. The form shows a
 readiness checklist (signer, quorum RPCs, venue, deployed executor, canonical
 contracts, delivery) and keeps the live-execution switch locked until every
 required row holds; the on-chain rows come from the latest scan, so a freshly
@@ -432,16 +433,15 @@ live mode (quorum RPCs and an enabled venue), binds live
 execution to the signer that will be active at that boundary (the queued signer
 when a signer change is pending, otherwise the running one), reserves its
 exclusive process lock before saving, and pauses the bot so signing begins only
-after **Resume bot** and its readiness check; the complete editor binds execution
-to the persisted key and leaves the pause state as submitted. When execution starts without a
+after **Resume bot** and its readiness check. When execution starts without a
 remembered signer, it remains locked until a key is set in the local dashboard. Signer set/clear
 changes apply at the next unpaused scan boundary; they do not interrupt the current
 scan or confirmation wait, and clearing a signer cannot cancel a transaction already
 broadcast.
 
-Private bundle delivery is the example default. Configure relay URLs and the
-successful bundle-relay threshold under `submission.minimumBundleRelaySuccesses`,
-either in the focused dashboard form or the complete JSON editor. In private mode,
+Public mempool delivery is the example default. Configure relay URLs and the
+successful bundle-relay threshold under `submission.minimumBundleRelaySuccesses`
+in the dashboard's **Submission** form. In private mode,
 this threshold applies both to pre-submission bundle simulations and to final bundle
 fan-out. The bot proceeds only when at least that many simulated relays accept the
 canonical bundle submission. Public transaction fan-out succeeds after one public
@@ -594,7 +594,7 @@ locked through later dispute rounds.
   price.
 - The full adverse movement permitted by the signed hedge limit
   (`runtime.maxHedgeSlippageBps`).
-- The larger of `runtime.riskLimits.lifecycleGasReserveAttoWeth` and
+- The larger of `runtime.riskLimits.lifecycleGasReserveWeth` and
   `(callbackGasLimit + 900,000) × gas price`. Public and private delivery use the
   same single atomic lifecycle call.
 
@@ -694,12 +694,12 @@ that network free of untrusted peers or terminate TLS at an authenticated proxy.
 JSON API bodies are capped at 1 MiB. The key is kept in memory unless
 **Save this key in the local operator file** is selected. That explicit choice
 stores the key in the owner-only operator settings file; protect the host, backups,
-and settings path as wallet credentials. **Forget saved key** atomically removes
-only the persisted credential while retaining the active in-memory signer. **Clear
+and settings path as wallet credentials. **Remove saved key · keep signer** atomically removes
+only the persisted credential while retaining the active in-memory signer. **Remove
 signer & saved key** removes both. The status names the active address and, when
 different, the saved address. Setting a different memory-only key preserves an
-existing saved key until **Forget saved key** or **Clear signer & saved key** is
-used. Mutable API
+existing saved key until **Remove saved key · keep signer** or **Remove signer & saved
+key** is used. Mutable API
 requests require authentication when network-bound, same-origin JSON, and either the
 loopback or explicitly configured host authority. Do not expose the dashboard to a network without transport
 security.
@@ -712,8 +712,9 @@ chain are retained in `.state/operator.json.mainnet.profile` and
 three files so both chain profiles can be restored. The bot refuses to load an
 operator settings file or position journal that is a symbolic link, is not owned by
 the bot user, or has a mode other than `0600`. The bot accepts no command-line
-arguments and does not read chain, RPC URL, or quorum settings from environment
-variables. Copy the example before first startup:
+arguments and does not read chain or RPC URL settings from environment variables;
+`ZOLTAR_BOT_RPC_QUORUM` only supplies the agreement requirement for a file without a
+saved `rpcQuorum`. Copy the example before first startup:
 
 ```bash
 install -d -m 700 .state
@@ -724,31 +725,28 @@ install -m 600 config/operator.example.json .state/operator.json
 it does not override any value inside the document. Its chain profiles use the
 `<operator-config>.mainnet.profile` and `<operator-config>.sepolia.profile` sibling
 paths. This locator is useful for service managers and tests. Select the chain and
-enter the read and public RPC URLs in **RPC
-connectivity**. Every endpoint is checked against the selected chain before it is
+enter the read and public RPC URLs in **Chain and RPC
+endpoints**. Every endpoint is checked against the selected chain before it is
 saved. Initial chain selection applies immediately, while quorum and RPC changes
 apply at the next scan boundary. To operate another chain, select its saved chain
 profile in the dashboard. Configure the reader set required
-by the saved RPC agreement requirement with the deployment controls before enabling
-execution. The default policy uses the primary reader alone. Independent quorum
+by the saved RPC agreement requirement in the same form before enabling execution. The default policy uses the primary reader alone. Independent quorum
 readers are required only when the saved requirement is `2`.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the
 file concurrently with a dashboard save.
 
-The dashboard's focused forms and the **Complete configuration** JSON editor under
-Advanced write the same versioned file. The focused forms cover chain connectivity
+Save changes in the dashboard's focused forms. They cover chain connectivity
 with the quorum RPC URLs, approved universes, venues, the
 REP market source policy, strategy, risk limits and event lookback, third-party
 settlement, the signer, submission, and execution mode. Each form's save button stays
 disabled until an edit differs from the loaded values, an **Unsaved changes** badge
 marks edited panels, and a **Queued · next scan** badge marks sections the bot has
-saved but not yet applied at a scan boundary. The complete editor exposes those plus
-the process-fixed runtime fields (paths, dashboard bind, and `once`), which cannot
-change while the bot runs. A saved private
-key is returned as `__PRESERVE_SAVED_PRIVATE_KEY__`, never as key material; leaving
-that marker unchanged preserves the credential.
+saved but not yet applied at a scan boundary. The read-only **Complete configuration**
+view shows the current file for copying, including the process-fixed runtime fields
+(paths, dashboard bind, and `once`), which cannot change while the bot runs. A saved
+private key appears as `__PRESERVE_SAVED_PRIVATE_KEY__`, never as key material.
 
 The containing directory is created with owner-only permissions when possible, and
 every replacement configuration file is mode `0600`. File contents and the containing
@@ -956,7 +954,8 @@ it. Set `assetSymbol` to `REP`; the bot derives the root market address and chai
 from the selected network manifest. Existing `assetAddress` and `assetChainId`
 values cannot override that identity and are omitted when settings are saved. The
 dashboard's **REP market sources** form edits this `centralizedMarkets` document as a
-source table plus threshold fields, with `venueConsensus` in an advanced JSON block.
+source table plus threshold fields, with `venueConsensus` in its **Venue consensus**
+fieldset.
 CEX and DEX source IDs share one global namespace so
 one failure domain cannot vote in both groups. The dashboard shows each
 normalized REP/ETH observation and its executable bid and
@@ -1116,7 +1115,7 @@ All other startup values are in `deployment`, `submission`, `approvedUniverses`,
 `runtime`; `network` and `connectivity` are absent until the focused dashboard form
 saves them. **Risk limits and scanning** edits `runtime.riskLimits`,
 `runtime.maxHedgeSlippageBps`, and `runtime.lookbackBlocks`; **Execution mode** edits
-`runtime.execute`; the complete JSON editor can change the same fields. Deployment,
+`runtime.execute`. Deployment,
 execution-mode, and risk changes take effect at the next scan boundary.
 Process persistence paths and the dashboard bind cannot be edited while the bot is
 running.
@@ -1143,7 +1142,7 @@ the projected gas for `settle` (the callback gas limit plus the 1/63 slack
 OpenOracle requires after the callback, plus a fixed base and an amortised reward
 withdrawal, each padded the way the signer pads its gas limit), and the projected
 net. Settlement is off until it is enabled in the dashboard's **Settlement** form or
-under `settlement` in the complete configuration:
+under `settlement` in the operator file:
 
 | Setting | Default | JSON field | Effect |
 | --- | ---: | --- | --- |
@@ -1238,10 +1237,10 @@ execution history remains the audit record for older confirmed entries and their
 dated gas costs.
 
 Execute mode holds `<position-file>.lock` for the process lifetime to prevent
-concurrent writers. While a signer is active or queued, it also holds an
-operating-system temporary-directory lock that prevents a second local process from
+concurrent writers. While a signer is active or queued, it also holds a signer lock
+under the `ZOLTAR_BOT_SIGNER_LOCK_ROOT` directory that prevents a second process from
 using the same signer on the same chain with a different journal, provided both
-processes share the same OS temporary-directory namespace. A signer change acquires
+processes resolve the same lock root. A signer change acquires
 the new lock before persistence and keeps the old and new locks until the next scan
 boundary completes the transfer. The reconciliation command also holds the journal
 lock. Journal contention fails before journal load, while signer contention fails
@@ -1249,9 +1248,8 @@ before signer activation, signing, or submission. Lock files include the owner P
 and acquisition time and are removed after normal completion or caught-error
 unwinding. After any interrupted, terminated, or crashed process, verify that no bot
 or reconciliation process is still running before removing an orphan lock; never
-delete a live lock to force startup. Signer locks cannot coordinate different
-temporary-directory roots, private temp namespaces, containers, or hosts. Never run
-the same execution signer across any of those boundaries.
+delete a live lock to force startup. Signer locks cannot coordinate different lock
+roots or hosts. Never run the same execution signer across either boundary.
 
 The state sequence is:
 
@@ -1310,7 +1308,7 @@ hedged inventory has returned and automatic revenue would be misleading.
 ### `recovery-required` runbook
 
 Stop new entries and preserve the position journal before investigating. Do not
-delete or hand-edit a record to bypass the one-position guard.
+delete or hand-edit a record to bypass the concurrent-position limit.
 
 1. Confirm the dashboard network, signer address, OpenOracle, executor, and token
    match the journal record. Save a copy of the journal, operation log, and evidence
@@ -1385,8 +1383,8 @@ Escalate unresolved or contradictory evidence to the protocol/operator security
 team. Resume unattended entry only after the journal shows `closed`; recovery
 states are a safety stop, not an ignorable warning.
 
-The current safety policy permits one non-closed durable position at a time. This is
-separate from the per-position and total-locked WETH limits; it prevents a second
+`runtime.riskLimits.maxConcurrentPositions` (1 through 1,000; the example sets `1`)
+caps non-closed durable positions. This is separate from the per-position and total-locked WETH limits; it prevents a second
 entry from depending on wallet inventory already committed to recovery.
 
 ## Operational limitations
