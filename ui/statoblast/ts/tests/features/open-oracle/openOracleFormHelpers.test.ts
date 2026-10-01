@@ -57,12 +57,11 @@ describe('Open Oracle create form helpers', () => {
 		expect(getOpenOracleCreateValidation({ form: createValidForm({ multiplier: '0.5' }) }).fieldErrors.multiplier).toBe('Multiplier must be at least 1×.')
 	})
 
-	test('sends exactly the settler reward instead of a separately entered ETH value', () => {
+	test('sends exactly the settler reward as the ETH value', () => {
 		expect(getOpenOracleCreateEthSent('0.25')).toBe(25n * 10n ** 16n)
-		const parsed = parseOpenOracleCreateFormSubmission({ form: createValidForm({ ethValue: '5', settlerRewardEthAmount: '0.25' }), token1Decimals: 18, token2Decimals: 18 })
+		const parsed = parseOpenOracleCreateFormSubmission({ form: createValidForm({ settlerRewardEthAmount: '0.25' }), token1Decimals: 18, token2Decimals: 18 })
 		expect(parsed.ethValueAttoEth).toBe(25n * 10n ** 16n)
 		expect(parsed.settlerRewardAttoEth).toBe(25n * 10n ** 16n)
-		expect(getOpenOracleCreateValidation({ form: createValidForm({ ethValue: '5' }) }).isValid).toBe(true)
 	})
 
 	test('reports precision errors inline once token decimals are known', () => {
@@ -131,7 +130,7 @@ describe('Open Oracle report progress', () => {
 describe('Open Oracle created report link', () => {
 	test('reads the created report ID only from create results', () => {
 		const hash = '0x1234000000000000000000000000000000000000000000000000000000000000'
-		const created: Parameters<typeof getCreatedOpenOracleReportId>[0] & { reportId: bigint } = { action: 'createReportInstance', hash, reportId: 9n }
+		const created: Parameters<typeof getCreatedOpenOracleReportId>[0] = { action: 'createReportInstance', hash, reportId: 9n }
 		expect(getCreatedOpenOracleReportId(created)).toBe(9n)
 		expect(getCreatedOpenOracleReportId({ action: 'createReportInstance', hash })).toBeUndefined()
 		expect(getCreatedOpenOracleReportId({ action: 'settle', hash })).toBeUndefined()

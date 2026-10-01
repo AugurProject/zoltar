@@ -734,7 +734,6 @@ describe('Open Oracle helpers', () => {
 				escalationHalt: '2.5',
 				exactToken1Report: '1.25',
 				initialToken2Amount: '2',
-				ethValue: '0.000000000000001',
 				feePercentage: '0.001',
 				multiplier: '1',
 				protocolFee: '0.002',
@@ -771,7 +770,6 @@ describe('Open Oracle helpers', () => {
 			disputeDelay: '10',
 			exactToken1Report: '1',
 			initialToken2Amount: '1',
-			ethValue: '1',
 			feePercentage: '1',
 			multiplier: '1',
 			protocolFee: '1',
@@ -804,8 +802,6 @@ describe('Open Oracle helpers', () => {
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, exactToken1Report: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Base token amount exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, escalationHalt: (1n << 128n).toString() }, token1Decimals: 18 })).toBe('Escalation halt exceeds the contract maximum.')
 		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, settlerRewardEthAmount: (1n << 96n).toString() } })).toBe('Settler reward exceeds the contract maximum.')
-		// The ETH sent follows the settler reward, so a stale separate ETH value cannot invalidate the form.
-		expect(getOpenOracleCreateValidationMessage({ form: { ...baseForm, ethValue: (1n << 96n).toString() } })).toBeUndefined()
 	})
 
 	test('open oracle create parser accepts high-decimal token1 amounts once token decimals are known', () => {
@@ -816,7 +812,6 @@ describe('Open Oracle helpers', () => {
 				escalationHalt: '0.000000000000000000000000000000000001',
 				exactToken1Report: '0.000000000000000000000000000000000001',
 				initialToken2Amount: '1',
-				ethValue: '1',
 				feePercentage: '1',
 				multiplier: '1',
 				protocolFee: '1',
@@ -839,7 +834,6 @@ describe('Open Oracle helpers', () => {
 			disputeDelay: '10',
 			exactToken1Report: '1',
 			initialToken2Amount: '1',
-			ethValue: '1',
 			feePercentage: '1',
 			multiplier: '1',
 			protocolFee: '0.001',
@@ -864,7 +858,6 @@ describe('Open Oracle helpers', () => {
 					disputeDelay: '10',
 					exactToken1Report: '1',
 					initialToken2Amount: '1',
-					ethValue: '1',
 					feePercentage: '60',
 					multiplier: '1',
 					protocolFee: '50.00001',
@@ -884,7 +877,6 @@ describe('Open Oracle helpers', () => {
 					disputeDelay: '10',
 					exactToken1Report: '1',
 					initialToken2Amount: '1',
-					ethValue: '1',
 					feePercentage: '1',
 					multiplier: '655.36',
 					protocolFee: '1',

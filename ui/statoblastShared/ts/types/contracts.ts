@@ -117,6 +117,8 @@ export type SecurityVaultActionResult = ActionResult & {
 	queuedOperationState?: QueuedVaultOperationState
 	action: 'setVaultUnderwritingLimit' | 'approveRep' | 'depositRepToVault' | 'queueWithdrawRep' | 'redeemFees' | 'redeemRepFromVault' | 'updateVaultFees'
 	queuedOperation?: StagedOracleQueuedResult
+	/** The new report's ID, read from the receipt; only a successful create carries it. */
+	reportId?: bigint | undefined
 	stagedExecution?: StagedOracleExecutionResult
 }
 
@@ -149,6 +151,8 @@ export type OracleManagerDetails = {
 export type OpenOracleActionResult = ActionResult & {
 	action: 'approveToken1' | 'approveToken2' | 'createReportInstance' | 'dispute' | 'executeStagedOperation' | 'queueOperation' | 'requestPrice' | 'settle' | 'withdrawBalance' | 'wrapWeth'
 	queuedOperation?: StagedOracleQueuedResult
+	/** The new report's ID, read from the receipt; only a successful create carries it. */
+	reportId?: bigint | undefined
 	stagedExecution?: StagedOracleExecutionResult
 }
 

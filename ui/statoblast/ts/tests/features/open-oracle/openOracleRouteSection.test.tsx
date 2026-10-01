@@ -12,13 +12,12 @@ import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/rende
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
+import type { OpenOracleActionResult, OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainBlockNumberContext, ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import * as openOracleCopy from '@zoltar/ui-statoblast-shared/copy/openOracle.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { getDefaultOpenOracleCreateFormState, getDefaultOpenOracleFormState } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/formDefaults.js'
 import { deriveOpenOracleDisputeSubmissionDetails } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/openOracleDispute.js'
-import type { OpenOracleCreateReportResult } from '@zoltar/ui-statoblast-shared/protocol/openOracle.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleCreateFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
@@ -226,7 +225,7 @@ describe('OpenOracleSection route create view', () => {
 		const formChanges: Array<Record<string, unknown>> = []
 		const viewChanges: string[] = []
 		const loadedReportIds: Array<string | undefined> = []
-		const createdResult: OpenOracleCreateReportResult = {
+		const createdResult: OpenOracleActionResult = {
 			action: 'createReportInstance',
 			hash: '0x1234000000000000000000000000000000000000000000000000000000000000',
 			reportId: 12n,
@@ -267,7 +266,6 @@ describe('OpenOracleSection route create view', () => {
 					openOracleCreateForm: {
 						disputeDelay: '3600',
 						escalationHalt: '0.5',
-						ethValue: '1',
 						exactToken1Report: '1',
 						initialToken2Amount: '1',
 						feePercentage: '0',
@@ -761,7 +759,6 @@ describe('OpenOracleSection route create view', () => {
 					accountState: createAccountState({ ethBalanceAttoEth: 1_000n * ATTO_ETH_PER_ETH }),
 					openOracleCreateForm: {
 						...getDefaultOpenOracleCreateFormState(),
-						ethValue: '1100',
 						exactToken1Report: '1',
 						initialToken2Amount: '1',
 						settlerRewardEthAmount: '1100',
@@ -787,7 +784,6 @@ describe('OpenOracleSection route create view', () => {
 						disputeDelay: '10',
 						exactToken1Report: '1000000000',
 						initialToken2Amount: '1',
-						ethValue: '1',
 						feePercentage: '1',
 						multiplier: '1',
 						protocolFee: '1',
@@ -819,7 +815,6 @@ describe('OpenOracleSection route create view', () => {
 						escalationHalt: '0.000000000000000000000000000000000001',
 						exactToken1Report: '0.000000000000000000000000000000000001',
 						initialToken2Amount: '1',
-						ethValue: '1',
 						feePercentage: '1',
 						multiplier: '1',
 						protocolFee: '1',
@@ -879,7 +874,6 @@ describe('OpenOracleSection route create view', () => {
 						escalationHalt: '25',
 						exactToken1Report: '100',
 						initialToken2Amount: '300',
-						ethValue: '1',
 						feePercentage: '2',
 						protocolFee: '0.5',
 						settlerRewardEthAmount: '1',

@@ -29,7 +29,6 @@ type OpenOracleApprovalTestCase = {
 	currentUnderwritingLimitAttoEth: bigint
 	disputeNewAmount1: string
 	disputeNewAmount2: string
-	disputeTokenToSwap: 'token1' | 'token2'
 	requiredAmount: bigint
 	token: 'token1' | 'token2'
 	tokenLabel: 'base token' | 'quote token'
@@ -45,7 +44,6 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		currentUnderwritingLimitAttoEth: 100n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '25',
-		disputeTokenToSwap: 'token1',
 		requiredAmount: 201n,
 		token: 'token1',
 		tokenLabel: 'base token',
@@ -59,7 +57,6 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		currentUnderwritingLimitAttoEth: 25n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '26',
-		disputeTokenToSwap: 'token2',
 		requiredAmount: 51n,
 		token: 'token2',
 		tokenLabel: 'quote token',
@@ -183,7 +180,6 @@ function setOpenOracleApprovalForm(state: UseOpenOracleOperationsState, testCase
 		...current,
 		disputeNewAmount1: testCase.disputeNewAmount1,
 		disputeNewAmount2: testCase.disputeNewAmount2,
-		disputeTokenToSwap: testCase.disputeTokenToSwap,
 	}))
 }
 
@@ -553,7 +549,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '101',
 				disputeNewAmount2: '25',
-				disputeTokenToSwap: 'token1',
 			}))
 		})
 		await act(async () => {
@@ -601,7 +596,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '101',
 				disputeNewAmount2: '25',
-				disputeTokenToSwap: 'token1',
 			}))
 		})
 		await act(async () => {
@@ -838,7 +832,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '200',
 				disputeNewAmount2: '30',
-				disputeTokenToSwap: 'token1',
 			}))
 		})
 		await act(async () => {
@@ -1451,7 +1444,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '100',
 				disputeNewAmount2: '25',
-				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -1602,7 +1594,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '150',
 				disputeNewAmount2: '20',
-				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -1667,7 +1658,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '150',
 				disputeNewAmount2: '20',
-				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -1702,7 +1692,7 @@ describe('useOpenOracleOperations', () => {
 				await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
 			})
 			await act(async () => {
-				requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '20', disputeTokenToSwap: 'token1', reportId: REPORT_ID.toString(), stateHash: STATE_HASH }))
+				requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount1: '101', disputeNewAmount2: '20', reportId: REPORT_ID.toString(), stateHash: STATE_HASH }))
 			})
 			await act(async () => {
 				await requireHookState(hookState).disputeReport()
@@ -1762,7 +1752,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '2',
 				disputeNewAmount2: '7.5',
-				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -2075,7 +2064,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '150',
 				disputeNewAmount2: '20',
-				disputeTokenToSwap: 'token1',
 				reportId: REPORT_ID.toString(),
 				stateHash: STATE_HASH,
 			}))
@@ -2093,7 +2081,6 @@ describe('useOpenOracleOperations', () => {
 				...current,
 				disputeNewAmount1: '250',
 				disputeNewAmount2: '45',
-				disputeTokenToSwap: 'token2',
 				stateHash: editedStateHash,
 			}))
 		})

@@ -419,11 +419,8 @@ export async function createOpenOracleReportInstance(
 		action: 'createReportInstance',
 		hash,
 		reportId: getOpenOracleSubmittedReportId(receipt, getOpenOracleAddress()),
-	} satisfies OpenOracleCreateReportResult
+	} satisfies OpenOracleActionResult
 }
-
-/** A create result also carries the new report ID read from the receipt, so the app can link to the report. */
-export type OpenOracleCreateReportResult = OpenOracleActionResult & { reportId: bigint | undefined }
 
 // ReportSubmitted is emitted with a raw log2 whose data is the packed report rather than ABI-encoded bytes, so only its topics are decoded.
 function getOpenOracleReportSubmittedTopic() {
@@ -445,8 +442,7 @@ function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<Transact
 
 /** Reads the report ID of a successful create result; other action results carry none. */
 export function getCreatedOpenOracleReportId(result: OpenOracleActionResult | undefined) {
-	if (result?.action !== 'createReportInstance' || !('reportId' in result)) return undefined
-	return typeof result.reportId === 'bigint' ? result.reportId : undefined
+	return result?.action === 'createReportInstance' ? result.reportId : undefined
 }
 export async function wrapWeth(client: WriteClient, amountAttoEth: bigint) {
 	const hash = await writeContractAndWait(client, () => ({
