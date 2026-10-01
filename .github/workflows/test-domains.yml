@@ -55,7 +55,7 @@ jobs:
       matrix:
         domain: ${{ fromJSON(inputs.application && inputs.solidity && '["application", "solidity"]' || (inputs.application && '["application"]' || '["solidity"]')) }}
     steps:
-      - uses: actions/cache/restore@v5
+      - uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .ci/test-timings-${{ matrix.domain }}.json
           key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
@@ -66,7 +66,7 @@ jobs:
           if [[ ! -f ".ci/test-timings-${{ matrix.domain }}.json" ]]; then
             printf '{"version":1,"samplesByFile":{}}\n' > ".ci/test-timings-${{ matrix.domain }}.json"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.domain }}-test-timing-history-input
           path: .ci/test-timings-${{ matrix.domain }}.json
@@ -92,7 +92,7 @@ jobs:
       - name: Read canonical UI artifact metadata
         id: projects
         run: bun ./tooling/repo/query-projects.mts --github-output
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: domain-production-ui
           path: ${{ steps.projects.outputs.ui_artifact_outputs }}
@@ -114,11 +114,11 @@ jobs:
       - uses: ./.github/actions/setup-ci
         with:
           build-inputs: ${{ inputs.build-inputs }}
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: domain-production-ui
           path: ui
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: application-test-timing-history-input
           path: .ci
@@ -128,7 +128,7 @@ jobs:
           ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-application.json
           ZOLTAR_TEST_TIMING_OUTPUT: test-results/application-${{ matrix.shard }}.timing.json
         run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=application --shard="${{ matrix.shard }}/4"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: application-test-timing-${{ matrix.shard }}
@@ -152,7 +152,7 @@ jobs:
         with:
           profile: contracts
           build-inputs: ${{ inputs.build-inputs }}
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: solidity-test-timing-history-input
           path: .ci
@@ -161,7 +161,7 @@ jobs:
           ZOLTAR_TEST_TIMING_HISTORY: .ci/test-timings-solidity.json
           ZOLTAR_TEST_TIMING_OUTPUT: test-results/solidity-${{ matrix.shard }}.timing.json
         run: bun run test:run:balanced-shard -- --bail=1 --parallel=1 --domain=solidity --shard="${{ matrix.shard }}/8"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: solidity-test-timing-${{ matrix.shard }}
@@ -180,17 +180,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-bun
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: ${{ matrix.domain }}-test-timing-history-input
           path: .ci
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           pattern: ${{ matrix.domain }}-test-timing-*
           path: test-results
           merge-multiple: true
       - run: bun ./tooling/testing/merge-test-timings.mts --observations test-results --history ".ci/test-timings-${{ matrix.domain }}.json"
-      - uses: actions/cache/save@v5
+      - uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .ci/test-timings-${{ matrix.domain }}.json
           key: ${{ runner.os }}-test-timings-v2-${{ matrix.domain }}-${{ github.sha }}
