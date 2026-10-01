@@ -1,6 +1,6 @@
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '../ethereum.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
-import { acquireExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from './process-lock.ts'
+import { acquireExecutionSignerLock, acquireFileProcessLock, ExecutionSignerLockHeldError, signerLockConflictMessage, type ExclusiveProcessLock } from './process-lock.ts'
 
 export type BotLockSettings = {
 	chainId: number
@@ -22,6 +22,7 @@ export type BotProcessLockAcquirers = {
  */
 export type BotProcessLockOptions = {
 	readonly acquirers?: BotProcessLockAcquirers
+	readonly allowSignerConflict?: boolean
 	readonly label: string
 	readonly signerLocksInDryRun: boolean
 }
@@ -43,35 +44,43 @@ class BotProcessLockAcquisitionError extends Error {
 	}
 }
 
-export async function acquireBotProcessLocks(settings: BotLockSettings, { acquirers: configuredAcquirers, label, signerLocksInDryRun }: BotProcessLockOptions) {
+export async function acquireBotProcessLocks(settings: BotLockSettings, { acquirers: configuredAcquirers, allowSignerConflict = false, label, signerLocksInDryRun }: BotProcessLockOptions) {
 	const acquirers = configuredAcquirers ?? defaultLockAcquirers(label)
 	if (!Number.isSafeInteger(settings.chainId) || settings.chainId < 1) throw new Error(`${label} lock chain ID must be a positive integer`)
 	const stateLock = await acquirers.acquireState(settings.stateFile)
 	let signerLock: ExclusiveProcessLock | undefined
 	let signerAddress: Address | undefined
+	let startupSignerConflict: string | undefined
+	let conflictedSignerAddress: Address | undefined
 	try {
-		if (settings.execute) {
+		if (settings.execute || (allowSignerConflict && signerLocksInDryRun && settings.privateKey !== undefined)) {
 			if (settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
 			signerAddress = privateKeyToAccount(settings.privateKey).address
 			signerLock = await acquirers.acquireSigner(settings.chainId, signerAddress, settings.signerLockRoot)
 		}
 	} catch (error) {
-		try {
-			await stateLock.release()
-		} catch (cleanupError) {
-			throw new BotProcessLockAcquisitionError(error, async () => {
-				try {
-					await stateLock.release()
-				} catch (retryError) {
-					throw new AggregateError([cleanupError, retryError], `Failed to release the partially acquired ${label} state lock ${stateLock.path}`)
-				}
-			})
+		if (allowSignerConflict && error instanceof ExecutionSignerLockHeldError) {
+			conflictedSignerAddress = signerAddress
+			signerAddress = undefined
+			startupSignerConflict = signerLockConflictMessage(error)
+		} else {
+			try {
+				await stateLock.release()
+			} catch (cleanupError) {
+				throw new BotProcessLockAcquisitionError(error, async () => {
+					try {
+						await stateLock.release()
+					} catch (retryError) {
+						throw new AggregateError([cleanupError, retryError], `Failed to release the partially acquired ${label} state lock ${stateLock.path}`)
+					}
+				})
+			}
+			throw error
 		}
-		throw error
 	}
 
 	// Live execution can be armed at runtime, so the mode the signer reservation follows is tracked here rather than read from the startup settings.
-	let execute = settings.execute
+	let execute = settings.execute && startupSignerConflict === undefined
 	let released = false
 	let releaseAttempt: Promise<void> | undefined
 	const retiredSignerLocks = new Map<string, ExclusiveProcessLock>()
@@ -82,7 +91,8 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 			retiredSignerLocks.delete(key)
 		}
 	}
-	return {
+	const locks = {
+		...(startupSignerConflict === undefined ? {} : { startupSignerConflict }),
 		acquireSigner: async (address: Address | undefined) => {
 			if ((!signerLocksInDryRun && !execute) || address === undefined || (signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase())) return undefined
 			const key = signerKey(address)
@@ -94,7 +104,10 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 			return acquirers.acquireSigner(settings.chainId, getAddress(address), settings.signerLockRoot)
 		},
 		commitSigner: async (address: Address | undefined, nextLock: ExclusiveProcessLock | undefined) => {
-			if (!signerLocksInDryRun && !execute) return
+			if (!signerLocksInDryRun && !execute) {
+				if (address?.toLowerCase() !== conflictedSignerAddress?.toLowerCase()) startupSignerConflict = undefined
+				return
+			}
 			const unchanged = address !== undefined && signerAddress !== undefined && address.toLowerCase() === signerAddress.toLowerCase()
 			if (unchanged) {
 				if (nextLock !== undefined) throw new Error(`Unchanged ${label} signer unexpectedly acquired another lock`)
@@ -108,6 +121,7 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 			signerLock = nextLock
 			if (previousLock !== undefined && previousAddress !== undefined) retiredSignerLocks.set(signerKey(previousAddress), previousLock)
 			await releaseRetiredSignerLocks()
+			startupSignerConflict = undefined
 		},
 		discardSigner: async (address: Address | undefined, lock: ExclusiveProcessLock | undefined) => {
 			if (lock === undefined) return
@@ -138,6 +152,7 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 				await releaseRetiredSignerLocks()
 			}
 			execute = true
+			startupSignerConflict = undefined
 		},
 		/**
 		 * Returns to dry run; a bot that reserves signers only while live releases the signer lock again. A release that
@@ -186,6 +201,7 @@ export async function acquireBotProcessLocks(settings: BotLockSettings, { acquir
 			return releaseAttempt
 		},
 	}
+	return Object.defineProperty(locks, 'startupSignerConflict', { get: () => startupSignerConflict })
 }
 
 export type BotProcessLocks = Awaited<ReturnType<typeof acquireBotProcessLocks>>

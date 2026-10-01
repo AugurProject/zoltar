@@ -1,3 +1,4 @@
+import { signerConflictCopy } from '../src/execution/signer-lock-conflict.ts'
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import { renderOperatorHeader } from '../src/dashboard/header.ts'
@@ -89,6 +90,27 @@ test('dismisses the list, restores keyboard focus, and reveals linked notices', 
 		window.dispatchEvent(new window.HashChangeEvent('hashchange'))
 		expect(disclosure.open).toBe(true)
 		window.document.querySelector('#notice a')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+		expect(disclosure.open).toBe(false)
+	} finally {
+		await window.happyDOM.close()
+	}
+})
+
+test('automatically reveals a signer conflict once and respects dismissal during later refreshes', async () => {
+	const window = new Window({ settings: { enableJavaScriptEvaluation: true, disableJavaScriptFileLoading: true, suppressInsecureJavaScriptEnvironmentWarning: true } })
+	try {
+		window.document.write(renderOperatorHeader({ title: 'Bot', eyebrow: 'Operator', blockStatus: 'Block 1', network: '', safety: '', navigation: '', notices: '<section class="notice error" id="conflict"></section>' }))
+		window.eval(source)
+		const disclosure = window.document.querySelector('details')
+		const notice = window.document.getElementById('conflict')
+		if (disclosure === null || notice === null) throw new Error('Missing signer conflict fixture')
+		notice.textContent = signerConflictCopy('liquidator')
+		await window.happyDOM.waitUntilComplete()
+		expect(disclosure.open).toBe(true)
+		window.document.body.click()
+		expect(disclosure.open).toBe(false)
+		notice.textContent = signerConflictCopy('chaos-bot')
+		await window.happyDOM.waitUntilComplete()
 		expect(disclosure.open).toBe(false)
 	} finally {
 		await window.happyDOM.close()

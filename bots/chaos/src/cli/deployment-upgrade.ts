@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { acquireBotProcessLocks, runBotMain } from '@zoltar/bot-shared/execution/bot-process-locks'
@@ -241,8 +242,13 @@ async function main() {
 		if (status === 'retiring') process.exitCode = RETIRING_EXIT_CODE
 		return
 	}
-	const result = await prepareCurrentDeployment()
-	console.log(result.message)
+	try {
+		const result = await prepareCurrentDeployment()
+		console.log(result.message)
+	} catch (error) {
+		if (!(error instanceof ExecutionSignerLockHeldError) || !(await loadSettings()).settings.runtime.ui) throw error
+		console.error(`Deployment preparation deferred. ${signerLockConflictMessage(error)}`)
+	}
 }
 
 if (import.meta.main) runBotMain(main)

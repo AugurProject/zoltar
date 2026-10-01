@@ -27,6 +27,45 @@ const acquireLiquidatorProcessLocks = (settings: Parameters<typeof acquireBotPro
 const acquireChaosProcessLocks = (settings: Parameters<typeof acquireBotProcessLocks>[0], acquirers?: BotProcessLockOptions['acquirers']) => acquireBotProcessLocks(settings, acquirers === undefined ? ALWAYS : { ...ALWAYS, acquirers })
 
 describe('bot process locks', () => {
+	test('opens a dashboard session on signer contention while retaining state ownership and requiring a fresh lock to arm', async () => {
+		const privateKey = `0x${'70'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const signerLockRoot = await stateFile('locks')
+		const owner = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('owner.json') })
+		releases.push(owner.release)
+		const settings = { chainId: 1, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('dashboard.json') }
+		const dashboard = await acquireBotProcessLocks(settings, { ...ALWAYS, allowSignerConflict: true })
+		releases.push(dashboard.release)
+		expect(dashboard.startupSignerConflict).toContain('liquidator')
+		expect(dashboard.startupSignerConflict).not.toContain(signerLockRoot)
+		await expect(acquireChaosProcessLocks({ ...settings, execute: false, privateKey: undefined })).rejects.toThrow('already locked')
+		await expect(dashboard.enableExecution(address)).rejects.toThrow('already locked')
+		await owner.release()
+		await dashboard.enableExecution(address)
+		expect(dashboard.startupSignerConflict).toBeUndefined()
+		await expect(acquireLiquidatorProcessLocks({ ...settings, stateFile: await stateFile('contender.json') })).rejects.toThrow('already locked')
+	})
+
+	test.each(['replace', 'remove'])('clears a live-only startup conflict after a successful dry-run signer %s while retaining execution locks', async action => {
+		const privateKey = `0x${'74'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const replacement = privateKeyToAccount(`0x${'75'.repeat(32)}`).address
+		const signerLockRoot = await stateFile('locks')
+		const settings = { chainId: 1, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('owner.json') }
+		const owner = await acquireLiquidatorProcessLocks(settings)
+		releases.push(owner.release)
+		const dashboard = await acquireBotProcessLocks({ ...settings, stateFile: await stateFile('dashboard.json') }, { ...LIVE_ONLY, allowSignerConflict: true })
+		releases.push(dashboard.release)
+		await dashboard.commitSigner(address, await dashboard.acquireSigner(address))
+		expect(dashboard.startupSignerConflict).toContain('liquidator')
+		const nextAddress = action === 'remove' ? undefined : replacement
+		await dashboard.commitSigner(nextAddress, await dashboard.acquireSigner(nextAddress))
+		expect(dashboard.startupSignerConflict).toBeUndefined()
+		await expect(dashboard.enableExecution(address)).rejects.toThrow('already locked')
+		await dashboard.enableExecution(replacement)
+		await expect(acquireLiquidatorProcessLocks({ ...settings, privateKey: `0x${'75'.repeat(32)}`, stateFile: await stateFile('contender.json') })).rejects.toThrow('already locked')
+	})
+
 	for (const options of [LIVE_ONLY, ALWAYS]) {
 		for (const execute of [true, false]) {
 			test(`${options.label} identifies its signer lock owner after ${execute ? 'live startup' : 'runtime activation'} and signer changes`, async () => {

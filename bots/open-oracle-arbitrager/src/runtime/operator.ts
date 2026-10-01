@@ -106,8 +106,8 @@ async function stopOperator(runtime: OperatorRuntime, context: OperatorContext) 
 }
 
 /** Runs the operator until it stops; returns whether it stopped to switch the network profile. */
-export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: BotShutdownController) {
-	const { context, runtime } = await startOperator(config, lockManager, initialSignerLock, shutdown)
+export async function runOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown?: BotShutdownController, startupSignerConflict?: string) {
+	const { context, runtime } = await startOperator(config, lockManager, initialSignerLock, shutdown, startupSignerConflict)
 	try {
 		await pollUntilStopped(
 			async consecutiveFailures => await pollOnce(runtime, context, consecutiveFailures),

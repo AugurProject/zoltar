@@ -1,3 +1,5 @@
+import { isSignerLockConflictMessage } from '../execution/signer-lock-conflict.ts'
+
 function initializeHeaderNotices() {
 	const disclosure = document.getElementById('header-notices')
 	const toggle = document.getElementById('header-notices-toggle')
@@ -7,6 +9,7 @@ function initializeHeaderNotices() {
 	const notices = disclosure?.querySelector('.operator-notices')
 	if (!(disclosure instanceof HTMLDetailsElement) || !(toggle instanceof HTMLElement) || count === null || !(empty instanceof HTMLElement) || status === null || notices === undefined || notices === null) throw new Error('Bot notice controls are missing')
 
+	let signerConflictShown = false
 	const update = () => {
 		const visible = [...notices.querySelectorAll<HTMLElement>('.notice')].filter(notice => notice.textContent?.trim() !== '' && notice.closest('[hidden], .hidden') === null)
 		const errors = visible.filter(notice => notice.matches('.error, .warning, [data-tone="danger"], [data-tone="warning"]'))
@@ -16,6 +19,10 @@ function initializeHeaderNotices() {
 		disclosure.classList.toggle('has-errors', errors.length > 0)
 		empty.hidden = visible.length > 0
 		if (status.textContent !== label) status.textContent = label
+		if (!signerConflictShown && errors.some(notice => [notice, ...notice.querySelectorAll('*')].some(element => isSignerLockConflictMessage(element.textContent?.trim() ?? '')))) {
+			signerConflictShown = true
+			disclosure.open = true
+		}
 	}
 	const dismiss = (restoreFocus: boolean) => {
 		disclosure.open = false

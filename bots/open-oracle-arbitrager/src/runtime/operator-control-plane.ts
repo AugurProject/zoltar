@@ -1,3 +1,4 @@
+import { createSignerConflictSnapshot } from './signer-conflict-snapshot.ts'
 import { canonicalExecutorSalt } from '#execution/executor-identity'
 import { parseApprovedUniverses, validateApprovedUniverseSelection } from '@zoltar/bot-shared/monitoring/universe-policy'
 import { resolve } from 'node:path'
@@ -84,6 +85,7 @@ async function preflightOperatorProfile(settingsFile: string, target: PersistedO
 
 export function startOperatorControlPlane(parameters: {
 	config: Configuration
+	startupSignerConflict?: string
 	/** The dashboard exposure settings the operator read from its environment at startup. */
 	dashboardEnvironment: DashboardEnvironment
 	deploymentRecovery: DeploymentRecoveryState
@@ -96,6 +98,7 @@ export function startOperatorControlPlane(parameters: {
 	state: OperatorState
 }) {
 	const { config, fixedState, lockManager, signerOperationGate, state } = parameters
+	const signerConflictSnapshot = createSignerConflictSnapshot(parameters.startupSignerConflict, fixedState.wallet)
 	const pending: PendingOperatorUpdates = {
 		centralizedMarkets: undefined,
 		connectivity: undefined,
@@ -153,7 +156,7 @@ export function startOperatorControlPlane(parameters: {
 				revision: loaded.revision,
 			}
 		},
-		getSnapshot: () => operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, snapshotFixedState(), config.riskLimits, queuedSettingsSections(pending)),
+		getSnapshot: () => signerConflictSnapshot(operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, snapshotFixedState(), config.riskLimits, queuedSettingsSections(pending))),
 		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
 		...parameters.dashboardEnvironment,

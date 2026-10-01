@@ -1,3 +1,4 @@
+import { signerConflictCopy } from './signer-lock-conflict.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, readFile } from 'node:fs/promises'
@@ -77,7 +78,11 @@ async function assertSafeLockDirectory(path: string, filesystem: ProcessLockFile
 
 /** Another live process holds the lock; callers that can wait for it distinguish this from filesystem or permission failures. */
 export class ProcessLockHeldError extends Error {
-	constructor(subject: string, owner: string, lockPath: string) {
+	constructor(
+		readonly subject: string,
+		readonly owner: string,
+		readonly lockPath: string,
+	) {
 		super(`${subject} is already locked (${owner}). Stop the other process before removing ${lockPath}.`)
 		this.name = 'ProcessLockHeldError'
 	}
@@ -168,9 +173,35 @@ function executionSignerLockPath(chainId: number, account: Address, lockRoot = s
 	return join(resolve(lockRoot), `${chainId.toString()}-${signer.toLowerCase()}.lock`)
 }
 
-export function acquireExecutionSignerLock(chainId: number, account: Address, bot: string, lockRoot?: string, filesystem?: ProcessLockFilesystem) {
+export async function acquireExecutionSignerLock(chainId: number, account: Address, bot: string, lockRoot?: string, filesystem?: ProcessLockFilesystem) {
 	if (bot.trim() === '') throw new Error('Execution signer lock bot name cannot be empty')
 	const signer = getAddress(account)
 	const lockPath = executionSignerLockPath(chainId, signer, lockRoot)
-	return acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { bot, chainId, signer }, filesystem)
+	try {
+		return await acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { bot, chainId, signer }, filesystem)
+	} catch (error) {
+		if (error instanceof ProcessLockHeldError) throw new ExecutionSignerLockHeldError(error.subject, error.owner, error.lockPath)
+		throw error
+	}
+}
+
+/** A signer conflict can disable execution without preventing an independent dashboard from starting. */
+export class ExecutionSignerLockHeldError extends ProcessLockHeldError {
+	constructor(subject: string, owner: string, lockPath: string) {
+		super(subject, owner, lockPath)
+		this.name = 'ExecutionSignerLockHeldError'
+	}
+}
+
+/** Public dashboard copy excludes filesystem paths and untrusted owner metadata. */
+export function signerLockConflictMessage(error: ExecutionSignerLockHeldError) {
+	let bot = 'another bot'
+	try {
+		const owner: unknown = JSON.parse(error.owner)
+		if (typeof owner === 'object' && owner !== null && 'bot' in owner && ['chaos-bot', 'liquidator', 'open-oracle-arbitrager'].includes(String(owner.bot))) bot = String(owner.bot)
+	} catch (error) {
+		if (!(error instanceof SyntaxError)) throw error
+		// Older or unreadable metadata cannot identify the bot holding the signer.
+	}
+	return signerConflictCopy(bot)
 }

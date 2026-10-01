@@ -1,3 +1,4 @@
+import { isSignerLockConflictMessage } from '@zoltar/bot-shared/dashboard/public-failures'
 import { EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
 import type { PublicOperatorSnapshot } from '#state/operator-state'
 import { marketAvailabilityPresentation, pollRetryStatus } from './dashboard-format.ts'
@@ -45,6 +46,11 @@ export function operatorNoticePresentation(snapshot: PublicOperatorSnapshot) {
 		const retryDue = retry?.state === 'due' && snapshot.nextRetryAt !== undefined ? ` Automatic retry became due at ${new Date(snapshot.nextRetryAt).toLocaleTimeString()}.` : ''
 		const lastRetry = snapshot.lastRetryAt === undefined ? '' : ` ${snapshot.retryInProgress ? 'Automatic retry' : 'Last automatic retry'} started at ${new Date(snapshot.lastRetryAt).toLocaleTimeString()}.`
 		noticeCopy = `${failure}${failureTime}${nextRetry}${retryDue}${lastRetry}`
+		noticeTone = 'danger'
+	}
+	if (snapshot.lastError !== undefined && isSignerLockConflictMessage(snapshot.lastError)) {
+		noticeTitle = 'Signer unavailable'
+		noticeCopy = snapshot.lastError
 		noticeTone = 'danger'
 	}
 	// The recovery notice outranks everything else: no other notice explains why Resume is refused, and the poll status stays visible in the header.

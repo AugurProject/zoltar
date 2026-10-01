@@ -1,3 +1,6 @@
+import { isSignerLockConflictMessage } from '../execution/signer-lock-conflict.ts'
+export { isSignerLockConflictMessage } from '../execution/signer-lock-conflict.ts'
+
 /** Operator-facing failure messages that redact URLs, secrets, and filesystem paths from raw errors. */
 const GENERIC_PUBLIC_FAILURE = 'The operation returned an unexpected error. Automatic retry remains active; check protected bot logs for details.'
 
@@ -56,12 +59,15 @@ function publicFailureCategory(error: string) {
 }
 
 export function publicOperatorFailure(error: string, fallback = GENERIC_PUBLIC_FAILURE) {
+	if (isSignerLockConflictMessage(error)) return error
 	const category = publicFailureCategory(error)
 	return category === undefined ? fallback : attemptedOperationFailure(category.attempt, error, category.operatorRecovery)
 }
 
 export function publicPollFailure(error: string, attempt?: string) {
+	if (isSignerLockConflictMessage(error)) return error
 	if (attempt !== undefined) return attemptedOperationFailure(attempt, error, 'Automatic retry remains active.')
+	if (isSignerLockConflictMessage(error)) return error
 	const category = publicFailureCategory(error)
 	return category === undefined ? attemptedOperationFailure('complete the latest polling cycle', error, 'Automatic retry remains active.') : attemptedOperationFailure(category.attempt, error, category.pollRecovery)
 }

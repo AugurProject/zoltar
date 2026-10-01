@@ -1,3 +1,4 @@
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '../execution/process-lock.ts'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { logEvent, type BotName } from '../infrastructure/log-event.ts'
 import { publicOperatorFailure } from './public-failures.ts'
@@ -16,5 +17,6 @@ export function logDashboardFailure(bot: BotName, operation: string, error: unkn
  */
 export function publicDashboardError(bot: BotName, error: unknown, status: number, operation: string, fallback: string, categorize = false) {
 	const message = logDashboardFailure(bot, operation, error)
+	if (error instanceof ExecutionSignerLockHeldError) return dashboardJson({ error: signerLockConflictMessage(error) }, status)
 	return dashboardJson({ error: categorize ? publicOperatorFailure(message, fallback) : fallback }, status)
 }
