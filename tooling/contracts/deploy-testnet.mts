@@ -653,8 +653,8 @@ Sepolia uses Uniswap's published WETH, V3 factory, QuoterV2, and V4 contracts pl
 a deterministic SwapRouter and genesis REP; an Anvil node with the Sepolia chain ID
 receives Uniswap's contracts by replaying their creation transactions. Any other
 chain receives deterministic WETH, genesis REP, and a complete Uniswap deployment.
-The RPC must support Cancun, EIP-1559, and the canonical legacy deployer
-transactions. Ethereum mainnet chain ID 1 is intentionally rejected.`
+The RPC must support Cancun, the Osaka CLZ opcode, EIP-1559, and the canonical
+legacy deployer transactions. Ethereum mainnet chain ID 1 is intentionally rejected.`
 }
 
 function printHelp() {
