@@ -246,6 +246,9 @@ function readEvaluationString(response: unknown) {
 	return result.value
 }
 
+// In-page expression naming a `button` the way its accessible name does: an explicit aria-label, otherwise its text without aria-hidden decoration such as arrow icons.
+const browserButtonNameExpression = `(button.getAttribute('aria-label') ?? (() => { const copy = button.cloneNode(true); copy.querySelectorAll('[aria-hidden="true"]').forEach(hidden => hidden.remove()); return copy.textContent?.trim() })())`
+
 type ProductionBrowserDriver = {
 	captureScreenshot: (screenshotPath: string) => Promise<void>
 	clickButton: (label: string, occurrence?: number) => Promise<void>
@@ -325,7 +328,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			clickButton: async (label, occurrence = 0) => {
 				const clicked = await evaluate(
-					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
+					`(() => { const buttons = [...document.querySelectorAll('button')].filter(button => ${browserButtonNameExpression} === ${JSON.stringify(label)} && !button.disabled); const button = buttons[${occurrence.toString()}]; if (!(button instanceof HTMLButtonElement)) return false; button.focus(); button.click(); return true })()`,
 				)
 				if (clicked !== true) throw new Error(`Unable to click enabled browser button ${label} at occurrence ${occurrence.toString()}`)
 			},
@@ -347,7 +350,7 @@ async function loadProductionDocumentInChromiumUnlocked(pageUrl: string, viewpor
 			},
 			waitForButtonEnabled: async (label, occurrence = 0) => {
 				for (let attempt = 0; attempt < 600; attempt += 1) {
-					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
+					const enabled = await evaluate(`[...document.querySelectorAll('button')].filter(button => ${browserButtonNameExpression} === ${JSON.stringify(label)} && !button.disabled)[${occurrence.toString()}] instanceof HTMLButtonElement`)
 					if (enabled === true) return
 					await Bun.sleep(50)
 				}
@@ -684,7 +687,23 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	await driver.clickButton('Reporting')
 	await driver.waitForBodyText('Report outcome')
 
-	const selectReportingOutcome = async (outcome: 'Yes' | 'No') => {
+	// A report that fills the second side to the non-decision threshold triggers the universe fork; Max stops below it until the user fills the side through the fork preset and confirms the fork warning.
+	const fillSideAndConfirmFork = async () => {
+		let filled = false
+		for (let attempt = 0; attempt < 2400 && !filled; attempt += 1) {
+			filled =
+				(await driver.evaluate(`(() => { const button = [...document.querySelectorAll('button')].find(candidate => candidate.textContent?.trim().startsWith('Fill side & trigger fork') === true); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)) === true
+			if (!filled) await Bun.sleep(50)
+		}
+		if (!filled) throw new Error(`Unable to fill the side up to the fork threshold: ${String(await driver.evaluate('document.body.innerText'))}`)
+		await driver.waitForBodyText('This report triggers a universe fork')
+		const confirmed = await driver.evaluate(
+			`(() => { const label = [...document.querySelectorAll('.reporting-fork-trigger-warning label')].find(candidate => candidate.textContent?.trim() === 'I understand this report ends escalation and leads to a universe fork.'); const input = label?.querySelector('input[type="checkbox"]'); if (!(input instanceof HTMLInputElement) || input.disabled) return false; if (!input.checked) input.click(); return input.checked })()`,
+		)
+		if (confirmed !== true) throw new Error('Unable to confirm the universe fork warning')
+	}
+
+	const selectReportingOutcome = async (outcome: 'Yes' | 'No', triggersFork = false) => {
 		let selected = false
 		// Outcome radios stay disabled while reporting details load, which can take well over five seconds on a loaded machine; use the shared body-wait budget.
 		for (let attempt = 0; attempt < 2400 && !selected; attempt += 1) {
@@ -698,12 +717,16 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 			const reportingState = await driver.evaluate(`JSON.stringify({ body: document.body?.innerText ?? '', radios: [...document.querySelectorAll('[role="radio"]')].map(radio => ({ disabled: radio.disabled, label: radio.textContent?.trim() })) })`)
 			throw new Error(`Unable to select ${outcome} reporting outcome: ${String(reportingState)}`)
 		}
-		await driver.waitForButtonEnabled('Max')
-		await driver.clickButton('Max')
+		if (triggersFork) {
+			await fillSideAndConfirmFork()
+		} else {
+			await driver.waitForButtonEnabled('Max')
+			await driver.clickButton('Max')
+		}
 		const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
 		if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
 		const approvalLabel = `Approve ${amount} REP`
-		const reportLabel = `Report ${outcome} · ${amount} REP…`
+		const reportLabel = triggersFork ? `Report ${outcome} & trigger fork · ${amount} REP…` : `Report ${outcome} · ${amount} REP…`
 		const reportedTitle = `Reported ${amount} REP on ${outcome}`
 		const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)
 		if (approvalRequired === true) {
@@ -746,7 +769,9 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 	}
 
 	await selectReportingOutcome('Yes')
-	await driver.waitForBodyText('Selected side is already full at')
+	// A submitted report clears its amount, and the filled side offers no further contribution capacity.
+	await driver.waitForBodyText('No remaining contribution capacity is available on the selected side.')
+	expect(await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")).toBe('')
 	await driver.waitForBodyWithoutText('Submitting report…')
 	const vaultLockedDesktopScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_DESKTOP_SCREENSHOT']
 	const vaultLockedMobileScreenshotPath = process.env['UI_ORDINARY_VAULT_LOCKED_MOBILE_SCREENSHOT']
@@ -768,7 +793,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		await driver.clickButton('Reporting')
 		await driver.waitForBodyText('Report outcome')
 	}
-	await selectReportingOutcome('No')
+	await selectReportingOutcome('No', true)
 	await driver.waitForButtonEnabled('Trigger universe fork')
 	await driver.clickButton('Trigger universe fork')
 	await completeTransactionReview()
@@ -904,7 +929,7 @@ productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?
 		)
 	const openLiquidationReview = async (targetVault: string) => {
 		const opened = await driver.evaluate(
-			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-title-copy')?.textContent?.toLowerCase().includes(${JSON.stringify(targetVault.toLowerCase())})); const button = [...(row?.querySelectorAll('.vault-more-actions button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Liquidate vault'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
+			`(() => { const row = [...document.querySelectorAll('.vault-position-strip')].find(candidate => candidate.querySelector('.vault-position-title-copy')?.textContent?.toLowerCase().includes(${JSON.stringify(targetVault.toLowerCase())})); const button = [...(row?.querySelectorAll('button') ?? [])].find(candidate => candidate.textContent?.trim() === 'Liquidate vault'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`,
 		)
 		expect(opened).toBe(true)
 		await driver.waitForBodyText('Commitment to transfer')
@@ -941,7 +966,8 @@ productionInteractionTest('liquidation-distance', '?workflow=liquidation#/pools?
 	await driver.waitForButtonEnabled('Max')
 	await driver.clickButton('Max')
 	await driver.waitForButtonEnabled('Execute vault liquidation')
-	expect(await driver.evaluate('document.body.innerText')).not.toContain(liquidationCopy.formatLiquidationDistanceTooLowReason('10%'))
+	// The vault list keeps showing the near vault's own distance reason, so only this vault's review must be free of it.
+	expect(await driver.evaluate(`document.querySelector('[role="dialog"]')?.innerText`)).not.toContain(liquidationCopy.formatLiquidationDistanceTooLowReason('10%'))
 	await driver.clickButton('Execute vault liquidation')
 	await driver.waitForTransactionStatus('Confirmed', 'Liquidation executed')
 	await driver.clickButton('Dismiss')

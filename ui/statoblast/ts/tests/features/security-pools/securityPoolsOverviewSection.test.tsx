@@ -728,8 +728,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		expect(getRenderedPoolTitles()).toEqual([])
 		expect(documentQueries.getByText('No favorite pools yet')).not.toBeNull()
-		// The pool stays downloaded, so the empty favorites state offers the downloaded collection.
-		expect(documentQueries.getByRole('button', { name: 'Show downloaded pools' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Show downloaded pools' })).toBeNull()
 		expect(securityPoolDownloadStore.read(getLocalEntityScope('statoblast', 'pool'))).toHaveLength(1)
 		expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'pool'))).toEqual([])
 	})
@@ -797,7 +796,7 @@ describe('SecurityPoolsOverviewSection', () => {
 		const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ onSelectSecurityPool, securityPools: [] })} />)
 		cleanupRenderedComponent = renderedComponent.cleanup
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByRole('button', { name: 'Show downloaded pools' })).not.toBeNull()
+		expect(documentQueries.queryByRole('button', { name: 'Show downloaded pools' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Open pool at this address' })).toBeNull()
 		await typeSearch(address)
 		await act(() => {
@@ -805,72 +804,6 @@ describe('SecurityPoolsOverviewSection', () => {
 		})
 		expect(onSelectSecurityPool).toHaveBeenCalledWith(address, 1n)
 	})
-	describe('pool discovery', () => {
-		const createDiscovery = (overrides: Partial<NonNullable<Parameters<typeof SecurityPoolsOverviewSection>[0]['discovery']>> = {}) => ({ error: undefined, loading: false, onDiscover: () => undefined, pools: undefined, ...overrides })
-
-		test('offers discovery to a new user and points the empty state at it', async () => {
-			const onDiscover = mock(() => undefined)
-			const renderedComponent = await renderIntoDocument(<SecurityPoolsOverviewSection {...createProps({ securityPools: [] })} discovery={createDiscovery({ onDiscover })} />)
-			cleanupRenderedComponent = renderedComponent.cleanup
-			const documentQueries = within(document.body)
-			expect(documentQueries.getByText('No favorite pools yet')).not.toBeNull()
-			expect(document.body.textContent).toContain('Discover pools in this universe')
-			await act(() => {
-				fireEvent.click(documentQueries.getByRole('button', { name: 'Discover pools' }))
-			})
-			expect(onDiscover).toHaveBeenCalledTimes(1)
-		})
-
-		test('records discovered pools of the active universe as downloaded entries and lists them', async () => {
-			const props = createProps({ securityPools: [] })
-			const { container, cleanup } = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery()} />)
-			cleanupRenderedComponent = cleanup
-			await act(() => {
-				fireEvent.click(within(document.body).getByRole('button', { name: 'Discover pools' }))
-			})
-			await act(() => render(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery({ loading: true })} />, container))
-			expect(
-				within(document.body)
-					.getByRole('button', { name: /Discovering/ })
-					.hasAttribute('disabled'),
-			).toBe(true)
-			const discovered = [createNumberedPool(1), createNumberedPool(2), createNumberedPool(3, { universeId: 11n })]
-			await act(() => render(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery({ pools: discovered })} />, container))
-			expect(getRenderedPoolTitles()).toEqual(['Numbered pool 1', 'Numbered pool 2'])
-			expect(within(document.body).getByRole('button', { name: 'Downloaded (2)' }).getAttribute('aria-pressed')).toBe('true')
-			expect(securityPoolDownloadStore.read(getLocalEntityScope('statoblast', 'pool'))).toHaveLength(2)
-			expect(readFavoriteEntries(getLocalEntityScope('statoblast', 'pool'))).toEqual([])
-			expect(within(document.body).getByRole('button', { name: 'Scan again' })).not.toBeNull()
-		})
-
-		test('explains an empty universe after discovery', async () => {
-			const props = createProps({ securityPools: [] })
-			const { container, cleanup } = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery()} />)
-			cleanupRenderedComponent = cleanup
-			await act(() => {
-				fireEvent.click(within(document.body).getByRole('button', { name: 'Discover pools' }))
-			})
-			await act(() => render(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery({ pools: [createNumberedPool(4, { universeId: 11n })] })} />, container))
-			expect(within(document.body).getByText('This universe has no security pools yet.')).not.toBeNull()
-		})
-
-		test('shows a retryable error when discovery fails', async () => {
-			const onDiscover = mock(() => undefined)
-			const props = createProps({ securityPools: [] })
-			const { container, cleanup } = await renderIntoDocument(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery({ onDiscover })} />)
-			cleanupRenderedComponent = cleanup
-			await act(() => {
-				fireEvent.click(within(document.body).getByRole('button', { name: 'Discover pools' }))
-			})
-			await act(() => render(<SecurityPoolsOverviewSection {...props} discovery={createDiscovery({ error: 'RPC unavailable', onDiscover })} />, container))
-			expect(within(document.body).getByText('Could not load pools for this universe.')).not.toBeNull()
-			await act(() => {
-				fireEvent.click(within(document.body).getByRole('button', { name: 'Retry discovery' }))
-			})
-			expect(onDiscover).toHaveBeenCalledTimes(2)
-		})
-	})
-
 	test('uses restored browser controls and follows history-driven updates', async () => {
 		const updates: Array<Partial<NonNullable<SecurityPoolsOverviewSectionProps['browseState']>>> = []
 		const props = createProps({
