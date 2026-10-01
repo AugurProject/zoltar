@@ -1,6 +1,7 @@
 import { getBrowserStorage } from '@zoltar/ui-core-shared/lib/browserStorage.js'
 import { tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { MAXIMUM_SLIPPAGE_BPS, MINIMUM_SLIPPAGE_BPS } from '../protocol/tradeQuote.js'
 
 /** Execution protection shared by every Trading transaction: how far the price may move, and how long a signed transaction stays valid. */
 export type TradeSettings = Readonly<{ slippageBps: bigint; validityMinutes: bigint }>
@@ -8,9 +9,6 @@ export type TradeSettings = Readonly<{ slippageBps: bigint; validityMinutes: big
 export const DEFAULT_TRADE_SETTINGS: TradeSettings = { slippageBps: 50n, validityMinutes: 20n }
 export const SLIPPAGE_PRESETS_BPS: readonly bigint[] = [10n, 50n, 100n, 300n]
 export const VALIDITY_PRESETS_MINUTES: readonly bigint[] = [10n, 20n, 60n]
-/** Zero tolerance makes any price movement revert the transaction, so the smallest accepted setting is 0.01%. */
-const MINIMUM_SLIPPAGE_BPS = 1n
-const MAXIMUM_SLIPPAGE_BPS = 500n
 /** Below this, ordinary price movement between quote and inclusion often reverts the transaction. */
 const LOW_SLIPPAGE_WARNING_BPS = 10n
 const MAXIMUM_VALIDITY_MINUTES = 1_440n

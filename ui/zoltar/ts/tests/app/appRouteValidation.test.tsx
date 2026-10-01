@@ -165,8 +165,18 @@ describe('Zoltar App route validation', () => {
 		}
 	})
 
+	test('renders not found for a malformed universe instead of opening Genesis', async () => {
+		for (const hash of ['#/zoltar?universe=abc', '#/zoltar?universe=-1&zoltarView=questions', '#/zoltar?universe=']) {
+			const documentQueries = await renderAppForRoute({ hash, route: 'zoltar', zoltarView: hash.includes('zoltarView=questions') ? 'questions' : '' })
+			expect(documentQueries.getByText('route:not-found')).not.toBeNull()
+			await cleanupRenderedComponent?.()
+			cleanupRenderedComponent = undefined
+			mock.restore()
+		}
+	})
+
 	test('keeps valid zoltar views on the zoltar route', async () => {
-		const documentQueries = await renderAppForRoute({ hash: '#/zoltar?zoltarView=questions', route: 'zoltar', zoltarView: 'questions' })
+		const documentQueries = await renderAppForRoute({ hash: '#/zoltar?universe=7&zoltarView=questions', route: 'zoltar', zoltarView: 'questions' })
 		expect(documentQueries.getByText('route:zoltar')).not.toBeNull()
 	})
 })

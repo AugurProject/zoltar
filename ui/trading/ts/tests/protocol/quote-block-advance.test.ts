@@ -3,6 +3,7 @@ import { createWalletClient, custom, decodeFunctionData, encodeAbiParameters, ty
 import { shareTokenAbi } from '../../protocol/authorization.js'
 import { simulateEntry, simulateExit, simulateLiquidity, simulateSettlement, submitFreshEntry, submitFreshExit, submitFreshLiquidity, submitFreshSettlement } from '../../protocol/live.js'
 import { tradingContracts } from '../../generated/contractArtifact.js'
+import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
 import { deploymentConfigurationFixture } from '../support/deploymentConfigurationFixture.js'
 import { feeAccountingRpcResult } from '../support/feeAccountingRpc.js'
 import type { LiveMarket } from '../../protocol/liveMarket.js'
@@ -126,14 +127,14 @@ describe('submitting a quote after the chain advances', () => {
 			},
 		}
 		chain.feeMarket = feeMarket
-		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, 7n, 0n)).rejects.toThrow('Holding fees')
+		await expect(simulateLiquidity(client, configuration, feeMarket, account, 'add', 10n, 5_000n, 7n, MINIMUM_SLIPPAGE_BPS)).rejects.toThrow('Holding fees')
 		expect(chain.sends).toHaveLength(0)
 	})
 
 	test('reloads fee accounting after the user changes pool state and refuses unsafe approved bounds', async () => {
 		for (const operation of ['sell', 'add'] as const) {
 			const { chain, client } = createAdvancingChain()
-			const quote = operation === 'sell' ? { kind: 'sell' as const, value: await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, 0n) } : { kind: 'add' as const, value: await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 7n, 0n) }
+			const quote = operation === 'sell' ? { kind: 'sell' as const, value: await simulateExit(client, configuration, market, account, 'YES', 10n, 7n, MINIMUM_SLIPPAGE_BPS) } : { kind: 'add' as const, value: await simulateLiquidity(client, configuration, market, account, 'add', 10n, 5_000n, 7n, MINIMUM_SLIPPAGE_BPS) }
 			chain.feeMarket = { ...market, currentRetentionRate: 999_000_000_000_000_000n }
 			const send = quote.kind === 'sell' ? submitFreshExit(client, configuration, account, quote.value, write) : submitFreshLiquidity(client, configuration, account, quote.value, write)
 			await expect(send).rejects.toThrow('Holding fees')

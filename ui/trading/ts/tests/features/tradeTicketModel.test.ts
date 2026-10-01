@@ -4,6 +4,7 @@ import { quoteEnterPosition } from '@zoltar/trading-shared/trading/positions'
 import { authoritativeQuoteMoved, tradeTicketModel, type TradeTicketInputs } from '../../features/live/tradeTicketModel.js'
 import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
+import { MINIMUM_SLIPPAGE_BPS } from '../../protocol/tradeQuote.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import * as availabilityCopy from '../../copy/availability.js'
 import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
@@ -65,25 +66,9 @@ describe('trade ticket estimate', () => {
 	})
 
 	test('blocks a sell whose approved ETH minimum cannot cover holding fees through validity', () => {
-		const feeMarket = {
-			...market,
-			currentRetentionRate: 999_999_996_843_524_738n,
-			valuation: {
-				timestamp: 2n,
-				feeEndTime: 1_000_000n,
-				projectedCollateralAttoEth: eth,
-				feeAccounting: {
-					settlementCollateralAttoEth: eth,
-					totalUnderwritingLimitAttoEth: eth,
-					feeEligibleUnderwritingLimitAttoEth: eth,
-					currentRetentionRate: 999_999_996_843_524_738n,
-					lastUpdatedFeeAccumulator: 2n,
-					feeIndexRemainder: 0n,
-					totalFeesOwedRemainder: 0n,
-				},
-			},
-		}
-		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', settings: { slippageBps: 0n, validityMinutes: 20n } })
+		// About 0.12% of collateral accrues as fees over the 20-minute validity: more than the minimum tolerance, less than the default.
+		const feeMarket = feeTicketMarket(2n, 999_999_000_000_000_000n, 1_000_000n)
+		const result = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01', settings: { slippageBps: MINIMUM_SLIPPAGE_BPS, validityMinutes: 20n } })
 		expect(result.availability.disabled).toBe(true)
 		expect(result.availability.reason).toContain('Holding fees')
 		const protectedResult = tradeTicketModel({ ...ready, market: feeMarket, mode: 'exit', amount: '0.01' })
