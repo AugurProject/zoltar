@@ -1,5 +1,5 @@
 import { getDisplayedLeadingEscalationOutcome, getReportingOutcomeLabel } from './reporting.js'
-import { formatCurrencyInputBalance, formatCurrencyBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { metricUnavailablePlaceholder } from '@zoltar/ui-core-shared/copy/common.js'
 import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
 import type { ActiveReportingDetails } from '../../../types/contracts.js'
@@ -24,7 +24,7 @@ export function getViewerPositions(details: ActiveReportingDetails) {
 			const leading = leader === side.key
 			const minimum = getReportingMinimumOutcomeChangeContribution(details, side.key).amountAttoRep
 			const lead = leading ? copy.winningStatusLead(side.label) : copy.losingStatusLead(side.label)
-			const detail = leading ? copy.winningStatusDetail(formatCurrencyBalance(stake), formatCurrencyBalance(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? metricUnavailablePlaceholder : formatCurrencyInputBalance(minimum), deadline, formatCurrencyBalance(stake))
+			const detail = leading ? copy.winningStatusDetail(formatCurrencyBalance(stake), formatCurrencyBalance(worth ?? 0n)) : copy.losingStatusDetail(minimum === undefined ? metricUnavailablePlaceholder : formatCurrencyBalance(minimum), deadline, formatCurrencyBalance(stake))
 			let positionStatus = copy.losingPosition
 			if (details.hasReachedNonDecision || details.systemState !== 'operational') positionStatus = copy.forkPosition
 			else if (worth === undefined) positionStatus = copy.tiedPosition

@@ -84,7 +84,7 @@ describe('forks protocol client', () => {
 		await migrateSecurityVault(client, securityPoolAddress, 12n, 'invalid', { repAttoRep: 3n * 10n ** 18n, underwritingLimitAttoEth: 2n * 10n ** 18n })
 		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([
 			['Trigger universe fork · 6\u00a0REP', 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and 6\u00a0REP held by the pool and its escalation game moves into fork migration. This can’t be undone.'],
-			['Migrate pool REP to Yes, No · 5\u00a0REP', 'Moves this pool’s 5\u00a0REP attributed to Yes, No into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
+			['Migrate pool-held REP to Yes, No · 5\u00a0REP', 'Moves this pool’s 5\u00a0REP attributed to Yes, No into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
 			['Migrate vault to Invalid · 3\u00a0REP', 'Moves all your vault REP (3\u00a0REP) and underwriting commitments (2\u00a0ETH) from this pool to the Invalid universe. This can’t be undone or split across outcomes.'],
 		])
 	})
@@ -95,9 +95,11 @@ describe('forks protocol client', () => {
 		client.onTransactionPrepared = preview => previews.push(preview)
 		await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, 12n, ['yes'])
 		await migrateSecurityVault(client, securityPoolAddress, 12n, 'no')
+		await migrateSecurityVault(client, securityPoolAddress, 12n, 'yes', { repAttoRep: undefined, underwritingLimitAttoEth: 2n * 10n ** 18n })
 		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([
-			['Migrate pool REP to Yes', 'Moves this pool’s REP attributed to Yes into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
+			['Migrate pool-held REP to Yes', 'Moves this pool’s REP attributed to Yes into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
 			['Migrate vault to No', 'Moves all your vault REP and underwriting commitments from this pool to the No universe. This can’t be undone or split across outcomes.'],
+			['Migrate vault to Yes', 'Moves all your vault REP and underwriting commitments (2\u00a0ETH) from this pool to the Yes universe. This can’t be undone or split across outcomes.'],
 		])
 	})
 

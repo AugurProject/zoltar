@@ -349,7 +349,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 			})),
 	)
 }
-/** `migrationAmountAttoRep` is the pool REP each selected outcome receives, when the caller already loaded it. */
+/** `migrationAmountAttoRep` is the pool-held REP each selected outcome receives, when the caller already loaded it. */
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[], migrationAmountAttoRep?: bigint) {
 	const outcomeLabels = outcomes.map(outcome => getEscalationSideLabel(outcome)).join(', ')
 	const migrationAmount = migrationAmountAttoRep === undefined ? undefined : formatCurrencyBalance(migrationAmountAttoRep)
@@ -369,14 +369,15 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 	)
 }
 
+/** `repAttoRep` is the pool-held REP `migrateVault` moves for the vault, or undefined when it can't be computed; the review then omits it instead of showing a wrong amount. */
 export type VaultMigrationReviewAmounts = {
-	repAttoRep: bigint
+	repAttoRep: bigint | undefined
 	underwritingLimitAttoEth: bigint
 }
 
 export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey, vault?: VaultMigrationReviewAmounts) {
 	const outcomeLabel = getEscalationSideLabel(outcome)
-	const amounts = vault === undefined ? undefined : { rep: formatCurrencyBalance(vault.repAttoRep), eth: formatCurrencyBalance(vault.underwritingLimitAttoEth) }
+	const amounts = vault === undefined ? undefined : { rep: vault.repAttoRep === undefined ? undefined : formatCurrencyBalance(vault.repAttoRep), eth: formatCurrencyBalance(vault.underwritingLimitAttoEth) }
 	return await executeForkAuctionAction(
 		'migrateVault',
 		securityPoolAddress,
