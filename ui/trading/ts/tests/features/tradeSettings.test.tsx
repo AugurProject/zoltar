@@ -31,6 +31,7 @@ describe('trade settings storage', () => {
 		expect(storedSettings('not json')).toEqual(DEFAULT_TRADE_SETTINGS)
 		expect(storedSettings('{"slippageBps":"900","validityMinutes":"30"}')).toEqual({ slippageBps: DEFAULT_TRADE_SETTINGS.slippageBps, validityMinutes: 30n })
 		expect(storedSettings('{"slippageBps":"10","validityMinutes":"0"}')).toEqual({ slippageBps: 10n, validityMinutes: DEFAULT_TRADE_SETTINGS.validityMinutes })
+		expect(storedSettings('{"slippageBps":"0","validityMinutes":"30"}')).toEqual({ slippageBps: DEFAULT_TRADE_SETTINGS.slippageBps, validityMinutes: 30n })
 	})
 
 	test('formats basis points as a trimmed percentage', () => {
@@ -55,12 +56,26 @@ describe('trade settings storage', () => {
 		})
 		expect(changes).toHaveLength(1)
 		expect(slippageInput.getAttribute('aria-invalid')).toBe('true')
-		expect(document.body.textContent).toContain('Enter 0% to 5%')
+		expect(document.body.textContent).toContain('Enter 0.01% to 5%')
+		await act(() => {
+			slippageInput.value = '0'
+			slippageInput.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		expect(changes).toHaveLength(1)
+		expect(slippageInput.getAttribute('aria-invalid')).toBe('true')
+		await act(() => {
+			slippageInput.value = '0.05'
+			slippageInput.dispatchEvent(new Event('input', { bubbles: true }))
+		})
+		expect(changes.at(-1)).toEqual({ slippageBps: 5n, validityMinutes: 20n })
+		expect(slippageInput.getAttribute('aria-invalid')).toBeNull()
+		expect(document.body.textContent).toContain('Below 0.1%, small price moves can make transactions fail.')
 		await act(() => {
 			validityInput.value = '45'
 			validityInput.dispatchEvent(new Event('input', { bubbles: true }))
 		})
 		expect(changes.at(-1)).toEqual({ slippageBps: 50n, validityMinutes: 45n })
+		expect(Array.from(document.querySelectorAll('[aria-label="Slippage presets"] button')).map(button => button.textContent)).toEqual(['0.1%', '0.5%', '1%', '3%'])
 		await rendered.cleanup()
 	})
 })

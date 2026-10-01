@@ -1,7 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useId, useState } from 'preact/hooks'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { formatSlippagePercent, parseSlippagePercent, parseValidityMinutes, SLIPPAGE_PRESETS_BPS, VALIDITY_PRESETS_MINUTES, type TradeSettings } from '../lib/tradeSettings.js'
+import { formatSlippagePercent, isLowSlippage, parseSlippagePercent, parseValidityMinutes, SLIPPAGE_PRESETS_BPS, VALIDITY_PRESETS_MINUTES, type TradeSettings } from '../lib/tradeSettings.js'
 import * as settingsCopy from '../copy/tradeSettings.js'
 
 function PresetRow({ label, presets, value, format, onSelect }: { label: string; presets: readonly bigint[]; value: bigint; format(value: bigint): string; onSelect(value: bigint): void }) {
@@ -21,7 +21,9 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 	const id = useId()
 	const [slippageText, setSlippageText] = useState(() => formatSlippagePercent(settings.slippageBps))
 	const [validityText, setValidityText] = useState(() => settings.validityMinutes.toString())
-	const slippageInvalid = parseSlippagePercent(slippageText) === undefined
+	const parsedSlippage = parseSlippagePercent(slippageText)
+	const slippageInvalid = parsedSlippage === undefined
+	const slippageHint = parsedSlippage !== undefined && isLowSlippage(parsedSlippage) ? settingsCopy.lowSlippageWarning : undefined
 	const validityInvalid = parseValidityMinutes(validityText) === undefined
 	const selectSlippage = (slippageBps: bigint) => {
 		setSlippageText(formatSlippagePercent(slippageBps))
@@ -45,6 +47,7 @@ export function TradeSettingsPanel({ settings, onChange }: { settings: TradeSett
 					aria-label={settingsCopy.customSlippage}
 					adornment={settingsCopy.percent}
 					error={slippageInvalid ? settingsCopy.slippageValidation : undefined}
+					hint={slippageHint}
 					value={slippageText}
 					onInput={event => {
 						const text = event.currentTarget.value

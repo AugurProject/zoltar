@@ -5,7 +5,7 @@ import { formatEthAmountPair, formatRoundedUnits } from '../../lib/format.js'
 import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
-import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker } from '../../features/LiveSettlementModel.js'
+import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
 import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, livePairInitialized, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
@@ -183,6 +183,10 @@ describe('standalone trading UI model', () => {
 		expect(parseSlippagePercent('5')).toBe(500n)
 		expect(parseSlippagePercent('5.01')).toBeUndefined()
 		expect(parseSlippagePercent('-1')).toBeUndefined()
+		// Zero tolerance reverts on any price movement, so the smallest accepted setting is 0.01%.
+		expect(parseSlippagePercent('0')).toBeUndefined()
+		expect(parseSlippagePercent('0.00')).toBeUndefined()
+		expect(parseSlippagePercent('0.01')).toBe(1n)
 		expect(parseValidityMinutes('1')).toBe(1n)
 		expect(parseValidityMinutes('1440')).toBe(1_440n)
 		expect(parseValidityMinutes('0')).toBeUndefined()
@@ -406,12 +410,29 @@ describe('standalone trading UI model', () => {
 
 	test('explains every settlement input that keeps simulation disabled', () => {
 		const unit = { settlementCollateralAttoEth: 10n ** 18n, shareTokenSupplyAttoShares: 10n ** 18n }
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a valid positive complete-set value')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
-		expect(settlementInputBlocker('redeem-complete-set', true, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any ETH')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child branch')
-		expect(settlementInputBlocker('migrate-shares', true, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('The selected YES balance is zero')
-		expect(settlementInputBlocker('redeem-winning-shares', false, 0n, undefined, [], 'NO', 0n, unit)).toContain('unavailable')
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n, undefined, [], 'YES', 1n, unit)).toBe('Enter a valid positive complete-set value')
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 6n * 10n ** 18n, [], 'YES', 1n, unit)).toContain('complete-set balance of 5 ETH')
+		expect(settlementInputBlocker('redeem-complete-set', undefined, 5n * 10n ** 18n, 1n, [], 'YES', 1n, { settlementCollateralAttoEth: 5n * 10n ** 17n, shareTokenSupplyAttoShares: 10n ** 18n })).toBe('Amount too small to redeem any ETH')
+		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [], 'YES', 1n, unit)).toContain('at least one child branch')
+		expect(settlementInputBlocker('migrate-shares', undefined, 0n, undefined, [0n], 'YES', 0n, unit)).toBe('The selected YES balance is zero')
+		expect(settlementInputBlocker('redeem-winning-shares', 'The question has not resolved yet.', 0n, undefined, [], 'NO', 0n, unit)).toBe('The question has not resolved yet.')
+	})
+
+	test('names the specific lifecycle or balance reason a settlement action is unavailable', () => {
+		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
+		const holdings = { completeSets: 5n, winningBalance: 0n, directionalBalance: 18n }
+		const empty = { completeSets: 0n, winningBalance: 0n, directionalBalance: 0n }
+		expect(settlementUnavailableReason('redeem-complete-set', open, holdings)).toBeUndefined()
+		expect(settlementUnavailableReason('redeem-complete-set', open, empty)).toBe('You hold no complete sets. Redeeming needs equal INVALID, YES, and NO.')
+		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked. Migrate your shares to a child universe instead.')
+		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The security pool is not operational, so it cannot pay out ETH.')
+		expect(settlementUnavailableReason('redeem-winning-shares', open, holdings)).toBe('The question has not resolved yet.')
+		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, holdings)).toBe('You hold no NO shares to redeem.')
+		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, winningBalance: 1n })).toBeUndefined()
+		expect(settlementUnavailableReason('migrate-shares', open, holdings)).toBe('The universe has not forked, so there is nothing to migrate.')
+		expect(settlementUnavailableReason('migrate-shares', { ...open, universeForkTime: 1n }, empty)).toBe('You hold no INVALID, YES, or NO shares to migrate.')
+		expect(settlementUnavailableReason('migrate-shares', { ...open, universeForkTime: 1n }, holdings)).toBeUndefined()
+		expect(settlementUnavailableReason('migrate-shares', { ...open, loadError: 'boom' }, holdings)).toBe('Market data is unavailable. Refresh the market.')
 	})
 
 	test('never presents unavailable settlement balances as zero', () => {

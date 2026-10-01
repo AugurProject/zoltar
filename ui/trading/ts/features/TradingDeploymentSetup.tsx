@@ -222,6 +222,10 @@ export function TradingDeploymentSetup({
 		setRpcOverride(true)
 	}, [activeNetwork.chain.id, busy, chainId, configuredRpcUrl, coreDeployments, currentConfiguration, rpcOverride, rpcUrl])
 	const selectedCore = coreDeployments.find(deployment => deployment.chainId.toString() === chainId)
+	// The chain the settings asked for; when the registry has no core deployment there, setup falls back to the first registered chain and says so.
+	const requestedChainId = currentConfiguration?.chainId.toString() ?? activeNetwork.chain.id.toString()
+	const requestedNetworkName = requestedChainId === activeNetwork.chain.id.toString() ? activeNetwork.displayName : deploymentCopy.chainLabel(requestedChainId)
+	const fallbackNotice = selectedCore !== undefined && selectedCore.chainId.toString() !== requestedChainId && !coreDeployments.some(deployment => deployment.chainId.toString() === requestedChainId) ? deploymentCopy.networkFallback(requestedNetworkName, selectedCore.chainName) : undefined
 	useEffect(() => {
 		if (busy || coreDeployments.length === 0 || selectedCore !== undefined) return
 		inputRevision.current += 1
@@ -527,11 +531,14 @@ export function TradingDeploymentSetup({
 				<ErrorNotice message={inputError} />
 				{selectedCore === undefined ? null : (
 					<DataGrid dense>
+						<MetricField label={deploymentCopy.deployingTo}>{selectedCore.chainName}</MetricField>
 						<MetricField label={deploymentCopy.securityPoolFactory}>
 							<ReadOnlyAddressValue address={selectedCore.securityPoolFactory} responsiveAbbreviation />
 						</MetricField>
 					</DataGrid>
 				)}
+				{fallbackNotice === undefined ? null : <UserMessage className='detail' tone='warning' detail={fallbackNotice} />}
+				{plan === undefined || deploymentComplete ? null : <UserMessage className='detail' detail={deploymentCopy.deploymentSequence(plan.factory.label, plan.router.label)} />}
 				{plan === undefined ? null : <DeploymentStepList steps={deploymentSteps.map(({ step, presentation }) => ({ address: step.address, badge: presentation, key: step.id, label: step.label }))} />}
 				<div className='deployment-setup__status' role='status' aria-live='polite'>
 					<DataGrid dense>
@@ -544,6 +551,13 @@ export function TradingDeploymentSetup({
 					)}
 				</div>
 				<ErrorNotice id={networkNoticeId} message={wrongNetworkNotice} />
+				{wrongNetworkNotice === undefined || selectedCore === undefined ? null : (
+					<div className='actions'>
+						<button type='button' className='secondary' disabled={busy || walletConnecting} aria-busy={walletConnecting} onClick={() => void connectDeploymentWallet()}>
+							{walletConnecting ? deploymentCopy.switchingToNetwork(selectedCore.chainName) : deploymentCopy.switchToNetwork(selectedCore.chainName)}
+						</button>
+					</div>
+				)}
 				<ErrorNotice message={walletConnectionMessage} />
 				<ErrorNotice message={inspectionError} />
 				{actionMessage === undefined || actionError ? null : <UserMessage className='detail' announcement='polite' detail={actionMessage} />}

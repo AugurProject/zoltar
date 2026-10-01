@@ -12,8 +12,21 @@ export const ethAmount = 'ETH amount'
 export const lp = 'LP'
 export const conditionalYesPrice = 'Conditional YES price'
 export const conditionalYesPriceValidation = 'Enter a conditional YES price above 0% and below 100%, with at most two decimal places.'
-export const removalGuidance = 'Removal returns raw YES and NO. It never consumes wallet INVALID.'
-export const additionGuidance = 'All INVALID and unused directional shares return to the wallet; LP tokens do not include wallet INVALID.'
+export const additionGuidance = 'Your ETH mints equal INVALID, YES, and NO shares. The pool keeps the YES and NO it needs; INVALID and any leftover YES or NO go to your wallet.'
+
+/** Removal pays out shares, not ETH, so the guidance names the next step that turns them into ETH. */
+export function removalGuidance(marketOpen: boolean) {
+	return marketOpen
+		? 'Removing liquidity returns YES and NO shares to your wallet, not ETH. Next, sell them on the Trade tab, or hold them until the question resolves.'
+		: 'Removing liquidity returns YES and NO shares to your wallet, not ETH. Next, redeem them with matching INVALID as complete sets on the Settlement tab, or hold them until the question resolves.'
+}
+
+export const poolNotInitializedReason = 'Initialize the pool first.'
+export const noLiquidityToRemoveReason = 'The pool has no liquidity yet.'
+export const invalidLpAmount = 'Enter an LP amount with at most 18 decimal places.'
+export { invalidEthAmount } from './tradeTicket.js'
+export const estimateNote = 'Estimate from the current pool state. Connect a wallet for an exact quote.'
+export const estimateHeading = 'Liquidity estimate'
 export const completeSetSharesCreated = 'Complete sets created'
 export const sharesDeposited = 'YES / NO deposited'
 export const liquidityTransaction = 'Liquidity transaction'
@@ -32,6 +45,10 @@ export function balancesUnavailable(reason: string) {
 
 export function walletEth(amount: string) {
 	return `Wallet: ${amount} ETH`
+}
+
+export function approximateRemovalValue(amount: string) {
+	return `Worth about ${amount} ETH at the current pool price, if the question resolves valid.`
 }
 
 export function lpHeld(amount: string) {
