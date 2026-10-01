@@ -209,7 +209,7 @@ describe('SecurityVaultSection', () => {
 		['executed', 'Commitment limit changed'],
 		['failed', 'Commitment limit change failed'],
 		['expired', 'Queued operation expired'],
-		['superseded', 'Target change replaced'],
+		['superseded', 'Commitment limit change replaced'],
 	] as const)('renders the reconciled %s state with the original queued receipt', async (status, title) => {
 		const rendered = await renderIntoDocument(
 			<SecurityVaultSection
@@ -426,6 +426,75 @@ describe('SecurityVaultSection', () => {
 		// 25 REP would leave 5 REP (below the minimum), but only 6 REP is withdrawable, so the only message is the blocker.
 		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Reduce the withdrawal to 6 REP or less.')
 		expect(document.body.textContent).not.toContain('so the whole vault is withdrawn instead')
+	})
+
+	test('treats an empty withdrawal as no amount yet, like the deposit field', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '' },
+					})}
+				/>,
+			)
+		).cleanup
+		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
+		expect(input.value).toBe('')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'Enter an amount greater than zero.')
+	})
+
+	test('flags a withdrawal above the withdrawable maximum inline on the field', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, repWithdrawAmount: '7' },
+					})}
+				/>,
+			)
+		).cleanup
+		const input = within(document.body).getByLabelText('REP withdraw amount') as HTMLInputElement
+		await act(() => {
+			input.dispatchEvent(new window.Event('blur'))
+		})
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+	})
+
+	test('states the 1–5 minute range for the staged timeout and flags an out-of-range value inline', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails(),
+						securityVaultForm: { ...createSecurityVaultSectionProps().securityVaultForm, stagedOperationTimeoutMinutes: '30' },
+					})}
+				/>,
+			)
+		).cleanup
+		const input = within(document.body).getByLabelText(/^Manual execution timeout/)
+		expect(input.getAttribute('max')).toBe('5')
+		expect(input.getAttribute('aria-invalid')).toBe('true')
+		const describedBy = (input.getAttribute('aria-describedby') ?? '').split(' ').map(id => document.getElementById(id)?.textContent)
+		expect(describedBy).toEqual(['Enter 1–5 whole minutes.', '1–5 whole minutes; expires after oracle settlement.'])
+	})
+
+	test('uses the pool REP token symbol for withdrawal amounts and labels', async () => {
+		cleanupRenderedComponent = (
+			await renderIntoDocument(
+				<SecurityVaultSection
+					{...createSecurityVaultSectionProps({
+						oracleManagerDetails: createOracleManagerDetails({ lastPrice: 3n * 10n ** 18n }),
+						securityVaultDetails: createSecurityVaultDetails({ disputeStakedAttoRep: 0n, repTokenSymbol: 'REP4', underwritingLimitAttoEth: 4n * 10n ** 18n, vaultAttoRepBacking: 30n * 10n ** 18n }),
+					})}
+				/>,
+			)
+		).cleanup
+		expect(within(document.body).getByLabelText('REP4 withdraw amount')).not.toBeNull()
+		expect(document.body.textContent?.replaceAll(' ', ' ')).toContain('6.00 REP4')
 	})
 
 	test('blocks REP redemption until the commitment is set to zero', async () => {
@@ -1635,7 +1704,7 @@ describe('SecurityVaultSection', () => {
 			const dialog = within(document.body).getByRole('dialog', { name: 'Set commitment limit' })
 			fireEvent.input(within(dialog).getByRole('textbox', { name: 'Commitment limit' }), { target: { value: '1' } })
 			if (ended) expectTransactionButtonEnabled(dialog, 'Set commitment limit')
-			else expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'The oracle price expires too soon. Retry after it expires and review report funding.')
+			else expectTransactionButtonDisabled(dialog, 'Set commitment limit', 'The oracle price expires in 1 second, before this transaction could confirm. Wait 1 second for it to expire, then submit again and fund a new oracle report.')
 			await rendered.cleanup()
 		}
 	})
@@ -1695,7 +1764,7 @@ describe('SecurityVaultSection', () => {
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'The oracle price expires too soon. Retry after it expires and review report funding.')
+		expectTransactionButtonDisabled(document.body, 'Withdraw REP', 'The oracle price expires in 1 second, before this transaction could confirm. Wait 1 second for it to expire, then submit again and fund a new oracle report.')
 	})
 
 	test('does not infer immediate withdrawal execution from an expired raw validity flag', async () => {

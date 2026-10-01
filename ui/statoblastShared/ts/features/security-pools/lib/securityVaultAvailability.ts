@@ -46,15 +46,17 @@ export function getVaultDepositAmountNotice({
 	depositAmount,
 	isDepositBelowMinimum,
 	minimumVaultRepDepositAttoRep,
+	repTokenSymbol,
 	walletRepShortfallAttoRep,
 }: {
 	currentVaultRepBackingAttoRep?: bigint | undefined
 	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
 	minimumVaultRepDepositAttoRep: bigint
+	repTokenSymbol?: string | undefined
 	walletRepShortfallAttoRep: bigint | undefined
 }) {
-	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep))
+	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return securityPoolCopy.formatInsufficientRepBalanceDetail(formatCurrencyBalance(walletRepShortfallAttoRep), repTokenSymbol)
 	if (isDepositBelowMinimum) return getVaultDepositGuardMessage({ approvalSatisfied: true, currentVaultRepBackingAttoRep, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep: undefined })
 	return undefined
 }

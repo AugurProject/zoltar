@@ -30,6 +30,7 @@ type SecurityVaultInlineActionSectionsProps = {
 	/** The amount, timeout, and oracle price fields the REP exit needs. */
 	repExitFields: ComponentChildren
 	repExitMode: VaultRepExitMode
+	repTokenSymbol: string
 	securityVaultError: string | undefined
 	/** Marks the withdrawable amount as an estimate from the UI price rather than the oracle price. */
 	showRepPriceEstimate: boolean
@@ -53,6 +54,7 @@ export function SecurityVaultInlineActionSections({
 	repExitAmountLabel,
 	repExitFields,
 	repExitMode,
+	repTokenSymbol,
 	securityVaultError,
 	showRepPriceEstimate,
 	walletRepBalanceError,
@@ -89,12 +91,12 @@ export function SecurityVaultInlineActionSections({
 				) : (
 					<div className='entity-metric-grid'>
 						<MetricField className='entity-metric' label={repExitAmountLabel}>
-							<CurrencyValue value={repExitAmount} suffix={commonCopy.rep} />
+							<CurrencyValue value={repExitAmount} suffix={repTokenSymbol} />
 							{showRepPriceEstimate ? <RepPriceStatusLabel /> : undefined}
 						</MetricField>
 						{repExitMode === 'redeem' ? (
 							<MetricField className='entity-metric' label={commonCopy.disputeStakedAttoRep}>
-								<CurrencyValue value={disputeStakedAttoRep} suffix={commonCopy.rep} />
+								<CurrencyValue value={disputeStakedAttoRep} suffix={repTokenSymbol} />
 							</MetricField>
 						) : undefined}
 						{repExitMode === 'withdraw' && oraclePriceValidUntilTimestamp !== undefined ? (

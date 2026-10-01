@@ -72,8 +72,7 @@ export function getVaultWithdrawGuardMessage({
 	if (withdrawableRepAmountAttoRep === undefined) return 'A REP price is needed to estimate how much REP your commitment keeps locked. Request a new oracle price or lower the commitment limit first.'
 	if (withdrawableRepAmountAttoRep <= 0n) return undefined
 	if (withdrawAmount > withdrawableRepAmountAttoRep) return `Reduce the withdrawal to ${formatCurrencyBalanceWithUnit(withdrawableRepAmountAttoRep, 'REP')} or less.`
-	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of at least 1 minute.'
-	if (stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 5 minutes or less.'
+	if (stagedOperationTimeoutMinutes === undefined || stagedOperationTimeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || stagedOperationTimeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) return 'Enter a staged operation timeout of 1–5 minutes.'
 	const ethGuardMessage = getOracleRequestEthGuardMessage({
 		actionLabel: 'queue this REP withdrawal',
 		includeBuffer: bufferRequiredEthCost,

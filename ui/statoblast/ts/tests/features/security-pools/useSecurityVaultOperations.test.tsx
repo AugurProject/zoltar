@@ -1192,6 +1192,30 @@ describe('useSecurityVaultOperations', () => {
 		expect(requireHookState(state).securityVaultError).toContain('Set your commitment limit to 0 ETH before redeeming REP.')
 	})
 
+	test('starts the REP withdrawal amount empty, like the deposit amount', async () => {
+		let state: UseSecurityVaultOperationsState | undefined
+		const dependencies = createSecurityVaultOperationsDependencies()
+		function Harness() {
+			state = useSecurityVaultOperations(
+				{
+					accountAddress: WALLET_ADDRESS,
+					enabled: true,
+					onTransactionFinished: () => undefined,
+					onTransactionPresented: () => undefined,
+					onTransactionRequested: () => undefined,
+					onTransactionSubmitted: () => undefined,
+					refreshState: async () => undefined,
+					selectedSecurityPoolAddress: SECURITY_POOL_ADDRESS,
+				},
+				dependencies,
+			)
+			return h('div', {})
+		}
+		trackCleanup((await renderIntoDocument(h(Harness, {}))).cleanup)
+		expect(requireHookState(state).securityVaultForm.depositAmount).toBe('')
+		expect(requireHookState(state).securityVaultForm.repWithdrawAmount).toBe('')
+	})
+
 	test('moves the vault owner to a newly connected wallet only when it named the previous wallet', async () => {
 		const NEXT_WALLET = getAddress('0x0000000000000000000000000000000000000011')
 		const THIRD_WALLET = getAddress('0x0000000000000000000000000000000000000012')

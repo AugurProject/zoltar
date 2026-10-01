@@ -74,7 +74,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(details?.textContent).toContain('Initial report priority fee')
 		expect(details?.textContent).toContain('Question description')
 		expect(details?.querySelectorAll('button[aria-label^="Copy identifier"]')).toHaveLength(1)
-		expect(within(document.body).getByText('Collateral in use / capacity')).not.toBeNull()
+		expect(within(document.body).getByText('Open interest / commitment')).not.toBeNull()
 		const tabList = within(document.body).getByRole('tablist', { name: 'Selected pool views' })
 		expect(tabList.getAttribute('data-orientation')).toBe('horizontal')
 		expect(tabList.getAttribute('data-size')).toBe('compact')
@@ -276,7 +276,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.queryByRole('heading', { name: 'Selected pool Summary' })).toBeNull()
 		expect(documentQueries.queryByText('Workflow')).toBeNull()
 		expect(documentQueries.getByText('Question description')).not.toBeNull()
-		expect(documentQueries.getByText('Collateral in use / capacity')).not.toBeNull()
+		expect(documentQueries.getByText('Open interest / commitment')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Underwriting commitments')).toBeNull()
 		expect(documentQueries.getByText('Open Oracle price')).not.toBeNull()
@@ -488,7 +488,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 			expect(getTransactionButtonState(document.body, actionLabel).reason).toBeUndefined()
 			expect(documentQueries.getByRole('button', { name: actionLabel }).getAttribute('aria-describedby')).toBeNull()
 		}
-		expect(getTransactionButtonState(document.body, 'Liquidate vault').reason).toBe('Loading vault details…')
+		// The wallet's own vault never offers liquidation, so it has no launcher to block.
+		expect(documentQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 	})
 
 	test('shows an Ended badge, allows REP redemption, and blocks ended-pool settlement-collateral actions in the vault workflow', async () => {
@@ -511,9 +512,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expectTransactionButtonDisabled(document.body, 'Deposit REP')
 		expectTransactionButtonEnabled(document.body, 'Redeem REP')
 		expectTransactionButtonEnabled(document.body, 'Claim fees')
-		expectTransactionButtonDisabled(document.body, 'Liquidate vault')
 		expect(getTransactionButtonState(document.body, 'Deposit REP').reason).toBe('REP deposits are unavailable because this pool has ended. Available redemption and fee actions remain below.')
-		expect(getTransactionButtonState(document.body, 'Liquidate vault').reason).toBe('Liquidation is unavailable in this pool state.')
+		expect(within(document.body).queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 	})
 
 	test('shows a vault-missing notice and hides the embedded summary for an empty selected vault', async () => {
@@ -534,16 +534,10 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		await openMyVault()
 		expect(documentQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
-		for (const actionLabel of ['Withdraw REP', 'Claim fees', 'Liquidate vault']) {
+		for (const actionLabel of ['Withdraw REP', 'Claim fees']) {
 			expect(getTransactionButtonState(document.body, actionLabel).reason).toBe('This vault does not exist.')
 		}
-		expectTransactionButtonDisabled(document.body, 'Liquidate vault')
-		const reviewLiquidationButton = documentQueries.getByRole('button', { name: 'Liquidate vault' }) as HTMLButtonElement
-
-		await act(() => {
-			fireEvent.click(reviewLiquidationButton)
-		})
-
+		expect(documentQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
 		expect(documentQueries.queryByRole('dialog', { name: 'Liquidate vault' })).toBeNull()
 	})
 
@@ -627,7 +621,8 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('This vault does not exist. Deposit REP to create it.')).toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'My vault' })).not.toBeNull()
-		expectTransactionButtonDisabled(document.body, 'Liquidate vault', 'Choose another vault to liquidate.')
+		expect(documentQueries.queryByRole('button', { name: 'Liquidate vault' })).toBeNull()
+		expect(document.body.textContent).not.toContain('Choose another vault to liquidate.')
 	})
 
 	test('keeps the duplicate summary absent after fork migration starts', async () => {

@@ -22,7 +22,7 @@ import { parseEthAmountInput, parseRepAmountInput } from '@zoltar/ui-core-shared
 import { getDefaultSecurityVaultFormState } from '../../markets/lib/marketForm.js'
 import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { requireDefined } from '@zoltar/ui-core-shared/forms/required.js'
-import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
+import { DEFAULT_STAGED_OPERATION_TIMEOUT_MINUTES, doesLoadedSecurityVaultMatchSelection, getSelectedVaultOwner, getStagedOperationTimeoutSeconds, getVaultBackingFactorAdjustmentGuard, MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES } from '../lib/securityVault.js'
 import { createSecurityVaultSuccessPresentation, createSecurityVaultTransactionIntent, getSecurityVaultActionRepAmount, createSecurityVaultWarningPresentation } from '../../transactionPresentations.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 import { getVaultRedeemRepGuardMessage } from '../lib/securityVaultGuards.js'
@@ -81,7 +81,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultMissing = useSignal(false)
 	const securityVaultError = useSignal<string | undefined>(undefined)
-	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
+	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>({ ...getDefaultSecurityVaultFormState(), repWithdrawAmount: '' })
 	const repBalanceLoader = useErc20BalanceLoader(loadErc20Balance)
 	const repAllowanceLoader = useErc20AllowanceLoader(loadErc20Allowance)
 	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)
@@ -133,9 +133,9 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const resolveSecurityVaultPoolAddress = () => parseAddressInput(effectiveSecurityPoolAddressInput, 'Security pool address')
 	const resolveStagedOperationValidForSecondsFromSnapshot = (snapshot: SecurityVaultActionSnapshot) => {
 		const timeoutMinutes = parseBigIntInput(snapshot.form.stagedOperationTimeoutMinutes ?? '', 'Staged operation timeout')
-		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Staged operation timeout must be at least 1 minute')
+		if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Staged operation timeout must be 1–5 minutes')
 		const timeoutSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
-		if (timeoutSeconds === undefined) throw new Error('Staged operation timeout must be at least 1 minute')
+		if (timeoutSeconds === undefined) throw new Error('Staged operation timeout must be 1–5 minutes')
 		return timeoutSeconds
 	}
 

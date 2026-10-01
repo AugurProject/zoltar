@@ -7,7 +7,8 @@ import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.
 import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
 
 test('vault operation copy uses accounting roles', () => {
-	expect(securityPoolCopy.withdrawingRep).toBe('Withdrawing REP…')
+	expect(securityPoolCopy.formatWithdrawingRep('REP')).toBe('Withdrawing REP…')
+	expect(securityPoolCopy.settingCommitmentLimitPending).toBe('Setting commitment limit…')
 })
 
 test('fork migration empty states are complete templates', () => {

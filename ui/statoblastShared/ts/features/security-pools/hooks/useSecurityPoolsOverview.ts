@@ -373,10 +373,8 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 						if (completedResult !== undefined) onTransactionPresented(createLiquidationWarningPresentation(completedResult, message, transactionContext))
 					},
 					onWriteError: message => {
-						if (isLiquidationSnapshotCurrent(submittedLiquidation)) {
-							liquidationModalOpen.value = true
-							securityPoolLiquidationError.value = message
-						}
+						// A dismissed dialog stays closed; the failure is reported through the transaction toast.
+						if (liquidationModalOpen.value && isLiquidationSnapshotCurrent(submittedLiquidation)) securityPoolLiquidationError.value = message
 						securityPoolOverviewFeedback.value = createErrorActionFeedback('queueLiquidation', 'Liquidation failed', message)
 					},
 					refreshState: async () => {
@@ -388,7 +386,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					const targetVault = parseAddressInput(submittedLiquidation.targetVault, 'Target vault')
 					const receiverVault = parseAddressInput(submittedLiquidation.receiverVault, 'Receiver vault')
 					const approvalId = parseBytes32Input(submittedLiquidation.approvalId, 'Liquidation approval ID')
-					const amount = parseEthAmountInput(submittedLiquidation.amount, 'Liquidation debt')
+					const amount = parseEthAmountInput(submittedLiquidation.amount, 'Commitment to transfer')
 					const fundingEnvironmentRefreshKey = latestEnvironmentRefreshKey.current
 					const fundingPreviewKey = getLiquidationFundingPreviewRequestKey(managerAddress, walletAddress, fundingEnvironmentRefreshKey, proposedRepPerEthPrice)
 					const ensureFundingContextIsCurrent = () => {
@@ -409,10 +407,9 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 					if (walletBalanceAttoEth !== undefined && walletBalanceAttoEth < fundingPreview.totalWalletEthRequiredAttoEth)
 						throw new Error(`Need ${formatAdditionalCurrencyBalance(fundingPreview.totalWalletEthRequiredAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to fund the initial report and queue this liquidation.`)
 					const timeoutMinutes = parseBigIntInput(submittedLiquidation.timeoutMinutes, 'Liquidation timeout')
-					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be at least 1 minute')
-					if (timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 5 minutes or less')
+					if (timeoutMinutes < MIN_STAGED_OPERATION_TIMEOUT_MINUTES || timeoutMinutes > MAX_STAGED_OPERATION_TIMEOUT_MINUTES) throw new Error('Liquidation timeout must be 1–5 minutes')
 					const validForSeconds = getStagedOperationTimeoutSeconds(timeoutMinutes)
-					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be at least 1 minute')
+					if (validForSeconds === undefined) throw new Error('Liquidation timeout must be 1–5 minutes')
 					ensureFundingContextIsCurrent()
 					return await dependencies.queueSecurityPoolLiquidation(writeClient, managerAddress, targetVault, amount, validForSeconds, 0n, receiverVault, approvalId, proposedRepPerEthPrice)
 				},

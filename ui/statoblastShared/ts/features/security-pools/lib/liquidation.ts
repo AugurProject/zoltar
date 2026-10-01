@@ -193,6 +193,25 @@ export function getLiquidationExecutionFailureDetail(errorMessage: string | unde
 	}
 }
 
+/** Why the target cannot be liquidated at the given protocol price; undefined when it can, or when no price is known and a queued liquidation decides at execution. */
+export function getVaultNotLiquidatableReason({
+	minLiquidationPriceDistanceBps,
+	repPerEthPrice,
+	statoblastSecurityMultiplierBps,
+	targetVaultSummary,
+}: {
+	minLiquidationPriceDistanceBps?: bigint | undefined
+	repPerEthPrice: bigint | undefined
+	statoblastSecurityMultiplierBps: bigint | undefined
+	targetVaultSummary: SecurityPoolVaultSummary
+}) {
+	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice <= 0n || statoblastSecurityMultiplierBps <= 0n) return undefined
+	const openInterestAttoEth = getVaultOpenInterestAttoEth(targetVaultSummary)
+	if (openInterestAttoEth === undefined) return undefined
+	if (openInterestAttoEth === 0n) return liquidationCopy.targetHasNoCommitmentReason
+	return getBadDebtReason(targetVaultSummary, undefined) ?? getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, openInterestAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary })
+}
+
 export function getMaxLiquidationAmount({
 	minLiquidationPriceDistanceBps,
 	repPerEthPrice,
@@ -375,7 +394,7 @@ export function getDeterministicLiquidationFailureReason({
 	if (remainingTargetDebtAttoEth !== 0n && remainingTargetDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The target vault would fall below the minimum commitment after liquidation.'
 	if (debtMovedAttoEth !== 0n && callerAfterRepDeposit < minimumVaultRepDepositAttoRep) return 'The receiver vault would remain below the minimum REP backing after liquidation.'
 	if (debtMovedAttoEth !== 0n && resultingReceiverDebtAttoEth < minimumSecurityBondDebtAttoEth) return 'The selected receiver would remain below the minimum commitment after liquidation.'
-	if (debtMovedAttoEth !== 0n && resultingCallerUnderwritingLimitAttoEth === 0n) return 'No underwriting commitments would move with the liquidation debt.'
+	if (debtMovedAttoEth !== 0n && resultingCallerUnderwritingLimitAttoEth === 0n) return 'No commitment would move with this liquidation.'
 	return undefined
 }
 
