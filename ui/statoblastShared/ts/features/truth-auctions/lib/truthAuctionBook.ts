@@ -7,9 +7,9 @@ import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.j
 import { getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
-import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
+import { formatTruthAuctionTickPriceInput, formatTruthAuctionValidationPrice, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-export { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
+export { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice }
 
 type TruthAuctionDisposition = {
 	label: string
@@ -395,12 +395,6 @@ function normalizeTruthAuctionPriceInput(value: string) {
 const TRUTH_AUCTION_MAX_PRICE = getTruthAuctionPriceAtTick(TRUTH_AUCTION_MAX_TICK)
 const TRUTH_AUCTION_MIN_PRICE = getTruthAuctionPriceAtTick(findTruthAuctionMinSupportedTick())
 
-function formatTruthAuctionValidationPrice(price: bigint) {
-	const wholePart = (price / TRUTH_AUCTION_PRICE_PRECISION).toString()
-	const fractionalDigits = (price % TRUTH_AUCTION_PRICE_PRECISION).toString().padStart(18, '0').replace(/0+$/, '')
-	return fractionalDigits === '' ? wholePart : `${wholePart}.${fractionalDigits}`
-}
-
 const TRUTH_AUCTION_MAX_PRICE_INPUT = formatTruthAuctionValidationPrice(TRUTH_AUCTION_MAX_PRICE)
 const TRUTH_AUCTION_PRICE_RANGE_MESSAGE = `Bid price must be between ${formatTruthAuctionValidationPrice(TRUTH_AUCTION_MIN_PRICE)} and ${TRUTH_AUCTION_MAX_PRICE_INPUT} ETH per REP.`
 const truthAuctionMaxPriceParts = TRUTH_AUCTION_MAX_PRICE_INPUT.split('.')
@@ -494,19 +488,6 @@ function getTruthAuctionBidPricePosition(truthAuction: TruthAuctionMetrics | und
 export function getRepPerEthPrice(repPrice: bigint) {
 	if (repPrice <= 0n) return undefined
 	return (TRUTH_AUCTION_PRICE_PRECISION * TRUTH_AUCTION_PRICE_PRECISION) / repPrice
-}
-
-const MIN_TICK_PRICE_INPUT_DECIMALS = 6
-
-/** The shortest bid-price input, with at least six decimals, that maps back to `tick`; it rounds up so it never falls to the tick below. */
-export function formatTruthAuctionTickPriceInput(tick: bigint) {
-	const price = getTruthAuctionPriceAtTick(tick)
-	for (let decimals = MIN_TICK_PRICE_INPUT_DECIMALS; decimals < 18; decimals += 1) {
-		const step = 10n ** BigInt(18 - decimals)
-		const roundedUpPrice = ((price + step - 1n) / step) * step
-		if (getTruthAuctionTickAtPrice(roundedUpPrice) === tick) return formatTruthAuctionValidationPrice(roundedUpPrice)
-	}
-	return formatTruthAuctionValidationPrice(price)
 }
 
 /** Bidding stops once the auction is finalized or its end time has passed on-chain. */

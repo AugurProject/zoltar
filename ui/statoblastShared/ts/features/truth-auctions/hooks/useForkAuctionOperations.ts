@@ -7,7 +7,18 @@ import { useFormState } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadController.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { finalizeSecurityPoolTruthAuction, refundTruthAuctionBid, settleTruthAuctionBids, startTruthAuctionForSecurityPool, submitTruthAuctionBid, withdrawTruthAuctionRefund } from '../../../protocol/truthAuctionActions.js'
-import { claimParentEscalationDeposits, createChildUniverseFromSecurityPool, forkUniverseDirectly, forkZoltarWithOwnEscalation, initiateSecurityPoolFork, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool, migrateSecurityVault, migrateVaultWithUnresolvedEscalation } from '../../../protocol/forks.js'
+import {
+	claimParentEscalationDeposits,
+	createChildUniverseFromSecurityPool,
+	forkUniverseDirectly,
+	forkZoltarWithOwnEscalation,
+	initiateSecurityPoolFork,
+	loadForkAuctionDetails,
+	migrateRepToZoltarFromSecurityPool,
+	migrateSecurityVault,
+	migrateVaultWithUnresolvedEscalation,
+	type VaultMigrationReviewAmounts,
+} from '../../../protocol/forks.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '../../../protocol/reportingCarryState.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
@@ -56,8 +67,8 @@ export type UseForkAuctionOperationsDependencies<TWriteClient = ForkAuctionProdu
 	initiateSecurityPoolFork: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint) => Promise<ForkAuctionActionResult>
 	loadForkAuctionDetails: (securityPoolAddress: Address) => Promise<ForkAuctionDetails>
 	claimParentEscalationDeposits: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, outcome: ReportingOutcomeKey, depositIndexes: bigint[]) => Promise<ForkAuctionActionResult>
-	migrateRepToZoltarFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) => Promise<ForkAuctionActionResult>
-	migrateSecurityVault: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
+	migrateRepToZoltarFromSecurityPool: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[], migrationAmountAttoRep: bigint) => Promise<ForkAuctionActionResult>
+	migrateSecurityVault: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey, vault: VaultMigrationReviewAmounts | undefined) => Promise<ForkAuctionActionResult>
 	migrateVaultWithUnresolvedEscalation: (client: TWriteClient, securityPoolAddress: Address, vaultAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) => Promise<ForkAuctionActionResult>
 	refundTruthAuctionBid: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, truthAuctionAddress: Address, tick: bigint, bidIndex: bigint, selectedBids?: readonly SettlementSelectedBid[]) => Promise<ForkAuctionActionResult>
 	settleTruthAuctionBids: (client: TWriteClient, securityPoolAddress: Address, universeId: bigint, vaultAddress: Address, claimTickIndices: readonly SettlementSelectedBid[], refundTickIndices: readonly SettlementSelectedBid[]) => Promise<ForkAuctionActionResult>
@@ -78,8 +89,8 @@ const defaultUseForkAuctionOperationsDependencies: UseForkAuctionOperationsDepen
 	initiateSecurityPoolFork: async (client, securityPoolAddress, universeId) => await initiateSecurityPoolFork(client, securityPoolAddress, universeId),
 	loadForkAuctionDetails: async securityPoolAddress => await loadForkAuctionDetails(createConnectedReadClient(), securityPoolAddress),
 	claimParentEscalationDeposits: async (client, securityPoolAddress, universeId, vaultAddress, outcome, depositIndexes) => await claimParentEscalationDeposits(client, securityPoolAddress, universeId, vaultAddress, outcome, depositIndexes),
-	migrateRepToZoltarFromSecurityPool: async (client, securityPoolAddress, universeId, outcomes) => await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, universeId, outcomes),
-	migrateSecurityVault: async (client, securityPoolAddress, universeId, outcome) => await migrateSecurityVault(client, securityPoolAddress, universeId, outcome),
+	migrateRepToZoltarFromSecurityPool: async (client, securityPoolAddress, universeId, outcomes, migrationAmountAttoRep) => await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, universeId, outcomes, migrationAmountAttoRep),
+	migrateSecurityVault: async (client, securityPoolAddress, universeId, outcome, vault) => await migrateSecurityVault(client, securityPoolAddress, universeId, outcome, vault),
 	migrateVaultWithUnresolvedEscalation: async (client, securityPoolAddress, vaultAddress, universeId, outcome) => await migrateVaultWithUnresolvedEscalation(client, securityPoolAddress, vaultAddress, universeId, outcome),
 	refundTruthAuctionBid: async (client, securityPoolAddress, universeId, truthAuctionAddress, tick, bidIndex, selectedBids) => await refundTruthAuctionBid(client, securityPoolAddress, universeId, truthAuctionAddress, tick, bidIndex, selectedBids),
 	settleTruthAuctionBids: async (client, securityPoolAddress, universeId, vaultAddress, claimTickIndices, refundTickIndices) => await settleTruthAuctionBids(client, securityPoolAddress, universeId, vaultAddress, claimTickIndices, refundTickIndices),
@@ -268,20 +279,22 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						details.securityPoolAddress,
 						details.universeId,
 						outcomesOverride ?? parseReportingOutcomeListInput(submittedRepMigrationOutcomes, 'REP migration outcomes'),
+						// Mirrors SecurityPoolForker.migrateRepToZoltar: an own fork splits the vault REP snapshot, otherwise the auctionable REP.
+						details.ownForkRepBuckets?.vaultRepAtForkAttoRep ?? details.auctionableAttoRepAtFork,
 					)
 				},
 				'Failed to migrate REP to Zoltar',
 			)
 		})()
 
-	const migrateVault = async () =>
+	const migrateVault = async (vault?: VaultMigrationReviewAmounts) =>
 		await (() => {
 			const submittedSelectedOutcome = forkAuctionForm.value.selectedOutcome
 			return runForkAuctionAction(
 				'migrateVault',
 				async (walletAddress, details, isCurrentSelection, context) => {
 					if (!isCurrentSelection()) return undefined
-					return await dependencies.migrateSecurityVault(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(submittedSelectedOutcome))
+					return await dependencies.migrateSecurityVault(dependencies.createWalletWriteClient(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }), details.securityPoolAddress, details.universeId, parseReportingOutcomeInput(submittedSelectedOutcome), vault)
 				},
 				'Failed to migrate vault',
 			)

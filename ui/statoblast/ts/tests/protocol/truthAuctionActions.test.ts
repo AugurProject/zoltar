@@ -3,6 +3,7 @@ import { decodeFunctionData, getAddress, type Hex } from '@zoltar/core-shared/ev
 import { refundTruthAuctionBid, submitTruthAuctionBid } from '@zoltar/ui-statoblast-shared/protocol/truthAuctionActions.js'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction as auctionArtifact } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { asWriteClient, createMockWriteClient, createBlockWithTimestamp, mockTransactionHash } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
+import type { TransactionPlanStep, TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 
 const pool = getAddress('0x00000000000000000000000000000000000000a1')
 const auction = getAddress('0x00000000000000000000000000000000000000a2')
@@ -64,6 +65,27 @@ describe('truth auction writes', () => {
 		client.waitForTransactionReceipt = wait
 		await expect(submitTruthAuctionBid(asWriteClient(client), pool, 1n, auction, 3n, 100n)).resolves.toEqual({ action: 'submitBid', hash: mockTransactionHash, securityPoolAddress: pool, universeId: 1n })
 		expect(wait).toHaveBeenCalledTimes(1)
+	})
+
+	test('reviews the bid with its ETH amount and submitted tick price', async () => {
+		const previews: TransactionRequestPreview[] = []
+		const plans: (readonly TransactionPlanStep[])[] = []
+		const client = {
+			...asWriteClient(
+				createMockWriteClient(
+					() => undefined,
+					async request => (request.functionName === 'auctionStarted' ? 1n : false),
+				),
+			),
+			getBlock: async () => createBlockWithTimestamp(604_740n),
+			onTransactionPlan: (steps: readonly TransactionPlanStep[]) => plans.push(steps),
+			onTransactionPrepared: (preview: TransactionRequestPreview) => previews.push(preview),
+		}
+		await submitTruthAuctionBid(client, pool, 1n, auction, 3n, 15n * 10n ** 17n)
+		const expectedTitle = 'Bid 1.5\u00a0ETH at 1.000301\u00a0ETH per REP'
+		const expectedDescription = 'Locks the ETH shown below in the truth auction at your bid price. Bids can’t be cancelled: the ETH stays locked until the bid wins REP backing in the child pool or is refunded as a losing bid.'
+		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([[expectedTitle, expectedDescription]])
+		expect(plans.map(steps => steps.map(step => [step.reviewTitle, step.reviewDescription]))).toEqual([[[expectedTitle, expectedDescription]]])
 	})
 
 	test('still rejects a reverted bid receipt', async () => {

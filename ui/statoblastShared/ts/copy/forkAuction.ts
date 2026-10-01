@@ -256,9 +256,15 @@ export const bidAtClearingWarning = 'This price equals the clearing price. Earli
 export const truthAuctionOpenProgressDetail = 'The ETH target has not been reached, so there is no clearing price yet. Once it is reached, a single clearing price decides which bids win.'
 export const truthAuctionClearingProgressDetail = 'Higher bids now raise the clearing price, so less REP is sold.'
 
-export const forkWithOwnEscalationReviewTitle = 'Trigger universe fork'
-export const forkWithOwnEscalationReviewDescription = 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and its REP moves into fork migration. This can’t be undone.'
-export const formatMigratePoolReviewTitle = (outcomeLabels: CopyTemplateValue) => `Migrate pool REP to ${outcomeLabels}`
-export const formatMigratePoolReviewDescription = (outcomeLabels: CopyTemplateValue) => `Moves this pool’s REP attributed to ${outcomeLabels} into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.`
-export const formatMigrateVaultReviewTitle = (outcomeLabel: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}`
-export const formatMigrateVaultReviewDescription = (outcomeLabel: CopyTemplateValue) => `Moves all your vault REP and underwriting commitments from this pool to the ${outcomeLabel} universe. This can’t be undone or split across outcomes.`
+export const formatSubmitBidReviewTitle = (amount: CopyTemplateValue, price: CopyTemplateValue) => `Bid ${amount}\u00a0ETH at ${formatEthPerRepValue(price)}`
+export const submitBidReviewDescription = 'Locks the ETH shown below in the truth auction at your bid price. Bids can’t be cancelled: the ETH stays locked until the bid wins REP backing in the child pool or is refunded as a losing bid.'
+export const formatForkWithOwnEscalationReviewTitle = (amount: CopyTemplateValue) => `Trigger universe fork · ${amount}\u00a0REP`
+export const formatForkWithOwnEscalationReviewDescription = (amount: CopyTemplateValue) =>
+	`Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and ${amount}\u00a0REP held by the pool and its escalation game moves into fork migration. This can’t be undone.`
+const formatRepAmountSuffix = (amount: CopyTemplateValue | undefined) => (amount === undefined ? '' : ` · ${amount}\u00a0REP`)
+export const formatMigratePoolReviewTitle = (outcomeLabels: CopyTemplateValue, amount?: CopyTemplateValue) => `Migrate pool REP to ${outcomeLabels}${formatRepAmountSuffix(amount)}`
+export const formatMigratePoolReviewDescription = (outcomeLabels: CopyTemplateValue, amount?: CopyTemplateValue) =>
+	`Moves this pool’s ${amount === undefined ? 'REP' : `${amount}\u00a0REP`} attributed to ${outcomeLabels} into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.`
+export const formatMigrateVaultReviewTitle = (outcomeLabel: CopyTemplateValue, amount?: CopyTemplateValue) => `Migrate vault to ${outcomeLabel}${formatRepAmountSuffix(amount)}`
+export const formatMigrateVaultReviewDescription = (outcomeLabel: CopyTemplateValue, amounts?: { rep: CopyTemplateValue; eth: CopyTemplateValue }) =>
+	`Moves all your vault REP${amounts === undefined ? '' : ` (${amounts.rep}\u00a0REP)`} and underwriting commitments${amounts === undefined ? '' : ` (${amounts.eth}\u00a0ETH)`} from this pool to the ${outcomeLabel} universe. This can’t be undone or split across outcomes.`

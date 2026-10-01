@@ -668,6 +668,67 @@ describe('ForkAuctionSection', () => {
 		expect(documentQueries.queryByRole('button', { name: 'Claim selected Yes deposits' })).toBeNull()
 	})
 
+	test('submits vault migration with the displayed vault amounts for the review', async () => {
+		const walletAddress = getAddress('0x00000000000000000000000000000000000000ad')
+		const onMigrateVault = mock((_vault?: { repAttoRep: bigint; underwritingLimitAttoEth: bigint }) => undefined)
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					accountState: createAccountState({ address: walletAddress }),
+					currentStageView: 'migration',
+					currentTimestamp: 50n,
+					forkAuctionDetails: createForkAuctionDetails({
+						currentTime: 50n,
+						migrationEndsAt: 100n,
+						systemState: 'forkMigration',
+						truthAuction: undefined,
+						truthAuctionStartedAt: 0n,
+					}),
+					forkMigrationReadClient: {
+						readContract: mock(async request => {
+							switch (request.functionName) {
+								case 'getChildUniverseId':
+									return 11n
+								case 'getMigrationProxyAddress':
+									return zeroAddress
+								case 'getRepToken':
+									return getAddress('0x00000000000000000000000000000000000000ae')
+								case 'balanceOf':
+									return 1n
+								default:
+									throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+							}
+						}) as ReadClient['readContract'],
+					},
+					onMigrateVault,
+					previewPool: createChildPool({
+						vaults: [
+							{
+								disputeStakedAttoRep: 0n,
+								vaultAttoRepBacking: 20n,
+								underwritingLimitAttoEth: 3n,
+								claimableFeesAttoEth: 0n,
+								vaultAddress: walletAddress,
+							},
+						],
+					}),
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => {
+			const button = documentQueries.getByRole('button', { name: 'Migrate vault to Yes' })
+			if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
+			expect(button.disabled).toBe(false)
+		})
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate vault to Yes' }))
+		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: 20n, underwritingLimitAttoEth: 3n })
+	})
+
 	test('disables vault migration after the migration window closes', async () => {
 		const walletAddress = getAddress('0x00000000000000000000000000000000000000ac')
 		const renderedComponent = await renderIntoDocument(

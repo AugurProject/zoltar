@@ -174,6 +174,56 @@ describe('reporting protocol client', () => {
 		expect(previews[1]?.args).toEqual([2, 7n])
 	})
 
+	test.each([false, true])('wallet reporting after a fork reviews the vault-funded report like a direct report (triggers fork: %p)', async triggersFork => {
+		const reader = createActiveReportingClient(() => [])
+		const previews: TransactionRequestPreview[] = []
+		let funded = false
+		const client = {
+			...asWriteClient(createMockWriteClient(() => undefined)),
+			...reader,
+			account: { address: vaultAddress, type: 'json-rpc' as const },
+			onTransactionPrepared: (preview: TransactionRequestPreview) => {
+				previews.push(preview)
+			},
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'forkResumedAt') return 100n
+				if (request.functionName === 'forkElapsedAtStart') return 0n
+				if (request.functionName === 'forkContinuation') return true
+				if (request.functionName === 'previewDepositOnOutcome') return [7n, 10n]
+				if (request.functionName === 'totalRepBackingUnits' || request.functionName === 'getTotalPoolHeldAttoRep') return funded ? 117n : 100n
+				if (request.functionName === 'minimumVaultRepDepositAttoRep') return 10n
+				if (request.functionName === 'securityVaults') return [funded ? 17n : 0n, 0n, 0n, 0n]
+				if (request.functionName === 'backingUnitsToAttoRep') return 17n
+				if (request.functionName === 'getEscalationMigrationEntitlementStatus') return [false, 0n, [false, false, false]]
+				if (request.functionName === 'disputeStakedRepByVaultAttoRep') return 0n
+				if (request.functionName === 'repToken') return repTokenAddress
+				if (request.functionName === 'balanceOf' || request.functionName === 'allowance') return 100n
+				if (request.functionName === 'statoblastSecurityMultiplierBps') return 15_000n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				return await reader.readContract(request)
+			}),
+		}
+		await reportOutcomeWithWalletViaVault(
+			client,
+			securityPoolAddress,
+			'no',
+			7n,
+			17n,
+			() => {
+				funded = true
+			},
+			triggersFork,
+		)
+		const reportPreview = previews.find(preview => preview.functionName === 'depositToEscalationGame')
+		expect(reportPreview?.reviewTitle).toBe(triggersFork ? 'Report No & trigger fork · 0.000000000000000007\u00a0REP' : 'Report No · 0.000000000000000007\u00a0REP')
+		expect(reportPreview?.reviewDescription).toBe(
+			triggersFork
+				? 'Fills No to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.'
+				: 'Stakes REP on No. If No loses, this REP is lost; if it wins, it returns with any earned reward.',
+		)
+		expect(reportPreview?.reviewAmount).toBe('0.000000000000000007\u00a0REP')
+	})
+
 	test.each([zeroAddress, escalationGameAddress])('wallet reporting approves the pool before and after game startup (%s)', async gameAddress => {
 		const previews: TransactionRequestPreview[] = []
 		const client = asWriteClient(

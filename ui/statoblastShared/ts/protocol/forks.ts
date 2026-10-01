@@ -14,6 +14,7 @@ import { requireForkDataView } from './forkData.js'
 import { executeForkAuctionAction } from './securityPoolActions.js'
 import { SECURITY_POOL_QUESTION_OUTCOME_ABI } from './securityPoolAbi.js'
 import { loadMarketDetails } from '@zoltar/ui-zoltar-shared/protocol/zoltar.js'
+import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 
 import { TRUTH_AUCTION_TIME_LENGTH } from './truthAuctionTiming.js'
 
@@ -296,21 +297,29 @@ export async function loadForkAuctionDetails(client: ReadClient, securityPoolAdd
 	}
 }
 
+/** REP the fork moves into migration: the forker drains the pool's REP and its escalation game's REP. */
+async function readRepToForkAttoRep(client: WriteClient, securityPoolAddress: Address) {
+	const [poolRepAttoRep, escalationGameAddress, repTokenAddress] = await Promise.all([
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'getTotalPoolHeldAttoRep' }),
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'escalationGame' }),
+		client.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'repToken' }),
+	])
+	if (escalationGameAddress === zeroAddress) return poolRepAttoRep
+	return poolRepAttoRep + (await client.readContract({ address: repTokenAddress, abi: ABIS.mainnet.erc20, functionName: 'balanceOf', args: [escalationGameAddress] }))
+}
+
 export async function forkZoltarWithOwnEscalation(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
-	return await executeForkAuctionAction(
-		'forkWithOwnEscalation',
-		securityPoolAddress,
-		universeId,
-		async () =>
-			await writeContractAndWait(client, () => ({
-				address: getInfraContractAddresses().securityPoolForker,
-				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
-				functionName: 'forkZoltarWithOwnEscalationGame',
-				args: [securityPoolAddress],
-				reviewTitle: forkAuctionCopy.forkWithOwnEscalationReviewTitle,
-				reviewDescription: forkAuctionCopy.forkWithOwnEscalationReviewDescription,
-			})),
-	)
+	return await executeForkAuctionAction('forkWithOwnEscalation', securityPoolAddress, universeId, async () => {
+		const repToFork = formatCurrencyBalance(await readRepToForkAttoRep(client, securityPoolAddress))
+		return await writeContractAndWait(client, () => ({
+			address: getInfraContractAddresses().securityPoolForker,
+			abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
+			functionName: 'forkZoltarWithOwnEscalationGame',
+			args: [securityPoolAddress],
+			reviewTitle: forkAuctionCopy.formatForkWithOwnEscalationReviewTitle(repToFork),
+			reviewDescription: forkAuctionCopy.formatForkWithOwnEscalationReviewDescription(repToFork),
+		}))
+	})
 }
 export async function initiateSecurityPoolFork(client: WriteClient, securityPoolAddress: Address, universeId: bigint) {
 	return await executeForkAuctionAction(
@@ -340,8 +349,10 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 			})),
 	)
 }
-export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
+/** `migrationAmountAttoRep` is the pool REP each selected outcome receives, when the caller already loaded it. */
+export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[], migrationAmountAttoRep?: bigint) {
 	const outcomeLabels = outcomes.map(outcome => getEscalationSideLabel(outcome)).join(', ')
+	const migrationAmount = migrationAmountAttoRep === undefined ? undefined : formatCurrencyBalance(migrationAmountAttoRep)
 	return await executeForkAuctionAction(
 		'migrateRepToZoltar',
 		securityPoolAddress,
@@ -352,12 +363,20 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateRepToZoltar',
 				args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
-				reviewTitle: forkAuctionCopy.formatMigratePoolReviewTitle(outcomeLabels),
-				reviewDescription: forkAuctionCopy.formatMigratePoolReviewDescription(outcomeLabels),
+				reviewTitle: forkAuctionCopy.formatMigratePoolReviewTitle(outcomeLabels, migrationAmount),
+				reviewDescription: forkAuctionCopy.formatMigratePoolReviewDescription(outcomeLabels, migrationAmount),
 			})),
 	)
 }
-export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey) {
+
+export type VaultMigrationReviewAmounts = {
+	repAttoRep: bigint
+	underwritingLimitAttoEth: bigint
+}
+
+export async function migrateSecurityVault(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcome: ReportingOutcomeKey, vault?: VaultMigrationReviewAmounts) {
+	const outcomeLabel = getEscalationSideLabel(outcome)
+	const amounts = vault === undefined ? undefined : { rep: formatCurrencyBalance(vault.repAttoRep), eth: formatCurrencyBalance(vault.underwritingLimitAttoEth) }
 	return await executeForkAuctionAction(
 		'migrateVault',
 		securityPoolAddress,
@@ -368,8 +387,8 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
 				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
-				reviewTitle: forkAuctionCopy.formatMigrateVaultReviewTitle(getEscalationSideLabel(outcome)),
-				reviewDescription: forkAuctionCopy.formatMigrateVaultReviewDescription(getEscalationSideLabel(outcome)),
+				reviewTitle: forkAuctionCopy.formatMigrateVaultReviewTitle(outcomeLabel, amounts?.rep),
+				reviewDescription: forkAuctionCopy.formatMigrateVaultReviewDescription(outcomeLabel, amounts),
 			})),
 	)
 }

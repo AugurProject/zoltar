@@ -34,7 +34,16 @@ type ResolvedReportingOperationsParameters = UseReportingOperationsParameters & 
 }
 
 export type UseReportingOperationsDependencies = {
-	reportOutcomeWithWalletViaVault?: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: ReportingOutcomeKey, reportAmount: bigint, depositAmount: bigint, onVaultFunded: () => void) => ReturnType<typeof reportOutcomeWithWalletViaVault>
+	reportOutcomeWithWalletViaVault?: (
+		accountAddress: Address,
+		callbacks: Parameters<typeof createWalletWriteClient>[1],
+		securityPoolAddress: Address,
+		outcome: ReportingOutcomeKey,
+		reportAmount: bigint,
+		depositAmount: bigint,
+		onVaultFunded: () => void,
+		triggersFork: boolean,
+	) => ReturnType<typeof reportOutcomeWithWalletViaVault>
 	approveReportingRep: (accountAddress: Address, callbacks: Parameters<typeof createWalletWriteClient>[1], securityPoolAddress: Address, outcome: Parameters<typeof approveReportingRep>[2], amount: bigint) => ReturnType<typeof approveReportingRep>
 	loadReportingDetails: (securityPoolAddress: Address, accountAddress: Address | undefined) => ReturnType<typeof loadReportingDetails>
 	reportOutcomeInSecurityPool: (
@@ -58,7 +67,7 @@ export type UseReportingOperationsDependencies = {
 }
 
 const defaultUseReportingOperationsDependencies: UseReportingOperationsDependencies = {
-	reportOutcomeWithWalletViaVault: async (accountAddress, callbacks, pool, outcome, amount, depositAmount, onVaultFunded) => await reportOutcomeWithWalletViaVault(createWalletWriteClient(accountAddress, callbacks), pool, outcome, amount, depositAmount, onVaultFunded),
+	reportOutcomeWithWalletViaVault: async (accountAddress, callbacks, pool, outcome, amount, depositAmount, onVaultFunded, triggersFork) => await reportOutcomeWithWalletViaVault(createWalletWriteClient(accountAddress, callbacks), pool, outcome, amount, depositAmount, onVaultFunded, triggersFork),
 	approveReportingRep: async (accountAddress, callbacks, securityPoolAddress, outcome, amount) => await approveReportingRep(createWalletWriteClient(accountAddress, callbacks), securityPoolAddress, outcome, amount),
 	loadReportingDetails: async (securityPoolAddress, accountAddress) => await loadReportingDetails(createConnectedReadClient(), securityPoolAddress, accountAddress),
 	reportOutcomeInSecurityPool: async (accountAddress, callbacks, securityPoolAddress, outcome, amount, reviewAmount, contributionFunding, triggersFork) =>
@@ -315,9 +324,18 @@ export function useReportingOperations(
 					let funded = false
 					try {
 						return {
-							...(await execute(walletAddress, { onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal }, securityPoolAddress, preflight.selectedOutcome, preflight.reportAmount, preflight.walletDepositAmount, () => {
-								funded = true
-							})),
+							...(await execute(
+								walletAddress,
+								{ onTransactionPrepared, onTransactionSubmitted, reviewSignal: context.reviewSignal },
+								securityPoolAddress,
+								preflight.selectedOutcome,
+								preflight.reportAmount,
+								preflight.walletDepositAmount,
+								() => {
+									funded = true
+								},
+								triggersFork,
+							)),
 							amountAttoRep: preflight.actualDepositAmount,
 						}
 					} catch (error) {
