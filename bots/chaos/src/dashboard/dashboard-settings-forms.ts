@@ -232,7 +232,7 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 			let mutationReconciled = true
 			try {
 				await put('/api/signer', { privateKey, remember, revision: state.configuration?.revision })
-				signerStatus.textContent = 'Signer updated. The input was cleared.'
+				signerStatus.textContent = 'Signer updated. If the address changed, the bot restarts paused with live execution off and preserves the old state. Reload to reconnect.'
 				await refresh()
 			} catch (error) {
 				const reconciliation = await reconcileUnknownMutation(error, signerStatus, 'configuration and state', 'signer')

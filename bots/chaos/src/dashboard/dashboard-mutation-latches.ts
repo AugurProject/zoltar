@@ -41,6 +41,12 @@ export function createMutationLatches({ state, elements, executionModeForm, sele
 		}
 		if (state.connectivityMutationUnreconciled || state.configurationCommitIndeterminate) elements.connectivityFields.disabled = true
 		if (state.signerMutationUnreconciled || state.configurationCommitIndeterminate) elements.signerFields.disabled = true
+		if (state.settingsMutationUnreconciled || state.configurationCommitIndeterminate) {
+			const completeFields = document.getElementById('complete-configuration-fields')
+			if (completeFields instanceof HTMLFieldSetElement) completeFields.disabled = true
+			const completeSave = document.getElementById('save-complete-configuration')
+			if (completeSave instanceof HTMLButtonElement) completeSave.disabled = true
+		}
 		if (!state.configurationCommitIndeterminate) return
 		elements.confirmResume.disabled = true
 		for (const fields of [elements.replacementFields, elements.cancellationFields, elements.candidateFields, elements.workflowFields, elements.obligationFields]) fields.disabled = true
