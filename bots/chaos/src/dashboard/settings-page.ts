@@ -130,9 +130,10 @@ const STEPS = [
 	{ id: 'settings-connect', label: 'Connect', step: 1 },
 	{ id: 'settings-policy', label: 'Execution policy', step: 2 },
 	{ id: 'settings-go-live', label: 'Go live', step: 3 },
+	{ id: 'settings-complete', label: 'Complete configuration', step: 4 },
 ]
 
-/** The Settings page: Connect, Execution policy, and Go live; the pause note sits under the chip row. */
+/** The Settings page: Connect, Execution policy, Go live, and Complete configuration; the pause note sits under the chip row. */
 function ChaosSettingsPage() {
 	return h(
 		SettingsPage,
@@ -152,7 +153,30 @@ function ChaosSettingsPage() {
 			SettingsSection,
 			{ id: 'settings-go-live', step: 3, title: 'Go live' },
 			h(SignerPanel, { rememberLabel: "Remember in the bot's owner-only state directory", summary: 'No signer configured', title: 'Transaction signer' }),
+			h('p', { class: 'notice' }, 'Changing the signer address restarts the bot paused with live execution off. Old funds, positions, and recovery history remain with the old signer and its preserved state.'),
 			h(ExecutionModePanel, { note: 'Off is dry-run mode. Live mode can spend gas and protocol assets.', switchLabel: 'Submit live transactions' }),
+		),
+		h(
+			SettingsSection,
+			{ id: 'settings-complete', step: 4, title: 'Complete configuration' },
+			h(
+				SettingsGroup,
+				{ title: 'All configuration fields', summary: 'Network, contracts, discovery, submission, and runtime' },
+				h('p', { class: 'notice' }, 'Saving restarts paused in dry-run mode. Identity changes preserve the old state. Dashboard binding changes may disconnect this page.'),
+				h(
+					'form',
+					{ id: 'complete-configuration-form' },
+					h('button', { id: 'load-complete-configuration', class: 'button button-secondary', type: 'button' }, 'Discard changes'),
+					h(
+						'fieldset',
+						{ id: 'complete-configuration-fields', disabled: true },
+						h('label', { class: 'switch-field' }, h('input', { id: 'complete-configuration-json-mode', type: 'checkbox' }), h('span', null, 'Edit as JSON, including optional fields')),
+						h('div', { id: 'complete-configuration-content' }),
+						h('label', { id: 'complete-configuration-json-label', class: 'hidden' }, h('span', null, 'Complete configuration JSON'), h('textarea', { id: 'complete-configuration-json', rows: 20, spellcheck: false, 'aria-describedby': 'complete-configuration-status' })),
+					),
+					h('div', { class: 'form-actions' }, h('span', { id: 'complete-configuration-status', class: 'action-status muted', role: 'status', 'aria-live': 'polite' }), h('button', { id: 'save-complete-configuration', class: 'button', type: 'submit', disabled: true }, 'Check, save and restart')),
+				),
+			),
 		),
 	)
 }

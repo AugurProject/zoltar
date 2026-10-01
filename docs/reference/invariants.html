@@ -117,7 +117,7 @@
 						</tbody>
 					</table>
 				</div>
-				<p>Invariant identifiers are stable review labels. They are grouped by authority, universe, question, asset, share, vault, fork, escalation, oracle, auction, lifecycle, and observability boundaries rather than by Solidity file.</p>
+				<p>Invariant identifiers are stable review labels. They are grouped by authority, universe, question, asset, share, vault, fork, escalation, oracle, auction, lifecycle, observability, and external-interaction boundaries rather than by Solidity file.</p>
 				<h3>Terms used in the catalog</h3>
 				<dl>
 					<dt><strong>Pool question</strong></dt>
@@ -447,7 +447,8 @@
 								<div>
 									<dt>Primary evidence</dt>
 									<dd>
-										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.onlyValidOracle</code> and <code>onlyForker</code></a>
+										<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.onlyValidOracle</code> and <code>onlyForker</code></a
+										>, and the coordinator check in <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.setVaultUnderwritingLimit</code></a>
 									</dd>
 								</div>
 							</dl>
@@ -2460,7 +2461,7 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guards and boundary tests</dd>
+									<dd>Contract guard</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
@@ -2527,11 +2528,11 @@
 							<dl class="invariant-metadata">
 								<div>
 									<dt>Type</dt>
-									<dd>External assumption (mainnet); mixed safety and external assumption (Sepolia)</dd>
+									<dd>External assumption</dd>
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>External on mainnet; reviewed <code>GenesisReputationToken</code> issuance and transfer guards under A23 and A26 on Sepolia, with WETH behavior and burn-sink inaccessibility still assumed</dd>
+									<dd>Economic or external assumption</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>
@@ -2625,7 +2626,7 @@
 								</div>
 								<div>
 									<dt>Enforcement status</dt>
-									<dd>Contract guards and same-block tests</dd>
+									<dd>Contract guard</dd>
 								</div>
 								<div>
 									<dt>Primary evidence</dt>

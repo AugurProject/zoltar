@@ -102,13 +102,14 @@
 					<h2>What gets deployed</h2>
 					<ul>
 						<li>deterministic genesis <a href="../reference/glossary.html#rep">REP</a></li>
-						<li>the canonical CREATE2 deployer and Permit2</li>
+						<li>the canonical CREATE2 deployer, the proxy deployer, and Permit2</li>
 						<li>a deterministic Uniswap V3 SwapRouter</li>
+						<li>on chains other than Sepolia, deterministic WETH and a complete Uniswap deployment (V3 factory, QuoterV2, V4 PoolManager, and V4 Quoter)</li>
 						<li>the Zoltar and Statoblast protocol factories and their bootstrap support contracts</li>
 						<li>the Trading factory and router, at the canonical 0.30% fee</li>
 					</ul>
 					<p>The command does not create Uniswap pools or add liquidity; protocol factories create market-specific contracts later, when those features are used. Uniswap sourcing per chain is listed in the <a href="../reference/contract-inventory.html#testnet-uniswap-dependencies">contract inventory</a>, and the <a href="../reference/deployment-status.html">deployment status reference</a> explains how clients read which steps are installed.</p>
-					<p>The bots read core addresses from the tracked Sepolia manifest, so they work only against Sepolia and Sepolia replays such as a local Anvil node with chain ID <code>11155111</code>. A deployment to another testnet is not usable by the bots until that chain has a generated manifest.</p>
+					<p>The bots read core addresses from the tracked mainnet and Sepolia manifests, so on testnets they work only against Sepolia and Sepolia replays such as a local Anvil node with chain ID <code>11155111</code>. A deployment to another testnet is not usable by the bots until that chain has a generated manifest.</p>
 				</section>
 			</article>
 		</main>

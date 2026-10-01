@@ -35,6 +35,21 @@ describe('GlobalTransactionDialog', () => {
 		restoreRouting = installTestRouting()
 	})
 
+	test('reserves measured error notice space and releases it when dismissed', async () => {
+		const rendered = await renderIntoDocument(<GlobalTransactionDialog transaction={{ title: 'Price request failed', tone: 'error', dismissKey: 'transaction-request-layout' }} />)
+		trackRendered(rendered)
+		const panel = rendered.container.querySelector<HTMLElement>('.global-transaction-dialog')
+		if (panel === null) throw new Error('Missing transaction notice')
+		panel.getBoundingClientRect = () => new window.DOMRect(0, window.innerHeight - 200, 390, 180)
+		await act(async () => {
+			await new Promise(resolve => requestAnimationFrame(resolve))
+			window.dispatchEvent(new Event('resize'))
+		})
+		expect(document.documentElement.style.getPropertyValue('--transaction-status-inset')).toBe('200px')
+		await act(() => fireEvent.click(within(panel).getByRole('button', { name: 'Dismiss' })))
+		expect(document.documentElement.style.getPropertyValue('--transaction-status-inset')).toBe('')
+	})
+
 	test('wallet-only workflows keep the shared pending status without a step dialog', async () => {
 		const controller = createTransactionStepController(undefined, false)
 		const step = { title: 'Report Yes · 5 REP', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: undefined }

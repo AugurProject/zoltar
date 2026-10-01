@@ -24,7 +24,8 @@ async function fetchUniswapPrice(review: NonNullable<RequestPriceModalProps['rev
 	return await getCoordinatorInitialReportPrice(createConnectedReadClient(), review.managerAddress)
 }
 
-type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; failedHash?: string | undefined; submissionOutstanding?: boolean; steps?: NonNullable<typeof transactionSteps.value>['steps'] | undefined; plan?: FailedPricePlan }
+type Workflow = NonNullable<typeof transactionSteps.value>
+type PriceRequestRun = { key: string; signal: AbortSignal; cancel: () => void; submittedHash?: string; finalSubmittedHash?: string; failedHash?: string | undefined; submissionOutstanding?: boolean; steps?: Workflow['steps'] | undefined; workflow?: Workflow | undefined; plan?: FailedPricePlan }
 
 function getRunSubmission(run: PriceRequestRun | undefined) {
 	const workflow = transactionSteps.peek()
@@ -45,6 +46,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const [preparationPaused, setPreparationPaused] = useState(false)
 	const [failureLatched, setFailureLatched] = useState(false)
 	const [failedPlan, setFailedPlan] = useState<FailedPricePlan>()
+	const [failedWorkflow, setFailedWorkflow] = useState<Workflow>()
 	const [running, setRunning] = useState(false)
 	const [attempted, setAttempted] = useState<string>()
 	const run = useRef<PriceRequestRun>()
@@ -54,6 +56,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const confirm = useRef(onConfirm)
 	confirm.current = onConfirm
 	const presentation = useGlobalTransactionPresentation()
+	const ignoredFailure = useRef<typeof presentation>()
 	const failureDismissed = presentation?.tone === 'error' && isGlobalTransactionDismissed(presentation)
 	const previousFailureDismissed = useRef(failureDismissed)
 	const retryPreparation = () => {
@@ -72,6 +75,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setPreparationPaused(false)
 		setFailureLatched(false)
 		setFailedPlan(undefined)
+		setFailedWorkflow(undefined)
+		ignoredFailure.current = presentation?.tone === 'error' ? presentation : undefined
 		setRetry(value => value + 1)
 	}
 	// A quote resolves after an await; it reads the latched failure, pause, and retry of the latest render, not of the click that started it.
@@ -98,7 +103,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 	const current = (valid || completedRequest || awaitingResult) && run.current?.key === key && run.current?.signal.aborted === false
 	const showSteps = current && ownsWorkflow && workflow?.steps[workflow.activeIndex] !== undefined
 	const failedCurrentAttempt =
-		(!running && presentation?.tone === 'error' && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) || (showSteps && workflow?.steps.some(step => step.phase === 'failed'))
+		(!running && presentation?.tone === 'error' && presentation !== ignoredFailure.current && ((key !== undefined && attempted === key) || (submittedHash !== undefined && presentation.hash === submittedHash) || (run.current?.submissionOutstanding && presentation.hash !== undefined))) ||
+		(showSteps && workflow?.steps.some(step => step.phase === 'failed'))
 	useEffect(() => {
 		const tracked = run.current
 		if (preparationPaused && !running && !failureLatched && !failedCurrentAttempt && tracked?.steps !== undefined && finalSubmittedHash === undefined && !getRunSubmission(tracked).inFlight) retryPreparation()
@@ -123,6 +129,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		setPreparationPaused(false)
 		setFailureLatched(false)
 		setFailedPlan(undefined)
+		setFailedWorkflow(undefined)
 	}, [review])
 	useLayoutEffect(() => {
 		if (review !== undefined) return
@@ -136,11 +143,13 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 		if (run.current !== undefined && failedHash !== undefined && (failedHash === finalSubmittedHash || failedHash === submittedHash)) run.current.failedHash = failedHash
 		setFailureLatched(true)
 		setPreparationPaused(true)
-		if (workflow !== undefined) {
+		const ownedWorkflow = ownsWorkflow ? workflow : run.current?.workflow
+		if (ownedWorkflow !== undefined) {
+			setFailedWorkflow(ownedWorkflow)
 			const plan = {
-				funding: workflow.steps.flatMap(step => step.tokenFunding ?? []),
-				totalAttoEth: workflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
-				outcome: workflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
+				funding: ownedWorkflow.steps.flatMap(step => step.tokenFunding ?? []),
+				totalAttoEth: ownedWorkflow.steps.reduce((sum, step) => sum + (step.phase === 'skipped' ? 0n : (step.ethValueAttoEth ?? 0n)), 0n),
+				outcome: ownedWorkflow.steps.find(step => step.oracleOutcome !== undefined)?.oracleOutcome,
 			}
 			setFailedPlan(plan)
 		} else if (run.current?.plan !== undefined) setFailedPlan(run.current.plan)
@@ -182,6 +191,8 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			embeddedTransactionSteps.value = cancellation.signal
 			const cancel = () => {
 				releasePreparation()
+				const currentWorkflow = transactionSteps.peek()
+				const ownedWorkflow = currentWorkflow?.reviewSignal === cancellation.signal ? currentWorkflow : undefined
 				const firstDetach = run.current?.signal === cancellation.signal && run.current.submissionOutstanding !== true
 				const { steps: currentSteps } = cancelTransactionReview(cancellation.signal)
 				const steps = currentSteps ?? (run.current?.signal === cancellation.signal ? run.current.steps : undefined)
@@ -189,6 +200,7 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 				const finalSubmittedHash = steps?.at(-1)?.hash
 				const submissionOutstanding = (steps?.some(isTransactionStepInFlight) ?? false) || finalSubmittedHash !== undefined
 				if (run.current?.signal === cancellation.signal) {
+					run.current.workflow = ownedWorkflow ?? run.current.workflow
 					run.current.steps = steps
 					run.current.submissionOutstanding = submissionOutstanding
 					if (submittedHash !== undefined) run.current.submittedHash = submittedHash
@@ -272,9 +284,14 @@ export function RequestPriceModal({ review, onConfirm, onClose, canRequest, conf
 			<TransactionActionButtonLockProvider lock={unlockedTransactionActions}>
 				<OperationModal embedTransactionSteps={false} getReturnFocusTarget={getReturnFocusTarget} isOpen={review !== undefined} title={poolCopy.requestNewPriceTitle} onClose={close}>
 					{priceControls}
-					{showSteps ? (
-						<GlobalTransactionPresentationProvider transaction={presentation}>
-							<TransactionStepsContent contextKey={key ?? ''} onClose={close} />
+					{showSteps || failedWorkflow !== undefined ? (
+						<GlobalTransactionPresentationProvider transaction={presentation === ignoredFailure.current ? undefined : presentation}>
+							<TransactionStepsContent
+								contextKey={key ?? ''}
+								onClose={close}
+								retainedWorkflow={failedWorkflow}
+								retryAction={failedWorkflow === undefined ? undefined : { onClick: retryPreparation, availability: { disabled: !canRetry, reason: canRetry ? undefined : (confirmationGuardMessage ?? priceError ?? previewPrompt), walletBlocker: confirmationWalletBlocker } }}
+							/>
 						</GlobalTransactionPresentationProvider>
 					) : (
 						<PriceRequestPreview

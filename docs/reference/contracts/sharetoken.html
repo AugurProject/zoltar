@@ -70,22 +70,22 @@
 						<tr>
 							<td><code>mintCompleteSets(universeId, account, amountAttoShares)</code></td>
 							<td>An authorized <code>SecurityPool</code></td>
-							<td>Caller is authorized; <code>account</code> is nonzero; <code>amount</code> is positive; under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract account accepts <code>onERC1155BatchReceived</code>.</td>
-							<td>Mints <code>amount</code> each of Invalid, Yes, and No to <code>account</code>, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized pool's surrounding transaction.</td>
+							<td>Caller is authorized; <code>account</code> is nonzero; <code>amountAttoShares</code> is positive; under <a href="../security-model.html#assumption-a22">A22 asset-recipient compatibility</a>, a contract account accepts <code>onERC1155BatchReceived</code>.</td>
+							<td>Mints <code>amountAttoShares</code> each of Invalid, Yes, and No to <code>account</code>, then invokes its ERC-1155 batch-receiver callback when it is a contract. Rejection rolls back the mint and the authorized pool's surrounding transaction.</td>
 							<td><code>TransferBatch</code> on a successful callback</td>
 						</tr>
 						<tr>
-							<td><code>burnCompleteSets(universeId, account, amountAttoShares)</code></td>
+							<td><code>burnCompleteSets(universeId, owner, amountAttoShares)</code></td>
 							<td>An authorized <code>SecurityPool</code></td>
-							<td>Caller is authorized; <code>account</code> is nonzero and has at least <code>amount</code> of every outcome.</td>
-							<td>Burns <code>amount</code> each of Invalid, Yes, and No from <code>account</code>; global outcome supplies may differ.</td>
+							<td>Caller is authorized; <code>owner</code> is nonzero and has at least <code>amountAttoShares</code> of every outcome.</td>
+							<td>Burns <code>amountAttoShares</code> each of Invalid, Yes, and No from <code>owner</code>; global outcome supplies may differ.</td>
 							<td><code>TransferBatch</code></td>
 						</tr>
 						<tr>
-							<td><code>burnTokenIdAndGetRemainingSupply(tokenId, account)</code></td>
+							<td><code>burnTokenIdAndGetRemainingSupply(tokenId, owner)</code></td>
 							<td>An authorized <code>SecurityPool</code></td>
-							<td><code>account</code> is nonzero; caller is authorized.</td>
-							<td>Burns <code>account</code>'s full balance of <code>tokenId</code> and returns the burned amount and that token ID's remaining supply.</td>
+							<td><code>owner</code> is nonzero; caller is authorized.</td>
+							<td>Burns <code>owner</code>'s full balance of <code>tokenId</code> and returns the burned amount and that token ID's remaining supply.</td>
 							<td><code>TransferSingle</code>, including when the burned balance is zero</td>
 						</tr>
 					</tbody>
