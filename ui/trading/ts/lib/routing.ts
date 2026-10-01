@@ -1,6 +1,6 @@
 import { buildRouteHref, createRouting, getRouteHashSearch, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { writeUniverseQueryParam } from '@zoltar/ui-core-shared/navigation/urlParams.js'
-import { withoutTicketSideParam } from './ticketSide.js'
+import { withoutRouteStateParams } from './routeState.js'
 
 export type TradingRoute = 'create-market' | 'market' | 'liquidity' | 'portfolio' | 'universe' | 'deploy' | 'help' | `security-pool/${string}` | `market/${string}` | `liquidity/${string}` | `create-market/${string}`
 
@@ -36,16 +36,17 @@ const TRADING_ROUTING_CONFIG: RoutingConfig<TradingRoute> = {
 
 export const tradingRouting = createRouting(TRADING_ROUTING_CONFIG)
 
+/** Link to another route: the environment and universe parameters carry over, the current route's view state does not. */
 export function getTradingRouteHref(routeHash: string) {
-	return buildRouteHref(routeHash, getRouteHashSearch())
+	return buildRouteHref(routeHash, withoutRouteStateParams(getRouteHashSearch()))
 }
 
 /**
  * The parts of the location that select the environment; the universe parameter changes what the routes show, and the
- * ticket side only preselects an outcome, so neither changes which chain the routes read.
+ * route view state (ticket, workspace view, list options) only restores a view, so neither changes which chain the routes read.
  */
 export function getTradingEnvironmentLocationKey(location: Pick<Location, 'hash' | 'search'> = window.location) {
-	return `${location.search}|${withoutTicketSideParam(writeUniverseQueryParam(getRouteHashSearch(location.hash), undefined))}`
+	return `${location.search}|${withoutRouteStateParams(writeUniverseQueryParam(getRouteHashSearch(location.hash), undefined))}`
 }
 
 export function installTradingRouting() {

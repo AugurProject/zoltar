@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { arrangeMarkets, coarseDuration, marketLiquidityAttoEth, marketOddsPercent, marketYesTenths, type MarketFilter } from '../../lib/marketListing.js'
-import { hashWithoutTicketSide, marketTicketHref, readTicketSideParam } from '../../lib/ticketSide.js'
+import { DEFAULT_MARKET_LIST_OPTIONS, marketTicketHref, readMarketListParams, readMarketViewParam, readTicketParam, withoutRouteStateParams, writeMarketListParams, writeMarketViewParam, writeTicketParam } from '../../lib/routeState.js'
 import type { LiveMarket } from '../../protocol/live.js'
 import { FIXTURE_DAY, FIXTURE_NOW, fixtureAddress as address, listingMarketFixture as market } from '../support/liveMarketFixture.js'
 
@@ -126,23 +126,42 @@ describe('card close times', () => {
 	})
 })
 
-describe('ticket side preselection', () => {
-	test('reads only YES or NO from the side parameter', () => {
-		expect(readTicketSideParam('?side=yes')).toBe('YES')
-		expect(readTicketSideParam('?universe=1&side=NO')).toBe('NO')
-		expect(readTicketSideParam('?side=invalid')).toBeUndefined()
-		expect(readTicketSideParam('')).toBeUndefined()
+describe('route view state in the hash query', () => {
+	test('reads the ticket direction and outcome from the ticket parameter', () => {
+		expect(readTicketParam('?ticket=buy-yes')).toEqual({ mode: 'entry', side: 'YES' })
+		expect(readTicketParam('?universe=1&ticket=SELL-NO')).toEqual({ mode: 'exit', side: 'NO' })
+		expect(readTicketParam('?ticket=sell-invalid')).toBeUndefined()
+		expect(readTicketParam('?side=yes')).toBeUndefined()
+		expect(readTicketParam('')).toBeUndefined()
 	})
 
-	test('builds a market link that keeps the current hash parameters', () => {
-		const pool = address('01')
-		expect(marketTicketHref(pool, 'YES', '')).toBe(`#/market/${pool}?side=yes`)
-		expect(marketTicketHref(pool, 'NO', '?universe=2&side=yes')).toBe(`#/market/${pool}?universe=2&side=no`)
+	test('records a non-default ticket selection and leaves the default out', () => {
+		expect(writeTicketParam('?universe=2', { mode: 'exit', side: 'NO' })).toBe('?universe=2&ticket=sell-no')
+		expect(writeTicketParam('?universe=2&ticket=sell-no', { mode: 'entry', side: 'YES' })).toBe('?universe=2')
 	})
 
-	test('drops the one-shot side parameter from the hash it was consumed from', () => {
+	test('builds a market ticket link that keeps the environment and drops the current route view state', () => {
 		const pool = address('01')
-		expect(hashWithoutTicketSide(`#/market/${pool}?side=yes`)).toBe(`#/market/${pool}`)
-		expect(hashWithoutTicketSide(`#/market/${pool}?universe=2&side=no`)).toBe(`#/market/${pool}?universe=2`)
+		expect(marketTicketHref(pool, { mode: 'entry', side: 'YES' }, '')).toBe(`#/market/${pool}?ticket=buy-yes`)
+		expect(marketTicketHref(pool, { mode: 'exit', side: 'NO' }, '?universe=2&q=bridge&status=open&ticket=buy-yes')).toBe(`#/market/${pool}?universe=2&ticket=sell-no`)
+	})
+
+	test('round-trips the closed-market workspace view', () => {
+		expect(readMarketViewParam(writeMarketViewParam('?universe=2', 'trade'))).toBe('trade')
+		expect(readMarketViewParam('?view=bogus')).toBeUndefined()
+		expect(writeMarketViewParam('?view=trade', undefined)).toBe('')
+	})
+
+	test('round-trips the market list search, filter, and sort, falling back to the defaults', () => {
+		const options = { filter: 'open', query: 'bridge opens', sort: 'liquidity' } as const
+		const search = writeMarketListParams('?universe=2', options)
+		expect(search).toBe('?universe=2&q=bridge+opens&status=open&sort=liquidity')
+		expect(readMarketListParams(search)).toEqual(options)
+		expect(readMarketListParams('?status=bogus&sort=bogus')).toBe(DEFAULT_MARKET_LIST_OPTIONS)
+		expect(writeMarketListParams(search, DEFAULT_MARKET_LIST_OPTIONS)).toBe('?universe=2')
+	})
+
+	test('drops every route view parameter for links to another route', () => {
+		expect(withoutRouteStateParams('?universe=2&simulate=1&ticket=sell-no&view=trade&q=x&status=open&sort=liquidity')).toBe('?universe=2&simulate=1')
 	})
 })

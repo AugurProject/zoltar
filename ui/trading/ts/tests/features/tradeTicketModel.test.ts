@@ -6,6 +6,7 @@ import { shareBalanceScope, type LiveBalances } from '../../protocol/live.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
 import * as ticketCopy from '../../copy/tradeTicket.js'
 import * as availabilityCopy from '../../copy/availability.js'
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { liveMarketFixture, ticketEstimateFor, ticketModelFor } from '../support/liveMarketFixture.js'
 
 const eth = 10n ** 18n
@@ -160,7 +161,15 @@ describe('trade ticket inputs', () => {
 		expect(sellable).toBeGreaterThan(2n * shares)
 		expect(sellable).toBeLessThan(5n * shares)
 		expect(ticketModelFor(market, 'exit', '', { ...balances, yes: 0n }).shortcuts).toEqual([])
-		expect(ticketModelFor(market, 'entry', '', balances).shortcuts).toEqual([])
+	})
+
+	test('offers a buy Max that spends the wallet ETH less the gas reserve', () => {
+		const buyMax = (walletEthAttoEth: bigint | undefined) => tradeTicketModel({ ...ready, amount: '', walletEthAttoEth }).shortcuts
+		expect(buyMax(5n * eth)).toEqual([{ label: ticketCopy.max, value: 5n * eth - ETH_GAS_RESERVE_ATTO_ETH }])
+		// The amount is trimmed to eight decimals like the sell shortcuts, never above what can be spent.
+		expect(buyMax(5n * eth + 123_456_789n)).toEqual([{ label: ticketCopy.max, value: 5n * eth - ETH_GAS_RESERVE_ATTO_ETH }])
+		expect(buyMax(ETH_GAS_RESERVE_ATTO_ETH)).toEqual([])
+		expect(buyMax(undefined)).toEqual([])
 	})
 })
 
@@ -181,8 +190,15 @@ describe('trade ticket model', () => {
 		expect(tradeTicketModel({ ...ready, amountSettling: true }).availability).toEqual({ disabled: true, loading: true, reason: ticketCopy.updatingEstimate })
 		expect(tradeTicketModel({ ...ready, amount: '' }).availability.reason).toBe(availabilityCopy.amountRequiredReason)
 		expect(tradeTicketModel({ ...ready, amount: '6' }).availability.reason).toBe(availabilityCopy.insufficientEthReason)
-		expect(tradeTicketModel({ ...ready, marketClosed: true }).availability.reason).toBe(availabilityCopy.marketClosedReason)
+		expect(tradeTicketModel({ ...ready, marketClosed: true }).availability.reason).toBe(ticketCopy.tradingEndedReason)
 		expect(tradeTicketModel({ ...ready, workflowLocked: true }).availability.reason).toBe(availabilityCopy.transactionInProgressReason)
+	})
+
+	test('keeps the gas reserve in the wallet when a buy would spend the whole ETH balance', () => {
+		const reserveReason = ticketCopy.gasReserveReason('0.01')
+		expect(tradeTicketModel({ ...ready, amount: '5' }).availability).toEqual({ disabled: true, reason: reserveReason })
+		expect(tradeTicketModel({ ...ready, amount: '4.995' }).availability.reason).toBe(reserveReason)
+		expect(tradeTicketModel({ ...ready, amount: '4.99' }).availability).toEqual({ disabled: false, reason: undefined })
 	})
 
 	test('explains an INVALID shortfall inline and names what can be sold instead', () => {

@@ -11,12 +11,14 @@ function outcomeOdds(outcome: string, percent: number) {
 }
 
 export const marketsCopy = {
-	sortRegistry: 'Registry order',
+	/** The discovery order: security pools in the order they were registered. */
+	sortRegistry: 'Oldest first',
 	yes,
 	no,
 	outcomeOdds,
 	buyOutcomeAt: (outcome: string, percent: number) => `Buy ${outcome} at a conditional ${percent.toString()}%`,
 	buyOutcome: (outcome: string) => `Buy ${outcome}`,
+	sellOutcome: (outcome: string) => `Sell ${outcome}`,
 	conditionalOdds: 'Conditional odds',
 	impliedOdds: (yesPercent: number, noPercent: number) => `Conditional odds: ${outcomeOdds(yes, yesPercent)}, ${outcomeOdds(no, noPercent)}`,
 	oddsUnavailable: 'Odds appear once the pair holds liquidity.',
@@ -46,9 +48,15 @@ export const marketsCopy = {
 	noQuestionDescription: 'This question has no description.',
 	contracts: 'Contracts',
 	yourPosition: 'Your position',
+	connectToSeePosition: 'Connect wallet to see your position',
 	allMarkets: 'All markets',
 	shareToken: 'Share token',
 	ticket: 'Trade ticket',
 	openTicket: (label: string) => `Open ${label.toLowerCase()}`,
 	closeTicket: 'Close ticket',
+	/** The collapsed ticket bar while another market transaction holds this market's ticket. */
+	transactionInProgress: 'Transaction in progress',
+	poolNotInUniverse: 'Pool not in this universe',
+	poolNotInUniverseDetail: 'Switch universe to open it, or return to Markets.',
+	switchUniverse: 'Switch universe',
 } as const

@@ -1,3 +1,4 @@
+import { parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
@@ -19,12 +20,11 @@ import { liveCopy } from '../copy/live.js'
 import { marketsCopy } from '../copy/markets.js'
 import { partitionFavoriteMarkets } from '../lib/favoriteMarkets.js'
 import { arrangeMarkets, type MarketFilter, type MarketListOptions, type MarketSort } from '../lib/marketListing.js'
+import { DEFAULT_MARKET_LIST_OPTIONS, readMarketListParams, replaceRouteHashSearch, writeMarketListParams } from '../lib/routeState.js'
 import { getTradingRouteHref, tradingListKindFor, type TradingListKind, type TradingLookupRoute } from '../lib/routing.js'
 import type { LiveMarket } from '../protocol/live.js'
 import { MarketCard } from './MarketCard.js'
 import { OpenPoolForm } from './OpenPoolForm.js'
-
-const DEFAULT_LIST_OPTIONS: MarketListOptions = { filter: 'all', query: '', sort: 'closing-soon' }
 
 const FILTER_OPTIONS: readonly { value: MarketFilter; label: string }[] = [
 	{ value: 'all', label: marketsCopy.filterAll },
@@ -135,17 +135,23 @@ export function LiveMarketBrowser({
 	retry(): void
 	loadMarketPage(start: bigint | undefined): void
 }) {
-	const [listOptions, setListOptions] = useState(DEFAULT_LIST_OPTIONS)
+	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
+	const browsesDownloads = listKind === 'markets'
+	// The market list's search, filter, and sort live in the hash query, so Back and refresh restore them.
+	const [listOptions, setStoredListOptions] = useState(() => (browsesDownloads ? readMarketListParams(parseRouteHash(window.location.hash).search) : DEFAULT_MARKET_LIST_OPTIONS))
+	const setListOptions = (next: MarketListOptions) => {
+		setStoredListOptions(next)
+		if (browsesDownloads) replaceRouteHashSearch(search => writeMarketListParams(search, next))
+	}
 	const hadRetainedMarkets = useRef(false)
 	if (discoveryRows === undefined) hadRetainedMarkets.current = markets.length > 0
 	// Saved rows remain visible during reloads; positional placeholders belong to an empty first load.
 	const rows = hadRetainedMarkets.current ? undefined : discoveryRows
-	const listKind = tradingListKindFor(lookupRoute) ?? 'markets'
 	const presentation = listPresentation(listKind)
-	const browsesDownloads = listKind === 'markets'
 	// Filters, search, and sort run over every downloaded market; security-pool candidates are all open by construction.
 	const arrangeable = browsesDownloads && (markets.length > 0 || rows !== undefined)
-	const positional = rows !== undefined && listOptions === DEFAULT_LIST_OPTIONS
+	// Identity, not equality: any explicit choice (even the default sort) leaves the positional first-load order.
+	const positional = rows !== undefined && listOptions === DEFAULT_MARKET_LIST_OPTIONS
 	const shownMarkets = arrangeable && !positional ? arrangeMarkets(markets, listOptions, nowSeconds) : markets
 	const groups = browsesDownloads ? partitionFavoriteMarkets(shownMarkets, favorites) : { favorites: [], others: shownMarkets }
 	const initialLoad = rows === undefined && discoveryState === 'loading' && pageMarketCount === 0 && (!browsesDownloads || markets.length === 0)
@@ -153,7 +159,7 @@ export function LiveMarketBrowser({
 	const cardList = (listed: readonly LiveMarket[]) => <MarketCardList markets={listed} listKind={listKind} lookupRoute={lookupRoute} nowSeconds={nowSeconds} />
 	let list: ComponentChildren
 	// An empty discovery page has no positions to hold, so it falls through to the empty state.
-	if (rows !== undefined && rows.length > 0 && listOptions === DEFAULT_LIST_OPTIONS)
+	if (rows !== undefined && rows.length > 0 && listOptions === DEFAULT_MARKET_LIST_OPTIONS)
 		list = (
 			<div className='entity-card-list market-list'>
 				{rows.map((market, index) => (
@@ -169,7 +175,7 @@ export function LiveMarketBrowser({
 			<EmptyState
 				title={marketsCopy.noMatches}
 				actions={
-					<button type='button' onClick={() => setListOptions(DEFAULT_LIST_OPTIONS)}>
+					<button type='button' onClick={() => setListOptions(DEFAULT_MARKET_LIST_OPTIONS)}>
 						{marketsCopy.clearFilters}
 					</button>
 				}

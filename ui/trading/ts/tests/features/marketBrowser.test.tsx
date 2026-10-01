@@ -58,8 +58,8 @@ test('market cards lead with odds and one-click outcome buttons that keep the en
 		expect(yes?.textContent).toBe('YES 62%')
 		expect(no?.textContent).toBe('NO 38%')
 		expect(yes?.getAttribute('aria-label')).toBe('Buy YES at a conditional 62%')
-		expect(yes?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&side=yes`)
-		expect(no?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&side=no`)
+		expect(yes?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&ticket=buy-yes`)
+		expect(no?.getAttribute('href')).toBe(`#/market/${fixtureAddress('01')}?simulate=1&simScenario=trading-funded&ticket=buy-no`)
 		expect(rain?.querySelector('[role="img"]')?.getAttribute('aria-label')).toBe('Conditional odds: YES 62%, NO 38%')
 		expect(rain?.textContent).toContain('Liquidity')
 		expect(rain?.textContent).toContain('in 30 days')
@@ -92,6 +92,34 @@ test('search and status filters narrow the downloaded markets and offer a way ba
 		await act(() => clear.click())
 		expect(cardTitles(rendered.container)).toHaveLength(2)
 		expect(rendered.container.querySelector('.market-list-filters button[aria-pressed="true"]')?.textContent).toBe('All')
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
+test('search, status filter, and sort live in the hash query, so Back and refresh restore them', async () => {
+	const dom = installDomEnvironment('http://localhost/#/market?simulate=1&q=paris&status=open&sort=liquidity')
+	const rendered = await renderBrowser('market')
+	try {
+		expect(rendered.container.querySelector<HTMLInputElement>('input[type="search"]')?.value).toBe('paris')
+		expect(rendered.container.querySelector('.market-list-filters button[aria-pressed="true"]')?.textContent).toBe('Open')
+		expect(rendered.container.querySelector('.enum-dropdown-trigger')?.textContent).toBe('Liquidity')
+		expect(cardTitles(rendered.container)).toEqual(['Will it rain in Paris?'])
+		const historyLength = window.history.length
+		await typeSearch(rendered.container, 'bridge')
+		await pressFilter(rendered.container, 'Closing soon')
+		// The list options replace the current entry: Back still leaves the list.
+		expect(window.history.length).toBe(historyLength)
+		expect(window.location.hash).toBe('#/market?simulate=1&q=bridge&status=closing-soon&sort=liquidity')
+		// Market links leave the list's options behind.
+		expect(rendered.container.querySelector('.market-record .outcome-button--yes')?.getAttribute('href')).toBe(`#/market/${fixtureAddress('02')}?simulate=1&ticket=buy-yes`)
+		const clear = async () => {
+			await typeSearch(rendered.container, '')
+			await pressFilter(rendered.container, 'All')
+		}
+		await clear()
+		expect(window.location.hash).toBe('#/market?simulate=1&sort=liquidity')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()
@@ -155,7 +183,7 @@ test('search spans every discovered page, and Discover reads the next page into 
 	}
 })
 
-test('limits the registry-order label to the positional first-load presentation', async () => {
+test('limits the oldest-first label to the positional first-load presentation', async () => {
 	const dom = installDomEnvironment('http://localhost/#/market')
 	const first = liveMarketFixture({ pool: fixtureAddress('01'), title: 'Registry first', endTime: FIXTURE_NOW + 30n * FIXTURE_DAY })
 	const second = liveMarketFixture({ pool: fixtureAddress('02'), title: 'Registry second', endTime: FIXTURE_NOW + FIXTURE_DAY })
@@ -180,14 +208,14 @@ test('limits the registry-order label to the positional first-load presentation'
 		await act(() => render(view(true), rendered.container))
 		expect(cardTitles(rendered.container)).toEqual(['Registry first', 'Registry second'])
 		const sort = () => rendered.container.querySelector<HTMLButtonElement>('.enum-dropdown-trigger')
-		expect(sort()?.textContent).toBe('Registry order')
+		expect(sort()?.textContent).toBe('Oldest first')
 		await act(() => sort()?.click())
 		const closing = Array.from(rendered.container.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(option => option.textContent === 'Closing soon')
 		if (closing === undefined) throw new Error('Closing-soon option missing')
 		await act(() => closing.click())
 		expect(cardTitles(rendered.container)).toEqual(['Registry second', 'Registry first'])
 		await act(() => sort()?.click())
-		expect(Array.from(rendered.container.querySelectorAll('[role="option"]')).map(option => option.textContent)).not.toContain('Registry order')
+		expect(Array.from(rendered.container.querySelectorAll('[role="option"]')).map(option => option.textContent)).not.toContain('Oldest first')
 	} finally {
 		await rendered.cleanup()
 		dom.cleanup()

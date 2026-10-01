@@ -5,6 +5,7 @@ import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue
 import * as portfolioCopy from '../copy/portfolio.js'
 import { formatRoundedUnits } from '../lib/format.js'
 import { getTradingRouteHref } from '../lib/routing.js'
+import { marketTicketHref } from '../lib/routeState.js'
 import type { PortfolioActionItem, PortfolioOverview, PortfolioRow, PortfolioValuation } from './portfolioModel.js'
 
 function formatPortfolioEth(attoEth: bigint) {
@@ -64,10 +65,10 @@ function actionBadge(item: PortfolioActionItem) {
 }
 
 function actionLink(item: PortfolioActionItem) {
-	if (item.action === 'withdraw-liquidity') return { action: portfolioCopy.withdrawLiquidity, href: `#/liquidity/${item.pool}` }
-	if (item.action === 'redeem') return { action: portfolioCopy.redeem, href: `#/market/${item.pool}` }
-	if (item.action === 'settle') return { action: portfolioCopy.settle, href: `#/market/${item.pool}` }
-	return { action: portfolioCopy.sell, href: `#/market/${item.pool}` }
+	if (item.action === 'withdraw-liquidity') return { action: portfolioCopy.withdrawLiquidity, href: getTradingRouteHref(`#/liquidity/${item.pool}`) }
+	if (item.action === 'redeem') return { action: portfolioCopy.redeem, href: getTradingRouteHref(`#/market/${item.pool}`) }
+	if (item.action === 'settle') return { action: portfolioCopy.settle, href: getTradingRouteHref(`#/market/${item.pool}`) }
+	return { action: portfolioCopy.sell, href: marketTicketHref(item.pool, { mode: 'exit', side: item.sellSide }) }
 }
 
 function actionItemPresentation(item: PortfolioActionItem) {
@@ -88,7 +89,7 @@ export function PortfolioActionItems({ items, nowSeconds }: { items: readonly Po
 							<Badge tone={presentation.tone}>{presentation.label}</Badge>
 							<span className='portfolio-action-item-title'>{item.title}</span>
 							<span className='portfolio-action-item-deadline'>{item.deadline === undefined ? portfolioCopy.noDeadline : <TimestampValue timestamp={item.deadline} currentTimestamp={nowSeconds} />}</span>
-							<a className='button-link secondary-link' href={getTradingRouteHref(presentation.href)} aria-label={portfolioCopy.actionFor(presentation.action, item.title)}>
+							<a className='button-link secondary-link' href={presentation.href} aria-label={portfolioCopy.actionFor(presentation.action, item.title)}>
 								{presentation.action}
 							</a>
 						</li>
@@ -99,14 +100,14 @@ export function PortfolioActionItems({ items, nowSeconds }: { items: readonly Po
 	)
 }
 
-/** Sell while the market trades; Redeem once it has closed and something is redeemable. Both open the market workspace. */
+/** Sell while the market trades, opening the ticket in Sell mode on the held outcome; Redeem once it has closed and something is redeemable. */
 export function PortfolioRowActions({ row }: { row: PortfolioRow }) {
 	const { pool, title } = row.entry.market
 	if (!row.canSell && !row.canRedeem) return null
 	return (
 		<>
 			{row.canSell ? (
-				<a className='button-link primary' href={getTradingRouteHref(`#/market/${pool}`)} aria-label={portfolioCopy.actionFor(portfolioCopy.sell, title)}>
+				<a className='button-link primary' href={marketTicketHref(pool, { mode: 'exit', side: row.sellSide })} aria-label={portfolioCopy.actionFor(portfolioCopy.sell, title)}>
 					{portfolioCopy.sell}
 				</a>
 			) : null}

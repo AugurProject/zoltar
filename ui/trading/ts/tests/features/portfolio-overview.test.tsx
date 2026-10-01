@@ -74,11 +74,19 @@ describe('portfolio overview', () => {
 		// The badge names the state; the link carries the verb.
 		expect(rendered.container.querySelector('.portfolio-action-items li:nth-child(2) .badge')?.textContent).toBe('Payout ready')
 		expect(rendered.container.querySelector('.portfolio-action-items li:nth-child(2) a')?.textContent).toBe('Redeem')
-		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label="Sell: Open market"]`)?.getAttribute('href')).toBe(`#/market/${openPool}`)
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label="Sell: Open market"]`)?.getAttribute('href')).toBe(`#/market/${openPool}?ticket=sell-yes`)
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label^="Redeem"]`)).toBeNull()
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] a[aria-label="Redeem: Resolved market"]`)?.getAttribute('href')).toBe(`#/market/${resolvedPool}`)
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"] a[aria-label^="Sell"]`)).toBeNull()
 		expect(rendered.container.querySelector(`[data-portfolio-pool="${resolvedPool}"]`)?.textContent).toContain('Value now2 ETH')
+	})
+
+	test('Sell opens the ticket in Sell mode on the outcome the account holds', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market: openMarket, balances: { scope: scope(openPool), yes: 0n, no: 2n * SET, invalid: SET, lp: 0n }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={NOW} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector(`[data-portfolio-pool="${openPool}"] a[aria-label="Sell: Open market"]`)?.getAttribute('href')).toBe(`#/market/${openPool}?ticket=sell-no`)
+		// The trading-closes reminder links to the same sell.
+		expect(rendered.container.querySelector('.portfolio-action-items a')?.getAttribute('href')).toBe(`#/market/${openPool}?ticket=sell-no`)
 	})
 
 	test('says when shares are left out of the total until resolution', async () => {

@@ -11,6 +11,7 @@ export function positionTicket(overrides: Partial<PositionTicket> = {}): Positio
 		positionHash: undefined,
 		message: undefined,
 		positionReceiptWarning: undefined,
+		requoteNotice: undefined,
 		setMode: () => undefined,
 		setSide: () => undefined,
 		setAmount: () => undefined,

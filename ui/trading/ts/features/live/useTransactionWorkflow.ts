@@ -12,10 +12,12 @@ type TicketInputs = Readonly<{
 	amount: string
 	/** The impact the user accepted; a later estimate with a higher impact needs a new acknowledgment. */
 	acknowledgedImpactBps: bigint | undefined
+	/** Set when the last submission stopped because the chain re-quoted past the estimate; the ticket shows it as a prompt to review, not a failure. */
+	requoteNotice: string | undefined
 }>
 
 // Amount fields start empty: a prefilled value reads like a recommendation.
-const emptyTicketInputs: TicketInputs = { mode: 'entry', side: 'YES', amount: '', acknowledgedImpactBps: undefined }
+const emptyTicketInputs: TicketInputs = { mode: 'entry', side: 'YES', amount: '', acknowledgedImpactBps: undefined, requoteNotice: undefined }
 
 /**
  * Trade-ticket inputs plus the shared quoted-transaction engine, both kept per market: a trade running on one market
@@ -88,6 +90,8 @@ export function useTransactionWorkflow({
 		setAcknowledgedImpactBps: (acknowledgedImpactBps: bigint | undefined) => updateInputs(currentMarket, { acknowledgedImpactBps }),
 		/** Clears the amount a confirmed trade used on its own market, whichever market is on screen by then. */
 		clearConfirmedAmount: (confirmedMarket: Address) => updateInputs(transactionMarketKey(confirmedMarket), { amount: '', acknowledgedImpactBps: undefined }),
+		/** Records or clears the re-quote prompt on the market the submission ran on, whichever market is on screen by then. */
+		setRequoteNotice: (target: Address, requoteNotice: string | undefined) => updateInputs(transactionMarketKey(target), { requoteNotice }),
 		transaction,
 		dispatchWorkflow: transaction.dispatchWorkflow,
 		resetUnlocked: transaction.resetUnlocked,

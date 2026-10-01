@@ -8,6 +8,7 @@ export const half = '50%'
 export const max = 'Max'
 export const noBalance = '—'
 export const sellShortcutsLabel = 'Sell amount shortcuts'
+export const buyShortcutsLabel = 'Buy amount shortcuts'
 export const estimateHeading = 'Estimate'
 export const estimateNote = 'Estimated from current pool reserves. The price is checked again before your wallet opens.'
 export const youReceiveEstimate = 'You receive ≈'
@@ -28,6 +29,22 @@ export const invalidShareAmount = 'Enter a share amount with at most 18 decimal 
 export const invalidCoverageReason = 'Not enough INVALID to insure this sale.'
 export const priceImpactBlockedReason = 'Trade a smaller amount.'
 export const acknowledgeImpactReason = 'Confirm the price impact first.'
+/** Every ticket control is disabled once the market stops taking new positions; Settlement is where holdings go next. */
+export const tradingEndedReason = 'Trading has ended for this market.'
+export const tradingEndedDetail = `${tradingEndedReason} Use Settlement to redeem.`
+export const openSettlement = 'Open settlement'
+
+export function gasReserveReason(reserve: string) {
+	return `Leave ${reserve} ETH in the wallet for gas.`
+}
+
+/** Announced once per price-impact tier, without the percentage, so re-priced estimates in the same tier stay quiet. */
+export function priceImpactTierAnnouncement(tier: 'low' | 'caution' | 'warning' | 'blocked') {
+	if (tier === 'caution') return 'Price impact above 2%.'
+	if (tier === 'warning') return 'High price impact. Confirm it before trading.'
+	if (tier === 'blocked') return 'Price impact above the 15% limit. Trade a smaller amount.'
+	return ''
+}
 
 export function buyOutcome(outcome: 'YES' | 'NO') {
 	return `Buy ${outcome}`
