@@ -219,6 +219,14 @@ strong.metric-value-danger {
 	box-shadow: var(--shadow-overlay);
 }
 
+body:has(.global-transaction-dialog-error) .modal-backdrop:has(> .operation-modal-panel) {
+	bottom: calc(var(--transaction-status-inset, 0px) + var(--space-4));
+}
+
+body:has(.global-transaction-dialog-error) .operation-modal-panel {
+	max-height: min(calc(100dvh - var(--transaction-status-inset, 0px) - 3rem), 58rem);
+}
+
 .modal-header {
 	display: flex;
 	justify-content: space-between;

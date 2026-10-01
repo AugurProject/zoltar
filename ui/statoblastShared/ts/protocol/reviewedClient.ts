@@ -103,9 +103,10 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		}
 	}
 
-	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint]) => Promise<`0x${string}`>) => {
+	const send = async (fallback: TransactionRequestPreview, execute: (approvalArgs?: readonly [ReturnType<typeof getAddress>, bigint], gas?: bigint) => Promise<`0x${string}`>, requestedGas?: bigint) => {
 		const prepared = preview
 		let transaction = prepared ?? fallback
+		let gas = requestedGas
 		preview = undefined
 		try {
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
@@ -138,8 +139,10 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
 				const gasPrice = await client.getGasPrice()
-				await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
-				// This validates the direct call; the wallet must estimate any delegation wrapper itself.
+				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
+				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
+				const bufferedGas = (estimate * 150n + 99n) / 100n
+				if (gas === undefined || gas < bufferedGas) gas = bufferedGas
 				await validate()
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 				controller.assertActive()
@@ -161,7 +164,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
 			controller.assertActive()
 			client.onTransactionPrepared?.(transaction)
-			const hash = await execute(approvalArgs)
+			const hash = await execute(approvalArgs, gas)
 			controller.submitted(hash)
 			return hash
 		} catch (error) {
@@ -201,7 +204,8 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 		sendTransaction: async parameters =>
 			await send(
 				{ account: client.account, args: undefined, chainName: client.chain.name, data: parameters.data, functionName: parameters.data === undefined ? 'Transfer ETH' : 'Contract transaction', to: parameters.to ?? undefined, value: parameters.value },
-				async approvalArgs => await client.sendTransaction(approvalArgs === undefined ? parameters : { ...parameters, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }),
+				async (approvalArgs, gas) => await client.sendTransaction({ ...parameters, ...(gas === undefined ? {} : { gas }), ...(approvalArgs === undefined ? {} : { data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }) }),
+				parameters.gas,
 			),
 		sendRawTransaction: async parameters => await send({ account: undefined, args: undefined, chainName: client.chain.name, functionName: 'Deploy contract', data: parameters.serializedTransaction, value: undefined }, async () => await client.sendRawTransaction(parameters)),
 		writeContract: async parameters =>
@@ -215,7 +219,11 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 					value: parameters.value,
 					data: encodeFunctionData({ abi: parameters.abi, functionName: parameters.functionName, ...(parameters.args === undefined ? {} : { args: parameters.args }) }),
 				},
-				async approvalArgs => (approvalArgs === undefined ? await client.writeContract(parameters) : await client.writeContract({ ...parameters, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs })),
+				async (approvalArgs, gas) => {
+					const call = { ...parameters, ...(gas === undefined ? {} : { gas }) }
+					return approvalArgs === undefined ? await client.writeContract(call) : await client.writeContract({ ...call, abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs })
+				},
+				parameters.gas,
 			),
 		waitForTransactionReceipt: async parameters => {
 			let diagnosedReceiptFailure = false
