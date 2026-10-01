@@ -584,6 +584,65 @@ describe('trading deployment setup', () => {
 		expect(rendered.container.querySelector(`[id="${describedBy}"]`)?.textContent).toContain(`The connected wallet must use ${core.chainName}`)
 	})
 
+	test('offers a network switch to a wallet connected on the wrong network', async () => {
+		window.history.replaceState(undefined, '', '/#/deploy')
+		let walletChainId = 1
+		const requests: string[] = []
+		const provider: InjectedEthereum = {
+			request: async ({ method, params }) => {
+				requests.push(method)
+				if (method === 'eth_chainId') return `0x${walletChainId.toString(16)}`
+				if (method === 'eth_accounts' || method === 'eth_requestAccounts') return [testWalletAccount]
+				if (method === 'wallet_switchEthereumChain' && Array.isArray(params)) {
+					walletChainId = core.chainId
+					return null
+				}
+				throw new Error(`Unexpected wallet method ${method}`)
+			},
+		}
+		// The first connection finds no injected provider, so it keeps the wallet's network; later reads see the provider.
+		let providerReads = 0
+		const services: TradingDeploymentSetupServices = {
+			createPublicClient: () => deploymentClient(),
+			connectWallet: async () => ({ account: testWalletAccount, chainId: walletChainId }),
+			getWalletProvider: () => (providerReads++ < 2 ? undefined : provider),
+			loadCoreDeployments: async () => [core],
+		}
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Trading factory')
+		await connectDeploymentWallet(rendered.container)
+		await waitForConnectedWallet(rendered.container)
+		await waitForText(`The connected wallet must use ${core.chainName}.`)
+		expect(rendered.container.textContent).not.toContain('Reconnect to switch networks')
+		const switchButton = Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent?.trim() === `Switch to ${core.chainName}`)
+		if (!(switchButton instanceof HTMLButtonElement)) throw new Error('Missing network switch')
+		await act(async () => {
+			switchButton.click()
+			await Bun.sleep(0)
+		})
+		await waitFor(() => expect(rendered.container.textContent).not.toContain('The connected wallet must use'))
+		expect(requests).toContain('wallet_switchEthereumChain')
+		expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(false)
+	})
+
+	test('names the deployment network, the two-transaction sequence, and any registry fallback', async () => {
+		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [core] }
+		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
+		cleanupRendered = rendered.cleanup
+		await waitForText('Deploy Trading factory')
+		expect(rendered.container.textContent).toContain(`Deploying to${core.chainName}`)
+		expect(rendered.container.textContent).toContain('Deployment takes two wallet transactions: Trading factory, then Trading router.')
+		expect(rendered.container.textContent).not.toContain('has no core deployment')
+		await rendered.cleanup()
+		const otherCore = { ...core, chainId: 17_000, chainName: 'Holesky', id: 'holesky' }
+		const fallback = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={{ createPublicClient: () => inspectionClient({ chainId: () => '0x4268', hasCode: address => sameAddress(address, core.securityPoolFactory) }), loadCoreDeployments: async () => [otherCore] }} />)
+		cleanupRendered = fallback.cleanup
+		await waitForText('has no core deployment')
+		expect(fallback.container.textContent).toContain(`Deploying to${otherCore.chainName}`)
+		expect(fallback.container.textContent).toContain('has no core deployment, so this deploys to Holesky instead.')
+	})
+
 	test('lets navigation leave a pending deployment and keeps the deploy action locked until it settles', async () => {
 		window.history.replaceState(undefined, '', '/#/deploy')
 		const loadedConfiguration = deploymentConfigurationForPlan(getTradingDeploymentPlan(core, 30), 'https://rpc.example/')
