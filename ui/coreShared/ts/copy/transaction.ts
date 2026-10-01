@@ -94,6 +94,7 @@ export const amount = 'Amount'
 export const settleEscalationDeposits = 'Settle escalation deposits'
 export const escalationDepositsSettled = 'Settled escalation deposits'
 
+const reportOutcomeReviewDescription = 'Stakes REP on the selected outcome. If that outcome loses, this REP is lost.'
 export const reviewedActions: Record<string, { title: string; description?: string }> = {
 	'Transfer ETH': { title: 'Transfer ETH', description: 'Send ETH from your wallet to the recipient below.' },
 	'Fund deterministic proxy deployer signer without surplus': { title: 'Fund proxy deployment', description: 'Provide ETH for deploying the shared proxy. Unused funding is returned in this transaction.' },
@@ -101,9 +102,10 @@ export const reviewedActions: Record<string, { title: string; description?: stri
 	deposit: { title: 'Wrap ETH into WETH', description: 'Convert ETH into WETH held in your wallet to fund the oracle report.' },
 	requestPrice: { title: 'Request new price', description: 'Fund and start an oracle price report using your approved REP and WETH.' },
 	approve: { title: 'Approve token spending', description: 'Authorize the listed spending limit; tokens stay in your wallet.' },
-	depositToEscalationGame: { title: 'Report outcome' },
-	depositRepOnOutcome: { title: 'Report outcome' },
-	depositWalletRepToEscalationGame: { title: 'Report outcome' },
+	depositToEscalationGame: { title: 'Report outcome', description: reportOutcomeReviewDescription },
+	depositRepOnOutcome: { title: 'Report outcome', description: reportOutcomeReviewDescription },
+	depositWalletRepToEscalationGame: { title: 'Report outcome', description: reportOutcomeReviewDescription },
+	submitBid: { title: 'Submit truth auction bid', description: 'Locks the ETH shown below in the truth auction at your bid price. Bids can’t be cancelled: the ETH stays locked until the bid wins REP backing in the child pool or is refunded as a losing bid.' },
 	withdrawFromEscalationGame: { title: 'Settle escalation deposits', description: 'Settle the selected deposits after resolution.' },
 	settle: { title: 'Settle report', description: 'Settle the completed oracle report.' },
 	dispute: { title: 'Dispute report', description: 'Fund the counter-report and swap against the current report.' },

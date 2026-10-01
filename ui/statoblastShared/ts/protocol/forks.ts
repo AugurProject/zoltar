@@ -6,7 +6,8 @@ import { statoblast_SecurityPoolForker_SecurityPoolForker, statoblast_SecurityPo
 import type { ReadClient, ReportingOutcomeKey, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionMetrics } from '../types/contracts.js'
 import { getReportingOutcomeKey, getReportingOutcomeValue, getSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
-import { getForkOutcomeKey, hasTimestamp } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import { getEscalationSideLabel, getForkOutcomeKey, hasTimestamp } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
+import * as forkAuctionCopy from '../copy/forkAuction.js'
 import { readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getInfraContractAddresses, getZoltarAddress } from './deploymentHelpers.js'
 import { requireForkDataView } from './forkData.js'
@@ -306,6 +307,8 @@ export async function forkZoltarWithOwnEscalation(client: WriteClient, securityP
 				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'forkZoltarWithOwnEscalationGame',
 				args: [securityPoolAddress],
+				reviewTitle: forkAuctionCopy.forkWithOwnEscalationReviewTitle,
+				reviewDescription: forkAuctionCopy.forkWithOwnEscalationReviewDescription,
 			})),
 	)
 }
@@ -338,6 +341,7 @@ export async function createChildUniverseFromSecurityPool(client: WriteClient, s
 	)
 }
 export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, securityPoolAddress: Address, universeId: bigint, outcomes: ReportingOutcomeKey[]) {
+	const outcomeLabels = outcomes.map(outcome => getEscalationSideLabel(outcome)).join(', ')
 	return await executeForkAuctionAction(
 		'migrateRepToZoltar',
 		securityPoolAddress,
@@ -348,6 +352,8 @@ export async function migrateRepToZoltarFromSecurityPool(client: WriteClient, se
 				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateRepToZoltar',
 				args: [securityPoolAddress, outcomes.map(outcome => BigInt(getReportingOutcomeValue(outcome)))],
+				reviewTitle: forkAuctionCopy.formatMigratePoolReviewTitle(outcomeLabels),
+				reviewDescription: forkAuctionCopy.formatMigratePoolReviewDescription(outcomeLabels),
 			})),
 	)
 }
@@ -362,6 +368,8 @@ export async function migrateSecurityVault(client: WriteClient, securityPoolAddr
 				abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 				functionName: 'migrateVault',
 				args: [securityPoolAddress, BigInt(getReportingOutcomeValue(outcome))],
+				reviewTitle: forkAuctionCopy.formatMigrateVaultReviewTitle(getEscalationSideLabel(outcome)),
+				reviewDescription: forkAuctionCopy.formatMigrateVaultReviewDescription(getEscalationSideLabel(outcome)),
 			})),
 	)
 }

@@ -523,3 +523,32 @@ export function getTruthAuctionLiveBidGuidance(truthAuction: TruthAuctionMetrics
 		minimumWinningPriceInput: truthAuction.clearingTick < TRUTH_AUCTION_MAX_TICK ? formatTruthAuctionTickPriceInput(truthAuction.clearingTick + 1n) : undefined,
 	}
 }
+
+/** Bids snap down to the nearest valid tick. Describes that rounding, with the next tick up as the round-up input, unless the input already names its tick. */
+export function getTruthAuctionBidPriceRounding(submitBidPriceInput: string) {
+	const preview = getTruthAuctionBidPreview(submitBidPriceInput)
+	if (preview === undefined || preview.enteredPrice === preview.submittedPrice) return undefined
+	const tickPriceInput = formatTruthAuctionTickPriceInput(preview.tick)
+	const tickInputPrice = tryParseTruthAuctionPriceInput(tickPriceInput)
+	if (tickInputPrice === preview.enteredPrice) return undefined
+	return {
+		roundUpPriceInput: preview.tick < TRUTH_AUCTION_MAX_TICK ? formatTruthAuctionTickPriceInput(preview.tick + 1n) : undefined,
+		submittedPriceInput: tickInputPrice !== undefined && tickInputPrice <= preview.enteredPrice ? tickPriceInput : formatTruthAuctionValidationPrice(preview.submittedPrice),
+	}
+}
+
+/** Gas for a bid stays in the wallet, so Max offers only the balance above this reserve. */
+export const TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH = 10n ** 16n
+
+export function getTruthAuctionMaxBidAmount(walletBalanceAttoEth: bigint | undefined) {
+	if (walletBalanceAttoEth === undefined) return undefined
+	return walletBalanceAttoEth > TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH ? walletBalanceAttoEth - TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH : 0n
+}
+
+/** The bid amount and the price it is submitted at, once both inputs are valid. */
+export function getTruthAuctionSubmitBidLabelParts(submitBidAmountInput: string, submitBidPriceInput: string) {
+	const amountAttoEth = tryParseTruthAuctionAmountInput(submitBidAmountInput.trim())
+	const preview = getTruthAuctionBidPreview(submitBidPriceInput)
+	if (amountAttoEth === undefined || amountAttoEth <= 0n || preview === undefined) return undefined
+	return { amountAttoEth, priceInput: getTruthAuctionBidPriceRounding(submitBidPriceInput)?.submittedPriceInput ?? formatTruthAuctionValidationPrice(preview.enteredPrice) }
+}

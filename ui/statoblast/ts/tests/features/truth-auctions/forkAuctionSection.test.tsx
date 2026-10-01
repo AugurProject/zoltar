@@ -13,7 +13,7 @@ import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testR
 import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { EscalationDeposit, ForkAuctionDetails, ListedSecurityPool, ReportingDetails, TruthAuctionMetrics } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { formatTruthAuctionTickPriceInput, getTruthAuctionPriceAtTick } from '@zoltar/ui-statoblast-shared/features/truth-auctions/lib/truthAuctionBook.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { ForkAuctionSection } from '@zoltar/ui-statoblast-shared/features/truth-auctions/components/ForkAuctionSection.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
@@ -499,11 +499,13 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(
-			documentQueries.getByText(
-				'First transfers this wallet’s REP backing units and underwriting commitments to the selected child, checkpoints but retains claimable fees in the parent vault, and separately routes proportional pool-level settlement collateral. It then clears the three parent outcome totals in constant-size work. This is not required to fund dispute-staked REP backing or claim a winning carried proof; inherited losers require no claim transaction.',
-			),
-		).not.toBeNull()
+		expect(documentQueries.getByText('Optional. Moves your vault to the selected universe and clears your unresolved parent deposits in one step; the move can’t be undone. You don’t need it to claim winning deposits, and losing carried deposits need no transaction.')).not.toBeNull()
+		// The contract mechanics stay available under Technical details instead of leading the explanation.
+		expect(documentQueries.getByText('Technical details')).not.toBeNull()
+		expect(document.body.textContent).toContain('It then clears the three parent outcome totals in constant-size work.')
+		// Every unresolved deposit is included automatically, so the list shows no checkboxes that look selectable but cannot change.
+		expect(document.body.textContent).toContain('Deposit #4')
+		expect(document.body.querySelector('.withdraw-deposit-list input[type="checkbox"]')).toBeNull()
 		const button = documentQueries.getByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected unresolved migration action button')
 		expect(button.disabled).toBe(true)
@@ -659,7 +661,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getByText('The optional unresolved parent escalation-deposit accounting cleanup window has closed. Child backing and winning-proof eligibility are unchanged.')).not.toBeNull()
+		expect(documentQueries.getByText('The window for this optional cleanup has closed. Nothing is lost: your child-pool backing and winning claims are unchanged.')).not.toBeNull()
 		expect(documentQueries.getByRole('heading', { name: 'Optional: Clear unresolved parent escalation-deposit accounting' })).not.toBeNull()
 		expect(documentQueries.queryByRole('heading', { name: 'Optional: Claim parent escalation deposits' })).toBeNull()
 		expect(documentQueries.queryByRole('button', { name: 'Clear unresolved parent escalation-deposit accounting for Yes' })).toBeNull()
@@ -704,6 +706,8 @@ describe('ForkAuctionSection', () => {
 		if (!(button instanceof HTMLButtonElement)) throw new Error('Expected vault migration action button')
 		expect(button.disabled).toBe(true)
 		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').reason).toBe('Migration window has closed for this parent pool.')
+		expect(documentQueries.getByText('Moves all your vault REP and underwriting commitments to the Yes universe. This can’t be undone or split across outcomes.')).not.toBeNull()
+		expect(document.body.textContent).not.toContain('migration power')
 	})
 
 	test('keeps fork-carried settlement disabled until the child pool question finalizes', async () => {
@@ -1437,15 +1441,46 @@ describe('ForkAuctionSection', () => {
 		})
 	}
 
+	// The live-auction form bids 1 ETH at 1 ETH per REP, so the submit action names both.
+	const LIVE_AUCTION_BID_LABEL = 'Bid 1\u00a0ETH at 1\u00a0ETH/REP'
+
+	test('shows the tick price a bid is submitted at and offers to round it up', async () => {
+		const onForkAuctionFormChange = mock((_update: Partial<ForkAuctionSectionProps['forkAuctionForm']>) => undefined)
+		const props = createLiveAuctionProps(createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }))
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, { ...props, forkAuctionForm: { ...props.forkAuctionForm, submitBidPrice: '1.00005' }, onForkAuctionFormChange }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		// 1.00005 sits between the 1 and next valid tick prices, so the bid snaps down to 1.
+		expect(document.body.textContent).toContain('Will be submitted at 1\u00a0ETH per REP (nearest valid price below).')
+		expect(documentQueries.getByRole('button', { name: 'Bid 1\u00a0ETH at 1\u00a0ETH/REP' })).not.toBeNull()
+		const roundUpPrice = formatTruthAuctionTickPriceInput(1n)
+		fireEvent.click(documentQueries.getByRole('button', { name: `Round up to ${roundUpPrice}` }))
+		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidPrice: roundUpPrice })
+	})
+
+	test('shows the bid balance and minimum and fills Max below a gas reserve', async () => {
+		const onForkAuctionFormChange = mock((_update: Partial<ForkAuctionSectionProps['forkAuctionForm']>) => undefined)
+		const props = createLiveAuctionProps(createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }))
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, { ...props, onForkAuctionFormChange }))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		expect(document.body.textContent).toContain(`Available: ${formatCurrencyBalance(2n * 10n ** 18n)}\u00a0ETH · Min bid ${formatCurrencyBalance(1n)}\u00a0ETH · Max keeps ${formatCurrencyBalance(10n ** 16n)}\u00a0ETH for gas`)
+		// An exact tick price needs no rounding notice.
+		expect(document.body.textContent).not.toContain('Will be submitted at')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
+		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidAmount: '1.99' })
+	})
+
 	test('keeps fork-auction actions disabled off Sepolia and shows switch-network recovery', async () => {
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createLiveAuctionProps(createAccountState({ chainId: '0x1', ethBalanceAttoEth: 10n ** 18n }))))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		const submitBidButton = documentQueries.getByRole('button', { name: 'Submit bid' })
+		const submitBidButton = documentQueries.getByRole('button', { name: LIVE_AUCTION_BID_LABEL })
 		if (!(submitBidButton instanceof HTMLButtonElement)) throw new Error('Expected Submit bid button to be a button element')
 		expect(submitBidButton.disabled).toBe(true)
-		expect(getTransactionButtonState(document.body, 'Submit bid').reason).toBe('Switch to Sepolia.')
+		expect(getTransactionButtonState(document.body, LIVE_AUCTION_BID_LABEL).reason).toBe('Switch to Sepolia.')
 		expect(document.body.textContent?.includes('Switch to Sepolia')).toBe(true)
 	})
 
@@ -1457,7 +1492,7 @@ describe('ForkAuctionSection', () => {
 			const { calls, walletActions } = createWalletActions()
 			const renderedComponent = await renderIntoDocument(h(WalletActionsProvider, { walletActions }, h(ForkAuctionSection, createLiveAuctionProps(accountState))))
 			cleanupRenderedComponent = renderedComponent.cleanup
-			const fix = expectWalletFixDescribesAction(document.body, 'Submit bid', fixLabel)
+			const fix = expectWalletFixDescribesAction(document.body, LIVE_AUCTION_BID_LABEL, fixLabel)
 			expect(document.body.textContent).not.toContain('Connect a wallet before using fork and auction actions.')
 			fireEvent.click(fix)
 			expect(calls).toEqual([fixLabel === 'Connect wallet' ? 'connect' : 'switch'])

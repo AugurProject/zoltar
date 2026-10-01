@@ -213,6 +213,8 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 					forkAuctionResult.value = result
 					forkAuctionFeedback.value = createSuccessActionFeedback(actionName, getSuccessTitle(actionName, displayTitleOverride), result.hash)
 					onTransactionPresented(createForkAuctionSuccessPresentation(result))
+					// A submitted bid must not leave its amount behind for an accidental second bid; child-auction bids share this form too.
+					if (actionName === 'submitBid') setForkAuctionForm(current => (current.submitBidAmount === '' ? current : { ...current, submitBidAmount: '' }))
 					if (!shouldApplyCurrentSelection()) return
 					const details = await dependencies.loadForkAuctionDetails(result.securityPoolAddress)
 					if (!shouldApplyCurrentSelection()) return

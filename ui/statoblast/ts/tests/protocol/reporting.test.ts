@@ -10,7 +10,7 @@ import { reportOutcomeWithWalletViaVault } from '@zoltar/ui-statoblast-shared/pr
 import { describe, expect, test } from 'bun:test'
 import { concatHex, decodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbiParameters, zeroAddress, type Address, type Hex } from '@zoltar/core-shared/evm/ethereum'
 import { claimParentEscalationDeposits, migrateVaultWithUnresolvedEscalation } from '@zoltar/ui-statoblast-shared/protocol/forks.js'
-import { approveReportingRep, loadReportingDetails, reportOutcomeInSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
+import { approveReportingRep, loadReportingDetails, reportOutcomeInSecurityPool, withdrawEscalationFromSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/reporting.js'
 import { buildForkCarriedEscalationProofs, withdrawForkedEscalationDeposits } from '@zoltar/ui-statoblast-shared/protocol/reportingCarryState.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_SecurityPoolForker_SecurityPoolForker } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
@@ -264,6 +264,7 @@ describe('reporting protocol client', () => {
 		const result = await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'yes', 7n, 6n)
 		expect(previews[0]?.reviewAmount).toBe('0.000000000000000006\u00a0REP')
 		expect(previews[0]?.reviewTitle).toBe('Report Yes · 0.000000000000000006\u00a0REP')
+		expect(previews[0]?.reviewDescription).toBe('Stakes REP on Yes. If Yes loses, this REP is lost; if it wins, it returns with any earned reward.')
 
 		expect(capturedTo).toBe(securityPoolAddress)
 		expect(capturedData).toBeDefined()
@@ -274,6 +275,44 @@ describe('reporting protocol client', () => {
 		expect(decodedCall.functionName).toBe('depositWalletRepToEscalationGame')
 		expect(decodedCall.args).toEqual([1n, 7n])
 		expect(result).toMatchObject({ action: 'reportOutcome', securityPoolAddress, universeId: 9n })
+	})
+
+	test('reportOutcomeInSecurityPool explains a fork-triggering report in its review step', async () => {
+		const client = createMockWriteClient(
+			() => undefined,
+			async request => {
+				if (request.functionName === 'universeId') return 9n
+				if (request.functionName === 'escalationGame') return escalationGameAddress
+				if (request.functionName === 'getEscalationGameEndDate') return 1000n
+				if (request.functionName === 'forkContinuation') return false
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		)
+		const previews: TransactionRequestPreview[] = []
+		const writeClient = asWriteClient(client)
+		writeClient.getBlock = async () => createBlockWithTimestamp(1n)
+		writeClient.onTransactionPrepared = preview => previews.push(preview)
+		await reportOutcomeInSecurityPool(writeClient, securityPoolAddress, 'no', 6n, 6n, 'vault', true)
+		expect(previews[0]?.reviewTitle).toBe('Report No & trigger fork · 0.000000000000000006\u00a0REP')
+		expect(previews[0]?.reviewDescription).toBe('Fills No to the non-decision threshold while another side is already there. Escalation ends without a decision, deposits lock, and the question can only resolve through a universe fork. This can’t be undone.')
+	})
+
+	test('withdrawEscalationFromSecurityPool explains that clearing losing deposits returns no REP', async () => {
+		const client = createMockWriteClient(
+			() => undefined,
+			async request => {
+				if (request.functionName === 'universeId') return 9n
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			},
+		)
+		const previews: TransactionRequestPreview[] = []
+		const writeClient = asWriteClient(client)
+		writeClient.onTransactionPrepared = preview => previews.push(preview)
+		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'no', [0n], 0n)
+		expect(previews[0]?.reviewTitle).toBe('Clear No deposits (worth 0 REP)')
+		expect(previews[0]?.reviewDescription).toBe('Returns no REP. Removes these losing deposits from your vault’s dispute stake so you can redeem your vault REP from this pool.')
+		await withdrawEscalationFromSecurityPool(writeClient, securityPoolAddress, 'yes', [0n], 4n)
+		expect(previews[1]?.reviewDescription).toBeUndefined()
 	})
 
 	test('reportOutcomeInSecurityPool preserves vault-funded deposits for fork continuations', async () => {

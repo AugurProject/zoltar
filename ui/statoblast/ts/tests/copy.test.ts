@@ -30,7 +30,7 @@ test('truth-auction settlement copy identifies REP backing-unit credits', () => 
 
 test('truth-auction dynamic values use nonbreaking separators', () => {
 	expect(forkAuctionCopy.formatEthPerRepValue('12')).toBe('12\u00a0ETH per REP')
-	expect(forkAuctionCopy.formatSelectPriceValueEthRepFromDepthChart('12')).toContain('12\u00a0ETH per REP')
+	expect(forkAuctionCopy.formatDepthChartPointLabel({ depth: '3', price: '12', status: forkAuctionCopy.depthChartClearingStatus })).toBe('Select bid price 12\u00a0ETH per REP. 3\u00a0ETH bid at or above this price. Current clearing price.')
 	expect(forkAuctionCopy.zeroEth).toBe('0\u00a0ETH')
 })
 

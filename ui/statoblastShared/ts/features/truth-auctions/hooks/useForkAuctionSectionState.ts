@@ -6,11 +6,24 @@ import { useState } from 'preact/hooks'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getTimeRemaining } from '../lib/forkAuction.js'
-import { buildTruthAuctionDepthPoints, formatTruthAuctionTickPriceInput, getTruthAuctionBidGuardMessage, getTruthAuctionBidPreview, getTruthAuctionBidPriceValidationMessage, getTruthAuctionLiveBidGuidance, getTruthAuctionOverviewProgress, getTruthAuctionWinningThresholdPrice } from '../lib/truthAuctionBook.js'
+import {
+	buildTruthAuctionDepthPoints,
+	formatTruthAuctionTickPriceInput,
+	getTruthAuctionBidGuardMessage,
+	getTruthAuctionBidPreview,
+	getTruthAuctionBidPriceRounding,
+	getTruthAuctionBidPriceValidationMessage,
+	getTruthAuctionLiveBidGuidance,
+	getTruthAuctionMaxBidAmount,
+	getTruthAuctionOverviewProgress,
+	getTruthAuctionSubmitBidLabelParts,
+	getTruthAuctionWinningThresholdPrice,
+	TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH,
+} from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
-import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -301,6 +314,17 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		auctionableAttoRepAtFork: context.forkAuctionDetails?.auctionableAttoRepAtFork,
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(context.forkAuctionForm.submitBidPrice)
+	const bidPriceRounding = getTruthAuctionBidPriceRounding(context.forkAuctionForm.submitBidPrice)
+	const submitBidLabelParts = getTruthAuctionSubmitBidLabelParts(context.forkAuctionForm.submitBidAmount, context.forkAuctionForm.submitBidPrice)
+	const submitBidLabel = submitBidLabelParts === undefined ? forkAuctionCopy.submitBid : forkAuctionCopy.formatSubmitBidLabel(formatCurrencyInputBalance(submitBidLabelParts.amountAttoEth), submitBidLabelParts.priceInput)
+	const walletBalanceAttoEth = context.accountState.ethBalanceAttoEth
+	const bidAmountHint = walletBalanceAttoEth === undefined || truthAuctionStatus === undefined ? undefined : forkAuctionCopy.formatBidAmountHint(formatCurrencyBalance(walletBalanceAttoEth), formatCurrencyBalance(truthAuctionStatus.minBidSizeAttoEth), formatCurrencyBalance(TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH))
+	const maxBidAmountAttoEth = getTruthAuctionMaxBidAmount(walletBalanceAttoEth)
+	let maxBidUnavailableReason: string | undefined
+	if (context.accountState.address === undefined) maxBidUnavailableReason = forkAuctionCopy.forkActionWalletRequired
+	else if (maxBidAmountAttoEth === undefined) maxBidUnavailableReason = forkAuctionCopy.loadingWalletEthBalance
+	else if (maxBidAmountAttoEth === 0n) maxBidUnavailableReason = forkAuctionCopy.walletEthBelowGasReserve
+	const bidAmountMax = { amount: maxBidAmountAttoEth, unavailableReason: maxBidUnavailableReason }
 	const startTruthAuctionAvailabilityMessage = (() => {
 		if (isStartTruthAuctionInProgress) return forkAuctionCopy.startingTruthAuction
 		return startTruthAuctionGuardMessage
@@ -415,6 +439,10 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 		stageActionContext,
 		truthAuctionEndsAt,
 		submitBidGuardMessage,
+		submitBidLabel,
+		bidAmountHint,
+		bidAmountMax,
+		bidPriceRounding,
 		onSubmitBidForSelectedAuction,
 		isTruthAuctionDetailsLoading,
 		isMigrationRequired,
