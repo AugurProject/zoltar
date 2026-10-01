@@ -750,6 +750,71 @@ test('keeps submitted funding and pool details beside the original action after 
 	}
 })
 
+test.each(['reverted', 'rejected'] as const)('keeps approvals in place after a %s price request and rechecks them on retry', async outcome => {
+	const dom = installDomEnvironment()
+	const presentation = signal<GlobalTransactionPresentation | undefined>(undefined)
+	let attempts = 0
+	const hash: Hash = `0x${'d'.repeat(64)}`
+	const onConfirm = async (_request: RequestPriceReview, signal?: AbortSignal) => {
+		attempts += 1
+		const controller = createTransactionStepController(signal)
+		controller.setPlan([...['REP', 'WETH'].map(tokenSymbol => ({ ...step, title: `Approve ${tokenSymbol}`, approval: { requiredAmount: 3n, approvedAmount: attempts === 1 ? 3n : 0n, tokenSymbol, tokenUnits: 0 } })), { ...step, title: 'Request new price' }])
+		try {
+			if (attempts > 1) {
+				await controller.chooseFunding([0, 1])
+				return
+			}
+			await controller.chooseFunding([])
+			await controller.review(2)
+			if (outcome === 'reverted') {
+				controller.submitted(hash)
+				controller.receipt(hash, 'reverted')
+			} else controller.failed({ kind: 'rejected', message: 'User rejected the request.' })
+			presentation.value = { tone: 'error', title: 'Price request failed', detail: outcome === 'reverted' ? 'Transaction reverted.' : 'User rejected the request.', hash: outcome === 'reverted' ? hash : undefined }
+		} catch (error) {
+			if (!(error instanceof Error) || !error.message.includes('canceled')) throw error
+		}
+	}
+	function Harness() {
+		return (
+			<GlobalTransactionPresentationProvider transaction={presentation.value}>
+				<RequestPriceModal {...props} onConfirm={onConfirm} />
+				<TransactionStepsModal contextKey='wallet' />
+				<GlobalTransactionDialog transaction={presentation.value} />
+			</GlobalTransactionPresentationProvider>
+		)
+	}
+	const rendered = await renderIntoDocument(<Harness />)
+	try {
+		const queries = within(document.body)
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '2' } }))
+		await settle()
+		const form = queries.getByRole('dialog', { name: 'Request new price' })
+		const approvals = ['REP', 'WETH'].map(symbol => within(form).getByRole('button', { name: `${symbol} approved ✓` }))
+		const actionRows = Array.from(form.querySelectorAll('.transaction-plan-action'))
+		await act(() => fireEvent.click(within(form).getByRole('button', { name: /^Request new price/ })))
+		await settle()
+		expect(transactionSteps.value).toBeUndefined()
+		for (const [index, row] of actionRows.entries()) expect(form.querySelectorAll('.transaction-plan-action')[index] === row).toBe(true)
+		for (const approval of approvals) {
+			expect(form.contains(approval)).toBe(true)
+			expect(approval.hasAttribute('disabled')).toBe(true)
+		}
+		await act(() => fireEvent.click(within(form).getByRole('button', { name: /^Request new price/ })))
+		await settle()
+		expect(attempts).toBe(2)
+		for (const symbol of ['REP', 'WETH'])
+			expect(
+				within(form)
+					.getByRole('button', { name: new RegExp(`Approve.*${symbol}`) })
+					.hasAttribute('disabled'),
+			).toBe(false)
+	} finally {
+		await rendered.cleanup()
+		dom.cleanup()
+	}
+})
+
 test.each(['preparation', 'transaction step'] as const)('prepares again after a %s failure when the price changes or a new quote arrives', async failure => {
 	const dom = installDomEnvironment()
 	let attempts = 0

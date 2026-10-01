@@ -43,7 +43,7 @@
 						<tr>
 							<td><code>forkZoltarWithOwnEscalationGame(securityPool)</code></td>
 							<td>Anyone</td>
-							<td>Pool operational with no inherited fixed outcome; its escalation game reports the supplied pool from <code>securityPool()</code> when validated and <code>canTriggerOwnFork()</code> is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome; universe not already forked. The game-local predicate does not bypass the pool guard. Unlike external-universe initiation, this entrypoint does not require declared-share-token authorization; neither path authenticates the supplied address against the configured pool factory. See the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
+							<td>Pool operational with no inherited fixed outcome; its escalation game reports the supplied pool from <code>securityPool()</code> when validated and <code>canTriggerOwnFork()</code> is true because it recorded a local non-decision or inherited a threshold tie without a game-level fixed outcome; universe not already forked; the pool and game REP released to the forker reaches the Zoltar fork threshold (<code>Fork threshold not reached</code>). The game-local predicate does not bypass the pool guard. Unlike external-universe initiation, this entrypoint does not require declared-share-token authorization; neither path authenticates the supplied address against the configured pool factory. See the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>Uses the supplied pool game's non-decision to fork Zoltar, freezes that pool, and records own-fork REP buckets and snapshot state keyed by its address. The snapshot is canonical only when the supplied pool is already registered by the configured <code>SecurityPoolFactory</code>.</td>
 							<td><code>SecurityPoolForkSnapshot</code>, <code>ParentRepLocked</code>, and Zoltar fork events; additionally <code>DisputeStakedRepDrainedAtFork</code> when unresolved escalation exists</td>
 						</tr>
@@ -71,7 +71,7 @@
 						<tr>
 							<td><code>migrateVaultWithUnresolvedEscalation(securityPool, vault, childOutcomeIndex)</code></td>
 							<td>The named vault owner</td>
-							<td>Migration window open; caller equals <code>vault</code>; selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
+							<td>Migration window open; caller equals <code>vault</code>; the fork recorded unresolved escalation (<code>unresolvedEscalationAtFork</code>); selected child not already recorded for this optional cleanup; the selected child's reported nonzero escalation game passes the <a href="#child-game-trust-boundary">child-game trust boundary</a>.</td>
 							<td>First runs ordinary migration for the same vault, which may convert its parent REP backing-unit claim to REP and credit that REP as child-local backing units; transfer underwriting commitment and vault bad debt to the selected child while preserving aggregate bad debt; checkpoint but retain claimable fees in the parent vault; and separately route proportional pool-level settlement collateral. The underwriting commitment migrates separately from REP backing. It returns the selected child and its captured, validated escalation game to the unresolved-accounting cleanup phase, which reuses those exact addresses without reading the child's game again. The cleanup then clears that vault's unresolved parent escalation-deposit accounting in constant-size work and records it; the cleanup neither funds dispute-staked REP backing nor authorizes carried proofs.</td>
 							<td>Vault migration events, including <code>VaultBadDebtMigrated</code>, plus <code>EscalationMigrationEntitlementInitialized</code> on first export and <code>EscalationMigrationEntitlementMaterialized</code> for the selected child</td>
 						</tr>
@@ -107,7 +107,7 @@
 							<td><code>takeOverUnassignedCommitment(securityPool, maximumCommitmentAttoEth)</code></td>
 							<td>Receiving vault owner</td>
 							<td>Positive residual commitment within the caller’s explicit maximum; no auction purchases; fresh price; operational, unforked pool; receiver fully backs its entire resulting underwriting commitment. Sold entitlements are never available for takeover.</td>
-							<td>Assigns all residual ETH commitment and unassigned REP backing from a finalized zero-purchase auction to the caller. Conserves total commitments and backing units. Preserves earned fees and starts recovered fee rights at the takeover checkpoint.</td>
+							<td>Assigns all residual ETH commitment, unassigned REP backing, and unclaimed auctioned bad debt from a finalized zero-purchase auction to the caller; the bad debt is assigned only while the recorded auction bad-debt generation is current. Conserves total commitments and backing units. Preserves earned fees and starts recovered fee rights at the takeover checkpoint.</td>
 							<td><code>UnassignedCommitmentTakenOver</code> and vault/pool accounting checkpoints</td>
 						</tr>
 						<tr>

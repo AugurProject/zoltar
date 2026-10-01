@@ -98,7 +98,7 @@
 							<td><code>EscalationGameSet</code> on first deposit; game emits <code>LocalDepositAppended</code> and <code>DepositOnOutcome</code></td>
 						</tr>
 						<tr>
-							<td><code>depositToEscalationGame(outcome, maxAmount)</code></td>
+							<td><code>depositToEscalationGame(outcome, maximumDepositAttoRep)</code></td>
 							<td>Vault owner</td>
 							<td>Question end time reached (<code>block.timestamp &gt;= endTime</code>); pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve both full-commitment backing requirements; a fresh price is required when total underwriting commitment is nonzero.</td>
 							<td>Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses <code>nonDecisionThresholdAttoRep - 1</code> instead. Repeat deposits use the existing game's stored <code>startBondAttoRep</code> and <code>nonDecisionThresholdAttoRep</code>. Every accepted deposit removes enough REP backing units and escrows dispute-staked REP on the selected outcome.</td>
@@ -121,7 +121,7 @@
 						<tr>
 							<td><code>updateSettlementCollateral()</code></td>
 							<td>Anyone</td>
-							<td>No caller or lifecycle restriction. It returns unchanged when the accumulator is already at or beyond the clamped timestamp.</td>
+							<td>No caller or lifecycle restriction. When the accumulator is already at or beyond the clamped timestamp, it leaves the accumulator unchanged and emits no event, though it still caches the current fee-epoch cutoff.</td>
 							<td>For an initial pool, accrues elapsed fees through question end while its universe remains unforked; if its question remains unresolved when the universe forks, the fork timestamp replaces question end as the cutoff, including a later question-end-to-fork interval. A question finalized before the fork retains its question-end cutoff. Finalizing an activated child starts a separate epoch at that finalization timestamp, which runs until the child game resolves or the child universe subsequently forks. An inherited fixed-outcome child without a continuation game fixes its cutoff at finalization and accrues no later fees. Accumulator timestamps prevent charging an interval twice. It moves whole credited fees from settlement collateral into the unallocated accrued-fee reserve and advances the accumulator. With positive elapsed time but zero fee-eligible underwriting commitment it clears denominator-specific remainder and advances the timestamp without charging fees.</td>
 							<td><code>PoolAccountingCheckpoint</code> whenever positive elapsed time is processed, including the zero-commitment branch; no event for an unchanged timestamp</td>
 						</tr>

@@ -43,7 +43,7 @@
 				<ul>
 					<li><code>minimumAfterSlippage(amount, slippageBps?)</code> floors and <code>maximumAfterSlippage(amount, slippageBps?)</code> ceils a bound; slippage defaults to <code>UI_SLIPPAGE_BPS</code> (50) and must be between 0 and 500 basis points.</li>
 					<li><code>stableSimulation(client, simulate)</code> reads the latest block and passes its <code>blockNumber</code>, <code>blockHash</code>, and <code>blockTimestamp</code> to <code>simulate</code>, whose reads must all pin that block hash.</li>
-					<li><code>simulateWithDeadline(client, expiry, simulate)</code> does the same and also resolves <code>expiry</code>, either an absolute deadline or <code>{ validityMinutes }</code> between 1 and 1,440, against the pinned block's timestamp.</li>
+					<li><code>simulateWithDeadline(client, expiry, simulate, resolveDeadline?)</code> does the same and also resolves <code>expiry</code>, either an absolute deadline or <code>{ validityMinutes }</code> between 1 and 1,440, against the pinned block's timestamp. The optional <code>resolveDeadline(block, requestedDeadline)</code> can replace that deadline, and <code>simulate</code> receives <code>(block, deadline)</code>.</li>
 					<li><code>retainApprovedMinimum(approved, refreshed, label)</code> and <code>retainApprovedMaximum(approved, refreshed, label)</code> return the approved bound, or throw when the submission-time simulation no longer satisfies it.</li>
 				</ul>
 				<p>Pure math is a responsive preview only. A quote does not expire when a new block arrives: immediately before wallet submission the client simulates the actual call again at the latest block, and submits with the bounds and deadline approved in the quote only if that simulation succeeds within them.</p>

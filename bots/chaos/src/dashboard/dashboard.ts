@@ -1,3 +1,4 @@
+import { registerCompleteConfigurationForm } from './complete-configuration-form.ts'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
 import { createActivityTimeline } from './activity-timeline.js'
 import { createCatalogGroups } from './catalog-groups.js'
@@ -101,9 +102,11 @@ for (const filter of [elements.catalogFilter, elements.catalogClassificationFilt
 }
 registerPauseControls({ state, elements, put, refresh, reconcileUnknownMutation, renderHeader: healthView.renderHeader })
 const syncWorkflowSubmit = registerRecoveryForms({ state, elements, contexts: recoveryContexts, put, refresh, reconcileUnknownMutation, requestRecoveryContextRefresh })
+const completeConfigurationForm = registerCompleteConfigurationForm(state, reconcileUnknownMutation)
 registerSettingsForms({ state, elements, settingsDraft, put, refresh, reconcileUnknownMutation, renderConfiguration: settingsView.renderConfiguration })
 
 function renderSnapshot(value: Snapshot) {
+	completeConfigurationForm.renderAvailability()
 	healthView.renderHeader(value)
 	healthView.renderOverview(value)
 	catalogView.renderCatalog(value.operationEvaluations)

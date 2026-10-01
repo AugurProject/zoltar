@@ -6,7 +6,7 @@ import * as transactionCopy from '../copy/transaction.js'
 import { AddressValue } from './AddressValue.js'
 import { ReadOnlyDetailAccordion } from './ReadOnlyDetailAccordion.js'
 import { TransactionObjectContext } from './TransactionObjectContext.js'
-import type { GlobalTransactionRow } from '../types/components.js'
+import type { ActionAvailability, GlobalTransactionRow } from '../types/components.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { GlobalTransactionPresentationProvider, useGlobalTransactionPresentation } from './GlobalTransactionPresentationContext.js'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
@@ -41,9 +41,11 @@ function TransactionStepReview({ contractAddress, contractLabel, description, ro
 	)
 }
 
-function useTransactionStepsState() {
+type Workflow = NonNullable<typeof transactionSteps.value>
+
+function useTransactionStepsState(retainedWorkflow?: Workflow) {
 	const presentation = useGlobalTransactionPresentation()
-	const workflow = transactionSteps.value
+	const workflow = retainedWorkflow ?? transactionSteps.value
 	const current = workflow?.steps[workflow.activeIndex]
 	const operationFailed = presentation?.tone === 'error'
 	const operationError = typeof presentation?.detail === 'string' ? presentation.detail : copy.requirementsFailed
@@ -62,11 +64,14 @@ type TransactionStepsActionsProps = {
 	/** Keep the actions scrolled into view as they change state when the review sits in page flow under the transaction tray. */
 	keepActionsVisible?: boolean
 	onClose?: (() => void) | undefined
+	/** A detached failed plan stays visible, but cannot send transactions through its old controller. */
+	retainedWorkflow?: Workflow | undefined
+	retryAction?: { onClick: () => void; availability: ActionAvailability } | undefined
 }
 
 /** The review's confirm, approval, and cancel controls. */
-function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose }: TransactionStepsActionsProps) {
-	const { error, pending, presentation, workflow } = useTransactionStepsState()
+function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount = false, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsActionsProps) {
+	const { error, pending, presentation, workflow } = useTransactionStepsState(retainedWorkflow)
 	const actionsRef = useRef<HTMLDivElement>(null)
 	const pendingActionRef = useRef<HTMLDivElement>(null)
 	const focusWasInActions = useRef(false)
@@ -100,6 +105,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 	const fundingReason = funding.length > 0 ? copy.fundingRequired : copy.prerequisitesRequired
 	const blockedReason = pending ? copy.transactionPending : fundingReason
 	const prerequisiteReason = pending ? copy.transactionPending : copy.prerequisitesRequired
+	const approvalBlockedReason = retainedWorkflow === undefined ? prerequisiteReason : copy.notCompleted
 	// Finished steps stay in place, disabled and labelled with their result, so the plan never loses a row as it advances.
 	const getCompletedLabel = (step: (typeof workflow.steps)[number]) => {
 		const approvalSatisfied = step.approval !== undefined && step.approval.approvedAmount !== undefined && step.approval.requiredAmount <= step.approval.approvedAmount
@@ -127,7 +133,9 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 								const completedLabel = getCompletedLabel(step)
 								const active = index === workflow.activeIndex
 								const final = index === workflow.steps.length - 1
-								const ready = step.phase === 'review' && !pending && error === undefined
+								const ready = retainedWorkflow === undefined && step.phase === 'review' && !pending && error === undefined
+								const retry = final ? retryAction : undefined
+								const approvalBlocked = completedLabel === undefined && (retainedWorkflow !== undefined || step.phase === 'upcoming')
 								const status = { skipped: copy.skipped, upcoming: step.optional ? copy.ifNeeded : undefined, review: undefined, wallet: undefined, pending: undefined, confirmed: transactionCopy.confirmed, failed: copy.notCompleted }[step.phase]
 								const detail = [step.phase === 'upcoming' || step.spender !== undefined || step.paidFrom !== undefined || step.approval !== undefined ? undefined : step.amount, status].filter(value => value !== undefined).join(' · ')
 								return (
@@ -141,7 +149,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 												allowanceError={undefined}
 												allowanceLoading={false}
 												approvedAmount={step.approval.approvedAmount}
-												guardMessage={step.phase === 'upcoming' && completedLabel === undefined ? prerequisiteReason : undefined}
+												guardMessage={approvalBlocked ? approvalBlockedReason : undefined}
 												disabled={!ready}
 												onApprove={amount => workflow.confirmStep(index, amount)}
 												pending={isTransactionStepInFlight(step)}
@@ -172,14 +180,15 @@ function TransactionStepsActions({ cancelable = true, contextKey, focusOnMount =
 												pendingLabel={copy.formatPendingAction(step.title)}
 												pending={active && pending}
 												onClick={() => {
-													if (ready) workflow.confirmStep(index)
+													if (retry !== undefined) retry.onClick()
+													else if (ready) workflow.confirmStep(index)
 												}}
-												availability={{ disabled: !ready, reason: completedLabel ?? (step.phase === 'upcoming' ? blockedReason : status) }}
-												showDisabledReason={final && step.phase === 'upcoming'}
+												availability={retry?.availability ?? { disabled: !ready, reason: completedLabel ?? (step.phase === 'upcoming' ? blockedReason : status) }}
+												showDisabledReason={final && (step.phase === 'upcoming' || retry?.availability.disabled === true)}
 												tone={step.approval === undefined ? 'primary' : 'secondary'}
 											/>
 										)}
-										{final && cancelable && !terminal ? (
+										{final && cancelable && (!terminal || retryAction !== undefined) ? (
 											<div className='actions transaction-step-close'>
 												<button className='secondary' type='button' onClick={onClose ?? workflow.cancel} disabled={pending}>
 													{commonCopy.cancel}
@@ -201,8 +210,8 @@ type TransactionStepsContentProps = TransactionStepsActionsProps & {
 	heading?: string | undefined
 }
 
-export function TransactionStepsContent({ cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose }: TransactionStepsContentProps) {
-	const { current, presentation, workflow } = useTransactionStepsState()
+export function TransactionStepsContent({ cancelable = true, contextKey, focusOnMount = false, heading, keepActionsVisible = false, onClose, retainedWorkflow, retryAction }: TransactionStepsContentProps) {
+	const { current, presentation, workflow } = useTransactionStepsState(retainedWorkflow)
 	if (workflow === undefined || current === undefined) return undefined
 	const completed = workflow.steps.every(step => step.phase === 'confirmed' || step.phase === 'skipped')
 	const funding = workflow.steps.flatMap(step => step.tokenFunding ?? [])
@@ -236,7 +245,7 @@ export function TransactionStepsContent({ cancelable = true, contextKey, focusOn
 				)}
 				{funding.length === 0 || completed ? undefined : <p className='detail transaction-funding-note'>{copy.fundingDetail}</p>}
 			</div>
-			<TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} />
+			<TransactionStepsActions cancelable={cancelable} contextKey={contextKey} focusOnMount={focusOnMount} keepActionsVisible={keepActionsVisible} onClose={onClose} retainedWorkflow={retainedWorkflow} retryAction={retryAction} />
 		</>
 	)
 }

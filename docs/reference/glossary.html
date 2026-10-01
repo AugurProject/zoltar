@@ -64,7 +64,7 @@
 					<dt id="underwriting-commitment">Underwriting commitment</dt>
 					<dd>A vault owner's standing ETH underwriting amount (code field <code>underwritingLimitAttoEth</code>), separate from REP backing. Its share of the pool total determines proportional settlement obligations and fee rights.</dd>
 					<dt id="retention">Retention</dt>
-					<dd>The gradual transfer of outstanding complete-set collateral into a SecurityPool's fee reserve. Because it runs continuously, the ETH backing one complete set falls over time; see <a href="../explanation/fees.html">open-interest fees</a>.</dd>
+					<dd>The per-second fraction of a SecurityPool's outstanding complete-set collateral that stays with complete-set holders; the remainder moves continuously into the pool's fee reserve. Because retention is below one, the ETH backing one complete set falls over time; see <a href="../explanation/fees.html">open-interest fees</a>.</dd>
 				</dl>
 			</section>
 			<section id="escalation">
@@ -73,7 +73,7 @@
 					<dt id="escalation-game">Escalation Game</dt>
 					<dd>The local Statoblast dispute mechanism in which REP-backed balances accumulate behind Invalid, Yes, and No.</dd>
 					<dt id="start-bond">Start bond</dt>
-					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>, which must be below the non-decision threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold. A child pool continuing a forked game keeps its parent's start bond.</dd>
+					<dd>The minimum Escalation Game deposit: the larger of 1 REP and the universe's theoretical REP supply when the pool was deployed ÷ 10<sup>7</sup>. Origin-pool deployment requires it to be below the non-decision threshold; a game started with a bond at or above that threshold is clamped to one atto-REP below that threshold. A smaller deposit is accepted only when it fills an outcome exactly to that threshold. A child pool continuing a forked game keeps its parent's start bond.</dd>
 					<dt id="binding-capital">Binding capital</dt>
 					<dd>The median of the three outcome balances that determines the Escalation Game's scheduled deadline.</dd>
 					<dt id="non-decision-threshold">Non-decision threshold</dt>

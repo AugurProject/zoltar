@@ -50,16 +50,31 @@ export function GlobalTransactionDialog({ activeUniverseId, routeKey, transactio
 	}
 	useEffect(() => {
 		if (!visible || current?.tone !== 'error' || typeof requestAnimationFrame !== 'function') return
-		const frame = requestAnimationFrame(() => {
+		const reserveSpace = () => {
 			const panel = dialogRef.current?.getBoundingClientRect()
-			if (panel === undefined) return
+			if (panel === undefined || panel.height === 0) return
+			document.documentElement.style.setProperty('--transaction-status-inset', `${window.innerHeight - panel.top}px`)
+			const actions = document.querySelector<HTMLElement>('.operation-modal-panel .transaction-step-actions')
+			if (actions !== null) {
+				actions.scrollIntoView({ block: 'end' })
+				return
+			}
 			const obstructed = Array.from(document.querySelectorAll<HTMLElement>('.tx-action-button, .existing-pool-action')).find(action => {
 				const rect = action.getBoundingClientRect()
 				return rect.width > 0 && rect.height > 0 && rect.bottom > panel.top && rect.top < panel.bottom && rect.right > panel.left && rect.left < panel.right
 			})
 			obstructed?.scrollIntoView({ block: 'center' })
-		})
-		return () => cancelAnimationFrame(frame)
+		}
+		const frame = requestAnimationFrame(reserveSpace)
+		const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(reserveSpace)
+		if (dialogRef.current !== null) observer?.observe(dialogRef.current)
+		window.addEventListener('resize', reserveSpace)
+		return () => {
+			cancelAnimationFrame(frame)
+			observer?.disconnect()
+			window.removeEventListener('resize', reserveSpace)
+			document.documentElement.style.removeProperty('--transaction-status-inset')
+		}
 	}, [current?.hash, current?.tone, visible])
 	if (!visible || current === undefined) return undefined
 

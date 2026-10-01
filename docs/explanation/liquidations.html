@@ -51,7 +51,7 @@
 
 			<section id="queue-semantics">
 				<h2>Reservation and queued execution</h2>
-				<p>When the receiver is not the operator, the price coordinator reserves the receiver's approval quota while it obtains a fresh REP/ETH price. Execution then rechecks the live target and receiver rather than trusting the earlier preview. Success consumes only the commitment actually moved and releases unused quota; expiration or terminal failure releases the reservation so the receiver is not blocked permanently. The <a href="../reference/operator-guardrails.html#repeth-oracle-operations">REP/ETH oracle operations reference</a> covers staging, recovery, and failure handling.</p>
+				<p>When the receiver is not the operator, the price coordinator reserves the receiver's approval quota when the liquidation is staged, whether it runs immediately on a fresh REP/ETH price or waits for one. Execution then rechecks the live target and receiver rather than trusting the earlier preview. Success consumes only the commitment actually moved and releases unused quota; expiration or terminal failure releases the reservation so the receiver is not blocked permanently. The <a href="../reference/operator-guardrails.html#repeth-oracle-operations">REP/ETH oracle operations reference</a> covers staging, recovery, and failure handling.</p>
 			</section>
 
 			<section id="fork-behavior">

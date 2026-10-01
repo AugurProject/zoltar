@@ -25,6 +25,7 @@ describe('local UI Docker launchers', () => {
 
 			expect(compose).toEqual(
 				expect.objectContaining({
+					name: app.id === 'zoltar' ? 'zoltar-ui' : `zoltar-${app.id}`,
 					networks: { default: { external: true, name: 'zoltar' } },
 					services: {
 						[app.id]: expect.objectContaining({
@@ -35,7 +36,9 @@ describe('local UI Docker launchers', () => {
 					},
 				}),
 			)
-			const launchCommands = ['docker compose stop || goto finish', 'docker compose build || goto finish', 'docker compose up --no-build --force-recreate', ':finish']
+			const projectName = app.id === 'zoltar' ? 'zoltar-ui' : `zoltar-${app.id}`
+			const composeCommand = `docker compose --file compose.yaml --project-name ${projectName}`
+			const launchCommands = [`${composeCommand} stop ${app.id} || goto finish`, `${composeCommand} build ${app.id} || goto finish`, `${composeCommand} up --no-build --force-recreate ${app.id}`, ':finish']
 			expect(commands).toEqual(['pushd "%~dp0" || exit /b 1', 'docker network inspect zoltar >nul 2>&1 || docker network create zoltar || exit /b 1', ...launchCommands, 'set "exit_code=%errorlevel%"', 'popd', 'pause', 'exit /b %exit_code%'])
 		})
 	}

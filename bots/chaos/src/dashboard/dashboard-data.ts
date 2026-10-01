@@ -139,6 +139,7 @@ export type Snapshot = {
 }
 
 export type Configuration = {
+	completeConfigurationAvailable?: boolean | undefined
 	allowHighRiskOperations?: boolean | undefined
 	allowIrreversibleOperations?: boolean | undefined
 	initializeGenesisUniverse?: boolean | undefined
@@ -428,6 +429,7 @@ export function parseConfiguration(value: unknown): Configuration {
 		allowIrreversibleOperations: booleanValue(source['allowIrreversibleOperations']),
 		chainId: scalarValue(source['chainId']),
 		configurationCommitIndeterminate: booleanValue(source['configurationCommitIndeterminate']),
+		completeConfigurationAvailable: booleanValue(source['completeConfigurationAvailable']),
 		connectivity:
 			connectivity === undefined
 				? undefined

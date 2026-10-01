@@ -623,7 +623,7 @@ for (const functionName of ['requestPrice', 'requestPriceIfNeededAndStageOperati
 				expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('already pending')
 			} else {
 				expect(value).toBe(hash)
-				expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n })
+				expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n, gas: 150002n })
 				expect(sendTransaction).toHaveBeenCalledTimes(1)
 			}
 		})
@@ -638,6 +638,24 @@ test('a reverted final transaction does not claim there are remaining steps', as
 	controller.submitted(hash)
 	controller.receipt(hash, 'reverted')
 	expect(transactionSteps.value?.steps[0]?.failure?.message).toBe('Transaction reverted.')
+})
+
+test.each([undefined, 90000n, 200000n])('submits a fee-aware buffered contract gas estimate without reducing an explicit limit: %s', async gas => {
+	const { client } = setup()
+	const writeContract = mock(async () => hash)
+	const estimateGas = mock(async () => 100001n)
+	const reviewed = createReviewedClient({ ...client, writeContract, estimateGas, getGasPrice: async () => 2n })
+	const parameters = {
+		address: account,
+		abi: [{ type: 'function', name: 'requestPrice', stateMutability: 'payable', inputs: [{ name: 'price', type: 'uint256' }], outputs: [] }],
+		functionName: 'requestPrice',
+		args: [1n],
+		value: 2n,
+		gas,
+	} as const
+	expect(await reviewed.writeContract(parameters)).toBe(hash)
+	expect(estimateGas).toHaveBeenCalledWith({ account: client.account, to: account, data: encodeFunctionData(parameters), value: 2n, gasPrice: 2n })
+	expect(writeContract).toHaveBeenCalledWith({ ...parameters, gas: gas === 200000n ? gas : 150002n })
 })
 
 for (const diagnostic of ['out-of-gas', 'unavailable'] as const) {
