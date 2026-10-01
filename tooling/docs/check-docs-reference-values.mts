@@ -20,7 +20,8 @@ const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json',
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const operatorReference = (await Promise.all(['docs/reference/operator-guardrails.html', 'docs/reference/contract-inventory.html'].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
-const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}\n${await readFile('tooling/docs/security-pool-contract-reference.mts', 'utf8')}`
+const contractReferenceSources = ['generate-contract-interaction-reference', 'contract-reference-metadata', 'contract-reference-event-schemas', 'contract-reference-abi-surface', 'core-contract-references', 'fork-escalation-contract-references', 'oracle-market-contract-references', 'security-pool-contract-reference']
+const contractReferenceGenerator = (await Promise.all(contractReferenceSources.map(async sourceName => await readFile(`tooling/docs/${sourceName}.mts`, 'utf8')))).join('\n')
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
 const escalationGameClaimDelegate = await readFile('solidity/contracts/statoblast/EscalationGameClaimDelegate.sol', 'utf8')
 const escalationGameDepositDelegate = await readFile('solidity/contracts/statoblast/EscalationGameDepositDelegate.sol', 'utf8')
