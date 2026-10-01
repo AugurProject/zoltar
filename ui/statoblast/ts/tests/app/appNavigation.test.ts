@@ -5,10 +5,10 @@ import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRout
 
 installDomTestLifecycle({ url: 'http://localhost/#/pools?universe=7' })
 
-test('shows one primary row with Pools and Open Oracle under Advanced', () => {
+test('shows one primary row with Pools and Open Oracle', () => {
 	const tabs = getStatoblastRouteTabs({ route: 'pools', showDeployTab: false })
 	expect(tabs.map(tab => tab.route)).toEqual(['pools', 'open-oracle'])
-	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Advanced'])
+	expect(tabs.map(tab => tab.label)).toEqual(['Pools', 'Open Oracle'])
 	expect(tabs.map(tab => tab.hash)).toEqual(['#/pools', '#/open-oracle'])
 })
 
@@ -65,4 +65,9 @@ test('lands on Browse pools by default and rejects the removed portfolio route',
 	expect(statoblastRouting.getHash('pools')).toBe('#/pools')
 	expect(statoblastRouting.resolve('#/pools/browse')).toBe('pools')
 	expect(statoblastRouting.resolve('#/portfolio')).toBe('not-found')
+})
+
+test('treats a malformed pools path as not found instead of falling back to Browse pools', () => {
+	for (const routeHash of ['#/pools/browse/x', '#/pools/create/extra', '#/pools/operate', '#/pools/0xabc/tab/extra']) expect(statoblastRouting.resolve(routeHash)).toBe('not-found')
+	expect(statoblastRouting.resolve('#/pools/0xa83562266e1514927697d5118C8777828860aD73/vaults')).toBe('pools')
 })

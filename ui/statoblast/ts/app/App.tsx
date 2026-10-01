@@ -1,5 +1,5 @@
 import { TransactionStepsModal } from '@zoltar/ui-core-shared/components/TransactionStepsModal.js'
-import { useState } from 'preact/hooks'
+import { useCallback, useState } from 'preact/hooks'
 import { UniverseNamesProvider } from '@zoltar/ui-core-shared/components/UniverseNames.js'
 import { UniverseSwitcher } from '@zoltar/ui-core-shared/components/UniverseSwitcher.js'
 import { AppHeaderShell } from '@zoltar/ui-core-shared/app/components/AppHeaderShell.js'
@@ -15,14 +15,14 @@ import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets
 import { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
 import { useStatoblastUrlState } from './hooks/useStatoblastUrlState.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
-import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
+import { applicationTitle, formatAppDocumentTitle, getAppPageTitle, getPoolDocumentTitleDetail } from './lib/appPageTitle.js'
 import { buildRouteHref, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
 import { STATOBLAST_ROUTES, type StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
-import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
+import { getInvalidStatoblastRouteState, isInvalidStatoblastRouteState } from './lib/routeValidation.js'
 import { readUiPriceOracle, UiPriceOracleSettings } from './UiPriceOracleSettings.js'
 import { getHeaderRepPerEthPrice } from './lib/headerRepPrice.js'
 import { getRouteSecondaryNavigation, getStatoblastRouteTabs, getTransactionRouteKey } from './lib/appNavigation.js'
@@ -123,17 +123,21 @@ export function App() {
 	}
 	const invalidRouteState = getInvalidStatoblastRouteState({
 		openOracleView,
+		pageSearch: window.location.search,
 		resolvedRoute,
 		search: parseRouteHash(window.location.hash).search,
 		selectedPoolView,
 	})
-	const activeRoute = invalidRouteState.hasInvalidSelectedPoolView || invalidRouteState.hasInvalidOpenOracleView ? 'not-found' : resolvedRoute
+	const activeRoute = isInvalidStatoblastRouteState(invalidRouteState) ? 'not-found' : resolvedRoute
 	const tabNavigationProps = {
 		route,
 		tabs: getStatoblastRouteTabs({ route, showDeployTab }),
 		onRouteChange: navigate,
 	}
 	const pageTitle = getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route: activeRoute })
+	// Only the document title names the pool, so the pool loading in does not move focus to the page heading again.
+	const documentTitleDetail = activeRoute === 'pools' && activeSecurityPoolsView === 'operate' ? getPoolDocumentTitleDetail({ requestedPoolAddress: securityPoolAddress, selectedPool }) : undefined
+	const formatDocumentTitle = useCallback((title: string) => formatAppDocumentTitle(title, documentTitleDetail), [documentTitleDetail])
 	useAppRouteEffects({
 		accountAddress: walletScopedAccountAddress,
 		applicationDeploymentMissing,
@@ -175,7 +179,7 @@ export function App() {
 						settingsContent={<UiPriceOracleSettings priceOracle={uiPriceOracle} onPriceOracleChange={setUiPriceOracle} />}
 					/>
 				}
-				heading={<AppPageHeading formatDocumentTitle={formatAppDocumentTitle} pageTitle={pageTitle} />}
+				heading={<AppPageHeading formatDocumentTitle={formatDocumentTitle} pageTitle={pageTitle} />}
 				notices={<AppStatusNotices errorMessages={errorMessages} readBackendMessage={readBackendMessage} readBackendStatus={readBackendStatus} simulationBootstrapError={environmentBootstrapError} showApplicationDeploymentWarning={applicationDeploymentMissing} zoltarUniverseError={zoltarUniverseError} />}
 				routeContentDisabled={routeContentBlocked}
 				transactionRouteKey={transactionRouteKey}

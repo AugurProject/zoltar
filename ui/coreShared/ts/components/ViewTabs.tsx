@@ -91,12 +91,19 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 			return { 'aria-pressed': active }
 		})()
 		const commonProps = { ...sharedProps, ...semanticProps }
-		if (option.href !== undefined)
+		if (option.href !== undefined) {
+			// A disabled link drops its href, so it needs an explicit role and focusability; inside a tablist it stays a roving tab.
+			const disabledLinkProps = (() => {
+				if (option.disabled !== true) return {}
+				if (resolvedSemantics === 'tabs') return { 'aria-disabled': 'true' as const }
+				return { 'aria-disabled': 'true' as const, role: 'link' as const, tabIndex: 0 }
+			})()
 			return (
-				<a key={option.value} {...commonProps} aria-disabled={option.disabled === true ? 'true' : undefined} href={option.disabled === true ? undefined : option.href} role={option.disabled === true ? 'link' : undefined} tabIndex={option.disabled === true ? 0 : undefined}>
+				<a key={option.value} {...commonProps} {...disabledLinkProps} href={option.disabled === true ? undefined : option.href}>
 					{option.label}
 				</a>
 			)
+		}
 		return (
 			<button key={option.value} {...commonProps} type='button' disabled={option.disabled}>
 				{option.label}

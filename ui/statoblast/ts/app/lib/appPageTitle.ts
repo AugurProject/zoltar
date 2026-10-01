@@ -5,6 +5,7 @@ import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
+import { abbreviateAddress, isHexAddressInput, sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 
 export type AppPageTitleInput = {
 	activeOpenOracleView: OpenOracleView
@@ -30,6 +31,15 @@ export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView,
 
 export const applicationTitle = 'Augur Statoblast'
 
-export function formatAppDocumentTitle(pageTitle: string) {
-	return formatDocumentTitle(pageTitle, applicationTitle)
+/** `detail` names the specific object on the page, such as the open pool, ahead of the page title. */
+export function formatAppDocumentTitle(pageTitle: string, detail?: string) {
+	return formatDocumentTitle(detail === undefined ? pageTitle : `${detail} · ${pageTitle}`, applicationTitle)
+}
+
+/** Names the open pool by its question once that pool has loaded, otherwise by its short address. */
+export function getPoolDocumentTitleDetail({ requestedPoolAddress, selectedPool }: { requestedPoolAddress: string; selectedPool: { marketDetails: { title: string }; securityPoolAddress: string } | undefined }) {
+	const address = requestedPoolAddress.trim()
+	if (!isHexAddressInput(address)) return undefined
+	const question = selectedPool !== undefined && sameAddress(selectedPool.securityPoolAddress, address) ? selectedPool.marketDetails.title.trim() : ''
+	return question === '' ? abbreviateAddress(address) : question
 }

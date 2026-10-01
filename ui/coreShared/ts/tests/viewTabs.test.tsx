@@ -157,6 +157,29 @@ describe('ViewTabs', () => {
 		document.body.removeEventListener('click', preventNativeNavigation)
 	})
 
+	test('keeps tab semantics for a disabled link tab and link semantics only in navigation mode', async () => {
+		const options = [
+			{ href: '#/overview', label: 'Overview', panelId: 'overview-panel', value: 'overview' },
+			{ disabled: true, href: '#/details', label: 'Details', panelId: 'details-panel', reason: 'Select a pool first.', value: 'details' },
+		]
+		const renderedTabs = await renderIntoDocument(<ViewTabs ariaLabel='Pool Tabs' semantics='tabs' value='overview' onChange={() => undefined} options={options} />)
+		cleanupRenderedComponent = renderedTabs.cleanup
+		const disabledTab = within(document.body).getByRole('tab', { name: 'Details' })
+		expect(disabledTab.getAttribute('aria-disabled')).toBe('true')
+		expect(disabledTab.getAttribute('aria-selected')).toBe('false')
+		expect(disabledTab.getAttribute('tabindex')).toBe('-1')
+		expect(disabledTab.hasAttribute('href')).toBe(false)
+		expect(within(document.body).getByRole('tab', { name: 'Overview' }).getAttribute('tabindex')).toBe('0')
+		expect(within(document.body).queryByRole('link', { name: 'Details' })).toBeNull()
+		await renderedTabs.cleanup()
+
+		const renderedNavigation = await renderIntoDocument(<ViewTabs ariaLabel='Route Tabs' semantics='navigation' value='overview' onChange={() => undefined} options={options} />)
+		cleanupRenderedComponent = renderedNavigation.cleanup
+		const disabledLink = within(document.body).getByRole('link', { name: 'Details' })
+		expect(disabledLink.getAttribute('aria-disabled')).toBe('true')
+		expect(disabledLink.getAttribute('tabindex')).toBe('0')
+	})
+
 	test('uses rendered grouped options for keyboard navigation', async () => {
 		let selectedValue = 'overview'
 		const renderedComponent = await renderIntoDocument(

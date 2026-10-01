@@ -12,6 +12,8 @@ describe('market form defaults', () => {
 		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('')
 		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('5')
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')
+		expect(getDefaultTradingFormState().completeSetAmount).toBe('')
+		expect(getDefaultTradingFormState().redeemAmount).toBe('')
 		expect(getDefaultForkAuctionFormState().repMigrationOutcomes).toBe('yes')
 	})
 })
