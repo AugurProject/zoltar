@@ -318,9 +318,6 @@ export function OpenOracleSection({
 											/>
 										</label>
 									</div>
-									<p className='detail'>
-										{openOracleCopy.impliedInitialPrice}: {createImpliedPriceValue}
-									</p>
 									<label className='field'>
 										<span>{openOracleCopy.settlerReward}</span>
 										<FormInput
@@ -328,7 +325,7 @@ export function OpenOracleSection({
 											aria-label={openOracleCopy.settlerReward}
 											error={settlerRewardError}
 											errorId={getOpenOracleCreateFieldErrorId('settlerRewardEthAmount')}
-											hint={createEthSentAttoEth === undefined || createEthSentAttoEth < 0n ? openOracleCopy.settlerRewardHelpText : openOracleCopy.formatEthSentHint(createEthSentText)}
+											hint={openOracleCopy.settlerRewardHelpText}
 											inputMode='decimal'
 											liveError
 											onBlur={() => markCreateFieldTouched('settlerRewardEthAmount')}

@@ -925,7 +925,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(getDescriptionTexts(initialToken2AmountInput)).toEqual([openOracleCopy.initialToken2AmountHelpText])
 		// The ETH sent is derived from the settler reward, so it is shown read-only instead of asked for twice.
 		expect(document.body.querySelector('input[aria-label="ETH value to send"]')).toBeNull()
-		expect(getDescriptionTexts(settlerRewardInput)).toEqual([openOracleCopy.formatEthSentHint('0'), 'ETH'])
+		expect(getDescriptionTexts(settlerRewardInput)).toEqual([openOracleCopy.settlerRewardHelpText, 'ETH'])
 		expect(getDescriptionTexts(multiplierInput)).toEqual([openOracleCopy.escalationMultiplierHelpText, '×'])
 		expect((multiplierInput as HTMLInputElement).value).toBe('1')
 		expect(multiplierInput.getAttribute('inputmode')).toBe('decimal')
@@ -962,7 +962,7 @@ describe('OpenOracleSection route create view', () => {
 		expect(documentQueries.getByRole('button', { name: 'Create standalone oracle report' }).getAttribute('aria-describedby')).toBe('open-oracle-token1-address-error')
 		expect(documentQueries.getByText('Base-token amount to report.')).not.toBeNull()
 		expect(documentQueries.getByText('Quote-token amount to report.')).not.toBeNull()
-		expect(documentQueries.getByText(openOracleCopy.formatEthSentHint('0'))).not.toBeNull()
+		expect(documentQueries.getByText(openOracleCopy.settlerRewardHelpText)).not.toBeNull()
 		expect(documentQueries.queryByText('Fee charged during dispute economics, entered as a percentage.')).toBeNull()
 		expect(documentQueries.queryByText('Delay in seconds after the initial report before settlement can begin.')).toBeNull()
 		expect(documentQueries.getByText('Base-token amount that ends escalation.')).not.toBeNull()

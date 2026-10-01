@@ -288,6 +288,7 @@ strong.metric-value-danger {
 
 .transaction-object-context dl > div {
 	display: grid;
+	align-content: start;
 	gap: var(--space-1);
 	min-width: 0;
 }

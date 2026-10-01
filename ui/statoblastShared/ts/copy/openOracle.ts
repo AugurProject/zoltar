@@ -54,7 +54,6 @@ export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
 export const disputeEscalationStopAmountHelpText = 'Base-token amount that ends escalation.'
 export const ethSent = 'ETH sent'
-export const formatEthSentHint = (amount: CopyTemplateValue) => `The create transaction sends ${amount} ETH, exactly the settler reward.`
 export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} required`
 export const initialToken1AmountHelpText = 'Base-token amount to report.'
 export const exactToken1Report = 'Base token amount'
@@ -109,7 +108,7 @@ export const formatReportUpdated = (relativeTime: CopyTemplateValue) => `Updated
 export const settlingReport = 'Settling report…'
 export const settlingReportTitle = 'Settling report'
 export const reportSettled = 'Settled report'
-export const settlerRewardHelpText = 'ETH paid to the settler.'
+export const settlerRewardHelpText = 'ETH paid to the settler, sent with the create transaction.'
 export const settlementSummary = 'Settlement summary'
 export const settlementTimestamp = 'Settlement timestamp'
 export const settlementBlock = 'Settlement block'
@@ -143,7 +142,7 @@ export const trackDisputes = 'Track disputes'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} amount`
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
-export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. The create transaction sends the settler reward in ETH. Dispute settings determine escalation timing and economics.'
+export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. Dispute settings determine escalation timing and economics.'
 
 export const settleReportTitle = (id: bigint) => `Settle report #${id}`
 

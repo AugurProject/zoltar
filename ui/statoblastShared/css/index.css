@@ -3756,9 +3756,9 @@ span.rep-price-status.stale,
 .pool-action-current {
 	display: inline-flex;
 	align-items: center;
-	min-height: 2.75rem;
+	min-height: 2.25rem;
 	padding: 0 var(--space-3);
-	border: 1px dashed var(--divider-subtle);
+	border: 0;
 	border-radius: var(--radius-control);
 	color: var(--muted);
 	font-size: var(--font-caption);
