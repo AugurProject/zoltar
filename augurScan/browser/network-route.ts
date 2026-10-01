@@ -2,7 +2,7 @@ import type { NetworkRecord } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { ScannerLiveState } from './scanner-live-state.ts'
 import { decodeNetworkResponse } from './api-decoding.ts'
-import { isCurrentCanonicalGeneration } from './live-update.ts'
+import { isCurrentCanonicalGeneration } from './live-refresh.ts'
 
 interface NetworkRouteDeps {
 	lookup: (selector: string) => HTMLElement

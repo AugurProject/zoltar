@@ -1,7 +1,9 @@
 import type { LoadOptions, ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
-import type { RefreshGate } from './live-update.ts'
-import { isCurrentCanonicalGeneration, isCurrentContextRequest, paginatedSnapshotWasReplaced, paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, retainedPaginationAvailable } from './live-update.ts'
+import type { RefreshGate } from './live-refresh.ts'
+import { paginatedSnapshotWasReplaced } from './canonical-pagination.ts'
+import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
+import { paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, retainedPaginationAvailable } from './refresh-presentation.ts'
 import { decodeItemsPage, isRichListRecord } from './api-decoding.ts'
 import { renderRichListPage } from './rich-list-page.ts'
 

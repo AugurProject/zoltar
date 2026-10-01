@@ -11,7 +11,7 @@ import { createScannerState, nativeSymbolFor, requireChainId, selectedChainId } 
 import { createScannerViews } from './app-views.ts'
 import type { DemoFactory } from './demo-runtime.ts'
 import { fetchApi } from './fetch-api.ts'
-import { loadInitialNetworkStatus } from './live-update.ts'
+import { loadInitialNetworkStatus } from './network-freshness.ts'
 import { createQueryCache } from './query-cache.ts'
 import { mountSearch } from './search-ui.ts'
 

@@ -3,7 +3,9 @@ import type { AccountDetailOptions, AccountReference, ActivityRecord, CanonicalR
 import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import type { ScannerLiveState } from './scanner-live-state.ts'
-import { activityRefreshRetention, createLiveRouteRefreshCoordinator, historyInvalidationNotice, isHistoryInvalidationReason } from './live-update.ts'
+import { historyInvalidationNotice, isHistoryInvalidationReason } from './history-evidence.ts'
+import { createLiveRouteRefreshCoordinator } from './live-refresh.ts'
+import { activityRefreshRetention } from './refresh-presentation.ts'
 import { renderExplorerPage } from './explorer-page.ts'
 import { classifyRoute } from './routes.ts'
 
