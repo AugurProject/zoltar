@@ -5,6 +5,7 @@ import * as liquidationCopy from '../../../copy/liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { AddressInfo } from '@zoltar/ui-core-shared/components/AddressInfo.js'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
+import { tryParseAddressInput } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
@@ -73,6 +74,13 @@ export function QueuedLiquidationStatusCard({
 	return <TransactionStatusCard surface='flat' title={liquidationCopy.refreshingLiquidationStateTitle} badge={<Badge tone='muted'>{commonCopy.refreshingWithoutEllipsis}</Badge>} detail={liquidationCopy.refreshingLiquidationState} />
 }
 
+/** Partial or malformed input is not an address, so it is named as invalid instead of being clipped by the address abbreviation; the field below explains the error. */
+function LiquidationPartyAddress({ address }: { address: string }) {
+	if (address === '') return <>{commonCopy.noneSelected}</>
+	if (tryParseAddressInput(address) === undefined) return <>{liquidationCopy.invalidVaultAddressSummary}</>
+	return <AddressValue address={address} />
+}
+
 export function LiquidationContextSummary({
 	accountAddress,
 	currentPoolOracleManagerDetails,
@@ -110,14 +118,18 @@ export function LiquidationContextSummary({
 			<div className='exchange-preview'>
 				<div className='liquidation-party'>
 					<p className='detail'>{commonCopy.targetVault}</p>
-					<div className='decision-heading'>{trimmedLiquidationTargetVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationTargetVault} />}</div>
+					<div className='decision-heading'>
+						<LiquidationPartyAddress address={trimmedLiquidationTargetVault} />
+					</div>
 				</div>
 				<span className='exchange-arrow' aria-hidden='true'>
 					→
 				</span>
 				<div className='liquidation-party'>
 					<p className='detail'>{liquidationCopy.receiverVault}</p>
-					<div className='decision-heading'>{trimmedLiquidationReceiverVault === '' ? commonCopy.noneSelected : <AddressValue address={trimmedLiquidationReceiverVault} />}</div>
+					<div className='decision-heading'>
+						<LiquidationPartyAddress address={trimmedLiquidationReceiverVault} />
+					</div>
 				</div>
 			</div>
 			<MetricField label={statoblastAppCopy.openOraclePrice} valueTagName='span'>

@@ -150,7 +150,7 @@ export const maxAttoRepBeingSold = 'Max REP being sold'
 export const settlementAvailable = 'Settlement available'
 export const migrationStatus = 'Migration status'
 export const repAtFork = 'REP at fork'
-export const migratedAttoRep = 'Migrated REP'
+export const formatMigratedAttoRepToOutcome = (outcomeLabel: CopyTemplateValue) => `REP migrated to ${outcomeLabel}`
 export const settlementCollateral = 'Settlement collateral'
 export const migrationStarted = 'Migration started'
 export const migrationEnds = 'Migration ends'

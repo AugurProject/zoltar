@@ -287,7 +287,7 @@ export function renderSelectedReportActionSection({
 								<div className='field'>
 									<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
 									<strong className='field-read-only-value'>
-										<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} precision='exact' />
+										<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} />
 									</strong>
 									<UserMessage placement='field' detail={openOracleCopy.newBaseAmountFixedHint} />
 								</div>

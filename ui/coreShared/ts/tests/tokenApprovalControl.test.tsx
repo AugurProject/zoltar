@@ -53,6 +53,34 @@ describe('TokenApprovalControl', () => {
 		expect(approvals).toEqual([amount])
 	})
 
+	test('rounds the required amount, the shortfall notice and the button in the same upward direction', async () => {
+		const requiredAmount = 121_153_846_238_653_846n
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='disputing the report'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={0n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving WETH…'
+				requiredAmount={requiredAmount}
+				resetKey='dispute'
+				tokenSymbol='WETH'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		const requiredValue = queries.getByText('Required WETH').parentElement?.querySelector('.currency-value')
+		expect(requiredValue?.textContent).toBe('≈ 0.13 WETH')
+		expect(requiredValue?.getAttribute('title')).toBe('0.121153846238653846 WETH')
+		expect(queries.getByRole('button', { name: 'Approve ≈ 0.13 WETH' })).not.toBeNull()
+		expect(rendered.container.textContent).toContain('Need ≈ 0.13\u00a0more\u00a0WETH approved before disputing the report.')
+		expect(rendered.container.textContent).not.toContain('0.121153846238653846 more')
+	})
+
 	test.each([true, false])('preserves partial and invalid notices with showRequirementNotice=%s', async showRequirementNotice => {
 		const rendered = await renderIntoDocument(
 			<TokenApprovalControl

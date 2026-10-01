@@ -457,7 +457,7 @@ describe('OpenOracleSection route create view', () => {
 		const dialogQueries = within(dialog)
 		// Without flexible escalation the report fixes the base amount, so it is shown rather than entered.
 		expect(dialog.querySelector('input[aria-label="New REPv2 amount"]')).toBeNull()
-		expect(dialog.textContent).toContain('New REPv2 amount20 REPv2')
+		expect(dialog.textContent).toContain('New REPv2 amount20.00 REPv2')
 		const quoteTokenAmountInput = dialogQueries.getByLabelText('New WETH amount')
 		expect(quoteTokenAmountInput.hasAttribute('aria-invalid')).toBe(false)
 		expect(document.getElementById('open-oracle-dispute-new-amount-2-error-7')).toBeNull()
@@ -547,13 +547,45 @@ describe('OpenOracleSection route create view', () => {
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
 		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & swap' })
 		const fixedAmountField = within(dialog).getByText('New REPv2 amount').parentElement
-		expect(fixedAmountField?.querySelector('.field-read-only-value')?.textContent).toBe('20 REPv2')
+		expect(fixedAmountField?.querySelector('.field-read-only-value')?.textContent).toBe('20.00 REPv2')
+		expect(fixedAmountField?.querySelector('.field-read-only-value [title]')?.getAttribute('title')).toBe('20 REPv2')
 		const hint = within(dialog).getByText('Set by the report’s escalation rules.')
 		expect(hint.classList.contains('field-hint')).toBe(true)
 		expect(hint.closest('.field-read-only-value, strong')).toBeNull()
 		// Without a valid quote amount the swap token is still pending; its explanation is prose, not a value.
 		const pendingSwapToken = within(dialog).getByText('Determined by the proposed price')
 		expect(pendingSwapToken.closest('strong')).toBeNull()
+	})
+
+	test('rounds a fractional fixed base amount for display and keeps the exact amount in its title', async () => {
+		const openOracleReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 3_333_333_333_333_333_333n,
+			reportId: 8n,
+			currentAmount2: 5n * 10n ** 18n,
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			currentTime: 200n,
+			disputeDelay: 10n,
+			escalationHalt: 20n * 10n ** 18n,
+			multiplier: 200n,
+			reportTimestamp: 100n,
+			settlementTime: 200n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: openOracleReportDetails.reportId.toString() },
+					openOracleReportDetails,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & swap' })
+		const fixedAmountValue = within(dialog).getByText('New REPv2 amount').parentElement?.querySelector('.field-read-only-value')
+		expect(fixedAmountValue?.textContent).toBe('≈ 6.67 REPv2')
+		expect(fixedAmountValue?.querySelector('[title]')?.getAttribute('title')).toBe('6.666666666666666666 REPv2')
 	})
 
 	test('hides a revealed dispute amount error when another report is selected', async () => {

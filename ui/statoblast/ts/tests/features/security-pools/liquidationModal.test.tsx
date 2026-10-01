@@ -1865,6 +1865,24 @@ describe('LiquidationModal', () => {
 		expect(targetVaultButton.textContent).toContain(targetVaultAddress)
 	})
 
+	test('names partial receiver input as invalid in the header instead of clipping it as an address', async () => {
+		const callerVaultAddress = getAddress('0x0000000000000000000000000000000000000001')
+		const targetVaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
+		const renderedComponent = await renderLiquidationModal({
+			accountAddress: callerVaultAddress,
+			liquidationReceiverVault: '0x1234',
+			liquidationTargetVault: targetVaultAddress,
+			targetVaultSummary: createTargetVaultSummary({ vaultAddress: targetVaultAddress }),
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const receiverHeading = document.body.querySelectorAll('.liquidation-party .decision-heading')[1]
+		if (!(receiverHeading instanceof HTMLElement)) throw new Error('Expected the receiver vault heading')
+		expect(receiverHeading.textContent).toBe('Invalid address')
+		expect(receiverHeading.querySelector('.address-value')).toBeNull()
+		expect(within(document.body).getAllByText('Enter a valid receiver vault address.').length).toBeGreaterThan(0)
+	})
+
 	test('shows a warning and disables liquidation when receiver and target vaults are the same', async () => {
 		const vaultAddress = getAddress('0x00000000000000000000000000000000000000a1')
 		const renderedComponent = await renderLiquidationModal({

@@ -190,6 +190,8 @@ export type RankedBarListProps = {
 }
 
 export type ViewTabOption<TValue extends string> = {
+	/** Id of visible text that describes the option, such as the reason a disabled option is unavailable. */
+	describedById?: string
 	disabled?: boolean
 	href?: string
 	id?: string

@@ -1820,8 +1820,52 @@ describe('ForkAuctionSection', () => {
 		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
 		expect(migrationCard.querySelector('.fork-workflow-summary')).not.toBeNull()
 		expect(within(migrationCard).getByText('REP at fork')).not.toBeNull()
-		expect(within(migrationCard).getByText('Migrated REP')).not.toBeNull()
+		expect(within(migrationCard).getByText('REP migrated to Yes')).not.toBeNull()
 		expect(within(migrationCard).getByText('Settlement collateral')).not.toBeNull()
+	})
+
+	test('reports REP migrated into the selected outcome child pool instead of the parent pool own migrated amount', async () => {
+		const migratedToYesAttoRep = 2_012_000n * 10n ** 18n
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({ migratedAttoRep: 0n, systemState: 'forkMigration', truthAuctionStartedAt: 0n }),
+					securityPools: [createChildPool({ migratedAttoRep: migratedToYesAttoRep, questionOutcome: 'yes', truthAuctionStartedAt: 0n })],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const migrationCard = within(document.body).getByRole('heading', { name: 'Migration status' }).closest('.section-block')
+		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
+		const migratedMetric = within(migrationCard).getByText('REP migrated to Yes').closest('.fork-workflow-summary-stat-copy')
+		if (!(migratedMetric instanceof HTMLElement)) throw new Error('Expected migrated REP metric')
+		expect(migratedMetric.textContent).toContain('2\u00a0012\u00a0000.00')
+		expect(migratedMetric.textContent).toContain('REP')
+	})
+
+	test('reports no migrated REP for an outcome whose child pool does not exist yet', async () => {
+		const renderedComponent = await renderIntoDocument(
+			h(
+				ForkAuctionSection,
+				createProps({
+					currentStageView: 'migration',
+					forkAuctionDetails: createForkAuctionDetails({ migratedAttoRep: 5n * 10n ** 18n, systemState: 'forkMigration', truthAuctionStartedAt: 0n }),
+					forkAuctionForm: createForkAuctionForm({ selectedOutcome: 'no' }),
+					securityPools: [createChildPool({ migratedAttoRep: 7n * 10n ** 18n, questionOutcome: 'yes' })],
+					selectedStageView: 'migration',
+				}),
+			),
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const migrationCard = within(document.body).getByRole('heading', { name: 'Migration status' }).closest('.section-block')
+		if (!(migrationCard instanceof HTMLElement)) throw new Error('Expected migration summary card')
+		const migratedMetric = within(migrationCard).getByText('REP migrated to No').closest('.fork-workflow-summary-stat-copy')
+		expect(migratedMetric?.textContent).toContain('0.00')
 	})
 
 	test('shows a closed migration badge once the truth auction timeline has started', async () => {

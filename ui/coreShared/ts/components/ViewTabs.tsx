@@ -73,6 +73,7 @@ export function ViewTabs<TValue extends string>({ ariaLabel, className = '', gro
 		const sharedProps = {
 			className: `view-tab ${active ? 'active' : ''}`.trim(),
 			id: tabId,
+			'aria-describedby': option.describedById,
 			'aria-description': option.reason,
 			title: option.reason,
 			onClick: (event: MouseEvent) => {

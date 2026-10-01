@@ -251,6 +251,20 @@ export function formatCeilingAmount(value: bigint, units = 18): FormattedAmount 
 	return { approximate: compact.approximate, exact, text: compact.text }
 }
 
+/** Upward-rounded approval text with its `≈ ` marker, falling back to the exact amount beyond the compact suffix range. Approval figures share it so the requirement, the shortfall and the button never disagree. */
+export function formatCeilingAmountDisplay(value: bigint, units = 18) {
+	const amount = formatCeilingAmount(value, units)
+	return amount === undefined ? formatCurrencyBalance(value, units) : withApproximateMarker(amount)
+}
+
+export function formatCeilingAmountWithUnit(value: bigint, unit: string, units = 18) {
+	return formatValueWithUnit(formatCeilingAmountDisplay(value, units), unit)
+}
+
+export function formatAdditionalCeilingAmount(value: bigint, unit: string, units = 18) {
+	return `${formatCeilingAmountDisplay(value, units)}\u00a0more\u00a0${unit}`
+}
+
 /** Marks rounded text with `≈ ` only when rounding dropped digits. */
 export function withApproximateMarker({ approximate, text }: Pick<FormattedAmount, 'approximate' | 'text'>) {
 	return approximate ? `${APPROXIMATE_MARKER}${text}` : text

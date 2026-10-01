@@ -90,7 +90,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		return undefined
 	})()
 	const migrationRepAtForkDisplay = model.forkAuctionDetails === undefined ? model.forkOnlyFallbackText : <CurrencyValue value={model.forkAuctionDetails.auctionableAttoRepAtFork} suffix={commonCopy.rep} />
-	const migrationRepDisplay = renderMetricValue(model.forkAuctionDetails?.migratedAttoRep ?? model.previewPool?.migratedAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
+	// Vault migrations credit the selected outcome's child pool, so the parent pool's own migrated amount stays zero while REP moves.
+	const selectedOutcomeMigratedAttoRep = (() => {
+		const childMigratedAttoRep = model.selectedAuctionContext?.migratedAttoRep ?? model.selectedAuctionChildPool?.migratedAttoRep
+		if (childMigratedAttoRep !== undefined) return childMigratedAttoRep
+		// Until the outcome's child pool exists, nothing has migrated to it.
+		return model.forkAuctionDetails === undefined ? undefined : 0n
+	})()
+	const migrationRepDisplay = renderMetricValue(selectedOutcomeMigratedAttoRep, commonCopy.rep, commonCopy.metricUnavailablePlaceholder)
 	const migrationSettlementCollateralDisplay = renderMetricValue(model.forkAuctionDetails?.settlementCollateralAttoEth ?? model.previewPool?.settlementCollateralAttoEth, commonCopy.eth, commonCopy.metricUnavailablePlaceholder)
 	const migrationStartedDisplay = migrationStartedAt === undefined || migrationStartedAt <= 0n ? forkAuctionCopy.notStarted : <TimestampValue {...(model.effectiveCurrentTimestamp === undefined ? {} : { currentTimestamp: model.effectiveCurrentTimestamp })} timestamp={migrationStartedAt} />
 	const migrationEndsDisplay = (() => {
@@ -184,6 +191,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 			forkAuctionDetails={model.forkAuctionDetails}
 			forkTypeDisplay={model.resolvedForkTypeLabel}
 			migratedRepDisplay={migrationRepDisplay}
+			migratedRepLabel={forkAuctionCopy.formatMigratedAttoRepToOutcome(model.selectedOutcomeLabel)}
 			migrationEndsDisplay={migrationEndsDisplay}
 			migrationStartedDisplay={migrationStartedDisplay}
 			repAtForkDisplay={migrationRepAtForkDisplay}

@@ -97,6 +97,11 @@ describe('token approval helpers', () => {
 		expect(statusMessage({ nextApprovalAmount })).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
 	})
 
+	test('resolveTokenApprovalStatusMessage rounds a fractional shortfall upward like the approval button', () => {
+		const requirement = deriveTokenApprovalRequirement(121_153_846_238_653_846n, 0n)
+		expect(statusMessage({ nextApprovalAmount: requirement.targetAmount, requiredAmount: requirement.requiredAmount, requirement })).toBe('Need ≈ 0.13\u00a0more\u00a0ETH approved before submitting the initial report.')
+	})
+
 	test('resolveTokenApprovalStatusMessage formats a partial custom approval in token units', () => {
 		expect(statusMessage({ draftAmount: '24.5', nextApprovalAmount: 24_500_000_000_000_000_000n })).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
 	})

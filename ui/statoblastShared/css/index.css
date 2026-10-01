@@ -3340,6 +3340,10 @@ span.rep-price-status.stale,
 .liquidation-modal-content {
 	display: contents;
 }
+/* Plain-text party values (none selected, invalid input) keep the copyable address row height, so both party labels stay level. */
+.liquidation-party .decision-heading {
+	min-height: calc(var(--touch-target-min) - 0.4rem);
+}
 @media (max-width: 40rem) {
 	.liquidation-modal-panel {
 		height: 90dvh;
@@ -3899,8 +3903,8 @@ span.rep-price-status.stale,
 	}
 }
 
-/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. */
-:is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *) {
+/* Copyable addresses and identifiers keep their hover padding outside the text column, so their first character lines up with the labels and values around them. Addresses inline in running text have no hover padding to offset. */
+:is(.route-view-flow, .modal-panel) :is(.address-value, .identifier-value).copyable:not(.transaction-object-context *, .global-transaction-detail-text *) {
 	margin-inline-start: -0.25rem;
 }
 

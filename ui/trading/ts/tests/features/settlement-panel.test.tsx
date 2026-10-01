@@ -95,6 +95,12 @@ describe('settlement panel', () => {
 			expect(operationButton('Fork migration').disabled).toBe(true)
 			expect(operationButton('Fork migration').getAttribute('aria-description')).toBe('The universe has not forked, so there is nothing to migrate.')
 			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Fork migration unavailable: The universe has not forked, so there is nothing to migrate.'])
+			// The disabled option is described by the visible reason, not only by a tooltip.
+			const migrationReasonId = operationButton('Fork migration').getAttribute('aria-describedby')
+			expect(migrationReasonId).not.toBeNull()
+			expect(document.getElementById(migrationReasonId ?? '')?.closest('.operation-switcher-reasons')).not.toBeNull()
+			expect(describedText(operationButton('Fork migration'))).toBe('Fork migration unavailable: The universe has not forked, so there is nothing to migrate.')
+			expect(Array.from(document.querySelectorAll('.operation-switcher .view-tab:not([disabled])')).every(option => !option.hasAttribute('aria-describedby'))).toBe(true)
 			// Without complete sets there is nothing to fill, and the action names the missing INVALID.
 			expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Max')).toBe(false)
 			const redeem = buttonByLabel('Redeem complete sets')
