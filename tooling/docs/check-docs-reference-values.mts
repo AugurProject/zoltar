@@ -20,7 +20,8 @@ const coordinatorData = await readFile('docs/data/open-oracle-coordinator.json',
 const compiledContractArtifacts: unknown = JSON.parse(await readFile('solidity/artifacts/Contracts.json', 'utf8'))
 const operatorReference = (await Promise.all(['docs/reference/operator-guardrails.html', 'docs/reference/contract-inventory.html'].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
 const contractInteractionReference = (await Promise.all(['docs/reference/contracts.html', ...[...new Bun.Glob('docs/reference/contracts/*.html').scanSync('.')].toSorted()].map(async pagePath => htmlToDocumentationText(await readFile(pagePath, 'utf8'))))).join('\n')
-const contractReferenceGenerator = `${await readFile('tooling/docs/generate-contract-interaction-reference.mts', 'utf8')}\n${await readFile('tooling/docs/contract-reference-metadata.mts', 'utf8')}\n${await readFile('tooling/docs/security-pool-contract-reference.mts', 'utf8')}`
+const contractReferenceSources = ['generate-contract-interaction-reference', 'contract-reference-metadata', 'contract-reference-event-schemas', 'contract-reference-abi-surface', 'core-contract-references', 'fork-escalation-contract-references', 'oracle-market-contract-references', 'security-pool-contract-reference']
+const contractReferenceGenerator = (await Promise.all(contractReferenceSources.map(async sourceName => await readFile(`tooling/docs/${sourceName}.mts`, 'utf8')))).join('\n')
 const escalationGame = await readFile('solidity/contracts/statoblast/EscalationGame.sol', 'utf8')
 const escalationGameClaimDelegate = await readFile('solidity/contracts/statoblast/EscalationGameClaimDelegate.sol', 'utf8')
 const escalationGameDepositDelegate = await readFile('solidity/contracts/statoblast/EscalationGameDepositDelegate.sol', 'utf8')
@@ -341,7 +342,7 @@ function assertInvariantCatalogLifecycleBoundaries(): void {
 	const vaultEntry = normalizedInvariants.match(/<details class="invariant-entry" id="vault-03"\s*>[\s\S]*?<\/details>/)?.[0]
 	const activeAuctionEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-11"\s*>[\s\S]*?<\/details>/)?.[0]
 	const auctionLiabilityEntry = normalizedInvariants.match(/<details class="invariant-entry" id="auc-12"\s*>[\s\S]*?<\/details>/)?.[0]
-	assert.ok(capacityOwnershipEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified capacity ownership accounting')
+	assert.ok(capacityOwnershipEntry, 'Invariant catalog must retain BAL-08 lifecycle-qualified underwriting commitment accounting')
 	assert.ok(vaultEntry, 'Invariant catalog must retain VAULT-03 append-only registry accounting')
 	assert.ok(activeAuctionEntry, 'Invariant catalog must retain AUC-11 lifecycle-qualified clearing-tree accounting')
 	assert.ok(auctionLiabilityEntry, 'Invariant catalog must retain AUC-12 ETH liability accounting')
@@ -417,7 +418,7 @@ function assertOpenOracleVendorAndEventDocs(): void {
 	for (const pinnedRevision of ['4e5cffb7203ccc5d47ab986d74c04796a8f51302', 'c64a1edb67b6e3f4a15cca8909c9482ad33a02b0', 'src/OpenOracleSlim.sol', 'OpenZeppelin Contracts v5.4.0']) {
 		assert.ok(openOracleProvenance.includes(pinnedRevision), `OpenOracle provenance must retain ${pinnedRevision}`)
 	}
-	assert.match(liquidationHtml, /id="punitive-liquidation"/)
+	assert.match(liquidationHtml, /<section id="rule">/)
 	assert.doesNotMatch(whitepaperStatoblast, /id="fig-statoblast-auction-clearing"/, 'whitepaper must delegate auction clearing to the canonical focused diagram')
 }
 
@@ -494,7 +495,7 @@ function assertContractInteractionDistinctions(): void {
 	assert.match(securityPool, /function redeemShares\(\)[\s\S]*SecurityPoolOperationsDelegate\.redeemShares/)
 	assert.match(securityPoolOperationsDelegate, /function redeemShares\([\s\S]*settlementCollateralAttoEth\) \/ shareTokenSupplyAttoShares[\s\S]*shareTokenSupplyAttoShares -= winningSharesBurnedAttoShares[\s\S]*shareTokenSupplyAttoShares == 0[\s\S]*badDebtGeneration\+\+/)
 	assert.match(securityPoolForker, /securityPool\.setShareTokenSupplyAttoShares\(parent\.shareTokenSupplyAttoShares\(\)\)/)
-	assert.match(diagramModelsSource, /withdraw REP or liquidation/)
+	assert.match(diagramModelsSource, /withdraw REP, commitment', 'change, or liquidation/)
 	assert.doesNotMatch(diagramModelsSource, /withdraw, capacity ownership/)
 	assert.match(securityPoolUtils, /underwritingLimitToMoveAttoEth = debtToMoveAttoEth;/)
 	assert.match(securityPoolOperationsDelegate, /require\(receiverLimitAttoEth >= minimumSecurityBondDebtAttoEth, 'Receiver commitment below minimum'\)/)

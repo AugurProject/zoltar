@@ -1,7 +1,8 @@
 import type { EntityHistory, LoadOptions, StateCatalog, StateEntity, StateTab } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
-import type { RefreshGate } from './live-update.ts'
-import { isCurrentCanonicalGeneration, isCurrentContextRequest, refreshPresentation, runWithForegroundReservation } from './live-update.ts'
+import type { RefreshGate } from './live-refresh.ts'
+import { isCurrentCanonicalGeneration, isCurrentContextRequest, runWithForegroundReservation } from './live-refresh.ts'
+import { refreshPresentation } from './refresh-presentation.ts'
 import { decodeStateCatalog } from './api-decoding.ts'
 
 interface SystemCatalogLoaderDeps {

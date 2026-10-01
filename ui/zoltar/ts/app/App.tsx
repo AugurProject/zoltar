@@ -21,7 +21,7 @@ import { getUniversePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import type { RouteTabDefinition } from '@zoltar/ui-core-shared/types/components.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
-import { ZOLTAR_ROUTES, type Route } from '@zoltar/ui-zoltar-shared/types/app.js'
+import { ZOLTAR_ROUTES, type ZoltarRoute } from '@zoltar/ui-zoltar-shared/types/app.js'
 import { zoltarRouting } from '@zoltar/ui-zoltar-shared/lib/routing.js'
 import { ZOLTAR_TAB_VIEWS, ZOLTAR_VIEWS } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/lib/zoltarViewModels.js'
 import { ZoltarWorkspaceProvider, type ZoltarWorkspace } from '@zoltar/ui-zoltar-shared/features/zoltarSurface/components/ZoltarWorkspace.js'
@@ -34,7 +34,7 @@ import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTa
 export function App() {
 	const { activeUniverseId, setActiveUniverseId, setZoltarView, zoltarView } = useZoltarUrlState()
 	const { navigate, route } = useHashRoute()
-	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ZOLTAR_ROUTES)
+	const resolvedRoute = resolveEnumValue<ZoltarRoute>(route, 'not-found', ZOLTAR_ROUTES)
 	const invalidZoltarView = hasInvalidZoltarView({ resolvedRoute, search: parseRouteHash(window.location.hash).search, zoltarView })
 	const activeZoltarView = resolveEnumValue<ZoltarView>(zoltarView, 'overview', ZOLTAR_VIEWS)
 	const activeRoute = invalidZoltarView ? 'not-found' : resolvedRoute

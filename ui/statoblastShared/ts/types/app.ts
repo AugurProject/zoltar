@@ -4,7 +4,7 @@ export type { AccountState, TransactionCancellationParameters, TransactionLifecy
 export type { MarketFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 export const STATOBLAST_ROUTES = ['deploy', 'pools', 'open-oracle', 'not-found'] as const
-export type Route = (typeof STATOBLAST_ROUTES)[number]
+export type StatoblastRoute = (typeof STATOBLAST_ROUTES)[number]
 
 export type SecurityPoolFormState = {
 	initialReportPriorityFeeNanoEth: string

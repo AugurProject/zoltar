@@ -19,7 +19,7 @@ import { securityPoolDownloadStore, toCachedSecurityPool } from '@zoltar/ui-stat
 import { getUniverseDirectoryContextKey, isUniverseDirectoryLoadedForContext, shouldAutoLoadUniverseDirectory } from '../lib/universeDirectory.js'
 import { createSecurityPoolsRouteFormSync } from '../lib/routeFormSync.js'
 import { buildForkAuctionSectionProps, buildLiquidationSectionProps, buildPoolCreationSectionProps, buildReportingSectionProps, buildSecurityVaultSectionProps, buildTradingSectionProps } from '../lib/securityPoolsRouteSections.js'
-import { useBlockRefresh } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
+import { useBlockRefresh, useRefreshOnEnable } from '@zoltar/ui-core-shared/hooks/useDataRefresh.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
 import type { useStatoblastUrlState } from './useStatoblastUrlState.js'
 import type { AccountState, ReportingFormState, WriteOperationsParameters } from '@zoltar/ui-statoblast-shared/types/app.js'
@@ -88,8 +88,14 @@ export function useSecurityPoolsRoute({ context, marketCreation, openOracle, rep
 	}
 	const overview = useSecurityPoolsOverview({ ...walletScopedHookConfig, environmentRefreshKey: activeEnvironmentNonce })
 	const { checkedSecurityPoolAddress, hasLoadedUniverseDirectoryPools, loadingUniverseDirectoryPools, loadSecurityPools, loadUniverseDirectoryPools, refreshSecurityPools, securityPools, securityPoolUniverseDirectoryError } = overview
-	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload.
-	useBlockRefresh(() => void refreshSecurityPools(), route === 'pools' && securityPoolsView === 'operate' && checkedSecurityPoolAddress !== undefined)
+	// The open pool's summary re-reads on each new block, so another user's deposit or fork appears without a reload, and again
+	// when the view returns, because a report settled from another route can change it without a new block arriving.
+	const poolViewActive = route === 'pools' && securityPoolsView === 'operate'
+	useBlockRefresh(() => void refreshSecurityPools(), poolViewActive && checkedSecurityPoolAddress !== undefined)
+	// Keyed on the view alone, so the first load of a pool address does not trigger a second read.
+	useRefreshOnEnable(() => {
+		if (checkedSecurityPoolAddress !== undefined) void refreshSecurityPools()
+	}, poolViewActive)
 	const selectedPool = securityPools.find(pool => pool.securityPoolAddress.toLowerCase() === securityPoolAddress.toLowerCase())
 	const openedPoolSummary = useMemo(() => (selectedPool === undefined ? undefined : toCachedSecurityPool(selectedPool)), [selectedPool])
 	useRememberOpenedEntity('statoblast', 'pool', securityPoolDownloadStore, selectedPool?.securityPoolAddress, openedPoolSummary)

@@ -2,13 +2,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import type { ReadinessRow } from '../src/dashboard/readiness.ts'
 import { h } from 'preact'
-import { executionModePanel, FormActions, settingsGroup, settingsIntro, settingsPage, settingsSection, signerPanel, SubmissionPanel, SwitchField } from '../src/dashboard/settings-markup.ts'
+import { ExecutionModePanel, FormActions, SettingsGroup, SettingsIntro, SettingsPage, SettingsSection, SignerPanel, SubmissionPanel, SwitchField } from '../src/dashboard/settings-markup.tsx'
 import { renderStaticMarkup } from '../src/dashboard/static-markup.ts'
-
-// The page mixes the string API the chaos bot uses with the components the other bots compose in JSX.
-const formActions = (props: Parameters<typeof FormActions>[0]) => renderStaticMarkup(h(FormActions, props))
-const switchField = (props: Parameters<typeof SwitchField>[0]) => renderStaticMarkup(h(SwitchField, props))
-const submissionPanel = (props: Parameters<typeof SubmissionPanel>[0]) => renderStaticMarkup(h(SubmissionPanel, props))
 
 const previousGlobals = new Map<string, unknown>()
 let window: Window | undefined
@@ -32,29 +27,34 @@ afterEach(async () => {
 	window = undefined
 })
 
-const page = settingsPage({
-	intro: settingsIntro({ scopeText: 'Select a chain profile first.' }),
-	sections: [
-		settingsSection({
-			groups: settingsGroup({
-				body: `<form id="policy-form"><fieldset id="policy-fieldset"><div class="field-grid"><label><span>Limit</span><input name="limit" type="number" /></label>${switchField({ id: 'policy-switch', label: 'Enabled' })}</div>${formActions({ statusId: 'policy-status', submitLabel: 'Save policy' })}</fieldset></form>`,
-				formId: 'policy-form',
-				summary: 'Caps',
-				title: 'Policy',
-			}),
-			id: 'settings-policy',
-			step: 1,
-			title: 'Policy',
-		}),
-		settingsSection({ groups: signerPanel({ forgetButton: true }) + submissionPanel({ note: 'Delivery note' }) + executionModePanel({ note: 'Execution note' }), id: 'settings-go-live', step: 2, title: 'Go live' }),
-		settingsSection({ collapsed: true, groups: settingsGroup({ body: '<p>Advanced body</p>', open: false, summary: 'Whole file', title: 'Complete configuration' }), id: 'settings-advanced', title: 'Advanced' }),
-	].join(''),
-	steps: [
-		{ id: 'settings-policy', label: 'Policy', step: 1 },
-		{ id: 'settings-go-live', label: 'Go live', step: 2 },
-		{ id: 'settings-advanced', label: 'Advanced' },
-	],
-})
+const page = renderStaticMarkup(
+	h(
+		SettingsPage,
+		{
+			intro: h(SettingsIntro, { scopeText: 'Select a chain profile first.' }),
+			steps: [
+				{ id: 'settings-policy', label: 'Policy', step: 1 },
+				{ id: 'settings-go-live', label: 'Go live', step: 2 },
+				{ id: 'settings-advanced', label: 'Advanced' },
+			],
+		},
+		h(
+			SettingsSection,
+			{ id: 'settings-policy', step: 1, title: 'Policy' },
+			h(
+				SettingsGroup,
+				{ formId: 'policy-form', summary: 'Caps', title: 'Policy' },
+				h(
+					'form',
+					{ id: 'policy-form' },
+					h('fieldset', { id: 'policy-fieldset' }, h('div', { class: 'field-grid' }, h('label', null, h('span', null, 'Limit'), h('input', { name: 'limit', type: 'number' })), h(SwitchField, { id: 'policy-switch', label: 'Enabled' })), h(FormActions, { statusId: 'policy-status', submitLabel: 'Save policy' })),
+				),
+			),
+		),
+		h(SettingsSection, { id: 'settings-go-live', step: 2, title: 'Go live' }, h(SignerPanel, { forgetButton: true }), h(SubmissionPanel, { note: 'Delivery note' }), h(ExecutionModePanel, { note: 'Execution note' })),
+		h(SettingsSection, { collapsed: true, id: 'settings-advanced', title: 'Advanced' }, h(SettingsGroup, { open: false, summary: 'Whole file', title: 'Complete configuration' }, h('p', null, 'Advanced body'))),
+	),
+)
 
 test('settings page markup composes the stepper, step sections, badge rows, and the shared go-live panels', () => {
 	const document = installWindow(page)
@@ -77,7 +77,7 @@ test('settings page markup composes the stepper, step sections, badge rows, and 
 	expect(document.querySelector('#remember-signer')?.getAttribute('name')).toBe('rememberSigner')
 	expect(Array.from(document.querySelectorAll('#signer-form .button-group button'), button => button.id)).toEqual(['forget-signer-button', 'clear-signer-button', 'set-signer-button'])
 	expect(document.querySelector('#set-signer-button')?.hasAttribute('disabled')).toBe(true)
-	expect(installWindow(signerPanel()).querySelector('#forget-signer-button')).toBeNull()
+	expect(installWindow(renderStaticMarkup(h(SignerPanel, { forgetButton: false }))).querySelector('#forget-signer-button')).toBeNull()
 	const withoutForget = installWindow(page)
 	// Submission and execution mode panels carry the ids the shared client modules expect.
 	expect(withoutForget.querySelector('#submission-form #submission-mode option[value="private"]')).not.toBeNull()

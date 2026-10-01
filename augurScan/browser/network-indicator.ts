@@ -1,6 +1,6 @@
 import type { NetworkRecord } from './browser-types.ts'
 import { exactNumber } from './format.ts'
-import { indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel } from './live-update.ts'
+import { indexerConnectionStatus, indexerHeadFreshness, indexerLagLabel } from './network-freshness.ts'
 
 export const networkIndicator = (input: {
 	readonly network?: NetworkRecord | undefined

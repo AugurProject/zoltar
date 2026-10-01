@@ -21,7 +21,7 @@
 					<h2>1. Mental model</h2>
 					<a class="anchor-link" href="#mental-model" aria-label="Link to Mental model">#</a>
 				</div>
-				<p>Statoblast is the market layer: one SecurityPool per question and universe that holds ETH settlement collateral, manages vault security capacity, and mints, migrates, and settles shares. <a href="./zoltar.html">Zoltar</a> owns the questions, universes, REP, and forks underneath it; <a href="./trading.html">Statoblast Trading</a> and <a href="./open-oracle.html">OpenOracle</a> sit beside it. The <a href="./system-overview.html">system overview</a> introduces all four.</p>
+				<p>Statoblast is the market layer. For each question, universe, and pool configuration (security multiplier and oracle priority fee) it deploys one <a href="../reference/glossary.html#security-pool">SecurityPool</a> that holds ETH <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a>, tracks vault owners' <a href="../reference/glossary.html#underwriting-commitment">underwriting commitments</a>, and mints, migrates, and settles shares. <a href="./zoltar.html">Zoltar</a> owns the questions, universes, REP, and forks underneath it; <a href="./trading.html">Trading</a> and <a href="./open-oracle.html">OpenOracle</a> sit beside it. The <a href="./system-overview.html">system overview</a> introduces all four.</p>
 				<figure class="diagram" id="fig-statoblast-system-decision-flow">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-system-decision-flow" data-plot-width="940" data-plot-height="1564" role="img" aria-label="Statoblast market lifecycle from question registration through local resolution or fork migration and redemption"><span class="plot-chart-fallback">The example question enters a SecurityPool. Local reporting may resolve the market or produce a non-decision; an independent fork of the pool's universe can also interrupt the pool while it remains unresolved and operational. Either fork trigger leads through child migration, collateral repair where needed, and branch-specific redemption.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Market lifecycle.</span> Local resolution is the ordinary route. An own-question non-decision or an independent universe fork while the pool remains unresolved and operational enters the migration and collateral-repair route.</p>
@@ -36,8 +36,8 @@
 				<ol>
 					<li>Register the example question in Zoltar and deploy its SecurityPool in one universe.</li>
 					<li>Vault owners deposit REP; traders deposit ETH to mint complete sets.</li>
-					<li>Traders may exchange shares through an exchange such as <a href="./trading.html">Statoblast Trading</a>.</li>
-					<li>After the question ends, an initial report opens the Escalation Game.</li>
+					<li>Traders may exchange shares through an exchange such as <a href="./trading.html">Trading</a>.</li>
+					<li>After the question ends, the first REP deposit on an outcome opens the <a href="../reference/glossary.html#escalation-game">Escalation Game</a>.</li>
 					<li>A strict local winner finalizes the pool; holders redeem winning shares from its settlement collateral.</li>
 				</ol>
 				<figure class="diagram" id="fig-statoblast-share-lifecycle">
@@ -55,15 +55,14 @@
 					<dt>Traders and liquidity providers</dt>
 					<dd>Mint complete sets, hold or trade outcome shares, redeem claims, and optionally provide Yes/No liquidity.</dd>
 					<dt>Vault owners</dt>
-					<dd>Deposit REP, authorize a separate standing ETH underwriting limit, maintain its backing, earn fees, and may report or migrate.</dd>
+					<dd>Deposit REP, set a separate underwriting commitment in ETH, keep it backed, earn fees, and may report or migrate.</dd>
 					<dt>Reporters</dt>
 					<dd>Place REP-backed positions on Invalid, Yes, or No in the Escalation Game.</dd>
 					<dt>Liquidation receivers and operators</dt>
-					<dd>A receiver vault authorizes a transferred ETH commitment and receives REP backing. An operator submits the operation but receives no automatic protocol payment.</dd>
+					<dd>A receiver vault accepts a transferred underwriting commitment and receives REP backing. An operator submits the operation but receives no automatic protocol payment.</dd>
 					<dt>Truth Auction bidders</dt>
 					<dd>Supply ETH in exchange for child-pool REP-backed accounting positions when a child needs collateral repair.</dd>
 				</dl>
-				<p>A <a href="../reference/glossary.html#complete-set">complete set</a> is backed by ETH in its SecurityPool. REP is security and reporting capital, not settlement collateral. Capacity ownership is a pool accounting claim, and LP tokens claim only one Trading pair's Yes and No reserves.</p>
 				<table>
 					<thead>
 						<tr>
@@ -75,22 +74,22 @@
 					<tbody>
 						<tr>
 							<td>ETH settlement collateral</td>
-							<td>Backing for outstanding complete sets</td>
+							<td>Backing for outstanding <a href="../reference/glossary.html#complete-set">complete sets</a></td>
 							<td>The SecurityPool; it is allocated, not copied, during migration</td>
 						</tr>
 						<tr>
 							<td>REP</td>
-							<td>Universe-specific reporting and security capital</td>
+							<td>Universe-specific reporting and security capital; never settlement collateral</td>
 							<td>Wallets, SecurityPool vault accounting, Escalation Games, or migration contracts</td>
 						</tr>
 						<tr>
 							<td>Outcome shares</td>
 							<td>Yes, No, or Invalid claims for one pool and universe</td>
-							<td>The shared ERC-1155 ShareToken ledger</td>
+							<td>An ERC-1155 ShareToken deployed once per origin pool and reused by all of its fork descendants</td>
 						</tr>
 						<tr>
-							<td>Capacity ownership</td>
-							<td>A vault's proportional claim on fee-eligible security capacity</td>
+							<td>Underwriting commitment</td>
+							<td>ETH a vault owner agrees to underwrite; its share of the pool total sets the vault's collateral obligations and fee rights</td>
 							<td>SecurityPool vault accounting</td>
 						</tr>
 						<tr>
@@ -112,8 +111,8 @@
 					<h2>4. Local resolution</h2>
 					<a class="anchor-link" href="#local-resolution" aria-label="Link to Local resolution">#</a>
 				</div>
-				<p>The normal path begins with an initial report. REP-backed balances then accumulate behind Invalid, Yes, and No. Their median is binding capital and determines the moving deadline. After that deadline, exactly one strict balance leader produces the local winner. Winning shares redeem from that pool.</p>
-				<p>If two outcomes reach the non-decision threshold, the game does not choose between them. Statoblast instead initiates a Zoltar fork when the fork conditions are met. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the cost curve, deadlines, continuation proofs, and claims.</p>
+				<p>The game opens with the first REP deposit after the question ends. REP-backed balances then accumulate behind Invalid, Yes, and No. Their median is <a href="../reference/glossary.html#binding-capital">binding capital</a> and determines the moving deadline. After that deadline, exactly one strict balance leader produces the local winner. Winning shares redeem from that pool.</p>
+				<p>If two outcomes reach the non-decision threshold, the game does not choose between them. Statoblast instead initiates a Zoltar fork when the fork conditions are met. See <a href="./escalation-game.html">the Escalation Game explanation</a> for the required-support curve, deadlines, payouts, and how games continue across forks.</p>
 			</section>
 
 			<section class="paper-section" id="forks-migration">
@@ -121,12 +120,12 @@
 					<h2>5. Forks and migration</h2>
 					<a class="anchor-link" href="#forks-migration" aria-label="Link to Forks and migration">#</a>
 				</div>
-				<p>An unresolved operational pool can enter the fork path in two ways. Its own Escalation Game can reach non-decision and fork Zoltar on the market question; in this example, that creates Invalid, Yes, and No children. A fork of the pool's universe on another question can also interrupt it, in which case the children represent that categorical or scalar question's valid answers. A finalized pool remains settled and rejects later fork migration. Zoltar never chooses a canonical child.</p>
+				<p>An unresolved operational pool can enter the fork path in two ways. Its own Escalation Game can reach non-decision and fork Zoltar on the market question; in this example, that creates Invalid, Yes, and No children. A fork of the pool's universe on another question can also interrupt it, in which case the children represent that categorical or scalar question's valid answers. A finalized pool remains settled and rejects later fork migration.</p>
 				<figure class="diagram" id="fig-statoblast-fork-state-machine">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-fork-state-machine" data-plot-width="960" data-plot-height="906" role="img" aria-label="SecurityPool fork state machine"><span class="plot-chart-fallback">A pool moves from active operation through fork, child deployment, REP and collateral migration, and any auction repair to an operational child.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Fork timeline.</span> The parent halts permanently; each child becomes operational only after migration and any required repair.</p>
 				</figure>
-				<p>A vault's parent backing claim, ETH commitment, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
+				<p>A vault's parent backing claim, underwriting commitment, and proportional pool collateral are routed into one selected child pool. The same parent vault migration cannot be reused across siblings. Eligible outcome-share balances work differently: users can materialize branch-specific ledger claims in multiple selected child pools. That reproduces claims, not ETH; see <a href="./zoltar.html#non-guarantees">what Zoltar does not guarantee</a>.</p>
 				<figure class="diagram" id="fig-statoblast-share-migration">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-share-migration" data-plot-width="900" data-plot-height="468" role="img" aria-label="Share migration materializes persistent branch entitlements"><span class="plot-chart-fallback">The full eligible source balance can materialize in each selected child as a separate branch claim, while the source remains locked. ETH is not copied.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Share migration.</span> Branch-specific token claims may appear in more than one child; settlement collateral follows vault migration and remains finite.</p>
@@ -136,23 +135,14 @@
 					<div class="plot-chart" data-plot-chart="fig-statoblast-auction-balance-sheet" data-plot-width="960" data-plot-height="330" role="img" aria-label="Truth Auction collateral repair balance sheet"><span class="plot-chart-fallback">A child begins with a collateral shortfall. Auction ETH may fully repair it, partially repair it, or leave it unchanged when there is no demand.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Collateral repair.</span> The auction raises what demand supports and never selects truth.</p>
 				</figure>
-				<figure class="diagram" id="fig-statoblast-collateral-repair">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-collateral-repair" data-plot-width="760" data-plot-height="170" role="img" aria-label="Child collateral repair progress"><span class="plot-chart-fallback">Migration collateral and auction proceeds are compared with the finite parent settlement target.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Repair progress.</span> Migrated collateral plus accepted auction ETH determines the child's funded amount.</p>
-				</figure>
 			</section>
 
 			<section class="paper-section" id="fees-capacity-liquidations">
 				<div class="section-heading">
-					<h2>6. Fees, capacity, and liquidations</h2>
-					<a class="anchor-link" href="#fees-capacity-liquidations" aria-label="Link to Fees, capacity, and liquidations">#</a>
+					<h2>6. Fees, underwriting, and liquidations</h2>
+					<a class="anchor-link" href="#fees-capacity-liquidations" aria-label="Link to Fees, underwriting, and liquidations">#</a>
 				</div>
-				<p>REP deposits do not create commitments. Each owner separately sets an ETH limit X. Total commitments T are maintained incrementally. With tracked settlement collateral L, each vault owes L × X / T rounded upward to the next atomic unit. Minting requires L + deposit ≤ T and no escalation game; it needs no oracle price because vaults already answer for their full limits. Outstanding complete-set collateral accrues time-based fees for fee-eligible capacity owners.</p>
-				<p>Backing requirements apply to the full standing limit, including when L is zero. Liquidation transfers commitment and backing to an authorized receiver without changing T or unrelated vault weights. An untransferred residual remains visible; <a href="../reference/invariants.html#bal-03">minting within T continues</a> regardless of current backing. The receiver receives the funded REP award, subject to caps and rounding; the submitting operator receives no automatic reward. See <a href="./fees.html">protocol fees</a> and <a href="./liquidations.html">vault liquidation</a> for the precise accounting.</p>
-				<figure class="diagram" id="fig-statoblast-oracle-flow">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-oracle-flow" data-plot-width="940" data-plot-height="1064" role="img" aria-label="OpenOracle price request and guarded-operation flow"><span class="plot-chart-fallback">A cached fresh price may execute a guarded operation immediately. Otherwise an accepted settlement callback refreshes the price and runs a bounded batch; a rejected report terminally consumes its attached batch. Overflow operations remain active for later execution with a fresh price.</span></div>
-					<p class="diagram-caption"><span class="figure-label">Price-guarded operations.</span> The price coordinator supplies a fresh input; the SecurityPool still enforces live safety.</p>
-				</figure>
+				<p>REP deposits do not create underwriting commitments; each vault owner sets one separately, and a vault's share of total commitments sets its share of the pool's settlement collateral obligations and of the time-based fees that outstanding collateral pays. New complete sets can be minted only while total commitments cover the resulting collateral and no Escalation Game has opened. Minting needs no oracle price or backing check, because vault owners already answer for their full commitments, so minters accept the pool's current backing; <a href="../reference/invariants.html#bal-03">invariant BAL-03</a> states the exact condition. A vault whose REP no longer backs its commitment can be liquidated: some or all of its commitment and backing move to an authorized receiver vault. See <a href="./fees.html">open-interest fees</a> and <a href="./liquidations.html">vault liquidation</a> for the accounting.</p>
 			</section>
 
 			<section class="paper-section" id="security">

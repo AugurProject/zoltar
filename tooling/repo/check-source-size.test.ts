@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { inspectSourceSizes, isProductionSource } from './check-source-size.mts'
+import { countSolidityCommentOnlyLines, countSourceLines, inspectSourceSizes, isProductionSource } from './check-source-size.mts'
 
 const source = (lines: number) => `${'line\n'.repeat(lines)}`
 
@@ -52,6 +52,39 @@ test('requires valid production paths, ceilings, and nonblank reasons for allowa
 		['shared/core/ts/tests/helper.ts', 'invalid-allowance-path'],
 	])
 	expect(findings.every(finding => finding.detail === undefined || finding.detail.trim() !== '')).toBe(true)
+})
+
+test('excludes Solidity comment-only lines but keeps code, blank lines, and comment-like string contents', () => {
+	const contract = [
+		'// SPDX-License-Identifier: UNLICENSE',
+		'pragma solidity 0.8.33;',
+		'',
+		'/// @notice Holds one value.',
+		'/**',
+		' * @dev Block NatSpec.',
+		' */',
+		'contract Example {',
+		'\t/* inline block */ uint256 public value; // trailing comment',
+		'\tstring constant URL = "https://example.com/*not-a-comment";',
+		"\tstring constant SLASHES = 'a // b \\' // c';",
+		'\t/* opens a block',
+		'\t   still inside */',
+		'\tfunction set(uint256 newValue) external { value = newValue; } /*',
+		'\t   trailing block continues */',
+		'}',
+	].join('\n')
+	expect(countSolidityCommentOnlyLines(contract)).toBe(8)
+	expect(countSourceLines(contract, 'solidity/contracts/Example.sol')).toBe(8)
+	expect(countSourceLines(`${contract}\n`, 'solidity/contracts/Example.sol')).toBe(8)
+	expect(countSourceLines(contract.replaceAll('\n', '\r\n'), 'solidity/contracts/Example.sol')).toBe(8)
+	expect(countSourceLines(contract, 'tooling/repo/example.ts')).toBe(16)
+	expect(countSourceLines('', 'solidity/contracts/Empty.sol')).toBe(0)
+})
+
+test('applies the Solidity comment exclusion to size findings', () => {
+	const documentedSource = `${'/// @notice Documentation.\n'.repeat(50)}${'line;\n'.repeat(600)}`
+	expect(inspectSourceSizes(new Map([['solidity/contracts/Documented.sol', documentedSource]]), new Map())).toEqual([])
+	expect(inspectSourceSizes(new Map([['ui/zoltar/ts/documented.ts', documentedSource]]), new Map())).toEqual([{ file: 'ui/zoltar/ts/documented.ts', kind: 'oversized', limit: 600, lines: 650 }])
 })
 
 test('requires ceilings to ratchet down when an oversized module shrinks', () => {

@@ -7,7 +7,7 @@ export type AuctionBidInput = {
 	price: number
 }
 
-export const quantitativeChartIds = ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve', 'fig-statoblast-retention-utilization', 'fig-zoltar-fork-threshold-decay', 'fig-statoblast-collateral-repair'] as const
+export const quantitativeChartIds = ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve', 'fig-statoblast-retention-utilization', 'fig-zoltar-fork-threshold-decay'] as const
 
 type QuantitativeChartId = (typeof quantitativeChartIds)[number]
 
@@ -16,7 +16,6 @@ export const quantitativeChartAxisLabels: Record<QuantitativeChartId, { x: strin
 	'fig-statoblast-escalation-cost-curve': { x: 'Days since game start (days)', y: 'Required support threshold / attrition cost (REP)' },
 	'fig-statoblast-retention-utilization': { x: 'Minting-capacity utilization (%)', y: 'Annualized open-interest fee (%)' },
 	'fig-zoltar-fork-threshold-decay': { x: 'Fork generation (count)', y: 'Theoretical genesis supply (%)' },
-	'fig-statoblast-collateral-repair': { x: 'Child-universe collateral (ETH)', y: 'Collateral destination (category)' },
 }
 
 type AuctionBidResult = AuctionBidInput & {
@@ -127,27 +126,6 @@ export function calculateAuctionModel(ethRaiseCap: number, repInventory: number,
 		ethRaised: accumulatedBidEth,
 		mode: funded ? 'uniform' : 'underfunded',
 		qualificationPrice,
-	}
-}
-
-export function calculateCollateralRepairModel(
-	parentSettlementCollateral: number,
-	forkSettlementCollateralReceived: number,
-	auctionRaised: number,
-): {
-	initialShortfall: number
-	received: number
-	remainingShortfall: number
-	repairEth: number
-} {
-	const received = Math.min(Math.max(forkSettlementCollateralReceived, 0), Math.max(parentSettlementCollateral, 0))
-	const initialShortfall = Math.max(0, parentSettlementCollateral - received)
-	const repairEth = Math.min(Math.max(auctionRaised, 0), initialShortfall)
-	return {
-		initialShortfall,
-		received,
-		remainingShortfall: initialShortfall - repairEth,
-		repairEth,
 	}
 }
 
@@ -267,6 +245,7 @@ export const contractInteractionEdges: ContractInteractionEdge[] = [
 	{ action: 'fund report', id: 'coordinator-oracle-report', phase: 'Price discovery', receiver: 'OpenOracle', source: 'Price Coordinator' },
 	{ action: 'settled callback', id: 'oracle-coordinator-callback', phase: 'Price settlement', receiver: 'Price Coordinator', source: 'OpenOracle' },
 	{ action: 'execute guarded op', id: 'coordinator-pool-execute', phase: 'Risk execution', receiver: 'Security Pool', source: 'Price Coordinator' },
+	{ action: 'reserve / consume approval', id: 'coordinator-liquidation-approval', phase: 'Risk operations', receiver: 'Liquidation Approval Registry', source: 'Price Coordinator' },
 	{ action: 'request child', id: 'share-token-forker-migration', phase: 'Share migration', receiver: 'Pool Forker', source: 'Share Token' },
 	{ action: 'snapshot game', id: 'forker-escalation-snapshot', phase: 'Fork snapshot', receiver: 'Escalation Game', source: 'Pool Forker' },
 	{ action: 'migrate REP', id: 'forker-migration-proxy', phase: 'Fork migration', receiver: 'Migration Proxy', source: 'Pool Forker' },

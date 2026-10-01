@@ -20,12 +20,20 @@ describe('test impact recommendations', () => {
 	test('runs the changed production-build test without escalating solely because the test changed', () => {
 		expect(commandsFor(['tooling/ui/productionBuild.test.ts'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts tooling/ui/productionBuild.test.ts'])
 		expect(commandsFor(['tooling/ui/browserSmoke.mts'])).toEqual(['bun run test:browser:smoke'])
-		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run test:browser:smoke'])
+		expect(commandsFor(['ui/coreShared/css/application-surfaces.css'])).toEqual(['bun run docs:screenshots -- --app statoblast', 'bun run docs:screenshots -- --app trading', 'bun run docs:screenshots -- --app zoltar', 'bun run test:browser:smoke'])
 		expect(commandsFor(['tooling/ui/production.mts'])).toEqual(['bun run test:browser:smoke', 'bun run test:browser:workflow'])
 		expect(commandsFor(['tooling/ui/productionWorkflowScenarios.ts'])).toEqual(['bun run test:browser:workflow'])
 		// The browser workflows seed these simulation scenarios, so editing them must suggest the workflow tier.
 		expect(commandsFor(['ui/statoblastShared/ts/simulation/statoblastWorkflowScenarios.ts'])).toEqual(['bun run test:browser:workflow'])
 		expect(commandsFor(['ui/statoblastShared/ts/simulation/statoblastScenarioSeeding.ts'])).toEqual(['bun run test:browser:workflow'])
+	})
+
+	test('suggests recapturing documentation screenshots when a documented UI changes', () => {
+		expect(commandsFor(['ui/trading/ts/features/LivePositionControls.tsx'])).toEqual(['bun run docs:screenshots -- --app trading'])
+		expect(commandsFor(['ui/coreShared/ts/lib/formatters.ts'])).toContain('bun run docs:screenshots -- --app trading')
+		expect(commandsFor(['ui/statoblast/ts/app/lib/appNavigation.tsx'])).toEqual(['bun run docs:screenshots -- --app statoblast'])
+		// A changed UI test still runs directly instead of being replaced by the screenshot suggestion.
+		expect(commandsFor(['ui/trading/ts/tests/features/authorization-routing.test.tsx'])).toEqual(['bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/trading/ts/tests/features/authorization-routing.test.tsx'])
 	})
 
 	test('maps quote behavior to unit and deterministic fork coverage', () => {

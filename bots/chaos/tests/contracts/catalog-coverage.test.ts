@@ -467,7 +467,8 @@ describe('contract operation classification', () => {
 	test('routes every prerequisite selector through workflow steps and validates semantic aliases', () => {
 		const stepSelectors = new Set<string>()
 		const tradingFiles = readdirSync(path.resolve(import.meta.dir, '../../src/operations/trading')).map(file => `trading/${file}`)
-		for (const file of ['open-oracle.ts', 'statoblast.ts', 'statoblast/complete-sets.ts', ...tradingFiles, 'zoltar.ts']) {
+		const openOracleFiles = readdirSync(path.resolve(import.meta.dir, '../../src/operations/open-oracle')).map(file => `open-oracle/${file}`)
+		for (const file of [...openOracleFiles, 'statoblast.ts', 'statoblast/complete-sets.ts', ...tradingFiles, 'zoltar.ts']) {
 			for (const selector of operationStepSelectors(path.resolve(import.meta.dir, '../../src/operations', file))) stepSelectors.add(selector)
 		}
 		for (const entry of MUTATING_CONTRACT_SURFACE.filter(candidate => candidate.classification === 'prerequisite')) {

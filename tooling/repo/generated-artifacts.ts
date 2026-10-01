@@ -66,6 +66,7 @@ export const generatedArtifacts: readonly GeneratedArtifact[] = [
 	},
 	{ pattern: 'docs/reference/contracts.html', tracked: true, regenerate: 'bun run docs:generate-contract-reference', reason: documentationReason, check: 'bun run docs:check-contract-reference', linguist: 'generated' },
 	{ pattern: 'docs/reference/contracts/*.html', tracked: true, regenerate: 'bun run docs:generate-contract-reference', reason: documentationReason, check: 'bun run docs:check-contract-reference', linguist: 'generated' },
+	{ pattern: 'docs/assets/screenshots/**', tracked: true, regenerate: 'bun run docs:screenshots (captures tooling/docs/ui-screenshot-specs/<app>.mts from the walletless simulations)', reason: documentationReason, check: 'bun run docs:check-screenshots', linguist: 'generated' },
 	{
 		pattern: 'bots/shared/src/contracts/abi.generated.ts',
 		tracked: true,

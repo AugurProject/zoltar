@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="Enter a YES or NO position through the Trading router, read the simulation, and exit while keeping INVALID insurance." />
+		<meta name="description" content="Buy Yes shares in a Trading market, read the estimate, and sell part of them back for ETH." />
 		<title>Your first trade</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -13,30 +13,54 @@
 			<header>
 				<p class="kicker">Tutorial</p>
 				<h1>Your first trade</h1>
-				<p>In this tutorial you buy a directional position in an open market and then exit part of it. You will see how one ETH entry becomes a complete set, a swap, and an INVALID share you keep, and how the exit gives that INVALID back in exchange for ETH.</p>
+				<p>In this tutorial you buy Yes shares in an open market and then sell part of them back for ETH. You will see one ETH purchase become a <a href="../reference/glossary.html#complete-set">complete set</a> plus a swap, leaving you Yes shares and <a href="../reference/glossary.html#invalid">Invalid</a> shares, and you will see the sale hand that Invalid back in exchange for ETH.</p>
 			</header>
 			<section id="before-you-start">
 				<h2>Before you start</h2>
-				<p>Open the standalone UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a>; it derives and verifies the deterministic trading contracts for you. Connect a wallet on that network and select an initialized, open pair. To practise without a wallet, add <code>?simulate=1</code> for the browser-local simulator, which is clearly labeled and never reflects live chain state.</p>
+				<p>Trading is the market interface for <a href="../explanation/statoblast.html">Statoblast</a>: each market trades the Yes and No shares of one <a href="../reference/glossary.html#security-pool">SecurityPool</a> in a constant-product <a href="../reference/glossary.html#trading-pool">trading pool</a>.</p>
+				<p>To practise without a wallet, run <code>bun run app:serve:trading</code> and open <code>http://localhost:4163/?simulate=1</code>. The browser-local simulator is labeled at the top of the page, starts with one funded market, and never reflects live chain state; the screenshots below come from it. To trade for real, open the UI on a supported network as described in <a href="../how-to/trading-configure-ui.html">Configure the Trading UI</a> and connect a wallet.</p>
 			</section>
-			<section id="enter">
-				<h2>Enter a position</h2>
-				<ol>
-					<li>Select <strong>Enter</strong>, choose <strong>YES</strong> or <strong>NO</strong>, and enter an ETH amount. Set the slippage tolerance (0% to 5%) and how many whole minutes the transaction stays valid (1 to 1440), then select <strong>Preview trade</strong>. Lower slippage tolerates less adverse movement from the quote; a shorter validity window reduces stale-transaction exposure. Either setting makes reverts more likely.</li>
-					<li>Review the simulation: complete-set shares, opposite shares swapped, additional and total long shares, INVALID insurance, fee, average execution price, conditional price impact, your slippage tolerance, deadline, and minimum received.</li>
-					<li>Select <strong>Enter YES</strong> (or <strong>Enter NO</strong>) and confirm the single <code>enterPosition</code> transaction in the wallet.</li>
-					<li>Check the wallet. A YES entry delivers the complete-set YES plus the additional YES from the swap. Its INVALID insurance equals the complete-set quantity, not the larger total YES delivered, and the operation leaves you no NO.</li>
-				</ol>
+			<section id="choose">
+				<h2>Choose a market</h2>
+				<p>The <strong>Markets</strong> tab lists every market in the selected universe with its conditional odds, liquidity, and closing time. Select the market title to open it.</p>
+				<figure class="screenshot" id="fig-trading-markets" aria-labelledby="fig-trading-markets-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/markets.png"><img width="410" height="471" src="../assets/screenshots/trading/markets.png" alt="The market card for Will this resolve? on the Markets tab, marked Trading open, with Yes 50% and No 50% conditional odds, 0.01 ETH liquidity, and its closing date." loading="lazy" /></a>
+					<figcaption id="fig-trading-markets-caption"><span class="figure-label">Markets.</span> Only markets whose badge reads <strong>TRADING OPEN</strong> accept new trades.</figcaption>
+				</figure>
 			</section>
-			<section id="exit">
-				<h2>Exit a position</h2>
+			<section id="protect">
+				<h2>Set your protection</h2>
+				<p>Open <strong>Settings</strong> in the header. Under <strong>Trade settings</strong>, choose a <strong>Slippage tolerance</strong> (0% to 5%) and how long a transaction stays valid (<strong>Transaction valid for</strong>, 1 to 1440 minutes). A transaction reverts if the price moves further than the tolerance or it is not mined in time, so tighter values mean fewer surprises and more reverts. The defaults, 0.5% and 20 minutes, are fine for this tutorial.</p>
+				<figure class="screenshot" id="fig-trading-settings" aria-labelledby="fig-trading-settings-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/trade-settings.png"><img width="352" height="753" src="../assets/screenshots/trading/trade-settings.png" alt="The Settings menu with Trade settings: slippage tolerance presets 0.1%, 0.5%, and 1% with 0.5% selected, and validity presets 10, 20, and 60 minutes with 20 selected." loading="lazy" /></a>
+					<figcaption id="fig-trading-settings-caption"><span class="figure-label">Trade settings.</span> Every quote repeats the current values, for example <em>Slippage 0.5% · valid up to 20 min</em>.</figcaption>
+				</figure>
+			</section>
+			<section id="buy">
+				<h2>Buy Yes</h2>
 				<ol>
-					<li>Select <strong>Exit</strong> and the side you hold, then enter the <strong>Complete-set value to redeem</strong>. No approval step is needed: the exit is a single share transfer from your wallet to the router.</li>
-					<li>Select <strong>Preview trade</strong>. The simulation shows the complete sets redeemed, the opposite shares the router buys for you, the INVALID required, the estimated and minimum ETH out, the fee, and the deadline.</li>
-					<li>Select <strong>Exit insured YES</strong> (or <strong>Exit insured NO</strong>) and confirm the wallet transaction. It calls the ShareToken's <code>safeBatchTransferFrom</code> with your INVALID and long shares; the router buys exactly the missing opposite shares, redeems the complete sets at the pool's current collateral rate, and forwards only that operation's ETH to you.</li>
-					<li>Check the wallet: the ETH arrived, the INVALID you redeemed is gone, and any long shares beyond what the exit needed came back.</li>
+					<li>In the market's <strong>Trade</strong> tab, select <strong>Buy</strong> and <strong>YES</strong>.</li>
+					<li>Enter <code>0.001</code> in <strong>You pay</strong>. The estimate appears below the field: <strong>You receive ≈</strong>, <strong>Minimum received</strong>, <strong>Price impact</strong>, <strong>INVALID insurance</strong>, and <strong>Pool fee</strong>. A price impact above 5% asks you to confirm it, and above 15% the ticket refuses the trade.</li>
+					<li>Select <strong>Buy YES</strong> and confirm the single <code>enterPosition</code> transaction in your wallet. The client checks the price again before the wallet opens.</li>
 				</ol>
-				<p>If your INVALID balance cannot cover the exit you asked for, reduce the amount; directional profit beyond what you can insure stays in your wallet as shares. <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> explains the bound, and <a href="../how-to/trading-exit-a-position.html">Exit an insured position</a> covers the SDK helper that finds the largest exit for you.</p>
+				<figure class="screenshot" id="fig-trading-buy" aria-labelledby="fig-trading-buy-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/buy-ticket.png"><img width="480" height="1013" src="../assets/screenshots/trading/buy-ticket.png" alt="The Trade tab with Buy and YES selected and 0.001 ETH entered. The estimate shows about 0.0019 Yes received, a minimum received, a 4.52% price impact, 0.001 Invalid insurance, and a 0.3% pool fee, above an enabled Buy YES button." loading="lazy" /></a>
+					<figcaption id="fig-trading-buy-caption"><span class="figure-label">A Yes purchase.</span> The bar above the ticket shows how far the purchase moves the conditional odds.</figcaption>
+				</figure>
+				<p>When the transaction confirms, the <strong>Wallet YES</strong> and <strong>Wallet INVALID</strong> balances under <strong>Your position</strong> on the market page go up. The ETH became complete sets; the router sold their No for more Yes and sent you all the Yes plus the Invalid. Your Invalid insurance equals the number of complete sets, not the larger Yes total, and you hold no new No.</p>
+			</section>
+			<section id="sell">
+				<h2>Sell Yes</h2>
+				<ol>
+					<li>Select <strong>Sell</strong> and <strong>YES</strong>, then enter <code>0.001</code> in <strong>Shares to sell</strong>. The <strong>25%</strong>, <strong>50%</strong>, and <strong>Max</strong> buttons fill in larger amounts.</li>
+					<li>Read the estimate: <strong>You sell</strong>, <strong>You receive ≈</strong> in ETH, <strong>Minimum received</strong>, and <strong>INVALID used</strong>.</li>
+					<li>Select <strong>Sell YES</strong> and confirm. No approval is needed: the sale is one ShareToken transfer of your Yes and Invalid to the <a href="../reference/glossary.html#trading-router">router</a>.</li>
+				</ol>
+				<figure class="screenshot" id="fig-trading-sell" aria-labelledby="fig-trading-sell-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/sell-ticket.png"><img width="480" height="1035" src="../assets/screenshots/trading/sell-ticket.png" alt="The Trade tab with Sell and YES selected and 0.001 Yes entered. The estimate shows about 0.00049 ETH received, a minimum received, a 2.49% price impact, 0.0005 Invalid used, and a 0.3% pool fee, above an enabled Sell YES button." loading="lazy" /></a>
+					<figcaption id="fig-trading-sell-caption"><span class="figure-label">A Yes sale.</span> <strong>INVALID used</strong> is the insurance the sale returns to redeem complete sets for ETH.</figcaption>
+				</figure>
+				<p>When it confirms, the ETH is in your wallet, your Invalid has dropped by the amount used, and any Yes the router did not need has come back. If you ask to sell more than your Invalid can insure, the ticket offers the largest amount you can sell now; <a href="../how-to/trading-exit-a-position.html">Exit an insured position</a> covers that case and <a href="../explanation/trading/early-exit-limit.html">Why early ETH exits are limited</a> explains the bound.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

@@ -603,7 +603,7 @@ body.security-model .assumption-grid {
 body.security-model .assumption-grid > li {
 	position: relative;
 	min-width: 0;
-	padding: 1rem 1rem 1rem 3.45rem;
+	padding: 1rem;
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	background: color-mix(in srgb, var(--soft) 48%, var(--paper));
@@ -616,25 +616,13 @@ body.security-model .assumption-grid > li:target {
 	border-color: var(--blue);
 	box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--blue) 20%, transparent);
 }
-body.security-model .assumption-grid > li::before {
-	content: attr(data-assumption);
-	position: absolute;
-	top: 1.02rem;
-	left: 1rem;
+body.security-model .assumption-grid .assumption-id {
+	margin-right: 0.35rem;
 	color: var(--blue);
 	font-family: var(--docs-font-mono);
 	font-size: 0.82rem;
 	font-weight: 800;
 	letter-spacing: 0.03em;
-}
-body.security-model .assumption-grid > li::after {
-	content: "";
-	position: absolute;
-	top: 2.55rem;
-	bottom: 1rem;
-	left: 1.78rem;
-	width: 1px;
-	background: var(--line);
 }
 body.security-model .assumption-grid h3 {
 	margin: 0 0 0.35rem;
@@ -746,6 +734,27 @@ body.doc-openoracle .equation {
 	border: 1px solid var(--line);
 	border-radius: var(--radius);
 	background: var(--soft);
+}
+body.doc-openoracle .screenshot {
+	margin: 1.25rem 0;
+}
+body.doc-openoracle .screenshot-link {
+	display: block;
+	width: fit-content;
+	max-width: 100%;
+}
+body.doc-openoracle .screenshot img {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--paper);
+}
+body.doc-openoracle .screenshot figcaption {
+	margin: 0.75rem 0 0;
+	color: var(--muted);
+	font-size: 0.94rem;
 }
 body.doc-openoracle .diagram {
 	overflow-x: auto;
@@ -1121,9 +1130,6 @@ body.doc-openoracle td math {
 	}
 	body.security-model .assumption-nav a {
 		text-align: center;
-	}
-	body.security-model .assumption-grid > li {
-		padding-left: 3.15rem;
 	}
 	body.security-model .assumption-grid .assumption-links a {
 		white-space: normal;

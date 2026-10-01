@@ -131,6 +131,8 @@ Choose the smallest relevant scenario:
 - `simScenario=securitypoolx2`
 - `simScenario=trading-funded`
 
+When the change alters a screen that documentation screenshots show, run `bun run docs:screenshots -- --app <app>` and review the recaptured images and the page text that quotes their labels (`bun run test:plan` suggests this).
+
 Check the changed flow at desktop and narrow/mobile widths, including relevant empty, loading, disabled, pending, success, and failure states. Uniswap-backed REP pricing is intentionally unavailable in simulation; quote-dependent UI must degrade gracefully.
 
 Capture current-state screenshots for the visual-review handoff. Normally use `1440x900` for desktop and `390x844` for narrow/mobile; record the exact dimensions and explain any different viewport. Include baseline or before screenshots when they are trustworthy and readily available, but do not manufacture a baseline for a new surface. Record the route, scenario, state, browser, screenshot path or evidence identifier, intentional differences, and any console or runtime errors. Do not commit QA screenshots unless the task explicitly requires tracked visual fixtures.

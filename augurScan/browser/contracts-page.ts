@@ -1,5 +1,5 @@
 import type { ContractRecord } from './browser-types.ts'
-import { contractDeploymentStatus, contractRegistrySection, type ContractRegistrySection } from './live-update.ts'
+import { contractDeploymentStatus, contractRegistrySection, type ContractRegistrySection } from './contract-registry-status.ts'
 
 export interface ContractsPageDeps {
 	readonly lookup: (selector: string) => HTMLElement

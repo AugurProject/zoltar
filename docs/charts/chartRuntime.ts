@@ -1,10 +1,9 @@
-import { areaY, barX, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
+import { areaY, dot, line, lineY, plot, rect, ruleX, ruleY, text } from '@observablehq/plot'
 import {
 	calculateAnnualizedRetentionFeePercent,
 	computeCanonicalEscalationBindingCapital,
 	computeCanonicalEscalationDeadlineDays,
 	projectDocumentationEscalationDeposit,
-	calculateCollateralRepairModel,
 	calculateAuctionModel,
 	calculateForkThresholdSeries,
 	ESCALATION_ACTIVATION_DELAY_DAYS,
@@ -427,16 +426,15 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
 	const startBond = readInput(simulator, 'startBond', 1)
 	const nonDecisionThreshold = readInput(simulator, 'nonDecisionThreshold', 10)
-	const curve = Array.from({ length: ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS + 1 }, (_, day) => {
-		return {
-			day,
-			bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
-		}
-	})
-	const start = curve[0]
-	const activation = curve[ESCALATION_ACTIVATION_DELAY_DAYS]
-	const end = curve[ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS]
-	if (start === undefined || activation === undefined || end === undefined) {
+	const sampled = Array.from({ length: ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS + 1 }, (_, day) => ({
+		day,
+		bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
+	}))
+	// The contract requires nothing through the activation second and the start bond right after it, so the curve steps up at day 3.
+	const curve = [...sampled.slice(0, ESCALATION_ACTIVATION_DELAY_DAYS), { day: ESCALATION_ACTIVATION_DELAY_DAYS, bindingCapital: 0 }, ...sampled.slice(ESCALATION_ACTIVATION_DELAY_DAYS)]
+	const activation = sampled[ESCALATION_ACTIVATION_DELAY_DAYS]
+	const end = sampled[ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS]
+	if (activation === undefined || end === undefined) {
 		throw new Error('Escalation cost curve must include both endpoints')
 	}
 	return plot({
@@ -466,9 +464,9 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 				x: 'day',
 				y: 'bindingCapital',
 			}),
-			text([{ day: activation.day, label: `day ${activation.day}: activation / ${startBond} REP`, bindingCapital: activation.bindingCapital }], {
+			text([{ day: activation.day, label: spec.width < 900 ? `day ${activation.day}: ${startBond} REP` : `day ${activation.day}: activation, then ${startBond} REP`, bindingCapital: activation.bindingCapital }], {
 				dx: 9,
-				dy: -10,
+				dy: compact ? -56 : -26,
 				fill: 'var(--green, #1d735d)',
 				fontWeight: 700,
 				text: 'label',
@@ -486,11 +484,10 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 				x: 'day',
 				y: 'bindingCapital',
 			}),
-			text([{ day: 0, label: 'day 0: game starts', bindingCapital: 0 }], { dx: 8, dy: -8, fill: 'var(--ink, currentColor)', fontWeight: 650, text: 'label', textAnchor: 'start', x: 'day', y: 'bindingCapital' }),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: compact ? [0, 52] : [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
+		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: spec.width < 720 ? [0, 52] : [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
 		y: { domain: [0, Math.max(nonDecisionThreshold * 1.08, 1)], grid: true, label: axes.y, tickFormat: (value: number) => `${value.toFixed(1)} REP` },
 	}) as SVGSVGElement
 }
@@ -687,56 +684,6 @@ function auctionDemandChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement 
 	return chart
 }
 
-function collateralRepairChart(spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
-	const axes = quantitativeChartAxisLabels['fig-statoblast-collateral-repair']
-	const example = mount.closest('#collateral-repair-example')
-	const parentSettlementCollateral = Math.max(readInput(example, 'parentSettlementCollateral', 50), 0)
-	const forkSettlementCollateralReceived = readInput(example, 'forkSettlementCollateralReceived', 47.5)
-	const auctionRaised = readInput(example, 'auctionRaised', 2.5)
-	const model = calculateCollateralRepairModel(parentSettlementCollateral, forkSettlementCollateralReceived, auctionRaised)
-	if (example !== null) {
-		if (example instanceof HTMLElement) example.dataset['widgetState'] = model.remainingShortfall === 0 ? 'safe' : 'warning'
-		const values = {
-			auctionRaised: `${auctionRaised.toFixed(2)} ETH`,
-			forkSettlementCollateralReceived: `${forkSettlementCollateralReceived.toFixed(2)} ETH`,
-			parentSettlementCollateral: `${parentSettlementCollateral.toFixed(2)} ETH`,
-		}
-		for (const [name, value] of Object.entries(values)) example.querySelector(`[data-example-value="${name}"]`)?.replaceChildren(String(value))
-		example.querySelector('[data-example-output="routedCollateral"]')?.replaceChildren(`${model.received.toFixed(2)} ETH`)
-		example.querySelector('[data-example-output="initialShortfall"]')?.replaceChildren(`${model.initialShortfall.toFixed(2)} ETH`)
-		example.querySelector('[data-example-output="remainingShortfall"]')?.replaceChildren(`${model.remainingShortfall.toFixed(2)} ETH`)
-		let repairStatus = 'shortfall remains'
-		if (model.initialShortfall === 0) repairStatus = 'no repair needed'
-		else if (model.remainingShortfall === 0) repairStatus = 'fully repaired'
-		example.querySelector('[data-example-output="repairStatus"]')?.replaceChildren(repairStatus)
-	}
-	const parts = [
-		{ kind: 'Migration-routed', x1: 0, x2: model.received },
-		{ kind: 'Auction repair', x1: model.received, x2: model.received + model.repairEth },
-	]
-	const chart = plot({
-		ariaDescription: `${spec.ariaDescription}. Migration routed ${model.received.toFixed(2)} ETH and the auction repairs ${model.repairEth.toFixed(2)} ETH toward the ${parentSettlementCollateral.toFixed(2)} ETH target, leaving ${model.remainingShortfall.toFixed(2)} ETH unfilled.`,
-		ariaLabel: spec.ariaLabel,
-		color: {
-			domain: ['Migration-routed', 'Auction repair'],
-			range: ['var(--blue, #245f9f)', 'var(--green, #1d735d)'],
-		},
-		height: spec.height,
-		marginBottom: 32,
-		marginLeft: 12,
-		marginRight: 12,
-		marginTop: 20,
-		marks: [barX(parts, { fill: 'kind', inset: 2, x1: 'x1', x2: 'x2', y: () => 'Child collateral' }), ruleX([parentSettlementCollateral], { stroke: 'var(--gold, #8a5d18)', strokeDasharray: '5,4', strokeWidth: 2 })],
-		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
-		width: spec.width,
-		x: { domain: [0, Math.max(parentSettlementCollateral, model.received + model.repairEth, 1)], grid: true, label: axes.x },
-		y: { axis: null, label: axes.y },
-	}) as SVGSVGElement
-	chart.dataset['chartState'] = model.remainingShortfall === 0 ? 'repaired' : 'partial'
-	mount.dataset['chartState'] = chart.dataset['chartState']
-	return chart
-}
-
 function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGSVGElement {
 	if (chartId === 'fig-statoblast-escalation-cost-curve') {
 		return bindingCapitalThresholdChart(spec)
@@ -749,9 +696,6 @@ function createChart(chartId: string, spec: ChartSpec, mount: HTMLElement): SVGS
 	}
 	if (chartId === 'fig-auction-clearing-ladder') {
 		return auctionDemandChart(spec, mount)
-	}
-	if (chartId === 'fig-statoblast-collateral-repair') {
-		return collateralRepairChart(spec, mount)
 	}
 	return markDrivenDiagramChart(spec)
 }
@@ -1095,7 +1039,7 @@ function updateEscalationSimulator(): void {
 
 updateEscalationSimulator()
 
-for (const chartId of ['fig-auction-clearing-ladder', 'fig-statoblast-collateral-repair', 'fig-statoblast-escalation-cost-curve']) {
+for (const chartId of ['fig-auction-clearing-ladder', 'fig-statoblast-escalation-cost-curve']) {
 	const mount = document.querySelector<HTMLElement>(`[data-plot-chart="${chartId}"]`)
 	const inputRoot = mount === null ? null : quantitativeInputRoot(chartId, mount)
 	for (const input of Array.from(inputRoot?.querySelectorAll<HTMLElement>('[data-example-input]') ?? [])) {

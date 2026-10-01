@@ -1,4 +1,3 @@
-import { publicFailure, indeterminateConfigurationFailure } from './public-failure.ts'
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
 import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
@@ -13,6 +12,7 @@ import { mutationRoutes } from './mutation-routes.ts'
 import { settingsPageMarkup } from './settings-page.ts'
 import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
+import { indeterminateConfigurationFailure, publicFailure } from './public-failure.ts'
 
 export type ChaosDashboardController = {
 	getConfiguration: () => unknown | Promise<unknown>

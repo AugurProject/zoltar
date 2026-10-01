@@ -1,91 +1,160 @@
-import { describedSwitch, executionModePanel, settingsGroup, settingsIntro, settingsPage, settingsSection, signerPanel } from '@zoltar/bot-shared/dashboard/settings-markup'
+// The chaos bot does not depend on Preact itself and ships no tsconfig in its image, so it calls the factory re-exported by the shared renderer directly instead of compiling JSX.
+import { DescribedSwitch, ExecutionModePanel, SettingsGroup, SettingsIntro, SettingsPage, SettingsSection, SignerPanel } from '@zoltar/bot-shared/dashboard/settings-markup'
+import { Fragment, h, renderStaticMarkup } from '@zoltar/bot-shared/dashboard/static-markup'
 
-// All inputs are repository-owned markup, never request or runtime data.
-
-function unitField(label: string, id: string, unit: string, attributes: string) {
-	return `<label><span>${label}</span><span class="input-with-unit"><input id="${id}" ${attributes} inputmode="numeric" type="number" required /><span>${unit}</span></span></label>`
+function UnitField({ id, label, max, min, unit }: { id: string; label: string; max: string; min: string; unit: string }) {
+	return h('label', null, h('span', null, label), h('span', { class: 'input-with-unit' }, h('input', { id, min, max, inputmode: 'numeric', type: 'number', required: true }), h('span', null, unit)))
 }
 
-function decimalField(label: string, id: string) {
-	return `<label><span>${label}</span><input id="${id}" inputmode="decimal" type="text" required /></label>`
+function DecimalField({ id, label }: { id: string; label: string }) {
+	return h('label', null, h('span', null, label), h('input', { id, inputmode: 'decimal', type: 'text', required: true }))
 }
 
-const connectivityPanel = settingsGroup({
-	body: `<form id="connectivity-form"><fieldset id="connectivity-fields" disabled><p class="notice">RPC checks run from the chaos-bot server. Docker service URLs such as <code>http://reth:8545</code> work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited.</p><div class="field-grid"><label><span>Primary read RPC</span><input id="read-rpc-url" autocomplete="off" placeholder="http://reth:8545" spellcheck="false" type="url" required /></label><label><span>RPC agreement</span><select id="rpc-quorum"><option value="1">One healthy reader</option><option value="2">Two agreeing readers</option></select></label><label class="field-grid-wide"><span>Independent quorum read RPCs</span><textarea id="quorum-rpc-urls" autocomplete="off" placeholder="One URL per line" rows="3" spellcheck="false"></textarea></label><label class="field-grid-wide"><span>Public submission RPCs</span><textarea id="public-rpc-urls" autocomplete="off" placeholder="One URL per line" rows="3" spellcheck="false" required></textarea></label></div><div class="form-actions"><span id="connectivity-status" class="action-status muted" role="status" aria-live="polite"></span><div class="button-group"><button id="discard-connectivity" class="button button-secondary" type="button" disabled>Discard RPC draft</button><button id="save-connectivity" class="button" type="submit">Check and save RPCs</button></div></div></fieldset></form>`,
-	id: 'network-connectivity',
-	summary: 'Server-side endpoint and chain verification',
-	title: 'Chain and RPC connectivity',
-})
+function ConnectivityPanel() {
+	return h(
+		SettingsGroup,
+		{ id: 'network-connectivity', summary: 'Server-side endpoint and chain verification', title: 'Chain and RPC connectivity' },
+		h(
+			'form',
+			{ id: 'connectivity-form' },
+			h(
+				'fieldset',
+				{ id: 'connectivity-fields', disabled: true },
+				h('p', { class: 'notice' }, 'RPC checks run from the chaos-bot server. Docker service URLs such as ', h('code', null, 'http://reth:8545'), " work only when that process shares the service's container network. Saved endpoint URLs remain visible here so the active configuration can be reviewed and edited."),
+				h(
+					'div',
+					{ class: 'field-grid' },
+					h('label', null, h('span', null, 'Primary read RPC'), h('input', { id: 'read-rpc-url', autocomplete: 'off', placeholder: 'http://reth:8545', spellcheck: false, type: 'url', required: true })),
+					h('label', null, h('span', null, 'RPC agreement'), h('select', { id: 'rpc-quorum' }, h('option', { value: '1' }, 'One healthy reader'), h('option', { value: '2' }, 'Two agreeing readers'))),
+					h('label', { class: 'field-grid-wide' }, h('span', null, 'Independent quorum read RPCs'), h('textarea', { id: 'quorum-rpc-urls', autocomplete: 'off', placeholder: 'One URL per line', rows: 3, spellcheck: false })),
+					h('label', { class: 'field-grid-wide' }, h('span', null, 'Public submission RPCs'), h('textarea', { id: 'public-rpc-urls', autocomplete: 'off', placeholder: 'One URL per line', rows: 3, spellcheck: false, required: true })),
+				),
+				h(
+					'div',
+					{ class: 'form-actions' },
+					h('span', { id: 'connectivity-status', class: 'action-status muted', role: 'status', 'aria-live': 'polite' }),
+					h('div', { class: 'button-group' }, h('button', { id: 'discard-connectivity', class: 'button button-secondary', type: 'button', disabled: true }, 'Discard RPC draft'), h('button', { id: 'save-connectivity', class: 'button', type: 'submit' }, 'Check and save RPCs')),
+				),
+			),
+		),
+	)
+}
 
-const policySwitches = [
-	describedSwitch({ description: 'Includes disputes, auction participation, and other economically adversarial workflows.', id: 'allow-high-risk', label: 'Allow high-risk operations', name: 'allowHighRiskOperations' }),
-	describedSwitch({ danger: true, description: 'Includes forks, REP migration, burns, and global lifecycle transitions.', id: 'allow-irreversible', label: 'Allow irreversible operations', name: 'allowIrreversibleOperations' }),
-	describedSwitch({
-		description:
-			'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
-		id: 'initialize-genesis-universe',
-		label: 'Initialize genesis universe',
-		name: 'initializeGenesisUniverse',
-	}),
-	describedSwitch({
-		description:
-			'Turn this off for a staged rollout, then enable operations in the <a id="selectable-operation-catalog-link" class="text-link" href="/catalog">Operation catalog</a>. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
-		id: 'all-selectable-operations',
-		label: 'Allow every selectable operation',
-		name: 'allSelectableOperations',
-	}),
-].join('')
+function PolicySwitches() {
+	return h(
+		Fragment,
+		null,
+		h(DescribedSwitch, { description: 'Includes disputes, auction participation, and other economically adversarial workflows.', id: 'allow-high-risk', label: 'Allow high-risk operations', name: 'allowHighRiskOperations' }),
+		h(DescribedSwitch, { danger: true, description: 'Includes forks, REP migration, burns, and global lifecycle transitions.', id: 'allow-irreversible', label: 'Allow irreversible operations', name: 'allowIrreversibleOperations' }),
+		h(DescribedSwitch, {
+			description:
+				'Continuously completes the exact genesis topology: binary question, origin security pool, wallet vault, external REP/WETH Uniswap pool creation, initialization, and seeding, Statoblast trading roots, canonical trading pair, and initial pair liquidity. Only these initializer operations bypass the selectable allowlist.',
+			id: 'initialize-genesis-universe',
+			label: 'Initialize genesis universe',
+			name: 'initializeGenesisUniverse',
+		}),
+		h(DescribedSwitch, {
+			description: h(
+				Fragment,
+				null,
+				'Turn this off for a staged rollout, then enable operations in the',
+				' ',
+				h('a', { id: 'selectable-operation-catalog-link', class: 'text-link', href: '/catalog' }, 'Operation catalog'),
+				'. An empty allowlist runs lifecycle obligations only unless genesis initialization is enabled; only its ordered initializer operations are exempt. Lifecycle discovery, recovery, and execution are never disabled by this control.',
+			),
+			id: 'all-selectable-operations',
+			label: 'Allow every selectable operation',
+			name: 'allSelectableOperations',
+		}),
+	)
+}
 
-const policyFields = [
-	unitField('Minimum random delay', 'min-delay', 'seconds', 'min="60" max="3599"'),
-	unitField('Maximum random delay', 'max-delay', 'seconds', 'min="60" max="3600"'),
-	decimalField('ETH reserve', 'reserve-eth'),
-	decimalField('REP reserve', 'reserve-rep'),
-	decimalField('Maximum ETH per operation', 'maximum-eth-operation'),
-	decimalField('Maximum gas cost (ETH)', 'maximum-gas-cost'),
-	decimalField('Maximum REP per operation', 'maximum-rep-operation'),
-	unitField('Workflow validity', 'workflow-valid-blocks', 'blocks', 'min="243" max="1000000"'),
-].join('')
-
-const ecosystemSwitches = [
+const ECOSYSTEM_SWITCHES = [
 	['zoltar', 'Zoltar'],
 	['statoblast', 'Statoblast'],
 	['open-oracle', 'Open Oracle'],
 	['trading', 'Trading'],
-]
-	.map(([id, label]) => `<label class="switch-field"><input data-ecosystem-toggle="${id}" type="checkbox" /><span>${label}</span></label>`)
-	.join('')
+] as const
 
-const policyPanel = settingsGroup({
-	badges: '<span id="settings-draft-status" class="settings-badge" data-kind="dirty" role="status" hidden>Unsaved changes</span>',
-	body: `<form id="settings-form"><fieldset id="settings-fields" disabled>${policySwitches}<label class="selectable-operation-allowlist-label" for="selectable-operation-allowlist"><span>Selectable operation allowlist</span><textarea id="selectable-operation-allowlist" aria-describedby="all-selectable-operations-help" placeholder="One exact definition ID per line, for example:&#10;open-oracle.weth.wrap" rows="5" spellcheck="false"></textarea></label><div class="field-grid">${policyFields}</div><fieldset class="ecosystem-controls"><legend>Enabled ecosystems</legend>${ecosystemSwitches}</fieldset><div class="form-actions"><span id="settings-save-status" class="action-status muted" role="status" aria-live="polite"></span><div class="button-group"><button id="discard-settings" class="button button-secondary" type="button" disabled>Discard changes</button><button id="save-settings" class="button" type="submit">Save execution policy</button></div></div></fieldset></form>`,
-	summary: 'Risk scope, random novelty, reserves, timing, and ecosystems · editable while paused',
-	title: 'Execution policy',
-})
+function PolicyPanel() {
+	return h(
+		SettingsGroup,
+		{
+			badges: h('span', { id: 'settings-draft-status', class: 'settings-badge', 'data-kind': 'dirty', role: 'status', hidden: true }, 'Unsaved changes'),
+			summary: 'Risk scope, random novelty, reserves, timing, and ecosystems · editable while paused',
+			title: 'Execution policy',
+		},
+		h(
+			'form',
+			{ id: 'settings-form' },
+			h(
+				'fieldset',
+				{ id: 'settings-fields', disabled: true },
+				h(PolicySwitches, null),
+				h(
+					'label',
+					{ class: 'selectable-operation-allowlist-label', for: 'selectable-operation-allowlist' },
+					h('span', null, 'Selectable operation allowlist'),
+					h('textarea', { id: 'selectable-operation-allowlist', 'aria-describedby': 'all-selectable-operations-help', placeholder: 'One exact definition ID per line, for example:\nopen-oracle.weth.wrap', rows: 5, spellcheck: false }),
+				),
+				h(
+					'div',
+					{ class: 'field-grid' },
+					h(UnitField, { id: 'min-delay', label: 'Minimum random delay', max: '3599', min: '60', unit: 'seconds' }),
+					h(UnitField, { id: 'max-delay', label: 'Maximum random delay', max: '3600', min: '60', unit: 'seconds' }),
+					h(DecimalField, { id: 'reserve-eth', label: 'ETH reserve' }),
+					h(DecimalField, { id: 'reserve-rep', label: 'REP reserve' }),
+					h(DecimalField, { id: 'maximum-eth-operation', label: 'Maximum ETH per operation' }),
+					h(DecimalField, { id: 'maximum-gas-cost', label: 'Maximum gas cost (ETH)' }),
+					h(DecimalField, { id: 'maximum-rep-operation', label: 'Maximum REP per operation' }),
+					h(UnitField, { id: 'workflow-valid-blocks', label: 'Workflow validity', max: '1000000', min: '243', unit: 'blocks' }),
+				),
+				h(
+					'fieldset',
+					{ class: 'ecosystem-controls' },
+					h('legend', null, 'Enabled ecosystems'),
+					ECOSYSTEM_SWITCHES.map(([id, label]) => h('label', { class: 'switch-field' }, h('input', { 'data-ecosystem-toggle': id, type: 'checkbox' }), h('span', null, label))),
+				),
+				h(
+					'div',
+					{ class: 'form-actions' },
+					h('span', { id: 'settings-save-status', class: 'action-status muted', role: 'status', 'aria-live': 'polite' }),
+					h('div', { class: 'button-group' }, h('button', { id: 'discard-settings', class: 'button button-secondary', type: 'button', disabled: true }, 'Discard changes'), h('button', { id: 'save-settings', class: 'button', type: 'submit' }, 'Save execution policy')),
+				),
+			),
+		),
+	)
+}
+
+const STEPS = [
+	{ id: 'settings-connect', label: 'Connect', step: 1 },
+	{ id: 'settings-policy', label: 'Execution policy', step: 2 },
+	{ id: 'settings-go-live', label: 'Go live', step: 3 },
+]
 
 /** The Settings page: Connect, Execution policy, and Go live; the pause note sits under the chip row. */
-export const settingsPageMarkup = settingsPage({
-	intro: settingsIntro({ aside: '<span id="settings-scope" class="badge neutral">Configuration loading</span>', eyebrow: 'Safety controls', scopeText: 'Changes apply before the next selection cycle.' }),
-	notices:
-		'<div id="configuration-status" class="notice hidden" role="status" data-page-content="settings"></div><div id="settings-pause-note" class="notice warning hidden" role="status" data-page-content="settings">Execution policy and execution mode are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, ecosystem scope, or the live switch.</div>',
-	sections: [
-		settingsSection({ groups: connectivityPanel, id: 'settings-connect', step: 1, title: 'Connect' }),
-		settingsSection({ groups: policyPanel, id: 'settings-policy', step: 2, title: 'Execution policy' }),
-		settingsSection({
-			groups:
-				signerPanel({ rememberLabel: "Remember in the bot's owner-only state directory", summary: 'No signer configured', title: 'Transaction signer' }) +
-				executionModePanel({
-					note: 'Off is dry-run mode. Live mode can spend gas and protocol assets.',
-					switchLabel: 'Submit live transactions',
-				}),
-			id: 'settings-go-live',
-			step: 3,
-			title: 'Go live',
-		}),
-	].join(''),
-	steps: [
-		{ id: 'settings-connect', label: 'Connect', step: 1 },
-		{ id: 'settings-policy', label: 'Execution policy', step: 2 },
-		{ id: 'settings-go-live', label: 'Go live', step: 3 },
-	],
-})
+function ChaosSettingsPage() {
+	return h(
+		SettingsPage,
+		{
+			intro: h(SettingsIntro, { aside: h('span', { id: 'settings-scope', class: 'badge neutral' }, 'Configuration loading'), eyebrow: 'Safety controls', scopeText: 'Changes apply before the next selection cycle.' }),
+			notices: h(
+				Fragment,
+				null,
+				h('div', { id: 'configuration-status', class: 'notice hidden', role: 'status', 'data-page-content': 'settings' }),
+				h('div', { id: 'settings-pause-note', class: 'notice warning hidden', role: 'status', 'data-page-content': 'settings' }, 'Execution policy and execution mode are locked while the bot is running. Pause the bot to review and change risk, caps, reserves, timing, ecosystem scope, or the live switch.'),
+			),
+			steps: STEPS,
+		},
+		h(SettingsSection, { id: 'settings-connect', step: 1, title: 'Connect' }, h(ConnectivityPanel, null)),
+		h(SettingsSection, { id: 'settings-policy', step: 2, title: 'Execution policy' }, h(PolicyPanel, null)),
+		h(
+			SettingsSection,
+			{ id: 'settings-go-live', step: 3, title: 'Go live' },
+			h(SignerPanel, { rememberLabel: "Remember in the bot's owner-only state directory", summary: 'No signer configured', title: 'Transaction signer' }),
+			h(ExecutionModePanel, { note: 'Off is dry-run mode. Live mode can spend gas and protocol assets.', switchLabel: 'Submit live transactions' }),
+		),
+	)
+}
+
+export const settingsPageMarkup = renderStaticMarkup(h(ChaosSettingsPage, null))

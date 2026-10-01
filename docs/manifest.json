@@ -49,7 +49,7 @@
 			"summary": "Canonical definitions for protocol assets, states, and mechanisms.",
 			"section": "start-here",
 			"topic": "Introduction",
-			"keywords": ["glossary", "terms", "REP", "universe"]
+			"keywords": ["glossary", "terms", "REP", "universe", "underwriting commitment", "haircut", "trading"]
 		},
 		{
 			"path": "reference/contracts.html",
@@ -149,7 +149,7 @@
 		},
 		{
 			"path": "reference/invariants.html",
-			"title": "Protocol invariants",
+			"title": "Statoblast and Zoltar invariants",
 			"summary": "Contract, lifecycle, cross-contract, liveness, and economic properties.",
 			"section": "reference",
 			"topic": "Safety",
@@ -157,7 +157,7 @@
 		},
 		{
 			"path": "reference/security-model.html",
-			"title": "Security model",
+			"title": "Statoblast security model",
 			"summary": "Normative participant, market, deployment, client, and cryptographic assumptions.",
 			"section": "reference",
 			"topic": "Safety",
@@ -174,7 +174,7 @@
 		{
 			"path": "how-to/launch-a-release.html",
 			"title": "Launch a protocol release",
-			"summary": "Release posture, the pre-tag checklist, and the genesis REP review.",
+			"summary": "The pre-tag checklist, runtime-hash review, and the testnet genesis REP review.",
 			"section": "how-to",
 			"topic": "Operations",
 			"keywords": ["release", "launch", "checklist", "genesis REP", "manifest"]
@@ -182,7 +182,7 @@
 		{
 			"path": "how-to/monitor-security-assumptions.html",
 			"title": "Monitor security assumptions",
-			"summary": "Evidence, cadence, and response for each assumption that can change with market conditions.",
+			"summary": "What to read, how often, and how to respond for each assumption that can change with market conditions.",
 			"section": "how-to",
 			"topic": "Operations",
 			"keywords": ["monitoring", "assumptions", "operators", "signals"]
@@ -198,7 +198,7 @@
 		{
 			"path": "reference/contract-inventory.html",
 			"title": "Contract inventory",
-			"summary": "Deployment helpers, delegate modules, SecurityPoolUtils reads, and the production contract list.",
+			"summary": "Deployment helpers, delegate modules, SecurityPoolUtils reads, the production contract list, and testnet Uniswap dependencies.",
 			"section": "reference",
 			"topic": "Contracts",
 			"keywords": ["inventory", "factories", "delegates", "SecurityPoolUtils", "trust boundary"]
@@ -206,14 +206,14 @@
 		{
 			"path": "reference/deployment-status.html",
 			"title": "Deployment status oracle",
-			"summary": "Deployment progress bitmask semantics and the 256-step limit.",
+			"summary": "Deployment progress bitmask semantics, per-network bit mappings, and the 256-step limit.",
 			"section": "reference",
 			"topic": "Deployment",
 			"keywords": ["deployment", "bitmask", "runtime bytecode", "status"]
 		},
 		{
 			"path": "reference/merkle-mountain-range.html",
-			"title": "Merkle Mountain Range proofs",
+			"title": "Merkle Mountain Range carry proofs",
 			"summary": "Carry-proof hashing, snapshot peaks, bounds, and replay protection.",
 			"section": "reference",
 			"topic": "Proofs",
@@ -237,7 +237,7 @@
 		},
 		{
 			"path": "explanation/trading.html",
-			"title": "How Statoblast Trading works",
+			"title": "How Trading works",
 			"summary": "Complete sets, directional liquidity, conditional prices, and market isolation.",
 			"section": "explanation",
 			"topic": "Trading",
@@ -246,7 +246,7 @@
 		{
 			"path": "explanation/escalation-game.html",
 			"title": "Escalation Game",
-			"summary": "Local dispute escalation, deadlines, fork conditions, proofs, and claims.",
+			"summary": "How REP deposits resolve a market locally, when they force a fork, and how games continue across forks.",
 			"section": "explanation",
 			"topic": "Architecture",
 			"keywords": ["Escalation Game", "disputes", "deadlines", "accounting"]
@@ -254,18 +254,18 @@
 		{
 			"path": "explanation/liquidations.html",
 			"title": "Vault liquidation",
-			"summary": "Dynamic capacity, liquidation roles, bounded receiver approvals, and reservation lifecycle.",
+			"summary": "Liquidation eligibility, roles, REP awards, bounded receiver approvals, and reservation lifecycle.",
 			"section": "explanation",
 			"topic": "Economics",
-			"keywords": ["liquidation", "capacity", "operator", "receiver vault", "approval", "reservation", "bad debt"]
+			"keywords": ["liquidation", "underwriting commitment", "backing constraints", "operator", "receiver vault", "approval", "reservation", "bad debt"]
 		},
 		{
 			"path": "explanation/fees.html",
-			"title": "Protocol fees",
-			"summary": "Understand fee accounting across markets, vaults, and protocol operations.",
+			"title": "Open-interest fees",
+			"summary": "Why vaults earn a fee on open interest, how utilization sets the rate, and when accrual stops.",
 			"section": "explanation",
 			"topic": "Economics",
-			"keywords": ["fees", "markets", "vaults", "accounting"]
+			"keywords": ["fees", "open interest", "retention", "utilization", "vaults"]
 		},
 		{
 			"path": "explanation/truth-auctions.html",
@@ -300,20 +300,36 @@
 			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]
 		},
 		{
+			"path": "tutorials/zoltar-first-question.html",
+			"title": "Your first Zoltar question",
+			"summary": "Create a yes-or-no question in the Zoltar registry and find it again.",
+			"section": "tutorials",
+			"topic": "Zoltar",
+			"keywords": ["Zoltar", "question", "registry", "screenshots"]
+		},
+		{
+			"path": "tutorials/statoblast-first-pool.html",
+			"title": "Your first security pool",
+			"summary": "Create a SecurityPool, back it with REP, commit to underwrite it, and mint a complete set.",
+			"section": "tutorials",
+			"topic": "Statoblast",
+			"keywords": ["Statoblast", "SecurityPool", "vault", "underwriting commitment", "OpenOracle", "screenshots"]
+		},
+		{
 			"path": "tutorials/trading-first-market.html",
 			"title": "Your first Trading market",
-			"summary": "Create and seed the first YES/NO pair for a SecurityPool.",
+			"summary": "Create and seed the trading pool for a SecurityPool in the UI.",
 			"section": "tutorials",
 			"topic": "Trading",
-			"keywords": ["Trading", "liquidity", "initialize", "pair"]
+			"keywords": ["Trading", "liquidity", "initialize", "pair", "screenshots"]
 		},
 		{
 			"path": "tutorials/trading-first-trade.html",
 			"title": "Your first trade",
-			"summary": "Enter and exit a directional position through the Trading router.",
+			"summary": "Buy Yes shares in the UI and sell part of them back for ETH.",
 			"section": "tutorials",
 			"topic": "Trading",
-			"keywords": ["Trading", "enterPosition", "exitPosition", "slippage"]
+			"keywords": ["Trading", "buy", "sell", "enterPosition", "slippage"]
 		},
 		{
 			"path": "how-to/trading-set-up-development.html",
@@ -326,15 +342,15 @@
 		{
 			"path": "how-to/trading-configure-ui.html",
 			"title": "Configure the Trading UI",
-			"summary": "Live, demo, and simulation modes; network and RPC selection.",
+			"summary": "Live and simulation modes; network and RPC selection.",
 			"section": "how-to",
 			"topic": "Trading",
-			"keywords": ["Trading", "UI", "demo", "simulate", "RPC"]
+			"keywords": ["Trading", "UI", "simulate", "RPC", "settings"]
 		},
 		{
 			"path": "how-to/trading-deploy-contracts.html",
 			"title": "Deploy the Trading contracts",
-			"summary": "Deploy the deterministic factory and router from the browser or a script.",
+			"summary": "Deploy the Trading factory and router from the browser, with the testnet deployer on local Anvil, or as script-only copies for tests.",
 			"section": "how-to",
 			"topic": "Trading",
 			"keywords": ["Trading", "deploy", "factory", "router", "Anvil"]
@@ -342,7 +358,7 @@
 		{
 			"path": "how-to/trading-seed-alternative-odds.html",
 			"title": "Seed alternative conditional odds",
-			"summary": "Compute the deposits that open a pair at a chosen Conditional YES price.",
+			"summary": "Compute the deposits that open a pool at a chosen Conditional YES price when calling the contract directly.",
 			"section": "how-to",
 			"topic": "Trading",
 			"keywords": ["Trading", "odds", "initialize", "basis points"]
@@ -350,15 +366,15 @@
 		{
 			"path": "how-to/trading-exit-a-position.html",
 			"title": "Exit an insured position",
-			"summary": "Find and submit the largest complete-set exit a wallet can insure.",
+			"summary": "Sell shares for ETH in the UI or find the largest insured exit with the SDK.",
 			"section": "how-to",
 			"topic": "Trading",
-			"keywords": ["Trading", "exit", "maximumInsuredExit", "INVALID"]
+			"keywords": ["Trading", "exit", "sell", "maximumInsuredExit", "Invalid"]
 		},
 		{
 			"path": "how-to/trading-remove-liquidity.html",
 			"title": "Remove liquidity",
-			"summary": "Withdraw an LP position as raw YES and NO in any lifecycle phase.",
+			"summary": "Withdraw an LP position as raw Yes and No in any lifecycle phase.",
 			"section": "how-to",
 			"topic": "Trading",
 			"keywords": ["Trading", "liquidity", "removeLiquidity", "permit"]
@@ -369,12 +385,12 @@
 			"summary": "Unwind LP, redeem complete sets, and claim winning shares after resolution.",
 			"section": "how-to",
 			"topic": "Trading",
-			"keywords": ["Trading", "resolution", "redeemShares", "INVALID"]
+			"keywords": ["Trading", "resolution", "settlement", "redeemShares", "Invalid"]
 		},
 		{
 			"path": "how-to/trading-handle-a-fork.html",
 			"title": "Handle a universe fork",
-			"summary": "Migrate parent shares into chosen child branches and open a child pair.",
+			"summary": "Migrate parent shares into chosen child branches and open a child trading pool.",
 			"section": "how-to",
 			"topic": "Trading",
 			"keywords": ["Trading", "fork", "migrate", "ShareToken"]
@@ -382,14 +398,14 @@
 		{
 			"path": "explanation/trading/two-way-market.html",
 			"title": "The two-way market",
-			"summary": "One ETH entry as a complete set, a swap, and INVALID insurance.",
+			"summary": "One ETH entry as a complete set, a swap, and Invalid insurance.",
 			"section": "explanation",
 			"topic": "Trading",
 			"keywords": ["Trading", "constant product", "complete set", "YES", "NO"]
 		},
 		{
 			"path": "explanation/trading/invalid-insurance.html",
-			"title": "INVALID insurance",
+			"title": "Invalid insurance",
 			"summary": "Why INVALID is held rather than traded and what it pays.",
 			"section": "explanation",
 			"topic": "Trading",
@@ -457,7 +473,7 @@
 			"summary": "Router entrypoints, custody guarantees, and approval-free share operations.",
 			"section": "reference",
 			"topic": "Trading",
-			"keywords": ["Trading", "router", "enterPosition", "exitPosition", "permit"]
+			"keywords": ["Trading", "router", "enterPosition", "receive request", "permit"]
 		},
 		{
 			"path": "reference/trading/events.html",
@@ -470,10 +486,10 @@
 		{
 			"path": "reference/trading/sdk.html",
 			"title": "Trading SDK",
-			"summary": "Shared bigint math, exit search, and simulation-pinning helpers.",
+			"summary": "Shared bigint math, exit search, receive-request encoding, and simulation-pinning helpers.",
 			"section": "reference",
 			"topic": "Trading",
-			"keywords": ["Trading", "SDK", "quoteExactOutput", "maximumInsuredExit"]
+			"keywords": ["Trading", "SDK", "quoteExactOutput", "maximumInsuredExit", "encodeReceiveRequest"]
 		},
 		{
 			"path": "reference/trading/configuration.html",

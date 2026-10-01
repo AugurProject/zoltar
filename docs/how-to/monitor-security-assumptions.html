@@ -14,14 +14,30 @@
 				<header>
 					<p class="kicker">How-to guide</p>
 					<h1>Monitor security assumptions</h1>
-					<p>The contracts cannot tell you when an economic or liveness assumption has stopped holding. This guide lists, for each assumption whose truth changes with market or service conditions, what evidence to collect, how often to look, and what to do when the boundary is weak or unknown.</p>
+					<p>The Zoltar fork oracle and the Statoblast prediction-market contracts built on it (see the <a href="../explanation/system-overview.html">system overview</a>) cannot tell you when an economic or liveness assumption has stopped holding. This guide lists, for each assumption whose truth changes with market or service conditions, what to read, how often to look, and what to do when the boundary is weak or unknown.</p>
 				</header>
 				<section id="how-to-use">
 					<h2>How to use this guide</h2>
 					<ol>
 						<li>Before a deadline-bearing or price-sensitive action, find the rows whose assumptions the action depends on. The <a href="../reference/security-model.html">security model</a> lists which assumptions protect which mechanism.</li>
-						<li>Collect the row's evidence at the same lineage, pool, timestamp, numeraire, and decision horizon as the action, on the stated cadence, and apply the response before proceeding whenever the evidence is weak or unknown.</li>
+						<li>Take the row's reads for the same <a href="../reference/glossary.html#lineage">lineage</a>, pool, and block as the action, express values in one <a href="#terms">numeraire</a>, and cover the <a href="#terms">action horizon</a>. Repeat on the stated cadence, and apply the response before proceeding whenever a read is weak or unavailable.</li>
+						<li>Most on-chain reads are also indexed by augurScan under <code>/operations/…</code> (see the <a href="https://github.com/AugurProject/zoltar/blob/main/augurScan/README.md">augurScan README</a>); the liquidator and OpenOracle arbitrager bots in <code>bots/</code> show live pool, vault, and report state in their dashboards.</li>
 					</ol>
+				</section>
+				<section id="terms">
+					<h2>Terms used in the table</h2>
+					<dl>
+						<dt>Numeraire</dt>
+						<dd>The one unit of account, such as ETH, in which you express every value you compare.</dd>
+						<dt>Action horizon</dt>
+						<dd>The period until the action's last deadline.</dd>
+						<dt>Corrector</dt>
+						<dd>An account that disputes an incorrect OpenOracle report; see <a href="../reference/security-model.html#assumption-a17">A17</a>.</dd>
+						<dt>Callback-recovery candidate</dt>
+						<dd>A <a href="../reference/glossary.html#price-coordinator">price coordinator</a> whose pending report OpenOracle has already settled; see <a href="../reference/open-oracle.html#callback-rejection-and-recovery">settlement recovery</a>.</dd>
+						<dt>Overflow operation</dt>
+						<dd>A staged operation outside the next settlement callback's batch of four; see <a href="../reference/open-oracle.html#report-lifecycle">execution batches</a>.</dd>
+					</dl>
 				</section>
 				<section id="assumption-monitoring">
 					<h2>What to watch, how often, and what to do</h2>
@@ -30,7 +46,7 @@
 						<thead>
 							<tr>
 								<th>Assumptions</th>
-								<th>Operational evidence</th>
+								<th>What to read</th>
 								<th>Review cadence</th>
 								<th>Response when the boundary is weak or unknown</th>
 							</tr>
@@ -38,67 +54,151 @@
 						<tbody>
 							<tr>
 								<td>Executor incentives and participation — A01, A02, A03, A06</td>
-								<td>Expected reward after gas, fees, delay, and capital lockup; number and independence of active liquidators, escalation participants, bidders, correctors, and transition executors; settle-ready OpenOracle reports, callback-recovery candidates, and overflow operations</td>
+								<td>
+									<ul>
+										<li>Liquidation candidates and net reward: liquidator bot dashboard</li>
+										<li>Dispute opportunities and net reward: OpenOracle arbitrager dashboard</li>
+										<li>Active reporters, correctors, escalation depositors, and Truth Auction bidders: augurScan <code>/operations/reports</code>, <code>/operations/escalations</code>, <code>/operations/auctions</code></li>
+										<li>Callback-recovery candidates: coordinator <code>pendingReportId</code>, then the settlement timestamp in OpenOracle <code>storedGame(reportId)</code>; anyone can clear one with <code>recoverSettledPendingReport()</code></li>
+										<li>Overflow operations: coordinator <code>getActiveStagedOperationCount()</code> minus <code>getPendingSettlementOperationCount()</code></li>
+									</ul>
+								</td>
 								<td>Continuously for deadline-bearing flows; before launch and after parameter or gas-regime changes</td>
 								<td>Fund or arrange independent executors, reduce exposed value, or disclose that the affected transition may stall</td>
 							</tr>
 							<tr>
 								<td>Fork lineage value and migration readiness — A05, A07, A09, A11</td>
-								<td>Parent and supported-child lineage value in one numeraire; observed user, custodian, exchange, interface, and proof-tool readiness to migrate assets and state within the applicable windows; documented continued-use value and secured value</td>
+								<td>
+									<ul>
+										<li>Fork start: Zoltar <code>getForkTime(universeId)</code></li>
+										<li>Migration progress: augurScan <code>/operations/forks</code></li>
+										<li>Parent and <a href="../reference/glossary.html#child-rep">child REP</a> prices: market quotes in one numeraire</li>
+										<li>Custodian, exchange, interface, and proof-tool readiness: each party's published support statement (no on-chain read)</li>
+									</ul>
+								</td>
 								<td>Before a fork-security claim and throughout migration and coordination windows</td>
 								<td>Do not claim fork deterrence, practical migration, or value concentration; narrow supported lineage and exposure</td>
 							</tr>
 							<tr>
 								<td>REP value and liquidity versus secured exposure — A08, A13, A14</td>
-								<td>REP supply basis, price source, depth and price impact; REP discounted-cash-flow methodology; protocol-accounted ETH collateral or explicitly broader open interest</td>
+								<td>
+									<ul>
+										<li><a href="../reference/glossary.html#theoretical-rep-supply">Theoretical REP supply</a>: Zoltar <code>getUniverseTheoreticalSupplyAttoRep(universeId)</code></li>
+										<li>Pool <a href="../reference/glossary.html#open-interest">open interest</a>: <code>settlementCollateralAttoEth</code> in <code>getPoolAccountingSnapshot()</code></li>
+										<li>Pool-held REP: <code>getTotalPoolHeldAttoRep()</code></li>
+										<li>Cached REP/ETH price: coordinator <code>lastPrice</code></li>
+										<li>REP depth and price impact: arbitrager Uniswap venue quotes</li>
+										<li>Pool and vault risk: augurScan <code>/operations/risk</code></li>
+										<li>REP discounted cash flow: off-chain valuation (no on-chain read)</li>
+									</ul>
+								</td>
 								<td>At launch, continuously while open interest exists, and after material price, supply, liquidity, or exposure changes</td>
 								<td>Cap or stop new exposure in clients and disclosures; do not describe REP backing as economically sufficient</td>
 							</tr>
 							<tr>
 								<td>Outcome evidence and escalation funding — A04, A10</td>
-								<td>Outcome evidence sources and availability; immediately mobilizable REP and transaction budget before each local-escalation deadline</td>
+								<td>
+									<ul>
+										<li><a href="../reference/glossary.html#escalation-game">Escalation Game</a> deadline: <code>getEscalationGameEndDate()</code></li>
+										<li>Outcome funding: <code>getOutcomeBalancesAttoRep()</code> and <code>getBindingCapitalAttoRep()</code>, or augurScan <code>/operations/escalations</code></li>
+										<li>REP available to fund a correction: wallet REP <code>balanceOf</code> (wallet deposits, except in a game carried across a fork) and vault REP <code>backingUnitsToAttoRep(securityVaults(vault).repBackingUnits)</code> of each ready account</li>
+										<li>Outcome evidence: where each source publishes (off-chain)</li>
+									</ul>
+								</td>
 								<td>From question creation through local resolution and any fork window</td>
 								<td>Mark the market or action impaired, surface the deadline, and avoid asserting that honest local correction remains fundable</td>
 							</tr>
 							<tr>
 								<td>Truth Auction demand — A12</td>
-								<td>Auction demand, indicative REP/ETH depth, expected discount, and bidder operating cost</td>
+								<td>
+									<ul>
+										<li><a href="../reference/glossary.html#truth-auction">Truth Auction</a> bids: auction <code>getActiveTickPage(offset, limit)</code> and <code>previewFinalization()</code>, or augurScan <code>/operations/auctions</code></li>
+										<li>REP/ETH depth and expected discount: arbitrager Uniswap venue quotes</li>
+										<li>Bidder gas cost: RPC <code>eth_feeHistory</code></li>
+									</ul>
+								</td>
 								<td>Before and during every repair auction</td>
 								<td>Disclose likely incomplete repair and plan operation of the child at only migrated collateral plus accepted auction ETH</td>
 							</tr>
 							<tr>
 								<td>Transaction inclusion and Ethereum execution — A16, A26</td>
-								<td>Inclusion delay, base fee, priority fee, reorg depth, block gas limit, and gas schedule against each immutable window and mandatory transition</td>
+								<td>
+									<ul>
+										<li>Base and priority fees: RPC <code>eth_feeHistory</code></li>
+										<li>Block gas limit: latest block</li>
+										<li>Reorg history: augurScan <code>/operations/integrity</code></li>
+										<li>Escalation deadline: <code>getEscalationGameEndDate()</code></li>
+										<li>Truth Auction close: auction <code>auctionStarted</code> plus one week</li>
+										<li>Migration close: forker <code>forkData(pool)</code> <code>forkActivationTime</code> plus eight weeks</li>
+										<li>Margin: each deadline minus expected inclusion delay</li>
+									</ul>
+								</td>
 								<td>Continuously while a deadline or mandatory transition is live</td>
 								<td>Raise transaction fees where rational, use independent submission paths, and disclose missed-deadline or stranded-transition risk</td>
 							</tr>
 							<tr>
 								<td>REP/ETH price correction — A17, A18, A19</td>
-								<td>Independent corrector availability, ownership and payoff independence, scenario-dependent wrapped Ether (WETH) and REP replacement capital, reference-market depth, manipulation cost, correction profit after fees, gas, and price impact, transaction budget, and settlement inclusion</td>
+								<td>
+									<ul>
+										<li>Pending report: coordinator <code>pendingReportId</code>, then OpenOracle <code>storedGame(reportId)</code></li>
+										<li>Report outcomes: coordinator <code>PriceRequested</code>, <code>PriceReported</code>, and <code>PriceReportRejected</code> events, or augurScan <code>/operations/reports</code></li>
+										<li>Independent correctors: whether any, such as an operator running the <a href="https://github.com/AugurProject/zoltar/blob/main/bots/open-oracle-arbitrager/README.md">OpenOracle arbitrager</a>, reports disputes profitable after fees, gas, and price impact</li>
+										<li>Corrector inventory: wrapped Ether (WETH) and REP balances</li>
+									</ul>
+								</td>
 								<td>Continuously while a report is pending or a cached price can authorize operations</td>
 								<td>Block or discourage new price-sensitive operations and disclose that an incorrect report may settle</td>
 							</tr>
 							<tr>
 								<td>Token behavior and recipient compatibility — A21, A22</td>
-								<td>Mainnet external-token code and behavior; reviewed Sepolia genesis REP runtime bytecode, constructor allocations, and wiring; Uniswap's published Sepolia WETH runtime-code hash; WETH redeemability; burn-sink status; recipient ETH and Ethereum Request for Comments 1155 (ERC-1155) compatibility</td>
+								<td>
+									<ul>
+										<li>Sepolia genesis REP code: keccak-256 of <code>eth_getCode</code> against <code>reputationToken</code> in <code>EXPECTED_SEPOLIA_DEPLOYMENT_RUNTIME_CODE_HASHES</code> (<code>ui/zoltarShared/ts/protocol/deployment.ts</code>)</li>
+										<li>Sepolia WETH code: the same against <code>sepoliaPublished.weth.runtimeCodeHash</code> in <code>scripts/artifacts/uniswap-deployment.json</code></li>
+										<li>Mainnet REPv2 and WETH code: an externally sourced reference hash (no repository pin)</li>
+										<li>Sepolia genesis REP supply: <code>shared/zoltar/ts/deployment/sepoliaRepAllocations.ts</code> against <code>getTotalTheoreticalSupply()</code></li>
+										<li>WETH redeemability and recipient ETH and ERC-1155 acceptance: a test transfer from a disposable account</li>
+									</ul>
+								</td>
 								<td>At deployment verification and before first use of a new recipient or integration</td>
 								<td>Reject the deployment or incompatible recipient; do not rely on redirected recovery</td>
 							</tr>
 							<tr>
 								<td>Deployments, clients, data, and keys — A20, A23, A24, A27, A28</td>
-								<td>Pinned compiler and toolchain identity; reproducible-build output, reviewed bytecode hashes, release manifest, deployed runtime code and wiring; independent reorg-aware RPC/event replay; hash and CREATE2 verification; signer, typed-data domain, nonce, witness, session, and approval inventory</td>
+								<td>
+									<ul>
+										<li>Manifest freshness: <code>bun run check:mainnet-deployment:current</code></li>
+										<li>Explorer source verification: <code>bun run verify:contracts -- --chain-id=&lt;chain ID&gt;</code></li>
+										<li>Code presence: <a href="../reference/deployment-status.html"><code>getDeploymentMask()</code></a></li>
+										<li>Runtime hashes: <a href="./launch-a-release.html#launch-release-checklist">release checklist</a></li>
+										<li>Event replay: a second RPC or augurScan <code>/operations/integrity</code></li>
+										<li>Signers, typed-data domains, nonces, and approvals: each operator's key store</li>
+									</ul>
+								</td>
 								<td>At release, on every environment or account change, and continuously for indexers</td>
 								<td>Stop signing or operating, reject an unverifiable deployment, revoke compromised authority where possible, and re-establish canonical state from independent sources</td>
 							</tr>
 							<tr>
 								<td>Question selection — A15</td>
-								<td>Immutable question ID and metadata, evidence plan, and pool relevance</td>
+								<td>
+									<ul>
+										<li><a href="../reference/glossary.html#question">Question</a> creation, end date, and labels: <code>ZoltarQuestionData</code> <code>questionCreatedTimestamp</code>, <code>getQuestionEndDate</code>, and <code>getOutcomeLabels</code></li>
+										<li>Evidence plan and pool relevance: off-chain review</li>
+									</ul>
+								</td>
 								<td>Before pool selection</td>
 								<td>Reject or warn on the selection; do not represent an admitted question as relevant or resolvable</td>
 							</tr>
 							<tr>
 								<td>Immutable parameters — A25</td>
-								<td>Deployed immutable values and every documented economic, timing, integer-width, and gas relationship</td>
+								<td>
+									<ul>
+										<li>Deployed configuration: manifest <code>protocolConfig</code></li>
+										<li>Fork and non-decision thresholds: Zoltar <code>getForkThresholdAttoRep(universeId)</code> and <code>getNonDecisionThresholdAttoRep(universeId)</code></li>
+										<li>Oracle costs: coordinator <code>getRequestPriceCostAttoEth()</code> and <code>getSettlementCallbackGasLimit()</code></li>
+										<li>Required relationships: <a href="../reference/security-model.html#assumption-a25">A25</a></li>
+									</ul>
+								</td>
 								<td>Before deployment and after any change in external gas or market conditions used by the model</td>
 								<td>Treat the immutable deployment as unsupported; there is no administrative parameter repair</td>
 							</tr>

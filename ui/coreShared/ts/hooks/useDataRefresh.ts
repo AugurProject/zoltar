@@ -29,6 +29,20 @@ export function useBlockRefresh(onRefresh: (event: BlockWatcherEvent) => void, e
 	}, [enabled])
 }
 
+/**
+ * Calls `onRefresh` each time `enabled` turns true again after being false, for views whose data can change while
+ * another route is open without a new block arriving. The first render is skipped; the view's initial load covers it.
+ */
+export function useRefreshOnEnable(onRefresh: () => void, enabled: boolean) {
+	const callback = useRef(onRefresh)
+	callback.current = onRefresh
+	const wasEnabled = useRef(enabled)
+	useEffect(() => {
+		if (enabled && !wasEnabled.current) callback.current()
+		wasEnabled.current = enabled
+	}, [enabled])
+}
+
 /** Re-renders when the cached query for the key changes and returns its current state. */
 export function useQueryState<T>(store: QueryStore<T>, key: string | undefined): QueryState<T> | undefined {
 	const [, setVersion] = useState(0)

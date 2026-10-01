@@ -106,7 +106,7 @@ test('documentation navigation adds word-break opportunities inside camel-case c
 		if (link === undefined) throw new Error('Current contract page is missing from the navigation')
 		expect(link.textContent).toBe('UniformPriceDualCapBatchAuction')
 		expect(Array.from(link.childNodes).map(node => node.nodeName)).toEqual(['#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text', 'WBR', '#text'])
-		const plainLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).find(candidate => candidate.textContent === 'Security model')
+		const plainLink = Array.from(document.querySelectorAll<HTMLAnchorElement>('.docs-navigation-list a')).find(candidate => candidate.textContent === 'Statoblast security model')
 		expect(plainLink?.querySelector('wbr')).toBeNull()
 	} finally {
 		shell.cleanup()

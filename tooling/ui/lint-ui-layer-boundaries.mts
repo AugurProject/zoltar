@@ -29,9 +29,7 @@ export function collectExportedTypeNames(sourcePath: string, sourceText: string)
 	return names
 }
 
-// Every application declares its own route union under the same name, so it is not a Statoblast product type.
-const perApplicationTypeNames = new Set(['Route'])
-const statoblastProductTypeNames: ReadonlySet<string> = new Set(statoblastProductTypeModules.flatMap(modulePath => [...collectExportedTypeNames(modulePath, readFileSync(path.join(projectRoot, modulePath), 'utf8'))]).filter(name => !perApplicationTypeNames.has(name)))
+const statoblastProductTypeNames: ReadonlySet<string> = new Set(statoblastProductTypeModules.flatMap(modulePath => [...collectExportedTypeNames(modulePath, readFileSync(path.join(projectRoot, modulePath), 'utf8'))]))
 
 const genericUiPackagePattern = /^ui\/(?:coreShared|zoltarShared)\/ts\//
 

@@ -1,7 +1,7 @@
 import type { ProtocolAddressLinkOptions, RichListRecord } from './browser-types.ts'
 import { exactUnit } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'
-import { retainedPaginationAvailable } from './live-update.ts'
+import { retainedPaginationAvailable } from './refresh-presentation.ts'
 import { renderRichListTable } from './rich-list-table.ts'
 
 export interface RichListPageDeps {
