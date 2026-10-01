@@ -1,5 +1,5 @@
 import { restoreOperationPlanningInputs } from './manual-inputs.ts'
-import { OPEN_ORACLE_OPERATIONS } from './open-oracle.ts'
+import { OPEN_ORACLE_OPERATIONS } from './open-oracle/catalog.ts'
 import { STATOBLAST_OPERATIONS } from './statoblast.ts'
 import { assertWorkflowPrerequisiteLimit } from './timing.ts'
 import { TRADING_OPERATIONS } from './trading/catalog.ts'
