@@ -118,7 +118,7 @@ browserTest(
 				await cdp.command('Emulation.setDeviceMetricsOverride', { width, height: width === 390 ? 844 : 900, deviceScaleFactor: 1, mobile: false })
 				await cdp.command('Page.navigate', { url: new URL('/settings', dashboard.url).href })
 				await waitFor("document.querySelector('#settings-fields')?.disabled === false && document.querySelector('#execution-fieldset')?.disabled === false")
-				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-nav a'), chip => chip.textContent)")).toEqual(['1Connect', '2Execution policy', '3Go live'])
+				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-nav a'), chip => chip.textContent)")).toEqual(['1Connect', '2Execution policy', '3Go live', '4Complete configuration'])
 				expect(await cdp.evaluate("Array.from(document.querySelectorAll('#settings-go-live .settings-group > summary strong'), title => title.textContent)")).toEqual(['Transaction signer', 'Execution mode'])
 				// Nothing but the pause holds yet, so every required prerequisite is listed as missing and the switch stays locked.
 				expect(await cdp.evaluate(readiness)).toEqual(['true:Bot paused', 'false:Transaction signer', 'false:Chain and RPC endpoints', 'true:Independent quorum RPCs', 'false:Reserve policy', 'false:Canonical scan', 'false:Live inventory', 'false:Delivery', 'true~:Recovery work'])

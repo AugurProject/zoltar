@@ -1,8 +1,10 @@
+import type { RestartConfiguration } from './configuration-restart.ts'
+import { dashboardConfiguration, createConfigurationRestartController } from './configuration-restart-controller.ts'
 import { createSelectionController } from './selection-controller.ts'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import type { EndpointCheck } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { ChaosDashboardController } from '../dashboard/dashboard-server.ts'
-import { saveSettings, serializedSettings, type OperatorSettings } from '../config/settings.ts'
+import { saveSettings, type OperatorSettings } from '../config/settings.ts'
 import {
 	assertLiveExecutionReadiness,
 	assertSettingsUpdatePaused,
@@ -17,7 +19,7 @@ import {
 	signerAddress,
 	signerCandidateSettings,
 } from './configuration-candidates.ts'
-import { acquireConfigurationGate, applyRuntimeSettings, commitRuntimeState, ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused, latchSafetyPause, runtimeStateCandidate, safelyPausedSettings, safetyFailureCheckpoint, SignerOperationBusy } from './configuration-commit.ts'
+import { applyRuntimeSettings, commitRuntimeState, ConfigurationCommitIndeterminate, ConfigurationCommittedSafelyPaused, latchSafetyPause, runtimeStateCandidate, safelyPausedSettings, safetyFailureCheckpoint, SignerOperationBusy } from './configuration-commit.ts'
 import type { BotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { scheduledStateAfterRun, schedulerIsDue } from '../core/scheduler.ts'
 import { abandonLifecycleObligation, retryLifecycleObligation } from './obligations.ts'
@@ -40,6 +42,7 @@ export type ConfigurationState = {
 export type DashboardControllerOptions = {
 	checkConnectivityUpdate?: ((settings: OperatorSettings) => Promise<readonly EndpointCheck[]>) | undefined
 	configuration: ConfigurationState
+	onRestartRequested?: ((configuration: RestartConfiguration) => void) | undefined
 	onScheduleRequested?: (() => void) | undefined
 	gate: SignerOperationGate
 	hostname: ChaosDashboardController['hostname']
@@ -49,16 +52,6 @@ export type DashboardControllerOptions = {
 	saveConfiguration?: typeof saveSettings | undefined
 	saveState?: ((path: string, state: RuntimeState) => Promise<void>) | undefined
 	state: RuntimeState
-}
-
-function dashboardConfiguration(configuration: ConfigurationState) {
-	return {
-		hasSigner: configuration.settings.privateKey !== undefined,
-		rememberSigner: configuration.rememberSigner,
-		revision: configuration.revision,
-		settings: serializedSettings(configuration.settings, true),
-		wallet: signerAddress(configuration.settings),
-	}
 }
 
 export function createChaosDashboardController(options: DashboardControllerOptions): ChaosDashboardController {
@@ -153,16 +146,10 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 		commitRuntimeState(options.state, committedState)
 		return candidate
 	}
-	const update = async <T>(operation: () => Promise<T>) => {
-		acquireConfigurationGate(options.gate)
-		try {
-			return await operation()
-		} finally {
-			options.gate.release('configuration')
-		}
-	}
+	const { update, restart, ...configurationDocument } = createConfigurationRestartController(options)
 
 	return {
+		...configurationDocument,
 		getConfiguration: () => dashboardConfiguration(options.configuration),
 		getState: () => dashboardState(options.state, options.configuration, options.locks.startupSignerConflict),
 		hostname: options.hostname,
@@ -576,6 +563,12 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 			const candidate = signerCandidateSettings(options.configuration.settings, value)
 			try {
 				await update(async () => {
+					const address = signerAddress(candidate.settings)
+					if (address !== undefined && options.state.signerAddress !== undefined && address.toLowerCase() !== options.state.signerAddress.toLowerCase()) {
+						expectedRevision(candidate.revision, options.configuration.revision)
+						await restart(candidate.settings, candidate.rememberSigner)
+						return
+					}
 					await apply(candidate.settings, candidate.revision, candidate.rememberSigner, (state, baseline) => {
 						let message = 'Transaction signer updated'
 						if (candidate.settings.privateKey === undefined) message = 'Transaction signer cleared'

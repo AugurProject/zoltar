@@ -18,5 +18,6 @@ export function mutationRoutes(controller: ChaosDashboardController) {
 	if (controller.setRetirement !== undefined) handlers.set('/api/retirement', controller.setRetirement)
 	if (controller.setConnectivity !== undefined) handlers.set('/api/connectivity', controller.setConnectivity)
 	if (controller.setExecution !== undefined) handlers.set('/api/execution', controller.setExecution)
+	if (controller.setConfigurationDocument !== undefined) handlers.set('/api/configuration-document', controller.setConfigurationDocument)
 	return handlers
 }

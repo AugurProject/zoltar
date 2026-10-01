@@ -1,3 +1,4 @@
+import type { ChaosDashboardController } from './dashboard-controller-contract.ts'
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
 import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
@@ -8,32 +9,14 @@ import { requiredLiveInventory } from '../runtime/live-readiness.ts'
 import { pendingTransactionObservationKind } from '../state/pending-transaction-observation.ts'
 import { browserScript } from './browser-assets.ts'
 import { operatorHeader } from './header.ts'
+import { readDashboardConfiguration } from './configuration-document-route.ts'
 import { mutationRoutes } from './mutation-routes.ts'
 import { settingsPageMarkup } from './settings-page.ts'
 import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 import { indeterminateConfigurationFailure, publicFailure } from './public-failure.ts'
 
-export type ChaosDashboardController = {
-	getConfiguration: () => unknown | Promise<unknown>
-	getState: () => unknown | Promise<unknown>
-	hostname: '0.0.0.0' | '127.0.0.1'
-	loopbackPublished?: boolean
-	setCancellation: (value: unknown) => unknown | Promise<unknown>
-	setCandidate: (value: unknown) => unknown | Promise<unknown>
-	setConnectivity?: ((value: unknown) => unknown | Promise<unknown>) | undefined
-	setExecution?: ((value: unknown) => unknown | Promise<unknown>) | undefined
-	setOperation?: ((value: unknown) => unknown | Promise<unknown>) | undefined
-	setObligation: (value: unknown) => unknown | Promise<unknown>
-	setReplacement: (value: unknown) => unknown | Promise<unknown>
-	setPaused: (value: unknown) => unknown | Promise<unknown>
-	setRetirement?: ((value: unknown) => unknown | Promise<unknown>) | undefined
-	setSchedule?: ((value: unknown) => unknown | Promise<unknown>) | undefined
-	setSelection?: ((value: unknown) => unknown | Promise<unknown>) | undefined
-	setSettings: (value: unknown) => unknown | Promise<unknown>
-	setSigner: (value: unknown) => unknown | Promise<unknown>
-	setWorkflow: (value: unknown) => unknown | Promise<unknown>
-}
+export type { ChaosDashboardController } from './dashboard-controller-contract.ts'
 
 function publicStrings(value: unknown) {
 	return Array.isArray(value)
@@ -873,14 +856,13 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						return publicDashboardError('chaos', error, 503, 'state-read', 'Dashboard state is temporarily unavailable. Automatic recovery remains active.')
 					}
 				}
-				if (url.pathname === '/api/configuration') {
-					try {
-						await mutationBarrier
-						return json({ ...publicChaosConfiguration(await controller.getConfiguration()), configurationCommitIndeterminate })
-					} catch (error) {
-						return publicDashboardError('chaos', error, 503, 'configuration-read', 'Dashboard configuration is temporarily unavailable.')
-					}
-				}
+				if (url.pathname === '/api/configuration-document' && controller.getConfigurationDocument !== undefined) return readDashboardConfiguration(controller.getConfigurationDocument, mutationBarrier, true)
+				if (url.pathname === '/api/configuration')
+					return readDashboardConfiguration(
+						async () => ({ ...publicChaosConfiguration(await controller.getConfiguration()), configurationCommitIndeterminate, completeConfigurationAvailable: controller.getConfigurationDocument !== undefined && controller.setConfigurationDocument !== undefined }),
+						mutationBarrier,
+						false,
+					)
 			}
 			if (request.method === 'PUT') {
 				if (!dashboardRequestIsSameOrigin(request, acceptedAuthorities)) return json({ error: 'Cross-origin requests are not accepted' }, 403)

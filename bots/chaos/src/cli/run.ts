@@ -5,7 +5,8 @@ import { getAddress, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared
 import { createBotShutdownController, runBotMain, withBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
 import { assertSettingsProfileIsolation, loadSettings, saveSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
-import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
+import { restartSafeSettings } from '../runtime/configuration-candidates.ts'
+import { executionProfileId, runChaosOperator, type LoadedConfiguration } from '../runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
 import { acceptResidualProfileReplacement, assertSafeRetirementRecipient, cancelRetirement, DEFAULT_RETIREMENT_POLICIES, registerV3Position, requestRetirement } from '../state/retirement.ts'
 
@@ -53,7 +54,7 @@ export function parseRunCommand(args: readonly string[]): RunCommand {
 	}
 }
 
-async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'operator' }>, loaded: Awaited<ReturnType<typeof loadSettings>>) {
+async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'operator' }>, loaded: Pick<LoadedConfiguration, 'path' | 'revision' | 'settings'>) {
 	const state = await loadDurableState(loaded.settings.runtime.stateFile, loaded.settings.network.chainId)
 	if (command.kind === 'retirement-status') {
 		console.log(JSON.stringify(state.retirement, undefined, 2))
@@ -107,30 +108,34 @@ async function applyRetirementCommand(command: Exclude<RunCommand, { kind: 'oper
 export async function main() {
 	const command = parseRunCommand(process.argv.slice(2))
 	using shutdown = createBotShutdownController()
-	const loaded = await loadSettings()
-	await assertSettingsProfileIsolation(loaded.path, loaded.settings)
-	await withBotProcessLocks(
-		{
-			chainId: loaded.settings.network.chainId,
-			execute: loaded.settings.runtime.execute,
-			privateKey: loaded.settings.privateKey,
-			stateFile: loaded.settings.runtime.stateFile,
-		},
-		{ ...CHAOS_PROCESS_LOCK_OPTIONS, allowSignerConflict: command.kind === 'operator' && loaded.settings.runtime.ui },
-		shutdown,
-		async locks => {
-			if (command.kind !== 'operator') {
-				await applyRetirementCommand(command, loaded)
-				return
-			}
-			if (locks.startupSignerConflict !== undefined) {
-				loaded.settings = { ...loaded.settings, paused: true, runtime: { ...loaded.settings.runtime, execute: false } }
-				loaded.revision = await saveSettings(loaded.path, loaded.settings, loaded.revision)
-				console.error(locks.startupSignerConflict)
-			}
-			await runChaosOperator(loaded, locks, shutdown)
-		},
-	)
+	let loaded: LoadedConfiguration = await loadSettings()
+	do {
+		await assertSettingsProfileIsolation(loaded.path, loaded.settings)
+		const restart = await withBotProcessLocks(
+			{
+				chainId: loaded.settings.network.chainId,
+				execute: loaded.settings.runtime.execute,
+				privateKey: loaded.settings.privateKey,
+				stateFile: loaded.settings.runtime.stateFile,
+			},
+			{ ...CHAOS_PROCESS_LOCK_OPTIONS, allowSignerConflict: command.kind === 'operator' && loaded.settings.runtime.ui },
+			shutdown,
+			async locks => {
+				if (command.kind !== 'operator') {
+					await applyRetirementCommand(command, loaded)
+					return
+				}
+				if (locks.startupSignerConflict !== undefined) {
+					loaded.settings = { ...loaded.settings, paused: true, runtime: { ...loaded.settings.runtime, execute: false } }
+					loaded.revision = await saveSettings(loaded.path, restartSafeSettings(loaded.settings, loaded.rememberSigner ?? loaded.settings.privateKey !== undefined), loaded.revision)
+					console.error(locks.startupSignerConflict)
+				}
+				return await runChaosOperator(loaded, locks, shutdown)
+			},
+		)
+		if (restart === undefined) break
+		loaded = restart
+	} while (!shutdown.isRequested())
 }
 
 if (import.meta.main) runBotMain(main)

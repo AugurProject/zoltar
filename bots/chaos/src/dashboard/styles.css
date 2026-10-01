@@ -1686,3 +1686,18 @@ tbody tr:last-child td {
 		justify-self: start;
 	}
 }
+
+.complete-configuration-group {
+	min-width: 0;
+	margin-top: 1.5rem;
+}
+
+.complete-configuration-group legend {
+	font-weight: 600;
+	margin-bottom: 0.75rem;
+}
+
+#complete-configuration-json {
+	width: 100%;
+	font-family: monospace;
+}

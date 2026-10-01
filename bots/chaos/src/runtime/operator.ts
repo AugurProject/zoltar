@@ -24,7 +24,7 @@ import { ensureReadPreflight } from './submission-preflight.ts'
 import { blockInterruptedWorkflows } from './workflows.ts'
 import { repairDurableSelectableFailures } from './workflow-repair.ts'
 
-type LoadedConfiguration = { needsDeploymentPin?: boolean; path: string; revision: string; settings: OperatorSettings }
+export type LoadedConfiguration = { rememberSigner?: boolean; needsDeploymentPin?: boolean; path: string; revision: string; settings: OperatorSettings }
 
 export { executionProfileId } from '../config/execution-profile.ts'
 
@@ -57,7 +57,7 @@ async function startOperator(loaded: LoadedConfiguration): Promise<OperatorState
 	const startupFailureRepair = repairDurableSelectableFailures(state)
 	const configuration: ConfigurationState = {
 		path: loaded.path,
-		rememberSigner: loaded.settings.privateKey !== undefined,
+		rememberSigner: loaded.rememberSigner ?? loaded.settings.privateKey !== undefined,
 		revision: loaded.needsDeploymentPin ? await saveSettings(loaded.path, loaded.settings, loaded.revision) : loaded.revision,
 		settings: loaded.settings,
 	}
@@ -125,10 +125,11 @@ async function executeManualOperation(operator: OperatorState, deps: OperatorDep
 }
 
 /** Wire the dashboard controller and manual operations to the operator state. */
-function createOperatorDashboard(operator: OperatorState, deps: OperatorDependencies, locks: ChaosProcessLocks) {
+function createOperatorDashboard(operator: OperatorState, deps: OperatorDependencies, locks: ChaosProcessLocks, onRestartRequested: (configuration: ConfigurationState) => void) {
 	const { configuration, runtime: state } = operator
 	const dashboardController = createChaosDashboardController({
 		configuration,
+		onRestartRequested,
 		onScheduleRequested: deps.shutdown.wake,
 		gate: deps.gate,
 		hostname: configuration.settings.runtime.uiHost,
@@ -157,8 +158,13 @@ function createOperatorDashboard(operator: OperatorState, deps: OperatorDependen
 export async function runChaosOperator(loaded: LoadedConfiguration, locks: ChaosProcessLocks, shutdown: BotShutdownController) {
 	const environment = readBotEnvironment()
 	const operator = await startOperator(loaded)
-	const deps: OperatorDependencies = { environment, gate: createSignerOperationGate(), shutdown }
-	const { dashboardController, manualOperations } = createOperatorDashboard(operator, deps, locks)
+	let restart: ConfigurationState | undefined
+	const runShutdown = { ...shutdown, isRequested: () => shutdown.isRequested() || restart !== undefined }
+	const deps: OperatorDependencies = { environment, gate: createSignerOperationGate(), shutdown: runShutdown }
+	const { dashboardController, manualOperations } = createOperatorDashboard(operator, deps, locks, configuration => {
+		restart = configuration
+		shutdown.wake()
+	})
 	await using _manualOperations = manualOperations
 	const dashboard = loaded.settings.runtime.ui ? startDashboardServer(loaded.settings.runtime.uiPort, dashboardController) : undefined
 	await using _dashboardLifecycle = dashboard === undefined ? undefined : botDashboardLifecycle(dashboard)
@@ -169,4 +175,5 @@ export async function runChaosOperator(loaded: LoadedConfiguration, locks: Chaos
 		loaded.settings.runtime.once,
 		logCycleFailure,
 	)
+	return restart
 }
