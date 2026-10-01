@@ -1,5 +1,5 @@
 import { runFundingTransactions, type FundingTransaction } from './fundingTransactions.js'
-import { bigintToSafeNumber, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
+import { bigintToSafeNumber, toEventSelector, zeroAddress, type Address, type Hex, type TransactionReceipt } from '@zoltar/core-shared/evm/ethereum'
 import { getOpenOracleGameTuple, getOpenOracleHelperTuple, hasOpenOracleFlag, hashOpenOracleStatePreimage, OPEN_ORACLE_FLAG_STORE_ALL, OPEN_ORACLE_FLAG_STORE_PRICE, OPEN_ORACLE_FLAG_TIME_TYPE, OPEN_ORACLE_FLAG_TRACK_DISPUTES, type OpenOracleStatePreimage } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
@@ -8,9 +8,9 @@ import { getOpenOracleCreateParameterValidationMessage } from './openOracleValid
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
 import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
+import type { OpenOracleActionResult, OpenOracleReportDetails, OpenOracleWithdrawableBalances, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
-import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
+import { type WriteContractClient, readRequiredMulticall, writeContractAndWait, writeContractAndWaitForReceipt } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from './deploymentHelpers.js'
 import { loadOpenOracleStoredState, isOpenOracleStateUnavailable } from './openOracleState.js'
 import { requireBigintValue } from './decoders.js'
@@ -57,7 +57,7 @@ function normalizeOpenOracleTokenMetadata(tokenAddress: Address, decimalsValue: 
 }
 
 // Quote tokens per base token (token2 per token1), for example REP per WETH for Statoblast price reports.
-function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decimals1: number, decimals2: number) {
+export function calculateOpenOraclePrice(amount1: bigint, amount2: bigint, decimals1: number, decimals2: number) {
 	return amount1 === 0n ? 0n : (amount2 * 10n ** (OPEN_ORACLE_PRICE_UNITS + BigInt(decimals1))) / (amount1 * 10n ** BigInt(decimals2))
 }
 
@@ -70,7 +70,7 @@ function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'],
 	return required > OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT ? required : OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
 }
 
-export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('../types/contracts.js').OpenOracleReportDetails> {
+export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<OpenOracleReportDetails> {
 	const [storedState, stateHash, block] = await Promise.all([
 		loadOpenOracleStoredState(client, openOracleAddress, reportId).catch(error => {
 			if (error instanceof Error && error.message === `Oracle report #${reportId.toString()} does not exist`) throw createOpenOracleReportMissingError(reportId)
@@ -156,7 +156,10 @@ export async function loadOpenOracleReportDetails(client: ReadClient, openOracle
 		token2Symbol: token2Metadata.symbol,
 	}
 }
-export async function loadOpenOracleReportSummaries(client: ReadClient, pageIndex: number, pageSize: number): Promise<OpenOracleReportSummaryPage> {
+/** A browse summary that also carries the report's lifecycle timing, so browsing can show whether it is ready to settle. */
+export type OpenOracleReportTimedSummary = OpenOracleReportSummary & Pick<OpenOracleReportDetails, 'disputeDelay' | 'settlementTime'>
+
+export async function loadOpenOracleReportSummaries(client: ReadClient, pageIndex: number, pageSize: number): Promise<OpenOracleReportSummaryPage & { reports: OpenOracleReportTimedSummary[] }> {
 	const pageOffset = getProtocolPageOffset(pageIndex, pageSize)
 	const openOracleAddress = getOpenOracleAddress()
 	const nextReportId = await client.readContract({
@@ -256,12 +259,14 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			currentAmount1: game.currentAmount1,
 			currentAmount2: game.currentAmount2,
 			currentReporter: game.currentReporter,
+			disputeDelay: game.disputeDelay,
 			disputeOccurred: state.reportCount > 1n,
 			exactToken1Report: state.initialAmount1,
 			isDistributed: state.settled,
 			price: calculateOpenOraclePrice(game.currentAmount1, game.currentAmount2, token1Metadata.decimals, token2Metadata.decimals),
 			reportId,
 			reportTimestamp: game.reportTimestamp,
+			settlementTime: game.settlementTime,
 			settlementTimestamp: game.settlementTimestamp,
 			timeType: hasOpenOracleFlag(game, OPEN_ORACLE_FLAG_TIME_TYPE),
 			token1: game.token1,
@@ -270,7 +275,7 @@ export async function loadOpenOracleReportSummaries(client: ReadClient, pageInde
 			token2Decimals: token2Metadata.decimals,
 			token1Symbol: token1Metadata.symbol,
 			token2Symbol: token2Metadata.symbol,
-		} satisfies OpenOracleReportSummary
+		} satisfies OpenOracleReportTimedSummary
 	})
 	return {
 		nextReportId,
@@ -409,11 +414,39 @@ export async function createOpenOracleReportInstance(
 		],
 		value: parameters.ethValueAttoEth,
 	}
-	const hash = await writeContractAndWait(client, () => callParams)
+	const { hash, receipt } = await writeContractAndWaitForReceipt(client, () => callParams)
 	return {
 		action: 'createReportInstance',
 		hash,
-	} satisfies OpenOracleActionResult
+		reportId: getOpenOracleSubmittedReportId(receipt, getOpenOracleAddress()),
+	} satisfies OpenOracleCreateReportResult
+}
+
+/** A create result also carries the new report ID read from the receipt, so the app can link to the report. */
+export type OpenOracleCreateReportResult = OpenOracleActionResult & { reportId: bigint | undefined }
+
+// ReportSubmitted is emitted with a raw log2 whose data is the packed report rather than ABI-encoded bytes, so only its topics are decoded.
+function getOpenOracleReportSubmittedTopic() {
+	const event = statoblast_openOracle_OpenOracle_OpenOracle.abi.find(item => item.type === 'event' && item.name === 'ReportSubmitted')
+	if (event === undefined) throw new Error('OpenOracle ABI is missing the ReportSubmitted event')
+	return toEventSelector(event).toLowerCase()
+}
+
+function getOpenOracleSubmittedReportId(receipt: { logs?: readonly Pick<TransactionReceipt['logs'][number], 'address' | 'topics'>[] }, openOracleAddress: Address) {
+	const reportSubmittedTopic = getOpenOracleReportSubmittedTopic()
+	for (const log of receipt.logs ?? []) {
+		if (!sameAddress(log.address, openOracleAddress)) continue
+		const [selector, reportIdTopic] = log.topics
+		if (selector?.toLowerCase() !== reportSubmittedTopic || reportIdTopic === undefined) continue
+		return BigInt(reportIdTopic)
+	}
+	return undefined
+}
+
+/** Reads the report ID of a successful create result; other action results carry none. */
+export function getCreatedOpenOracleReportId(result: OpenOracleActionResult | undefined) {
+	if (result?.action !== 'createReportInstance' || !('reportId' in result)) return undefined
+	return typeof result.reportId === 'bigint' ? result.reportId : undefined
 }
 export async function wrapWeth(client: WriteClient, amountAttoEth: bigint) {
 	const hash = await writeContractAndWait(client, () => ({

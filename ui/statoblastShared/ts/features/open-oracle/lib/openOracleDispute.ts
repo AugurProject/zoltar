@@ -6,6 +6,8 @@ import { sanitizeErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { deriveTokenApprovalRequirement, formatTokenApprovalUnavailableMessage } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { getOpenOracleDisputeSwapTokenKey } from '../../../protocol/openOracleMath.js'
+import { calculateOpenOraclePrice } from '../../../protocol/openOracle.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 import { OPEN_ORACLE_MULTIPLIER_PRECISION, OPEN_ORACLE_PERCENTAGE_PRECISION } from '../../../protocol/openOracleValidation.js'
 import { getOpenOracleDisputeAvailability, type OpenOracleDisputeInputField, type OpenOracleDisputeSubmissionDetails, type OpenOracleGateMessage } from './openOracle.js'
 
@@ -45,28 +47,50 @@ function getOpenOracleDisputeFees(oldAmount: bigint, { chargeFees, feePercentage
 	if (!chargeFees) return { fee: 0n, protocolFeeAmount: 0n }
 	return { fee: (oldAmount * feePercentage) / OPEN_ORACLE_PERCENTAGE_PRECISION, protocolFeeAmount: (oldAmount * protocolFee) / OPEN_ORACLE_PERCENTAGE_PRECISION }
 }
-function resolveOpenOracleDisputeToken1Contribution({ chargeFees, feePercentage, isSelfDispute, newAmount1, oldAmount1, protocolFee, tokenToSwap }: { chargeFees: boolean; feePercentage: bigint; isSelfDispute: boolean; newAmount1: bigint; oldAmount1: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }) {
+type OpenOracleDisputeContributionParameters = { chargeFees: boolean; feePercentage: bigint; isSelfDispute: boolean; newAmount1: bigint; newAmount2: bigint; oldAmount1: bigint; oldAmount2: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }
+/** Token amounts the disputer pays, the fees inside them, and the quote tokens credited back to the disputer's oracle balance. */
+function resolveOpenOracleDisputeFlows({ chargeFees, feePercentage, isSelfDispute, newAmount1, newAmount2, oldAmount1, oldAmount2, protocolFee, tokenToSwap }: OpenOracleDisputeContributionParameters) {
 	if (tokenToSwap === 'token1') {
 		const { fee, protocolFeeAmount } = getOpenOracleDisputeFees(oldAmount1, { chargeFees, feePercentage, protocolFee })
-		if (isSelfDispute) return newAmount1 - oldAmount1 + protocolFeeAmount
-		return newAmount1 + oldAmount1 + fee + protocolFeeAmount
-	}
-	return newAmount1 > oldAmount1 ? newAmount1 - oldAmount1 : 0n
-}
-function resolveOpenOracleDisputeToken2Contribution({ chargeFees, feePercentage, isSelfDispute, newAmount2, oldAmount2, protocolFee, tokenToSwap }: { chargeFees: boolean; feePercentage: bigint; isSelfDispute: boolean; newAmount2: bigint; oldAmount2: bigint; protocolFee: bigint; tokenToSwap: 'token1' | 'token2' }) {
-	if (tokenToSwap === 'token1') {
-		return newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n
+		return {
+			disputeFeeAmount: isSelfDispute ? 0n : fee,
+			protocolFeeAmount,
+			token1Contribution: isSelfDispute ? newAmount1 - oldAmount1 + protocolFeeAmount : newAmount1 + oldAmount1 + fee + protocolFeeAmount,
+			token2Contribution: newAmount2 >= oldAmount2 ? newAmount2 - oldAmount2 : 0n,
+			token2Credit: newAmount2 < oldAmount2 ? oldAmount2 - newAmount2 : 0n,
+		}
 	}
 	const { fee, protocolFeeAmount } = getOpenOracleDisputeFees(oldAmount2, { chargeFees, feePercentage, protocolFee })
+	const token1Contribution = newAmount1 > oldAmount1 ? newAmount1 - oldAmount1 : 0n
 	if (isSelfDispute) {
 		const token2Needed = newAmount2 + protocolFeeAmount
-		return token2Needed >= oldAmount2 ? token2Needed - oldAmount2 : 0n
+		return {
+			disputeFeeAmount: 0n,
+			protocolFeeAmount,
+			token1Contribution,
+			token2Contribution: token2Needed >= oldAmount2 ? token2Needed - oldAmount2 : 0n,
+			token2Credit: token2Needed < oldAmount2 ? oldAmount2 - token2Needed : 0n,
+		}
 	}
-	return newAmount2 + oldAmount2 + fee + protocolFeeAmount
+	return { disputeFeeAmount: fee, protocolFeeAmount, token1Contribution, token2Contribution: newAmount2 + oldAmount2 + fee + protocolFeeAmount, token2Credit: 0n }
 }
 function isOpenOracleDisputeAmount1Allowed(report: Pick<OpenOracleReportDetails, 'escalationHalt' | 'flexibleEscalation'>, expectedNewAmount1: bigint, newAmount1: bigint) {
 	if (newAmount1 === expectedNewAmount1) return true
 	return report.flexibleEscalation && newAmount1 >= expectedNewAmount1 && newAmount1 <= report.escalationHalt
+}
+/** The base amount the next dispute must post: the escalated amount until the halt, then one unit more than the current amount. */
+function getOpenOracleExpectedDisputeAmount1(report: Pick<OpenOracleReportDetails, 'currentAmount1' | 'escalationHalt' | 'multiplier'>) {
+	if (report.escalationHalt <= report.currentAmount1) return report.currentAmount1 + 1n
+	const multiplied = (report.currentAmount1 * report.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION
+	return multiplied > report.escalationHalt ? report.escalationHalt : multiplied
+}
+/** Highest base amount a flexible-escalation dispute may post; undefined when the amount is exact. */
+function getOpenOracleMaximumDisputeAmount1(report: Pick<OpenOracleReportDetails, 'currentAmount1' | 'escalationHalt' | 'flexibleEscalation' | 'multiplier'>) {
+	return report.flexibleEscalation && report.escalationHalt > getOpenOracleExpectedDisputeAmount1(report) ? report.escalationHalt : undefined
+}
+/** Dispute inputs for a freshly loaded report state: the base amount starts at the required amount and the disputer enters the quote amount. */
+export function getOpenOracleDisputeFormDefaults(report: Pick<OpenOracleReportDetails, 'currentAmount1' | 'escalationHalt' | 'multiplier' | 'token1Decimals'>) {
+	return { disputeNewAmount1: formatCurrencyInputBalance(getOpenOracleExpectedDisputeAmount1(report), report.token1Decimals), disputeNewAmount2: '' }
 }
 export function deriveOpenOracleDisputeSubmissionDetails({
 	accountAddress,
@@ -74,7 +98,6 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	approvedToken2Amount,
 	disputeNewAmount1Input,
 	disputeNewAmount2Input,
-	disputeTokenToSwap,
 	reportDetails,
 	token1AllowanceError,
 	token1Balance,
@@ -90,7 +113,6 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	approvedToken2Amount: bigint | undefined
 	disputeNewAmount1Input: string
 	disputeNewAmount2Input: string
-	disputeTokenToSwap: 'token1' | 'token2'
 	reportDetails:
 		| Pick<
 				OpenOracleReportDetails,
@@ -135,48 +157,34 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		tokenAddress: reportDetails?.token2,
 		tokenSymbol: reportDetails?.token2Symbol,
 	})
-	let expectedNewAmount1: bigint | undefined
-	let newAmount1: bigint | undefined
-	let newAmount2: bigint | undefined
-	if (reportDetails !== undefined)
-		expectedNewAmount1 =
-			reportDetails.escalationHalt > reportDetails.currentAmount1
-				? (() => {
-						const multiplied = (reportDetails.currentAmount1 * reportDetails.multiplier) / OPEN_ORACLE_MULTIPLIER_PRECISION
-						return multiplied > reportDetails.escalationHalt ? reportDetails.escalationHalt : multiplied
-					})()
-				: reportDetails.currentAmount1 + 1n
-	newAmount1 = token1Decimals === undefined ? undefined : tryParseDecimalInput(disputeNewAmount1Input, token1Decimals)
-	newAmount2 = token2Decimals === undefined ? undefined : tryParseDecimalInput(disputeNewAmount2Input, token2Decimals)
+	const expectedNewAmount1 = reportDetails === undefined ? undefined : getOpenOracleExpectedDisputeAmount1(reportDetails)
+	const maximumNewAmount1 = reportDetails === undefined ? undefined : getOpenOracleMaximumDisputeAmount1(reportDetails)
+	// Without a flexible range the report fixes the base amount, so only flexible escalation reads it from the input.
+	const enteredNewAmount1 = token1Decimals === undefined ? undefined : tryParseDecimalInput(disputeNewAmount1Input, token1Decimals)
+	const newAmount1 = maximumNewAmount1 === undefined ? expectedNewAmount1 : enteredNewAmount1
+	const newAmount2 = token2Decimals === undefined ? undefined : tryParseDecimalInput(disputeNewAmount2Input, token2Decimals)
 	const isSelfDispute = accountAddress !== undefined && reportDetails !== undefined && sameAddress(accountAddress, reportDetails.currentReporter)
-	const maximumNewAmount1 = reportDetails !== undefined && expectedNewAmount1 !== undefined && reportDetails.flexibleEscalation && reportDetails.escalationHalt > expectedNewAmount1 ? reportDetails.escalationHalt : undefined
 	const chargeFees = reportDetails === undefined || !reportDetails.feesOnlyAtHalt || reportDetails.currentAmount1 >= reportDetails.escalationHalt
-	// Flexible escalation lets the disputer choose the base amount, so contributions follow the entered amount once it is allowed.
-	const contributionNewAmount1 = reportDetails !== undefined && expectedNewAmount1 !== undefined && newAmount1 !== undefined && isOpenOracleDisputeAmount1Allowed(reportDetails, expectedNewAmount1, newAmount1) ? newAmount1 : expectedNewAmount1
-	const token1ContributionAmount =
-		reportDetails === undefined || newAmount2 === undefined || contributionNewAmount1 === undefined
+	const amount1Allowed = reportDetails !== undefined && expectedNewAmount1 !== undefined && newAmount1 !== undefined && isOpenOracleDisputeAmount1Allowed(reportDetails, expectedNewAmount1, newAmount1)
+	// The proposed price decides which token is swapped out, so the disputer never chooses it separately.
+	const swapTokenKey = reportDetails === undefined || newAmount1 === undefined || newAmount2 === undefined || newAmount2 <= 0n || !amount1Allowed ? undefined : getOpenOracleDisputeSwapTokenKey({ currentAmount1: reportDetails.currentAmount1, currentAmount2: reportDetails.currentAmount2, newAmount1, newAmount2 })
+	const flows =
+		reportDetails === undefined || newAmount1 === undefined || newAmount2 === undefined || swapTokenKey === undefined
 			? undefined
-			: resolveOpenOracleDisputeToken1Contribution({
+			: resolveOpenOracleDisputeFlows({
 					chargeFees,
 					feePercentage: reportDetails.feePercentage,
 					isSelfDispute,
-					newAmount1: contributionNewAmount1,
-					oldAmount1: reportDetails.currentAmount1,
-					protocolFee: reportDetails.protocolFee,
-					tokenToSwap: disputeTokenToSwap,
-				})
-	const token2ContributionAmount =
-		reportDetails === undefined || newAmount2 === undefined
-			? undefined
-			: resolveOpenOracleDisputeToken2Contribution({
-					chargeFees,
-					feePercentage: reportDetails.feePercentage,
-					isSelfDispute,
+					newAmount1,
 					newAmount2,
+					oldAmount1: reportDetails.currentAmount1,
 					oldAmount2: reportDetails.currentAmount2,
 					protocolFee: reportDetails.protocolFee,
-					tokenToSwap: disputeTokenToSwap,
+					tokenToSwap: swapTokenKey,
 				})
+	const token1ContributionAmount = flows?.token1Contribution
+	const token2ContributionAmount = flows?.token2Contribution
+	const proposedPrice = newAmount1 === undefined || newAmount2 === undefined || token1Decimals === undefined || token2Decimals === undefined || newAmount1 <= 0n || newAmount2 <= 0n ? undefined : calculateOpenOraclePrice(newAmount1, newAmount2, token1Decimals, token2Decimals)
 	const token1Approval = deriveTokenApprovalRequirement(token1ContributionAmount, approvedToken1Amount)
 	const token2Approval = deriveTokenApprovalRequirement(token2ContributionAmount, approvedToken2Amount)
 	let blockMessage: OpenOracleGateMessage | undefined
@@ -198,32 +206,14 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 		} else if (token2Decimals === undefined) {
 			setInputBlockMessage(createHiddenLoadingGateMessage(`Loading ${token2Label} decimal metadata.`))
 		} else if (newAmount1 === undefined) {
-			setInputBlockMessage(createVisibleGateMessage('Enter a valid new base token amount.'), 'disputeNewAmount1')
+			setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token1Label} amount.`), 'disputeNewAmount1')
 		} else if (newAmount2 === undefined || newAmount2 <= 0n) {
-			setInputBlockMessage(createVisibleGateMessage('Enter a valid new quote token amount greater than zero.'), 'disputeNewAmount2')
+			setInputBlockMessage(createVisibleGateMessage(`Enter a valid new ${token2Label} amount greater than zero.`), 'disputeNewAmount2')
 		} else if (expectedNewAmount1 === undefined) {
-			setInputBlockMessage(createVisibleGateMessage('Unable to determine the required new base token amount.'))
-		} else if (!isOpenOracleDisputeAmount1Allowed(reportDetails, expectedNewAmount1, newAmount1)) {
-			setInputBlockMessage(
-				createVisibleGateMessage(
-					maximumNewAmount1 !== undefined
-						? `New base token amount must be between ${formatCurrencyInputBalance(expectedNewAmount1, token1Decimals)} and ${formatCurrencyInputBalance(maximumNewAmount1, token1Decimals)} for this dispute.`
-						: `New base token amount must be exactly ${formatCurrencyInputBalance(expectedNewAmount1, token1Decimals)} for this dispute.`,
-				),
-				'disputeNewAmount1',
-			)
-		} else {
-			const expectedSwapToken = getOpenOracleDisputeSwapTokenKey({
-				currentAmount1: reportDetails.currentAmount1,
-				currentAmount2: reportDetails.currentAmount2,
-				newAmount1,
-				newAmount2,
-			})
-			if (expectedSwapToken !== disputeTokenToSwap) {
-				const expectedTokenLabel = expectedSwapToken === 'token1' ? token1Label : token2Label
-				const selectedTokenLabel = disputeTokenToSwap === 'token1' ? token1Label : token2Label
-				setInputBlockMessage(createVisibleGateMessage(`These amounts would swap out ${expectedTokenLabel}, not ${selectedTokenLabel}. Select ${expectedTokenLabel} or change the proposed price.`), 'disputeTokenToSwap')
-			}
+			setInputBlockMessage(createVisibleGateMessage(`Unable to determine the required new ${token1Label} amount.`))
+		} else if (!amount1Allowed) {
+			const minimumAmount = formatCurrencyInputBalance(expectedNewAmount1, token1Decimals)
+			setInputBlockMessage(createVisibleGateMessage(maximumNewAmount1 === undefined ? openOracleCopy.formatNewAmountMustBeExactDetail(token1Label, minimumAmount) : openOracleCopy.formatNewAmountRangeDetail(token1Label, minimumAmount, formatCurrencyInputBalance(maximumNewAmount1, token1Decimals))), 'disputeNewAmount1')
 		}
 		if (inputBlockMessage === undefined) {
 			if (approvedToken1Amount === undefined && token1AllowanceError !== undefined) {
@@ -288,12 +278,17 @@ export function deriveOpenOracleDisputeSubmissionDetails({
 	return {
 		blockMessage,
 		canSubmit: blockMessage === undefined,
+		disputeFeeAmount: flows?.disputeFeeAmount,
 		expectedNewAmount1,
 		inputFieldErrors,
 		inputBlockMessage,
 		maximumNewAmount1,
 		newAmount1,
 		newAmount2,
+		proposedPrice,
+		protocolFeeAmount: flows?.protocolFeeAmount,
+		swapTokenKey,
+		token2CreditAmount: flows?.token2Credit,
 		token1Approval,
 		token1ContributionAmount,
 		token1Decimals,

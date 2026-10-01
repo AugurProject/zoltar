@@ -436,7 +436,7 @@ void describe('selected pool oracle price display', () => {
 				lastSettlementTimestamp: 1n,
 				priceValidUntilTimestamp: undefined,
 			}),
-		).toEqual({ text: '(Valid for 59m)', tone: 'success' })
+		).toEqual({ text: '(valid for 59m)', tone: 'success' })
 	})
 
 	void test('omits validity before settlement and reports expiry after the window closes', () => {

@@ -4,6 +4,7 @@ import type { OpenOracleCreateFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails, OpenOracleReportSummary } from '../../../types/contracts.js'
 import { getWalletConnectionActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
+import type { BadgeTone } from '@zoltar/ui-core-shared/types/components.js'
 import { parseDecimalInput, tryParseDecimalInput } from '@zoltar/ui-core-shared/forms/decimal.js'
 import { formatWriteErrorMessage, getErrorDetail } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatAdditionalCurrencyBalance, formatAmountDisplay, formatDuration, formatMultiplier, formatScaledPercentage } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -23,7 +24,7 @@ const OPEN_ORACLE_DECIMAL_INPUT_PATTERN = /^-?(?:\d+\.?\d*|\.\d+)$/
 type OpenOracleReportStatus = 'Pending' | 'Disputed' | 'Settled'
 export type OpenOracleSelectedReportActionMode = 'dispute' | 'settle' | 'read-only'
 export { addOpenOracleBountyBuffer }
-export type OpenOracleDisputeInputField = 'disputeNewAmount1' | 'disputeNewAmount2' | 'disputeTokenToSwap'
+export type OpenOracleDisputeInputField = 'disputeNewAmount1' | 'disputeNewAmount2'
 export type OpenOracleGateMessage = {
 	kind: 'hidden-loading' | 'visible'
 	message: string
@@ -35,6 +36,8 @@ type OpenOracleReportActionAvailability = {
 export type OpenOracleDisputeSubmissionDetails = {
 	blockMessage: OpenOracleGateMessage | undefined
 	canSubmit: boolean
+	/** Fee paid to the current reporter in the swapped token; zero for a self-dispute or before fees apply. */
+	disputeFeeAmount: bigint | undefined
 	expectedNewAmount1: bigint | undefined
 	inputFieldErrors: Partial<Record<OpenOracleDisputeInputField, string>>
 	inputBlockMessage: OpenOracleGateMessage | undefined
@@ -42,6 +45,13 @@ export type OpenOracleDisputeSubmissionDetails = {
 	maximumNewAmount1: bigint | undefined
 	newAmount1: bigint | undefined
 	newAmount2: bigint | undefined
+	/** Price the dispute proposes, in quote tokens per base token scaled by 10^30. */
+	proposedPrice: bigint | undefined
+	protocolFeeAmount: bigint | undefined
+	/** The token the dispute swaps out, which the proposed price direction determines. */
+	swapTokenKey: 'token1' | 'token2' | undefined
+	/** Quote tokens credited to the disputer's oracle balance when the new quote amount is below the current one. */
+	token2CreditAmount: bigint | undefined
 	token1Approval: TokenApprovalRequirement
 	token1ContributionAmount: bigint | undefined
 	token1Decimals: number | undefined
@@ -76,22 +86,24 @@ export function formatOpenOracleDisputeWriteErrorMessage(error: unknown, fallbac
 	if (normalizedDetail.includes('noreporttodispute') || normalizedDetail.includes('no report to dispute')) return 'This report is invalid because its atomic initial report is missing.'
 	return `Transaction failed while disputing the report. Reason: ${detail}`
 }
-export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { ethValueInput: string; isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
+export function getOpenOracleCreateGuardMessage({ isOnActiveAppChain, settlerRewardInput, walletConnected, walletBalanceAttoEth }: { isOnActiveAppChain: boolean; settlerRewardInput: string; walletConnected: boolean; walletBalanceAttoEth: bigint | undefined }) {
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
 		isOnActiveAppChain,
 		walletConnected,
 		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone Open Oracle report'),
 	})
 	if (walletGuardState.blocked) return walletGuardState.reason
-	const ethValue = tryParseDecimalInput(ethValueInput)
-	if (ethValue === undefined) return 'Enter a valid ETH value to send.'
-	const settlerRewardAttoEth = tryParseDecimalInput(settlerRewardInput)
-	if (settlerRewardAttoEth === undefined) return 'Enter a valid settler reward.'
-	// Standalone reports are ERC-20 pairs, so the contract needs exactly the settler reward in ETH; the create validation enforces the same rule.
-	if (ethValue !== settlerRewardAttoEth) return 'ETH value to send must equal the settler reward for ERC-20 token pairs.'
+	// Standalone reports are ERC-20 pairs, so the transaction sends exactly the settler reward in ETH.
+	const ethSentAttoEth = getOpenOracleCreateEthSent(settlerRewardInput)
+	if (ethSentAttoEth === undefined) return 'Enter a valid settler reward.'
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethValue - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone Open Oracle report.`
+	if (ethSentAttoEth > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethSentAttoEth - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone Open Oracle report.`
 	return undefined
+}
+
+/** ERC-20 report creation sends exactly the settler reward, so the ETH sent is derived instead of entered separately. */
+export function getOpenOracleCreateEthSent(settlerRewardInput: string) {
+	return tryParseDecimalInput(settlerRewardInput)
 }
 
 function getOpenOracleCreateAddressValidationMessage(addressInput: string, role: 'base' | 'quote') {
@@ -99,8 +111,9 @@ function getOpenOracleCreateAddressValidationMessage(addressInput: string, role:
 	return role === 'base' ? 'Enter a valid base token address.' : 'Enter a valid quote token address.'
 }
 
-export const OPEN_ORACLE_CREATE_FIELD_ORDER: ReadonlyArray<keyof OpenOracleCreateFormState> = ['token1Address', 'token2Address', 'exactToken1Report', 'initialToken2Amount', 'escalationHalt', 'ethValue', 'settlerRewardEthAmount', 'settlementTime', 'disputeDelay', 'multiplier', 'feePercentage', 'protocolFee']
-export type OpenOracleCreateField = (typeof OPEN_ORACLE_CREATE_FIELD_ORDER)[number]
+/** The ETH sent is derived from the settler reward, so it is not an editable field. */
+export type OpenOracleCreateField = Exclude<keyof OpenOracleCreateFormState, 'ethValue'>
+export const OPEN_ORACLE_CREATE_FIELD_ORDER: readonly OpenOracleCreateField[] = ['token1Address', 'token2Address', 'exactToken1Report', 'initialToken2Amount', 'escalationHalt', 'settlerRewardEthAmount', 'settlementTime', 'disputeDelay', 'multiplier', 'feePercentage', 'protocolFee']
 export type OpenOracleCreateContractFieldErrors = Partial<Record<'token1Address' | 'token2Address', string>>
 type OpenOracleCreateValidation = {
 	fieldErrors: Partial<Record<OpenOracleCreateField, string>>
@@ -134,12 +147,18 @@ function getOpenOracleUnknownScaleDecimalValidationMessage({ allowZero = true, i
 	return undefined
 }
 
+/** The contract stores the escalation multiplier scaled by 100, so the form takes a decimal multiplier such as 1.5. */
+const OPEN_ORACLE_MULTIPLIER_DECIMALS = 2
+function parseOpenOracleMultiplierInput(value: string) {
+	return tryParseDecimalInput(value, OPEN_ORACLE_MULTIPLIER_DECIMALS)
+}
+
 function setOpenOracleCreateFieldError(fieldErrors: Partial<Record<OpenOracleCreateField, string>>, field: OpenOracleCreateField, message: string | undefined) {
 	if (message === undefined || fieldErrors[field] !== undefined) return
 	fieldErrors[field] = message
 }
 
-export function getOpenOracleCreateValidation({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals?: number; token2Decimals?: number }): OpenOracleCreateValidation {
+export function getOpenOracleCreateValidation({ form, token1Decimals, token2Decimals }: { form: OpenOracleCreateFormState; token1Decimals?: number | undefined; token2Decimals?: number | undefined }): OpenOracleCreateValidation {
 	const fieldErrors: Partial<Record<OpenOracleCreateField, string>> = {}
 	const token1AddressValidationMessage = getOpenOracleCreateAddressValidationMessage(form.token1Address, 'base')
 	setOpenOracleCreateFieldError(fieldErrors, 'token1Address', token1AddressValidationMessage)
@@ -195,9 +214,8 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 			: tryParseDecimalInput(form.escalationHalt, token1Decimals)
 	if (token1Decimals !== undefined && escalationHalt === undefined) setOpenOracleCreateFieldError(fieldErrors, 'escalationHalt', 'Enter a valid escalation halt.')
 
-	const ethValue = tryParseDecimalInput(form.ethValue)
-	if (ethValue === undefined) setOpenOracleCreateFieldError(fieldErrors, 'ethValue', 'Enter a valid ETH value to send.')
 	const settlerRewardAttoEth = tryParseDecimalInput(form.settlerRewardEthAmount)
+	const ethValue = getOpenOracleCreateEthSent(form.settlerRewardEthAmount)
 	if (settlerRewardAttoEth === undefined) setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', 'Enter a valid settler reward.')
 
 	const settlementTime = tryParseBigIntInput(form.settlementTime)
@@ -205,8 +223,8 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	const disputeDelay = tryParseBigIntInput(form.disputeDelay)
 	if (disputeDelay === undefined) setOpenOracleCreateFieldError(fieldErrors, 'disputeDelay', 'Enter a valid dispute delay.')
 
-	const multiplier = tryParseBigIntInput(form.multiplier)
-	if (multiplier === undefined || multiplier < 0n) setOpenOracleCreateFieldError(fieldErrors, 'multiplier', 'Enter a valid multiplier.')
+	const multiplier = parseOpenOracleMultiplierInput(form.multiplier)
+	if (multiplier === undefined || multiplier < 0n) setOpenOracleCreateFieldError(fieldErrors, 'multiplier', 'Enter a valid multiplier, such as 1.5.')
 
 	const feePercentage = tryParseDecimalInput(form.feePercentage, 5)
 	if (feePercentage === undefined) setOpenOracleCreateFieldError(fieldErrors, 'feePercentage', 'Enter a valid fee percentage.')
@@ -246,8 +264,7 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 			{ skipToken1MagnitudeValidation: token1Decimals === undefined },
 		)
 		if (parameterValidation !== undefined) {
-			if (parameterValidation.field === 'settlerRewardAttoEth') setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', parameterValidation.message)
-			else if (parameterValidation.field === 'ethValueAttoEth') setOpenOracleCreateFieldError(fieldErrors, 'ethValue', parameterValidation.message)
+			if (parameterValidation.field === 'settlerRewardAttoEth' || parameterValidation.field === 'ethValueAttoEth') setOpenOracleCreateFieldError(fieldErrors, 'settlerRewardEthAmount', parameterValidation.message)
 			else setOpenOracleCreateFieldError(fieldErrors, parameterValidation.field, parameterValidation.message)
 		}
 	}
@@ -261,25 +278,66 @@ export function getOpenOracleCreateValidation({ form, token1Decimals, token2Deci
 	}
 }
 
-export function getOpenOracleCreateValidationMessage(parameters: { form: OpenOracleCreateFormState; token1Decimals?: number; token2Decimals?: number }) {
+export function getOpenOracleCreateValidationMessage(parameters: { form: OpenOracleCreateFormState; token1Decimals?: number | undefined; token2Decimals?: number | undefined }) {
 	return getOpenOracleCreateValidation(parameters).message
 }
-export function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
+function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
 	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('Open Oracle report is missing its atomic initial report')
 	if (report.isDistributed) return 'Settled'
 	if (report.disputeOccurred) return 'Disputed'
 	return 'Pending'
 }
-export function getOpenOracleReportStatusTone(status: OpenOracleReportStatus): 'blocked' | 'danger' | 'muted' | 'ok' {
-	switch (status) {
-		case 'Pending':
+/**
+ * Lifecycle progress shown in report badges and the browse filter. It combines the stored report state with the
+ * current clock, so a report past its settlement time reads as ready to settle instead of pending. `pending` and an
+ * untimed `disputed` remain only for cached summaries saved before their timing was recorded.
+ */
+export type OpenOracleReportProgress = 'awaiting-dispute-window' | 'dispute-window-open' | 'disputed' | 'ready-to-settle' | 'settled' | 'pending'
+export const OPEN_ORACLE_REPORT_PROGRESS_ORDER: readonly OpenOracleReportProgress[] = ['awaiting-dispute-window', 'dispute-window-open', 'disputed', 'ready-to-settle', 'settled']
+type OpenOracleReportProgressReport = Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'timeType'> & { disputeDelay?: bigint | undefined; settlementTime?: bigint | undefined }
+export function getOpenOracleReportProgress(report: OpenOracleReportProgressReport, clock: { currentBlockNumber?: bigint | undefined; currentTime?: bigint | undefined }): OpenOracleReportProgress {
+	const status = getOpenOracleReportStatus(report)
+	if (status === 'Settled') return 'settled'
+	const currentClock = report.timeType ? clock.currentTime : clock.currentBlockNumber
+	if (currentClock === undefined || report.settlementTime === undefined) return status === 'Disputed' ? 'disputed' : 'pending'
+	if (currentClock >= report.reportTimestamp + report.settlementTime) return 'ready-to-settle'
+	if (report.disputeOccurred) return 'disputed'
+	if (report.disputeDelay !== undefined && currentClock < report.reportTimestamp + report.disputeDelay) return 'awaiting-dispute-window'
+	return 'dispute-window-open'
+}
+export function getOpenOracleReportProgressLabel(progress: OpenOracleReportProgress) {
+	switch (progress) {
+		case 'awaiting-dispute-window':
+			return openOracleCopy.awaitingDisputeWindow
+		case 'dispute-window-open':
+			return openOracleCopy.disputeWindowOpen
+		case 'disputed':
+			return openOracleCopy.disputed
+		case 'ready-to-settle':
+			return openOracleCopy.readyToSettle
+		case 'settled':
+			return commonCopy.settled
+		case 'pending':
+			return commonCopy.pending
+		default:
+			return assertNever(progress)
+	}
+}
+/** A dispute is a normal step in the report lifecycle, so it reads as a caution rather than a failure. */
+export function getOpenOracleReportProgressTone(progress: OpenOracleReportProgress): BadgeTone {
+	switch (progress) {
+		case 'awaiting-dispute-window':
+		case 'pending':
 			return 'muted'
-		case 'Disputed':
-			return 'danger'
-		case 'Settled':
+		case 'dispute-window-open':
+			return 'pending'
+		case 'disputed':
+			return 'warning'
+		case 'ready-to-settle':
+		case 'settled':
 			return 'ok'
 		default:
-			return assertNever(status)
+			return assertNever(progress)
 	}
 }
 export function getOpenOracleSelectedReportActionMode(report: Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentReporter' | 'currentTime' | 'disputeDelay' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp' | 'settlementTime' | 'timeType'>): OpenOracleSelectedReportActionMode {
@@ -403,9 +461,9 @@ export function parseOpenOracleCreateFormSubmission({ form, token1Decimals, toke
 		escalationHalt: parseDecimalInput(form.escalationHalt, 'Escalation halt', token1Decimals),
 		exactToken1Report: parseDecimalInput(form.exactToken1Report, 'Base token amount', token1Decimals),
 		initialToken2Amount: parseDecimalInput(form.initialToken2Amount, 'Quote token amount', token2Decimals),
-		ethValueAttoEth: parseDecimalInput(form.ethValue, 'ETH value'),
+		ethValueAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
 		feePercentage: parseOpenOracleFeePercentageInput(form.feePercentage, 'Fee percentage'),
-		multiplier: bigintToSafeNumber(parseBigIntInput(form.multiplier, 'Multiplier'), 'Multiplier'),
+		multiplier: bigintToSafeNumber(parseDecimalInput(form.multiplier, 'Multiplier', OPEN_ORACLE_MULTIPLIER_DECIMALS), 'Multiplier'),
 		protocolFee: parseOpenOracleFeePercentageInput(form.protocolFee, 'Protocol fee'),
 		settlementTime: bigintToSafeNumber(parseBigIntInput(form.settlementTime, 'Settlement time'), 'Settlement time'),
 		settlerRewardAttoEth: parseDecimalInput(form.settlerRewardEthAmount, 'Settler reward'),
@@ -442,5 +500,53 @@ export function getOraclePriceValidityPresentation({ currentTimestamp, lastSettl
 		const expiredFor = currentTimestamp > validUntilTimestamp ? currentTimestamp - validUntilTimestamp : 0n
 		return { text: `(expired ${expiredFor === 0n ? 'less than a minute' : formatDuration(expiredFor)} ago)`, tone: 'danger' as const }
 	}
-	return { text: `(Valid for ${formatDuration(timeRemaining)})`, tone: 'success' as const }
+	return { text: `(valid for ${formatDuration(timeRemaining)})`, tone: 'success' as const }
+}
+
+/** Report timing values are seconds for time-based reports and blocks otherwise. */
+export function formatOpenOracleTimingDuration(value: bigint, timeType: boolean) {
+	if (!timeType) return openOracleCopy.formatTimingValue(value.toString(), openOracleCopy.blocks)
+	if (value < 60n) return openOracleCopy.formatTimingValue(value.toString(), openOracleCopy.secondsAbbreviation)
+	return formatDuration(value)
+}
+
+/** Hint for a seconds input, such as `86400 s = 1d 0h 0m`, so typed durations stay readable. */
+export function formatOpenOracleSecondsInputHint(input: string) {
+	const seconds = tryParseBigIntInput(input)
+	if (seconds === undefined || seconds < 0n) return undefined
+	return openOracleCopy.formatSecondsDurationHint(seconds.toString(), formatOpenOracleTimingDuration(seconds, true))
+}
+
+const OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS = 36
+const OPEN_ORACLE_PRICE_DECIMALS = 30n
+/** Implied price of the entered report amounts, in quote tokens per base token scaled by 10^30 like stored report prices. */
+export function getOpenOracleImpliedPrice({ token1Amount, token2Amount }: { token1Amount: string; token2Amount: string }) {
+	const amount1 = tryParseDecimalInput(token1Amount, OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS)
+	const amount2 = tryParseDecimalInput(token2Amount, OPEN_ORACLE_HUMAN_PRICE_PARSE_DECIMALS)
+	if (amount1 === undefined || amount2 === undefined || amount1 <= 0n || amount2 <= 0n) return undefined
+	return (amount2 * 10n ** OPEN_ORACLE_PRICE_DECIMALS) / amount1
+}
+
+/**
+ * Rounds a fixed-point price to a few significant digits for an editable input. The whole-number part is never rounded,
+ * and the fraction keeps enough digits to show `significantDigits` meaningful figures for small prices.
+ */
+export function formatOpenOraclePriceInput(value: bigint, decimals: number, significantDigits = 6) {
+	if (value <= 0n) return '0'
+	const base = 10n ** BigInt(decimals)
+	const whole = value / base
+	const wholeDigits = whole === 0n ? 0 : whole.toString().length
+	const fractionDigits = (() => {
+		if (whole > 0n) return Math.max(0, significantDigits - wholeDigits)
+		const fraction = (value % base).toString().padStart(decimals, '0')
+		const leadingZeros = fraction.length - fraction.replace(/^0+/, '').length
+		return leadingZeros + significantDigits
+	})()
+	const keptDigits = Math.min(fractionDigits, decimals)
+	const scale = 10n ** BigInt(decimals - keptDigits)
+	const rounded = (value + scale / 2n) / scale
+	const roundedBase = 10n ** BigInt(keptDigits)
+	const roundedWhole = rounded / roundedBase
+	const roundedFraction = keptDigits === 0 ? '' : (rounded % roundedBase).toString().padStart(keptDigits, '0').replace(/0+$/, '')
+	return roundedFraction === '' ? roundedWhole.toString() : `${roundedWhole.toString()}.${roundedFraction}`
 }

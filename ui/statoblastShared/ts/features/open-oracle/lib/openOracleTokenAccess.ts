@@ -3,6 +3,7 @@ import { ABIS } from '@zoltar/ui-core-shared/abis.js'
 import { isRecoverableContractReadError } from '@zoltar/ui-core-shared/lib/errors.js'
 import { formatTokenApprovalUnavailableMessage, type TokenApprovalRequirement, type TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
 import { toBigIntReadResult } from '@zoltar/ui-core-shared/lib/optionalReadResult.js'
+import * as openOracleCopy from '../../../copy/openOracle.js'
 
 export type OpenOracleReadClient = {
 	getBalance: (parameters: { address: Address }) => Promise<bigint>
@@ -20,15 +21,31 @@ function parseTokenDecimals(value: unknown) {
 
 type CreateTokenDecimalsReadResult = { decimals: number; status: 'success' } | { message: string; status: 'failure' }
 
-export async function readCreateTokenDecimals(readClient: OpenOracleReadClient, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenDecimalsReadResult> {
+export async function readCreateTokenDecimals(readClient: Pick<OpenOracleReadClient, 'readContract'>, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenDecimalsReadResult> {
 	try {
 		const value = await readClient.readContract({ abi: ABIS.mainnet.erc20, address, args: [], functionName: 'decimals' })
 		const decimals = parseTokenDecimals(value)
-		return decimals === undefined ? { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' } : { decimals, status: 'success' }
+		return decimals === undefined ? { message: openOracleCopy.formatTokenMetadataUnreadable(label), status: 'failure' } : { decimals, status: 'success' }
 	} catch (error) {
 		if (!isRecoverableContractReadError(error)) throw error
-		return { message: `${label} token address is not a readable ERC-20 contract.`, status: 'failure' }
+		return { message: openOracleCopy.formatTokenMetadataUnreadable(label), status: 'failure' }
 	}
+}
+
+export type CreateTokenMetadataReadResult = { decimals: number; status: 'success'; symbol: string | undefined } | { message: string; status: 'failure' }
+
+/** Reads the decimals the create form needs to validate amounts and the symbol it shows as the amount unit; a missing symbol is not an error. */
+export async function readCreateTokenMetadata(readClient: Pick<OpenOracleReadClient, 'readContract'>, address: Address, label: 'Base' | 'Quote'): Promise<CreateTokenMetadataReadResult> {
+	const decimalsResult = await readCreateTokenDecimals(readClient, address, label)
+	if (decimalsResult.status === 'failure') return decimalsResult
+	const symbol = await readClient.readContract({ abi: ABIS.mainnet.erc20, address, args: [], functionName: 'symbol' }).then(
+		value => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined),
+		(error: unknown) => {
+			if (!isRecoverableContractReadError(error)) throw error
+			return undefined
+		},
+	)
+	return { decimals: decimalsResult.decimals, status: 'success', symbol }
 }
 
 export type TokenAccessLoadResult = {
@@ -47,7 +64,7 @@ export type RefreshOpenOracleTokenAccessOptions = {
 	preserveExisting?: boolean
 }
 
-export function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAmount, requirement, tokenLabel }: { approvalError: string | undefined; explicitAmount: bigint | undefined; requirement: TokenApprovalRequirement; tokenLabel: 'base token' | 'quote token' }) {
+export function getRefreshedOpenOracleApprovalAmount({ approvalError, explicitAmount, requirement, tokenLabel }: { approvalError: string | undefined; explicitAmount: bigint | undefined; requirement: TokenApprovalRequirement; tokenLabel: string }) {
 	if (requirement.requiredAmount === undefined || requirement.requiredAmount <= 0n) throw new Error(`No ${tokenLabel} approval is required for the refreshed report`)
 	if (requirement.approvedAmount === undefined) {
 		throw new Error(

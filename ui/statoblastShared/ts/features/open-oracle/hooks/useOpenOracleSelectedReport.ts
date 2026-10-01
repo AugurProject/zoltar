@@ -12,6 +12,7 @@ import type { OpenOracleFormState } from '../../../types/app.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import { isOpenOracleReportMissingError } from '../../../protocol/openOracle.js'
 import { getDefaultOpenOracleFormState } from '../lib/formDefaults.js'
+import { getOpenOracleDisputeFormDefaults } from '../lib/openOracleDispute.js'
 import type { OpenOracleReportLookupState } from '../../oracleTypes.js'
 
 type LoadedOracleReportResult = {
@@ -74,10 +75,14 @@ export function useOpenOracleSelectedReport({
 	}
 
 	const applyLoadedOracleReport = (details: OpenOracleReportDetails) => {
+		const previousDetails = openOracleReportDetails.value
+		// A dispute or a different report changes the required amounts, so amounts typed for the earlier state start over.
+		const disputeStateChanged = previousDetails === undefined || previousDetails.reportId !== details.reportId || previousDetails.currentAmount1 !== details.currentAmount1 || previousDetails.reportTimestamp !== details.reportTimestamp
 		openOracleReportDetails.value = details
 		loadedOpenOracleReportId.value = details.reportId
 		openOracleForm.value = {
 			...openOracleForm.value,
+			...(disputeStateChanged ? getOpenOracleDisputeFormDefaults(details) : {}),
 			reportId: details.reportId.toString(),
 			stateHash: details.stateHash,
 		}

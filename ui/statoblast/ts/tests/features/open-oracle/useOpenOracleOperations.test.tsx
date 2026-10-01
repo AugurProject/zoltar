@@ -33,6 +33,7 @@ type OpenOracleApprovalTestCase = {
 	requiredAmount: bigint
 	token: 'token1' | 'token2'
 	tokenLabel: 'base token' | 'quote token'
+	tokenSymbol: 'REP' | 'WETH'
 	underRequiredAmount: bigint
 }
 
@@ -40,7 +41,7 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 	{
 		action: 'approveToken1',
 		allowanceKey: 'token1Approval',
-		changedContributionMessage: 'The required base token approval changed',
+		changedContributionMessage: 'The required REP approval changed',
 		currentUnderwritingLimitAttoEth: 100n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '25',
@@ -48,12 +49,13 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		requiredAmount: 201n,
 		token: 'token1',
 		tokenLabel: 'base token',
+		tokenSymbol: 'REP',
 		underRequiredAmount: 150n,
 	},
 	{
 		action: 'approveToken2',
 		allowanceKey: 'token2Approval',
-		changedContributionMessage: 'The required quote token approval changed',
+		changedContributionMessage: 'The required WETH approval changed',
 		currentUnderwritingLimitAttoEth: 25n,
 		disputeNewAmount1: '101',
 		disputeNewAmount2: '26',
@@ -61,6 +63,7 @@ const OPEN_ORACLE_APPROVAL_TEST_CASES = [
 		requiredAmount: 51n,
 		token: 'token2',
 		tokenLabel: 'quote token',
+		tokenSymbol: 'WETH',
 		underRequiredAmount: 30n,
 	},
 ] satisfies ReadonlyArray<OpenOracleApprovalTestCase>
@@ -607,7 +610,7 @@ describe('useOpenOracleOperations', () => {
 
 		expect(approveErc20).not.toHaveBeenCalled()
 		expect(reportLoadCount).toBe(2)
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('would swap out WETH, not REP')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('The refreshed report changes this dispute to swap out WETH instead of REP')
 	})
 
 	for (const approvalCase of OPEN_ORACLE_APPROVAL_TEST_CASES) {
@@ -652,7 +655,7 @@ describe('useOpenOracleOperations', () => {
 
 			expect(approveErc20).not.toHaveBeenCalled()
 			expect(tokenAccessLoadCount).toBe(2)
-			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(`Unable to verify ${approvalCase.tokenLabel} approval before submitting this approval`)
+			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain(`Unable to verify ${approvalCase.tokenSymbol} approval before submitting this approval`)
 			expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('allowance RPC unavailable')
 		})
 
@@ -748,12 +751,12 @@ describe('useOpenOracleOperations', () => {
 		for (const rejectionCase of [
 			{
 				amount: approvalCase.currentUnderwritingLimitAttoEth,
-				expectedMessage: `The ${approvalCase.tokenLabel} approval must increase the current allowance`,
+				expectedMessage: `The ${approvalCase.tokenSymbol} approval must increase the current allowance`,
 				name: 'non-increasing explicit approval',
 			},
 			{
 				amount: approvalCase.underRequiredAmount,
-				expectedMessage: `The ${approvalCase.tokenLabel} approval must cover the refreshed dispute requirement`,
+				expectedMessage: `The ${approvalCase.tokenSymbol} approval must cover the refreshed dispute requirement`,
 				name: 'under-required explicit approval',
 			},
 		]) {
@@ -844,7 +847,7 @@ describe('useOpenOracleOperations', () => {
 
 		expect(approveErc20).not.toHaveBeenCalled()
 		expect(reportLoadCount).toBe(2)
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('No quote token approval is required for the refreshed report')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toContain('No WETH approval is required for the refreshed report')
 	})
 
 	test('approval failures use base and quote token terminology', async () => {
@@ -1611,7 +1614,7 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).disputeReport()
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('These amounts would swap out WETH, not REP. Select WETH or change the proposed price')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('The refreshed report changes this dispute to swap out WETH instead of REP. Review the refreshed report and try again')
 		expect(readOptionalMulticall).toHaveBeenCalledTimes(tokenAccessLoadsBeforeDispute)
 		expect(disputeOracleReport).not.toHaveBeenCalled()
 	})
@@ -2107,5 +2110,42 @@ describe('useOpenOracleOperations', () => {
 
 		expect(disputeOracleReport).toHaveBeenCalledTimes(1)
 		expect(requireHookState(hookState).openOracleFeedback?.status.tone).toBe('success')
+	})
+
+	test('starts dispute inputs at the required base amount and clears them when the report state changes', async () => {
+		let loadedReport = createOpenOracleReportDetails()
+		const dependencies = createOpenOracleOperationsDependencies({
+			loadOpenOracleReportDetails: mock(async () => loadedReport),
+		})
+		let hookState: UseOpenOracleOperationsState | undefined
+		const Harness = createHarness(dependencies, state => {
+			hookState = state
+		})
+		const renderedComponent = await renderIntoDocument(h(Harness, {}))
+		trackCleanup(renderedComponent.cleanup)
+
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		// Past the escalation halt the next dispute must post one more base unit than the current 100.
+		expect(requireHookState(hookState).openOracleForm.disputeNewAmount1).toBe('101')
+		expect(requireHookState(hookState).openOracleForm.disputeNewAmount2).toBe('')
+
+		await act(() => {
+			requireHookState(hookState).setOpenOracleForm(current => ({ ...current, disputeNewAmount2: '30' }))
+		})
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		// Refreshing an unchanged report keeps what the user typed.
+		expect(requireHookState(hookState).openOracleForm.disputeNewAmount2).toBe('30')
+
+		loadedReport = createOpenOracleReportDetails({ currentAmount1: 101n, currentAmount2: 30n, reportTimestamp: 5n })
+		await act(async () => {
+			await requireHookState(hookState).loadOracleReport(REPORT_ID.toString())
+		})
+		// A dispute landed, so the amounts typed for the earlier state are replaced by the new requirement.
+		expect(requireHookState(hookState).openOracleForm.disputeNewAmount1).toBe('102')
+		expect(requireHookState(hookState).openOracleForm.disputeNewAmount2).toBe('')
 	})
 })
