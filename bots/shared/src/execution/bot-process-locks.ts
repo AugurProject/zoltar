@@ -27,7 +27,7 @@ export type BotProcessLockOptions = {
 }
 
 const defaultLockAcquirers = (label: string): BotProcessLockAcquirers => ({
-	acquireSigner: acquireExecutionSignerLock,
+	acquireSigner: (chainId, address, lockRoot) => acquireExecutionSignerLock(chainId, address, label, lockRoot),
 	acquireState: stateFile => acquireFileProcessLock(stateFile, `${label} state`),
 })
 

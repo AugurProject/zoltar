@@ -168,8 +168,9 @@ function executionSignerLockPath(chainId: number, account: Address, lockRoot = s
 	return join(resolve(lockRoot), `${chainId.toString()}-${signer.toLowerCase()}.lock`)
 }
 
-export function acquireExecutionSignerLock(chainId: number, account: Address, lockRoot?: string, filesystem?: ProcessLockFilesystem) {
+export function acquireExecutionSignerLock(chainId: number, account: Address, bot: string, lockRoot?: string, filesystem?: ProcessLockFilesystem) {
+	if (bot.trim() === '') throw new Error('Execution signer lock bot name cannot be empty')
 	const signer = getAddress(account)
 	const lockPath = executionSignerLockPath(chainId, signer, lockRoot)
-	return acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { chainId, signer }, filesystem)
+	return acquireExclusiveProcessLock(lockPath, `Execution signer ${signer} on chain ${chainId.toString()}`, { bot, chainId, signer }, filesystem)
 }

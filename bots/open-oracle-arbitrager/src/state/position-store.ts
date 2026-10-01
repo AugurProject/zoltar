@@ -561,7 +561,7 @@ export function acquirePositionJournalLock(path: string) {
 }
 
 export function acquireExecutionSignerLock(chainId: number, account: Address) {
-	return acquireSharedExecutionSignerLock(chainId, account)
+	return acquireSharedExecutionSignerLock(chainId, account, 'open-oracle-arbitrager')
 }
 
 export async function savePositionJournalState(path: string, state: PositionJournalState, chainId: number, filesystem?: PositionJournalFilesystem) {
