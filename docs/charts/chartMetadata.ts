@@ -9,7 +9,7 @@ export const quantitativeChartMetadata = {
 		width: 980,
 	},
 	'fig-statoblast-escalation-cost-curve': {
-		ariaDescription: 'Required support threshold is zero on days 0–2, starts at the configured start bond on day 3, follows the contract fixed-point attrition curve, and reaches the configured non-decision threshold on day 52; this curve is not the minimum individual deposit.',
+		ariaDescription: 'Required support threshold is zero through day 3, starts at the configured start bond just after day 3, follows the contract fixed-point attrition curve, and reaches the configured non-decision threshold on day 52; this curve is not the minimum individual deposit.',
 		ariaLabel: 'Contract fixed-point required support threshold from day 0 to day 52',
 		height: 300,
 		width: 860,
@@ -25,11 +25,5 @@ export const quantitativeChartMetadata = {
 		ariaLabel: 'Theoretical REP supply and fork threshold across repeated forks',
 		height: 420,
 		width: 900,
-	},
-	'fig-statoblast-collateral-repair': {
-		ariaDescription: 'Child collateral repair progress',
-		ariaLabel: 'Child collateral repair progress',
-		height: 170,
-		width: 760,
 	},
 } satisfies Record<string, ChartMetadata>

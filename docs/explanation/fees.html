@@ -3,28 +3,35 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Protocol fees</title>
+		<title>Open-interest fees</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
 	</head>
 	<body class="doc-openoracle">
 		<main>
 			<header>
-				<h1>Protocol fees</h1>
+				<h1>Open-interest fees</h1>
+				<p>Each SecurityPool charges an open-interest fee on its outstanding <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a> and pays it to the vaults that underwrite that collateral. The contracts express the fee as <a href="../reference/glossary.html#retention">retention</a>: the per-second fraction of collateral that stays with complete-set holders.</p>
 			</header>
-			<section>
-				<p>Vault owners provide REP-backed security capacity, maintain vault health, and may need to participate in reporting and migration. In return, fee-eligible ETH commitments earn a share of the time-based fees charged to outstanding complete-set collateral.</p>
-				<p>Complete-set collateral gradually decays into an unallocated fee reserve. Fee-eligible vaults accrue fees in proportion to their standing ETH limits. The retention rate falls as utilization rises, so security becomes more expensive as open interest consumes underwriting slack.</p>
-				<p>Retention follows a piecewise heuristic: the per-second retention rate declines linearly as utilization grows and stops declining once utilization passes a dip point, so the annualized fee rises from its floor to its ceiling and then holds; the <a href="../reference/contracts/securitypool.html#retention-rate-and-annualized-fee">SecurityPool reference</a> prints both rates. The <a href="../reference/contracts/securitypool.html#retention-rate-and-annualized-fee">SecurityPool reference</a> lists the on-chain constants and the formula clients use to annualize the rate.</p>
+			<section id="why-fees-exist">
+				<h2>Why the fee exists</h2>
+				<p>Vault owners provide REP-backed security, keep their vaults healthy, and may need to take part in reporting and migration. In return, each fee-eligible <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a> earns a share of the fee in proportion to its size. Collateral gradually decays into an unallocated fee reserve, and vault owners claim their shares from that reserve.</p>
+			</section>
+			<section id="rate">
+				<h2>How the rate moves</h2>
+				<p>The rate depends on utilization: settlement collateral divided by minting capacity, which equals the pool's total underwriting commitments, independent of price and backing. The per-second retention rate declines linearly as utilization rises and stops declining at a dip point, so the annualized fee rises from its floor to its ceiling and then holds. Security therefore becomes more expensive as open interest consumes underwriting slack.</p>
 				<figure class="diagram" id="fig-statoblast-retention-utilization">
 					<div class="plot-chart" data-plot-chart="fig-statoblast-retention-utilization" data-plot-width="900" data-plot-height="420" role="img" aria-label="Annualized open-interest fee across minting-capacity utilization"><span class="plot-chart-fallback">Retention and utilization curve. The annualized fee rises from its minimum at zero utilization to its maximum at the dip point, then remains flat.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Annualized fee against utilization.</span> Past the dip point the per-second retention rate is already at its minimum, so the fee stops rising.</p>
 				</figure>
-
-				<p>An empty pool earns no settlement fees. Fees charge only the fraction of settlement collateral assigned to fee-eligible commitments. Retained underbacked vault commitments keep earning fees; previously earned fees remain claimable. No-purchase auction commitments remain visible but have no fee recipient and earn no rewards until a receiver explicitly accepts the entire residual commitment and backing. The receiver must fully back its resulting limit; fee eligibility starts at takeover, without retroactive rewards. Ordinary redemption reduces settlement collateral without retiring standing limits.</p>
-				<p>Fee accrual is lazy: state-changing pool operations checkpoint the global fee index, and vault operations checkpoint each vault against that index. Fractional amounts remain in explicit remainders until they accumulate into whole attoETH, so callers do not need to iterate over every vault when time advances.</p>
-				<p>Fee accrual is time-clamped. An initial pool uses question end as its fee cutoff. If its question remains unresolved when the universe forks, fork time replaces that cutoff; a later unrelated fork does not reopen fees for an already finalized question. A child starts a new epoch when migration and any Truth Auction finalize, then accrues until local resolution or another fork; a child with a fixed outcome and no continuation game accrues no further fees.</p>
-				<p>Migrated commitments and sold auction commitments enter the fee denominator at finalization, even when a winning bidder claims later. The pool preserves each owner's accrued share while assigning late claims and reconciling rounding remainders. See the <a href="../reference/operator-guardrails.html#security-pool-guardrails">subsystem guardrails</a> for checkpoint and fork-reconciliation sequencing and the <a href="../reference/contracts/securitypool.html">SecurityPool contract reference</a> for exact state transitions.</p>
+				<p>Minting capacity is zero when the pool has no commitments or once an Escalation Game has opened. The rate then resets to its floor (<code>MAX_RETENTION_RATE</code>, the lowest fee) instead of treating the pool as fully utilized. The <a href="../reference/contracts/securitypool.html#retention-rate-and-annualized-fee">SecurityPool reference</a> lists the constants, the dip point, and the formula clients use to annualize the rate.</p>
+			</section>
+			<section id="earning-and-cutoff">
+				<h2>Who earns and when accrual stops</h2>
+				<p>An empty pool earns no fees. Fees charge only the fraction of settlement collateral assigned to fee-eligible commitments. Retained underbacked commitments keep earning fees, and previously earned fees remain claimable. Ordinary redemption reduces settlement collateral without retiring underwriting commitments.</p>
+				<p>When a child pool's <a href="../reference/glossary.html#truth-auction">Truth Auction</a> finalizes with no purchases, its unassigned commitment stays visible but has no fee recipient until a receiver takes over the entire residual commitment and backing and fully backs the result. Fee eligibility starts at takeover, without retroactive rewards. Migrated commitments and sold auction commitments enter the fee denominator at finalization, even when a winning bidder claims later.</p>
+				<p>Accrual stops at a cutoff. An initial pool uses question end. If its question remains unresolved when the universe forks, fork time replaces that cutoff; a later unrelated fork does not reopen fees for an already finalized question. A child starts a new epoch when migration and any Truth Auction finalize, then accrues until local resolution or another fork; a child with a fixed outcome and no continuation game accrues no further fees.</p>
+				<p>Accrual is lazy: state-changing pool operations checkpoint a global fee index, and vault operations checkpoint each vault against it, so no call iterates over every vault. Fractional amounts wait in explicit remainders until they reach whole attoETH. See the <a href="../reference/operator-guardrails.html#security-pool-guardrails">subsystem guardrails</a> for checkpoint and fork-reconciliation sequencing and the <a href="../reference/contracts/securitypool.html">SecurityPool contract reference</a> for exact state transitions.</p>
 			</section>
 		</main>
 

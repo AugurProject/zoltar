@@ -13,20 +13,29 @@
 			<header>
 				<p class="kicker">How-to guide</p>
 				<h1>Handle resolution</h1>
-				<p>Once an authoritative outcome exists, swaps and liquidity additions are closed but every asset you hold still has a defined exit. This guide takes each one in turn.</p>
+				<p>Once a market's question has ended, swaps and liquidity additions are closed, but every asset you hold still has an exit. Use this guide to turn LP tokens, complete sets, and winning shares back into ETH.</p>
 			</header>
 			<section id="steps">
 				<h2>Unwind after resolution</h2>
 				<ol>
-					<li>Remove LP into raw YES and NO (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
-					<li>If the wallet holds complete sets and the pool still permits the operational path, redeem them explicitly.</li>
-					<li>Redeem the winning share through <code>SecurityPool.redeemShares</code>.</li>
+					<li>Remove your LP tokens from the <a href="../reference/glossary.html#trading-pool">trading pool</a> into Yes and No shares (<a href="./trading-remove-liquidity.html">Remove liquidity</a>).</li>
+					<li>Redeem matching Invalid, Yes, and No as <a href="../reference/glossary.html#complete-set">complete sets</a> while the <a href="../reference/glossary.html#security-pool">SecurityPool</a> still allows it.</li>
+					<li>After the market finalizes, redeem the winning share through <code>SecurityPool.redeemShares</code>.</li>
 				</ol>
-				<p>On an INVALID result, INVALID is the only winning share. Raw YES and NO balances, including pair fee accrual, are not valuable merely because they are nonzero. An interface must show the exact YES, NO, or INVALID result and never infer it from reserve prices.</p>
+				<p>On an Invalid result, Invalid is the only winning share. Yes and No balances, including pool fees earned as LP, are worth nothing once they lose.</p>
 			</section>
 			<section id="in-the-ui">
-				<h2>In the live UI</h2>
-				<p>In the market view, open the <strong>Settlement</strong> tab and, under <strong>Settlement operation</strong>, select <strong>Redeem YES</strong> (or whichever outcome won). Select <strong>Simulate authoritative settlement</strong>, then <strong>Submit settlement transaction</strong>. Submitting <strong>Redeem YES</strong> redeems the wallet's entire winning-share balance for the exact SecurityPool through <code>redeemShares</code>. Submission simulates again at the latest block and stops if the redemption would now fail. Choose <strong>Complete set</strong> instead to redeem an explicitly entered amount of matching INVALID, YES, and NO.</p>
+				<h2>In the UI</h2>
+				<p>Open the market. A closed market opens on its <strong>Settlement</strong> tab.</p>
+				<ul>
+					<li>To redeem complete sets, select <strong>Complete set</strong>, enter the ETH value in <strong>Complete-set value to redeem</strong>, check <strong>You receive ≈</strong>, and select <strong>Redeem complete sets</strong>.</li>
+					<li>Once the market finalizes, a <strong>Redeem YES</strong>, <strong>Redeem NO</strong>, or <strong>Redeem INVALID</strong> option appears for the winning outcome. It redeems your entire balance of that share through this exact SecurityPool. Before finalization the option is absent.</li>
+				</ul>
+				<figure class="screenshot" id="fig-trading-settlement" aria-labelledby="fig-trading-settlement-caption">
+					<a class="screenshot-link" href="../assets/screenshots/trading/settlement.png"><img width="480" height="659" src="../assets/screenshots/trading/settlement.png" alt="The Settlement tab of an ended market with Complete set selected, 0.001 ETH entered as the complete-set value to redeem, an estimate of about 0.0009 ETH received, and an enabled Redeem complete sets button." loading="lazy" /></a>
+					<figcaption id="fig-trading-settlement-caption"><span class="figure-label">Settlement after the question ends.</span> The market has not finalized yet, so only complete-set redemption and fork migration are offered.</figcaption>
+				</figure>
+				<p>Every settlement transaction is simulated again at the latest block before your wallet opens, and stops if it would now fail.</p>
 			</section>
 		</main>
 		<script src="../assets/js/responsiveDocs.js"></script>

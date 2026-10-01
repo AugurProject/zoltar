@@ -41,9 +41,9 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 					),
 					equation(
 						'eq-escalation-required-support',
-						`required support is zero before day ${activationDay}, the start bond on day ${activationDay}, an exponential interpolation from the start bond to the non-decision threshold between days ${activationDay} and ${finalDay}, and the threshold from day ${finalDay} onward`,
-						`A(d) = 0 for 0 ≤ d < ${activationDay}; S for d = ${activationDay}; S × exp(ln(T / S) × (d − ${activationDay}) / ${escalationDays}) for ${activationDay} < d < ${finalDay}; T for d ≥ ${finalDay}`,
-						`<mtable><mtr><mtd><mi>A</mi><mo>(</mo><mi>d</mi><mo>)</mo></mtd><mtd><mo>=</mo></mtd><mtd><mn>0</mn></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mn>0</mn><mo>≤</mo><mi>d</mi><mo>&lt;</mo><mn>${activationDay}</mn></mtd></mtr><mtr><mtd></mtd><mtd><mo>=</mo></mtd><mtd><mi>S</mi></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mi>d</mi><mo>=</mo><mn>${activationDay}</mn></mtd></mtr><mtr><mtd></mtd><mtd><mo>=</mo></mtd><mtd><mstyle displaystyle="true"><mi>S</mi><mo>×</mo><mi>exp</mi><mo>(</mo><mi>ln</mi><mo>(</mo><mfrac><mi>T</mi><mi>S</mi></mfrac><mo>)</mo><mo>×</mo><mfrac><mrow><mi>d</mi><mo>−</mo><mn>${activationDay}</mn></mrow><mn>${escalationDays}</mn></mfrac><mo>)</mo></mstyle></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mn>${activationDay}</mn><mo>&lt;</mo><mi>d</mi><mo>&lt;</mo><mn>${finalDay}</mn></mtd></mtr><mtr><mtd></mtd><mtd><mo>=</mo></mtd><mtd><mi>T</mi></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mi>d</mi><mo>≥</mo><mn>${finalDay}</mn></mtd></mtr></mtable>`,
+						`required support is zero through day ${activationDay}, then an exponential interpolation that starts at the start bond and reaches the non-decision threshold on day ${finalDay}, and the threshold from day ${finalDay} onward`,
+						`A(d) = 0 for 0 ≤ d ≤ ${activationDay}; S × exp(ln(T / S) × (d − ${activationDay}) / ${escalationDays}) for ${activationDay} < d < ${finalDay}; T for d ≥ ${finalDay}`,
+						`<mtable><mtr><mtd><mi>A</mi><mo>(</mo><mi>d</mi><mo>)</mo></mtd><mtd><mo>=</mo></mtd><mtd><mn>0</mn></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mn>0</mn><mo>≤</mo><mi>d</mi><mo>≤</mo><mn>${activationDay}</mn></mtd></mtr><mtr><mtd></mtd><mtd><mo>=</mo></mtd><mtd><mstyle displaystyle="true"><mi>S</mi><mo>×</mo><mi>exp</mi><mo>(</mo><mi>ln</mi><mo>(</mo><mfrac><mi>T</mi><mi>S</mi></mfrac><mo>)</mo><mo>×</mo><mfrac><mrow><mi>d</mi><mo>−</mo><mn>${activationDay}</mn></mrow><mn>${escalationDays}</mn></mfrac><mo>)</mo></mstyle></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mn>${activationDay}</mn><mo>&lt;</mo><mi>d</mi><mo>&lt;</mo><mn>${finalDay}</mn></mtd></mtr><mtr><mtd></mtd><mtd><mo>=</mo></mtd><mtd><mi>T</mi></mtd><mtd><mtext>for</mtext><mspace width="0.3em"></mspace><mi>d</mi><mo>≥</mo><mn>${finalDay}</mn></mtd></mtr></mtable>`,
 					),
 				],
 			},
@@ -51,10 +51,10 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Winning-deposit payout',
 				blocks: [
 					paragraph(
-						`Binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by \`EXCESS_REWARD_WINDOW_DIVISOR\` (${escalationRules.excessRewardWindowDivisor}), so only the portion of winning deposits up to ${capCeilingFactor} × binding capital participates in the bonus. Of the binding capital, \`${escalationRules.rewardPoolNumerator} / ${escalationRules.poolDenominator}\` funds the reward pool and \`${escalationRules.haircutPoolNumerator} / ${escalationRules.poolDenominator}\` funds the haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.`,
+						`Binding capital is the median outcome balance at settlement; no outcome balance can exceed the non-decision threshold. The reward-eligible cap is binding capital plus binding capital divided by \`EXCESS_REWARD_WINDOW_DIVISOR\` (${escalationRules.excessRewardWindowDivisor}), so only the portion of winning deposits up to ${capCeilingFactor} × binding capital participates in the bonus. Of the binding capital, \`${escalationRules.rewardPoolNumerator} / ${escalationRules.poolDenominator}\` funds the reward pool and \`${escalationRules.haircutPoolNumerator} / ${escalationRules.poolDenominator}\` funds the escalation-haircut pool; both are shared pro rata across the reward-eligible principal, which is the smaller of the winning outcome balance and that cap.`,
 					),
 					paragraph(
-						`Let binding capital be \`${rep(example.bindingCapitalAttoRep)} REP\`, so the reward-eligible cap is \`${rep(payout.rewardEligibleCapAttoRep)} REP\`, the reward pool is \`${rep(payout.rewardPoolAttoRep)} REP\`, and the haircut pool is \`${rep(payout.haircutPoolAttoRep)} REP\`. If the winning outcome holds \`${rep(example.winningOutcomeBalanceAttoRep)} REP\` and one deposit contributed \`${rep(example.depositAmountAttoRep)} REP\` inside the eligible range:`,
+						`Let binding capital be \`${rep(example.bindingCapitalAttoRep)} REP\`, so the reward-eligible cap is \`${rep(payout.rewardEligibleCapAttoRep)} REP\`, the reward pool is \`${rep(payout.rewardPoolAttoRep)} REP\`, and the escalation-haircut pool is \`${rep(payout.haircutPoolAttoRep)} REP\`. If the winning outcome holds \`${rep(example.winningOutcomeBalanceAttoRep)} REP\` and one deposit contributed \`${rep(example.depositAmountAttoRep)} REP\` inside the eligible range:`,
 					),
 					list(
 						`Principal returned: \`${rep(example.depositAmountAttoRep)} REP\`.`,
@@ -76,7 +76,7 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Retention rate and annualized fee',
 				blocks: [
 					paragraph(
-						`\`SecurityPoolUtils.calculateRetentionRate\` returns a per-second retention factor scaled by \`PRICE_PRECISION\` (\`1e18\`). It equals \`MAX_RETENTION_RATE\` at zero utilization, declines linearly until utilization reaches \`RETENTION_RATE_DIP\` (${retentionRules.dipUtilizationPercent}% of minting capacity, which is total standing ETH commitments outside an escalation game), and stays at \`MIN_RETENTION_RATE\` above that. Zero minting capacity selects \`MAX_RETENTION_RATE\`.`,
+						`\`SecurityPoolUtils.calculateRetentionRate\` returns a per-second retention factor scaled by \`PRICE_PRECISION\` (\`1e18\`). It equals \`MAX_RETENTION_RATE\` at zero utilization, declines linearly until utilization reaches \`RETENTION_RATE_DIP\` (${retentionRules.dipUtilizationPercent}% of minting capacity, which is total underwriting commitments outside an escalation game), and stays at \`MIN_RETENTION_RATE\` above that. Zero minting capacity selects \`MAX_RETENTION_RATE\`.`,
 					),
 					list(
 						`\`MAX_RETENTION_RATE = ${formatUnderscored(retentionRules.maxRetentionRate)}\`, about a ${percent(annualizedFeePercent(retentionRules.maxRetentionRate))} yearly fee.`,
@@ -95,10 +95,10 @@ const accountingExamplesByContract: ReadonlyMap<string, readonly AccountingExamp
 				heading: 'Liquidation transfer rounding',
 				blocks: [
 					paragraph(
-						`A liquidation request bounds the standing ETH commitment transferred, capped by the target limit. The nominal REP award includes \`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps} (${formatBps(liquidationRules.repBonusBps)}). REP and backing units round upward before the award is capped at available units. The receiver is checked against its entire resulting limit and backing-unit position. Total ETH commitments remain constant, including at zero settlement collateral. Target claims and earned fees remain with their owners.`,
+						`A liquidation request bounds the underwriting commitment transferred, capped by the target’s underwriting commitment. The nominal REP award includes \`LIQUIDATION_REP_BONUS_BPS\` = ${liquidationRules.repBonusBps} (${formatBps(liquidationRules.repBonusBps)}). REP and backing units round upward before the award is capped at available units. The receiver is checked against its entire resulting underwriting commitment and backing-unit position. Total underwriting commitments remain constant, including at zero settlement collateral. Target claims and earned fees remain with their owners.`,
 					),
 					paragraph(
-						'No liquidation writes off a commitment. An untransferred residual stays visible and continues earning fees. A fully backed receiver can accept the entire target limit even when the nominal REP award is not fully funded. Partial transfers reserve available target REP for the minimum balance, and the remaining commitment must be zero or meet the commitment floor.',
+						'No liquidation writes off a commitment. An untransferred residual stays visible and continues earning fees. A fully backed receiver can accept the target’s entire underwriting commitment even when the nominal REP award is not fully funded. Partial transfers reserve available target REP for the minimum balance, and the remaining commitment must be zero or meet the commitment floor.',
 					),
 				],
 			},

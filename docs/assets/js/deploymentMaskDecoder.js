@@ -34,17 +34,22 @@ function validateManifest(manifest) {
     throw new TypeError("Deployment manifest must contain between 1 and 256 tracked steps");
   return tracked;
 }
-var mappingBody = requiredElement(document, "#deployment-status-bit-mapping", HTMLTableSectionElement);
-var sepoliaMappingBody = requiredElement(document, "#sepolia-deployment-status-bit-mapping", HTMLTableSectionElement);
 var decoder = requiredElement(document, "#deployment-mask-decoder", HTMLDetailsElement);
+var networkSelect = requiredElement(decoder, "[data-deployment-mask-network]", HTMLSelectElement);
 var maskInput = requiredElement(decoder, '[data-tool-input="deploymentMask"]', HTMLInputElement);
 var maskSummary = requiredElement(decoder, "[data-deployment-mask-summary]", HTMLOutputElement);
 var maskGuidance = requiredElement(decoder, "[data-deployment-mask-guidance]", HTMLElement);
 var retryButton = requiredElement(decoder, "[data-deployment-mask-retry]", HTMLButtonElement);
 var bitGrid = requiredElement(decoder, "[data-deployment-bit-grid]", HTMLElement);
-var manifestUrl = "../mainnet-deployment-addresses.json";
-var sepoliaManifestUrl = "../sepolia-deployment-addresses.json";
-var trackedSteps = [];
+var networks = {
+  mainnet: { body: requiredElement(document, "#deployment-status-bit-mapping", HTMLTableSectionElement), label: "Ethereum mainnet", manifestUrl: "../mainnet-deployment-addresses.json", steps: undefined },
+  sepolia: { body: requiredElement(document, "#sepolia-deployment-status-bit-mapping", HTMLTableSectionElement), label: "Sepolia", manifestUrl: "../sepolia-deployment-addresses.json", steps: undefined }
+};
+var networkIds = ["mainnet", "sepolia"];
+var loading = false;
+function selectedNetworkId() {
+  return networkSelect.value === "sepolia" ? "sepolia" : "mainnet";
+}
 function setToolUnavailable(unavailable) {
   if (unavailable)
     decoder.dataset["toolUnavailable"] = "true";
@@ -58,7 +63,7 @@ function setToolUnavailable(unavailable) {
 function renderMessageRow(body, message, linkUrl) {
   const row = document.createElement("tr");
   const cell = document.createElement("td");
-  cell.colSpan = body === mappingBody ? 4 : 3;
+  cell.colSpan = 4;
   cell.append(message);
   if (linkUrl !== undefined) {
     cell.append(document.createElement("br"));
@@ -72,6 +77,7 @@ function renderMessageRow(body, message, linkUrl) {
 }
 function createStepRow(step, bit) {
   const row = document.createElement("tr");
+  row.dataset["deploymentBit"] = String(bit);
   for (const [value, useCode] of [
     [String(bit), true],
     [step.id, true],
@@ -86,22 +92,26 @@ function createStepRow(step, bit) {
       cell.textContent = value;
     row.append(cell);
   }
+  const statusCell = document.createElement("td");
+  statusCell.dataset["deploymentBitStatus"] = String(bit);
+  row.append(statusCell);
   return row;
 }
-function renderMappingRows() {
-  const rows = trackedSteps.map((step, bit) => {
-    const row = createStepRow(step, bit);
-    row.dataset["deploymentBit"] = String(bit);
-    const statusCell = document.createElement("td");
-    statusCell.dataset["deploymentBitStatus"] = String(bit);
-    statusCell.textContent = "Clear";
-    row.append(statusCell);
-    return row;
-  });
-  mappingBody.replaceChildren(...rows);
+function statusCells(body) {
+  return Array.from(body.querySelectorAll("[data-deployment-bit-status]")).filter((cell) => cell instanceof HTMLTableCellElement);
 }
-function renderBitGrid() {
-  const buttons = trackedSteps.map((step, bit) => {
+function markOtherNetworksNotDecoded() {
+  for (const networkId of networkIds) {
+    if (networkId === selectedNetworkId())
+      continue;
+    for (const statusCell of statusCells(networks[networkId].body)) {
+      statusCell.textContent = "Not decoded · other network selected";
+      delete statusCell.dataset["maskState"];
+    }
+  }
+}
+function renderBitGrid(steps) {
+  const buttons = steps.map((step, bit) => {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset["deploymentBitToggle"] = String(bit);
@@ -121,22 +131,23 @@ function renderBitGrid() {
   });
   bitGrid.replaceChildren(...buttons);
 }
-async function loadSepoliaMapping() {
-  sepoliaMappingBody.setAttribute("aria-busy", "true");
-  renderMessageRow(sepoliaMappingBody, "Loading the canonical manifest…");
+async function loadNetwork(networkId) {
+  const network = networks[networkId];
+  network.body.setAttribute("aria-busy", "true");
+  renderMessageRow(network.body, "Loading the canonical manifest…");
   try {
-    const response = await fetch(sepoliaManifestUrl);
+    const response = await fetch(network.manifestUrl);
     if (!response.ok)
       throw new TypeError(`Could not load deployment manifest: ${response.status}`);
-    const steps = validateManifest(await response.json());
-    const rows = steps.map((step, bit) => createStepRow(step, bit));
-    sepoliaMappingBody.replaceChildren(...rows);
+    network.steps = validateManifest(await response.json());
+    network.body.replaceChildren(...network.steps.map((step, bit) => createStepRow(step, bit)));
   } catch (error) {
     if (!(error instanceof TypeError) && !(error instanceof SyntaxError))
       throw error;
-    renderMessageRow(sepoliaMappingBody, "Unable to load the deployment mapping. ", sepoliaManifestUrl);
+    network.steps = undefined;
+    renderMessageRow(network.body, "Unable to load the deployment mapping. ", network.manifestUrl);
   } finally {
-    sepoliaMappingBody.setAttribute("aria-busy", "false");
+    network.body.setAttribute("aria-busy", "false");
   }
 }
 function parseMask(source) {
@@ -146,10 +157,8 @@ function parseMask(source) {
   const mask = BigInt(normalized);
   return mask < 1n << 256n ? mask : undefined;
 }
-function markStatusesUnavailable() {
-  for (const statusCell of mappingBody.querySelectorAll("[data-deployment-bit-status]")) {
-    if (!(statusCell instanceof HTMLTableCellElement))
-      continue;
+function markStatusesUnavailable(body) {
+  for (const statusCell of statusCells(body)) {
     statusCell.textContent = "Unavailable · invalid mask";
     delete statusCell.dataset["maskState"];
   }
@@ -157,13 +166,16 @@ function markStatusesUnavailable() {
     button.removeAttribute("data-mask-state");
 }
 function updateDecoder() {
-  if (trackedSteps.length === 0 || maskInput.disabled)
+  const network = networks[selectedNetworkId()];
+  const steps = network.steps;
+  if (steps === undefined || maskInput.disabled)
     return;
+  markOtherNetworksNotDecoded();
   const source = maskInput.value.trim();
   const mask = parseMask(source);
   if (mask === undefined) {
     maskInput.setAttribute("aria-invalid", "true");
-    markStatusesUnavailable();
+    markStatusesUnavailable(network.body);
     const numeric = /^(?:0x[0-9a-f]+|[0-9]+)$/i.test(source);
     maskSummary.value = numeric ? "The value is larger than a uint256." : "Enter a non-negative decimal or hexadecimal integer.";
     maskGuidance.textContent = numeric ? "Use a value between 0 and 2²⁵⁶ − 1." : "Examples: 5, 0x5, or 0xff.";
@@ -172,9 +184,9 @@ function updateDecoder() {
   }
   maskInput.removeAttribute("aria-invalid");
   const deployedSteps = [];
-  for (const [bit, step] of trackedSteps.entries()) {
+  for (const [bit, step] of steps.entries()) {
     const isSet = (mask & 1n << BigInt(bit)) !== 0n;
-    const statusCell = mappingBody.querySelector(`[data-deployment-bit-status="${bit}"]`);
+    const statusCell = network.body.querySelector(`[data-deployment-bit-status="${bit}"]`);
     if (statusCell instanceof HTMLTableCellElement) {
       statusCell.textContent = isSet ? "Set · code present" : "Clear · no code";
       statusCell.dataset["maskState"] = isSet ? "set" : "clear";
@@ -187,46 +199,52 @@ function updateDecoder() {
     if (isSet)
       deployedSteps.push(step.label);
   }
-  const unknownBits = mask >> BigInt(trackedSteps.length);
-  maskSummary.value = deployedSteps.length === 0 ? `0 of ${trackedSteps.length} tracked steps have set bits.` : `${deployedSteps.length} of ${trackedSteps.length} tracked steps have set bits: ${deployedSteps.join(", ")}.`;
+  const unknownBits = mask >> BigInt(steps.length);
+  const scope = `${network.label}: `;
+  maskSummary.value = deployedSteps.length === 0 ? `${scope}0 of ${steps.length} tracked steps have set bits.` : `${scope}${deployedSteps.length} of ${steps.length} tracked steps have set bits: ${deployedSteps.join(", ")}.`;
   maskGuidance.textContent = unknownBits === 0n ? "No bits are set above the tracked manifest range." : `Additional untracked high bits are set (shifted value ${unknownBits.toString(16).toUpperCase()} hex). Verify the constructor event before interpreting them.`;
   decoder.dataset["widgetState"] = unknownBits === 0n ? "safe" : "warning";
 }
-async function loadMapping() {
-  mappingBody.setAttribute("aria-busy", "true");
-  renderMessageRow(mappingBody, "Loading the canonical manifest…");
+function applySelectedNetwork() {
+  if (loading)
+    return;
+  const network = networks[selectedNetworkId()];
+  maskInput.removeAttribute("aria-invalid");
+  if (network.steps === undefined) {
+    bitGrid.replaceChildren();
+    setToolUnavailable(true);
+    retryButton.hidden = false;
+    retryButton.disabled = false;
+    maskSummary.value = `The ${network.label} mapping is unavailable, so this mask cannot be decoded safely.`;
+    maskGuidance.textContent = "Retry to restore bit decoding and high-bit reporting.";
+    decoder.dataset["widgetState"] = "unsafe";
+    return;
+  }
+  renderBitGrid(network.steps);
+  retryButton.hidden = networkIds.every((networkId) => networks[networkId].steps !== undefined);
+  retryButton.disabled = false;
+  setToolUnavailable(false);
+  updateDecoder();
+}
+async function loadMappings() {
   setToolUnavailable(true);
   retryButton.hidden = true;
   retryButton.disabled = true;
   maskInput.removeAttribute("aria-invalid");
   maskSummary.value = "Loading the canonical mapping…";
   maskGuidance.textContent = "Decoder controls will be available when the mapping loads.";
+  loading = true;
   try {
-    const response = await fetch(manifestUrl);
-    if (!response.ok)
-      throw new TypeError(`Could not load deployment manifest: ${response.status}`);
-    trackedSteps = validateManifest(await response.json());
-    renderMappingRows();
-    renderBitGrid();
-    setToolUnavailable(false);
-    retryButton.disabled = false;
-    updateDecoder();
-  } catch (error) {
-    if (!(error instanceof TypeError) && !(error instanceof SyntaxError))
-      throw error;
-    trackedSteps = [];
-    bitGrid.replaceChildren();
-    renderMessageRow(mappingBody, "Unable to load the deployment mapping. ", manifestUrl);
-    setToolUnavailable(true);
-    retryButton.hidden = false;
-    retryButton.disabled = false;
-    maskSummary.value = "The canonical mapping is unavailable, so this mask cannot be decoded safely.";
-    maskGuidance.textContent = "Retry to restore bit decoding and high-bit reporting.";
-    decoder.dataset["widgetState"] = "unsafe";
+    await Promise.all(networkIds.map((networkId) => loadNetwork(networkId)));
   } finally {
-    mappingBody.setAttribute("aria-busy", "false");
+    loading = false;
   }
+  applySelectedNetwork();
 }
+networkSelect.addEventListener("change", applySelectedNetwork);
 maskInput.addEventListener("input", updateDecoder);
-retryButton.addEventListener("click", () => void loadMapping());
-var deploymentMaskDecoderReady = Promise.all([loadMapping(), loadSepoliaMapping()]);
+retryButton.addEventListener("click", () => {
+  if (!loading)
+    loadMappings();
+});
+var deploymentMaskDecoderReady = loadMappings();

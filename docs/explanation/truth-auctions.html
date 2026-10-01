@@ -11,29 +11,22 @@
 		<main>
 			<header>
 				<h1>Truth Auctions</h1>
-				<p>A child pool has 100 ETH of outstanding claims but receives only 70 ETH of settlement collateral through migration. Its Truth Auction tries to raise the missing 30 ETH by selling child REP.</p>
+				<p>When a <a href="../reference/glossary.html#universe">universe</a> forks, each unresolved Statoblast <a href="../reference/glossary.html#security-pool">SecurityPool</a> splits into child pools, one per child universe (<a href="./statoblast.html#forks-migration">forks and migration</a>). Each vault owner moves its REP and its share of the parent's <a href="../reference/glossary.html#settlement-collateral">settlement collateral</a> into one child of its choice, so a child receives only the collateral of the vaults that chose it. Suppose a child pool must back 100 ETH of <a href="../reference/glossary.html#open-interest">open interest</a> but receives only 70 ETH through migration. Its <a href="../reference/glossary.html#truth-auction">Truth Auction</a> tries to raise the missing 30 ETH by selling child REP.</p>
 				<ul>
 					<li><strong>Full repair:</strong> bidders contribute 30 ETH, so the child reaches its 100 ETH target.</li>
 					<li><strong>Partial repair:</strong> bidders contribute 12 ETH, so the child operates with 82 ETH and remains impaired.</li>
 					<li><strong>No demand:</strong> no qualifying bid contributes ETH, so the child remains at 70 ETH.</li>
 				</ul>
 				<p><strong>The auction repairs collateral and never selects truth.</strong> It sells REP belonging to an already-defined child universe. The child resumes with only the ETH that migration and accepted bids actually provide.</p>
-				<p>Winning positions settle into REP backing units and matching capacity ownership in the child pool rather than receiving a simple REP transfer.</p>
 			</header>
 
 			<section id="lifecycle">
 				<h2>Lifecycle</h2>
 
-				<ol>
-					<li>Migration deadline passes; the child may start the auction later</li>
-					<li>Bidding</li>
-					<li>Bidding ends and finalization occurs one week after the auction actually starts</li>
-				</ol>
-
 				<figure class="diagram diagram-wide" id="fig-auction-lifecycle">
 					<div class="plot-chart" data-plot-chart="fig-auction-lifecycle" data-plot-width="1070" data-plot-height="1272" role="img" aria-label="Auction lifecycle includes immediate no-sale activation, conditional losing-bid refunds during bidding, and post-finalization settlement."><span class="plot-chart-fallback">Auction Lifecycle. After migration closes, startTruthAuction either activates the child immediately when no sale is needed or opens bidding. During bidding, once demand establishes a clearing tick, bids below it may refund before finalization. Finalization later activates the child; paged calls then settle winning and partial bids plus any remaining refunds.</span></div>
 
-					<p class="diagram-caption"><span class="figure-label">Auction Lifecycle</span> The start transition activates a child immediately when no sale is needed. On the repair branch, losing bids below an established clearing tick may refund during bidding; finalization activates the child, and later calls settle winning and partial bids plus remaining refunds. REP doesn't leave the system. Finalization accounts the ETH actually raised and rejects contribution-only ETH, so bidder settlement never depends on a donor.</p>
+					<p class="diagram-caption"><span class="figure-label">Auction lifecycle.</span> The no-sale branch skips bidding entirely. On the repair branch, early refunds are optional and every path reaches finalization before winning bids settle.</p>
 				</figure>
 
 				<h3>Starting the auction</h3>
@@ -45,9 +38,9 @@
 				<p>Losing bids can be settled before finalization once current demand is enough to find a clearing tick. Only ticks below that clearing tick can use the pre-finalization path; binding or potentially winning bids stay in the auction. Settlement credits refundable ETH to the recorded bidder without calling recipient code. The bidder then calls <code>withdrawPendingEthRefund</code> to pull the complete credit. Once a clearing tick is found, it cannot be lowered, so currently losing bids remain losing bids.</p>
 
 				<h3>Bidding end</h3>
-				<p>When bidding ends, anyone may finalize the auction. Finalization clears the batch auction, sends the raised ETH into the respective security pool, and computes the accounting rates used to settle bidders. The child activates with legitimate migration settlement collateral plus retained bid ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected child's open-interest holders.</p>
+				<p>When bidding ends, anyone may finalize the auction. Finalization clears the batch auction, sends the raised ETH into the respective security pool, and computes the accounting rates used to settle bidders. The child activates with legitimate migration settlement collateral plus retained bid ETH, even when that total is below the original fork snapshot. Full repair is not guaranteed, and the remaining impairment is borne by the affected child's open-interest holders, whose winning shares redeem below face value.</p>
 
-				<p>Finalization records unclaimed auction ownership in an unassigned pool position. A winning bidder later assigns its proportional REP backing, capacity ownership, and accrued fees to a child-pool vault; the auction does not send REP directly to the wallet. Forced ETH does not count as migrated or auction-raised collateral, so it cannot fake a successful repair.</p>
+				<p>Finalization records unclaimed auction ownership in an unassigned pool position. Anyone may then settle a winning bid, which credits the bidder's child-pool vault with its proportional REP <a href="../reference/glossary.html#backing-units">backing units</a>, <a href="../reference/glossary.html#underwriting-commitment">underwriting commitment</a>, and accrued fees; the auction does not send REP directly to the wallet. Forced ETH does not count as migrated or auction-raised collateral, so it cannot fake a successful repair.</p>
 			</section>
 
 			<section id="clearing">
@@ -62,7 +55,7 @@
 				<p>As soon as cumulative demand is enough to hit either cap at some price, that price becomes the clearing tick and all winning bids settle from it at one price. That is a valid uniform clearing even when the REP cap binds before the ETH repair target is fully met.</p>
 
 				<h3>When demand is too low</h3>
-				<p>If demand never reaches a full clearing price, only bids that meet the auction's qualification threshold participate; lower bids receive refunds. Qualifying bidders share the available REP for the ETH they collectively contribute. With no qualifying demand, all bids refund and the child remains impaired.</p>
+				<p>If demand never reaches either cap, only bids at or above the <dfn>underfunded threshold</dfn> participate: the price at which selling the whole REP sale cap would raise exactly the ETH raise cap. Lower bids receive refunds. Qualifying bidders share the whole REP sale cap in proportion to the ETH they contribute, so each pays the same effective price. With no qualifying demand, all bids refund and the child remains impaired.</p>
 				<p>The contract uses bounded tick indexing and exact integer accounting so finalization does not loop over every possible price. See the <a href="../reference/contracts/uniformpricedualcapbatchauction.html">auction contract reference</a> for tick bounds, rounding, storage, and getter details, and the <a href="../reference/contracts/securitypoolforker.html">SecurityPoolForker reference</a> for child-pool settlement accounting.</p>
 			</section>
 
@@ -116,13 +109,13 @@
 						</div>
 						<div class="tool-workspace-view">
 							<figure class="diagram diagram-wide" id="fig-auction-clearing-ladder">
-								<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the cap-implied qualification tick and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
-								<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing or qualification price, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates as the auction controls change.</p>
+								<div class="plot-chart" data-plot-chart="fig-auction-clearing-ladder" data-plot-width="980" data-plot-height="360" role="img" aria-label="Auction demand is evaluated from high ticks to low ticks before uniform or underfunded clearing"><span class="plot-chart-fallback">High-price bids are considered first. If cumulative demand reaches the ETH raise cap or REP sale cap, the first binding tick sets normal uniform clearing. If neither cap is reached, finalization selects bids at or above the underfunded threshold and allocates the complete REP sale cap among them at one effective price. With no qualifying bids, every bid refunds.</span></div>
+								<p class="diagram-caption"><span class="figure-label">Interactive Demand Curve</span>The stepped curve accumulates bids from the highest limit price to the lowest. The vertical rule is available REP, the horizontal rule is the current clearing price or underfunded threshold, and colored bid points distinguish accepted demand from demand below the boundary. The chart updates as the auction controls change.</p>
 							</figure>
 							<div class="example-output-grid tool-detail-grid auction-allocation-grid">
 								<div><span>Binding condition</span><output data-example-output="bindingCondition">both caps</output></div>
 								<div><span>Winning ETH kept</span><output data-example-output="thresholdInputEth">not underfunded</output></div>
-								<div><span>Threshold</span><output data-example-output="underfundedThreshold">not underfunded</output></div>
+								<div><span>Underfunded threshold</span><output data-example-output="underfundedThreshold">not underfunded</output></div>
 								<div class="auction-allocation"><span>Alice allocation</span><output data-example-output="aliceReceives">1.00 REP</output></div>
 								<div class="auction-allocation"><span>Bob allocation</span><output data-example-output="bobReceives">1.33 REP</output></div>
 								<div class="auction-allocation"><span>Carol allocation</span><output data-example-output="carolReceives">1.67 REP</output></div>
@@ -136,10 +129,11 @@
 			<section id="three-auction-outcomes">
 				<h2>Three outcomes to keep separate</h2>
 				<ul>
-					<li>No auction is required when migrated REP already repairs the child pool.</li>
-					<li>A <code>funded</code> auction means a clearing cap bound, not necessarily full ETH repair: compare accepted ETH with the repair cap. An escalation-allocation haircut can still apply when purchased REP is allocated to positive dispute-staked REP.</li>
-					<li>An underfunded auction clears qualifying demand at or above the reserve threshold and refunds lower bids; it records the ETH shortfall, may apply the conditional escalation-allocation haircut, and cannot create missing ETH or duplicate REP.</li>
+					<li>No auction runs when ETH migrated into the child already reaches the parent's settlement-collateral snapshot; the start call activates the child directly.</li>
+					<li>A funded auction, reported by the <code>funded</code> field of the <code>AuctionFinalized</code> event, means a clearing cap bound, not necessarily full ETH repair: compare accepted ETH with the repair cap.</li>
+					<li>An underfunded auction clears qualifying demand at or above the underfunded threshold and refunds lower bids; it records the ETH shortfall and cannot create missing ETH or duplicate REP.</li>
 				</ul>
+				<p>If the parent's <a href="../reference/glossary.html#escalation-game">Escalation Game</a> was unresolved at the fork, part of the REP either kind of auction sells comes proportionally from REP staked in that game, and the child game's balances shrink to match. The <a href="../reference/contracts/securitypoolforker.html">SecurityPoolForker reference</a> gives the allocation.</p>
 			</section>
 		</main>
 

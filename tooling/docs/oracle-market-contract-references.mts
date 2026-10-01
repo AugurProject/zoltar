@@ -139,7 +139,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				call: '`requestPriceIfNeededAndStageLiquidation(targetVault, receiverVault, requestedDebtAttoEth, approvalId, ..., bountyAttoEth)`',
 				caller: 'Liquidation operator; a delegated receiver must have approved this exact operator',
 				effect:
-					'Stages explicit operator, receiver, target backing, and target capacity ownership and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.',
+					'Stages explicit operator, receiver, target backing, and target underwriting commitment and reserves bounded receiver quota before any oracle work. The queue event retains the full historical observation for indexing, while live execution inputs are not duplicated in persistent operation storage. The self-receiving operator path uses a zero approval ID.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageLiquidation' }],
 				preconditions: 'Receiver differs from target; delegated approval matches pool, receiver, operator, and target scope, has available cumulative and per-operation quota, and remains valid through latest execution.',
 				signals: '`LiquidationRouteStaged`; `LiquidationApprovalReserved` on a delegated route; staged-operation lifecycle events',
@@ -148,11 +148,11 @@ export const oracleMarketContractReferences: ContractReference[] = [
 				call: '`requestPriceIfNeededAndStageOperation(...)` with funding when stale',
 				caller: 'Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.',
 				effect:
-					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute standing underwriting limit in attoETH), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. A newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
+					'Records the operation (`0` transferred commitment in attoETH, `1` withdrawal in attoREP, `2` absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or leaves it active outside the batch for a later `executeStagedOperation`. A newly accepted target change consumes any older active target change for the same vault with `success=false` and `Backing target superseded`, freeing its settlement slot. When a report opens, the whole committed `bountyAttoEth` is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.',
 				declarations: [{ name: 'requestPriceIfNeededAndStageOperation' }],
 				preconditions:
 					'`securityPool.isEscalationResolved()` is false; valid self-target for withdrawal or underwriting-limit adjustment; liquidation and withdrawal require positive amounts, while an absolute underwriting limit may be zero to request an exit; and timeout from 1 second through 5 minutes. A committed bounty of at least `getRequestPriceCostAttoEth()` covered by `msg.value`, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.',
-				signals: '`StagedOperationQueued`, possibly `PriceRequested`, then `ExecutedStagedOperation`; authoritative `CoordinatorStateCheckpoint` records',
+				signals: '`StagedOperationQueued`; `PriceRequested` when this call opens a report; `ExecutedStagedOperation` for immediate fresh-price execution or a superseded target change; `LiquidationRouteStaged` for operation `0`; authoritative `CoordinatorStateCheckpoint` records',
 			},
 			{
 				call: '`requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)` with report funding',
@@ -198,7 +198,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			},
 			{
 				call: '`setLiquidationApprovalRegistry(registry)`',
-				caller: 'Coordinator deployment factory only',
+				caller: 'The `PriceCoordinatorDeploymentWorker` that deployed the coordinator only, invoked by `OpenOraclePriceCoordinatorFactory` during deployment',
 				effect: 'Binds the coordinator-local approval registry once.',
 				declarations: [{ name: 'setLiquidationApprovalRegistry' }],
 				preconditions: 'Registry is nonzero and no registry was previously installed.',
@@ -207,7 +207,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 			{
 				call: '`setSecurityPool(pool)`',
 				caller: 'Anyone while `securityPool` remains zero; normal factory deployment calls atomically',
-				effect: 'A nonzero value binds the pool permanently. A zero value emits and checkpoints zero but leaves the setter callable. Normal factory deployment supplies the nonzero canonical pool before returning the coordinator.',
+				effect: 'A nonzero value binds the pool permanently. A zero value emits and checkpoints zero but leaves the setter callable. `SecurityPoolFactory` supplies the nonzero canonical pool in the same deployment transaction, immediately after deploying the pool.',
 				declarations: [{ name: 'setSecurityPool' }],
 				preconditions: 'Current `securityPool` is zero; the argument itself is not required to be nonzero.',
 				signals: '`SecurityPoolSet` and `CoordinatorStateCheckpoint`',
@@ -225,7 +225,7 @@ export const oracleMarketContractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: 'b4d43db4a275c3118a700ca255a7f63d42dfdca1fb1e7c554d681e589a76ac85',
 		name: 'ShareToken',
-		purpose: "Stores universe-aware ERC-1155 outcome shares and materializes a holder's persistent source entitlement in selected fork branches.",
+		purpose: "Stores universe-aware ERC-1155 [outcome shares](./glossary.html#outcome-share) and materializes a holder's persistent source entitlement in selected fork branches.",
 		readAbiFingerprint: '6093653de73a0e5fa1e400d77bbded71a92de1197f58bd89da82a657887f349e',
 		readSurface:
 			'Base and relationship getters are `name`, `symbol`, `zoltar`, `canonicalPoolByUniverse`, `_balances`, `_supplies`, and `_operatorApprovals`. Standard ERC-1155 reads are `supportsInterface`, `balanceOf`, `totalSupply`, `balanceOfBatch`, and `isApprovedForAll`; protocol-specific reads are `isAuthorized`, `totalSupplyForOutcome`, `maximumOutcomeSupply`, `balanceOfOutcome`, `balanceOfShares`, `getMigratedShareAmountAttoShares`, `getTokenId`, `getTokenIds`, and `unpackTokenId`.',

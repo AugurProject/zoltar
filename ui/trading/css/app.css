@@ -277,6 +277,18 @@
 	grid-template-rows: auto 1fr auto;
 	align-content: start;
 }
+/* Directory records share the card grid's narrow columns, so they stack like market cards instead of placing the
+   actions beside the title, which squeezed the title into a sliver and left a gap above the actions. */
+.market-list .directory-record.entity-card {
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: auto 1fr auto;
+	align-content: start;
+}
+.market-list .directory-record > .entity-card-actions {
+	grid-column: 1;
+	grid-row: auto;
+	align-self: end;
+}
 .market-card .entity-card-copy h3 {
 	font-size: 1.05rem;
 	line-height: var(--line-height-snug);

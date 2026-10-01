@@ -35,7 +35,7 @@ export const coreContractReferences: ContractReference[] = [
 	{
 		compiledAbiFingerprint: '9aec957d945308eaeaa9a2d497f6a1efefe2253de96b527a02b121a58d9dc2ec',
 		name: 'Zoltar',
-		purpose: 'Registers universe forks, charges the fork admission haircut, and mints branch-specific child REP.',
+		purpose: 'Registers universe forks, charges the [fork haircut](./glossary.html#fork-haircut), and mints branch-specific [child REP](./glossary.html#child-rep).',
 		readAbiFingerprint: '888b513263619c6b31966cd009e078c19223641b9c4a6df0909bce3f797e37e2',
 		readSurface:
 			'Use `universes`, `forkThresholdDivisor`, `forkBurnDivisor`, `zoltarQuestionData`, `genesisReputationToken`, `childReputationTokenCount`, `getForkTime`, `forkQuestionMatches`, `getRepToken`, `getForkThresholdAttoRep`, `getNonDecisionThresholdAttoRep`, `getUniverseTheoreticalSupplyAttoRep`, `getChildUniverseId`, `getDeployedChildUniverses`, `getMigrationRepBalanceAttoRep`, and `getChildMigrationRepAmountsAttoRep` to reconstruct universe and migration state. The child migration getter accepts an array of child universe IDs and returns cumulative amounts in the same order, with zero for unused IDs. The fork threshold is the live universe theoretical supply divided by `forkThresholdDivisor`, rounded up, so every nonzero-supply universe has a positive fork cost. Construction requires a deployed genesis REP token with the REPv2 `getTotalTheoreticalSupply()` selector, theoretical supply from one attoREP through 11 million REP, and `forkBurnDivisor >= 5`, which caps the uncredited fork haircut at 20% of the threshold. Genesis REP uses ordinary ERC-20 approvals because the configured mainnet REPv2 token does not implement ERC-2612 or ERC-3009.',
@@ -58,7 +58,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`forkUniverse(universeId, questionId)`',
 				caller: 'Any address able to fund the current fork threshold',
-				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the configured uncredited haircut.',
+				effect: 'Records the fork, removes threshold REP from the parent universe, and credits the caller with the threshold minus the uncredited fork haircut.',
 				declarations: [{ name: 'forkUniverse' }],
 				preconditions: 'Initialized and unforked universe; existing ended question; sufficient caller REP. Genesis REP requires allowance; child REP is burned directly without allowance.',
 				signals: '`UniverseForked`',
@@ -66,7 +66,7 @@ export const coreContractReferences: ContractReference[] = [
 			{
 				call: '`burnRep(universeId, amountAttoRep)`',
 				caller: 'Any REP holder; the caller can burn only its own balance',
-				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this when the haircut was not paid through its own fork.',
+				effect: 'Permanently removes REP without creating migration credit; escalation settlement uses this to burn the [escalation haircut](./glossary.html#escalation-haircut) when its own fork has not already paid it.',
 				declarations: [{ name: 'burnRep' }],
 				preconditions: 'Initialized universe; positive amount; sufficient caller REP and theoretical supply. Genesis REP requires allowance.',
 				signals: '`RepBurned` and the token burn or transfer event',
@@ -94,7 +94,7 @@ export const coreContractReferences: ContractReference[] = [
 					'Adds the supplied preparation amount to migration credit, then splits the requested REP into the supplied outcomes using the existing migration checks. Both steps revert together on failure. Callers compute any preparation shortfall from cumulative child migration amounts, rather than current child token holdings.',
 				declarations: [{ name: 'prepareAndSplitMigrationRep' }],
 				preconditions: 'Forked universe; positive split amount; nonempty valid outcomes; sufficient parent REP for the exact preparationAttoRep supplied and sufficient migration credit for every split. Outcome order is unrestricted. Genesis REP requires allowance for preparation; child REP needs no allowance.',
-				signals: '`MigrationRepAdded` when preparationAttoRep is positive; `DeployChild`, `TheoreticalSupplySet`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
+				signals: '`MigrationRepAdded` when preparationAttoRep is positive; `TheoreticalSupplySet`, `ReputationTokenInitialized`, `DeployChild`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer`, `Mint`, and `MigrationRepSplit` for each destination',
 			},
 			{
 				call: '`splitMigrationRep(universeId, amountAttoRep, outcomeIndexes)`',
@@ -102,7 +102,7 @@ export const coreContractReferences: ContractReference[] = [
 				effect: 'Mints `amountAttoRep` of child REP into every selected branch, deploying missing children lazily.',
 				declarations: [{ name: 'splitMigrationRep' }],
 				preconditions: "Universe forked; positive split amount; nonempty list of well-formed outcomes; the cumulative amount per child must not exceed the caller's migration balance.",
-				signals: '`DeployChild`, `TheoreticalSupplySet`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer` and `Mint`, then `MigrationRepSplit`, per selected branch',
+				signals: '`TheoreticalSupplySet`, `ReputationTokenInitialized`, `DeployChild`, and `ChildReputationTokenInitialized` when children are deployed; child REP `Transfer` and `Mint`, then `MigrationRepSplit`, per selected branch',
 			},
 		],
 	},
@@ -215,7 +215,7 @@ export const coreContractReferences: ContractReference[] = [
 		purpose: 'Creates and canonically registers origin and child security pools with their share token, oracle coordinator, and optional Truth Auction.',
 		readAbiFingerprint: 'ee2532194c63d917a4665729c7456b2905cf62bfd69555cb023d1c7e00566473',
 		readSurface:
-			'Use `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep` for immutable deployment floors. Each pool derives its effective escalation deposit directly from its REP token at construction as `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor defaults to 1 ETH. Construction rejects a zero or code-less operations delegate. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
+			'Use `minimumSecurityBondDebtAttoEth` and `minimumVaultRepDepositAttoRep` for immutable deployment floors. Each pool derives its effective escalation deposit at construction from Zoltar’s universe theoretical REP supply (`getUniverseTheoreticalSupplyAttoRep`) as `max(1 REP, theoretical REP supply / 10,000,000)`. A zero configured vault REP floor selects the default `theoretical REP supply / 100,000`; a nonzero constructor value is the exact override. The security-bond debt floor is the exact nonzero constructor value; the repository deployment configuration uses 1 ETH. Construction rejects a zero or code-less operations delegate. Use `securityPoolDeploymentCount` with the strict `securityPoolDeploymentsRange(startIndex, count)` pager, which reverts rather than truncating when the requested range exceeds the array. Use `getOriginId`, `getPoolId`, `getSecurityPool`, `getSecurityPoolOriginId`, and `getSecurityPoolHasInheritedForkOutcome` for canonical lookup.',
 		readDeclarations: [{ name: 'securityPoolDeploymentCount' }, { name: 'securityPoolDeploymentsRange' }, { name: 'getOriginId' }, { name: 'getPoolId' }, { name: 'getSecurityPool' }, { name: 'getSecurityPoolOriginId' }, { name: 'getSecurityPoolHasInheritedForkOutcome' }],
 		readStorageDeclarations: [{ name: 'minimumSecurityBondDebtAttoEth' }, { name: 'minimumVaultRepDepositAttoRep' }],
 		sourcePath: 'solidity/contracts/statoblast/factories/SecurityPoolFactory.sol',

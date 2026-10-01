@@ -18,17 +18,17 @@
 			<section id="problem">
 				<h2>The problem</h2>
 				<p>A prediction market lets people trade on a question such as “Will the fictional Aurora spacecraft launch before 31 December 2030?” Its shares are worth something only after someone decides what actually happened. That decision is the weak point: whoever controls it controls the money.</p>
-				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. Anyone who reports an outcome must stake a token behind it, and the contracts settle in favour of the outcome with the most stake behind it. Reporters whose outcome loses forfeit REP, so backing an answer the rest of the market will not support is costly. Whether that pressure keeps reports honest depends on the <a href="../reference/security-model.html#assumptions-participation">participation assumptions</a> in the security model. And when reporters cannot agree, the system does not pick a side: it splits into parallel ledgers, one per possible answer, and lets the market decide which ledger stays valuable. A dishonest majority can win a vote, but it cannot stop honest participants from walking away with a copy of the books.</p>
+				<p>Zoltar and Statoblast make the decision expensive to corrupt in two ways. Anyone who reports an outcome must stake a token behind it, and the contracts settle in favour of the outcome with the most stake behind it. Reporters whose outcome loses forfeit REP, so backing an answer the rest of the market will not support is costly. Whether that pressure keeps reports honest depends on the <a href="../reference/security-model.html#assumptions-participation">participation assumptions</a> in the security model. And when reporters cannot agree, the system does not pick a side: it splits into parallel ledgers, one per possible answer, and lets the market decide which ledger stays valuable. A dishonest majority of REP cannot stop honest participants from moving their REP into a child universe that records the honest answer; <a href="./zoltar.html#non-guarantees">what that does and does not guarantee</a> is covered with Zoltar.</p>
 			</section>
 			<section id="vocabulary">
 				<h2>Three words you will see everywhere</h2>
 				<dl>
 					<dt>REP</dt>
-					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you risk: a reporter loses REP when the outcome they supported loses, and a vault owner loses REP when their <a href="../reference/glossary.html#vault">vault</a>, the account inside a SecurityPool that holds their backing, is liquidated.</dd>
+					<dd>The <a href="../reference/glossary.html#rep">Reputation token</a>. Holding REP lets you report outcomes and underwrite markets. It is also what you risk: a reporter loses REP when the outcome they supported loses.</dd>
 					<dt>Universe</dt>
 					<dd>A <a href="../reference/glossary.html#universe">ledger that can branch</a>. Markets and REP balances belong to a particular universe. Questions are registered globally, so the same question can have markets in multiple universes. When reporters split irreconcilably, the universe forks into children, one per possible answer, each with its own REP.</dd>
 					<dt>SecurityPool</dt>
-					<dd>The <a href="../reference/glossary.html#security-pool">contract for one market in one universe</a>. It holds the ETH that backs the market's shares and keeps the books on who underwrites the market, who is disputing its outcome, and who is owed what.</dd>
+					<dd>The <a href="../reference/glossary.html#security-pool">Statoblast contract for one question, universe, and pool configuration</a>. It holds the ETH that backs the market's shares and keeps the books on who underwrites the market, who is disputing its outcome, and who is owed what. Vault owners lock REP in a <a href="../reference/glossary.html#vault">vault</a>, their account inside the pool, and lose REP if that vault is liquidated.</dd>
 				</dl>
 			</section>
 			<section id="components">
@@ -37,8 +37,8 @@
 					<dt><a href="./zoltar.html">Zoltar</a></dt>
 					<dd>The ledger. It records questions, universes, REP, and forks. It never judges which answer is true.</dd>
 					<dt><a href="./statoblast.html">Statoblast core</a></dt>
-					<dd>The market. It deploys one SecurityPool per question and universe, mints and redeems shares, settles ordinary disputes locally, and moves markets into child universes after a fork.</dd>
-					<dt><a href="./trading.html">Statoblast Trading</a></dt>
+					<dd>The market. It deploys a SecurityPool for a question, universe, and pool configuration, mints and redeems shares, settles ordinary disputes locally, and moves markets into child universes after a fork.</dd>
+					<dt><a href="./trading.html">Trading</a></dt>
 					<dd>An exchange for Statoblast shares. It is one of possibly many; it neither creates nor resolves markets.</dd>
 					<dt><a href="./open-oracle.html">OpenOracle</a></dt>
 					<dd>A price feed. It supplies a contestable REP/ETH exchange rate whenever the protocol must check that REP still covers ETH obligations. It has no say in market outcomes.</dd>
@@ -46,7 +46,7 @@
 			</section>
 			<section id="lifecycle">
 				<h2>One market, start to finish</h2>
-				<p>Alice registers the Aurora question in Zoltar and deploys its SecurityPool. <a href="../reference/glossary.html#vault">Vault</a> owners lock REP in vaults, the accounts that provide economic backing for the market. Traders send ETH to the pool and receive <a href="../reference/glossary.html#complete-set">complete sets</a>: one Yes share, one No share, and one <a href="../reference/glossary.html#invalid">Invalid</a> share, the outcome used when the question cannot be validly resolved, for each unit of collateral at the pool's current rate. They trade those shares however they like. When the launch deadline passes, reporting begins.</p>
+				<p>Alice registers the Aurora question in Zoltar and deploys its SecurityPool. Vault owners lock REP in their vaults to back the market. Traders send ETH to the pool and receive <a href="../reference/glossary.html#complete-set">complete sets</a>: one Yes share, one No share, and one <a href="../reference/glossary.html#invalid">Invalid</a> share, the outcome used when the question cannot be validly resolved, for each unit of collateral at the pool's current rate. They trade those shares however they like. When the launch deadline passes, reporting begins.</p>
 				<figure class="diagram" id="fig-market-lifecycle" aria-labelledby="market-lifecycle-caption">
 					<ol class="protocol-flow">
 						<li>Register question</li>
@@ -55,7 +55,7 @@
 						<li>Mint complete sets</li>
 						<li>Trade shares</li>
 						<li>Question ends</li>
-						<li>Initial report and <a href="./escalation-game.html">Escalation Game</a></li>
+						<li>First REP deposit starts the <a href="./escalation-game.html">Escalation Game</a></li>
 						<li>Local resolution or Zoltar fork</li>
 						<li>Migrate into child pools</li>
 						<li>Repair missing collateral through a <a href="../reference/glossary.html#truth-auction">Truth Auction</a></li>

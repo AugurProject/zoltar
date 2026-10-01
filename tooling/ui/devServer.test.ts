@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import * as path from 'node:path'
 import ts from 'typescript'
+import { resolveDevServerPort } from './devServerPort.mts'
 import { getDevServerMimeType } from './devServerMimeTypes.mts'
 import { getServedFilePaths } from './devServerRequests.mts'
 
@@ -20,6 +21,15 @@ test('development server explicitly binds to IPv4 loopback', async () => {
 	const host = listenCalls[0]?.arguments[1]
 	if (host === undefined || !ts.isStringLiteral(host)) throw new Error('Development server must specify a literal loopback bind address')
 	expect(host.text).toBe('127.0.0.1')
+})
+
+test('development server port defaults per app and accepts an explicit override', () => {
+	expect(resolveDevServerPort('trading', undefined)).toBe(4163)
+	expect(resolveDevServerPort('zoltar', undefined)).toBe(4153)
+	expect(resolveDevServerPort('trading', '0')).toBe(0)
+	expect(resolveDevServerPort('trading', '5001')).toBe(5001)
+	expect(() => resolveDevServerPort('trading', 'abc')).toThrow('Invalid UI_DEV_SERVER_PORT')
+	expect(() => resolveDevServerPort('trading', '70000')).toThrow('Invalid UI_DEV_SERVER_PORT')
 })
 
 test('development server resolves files inside the app root first and never outside the configured roots', () => {

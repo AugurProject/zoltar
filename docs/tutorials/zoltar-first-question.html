@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Create a yes-or-no question in the Zoltar registry and find it again in the question browser." />
+		<title>Your first Zoltar question</title>
+		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
+		<link rel="stylesheet" href="../assets/css/docsShell.css" />
+	</head>
+	<body class="doc-openoracle">
+		<main id="main-content">
+			<header>
+				<p class="kicker">Tutorial</p>
+				<h1>Your first Zoltar question</h1>
+				<p>You will create a yes-or-no <a href="../reference/glossary.html#question">question</a> in Zoltar's global registry and then find it again in the question browser. Every market and every fork starts from a question like this one.</p>
+			</header>
+			<section id="before-you-start">
+				<h2>Before you start</h2>
+				<p>Zoltar is the base layer: it records questions and keeps the <a href="../reference/glossary.html#rep">REP</a> ledger of each <a href="../reference/glossary.html#universe">universe</a>. <a href="../explanation/zoltar.html">Zoltar and branching universes</a> explains the model.</p>
+				<p>Run <code>bun run app:serve:zoltar</code> and open <code>http://localhost:4153/?simulate=1&amp;simScenario=deployed</code>. That browser-local simulator has the contracts deployed and no questions yet; the screenshots below come from it. It never reflects live chain state.</p>
+			</section>
+			<section id="create">
+				<h2>Write the question</h2>
+				<ol>
+					<li>Select <strong>Create question</strong> and keep the <strong>Binary</strong> question type.</li>
+					<li>Enter a <strong>Title</strong>, for example <code>Will it rain in Lisbon on 1 June 2027?</code></li>
+					<li>In <strong>Description</strong>, name the source and say when the answer is <a href="../reference/glossary.html#invalid">Invalid</a>, for example <code>Resolves Yes if IPMA reports measurable rain at its Lisbon station on 1 June 2027 (UTC). Invalid if IPMA publishes no reading.</code></li>
+					<li>Enter an <strong>End time</strong> after the event. Leave <strong>Start time</strong> blank to start immediately.</li>
+				</ol>
+				<figure class="screenshot" id="fig-zoltar-create-question" aria-labelledby="fig-zoltar-create-question-caption">
+					<a class="screenshot-link" href="../assets/screenshots/zoltar/create-question.png"><img width="768" height="1184" src="../assets/screenshots/zoltar/create-question.png" alt="The Create question form with the Binary type, the title Will it rain in Lisbon on 1 June 2027?, a description naming IPMA as the source and the Invalid condition, an end time of 2 June 2027, and a draft preview with Yes, No, and Invalid outcomes." loading="lazy" /></a>
+					<figcaption id="fig-zoltar-create-question-caption"><span class="figure-label">The question form.</span> The draft preview shows exactly what will be recorded on chain.</figcaption>
+				</figure>
+				<p>A question cannot be edited after it is created, so check the preview before you submit.</p>
+			</section>
+			<section id="submit">
+				<h2>Create it</h2>
+				<p>Select <strong>Create question</strong> below the preview and confirm the transaction. The confirmation card shows the <strong>Question ID</strong>, the end time, and the <strong>Outcomes</strong> Yes, No, and Invalid.</p>
+				<figure class="screenshot" id="fig-zoltar-question-created" aria-labelledby="fig-zoltar-question-created-caption">
+					<a class="screenshot-link" href="../assets/screenshots/zoltar/question-created.png"><img width="800" height="411" src="../assets/screenshots/zoltar/question-created.png" alt="The created question card for Will it rain in Lisbon on 1 June 2027?, with its description, question type Binary, question ID, end time, outcomes Yes, No, and Invalid, and Use for fork and Create another question buttons." loading="lazy" /></a>
+					<figcaption id="fig-zoltar-question-created-caption"><span class="figure-label">The new question.</span> The question ID identifies the question in every universe.</figcaption>
+				</figure>
+			</section>
+			<section id="find">
+				<h2>Find it in the registry</h2>
+				<ol>
+					<li>Select <strong>Browse questions</strong>.</li>
+					<li>Select <strong>Discover questions</strong>. The browser scans the registry and lists your question under <strong>Downloaded</strong>.</li>
+				</ol>
+				<figure class="screenshot" id="fig-zoltar-discover" aria-labelledby="fig-zoltar-discover-caption">
+					<a class="screenshot-link" href="../assets/screenshots/zoltar/discover-questions.png"><img width="800" height="434" src="../assets/screenshots/zoltar/discover-questions.png" alt="The Questions list with the Downloaded tab selected, showing Will it rain in Lisbon on 1 June 2027?, marked Binary, with its end time and a Use for fork button." loading="lazy" /></a>
+					<figcaption id="fig-zoltar-discover-caption"><span class="figure-label">The registry.</span> Questions are global: any universe can use this one, and anyone can find it here.</figcaption>
+				</figure>
+				<p>That is a complete question. To put collateral behind a question, follow <a href="./statoblast-first-pool.html">Your first security pool</a>; on a live network you could choose <strong>Use a question ID</strong> there with this question's ID, while each simulator keeps its own chain. <strong>Use for fork</strong> instead starts a universe fork, which <a href="../explanation/zoltar.html">Zoltar and branching universes</a> explains.</p>
+			</section>
+		</main>
+		<script src="../assets/js/responsiveDocs.js"></script>
+		<script src="../assets/js/docsData.js"></script>
+		<script src="../assets/js/docsShell.js"></script>
+	</body>
+</html>

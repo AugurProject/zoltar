@@ -31,14 +31,14 @@ export const sourceSizeAllowances = new Map<string, SourceSizeAllowance>([
 	]),
 	...allowances('Bot QA and documentation capture scripts grew with every dashboard surface they exercise.', [['bots/chaos/scripts/capture-dashboard-qa.mts', 884]]),
 	...allowances('Repository tooling modules accumulated responsibilities that belong in separate modules.', [
-		['tooling/docs/check-docs-examples.mts', 1076],
+		['tooling/docs/check-docs-examples.mts', 1043],
 		['tooling/testing/coverage-report.mts', 931],
 		['tooling/docs/check-docs-reference-values.mts', 826],
 		['tooling/ui/watch.mts', 781],
 		['tooling/contracts/deploy-testnet.mts', 671],
 	]),
 	...allowances('Documentation runtime bundles and Solidity-side TypeScript utilities still need responsibility extraction.', [
-		['docs/charts/chartRuntime.ts', 1111],
+		['docs/charts/chartRuntime.ts', 1055],
 		['solidity/ts/testSupport/coverage/traceToSource.ts', 965],
 		['solidity/ts/gas-costs.ts', 714],
 		['solidity/ts/testSupport/simulator/AnvilWindowEthereum.ts', 623],

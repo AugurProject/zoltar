@@ -251,7 +251,7 @@ moves the signer's REP backing units and capacity ownership to the chosen child
 and atomically creates the child security pool when it does not exist. Claimable
 fees remain redeemable from the parent, while escalation accounting follows its
 separate migration path described in the
-[canonical migration design](../../docs/explanation/statoblast.html#migration).
+[canonical migration design](../../docs/explanation/statoblast.html#forks-migration).
 The bot does not split a
 parent vault across outcomes. Once the child becomes operational, normal vault
 maintenance and liquidation continue there because the next registry scan

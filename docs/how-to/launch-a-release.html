@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The release posture, pre-tag checklist, and genesis REP review for shipping an immutable Zoltar and Statoblast deployment." />
+		<meta name="description" content="The pre-tag checklist for shipping an immutable Zoltar and Statoblast release, and the genesis REP review for Sepolia and deterministic testnets." />
 		<title>Launch a protocol release</title>
 		<link rel="stylesheet" href="../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../assets/css/docsShell.css" />
@@ -14,19 +14,19 @@
 				<header>
 					<p class="kicker">How-to guide</p>
 					<h1>Launch a protocol release</h1>
-					<p>Follow this guide before tagging a release. It covers what an immutable launch can and cannot promise, the checks that must pass before the tag, and the genesis REP review that determines every deterministic address.</p>
+					<p>Follow this guide before tagging a release of Zoltar, the fork oracle, and Statoblast, the prediction-market layer built on it (see the <a href="../explanation/system-overview.html">system overview</a>). It lists the checks that must pass before the tag and, for Sepolia and deterministic testnets, the genesis <a href="../reference/glossary.html#rep">REP</a> review that determines every deterministic address there. Mainnet uses the existing REPv2 token and deploys no genesis REP.</p>
 				</header>
 				<section id="immutable-protocol-release-posture">
 					<h2>Know what a release cannot do</h2>
-					<p>Zoltar and Statoblast are intended to launch as immutable, permissionless contracts. Launch documentation should not assume an operator can pause, upgrade, roll back, or disable protocol behavior after deployment. Release work should instead publish verifiable provenance: final commit and tag, deterministic addresses, continuous integration (CI) and local quality assurance (QA) results, production UI artifact hash, and any known limitations. UI deployments may describe data freshness and route users to verified artifacts, but they must not be documented as emergency controls over the protocol. This is the protocol's <a href="../reference/security-model.html#excluded-guarantee-eg05">EG05 no-pause, upgrade, rollback, or rescue boundary</a>.</p>
+					<p>The contracts are immutable: no operator can pause, upgrade, roll back, or rescue them after deployment, so a release publishes verifiable provenance instead (commit and tag, deterministic addresses, CI and QA results, production UI artifact hash, known limitations) and never describes a UI deployment as an emergency control. See <a href="../reference/security-model.html#excluded-guarantee-eg05">EG05</a>.</p>
 				</section>
 				<section id="launch-release-checklist">
 					<h2>Run the release checklist</h2>
 					<ol>
-						<li>From a fresh dependency install, run <code>bun run ui:build:prod</code>.</li>
+						<li>From a fresh dependency install (<code>bun install --frozen-lockfile</code>), run <code>bun run ui:build:prod</code>.</li>
 						<li>
-							Run <code>bun run check:mainnet-deployment:generated</code>. It fails when either generated deployment manifest is stale. If so, refresh and review both manifests with <code>bun ./tooling/contracts/check-mainnet-deployment.mts --write</code>, which writes and checks <a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a> and <a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a
-							>, then rerun the check.
+							Run <code>bun run check:mainnet-deployment:generated</code>. It fails when either generated deployment manifest is stale. If so, regenerate both manifests with <code>bun ./tooling/contracts/check-mainnet-deployment.mts --write</code>, which only rewrites <a href="../mainnet-deployment-addresses.json"><code>mainnet-deployment-addresses.json</code></a> and <a href="../sepolia-deployment-addresses.json"><code>sepolia-deployment-addresses.json</code></a
+							>; review the diff, then rerun the check.
 						</li>
 						<li>
 							Confirm the build used the pinned compiler configuration in <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/ts/compile.ts"><code>solidity/ts/compile.ts</code></a
@@ -34,13 +34,17 @@
 							>, and the imported OpenOracle profile in <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/UPSTREAM.md"><code>UPSTREAM.md</code></a
 							>.
 						</li>
-						<li>Publish the reproducible-build runtime hashes with the release, keyed to the manifest addresses. Compare both a clean local rebuild and the deployed runtime code against those reviewed hashes before marking the release canonical.</li>
-						<li>Push the final tag only after the CI gate succeeds on the same commit. The tag must match <code>v&lt;number&gt;</code> (for example <code>v12</code>); the <strong>Version deploy</strong> workflow rejects any other form. That workflow builds the IPFS publisher, verifies the InterPlanetary File System (IPFS) content identifier, and creates or updates the GitHub release with that identifier in its notes. Confirm the release exists and records the hash before announcing.</li>
+						<li>
+							Review the pinned runtime-code hashes: the <code>EXPECTED_*_RUNTIME_CODE_HASHES</code> maps in <a href="https://github.com/AugurProject/zoltar/blob/main/ui/zoltarShared/ts/protocol/deployment.ts"><code>ui/zoltarShared/ts/protocol/deployment.ts</code></a
+							> and <a href="https://github.com/AugurProject/zoltar/blob/main/ui/statoblastShared/ts/protocol/deployment.ts"><code>ui/statoblastShared/ts/protocol/deployment.ts</code></a
+							>. <code>bun ./tooling/testing/bun-test.mts --preload ./bun-test-setup-ui.ts ui/zoltar/ts/tests/protocol/deployment.test.ts ui/statoblast/ts/tests/protocol/deployment.test.ts</code> confirms that a clean local build still matches the pinned hashes of the directly compiled steps (the deployment status oracle, Multicall3, ZoltarQuestionData, and five Statoblast artifacts); it does not cover the other pinned contracts. On Sepolia, rerunning <code>bun run deploy:testnet</code> checks the runtime code of every installed contract against its pinned hash. For any other deployed address, compare the keccak-256 hash of its <code>eth_getCode</code> result with the pinned hash by hand before marking the release canonical, and publish the reviewed hashes with the release.
+						</li>
+						<li>Push the final tag only after the CI gate succeeds on the same commit. The tag must match <code>v&lt;number&gt;</code> (for example <code>v12</code>); the <strong>Version deploy</strong> workflow rejects any other form. That workflow reruns CI, builds the InterPlanetary File System (IPFS) publisher image, reads the content identifier (CID) from that image, checks only that it has the <code>bafy…</code> form, and creates or updates the GitHub release with that CID in its notes. Confirm the release exists and records the CID before announcing.</li>
 						<li>In the production UI release notes, state that <code>?simulate=1</code> is a browser-local sandbox. Mainnet and Sepolia quote-dependent actions use live RPC data plus available network-local Uniswap liquidity; simulation uses its configured mock where supported. Stale, unavailable, or unsupported quotes are production blockers for the affected client action, never inputs to replace with simulation prices. RPC and client integrity remain covered by <a href="../reference/security-model.html#assumption-a24">A24</a>; quote availability is an official-client limitation, not a protocol security assumption.</li>
 					</ol>
 				</section>
 				<section id="genesis-rep-deployment">
-					<h2>Review genesis REP allocations</h2>
+					<h2>Review genesis REP allocations (Sepolia and deterministic testnets)</h2>
 					<p>
 						Sepolia genesis REP allocations are canonical source data in <a href="https://github.com/AugurProject/zoltar/blob/main/shared/zoltar/ts/deployment/sepoliaRepAllocations.ts"><code>sepoliaRepAllocations.ts</code></a
 						>. The configured 11 million REP mint cap is divided equally among the listed holders; adding a holder automatically reduces every holder's allocation. Integer division may leave the total minted supply below the cap by less than one attoREP per holder. Review both the holder list and the computed total before deployment. The <code>GenesisReputationToken</code> constructor requires at least one allocation, matching holder and balance array lengths, unique nonzero holders, nonzero balances, and a total supply no greater than 11 million REP. It emits the standard ERC-20 mint <code>Transfer</code> event once for each allocation.

@@ -295,8 +295,8 @@ export const diagramGraphSpecs = {
 	'fig-statoblast-oracle-flow': diagram(
 		{
 			ariaDescription:
-				'A REP withdrawal or liquidation executes immediately with a valid cached price or becomes an active staged operation behind an OpenOracle report. An accepted settlement callback attempts up to four still-active pending operations, skipping any already consumed; each attempt is consumed on success or terminal failure. A rejected report leaves the price cache unchanged and terminally consumes its attached pending batch. Additional staged operations remain active outside that callback batch and can execute later with a fresh price.',
-			ariaLabel: 'Queued REP/ETH oracle operation flow for REP withdrawals and liquidations',
+				'A REP withdrawal, underwriting-commitment change, or liquidation executes immediately with a valid cached price or becomes an active staged operation behind an OpenOracle report. An accepted settlement callback attempts up to four still-active pending operations, skipping any already consumed; each attempt is consumed on success or terminal failure. A rejected report leaves the price cache unchanged and terminally consumes its attached pending batch. Additional staged operations remain active outside that callback batch and can execute later with a fresh price.',
+			ariaLabel: 'Queued REP/ETH oracle operation flow for REP withdrawals, commitment changes, and liquidations',
 			height: 390,
 			width: 940,
 		},
@@ -304,7 +304,7 @@ export const diagramGraphSpecs = {
 			section(
 				'oracle-operation',
 				[
-					node('request', 'Operation request', 'blue', ['withdraw REP or liquidation']),
+					node('request', 'Operation request', 'blue', ['withdraw REP, commitment', 'change, or liquidation']),
 					node('price', 'Valid price?', 'gold', ['configured freshness window']),
 					node('execute', 'Execute now', 'green', ['no oracle ETH cost']),
 					node('stage', 'Stage active operation', 'gold', ['missing or stale price']),

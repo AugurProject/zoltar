@@ -14,11 +14,11 @@
 				<header>
 					<p class="kicker">Reference</p>
 					<h1 id="support-module-inventory">Contract inventory</h1>
-					<p>The <a href="./contracts.html">contract interaction reference</a> covers the contracts users and keepers call. This page inventories the supporting production contracts: deployment helpers, delegate modules, storage and type libraries, the shared utility library, and vendored dependencies, with the trust boundary of each.</p>
+					<p>The <a href="./contracts.html">contract interaction reference</a> covers the contracts users and keepers call. This page inventories the supporting production contracts: deployment helpers, delegate modules, storage and type libraries, the shared utility library, and vendored dependencies, with the trust boundary of each, plus the Uniswap contracts a testnet deployment uses.</p>
 				</header>
 				<section id="caller-and-trust-boundaries">
 					<h2>Caller and trust boundaries</h2>
-					<p>Deployment helpers are not interchangeable with canonical protocol discovery. Several are intentionally permissionless and namespace <code>CREATE2</code> salts by <code>msg.sender</code>; an application must discover canonical instances through <code>SecurityPoolFactory</code>, recognized pools, and recognized forker events rather than treating every factory-created address as canonical.</p>
+					<p>Deployment helpers are not interchangeable with canonical protocol discovery. Several are intentionally permissionless and namespace <code>CREATE2</code> salts by <code>msg.sender</code>; an application must discover canonical instances through <code>SecurityPoolFactory</code>, recognized <a href="./glossary.html#security-pool">security pools</a>, and recognized <a href="./glossary.html#security-pool-forker">forker</a> events rather than treating every factory-created address as canonical.</p>
 					<table>
 						<thead>
 							<tr>
@@ -60,7 +60,7 @@
 							</tr>
 							<tr>
 								<td><code>EscalationGameDepositDelegate</code>, <code>EscalationGameClaimDelegate</code>, <code>EscalationGameForker</code>, <code>SecurityPoolForkerVaultMigrationDelegate</code>, <code>SecurityPoolSettlementDelegate</code>, and <code>SecurityPoolOperationsDelegate</code></td>
-								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set minting validation and funded inherited-collateral installation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate implements standing ETH limit changes, aggregate mint backing checks, and authorized liquidation transfers that conserve total commitments without writing off residual exposure. REP backing and fees are accounted separately. See the <a href="./contracts/securitypool.html">SecurityPool interaction reference</a> for the public entrypoints. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
+								<td>Their public methods are delegatecall implementations. The deposit delegate implements <code>recordDeposit</code>, <code>recordForkedEscrowForOutcome</code>, <code>applyTruthAuctionHaircut</code>, funding-gated <code>resumeFromFork</code>, <code>consumeEscrowedRepForOwner</code>, <code>consumeUnresolvedRepForClaimOwners</code>, <code>creditClaimOwners</code>, and <code>creditExternalClaimOwners</code>. The shared claim delegate handles retention checkpoint reads and initialization; it has no ownership or import surface. The forker delegates implement escalation and vault migration. <code>SecurityPoolSettlementDelegate</code> is abstract and contributes complete-set minting validation and funded inherited-collateral installation to the single deployed <code>SecurityPoolOperationsDelegate</code>. That operations delegate implements <a href="./glossary.html#underwriting-commitment">underwriting commitment</a> changes, aggregate mint backing checks, and authorized liquidation transfers that conserve total underwriting commitments without writing off residual exposure. REP backing and fees are accounted separately. See the <a href="./contracts/securitypool.html">SecurityPool interaction reference</a> for the public entrypoints. A direct call may revert against uninitialized state or may mutate only the helper's isolated storage; it is not a protocol action.</td>
 								<td>Accept resulting state and logs only when the recognized game, pool, or forker executes the matching wrapper through <code>delegatecall</code>. State changes and events then occur in that recognized contract's context. Canonical liquidation enters through <code>SecurityPool.performLiquidation</code>; continuation progress enters through <code>SecurityPool.resumeForkedEscalationGame</code>.</td>
 							</tr>
 							<tr>
@@ -68,7 +68,7 @@
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolEventEmitter.sol"><code>SecurityPoolEventEmitter</code> and <code>SecurityPoolForkEventEmitter</code></a>
 								</td>
 								<td><code>SecurityPoolEventEmitter</code> inherits the pool's typed <code>SecurityPoolStorage</code> base and exposes <code>emitPoolAccountingCheckpoint</code> and <code>emitVaultAccountingCheckpoint</code>. <code>SecurityPoolForkEventEmitter</code> inherits the forker's typed <code>SecurityPoolForkerStorage</code> base and exposes <code>emitForkSnapshotEvents</code>. The entrypoints are externally callable and <code>payable</code>, but direct calls execute against the helper's own storage and emit from the helper address. Payability permits delegatecalls from value-bearing protocol flows; callers must not send ETH directly because it is not protocol collateral and the helpers have no recovery surface.</td>
-								<td>Pools delegate accounting checkpoints to their pool-layout emitter, while the forker delegates fork snapshots to its forker-layout emitter, so logs are emitted from the recognized pool or forker address. Indexers must reject matching signatures from either helper or any unrecognized emitter. External-universe fork initiation requires declared-share-token authorization; own-game initiation does not. Child linking preserves the source factory and forker and rejects undeployed or previously trusted auctions. Configured-factory registration remains the canonicality boundary. Storage-layout tests protect both typed delegate layouts.</td>
+								<td>Pools delegate accounting checkpoints to their pool-layout emitter, while the forker delegates fork snapshots to its forker-layout emitter, so logs are emitted from the recognized pool or forker address. Indexers must reject matching signatures from either helper or any unrecognized emitter. Storage-layout tests protect both typed delegate layouts.</td>
 							</tr>
 							<tr>
 								<td><code>EscalationGameProofVerifier</code>, <code>MerkleMountainRange</code>, and <code>SecurityPoolUtils</code></td>
@@ -85,7 +85,7 @@
 				</section>
 				<section id="securitypoolutils-read-surface">
 					<h2>SecurityPoolUtils read surface</h2>
-					<p>These external pure previews distinguish standing ETH commitments from current proportional ETH obligations. REP-per-ETH prices use <code>PRICE_PRECISION</code>, and health factors and security multipliers use basis points. The previews have no lifecycle, caller, freshness, or canonical-pool authority; only a recognized pool or coordinator transaction can apply their result.</p>
+					<p>These external pure previews distinguish a vault's underwriting commitment from its current proportional share of <a href="./glossary.html#open-interest">open interest</a>. REP-per-ETH prices use <code>PRICE_PRECISION</code>, and health factors and security multipliers use basis points. The previews have no lifecycle, caller, freshness, or canonical-pool authority; only a recognized pool or coordinator transaction can apply their result.</p>
 					<table>
 						<thead>
 							<tr>
@@ -97,7 +97,7 @@
 						<tbody>
 							<tr>
 								<td><code>calculateFeeAccrual(settlementCollateralAttoEth, retentionRate, timeDelta, indexRemainder, feeEligibleUnderwritingLimitAttoEth, feesOwedRemainder)</code></td>
-								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the already-counted but uncredited decay <code>(indexRemainder + feesOwedRemainder) / 1e18</code>, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers avoid zero eligible capacity ownership before this division.</td>
+								<td>Applies fixed-point retention over elapsed time to settlement collateral net of the already-counted but uncredited decay <code>(indexRemainder + feesOwedRemainder) / 1e18</code>, carries the global index remainder, and returns whole credited fees plus the next fee remainder. Credited fees therefore never exceed settlement collateral. Canonical callers avoid a zero fee-eligible underwriting commitment total before this division.</td>
 								<td><a href="../explanation/fees.html">Fee accrual</a></td>
 							</tr>
 							<tr>
@@ -107,13 +107,13 @@
 							</tr>
 							<tr>
 								<td><code>calculateVaultOpenInterestAttoEth(activeOpenInterestAttoEth, vaultUnderwritingLimitAttoEth, totalUnderwritingLimitAttoEth)</code></td>
-								<td>Attributes live pool open interest pro rata to capacity ownership, rounding a positive vault share upward. Zero vault or total ownership returns zero.</td>
+								<td>Attributes live pool open interest pro rata to underwriting commitment, rounding a positive vault share upward. A zero vault or total underwriting commitment returns zero.</td>
 								<td><a href="../explanation/liquidations.html#capacity-and-health">Dynamic capacity</a></td>
 							</tr>
 							<tr>
 								<td><code>calculateBundledLiquidationTransfer(targetBackingUnits, targetUnderwritingLimitAttoEth, targetOpenInterestAttoEth, requestedDebtAttoEth, repEthPrice, currentPoolHeldAttoRepBalance, currentTotalRepBackingUnits, minimumRemainingAttoRep)</code></td>
-								<td>The target exposure arguments are both the full ETH commitment. Transfers the lesser of request and target commitment. The nominal 5% REP award rounds up in REP and backing units, then caps at available target units. Partial transfers reserve the configured minimum REP when available. A full transfer can use all target units. The receiver must independently satisfy full-limit health; no residual commitment is written off.</td>
-								<td><a href="../explanation/liquidations.html#punitive-liquidation">Vault liquidation</a></td>
+								<td>Both target exposure arguments are the target's full underwriting commitment. Transfers the lesser of request and that commitment. The nominal 5% REP award rounds up in REP and backing units, then caps at available target units. Partial transfers reserve the configured minimum REP when available. A full transfer can use all target units. The receiver must independently satisfy full-limit health; no residual underwriting commitment is written off.</td>
+								<td><a href="../explanation/liquidations.html#rule">Vault liquidation</a></td>
 							</tr>
 							<tr>
 								<td><code>isVaultHealthy(poolHeldVaultRepBackingAttoRep, disputeStakedAttoRep, openInterestAttoEth, repEthPrice, poolSecurityMultiplierBps)</code></td>
@@ -314,6 +314,31 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/openOracle/openzeppelin/contracts/utils/math/SafeCast.sol"><code>SafeCast.sol</code></a>
 								</td>
 								<td>OpenOracle's imported source, exact <code>openPunt</code> revision, compiler profile, and dependency provenance are owned by <code>UPSTREAM.md</code>. The coordinator submits attoETH/attoREP reports with dispute history and full game storage enabled; it does not enable the new optional flags. OpenOracle's packed event stream remains separate from Zoltar replay.</td>
+							</tr>
+						</tbody>
+					</table>
+				</section>
+				<section id="testnet-uniswap-dependencies">
+					<h2>Testnet Uniswap dependencies</h2>
+					<p>The UI, the bots, and the testnet deployer read Uniswap addresses from one registry, <code>shared/core/ts/deployment/uniswapDeployments.ts</code>.</p>
+					<table>
+						<thead>
+							<tr>
+								<th>Chain</th>
+								<th>WETH, V3 factory, QuoterV2, V4 PoolManager, V4 Quoter</th>
+								<th>SwapRouter</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Sepolia (<code>11155111</code>)</td>
+								<td>Uniswap's published contracts (<a href="https://developers.uniswap.org/docs/protocols/v3/deployments/v3-ethereum-deployments">V3</a>, <a href="https://developers.uniswap.org/docs/protocols/v4/deployments">V4</a>); the deployer requires each to carry Uniswap's exact runtime code. An Anvil node with the Sepolia chain ID receives them by replaying Uniswap's original creation transactions, vendored byte for byte in <code>scripts/artifacts/uniswap-deployment.json</code>.</td>
+								<td>Deterministic SwapRouter (v1) bound to the published factory; Uniswap publishes none on Sepolia.</td>
+							</tr>
+							<tr>
+								<td>Any other testnet</td>
+								<td>Deterministic WETH plus a complete Uniswap V3 and V4 deployment from the pinned bytecode.</td>
+								<td>Deterministic SwapRouter from the pinned bytecode.</td>
 							</tr>
 						</tbody>
 					</table>

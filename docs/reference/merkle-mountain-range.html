@@ -11,7 +11,7 @@
 		<main>
 			<header>
 				<h1>Merkle Mountain Range carry proofs</h1>
-				<p>Statoblast uses a <a href="https://docs.grin.mw/wiki/chain-state/merkle-mountain-range/">Merkle Mountain Range (MMR)</a> only for inherited escalation carry. Parent escalation games export unresolved deposits into compact snapshots, and child continuations later verify withdrawals against those snapshots without replaying the full parent history on-chain.</p>
+				<p>Statoblast uses a <a href="https://docs.grin.mw/wiki/chain-state/merkle-mountain-range/">Merkle Mountain Range (MMR)</a> only for inherited escalation carry: the unresolved deposits a parent <a href="./glossary.html#escalation-game">Escalation Game</a> exports when its <a href="./glossary.html#universe">universe</a> forks. Each <a href="./glossary.html#child-universe">child universe</a>'s continuation game, the child Escalation Game that resumes the dispute during <a href="./glossary.html#fork-continuation">fork continuation</a>, verifies withdrawals against those compact snapshots without replaying the full parent history on-chain.</p>
 				<p>The hashing primitives live in <code>MerkleMountainRange.sol</code>. Snapshot storage, proof structs, peak bounds, and replay protection live in <code>EscalationGameTypes.sol</code>, <code>EscalationGameCarry.sol</code>, and <code>EscalationGameProofVerifier.sol</code>.</p>
 			</header>
 
@@ -28,7 +28,7 @@
 					<tbody>
 						<tr>
 							<td><code>depositor</code></td>
-							<td>Binds the proof and payout to the original depositor. This ownership is immutable: liquidation moves only pool-held vault Reputation (REP) backing and cannot acquire or split the committed escalation claim.</td>
+							<td>Binds the payout to the original depositor; see <a href="./invariants.html#vault-04"><code>VAULT-04</code></a>.</td>
 						</tr>
 						<tr>
 							<td><code>outcome</code></td>
@@ -40,7 +40,7 @@
 						</tr>
 						<tr>
 							<td><code>parentDepositIndex</code></td>
-							<td>Provides the stable identity later consumed by nullifiers.</td>
+							<td>Provides the stable identity later consumed by nullifiers. A nullifier is a per-continuation record that a carried deposit has been claimed, so the same proof cannot be replayed.</td>
 						</tr>
 						<tr>
 							<td><code>cumulativeAmount</code></td>

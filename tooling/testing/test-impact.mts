@@ -5,6 +5,7 @@ import { mergeBaseWithMain, runGit } from '../repo/git.mts'
 import { sharedPackages } from '../repo/sharedPackages.ts'
 import { walkFiles } from '../repo/walk.mts'
 import { isTestSourceFile } from './test-discovery.mts'
+import { isScreenshotSourcePath, screenshotAppIds } from '../docs/ui-screenshots.mts'
 
 // statoblastWorkflowScenarios.ts seeds the ended-pool-exit and liquidation-distance workflows; statoblastScenarioSeeding.ts is the shared seeding layer every production workflow scenario depends on.
 const WORKFLOW_SIMULATION_SCENARIO_PATHS = new Set(['ui/statoblastShared/ts/simulation/statoblastWorkflowScenarios.ts', 'ui/statoblastShared/ts/simulation/statoblastScenarioSeeding.ts'])
@@ -46,7 +47,15 @@ const TEST_INFRASTRUCTURE_PATHS = new Set([
 	'tooling/testing/test-timings.mts',
 ])
 
+// Documentation embeds screenshots of the walletless UI simulations; a rendering change may make them stale.
+const SCREENSHOT_RULES: readonly TestImpactRule[] = screenshotAppIds().map(appId => ({
+	command: `bun run docs:screenshots -- --app ${appId}`,
+	reason: `${appId} UI rendering changed; recapture its documentation screenshots and review the pages that quote its labels`,
+	matches: filePath => isScreenshotSourcePath(appId, filePath),
+}))
+
 const TEST_IMPACT_RULES: readonly TestImpactRule[] = [
+	...SCREENSHOT_RULES,
 	{
 		command: 'bun ./tooling/testing/bun-test.mts tooling/contracts/format-solidity-one-line.test.ts',
 		reason: 'Solidity formatter subprocess engine changed',

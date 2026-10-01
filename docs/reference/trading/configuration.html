@@ -13,7 +13,7 @@
 			<header>
 				<p class="kicker">Reference</p>
 				<h1>Trading deployment configuration</h1>
-				<p>The local deployment script and the standalone client read the inputs below. No public trading deployment manifest is bundled; the client derives and verifies its contracts at startup.</p>
+				<p>The local deployment script <code>solidity/ts/trading/deploy/deploy-local.mts</code> reads the environment variables below. No public trading deployment manifest is bundled; the client derives and checks its contracts at startup.</p>
 			</header>
 			<section id="environment">
 				<h2>Environment variables</h2>
@@ -55,7 +55,7 @@
 				<p><code>bun run trading:deploy:local</code> writes <code>solidity/deployments/trading/local.json</code> for scripts and integration environments. The file is git-ignored because local addresses are ephemeral. A generated manifest contains:</p>
 				<ul>
 					<li><code>network</code>: decimal and hexadecimal chain IDs plus the deployment RPC;</li>
-					<li><code>core</code>: verified SecurityPoolFactory and source manifest path;</li>
+					<li><code>core</code>: the SecurityPoolFactory address, checked to have code on the RPC chain, and the source manifest path;</li>
 					<li><code>trading</code>: factory, router, and immutable <code>feeBps</code>;</li>
 					<li><code>transactions</code>: <code>factory</code> and <code>router</code> objects shaped as <code>{ hash, blockNumber: "&lt;base-10 integer string&gt;" }</code>. <code>blockNumber</code> is a JSON string, not a JavaScript number, so large receipt block numbers remain exact;</li>
 					<li><code>compilerProfiles</code>: exact versions and settings from the main Solidity artifact;</li>
@@ -65,9 +65,15 @@
 				<p>Pairs never appear as static deployment inputs. Discover them dynamically with <code>getPair(pool)</code>, verify with <code>isPair</code>, or derive the deterministic address with <code>predictPair</code>. Review a manifest before publishing it, and never copy local ephemeral addresses into a public-network file.</p>
 			</section>
 			<section id="client">
-				<h2>What the client uses</h2>
-				<p>The live client discovers pools from the canonical <code>SecurityPoolFactory</code> in bounded pages, isolates individual market-read failures, never hard-codes market addresses, and refreshes market data and wallet balances in the background. The pool details view shows total and fee-eligible standing commitments in ETH. Remaining mint capacity is total standing commitments minus checkpointed settlement collateral, floored at zero, and is zero during an escalation game; minting reads no oracle price (see the <a href="../invariants.html#bal-03">coverage invariants</a>). Entry, exit, liquidity, settlement, and fork-migration calls are simulated through the actual contracts, and every read in one simulation is pinned to the same canonical block hash. A quote does not expire when a new block arrives: immediately before submission the client simulates the call again at the latest block and submits with the minimum or maximum amounts and the deadline approved in the quote, where the call accepts them. Submission stops if that simulation fails or its result falls outside the approved bounds.</p>
-				<p>The build writes <code>core-deployments.json</code> from the root mainnet and Sepolia deployment manifests and adds each network's default public RPC URL. The live client defaults to the first supported network, computes the trading contracts with the fixed 0.30% trading fee through the core deployment's canonical CREATE2 proxy, and checks each address directly. If either contract is missing, it lets the connected wallet deploy and verify it. <strong>Settings</strong> beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC override. The router handles entry and liquidity operations as well as approval-free receive-based share exits and complete-set redemptions; the canonical pair supports ERC-2612 permits and deadline-bound direct liquidity removal.</p>
+				<h2>What the client derives</h2>
+				<p>The standalone client reads no environment variables. At startup it uses:</p>
+				<ul>
+					<li><strong>Networks:</strong> the build writes <code>core-deployments.json</code> from the root mainnet and Sepolia deployment manifests, with each network's default public RPC URL. The client defaults to the first supported network.</li>
+					<li><strong>RPC override:</strong> <strong>Settings</strong> beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC URL.</li>
+					<li><strong>Trading contracts:</strong> the factory and router addresses are computed with the fixed 30 basis-point fee through the core deployment's canonical CREATE2 proxy, and each address is checked for code. If either contract is missing, the connected wallet can deploy it.</li>
+					<li><strong>Markets:</strong> pools are discovered from the canonical <code>SecurityPoolFactory</code> in bounded pages; no market address is hard-coded. Mint capacity follows <a href="../invariants.html#bal-03">BAL-03</a>.</li>
+				</ul>
+				<p>Quote and simulation behavior is described in the <a href="./sdk.html#transaction-helpers">Trading SDK</a>.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>

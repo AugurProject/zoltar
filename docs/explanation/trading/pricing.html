@@ -13,13 +13,13 @@
 			<header>
 				<p class="kicker">Explanation</p>
 				<h1>Conditional pricing</h1>
-				<p>A two-reserve pair produces exactly two prices, and both are conditional on the market resolving validly.</p>
+				<p>A two-reserve <a href="../../reference/glossary.html#trading-pool">pair</a> produces exactly two prices, and both are conditional on the market resolving validly.</p>
 			</header>
 			<section id="formula">
 				<h2>What the prices are</h2>
 				<p>The constant-product marginal relationship prices one outcome using the <em>opposite</em> reserve:</p>
 				<div class="equation" id="eq-trading-conditional-yes">
-					<math display="block" aria-label="Conditional YES equals the NO reserve divided by the sum of the YES and NO reserves" data-source="conditionalYes = noReserve / (yesReserve + noReserve)"
+					<math display="block" aria-label="Conditional YES equals the No reserve divided by the sum of the Yes and No reserves" data-source="conditionalYes = noReserve / (yesReserve + noReserve)"
 						><mrow
 							><mi>conditionalYes</mi><mo>=</mo
 							><mfrac
@@ -29,7 +29,7 @@
 					>
 				</div>
 				<div class="equation" id="eq-trading-conditional-no">
-					<math display="block" aria-label="Conditional NO equals the YES reserve divided by the sum of the YES and NO reserves" data-source="conditionalNo = yesReserve / (yesReserve + noReserve)"
+					<math display="block" aria-label="Conditional NO equals the Yes reserve divided by the sum of the Yes and No reserves" data-source="conditionalNo = yesReserve / (yesReserve + noReserve)"
 						><mrow
 							><mi>conditionalNo</mi><mo>=</mo
 							><mfrac
@@ -38,8 +38,8 @@
 						></math
 					>
 				</div>
-				<p>The two values sum to 100% because they partition the valid outcomes only. That does <strong>not</strong> imply INVALID has zero probability; there is no unconditional YES or NO probability in this AMM.</p>
-				<p>At 428.571 YES and 1,000 NO, Conditional YES is about 70% and Conditional NO about 30%. The larger NO reserve makes YES the more expensive side, which is why a “70% YES” initialization deposits more NO than YES.</p>
+				<p>The two values sum to 100% because they partition the valid outcomes only. That does <strong>not</strong> imply <a href="../../reference/glossary.html#invalid">Invalid</a> has zero probability; there is no unconditional Yes or No probability in this AMM.</p>
+				<p>At 428.571 Yes and 1,000 No, Conditional YES is about 70% and Conditional NO about 30%. The larger No reserve makes Yes the more expensive side, which is why initializing at 70% Conditional YES deposits more No than Yes.</p>
 			</section>
 			<section id="not-an-oracle">
 				<h2>Not an oracle</h2>

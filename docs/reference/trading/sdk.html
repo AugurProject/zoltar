@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="description" content="The shared bigint math, exit search, and simulation-pinning helpers used by the Trading UI and its parity tests." />
+		<meta name="description" content="The shared bigint math, exit search, receive-request encoding, and simulation-pinning helpers used by the Trading UI and its parity tests." />
 		<title>Trading SDK</title>
 		<link rel="stylesheet" href="../../assets/css/shared-docs.css" />
 		<link rel="stylesheet" href="../../assets/css/docsShell.css" />
@@ -17,15 +17,36 @@
 			</header>
 			<section id="pure-math">
 				<h2>Pure math</h2>
+				<p>Module <code>@zoltar/trading-shared/trading/math</code> mirrors <code>TwoWayConstantProductMath</code>:</p>
 				<ul>
-					<li><code>quoteExactOutput</code> (<code>trading/math</code>) mirrors the Solidity ceil behavior for an exact-output swap and returns gross input, output, net input, and fee.</li>
-					<li><code>maximumInsuredExit</code> (<code>trading/positions</code>) binary-searches the greatest complete-set amount allowed by INVALID, long balance, opposite reserve, and an optional long-input ceiling.</li>
+					<li><code>quoteExactInput(reserveIn, reserveOut, amountIn, feeBps)</code> and <code>quoteExactOutput(reserveIn, reserveOut, amountOut, feeBps)</code> return <code>{ amountIn, amountOut, netInput, feeAmount }</code> with the contract's floor (exact input) and ceil (exact output) rounding. They throw on empty reserves, an out-of-range output, or <code>feeBps ≥ 10,000</code>.</li>
+					<li><code>conditionalYesBps(yesReserve, noReserve)</code> returns the Conditional YES price in basis points, floor-rounded.</li>
 				</ul>
+			</section>
+			<section id="positions">
+				<h2>Position quotes</h2>
+				<p>Module <code>@zoltar/trading-shared/trading/positions</code> takes <code>{ yesReserve, noReserve, feeBps }</code> and a <code>longOutcome</code> of <code>'YES'</code> or <code>'NO'</code>:</p>
+				<ul>
+					<li><code>quoteEnterPosition(longOutcome, completeSetShares, reserves)</code> mirrors <code>enterPosition</code> after minting and returns the swapped, additional, and total long shares, the Invalid received, the fee, and Conditional YES before and after.</li>
+					<li><code>quoteExitPosition(longOutcome, completeSetShares, reserves)</code> mirrors the <a href="./router.html#approval-free">insured exit</a> and returns the long shares swapped, total long shares consumed, Invalid required, fee, and Conditional YES before and after.</li>
+					<li><code>largestExitForLongShares({ ...reserves, longOutcome, longShares, completeSetCap? })</code> binary-searches the largest complete-set amount whose total long-share cost fits within <code>longShares</code> and stays below the opposite reserve. The optional <code>completeSetCap</code> bounds the result further.</li>
+					<li><code>maximumInsuredExit({ ...reserves, longOutcome, longBalance, invalidBalance })</code> calls <code>largestExitForLongShares</code> with the long balance as <code>longShares</code> and the Invalid balance as <code>completeSetCap</code>.</li>
+				</ul>
+			</section>
+			<section id="receive-request">
+				<h2>Receive request encoding</h2>
+				<p>Module <code>@zoltar/trading-shared/trading/receiveRequest</code> exports <code>encodeReceiveRequest(request)</code>, which ABI-encodes the <code>data</code> argument for a share transfer to the router. The request is a positional tuple in the field order of the router's <code>ReceiveRequest</code> struct, which the <a href="./router.html#approval-free">router reference</a> lists.</p>
 			</section>
 			<section id="transaction-helpers">
 				<h2>Transaction helpers</h2>
-				<p>Transaction-facing helpers live in the Trading UI at <code>ui/trading/ts/protocol/tradeQuote.ts</code>: <code>minimumAfterSlippage</code> and <code>maximumAfterSlippage</code> build conservative bounds, <code>stableSimulation</code> reads the latest canonical block identity (number and hash) and passes it to the simulation callback, whose reads must all use that block hash, <code>retainApprovedMinimum</code> and <code>retainApprovedMaximum</code> keep the approved bounds when the submission-time simulation still satisfies them, and <code>deadlineAtBlock</code> derives router deadlines from the quote block.</p>
-				<p>Pure math is a responsive preview only. Transaction summaries must simulate the actual router call, use its returned values, and revalidate network, account, balances, approvals, reserves, deadline, and simulation immediately before wallet submission.</p>
+				<p>Transaction-facing helpers live in the Trading UI at <code>ui/trading/ts/protocol/tradeQuote.ts</code>, not in the shared package:</p>
+				<ul>
+					<li><code>minimumAfterSlippage(amount, slippageBps?)</code> floors and <code>maximumAfterSlippage(amount, slippageBps?)</code> ceils a bound; slippage defaults to <code>UI_SLIPPAGE_BPS</code> (50) and must be between 0 and 500 basis points.</li>
+					<li><code>stableSimulation(client, simulate)</code> reads the latest block and passes its <code>blockNumber</code>, <code>blockHash</code>, and <code>blockTimestamp</code> to <code>simulate</code>, whose reads must all pin that block hash.</li>
+					<li><code>simulateWithDeadline(client, expiry, simulate)</code> does the same and also resolves <code>expiry</code>, either an absolute deadline or <code>{ validityMinutes }</code> between 1 and 1,440, against the pinned block's timestamp.</li>
+					<li><code>retainApprovedMinimum(approved, refreshed, label)</code> and <code>retainApprovedMaximum(approved, refreshed, label)</code> return the approved bound, or throw when the submission-time simulation no longer satisfies it.</li>
+				</ul>
+				<p>Pure math is a responsive preview only. A quote does not expire when a new block arrives: immediately before wallet submission the client simulates the actual call again at the latest block, and submits with the bounds and deadline approved in the quote only if that simulation succeeds within them.</p>
 			</section>
 		</main>
 		<script src="../../assets/js/responsiveDocs.js"></script>
