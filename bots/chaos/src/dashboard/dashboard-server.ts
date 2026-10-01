@@ -11,7 +11,7 @@ import { pendingTransactionObservationKind } from '../state/pending-transaction-
 import { browserScript } from './browser-assets.ts'
 import { operatorHeader } from './header.ts'
 import { mutationRoutes } from './mutation-routes.ts'
-import { settingsPageMarkup } from './settings-page.ts'
+import { settingsPageMarkup } from './settings-page.tsx'
 import { booleanField, compact, isoTimestampField, record, publicExplorerUrl, safeIntegerField, safeString, scalar, stringField } from './public-fields.ts'
 import { publicAlert, publicRetirement } from './public-retirement.ts'
 

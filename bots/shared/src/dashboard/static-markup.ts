@@ -7,6 +7,13 @@ import { Fragment, isValidElement, type ComponentChildren, type ComponentType, t
  * event handlers are not supported because nothing hydrates this markup.
  */
 
+/**
+ * The classic JSX factory for bot packages that do not depend on Preact themselves. Such a package's `.tsx` page
+ * templates declare `@jsxRuntime classic`, `@jsx h` and `@jsxFrag Fragment` and import both names from here, so the
+ * compiled markup never imports `preact/jsx-runtime` from a package that cannot resolve it.
+ */
+export { Fragment, h } from 'preact'
+
 const VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
 
 /** Attributes whose `false` is meaningful, so booleans render as `"true"`/`"false"` instead of presence. */
@@ -22,7 +29,7 @@ function escapeText(value: string) {
 }
 
 function escapeAttribute(value: string) {
-	return escapeText(value).replaceAll('"', '&quot;')
+	return escapeText(value).replaceAll('"', '&quot;').replaceAll('\n', '&#10;')
 }
 
 /** Inserts repository-owned markup verbatim, for templates still composed from HTML strings. Never pass request or runtime data. */
