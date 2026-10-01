@@ -57,6 +57,20 @@ describe('chaos Docker packaging', () => {
 		expect(commands.at(-1)).toBe('exit /b %chaos_exit_code%')
 	})
 
+	test('stops previous chaos containers across projects before startup without removing state', async () => {
+		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
+		const list = 'docker ps --quiet --filter "label=com.docker.compose.service=chaos" --filter "volume=zoltar-bot-signer-locks" > "%chaos_container_list%" || goto failed'
+		const stop = 'docker stop --time 60 %%C || goto failed'
+		expect(commands).toContain(list)
+		expect(commands).toContain('for /f "usebackq" %%C in ("%chaos_container_list%") do (')
+		expect(commands).toContain(stop)
+		expect(commands.indexOf(list)).toBeGreaterThan(commands.indexOf('if /I "%~1"=="doctor" goto doctor'))
+		expect(commands.indexOf(list)).toBeLessThan(commands.indexOf(stop))
+		expect(commands.indexOf(stop)).toBeLessThan(commands.indexOf('docker compose down --remove-orphans --timeout 60 || goto failed'))
+		expect(commands).toContain('if defined chaos_container_list del "%chaos_container_list%" >nul 2>&1')
+		expect(commands.some(command => /docker (?:volume rm|compose down .*--volumes|compose down .* -v|rm)/u.test(command))).toBe(false)
+	})
+
 	test('keeps archived retirement explicit and preserves the active configuration', async () => {
 		const commands = batchCommands(await readFile(join(botDirectory, 'retirement.bat'), 'utf8'))
 		expect(commands).toContain('if "%~1"=="" goto list_archives')

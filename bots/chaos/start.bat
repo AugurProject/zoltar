@@ -2,11 +2,19 @@
 setlocal
 set "chaos_exit_code=0"
 set "chaos_pushed=0"
+set "chaos_container_list="
 pushd "%~dp0" || goto failed
 set "chaos_pushed=1"
 docker network inspect zoltar >nul 2>&1 || docker network create zoltar || goto failed
 if /I "%~1"=="doctor" goto doctor
-rem Include earlier one-off launcher containers while retaining state volumes.
+rem Stop chaos services and one-off runs even if their Compose project name differs.
+rem Both filters are required so other bots and unrelated chaos services stay running.
+set "chaos_container_list=%TEMP%\zoltar-chaos-containers-%RANDOM%-%RANDOM%.txt"
+docker ps --quiet --filter "label=com.docker.compose.service=chaos" --filter "volume=zoltar-bot-signer-locks" > "%chaos_container_list%" || goto failed
+for /f "usebackq" %%C in ("%chaos_container_list%") do (
+    docker stop --time 60 %%C || goto failed
+)
+rem Remove the current project's stopped containers while retaining state volumes.
 docker compose down --remove-orphans --timeout 60 || goto failed
 docker compose build || goto failed
 
@@ -36,6 +44,7 @@ echo Chaos startup or log monitoring failed. Review the error above.
 echo For an existing container, run docker compose logs chaos from this directory.
 
 :finish
+if defined chaos_container_list del "%chaos_container_list%" >nul 2>&1
 if "%chaos_pushed%"=="1" popd
 pause
 exit /b %chaos_exit_code%
