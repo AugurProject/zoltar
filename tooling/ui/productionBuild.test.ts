@@ -725,8 +725,8 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		}
 		const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
 		if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
-		// Labels and titles group the integer digits like other displayed amounts, while the input keeps the plain value.
-		const displayedAmount = amount.replace(/^\d+/, whole => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' '))
+		// Labels and titles group the integer digits with no-break spaces like other displayed amounts, while the input keeps the plain value.
+		const displayedAmount = amount.replace(/^\d+/, whole => whole.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0'))
 		const approvalLabel = `Approve ${displayedAmount} REP`
 		const reportLabel = triggersFork ? `Report ${outcome} & trigger fork · ${displayedAmount} REP…` : `Report ${outcome} · ${displayedAmount} REP…`
 		const reportedTitle = `Reported ${displayedAmount} REP on ${outcome}`

@@ -505,7 +505,7 @@ describe('ReportingSection', () => {
 				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (225 000 REP)' }))
 			})
 			expect(amountInput().value).toBe('225000')
-			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225 000 REP')
+			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225\u00a0000 REP')
 			expectTransactionButtonEnabled(document.body, 'Approve 225 000 REP')
 			const label = 'Report No & trigger fork · 225 000 REP…'
 			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.')

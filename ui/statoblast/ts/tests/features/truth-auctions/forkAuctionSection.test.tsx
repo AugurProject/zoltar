@@ -1641,7 +1641,7 @@ describe('ForkAuctionSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		// The hint rounds like other amounts, rounding the balance down, and keeps exact values in the titles.
-		expect(document.body.textContent).toContain('Available: ≈ 999 999 989 980.99 ETH · Min bid 0.0000000000000000010 ETH · Max keeps 0.010 ETH for gas')
+		expect(document.body.textContent).toContain('Available: ≈ 999\u00a0999\u00a0989\u00a0980.99 ETH · Min bid 0.0000000000000000010 ETH · Max keeps 0.010 ETH for gas')
 		expect(document.body.querySelector(`[title="${formatCurrencyBalance(balanceAttoEth)} ETH"]`)).not.toBeNull()
 		// An exact tick price needs no rounding notice.
 		expect(document.body.textContent).not.toContain('Will be submitted at')
