@@ -1,6 +1,6 @@
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
 import { decodeOperationsResponseValue, type OperationsResponse } from './api-validation.ts'
-import { runSerializedOperationsLoad } from './live-update.ts'
+import { runSerializedOperationsLoad } from './live-refresh.ts'
 import type { OperationsRouteState } from './operations-state.ts'
 import type { createOperationsData } from './operations-data.ts'
 

@@ -2,7 +2,7 @@ import type { LiveChangeOptions } from './browser-types.ts'
 import { requiredArrayItem } from './api-decoding.ts'
 import { element } from './app-dom.ts'
 import { exactNumber } from './format.ts'
-import { classifyLiveRecords } from './live-update.ts'
+import { classifyLiveRecords } from './live-refresh.ts'
 
 type TimeValue = string | number | Date | null | undefined
 

@@ -1,9 +1,11 @@
 import type { AccountTransaction, LoadOptions, NetworkRecord, RichListRecord } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
-import type { RefreshGate } from './live-update.ts'
+import type { RefreshGate } from './live-refresh.ts'
 import { decodeOperationsResponseValue, operationRecords, type OperationsResponse } from './api-validation.ts'
 import { decodeItemsPage, decodeValue, isAccountTransaction, isAddressIdentity, isRichListRecord } from './api-decoding.ts'
-import { isCurrentCanonicalGeneration, isCurrentContextRequest, mergeUniqueRecords, refreshPresentation } from './live-update.ts'
+import { mergeUniqueRecords } from './canonical-pagination.ts'
+import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
+import { refreshPresentation } from './refresh-presentation.ts'
 import { PORTFOLIO_KIND_LABELS, portfolioItems, portfolioItemKey, portfolioPage } from './portfolio-helpers.ts'
 
 interface AddressProfileRouteDeps {

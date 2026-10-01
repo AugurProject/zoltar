@@ -4,22 +4,10 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ensureContractArtifactsAreCurrent } from '../contracts/ensure-contract-artifacts.mts'
 import { walkFiles } from '../repo/walk.mts'
-import {
-	assemblyEventEmissions,
-	contractPageOutputPath,
-	contractPagesDirectory,
-	contractReferences,
-	delegateEventDeclarationMirrors,
-	documentedEventSchemas,
-	entrypointSignaturesBySource,
-	eventSourceByName,
-	expectedProductionSoliditySourceFingerprint,
-	outputPath,
-	readDeclarationExclusionsBySource,
-	referencedEventAbiFingerprint,
-	stateChangingAbiFingerprintBySource,
-	type ContractDeclaration,
-} from './contract-reference-metadata.mts'
+import { entrypointSignaturesBySource, readDeclarationExclusionsBySource, stateChangingAbiFingerprintBySource } from './contract-reference-abi-surface.mts'
+import { assemblyEventEmissions, delegateEventDeclarationMirrors, documentedEventSchemas, referencedEventAbiFingerprint } from './contract-reference-event-schemas.mts'
+import { eventSourceByName } from './contract-reference-event-sources.mts'
+import { contractPageOutputPath, contractPagesDirectory, contractReferences, expectedProductionSoliditySourceFingerprint, outputPath, type ContractDeclaration } from './contract-reference-metadata.mts'
 import { renderAccountingExamples } from './contract-reference-examples.mts'
 import { escapeHtml, headingId, renderRichText } from './contract-reference-rich-text.mts'
 import { renderReferencePage } from './docs-html-page.mts'

@@ -1,7 +1,7 @@
 import type { EntityHistory, StateEntity, StateTab } from './browser-types.ts'
 import { decodeEntityHistory } from './api-decoding.ts'
 import { isRecord, type EntityHistoryCoverageValue } from './api-validation.ts'
-import { collectCursorCollections, compareCanonicalEventPosition } from './live-update.ts'
+import { collectCursorCollections, compareCanonicalEventPosition } from './canonical-pagination.ts'
 
 export const entityHistoryCollectionKeys = ['snapshots', 'events', 'ammPrices', 'repEthPrices', 'uniswapRepEthPrices', 'openOracleHistory', 'pools', 'forks'] as const
 

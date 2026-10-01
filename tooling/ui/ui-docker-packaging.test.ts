@@ -4,6 +4,7 @@ import { repositoryRoot } from '../repo/root.mts'
 import { basename, dirname, join, posix, relative, resolve } from 'node:path'
 import { dockerInstructions, parseDockerfile, requireDockerStage, shellCommandSegments } from '../testing/packaging-parsers.ts'
 import ts from 'typescript'
+import { kuboImageFromDockerfile, localPublishSteps } from '../repo/publish-ui-local.mts'
 import { appSharedPackages, sharedPackageClosure } from '../repo/sharedPackages.ts'
 
 const dockerfile = join(repositoryRoot, 'ui', 'Dockerfile')
@@ -245,17 +246,33 @@ describe('UI Docker packaging', () => {
 		expect(dockerInstructions(local, 'COPY')).toContain('--chmod=755 ./tooling/ui/docker-local-publisher-entrypoint.sh /publish.sh')
 	})
 
-	test('Windows publishing checks the existing host node before building and only runs clients', async () => {
+	test('local publishing checks the existing host node before building and only runs clients', async () => {
+		const source = await readFile(dockerfile, 'utf8')
+		const stages = parseDockerfile(source)
+		const kubo = requireDockerStage(stages, 'ipfs-kubo')
+		requireDockerStage(stages, 'local-publisher')
+		const steps = localPublishSteps(kuboImageFromDockerfile(source), '/dns4/host.docker.internal/tcp/5001')
+		expect(steps.map(step => step.command.slice(0, 2).join(' '))).toEqual(['docker info', 'docker run', 'docker build', 'docker run'])
+		const [dockerCheck, nodeCheck, build, publish] = steps
+		if (dockerCheck === undefined || nodeCheck === undefined || build === undefined || publish === undefined) throw new Error('local publishing must run four Docker steps')
+		expect(dockerCheck.quiet).toBe(true)
+		expect(nodeCheck.quiet).toBe(true)
+		expect(nodeCheck.command).toContain(kubo.base)
+		expect(nodeCheck.command.slice(-4)).toEqual(['--api', '/dns4/host.docker.internal/tcp/5001', '--timeout=10s', 'id'])
+		expect(build.command).toEqual(['docker', 'build', '--target', 'local-publisher', '-f', 'ui/Dockerfile', '.', '-t', 'zoltar-local-ipfs-publisher'])
+		expect(publish.command.at(-1)).toBe('zoltar-local-ipfs-publisher')
+		expect(publish.command).toContain('IPFS_API=/dns4/host.docker.internal/tcp/5001')
+		expect(publish.command).not.toContain('-p')
+		expect(publish.command).not.toContain('-d')
+	})
+
+	test('publish.bat only delegates to the cross-platform local publisher', async () => {
+		const rootScripts: unknown = JSON.parse(await readFile(rootPackage, 'utf8'))
+		expect(rootScripts).toMatchObject({ scripts: { 'ui:publish:local': 'bun ./tooling/repo/publish-ui-local.mts' } })
 		const source = (await readFile(join(repositoryRoot, 'publish.bat'), 'utf8')).replaceAll('\r\n', '\n')
-		const kubo = requireDockerStage(parseDockerfile(await readFile(dockerfile, 'utf8')), 'ipfs-kubo')
-		const commands = source
-			.split('\n')
-			.map(line => line.trim())
-			.filter(line => line.startsWith('docker '))
-		expect(commands).toEqual(['docker info >nul 2>&1', `docker run --rm --entrypoint ipfs ${kubo.base} --api "%IPFS_API%" --timeout=10s id >nul`, 'docker build --target local-publisher -f ui/Dockerfile . -t zoltar-local-ipfs-publisher', 'docker run --rm -e IPFS_API zoltar-local-ipfs-publisher'])
-		for (const command of commands) expect(source).toContain(`${command}\nif errorlevel 1`)
-		expect(source).toContain('if not defined IPFS_API set "IPFS_API=/dns4/host.docker.internal/tcp/5001"')
 		expect(source).toContain('pushd "%~dp0" || exit /b 1')
+		expect(source).toContain('call bun run ui:publish:local\nif errorlevel 1 goto failed')
 		expect(source).toContain('exit /b 1')
+		expect(source.split('\n').filter(line => /^\s*docker\b/u.test(line))).toEqual([])
 	})
 })

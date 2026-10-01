@@ -1,4 +1,4 @@
-import { demoTimelineEvidenceStatus } from '../../../browser/live-update.ts'
+import { demoTimelineEvidenceStatus } from '../../../browser/history-evidence.ts'
 import { demoAddress, demoHash } from './chain-fixtures.ts'
 import type { DemoEnvironment } from './environment.ts'
 import { demoOperations } from './operations.ts'

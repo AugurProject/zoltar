@@ -4,8 +4,8 @@ import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { repositoryRoot } from './root.mts'
 
 /**
- * Cross-platform equivalent of publish.bat: builds all three UIs and pins them on the IPFS node that is
- * already running on the host. Run it with `bun run ui:publish:local`.
+ * Builds all three UIs and pins them on the IPFS node that is already running on the host.
+ * Run it with `bun run ui:publish:local`; publish.bat is a Windows double-click wrapper around that command.
  */
 const defaultLocalIpfsApi = '/dns4/host.docker.internal/tcp/5001'
 const localPublisherImage = 'zoltar-local-ipfs-publisher'
@@ -15,7 +15,7 @@ const hostGateway = '--add-host=host.docker.internal:host-gateway'
 type PublishStep = {
 	readonly description: string
 	readonly command: readonly string[]
-	/** Discard standard output, as publish.bat does for its probes. */
+	/** Discard standard output of probe commands. */
 	readonly quiet: boolean
 	readonly failure: string
 }

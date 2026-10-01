@@ -25,7 +25,7 @@
 		"./dashboard/form-state": "./src/dashboard/form-state.ts",
 		"./dashboard/forms": "./src/dashboard/forms.ts",
 		"./dashboard/readiness": "./src/dashboard/readiness.ts",
-		"./dashboard/settings-markup": "./src/dashboard/settings-markup.ts",
+		"./dashboard/settings-markup": "./src/dashboard/settings-markup.tsx",
 		"./dashboard/settings-navigation": "./src/dashboard/settings-navigation.ts",
 		"./dashboard/static-markup": "./src/dashboard/static-markup.ts",
 		"./dashboard/header": "./src/dashboard/header.ts",

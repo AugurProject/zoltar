@@ -2,8 +2,11 @@ import type { ActivityRecord, DetailContextSnapshot, LoadOptions } from './brows
 import type { ActivityRouteState } from './activity-route-state.ts'
 import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
-import type { RefreshGate } from './live-update.ts'
-import { collectCanonicalPages, isCurrentCanonicalGeneration, isCurrentContextRequest, paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, resolveActivityRefreshDepth, retainedPaginationAvailable, visibleActivityLogCount } from './live-update.ts'
+import type { RefreshGate } from './live-refresh.ts'
+import { visibleActivityLogCount } from './activity-detail-dom.ts'
+import { collectCanonicalPages } from './canonical-pagination.ts'
+import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
+import { paginationRequestAllowed, queuedPaginationPresentation, refreshPresentation, resolveActivityRefreshDepth, retainedPaginationAvailable } from './refresh-presentation.ts'
 import { decodeItemsPage, isActivityRecord } from './api-decoding.ts'
 import { logKeyFor } from './activity-row.ts'
 

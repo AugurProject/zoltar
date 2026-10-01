@@ -1,0 +1,52 @@
+import { element } from '@zoltar/bot-shared/dashboard/dom'
+
+/** Looks up every fixed dashboard element the page controllers use once; a missing element fails the page load with its ID. */
+export function createDashboardElements() {
+	return {
+		networkForm: element('network-form', HTMLFormElement),
+		networkFields: element('network-fields', HTMLFieldSetElement),
+		networkName: element('network-name', HTMLSelectElement),
+		readRpcUrl: element('read-rpc-url', HTMLInputElement),
+		publicRpcUrls: element('public-rpc-urls', HTMLTextAreaElement),
+		quorumRpcUrls: element('quorum-rpc-urls', HTMLTextAreaElement),
+		rpcQuorum: element('rpc-quorum', HTMLSelectElement),
+		networkStatus: element('network-status', HTMLSpanElement),
+		networkScopeSummary: element('network-scope-summary', HTMLElement),
+		marketConfigurationForm: element('market-configuration-form', HTMLFormElement),
+		marketConfigurationFields: element('market-configuration-fields', HTMLFieldSetElement),
+		marketConfigurationSaveStatus: element('market-configuration-save-status', HTMLSpanElement),
+		testMarketSourcesButton: element('test-market-sources', HTMLButtonElement),
+		showActiveAdmissionButton: element('show-active-admission', HTMLButtonElement),
+		marketSourceCaption: element('market-source-caption', HTMLTableCaptionElement),
+		marketSourceTestStatus: element('market-source-test-status', HTMLSpanElement),
+		recoveryList: element('recovery-list', HTMLDivElement),
+		recoveryGuidance: element('recovery-guidance', HTMLParagraphElement),
+		recheckRecovery: element('recheck-recovery', HTMLButtonElement),
+		universeRows: element('universe-rows', HTMLDivElement),
+		modeBadge: element('mode-badge', HTMLSpanElement),
+		networkBadge: element('network-badge', HTMLSpanElement),
+		runStatusBadge: element('run-status-badge', HTMLSpanElement),
+		capabilityBadge: element('capability-badge', HTMLSpanElement),
+		attentionBadge: element('attention-badge', HTMLAnchorElement),
+		pauseButton: element('pause-button', HTMLButtonElement),
+		pauseStatus: element('pause-status', HTMLSpanElement),
+		lastScan: element('last-scan', HTMLParagraphElement),
+		blockStatus: element('block-status', HTMLParagraphElement),
+		globalError: element('global-error', HTMLDivElement),
+		configurationStatus: element('configuration-status', HTMLDivElement),
+		strategyForm: element('strategy-form', HTMLFormElement),
+		strategyFields: element('strategy-fields', HTMLFieldSetElement),
+		strategyStatus: element('strategy-status', HTMLSpanElement),
+		settingsChainScope: element('settings-chain-scope', HTMLParagraphElement),
+		healthPolicyPreview: element('health-policy-preview', HTMLParagraphElement),
+		resumeDialog: element('resume-dialog', HTMLElement),
+		cancelResume: element('cancel-resume', HTMLButtonElement),
+		confirmResume: element('confirm-resume', HTMLButtonElement),
+		poolBrowser: element('pool-browser', HTMLElement),
+		activityFilter: element('activity-filter', HTMLSelectElement),
+		rpcEndpointHealth: element('rpc-endpoint-health', HTMLDivElement),
+		marketConfigurationEditor: element('market-configuration-editor', HTMLDivElement),
+	}
+}
+
+export type DashboardElements = ReturnType<typeof createDashboardElements>

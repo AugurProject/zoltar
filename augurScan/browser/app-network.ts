@@ -7,7 +7,8 @@ import { abortActivityRequests, clearLiveTimers, invalidateStateRequestVersions 
 import { hideCanonicalDialogStatus, updateConnectionStatus, updateFreshness } from './app-status.ts'
 import type { ScannerViews } from './app-views.ts'
 import { exactNumber, utcDateTime } from './format.ts'
-import { availableSessionSnapshotStorage, createSessionSnapshotCache, knownNetworkName, restoredNetworkSnapshotIsCurrent } from './live-update.ts'
+import { knownNetworkName, restoredNetworkSnapshotIsCurrent } from './network-freshness.ts'
+import { availableSessionSnapshotStorage, createSessionSnapshotCache } from './session-snapshot-cache.ts'
 import { createNetworkRenderer } from './network-render.ts'
 import { createNetworkRoute } from './network-route.ts'
 

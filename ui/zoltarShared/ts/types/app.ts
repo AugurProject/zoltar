@@ -3,7 +3,7 @@ import type { MarketType } from '@zoltar/ui-core-shared/types/contracts.js'
 export type { AccountState, TransactionLifecycleParameters, WriteOperationContext, WriteOperationsParameters } from '@zoltar/ui-core-shared/types/app.js'
 
 export const ZOLTAR_ROUTES = ['deploy', 'zoltar', 'not-found'] as const
-export type Route = (typeof ZOLTAR_ROUTES)[number]
+export type ZoltarRoute = (typeof ZOLTAR_ROUTES)[number]
 
 export type MarketFormState = {
 	answerUnit: string

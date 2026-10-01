@@ -2,12 +2,12 @@ import { buildRouteHref, createRouting, getCurrentRouteHash, getRouteHashSearch,
 import { updateSearchParams } from '@zoltar/ui-core-shared/navigation/urlParams.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { isHexAddressInput } from '@zoltar/ui-core-shared/lib/address.js'
-import type { Route } from '../types/app.js'
+import type { StatoblastRoute } from '../types/app.js'
 import { buildPoolsRouteHash, parsePoolsRouteHash, POOLS_ROUTE_HASH, STATOBLAST_CONTEXT_QUERY_PARAMS } from './statoblastLocation.js'
 
-type StatoblastRoute = Exclude<Route, 'not-found'>
+type NavigableStatoblastRoute = Exclude<StatoblastRoute, 'not-found'>
 
-const STATOBLAST_ROUTING_CONFIG: RoutingConfig<StatoblastRoute> = {
+const STATOBLAST_ROUTING_CONFIG: RoutingConfig<NavigableStatoblastRoute> = {
 	defaultRoute: 'pools',
 	buildNavigationHref: (route, routeHash, search) => {
 		const current = parsePoolsRouteHash(getCurrentRouteHash())

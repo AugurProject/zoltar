@@ -1,6 +1,7 @@
 {
 	"extends": "../tsconfig.base.json",
 	"compilerOptions": {
+		"jsx": "react-jsx",
 		"paths": {
 			"@zoltar/bot-shared/contracts/abi": ["../shared/src/contracts/abi.generated.ts"],
 			"@zoltar/bot-shared/*": ["../shared/src/*"],

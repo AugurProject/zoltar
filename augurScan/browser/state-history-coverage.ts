@@ -1,6 +1,7 @@
 import type { EntityHistory, SelectEntityOptions, StateEntity, StateTab } from './browser-types.ts'
 import { isRecord } from './api-validation.ts'
-import { entityHistoryContinuationPresentation, summarizeHistoryCollections } from './live-update.ts'
+import { summarizeHistoryCollections } from './canonical-pagination.ts'
+import { entityHistoryContinuationPresentation } from './refresh-presentation.ts'
 import { entityHistoryCollectionKeys } from './state-history-data.ts'
 
 export interface StateHistoryCoverageDeps {

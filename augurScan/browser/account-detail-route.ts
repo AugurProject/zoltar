@@ -2,7 +2,8 @@ import type { AccountDetailOptions, AccountReference, DialogSnapshot, RichListRe
 import type { ActivityDetailState } from './activity-detail-state.ts'
 import type { CanonicalState } from './canonical-state.ts'
 import { createAccountTransactionLoader } from './account-dialog.ts'
-import { reconcileTransactionDialogSnapshot, type RefreshGate, urlWithoutLogDetail } from './live-update.ts'
+import { reconcileTransactionDialogSnapshot, urlWithoutLogDetail } from './activity-detail-dom.ts'
+import type { RefreshGate } from './live-refresh.ts'
 
 interface AccountDetailRouteDeps {
 	activityDetailState: ActivityDetailState
