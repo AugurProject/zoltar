@@ -9,7 +9,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { LiveSecurityPoolDetails, PairInitializationAction, SecurityPoolRouteEmptyState } from '../../features/LiveSecurityPoolDetails.js'
 import { LivePortfolio } from '../../features/LivePortfolio.js'
-import type { LiveMarket } from '../../protocol/live.js'
+import { shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 
 const pool: Address = `0x${'12'.repeat(20)}`
@@ -57,19 +57,70 @@ describe('live portfolio scope', () => {
 		expect(button?.getAttribute('aria-describedby')).toBeTruthy()
 	})
 
-	for (const state of ['disconnected', 'loading', 'error'] as const) {
-		test(`links to pool details without exposing token identity while balances are ${state}`, async () => {
-			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: state === 'error' ? 'RPC unavailable' : undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
+	test('links to pool details without exposing token identity while disconnected', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: undefined }]} balanceState='disconnected' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.textContent).toContain(pool)
+		expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
+		expect(rendered.container.textContent).not.toContain(shareToken)
+		expect(rendered.container.textContent).not.toContain('Question ID')
+		expect(rendered.container.textContent).not.toContain('Outcome token IDs')
+		expect(rendered.container.textContent).not.toContain('0 shares')
+	})
+
+	for (const state of ['loading', 'error'] as const) {
+		test(`lists no position rows and no token identity while balances are ${state}`, async () => {
+			const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: undefined }]} balanceState={state} balanceError={state === 'error' ? 'RPC unavailable' : undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
 			cleanupRendered = rendered.cleanup
-			expect(rendered.container.textContent).toContain(pool)
-			expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
+			// Until the balances are known, no market is presented as a holding.
+			expect(rendered.container.querySelector('.portfolio-position-row')).toBeNull()
+			expect(rendered.container.textContent).not.toContain(pool)
 			expect(rendered.container.textContent).not.toContain(shareToken)
 			expect(rendered.container.textContent).not.toContain('Question ID')
 			expect(rendered.container.textContent).not.toContain('Outcome token IDs')
 			expect(rendered.container.textContent).not.toContain('0 shares')
+			if (state === 'loading') expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Loading balances')
 			if (state === 'error') expect(rendered.container.textContent).toContain('RPC unavailable')
 		})
 	}
+
+	test('lists each pool as its balance arrives while the rest still load', async () => {
+		const held = { scope: shareBalanceScope(market), yes: 10n ** 18n, no: 0n, invalid: 0n, lp: 0n }
+		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, title: 'Second scoped portfolio' }
+		const rendered = await renderIntoDocument(
+			<LivePortfolio
+				entries={[
+					{ market, balances: held, error: undefined },
+					{ market: secondMarket, balances: undefined, error: undefined },
+				]}
+				balanceState='loading'
+				balanceError={undefined}
+				retryBalances={async () => undefined}
+				nowSeconds={0n}
+			/>,
+		)
+		cleanupRendered = rendered.cleanup
+		expect(Array.from(rendered.container.querySelectorAll('[data-portfolio-pool]')).map(row => row.getAttribute('data-portfolio-pool'))).toEqual([pool])
+		expect(rendered.container.querySelector('[role="status"]')?.textContent).toContain('Loading balances')
+	})
+
+	test('links a pool whose own balance read failed to its details without exposing token identity', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: undefined, error: 'RPC unavailable' }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} />)
+		cleanupRendered = rendered.cleanup
+		expect(rendered.container.querySelector(`a[href="#/security-pool/${pool}"]`)).not.toBeNull()
+		expect(rendered.container.textContent).not.toContain(shareToken)
+		expect(rendered.container.textContent).not.toContain('Outcome token IDs')
+		expect(rendered.container.textContent).toContain('RPC unavailable')
+	})
+
+	test('names the selected universe when no position is found and links to switching it', async () => {
+		const rendered = await renderIntoDocument(<LivePortfolio entries={[{ market, balances: { scope: shareBalanceScope(market), yes: 0n, no: 0n, invalid: 0n, lp: 0n }, error: undefined }]} balanceState='ready' balanceError={undefined} retryBalances={async () => undefined} nowSeconds={0n} universeId={0n} />)
+		cleanupRendered = rendered.cleanup
+		const empty = rendered.container.querySelector('.empty-state')
+		expect(empty?.textContent).toContain('No positions in Genesis')
+		expect(empty?.querySelector('a')?.getAttribute('href')).toBe('#/universe')
+		expect(empty?.querySelector('a')?.textContent).toBe('Switch universe')
+	})
 
 	test('renders separate balance groups for each exact SecurityPool', async () => {
 		const secondMarket = { ...market, pool: secondPool, shareToken: secondShareToken, universeId: 8n, questionId: 10n, title: 'Second scoped portfolio' }
@@ -260,6 +311,13 @@ describe('live portfolio scope', () => {
 	test('announces when a routed live pool is unavailable in the selected universe', async () => {
 		const rendered = await renderIntoDocument(<SecurityPoolRouteEmptyState discoveryState='ready' discoveryError={undefined} workflowLocked={false} retry={() => undefined} />)
 		cleanupRendered = rendered.cleanup
-		expect(rendered.container.querySelector('.empty-state')?.textContent).toContain('This security pool is not available in the selected universe.')
+		const empty = rendered.container.querySelector('.empty-state')
+		// The pool route names what is wrong once, and offers both ways out.
+		expect(empty?.querySelector('.empty-state-title')?.textContent).toBe('Pool not in this universe')
+		expect(empty?.textContent).not.toContain('No security pool selected')
+		expect(Array.from(empty?.querySelectorAll('a') ?? []).map(link => [link.textContent, link.getAttribute('href')])).toEqual([
+			['Switch universe', '#/universe'],
+			['Markets', '#/market'],
+		])
 	})
 })

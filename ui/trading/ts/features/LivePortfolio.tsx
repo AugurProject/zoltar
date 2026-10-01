@@ -10,6 +10,8 @@ import { formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, forma
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { EmptyState } from '@zoltar/ui-core-shared/components/EmptyState.js'
+import { SkeletonList } from '@zoltar/ui-core-shared/components/Skeleton.js'
+import { formatUniverseDisplayLabel } from '@zoltar/ui-core-shared/lib/universeLabels.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { WorkflowSubsection } from '@zoltar/ui-core-shared/components/WorkflowSubsection.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
@@ -21,6 +23,7 @@ import type { BalanceState, PortfolioBalanceEntry } from './live/liveTradingType
 import { liveCopy } from '../copy/live.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import * as portfolioCopy from '../copy/portfolio.js'
+import { marketsCopy } from '../copy/markets.js'
 import { lpReserveClaims, portfolioOverview, type PortfolioValuation } from './portfolioModel.js'
 import { PortfolioActionItems, PortfolioRowActions, PortfolioRowValue, PortfolioSummary } from './PortfolioOverview.js'
 
@@ -118,6 +121,7 @@ export function LivePortfolio({
 	retryBalances,
 	nowSeconds,
 	walletAction,
+	universeId,
 }: {
 	entries: readonly PortfolioBalanceEntry[]
 	balanceState: BalanceState
@@ -126,8 +130,15 @@ export function LivePortfolio({
 	nowSeconds: bigint
 	/** Inline connect or switch-network control for the disconnected state. */
 	walletAction?: PortfolioWalletAction | undefined
+	/** The universe the positions were read from; the empty state names it and offers to switch. */
+	universeId?: bigint | undefined
 }) {
-	const visibleEntries = balanceState === 'ready' ? entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances))) : entries
+	// Without a wallet the rows list the pools a connection would read. Once a wallet is known, only pools whose own
+	// read has answered are listed (each pool's balance arrives separately while loading), so a pool still waiting for
+	// its balance, or one left unread by a failed refresh, never reads as a holding.
+	let visibleEntries: readonly PortfolioBalanceEntry[] = []
+	if (balanceState === 'ready' || balanceState === 'loading') visibleEntries = entries.filter(entry => entry.error !== undefined || (entry.balances !== undefined && hasPortfolioBalance(entry.balances)))
+	else if (balanceState === 'disconnected') visibleEntries = entries
 	const overview = portfolioOverview(visibleEntries, nowSeconds)
 	const showSummary = balanceState === 'ready' && visibleEntries.length > 0
 	return (
@@ -140,9 +151,21 @@ export function LivePortfolio({
 					}
 				/>
 			) : null}
-			{balanceState === 'loading' ? <EmptyState live title={portfolioCopy.loadingPoolBalances} /> : null}
+			{balanceState === 'loading' ? <SkeletonList label={portfolioCopy.loadingPoolBalances} rows={visibleEntries.length === 0 ? 2 : 1} /> : null}
 			{balanceState === 'error' ? <BalanceLoadError message={balanceError ?? portfolioCopy.portfolioBalancesUnavailable} retry={retryBalances} /> : null}
-			{balanceState === 'ready' && visibleEntries.length === 0 ? <EmptyState title={portfolioCopy.noPortfolioBalances} /> : null}
+			{balanceState === 'ready' && visibleEntries.length === 0 ? (
+				<EmptyState
+					title={universeId === undefined ? portfolioCopy.noPortfolioBalances : portfolioCopy.noPositionsInUniverse(formatUniverseDisplayLabel(universeId))}
+					detail={universeId === undefined ? undefined : portfolioCopy.noPortfolioBalances}
+					actions={
+						universeId === undefined ? undefined : (
+							<a className='button-link secondary-link' href={getTradingRouteHref('#/universe')}>
+								{marketsCopy.switchUniverse}
+							</a>
+						)
+					}
+				/>
+			) : null}
 			{showSummary ? <PortfolioSummary overview={overview} /> : null}
 			{showSummary ? <PortfolioActionItems items={overview.actionItems} nowSeconds={nowSeconds} /> : null}
 			{visibleEntries.length === 0 ? null : (

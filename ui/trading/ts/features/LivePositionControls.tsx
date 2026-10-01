@@ -2,6 +2,7 @@ import { useId } from 'preact/hooks'
 import type { Hash } from '@zoltar/core-shared/evm/ethereum'
 import { FormField } from '@zoltar/ui-core-shared/components/FormField.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
+import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { formatCurrencyInputBalance, formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
@@ -32,6 +33,8 @@ export type PositionTicket = Readonly<{
 	positionHash: Hash | undefined
 	message: string | undefined
 	positionReceiptWarning: string | undefined
+	/** The last submission stopped because the price moved past the estimate; shown as a prompt to review instead of a failure. */
+	requoteNotice: string | undefined
 	setMode(value: TradeMode): void
 	setSide(value: 'YES' | 'NO'): void
 	setAmount(value: string): void
@@ -83,7 +86,26 @@ function InvalidCoverageExplanation({ model, side, disabled, onUseSellable }: { 
  * Trade ticket container: debounces the amount, derives the pure ticket model, and renders the estimate and the
  * one-button workflow. Without a wallet it still prices the trade and the button offers to connect.
  */
-export function LivePositionControls({ market, nowSeconds, settings, ticket, wallet, holdings, externallyLocked }: { market: LiveMarket; nowSeconds: bigint; settings: TradeSettings; ticket: PositionTicket; wallet: TicketWallet; holdings: TicketBalances; externallyLocked: boolean }) {
+export function LivePositionControls({
+	market,
+	nowSeconds,
+	settings,
+	ticket,
+	wallet,
+	holdings,
+	externallyLocked,
+	onOpenSettlement,
+}: {
+	market: LiveMarket
+	nowSeconds: bigint
+	settings: TradeSettings
+	ticket: PositionTicket
+	wallet: TicketWallet
+	holdings: TicketBalances
+	externallyLocked: boolean
+	/** Opens the market's Settlement view, which the closed-market notice points to. */
+	onOpenSettlement?: (() => void) | undefined
+}) {
 	const { mode, side, state } = ticket
 	const settledAmount = useDebouncedValue(ticket.amount, ESTIMATE_DEBOUNCE_MILLISECONDS)
 	const closed = !marketAcceptsNewRisk(market, nowSeconds)
@@ -112,8 +134,22 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 	const estimate = model.estimate
 	const walletStep = panelWalletStep(wallet, model.primaryStep === 'submit', workflowLocked)
 	const confirmedText = revalidatingAfterReceipt ? workflowCopy.revalidatingAfterReceipt(workflowCopy.actionConfirmedOnchain(model.actionLabel)) : undefined
+	const requoted = state === 'error' && ticket.requoteNotice !== undefined
 	return (
 		<div className='position-controls' aria-busy={revalidatingAfterReceipt}>
+			{closed ? (
+				<UserMessage
+					className='trade-ticket-closed'
+					detail={ticketCopy.tradingEndedDetail}
+					actions={
+						onOpenSettlement === undefined ? undefined : (
+							<button type='button' className='secondary' onClick={onOpenSettlement}>
+								{ticketCopy.openSettlement}
+							</button>
+						)
+					}
+				/>
+			) : null}
 			{/* The reading column shows the resting odds; the ticket adds the bar only to preview how this trade moves them. */}
 			{estimate === undefined ? null : <ProbabilityBar yesPercent={probabilityPercent(estimate.quote.conditionalYesBpsAfter)} beforePercent={probabilityPercent(estimate.quote.conditionalYesBpsBefore)} />}
 			<div className='trade-ticket-switchers'>
@@ -159,7 +195,7 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 				/>
 			</FormField>
 			{model.shortcuts.length === 0 ? null : (
-				<div className='trade-amount-shortcuts' role='group' aria-label={ticketCopy.sellShortcutsLabel}>
+				<div className='trade-amount-shortcuts' role='group' aria-label={mode === 'entry' ? ticketCopy.buyShortcutsLabel : ticketCopy.sellShortcutsLabel}>
 					{model.shortcuts.map(shortcut => (
 						<button key={shortcut.label} type='button' className='secondary' disabled={controlsDisabled} onClick={() => ticket.setAmount(formatCurrencyInputBalance(shortcut.value, SHARE_QUANTITY_DECIMALS))}>
 							{shortcut.label}
@@ -168,7 +204,18 @@ export function LivePositionControls({ market, nowSeconds, settings, ticket, wal
 				</div>
 			)}
 			<InvalidCoverageExplanation model={model} side={side} disabled={controlsDisabled} onUseSellable={ticket.setAmount} />
-			<QuotedTransactionPanel phase={state} actionLabel={model.actionLabel} availability={model.availability} statusText={confirmedText} transactionHash={ticket.positionHash} receiptWarning={ticket.positionReceiptWarning} error={ticket.message} walletStep={walletStep} onSubmit={() => void ticket.submit(estimate)}>
+			{requoted ? <UserMessage placement='page' tone='warning' announcement='polite' className='trade-requote-notice' detail={ticket.requoteNotice} /> : null}
+			<QuotedTransactionPanel
+				phase={state}
+				actionLabel={model.actionLabel}
+				availability={model.availability}
+				statusText={confirmedText}
+				transactionHash={ticket.positionHash}
+				receiptWarning={ticket.positionReceiptWarning}
+				error={requoted ? undefined : ticket.message}
+				walletStep={walletStep}
+				onSubmit={() => void ticket.submit(estimate)}
+			>
 				{estimate === undefined || model.impactTier === undefined ? null : (
 					<TradeEstimatePanel estimate={estimate} market={market} settings={settings} impactTier={model.impactTier} impactAcknowledged={model.impactAcknowledged} disabled={controlsDisabled} onAcknowledgeImpact={checked => ticket.setAcknowledgedImpactBps(checked ? estimate.impactBps : undefined)} />
 				)}

@@ -31,13 +31,16 @@ type PortfolioActionKind = 'redeem' | 'settle' | 'withdraw-liquidity' | 'trading
 /** What the item's link does. */
 type PortfolioAction = 'sell' | 'redeem' | 'settle' | 'withdraw-liquidity'
 
-export type PortfolioActionItem = Readonly<{ kind: PortfolioActionKind; action: PortfolioAction; pool: LiveMarket['pool']; title: string; deadline: bigint | undefined }>
+/** `sellSide` is the outcome a sell action opens the ticket on. */
+export type PortfolioActionItem = Readonly<{ kind: PortfolioActionKind; action: PortfolioAction; pool: LiveMarket['pool']; title: string; deadline: bigint | undefined; sellSide: 'YES' | 'NO' }>
 
 export type PortfolioRow = Readonly<{
 	entry: PortfolioBalanceEntry
 	state: PortfolioRowState
 	valuation: PortfolioValuation
 	canSell: boolean
+	/** The held outcome a Sell opens the ticket on: the larger holding, YES on a tie. */
+	sellSide: 'YES' | 'NO'
 	canRedeem: boolean
 	actionItems: readonly PortfolioActionItem[]
 }>
@@ -135,7 +138,8 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	const state = rowState(entry, nowSeconds)
 	const valuation = rowValuation(entry, state)
 	const { market, balances } = entry
-	if (balances === undefined || state === 'unavailable') return { entry, state, valuation, canSell: false, canRedeem: false, actionItems: [] }
+	if (balances === undefined || state === 'unavailable') return { entry, state, valuation, canSell: false, sellSide: 'YES', canRedeem: false, actionItems: [] }
+	const sellSide = balances.no > balances.yes ? 'NO' : 'YES'
 	const availability = settlementAvailability(market, balances)
 	const pairTradable = market.pair !== undefined && market.yesReserve > 0n && market.noReserve > 0n
 	// Exits pair a long share with INVALID insurance, so a bare YES or NO holding has nothing the ticket can sell.
@@ -143,7 +147,7 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	const canSell = state === 'open' && pairTradable && holdsInsuredLong
 	// While trading is open, exits replace redemption; the settlement workspace opens once the market closes.
 	const canRedeem = state !== 'open' && (availability.canRedeemWinningShares || availability.canRedeemCompleteSets)
-	const item = (kind: PortfolioActionKind, action: PortfolioAction, deadline: bigint | undefined = undefined): PortfolioActionItem => ({ kind, action, pool: market.pool, title: market.title, deadline })
+	const item = (kind: PortfolioActionKind, action: PortfolioAction, deadline: bigint | undefined = undefined): PortfolioActionItem => ({ kind, action, pool: market.pool, title: market.title, deadline, sellSide })
 	const actionItems: PortfolioActionItem[] = []
 	if (canRedeem) actionItems.push(item('redeem', 'redeem'))
 	if (state === 'settlement-required' && availability.canMigrateShares) actionItems.push(item('settle', 'settle'))
@@ -151,7 +155,7 @@ function portfolioRow(entry: PortfolioBalanceEntry, nowSeconds: bigint): Portfol
 	const closesSoon = state === 'open' && market.endTime > nowSeconds && market.endTime - nowSeconds <= TRADING_CLOSES_SOON_SECONDS
 	if (closesSoon && canSell) actionItems.push(item('trading-closes', 'sell', market.endTime))
 	else if (closesSoon && balances.lp > 0n) actionItems.push(item('trading-closes', 'withdraw-liquidity', market.endTime))
-	return { entry, state, valuation, canSell, canRedeem, actionItems }
+	return { entry, state, valuation, canSell, sellSide, canRedeem, actionItems }
 }
 
 function compareActionItems(left: PortfolioActionItem, right: PortfolioActionItem) {

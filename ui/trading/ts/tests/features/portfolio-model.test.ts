@@ -98,9 +98,9 @@ describe('portfolio rows', () => {
 
 	test('flags open positions whose trading closes within a week, with the question end as the deadline', () => {
 		const endTime = NOW + WEEK
-		expect(row(entry({ endTime }, { no: SET, invalid: SET })).actionItems).toEqual([{ kind: 'trading-closes', action: 'sell', pool, title: market.title, deadline: endTime }])
+		expect(row(entry({ endTime }, { no: SET, invalid: SET })).actionItems).toEqual([{ kind: 'trading-closes', action: 'sell', pool, title: market.title, deadline: endTime, sellSide: 'NO' }])
 		// Liquidity providers are pointed at withdrawal rather than a sale they cannot make.
-		expect(row(entry({ endTime }, { lp: SET })).actionItems).toEqual([{ kind: 'trading-closes', action: 'withdraw-liquidity', pool, title: market.title, deadline: endTime }])
+		expect(row(entry({ endTime }, { lp: SET })).actionItems).toEqual([{ kind: 'trading-closes', action: 'withdraw-liquidity', pool, title: market.title, deadline: endTime, sellSide: 'YES' }])
 		expect(row(entry({ endTime: endTime + 1n }, { no: SET, invalid: SET })).actionItems).toEqual([])
 		// INVALID alone cannot be sold, so its closing is not an action.
 		expect(row(entry({ endTime }, { invalid: SET })).actionItems).toEqual([])

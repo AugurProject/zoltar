@@ -2,6 +2,8 @@ import { installTradingRouting, tradingRouting } from '../../lib/routing.js'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { installDomTestLifecycle } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
+import { render } from 'preact'
+import { act } from 'preact/test-utils'
 import { App } from '../../app/App.js'
 import { TradeEstimatePanel } from '../../features/TradeEstimatePanel.js'
 import { DEFAULT_TRADE_SETTINGS } from '../../lib/tradeSettings.js'
@@ -53,7 +55,13 @@ describe('essential trading copy', () => {
 		const buy = ticketEstimateFor(market, 'entry', '20')
 		const acknowledgements: boolean[] = []
 		const warning = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='warning' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={value => acknowledgements.push(value)} />)
-		expect(warning.container.querySelector('[role="alert"]')?.textContent).toContain('High price impact')
+		expect(warning.container.querySelector('.trade-impact-warning')?.textContent).toContain('High price impact')
+		// The live region names the tier, not the percentage, so a re-priced estimate in the same tier is not re-announced.
+		expect(warning.container.querySelector('[role="alert"]')).toBeNull()
+		const announcement = () => warning.container.querySelector('.trade-estimate [role="status"]')?.textContent
+		expect(announcement()).toBe('High price impact. Confirm it before trading.')
+		await act(() => render(<TradeEstimatePanel estimate={ticketEstimateFor(market, 'entry', '21')} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='warning' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={value => acknowledgements.push(value)} />, warning.container))
+		expect(announcement()).toBe('High price impact. Confirm it before trading.')
 		warning.container.querySelector<HTMLInputElement>('.trade-impact-acknowledge input')?.click()
 		expect(acknowledgements).toEqual([true])
 		await warning.cleanup()
@@ -61,6 +69,7 @@ describe('essential trading copy', () => {
 		cleanupRendered = blocked.cleanup
 		expect(blocked.container.textContent).toContain('above the 15% limit')
 		expect(blocked.container.querySelector('.trade-impact-acknowledge')).toBeNull()
+		expect(blocked.container.querySelector('.trade-estimate [role="status"]')?.textContent).toBe('Price impact above the 15% limit. Trade a smaller amount.')
 	})
 
 	test('resolves the retired browse hashes to their lookup landings and defaults to the market lookup', () => {
