@@ -287,6 +287,7 @@ export const customApprovalAmountDisclosure = 'Advanced: custom approval amount'
 export const questionEndedReason = 'This question has already ended.'
 
 export const commitmentNeedsOracleReport = 'A new Open Oracle report is needed to change the commitment limit. Set its starting price and fund the report when submitting the change.'
+export const vaultActionsNeedOracleReport = 'A valid Open Oracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.'
 export const openPriceOracle = 'Open price oracle'
 
 export const oracleOperationPriceExpiresTooSoon = 'The oracle price expires too soon. Retry after it expires and review report funding.'
