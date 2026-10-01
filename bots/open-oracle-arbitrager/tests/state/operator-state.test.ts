@@ -1,3 +1,4 @@
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { parseSettlementSettings, settlementSnapshot } from '#state/settlement-store'
 import { recordMarketDiscoveryFailure, recordObservedHead } from '#monitoring/market-discovery-status'
 import { completeSuccessfulPoll } from '../../src/runtime/poll-completion.ts'
@@ -24,6 +25,14 @@ const address = '0x0000000000000000000000000000000000000001' as Address
 const submission = { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: ['https://relay.flashbots.net/'] } as const
 const connectivity = { publicRpcUrls: ['https://rpc.example/'], readRpcUrl: 'https://rpc.example/' } as const
 const fixed = { execute: false, executor: undefined, expectedChainId: 1, explorerUrl: 'https://etherscan.io', network: 'mainnet', openOracle: address, queuedSigner: undefined, savedWallet: undefined, wallet: undefined } as const
+
+test('presents signer contention as a Settings action even when polling is also failing or deployment is missing', () => {
+	const message = signerLockConflictMessage(new ExecutionSignerLockHeldError('Signer', '{"bot":"liquidator"}', '/protected/lock'))
+	const state = operatorStateFixture({ paused: true, lastError: message, lastPollFailureAt: '2026-10-01T00:00:00.000Z', nextRetryAt: '2026-10-01T00:01:00.000Z' })
+	const snapshot = publicOperatorSnapshot({ ...operatorSnapshot(state, strategy(), submission, connectivity, fixed), marketAvailability: { kind: 'missing-deployment', chainId: 1, contracts: [] } })
+	expect(snapshot.lastError).toBe(message)
+	expect(operatorNoticePresentation(snapshot)).toEqual({ noticeTitle: 'Signer unavailable', noticeCopy: message, noticeTone: 'danger' })
+})
 
 function executionRecordFixture(): ExecutionRecord {
 	return {

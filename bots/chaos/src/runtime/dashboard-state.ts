@@ -50,13 +50,14 @@ function groupedOperationEvaluations(state: RuntimeState, enabled: ReadonlySet<s
 	return [...rows.values()]
 }
 
-export function dashboardState(state: RuntimeState, configuration: ConfigurationState) {
+export function dashboardState(state: RuntimeState, configuration: ConfigurationState, startupSignerConflict?: string) {
 	const currentWorkflow = state.workflows.find(workflow => workflow.status === 'running' || workflow.status === 'waiting-continuation' || workflow.status === 'waiting-obligation' || workflow.status === 'waiting-transaction' || workflowNeedsOperatorReconciliation(workflow))
 	const enabled = new Set(configuration.settings.strategy.enabledEcosystems)
 	const lifecyclePresenceAlert = state.lifecyclePresenceBlocker === undefined ? undefined : lifecyclePresenceBlockerMessage(state.lifecyclePresenceBlocker)
 	return {
 		...state,
 		alerts: [
+			...(!configuration.settings.runtime.execute && startupSignerConflict !== undefined ? [{ message: startupSignerConflict, severity: 'error' }] : []),
 			...(state.deploymentNotice === undefined ? [] : [{ message: state.deploymentNotice, severity: 'info' }]),
 			...(state.error === undefined ? [] : [{ message: state.error, severity: 'error' }]),
 			...(lifecyclePresenceAlert === undefined || lifecyclePresenceAlert === state.error ? [] : [{ message: lifecyclePresenceAlert, severity: 'error' }]),

@@ -5,7 +5,7 @@ import { type MutableStrategy } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
 import type { RiskLimits } from '#core/safety-controls'
-import { assertOperatorProfileIsolation, durableJournalPaths, loadOperatorSettings, type PersistedOperatorSettings } from '#config/settings-store'
+import { assertOperatorProfileIsolation, durableJournalPaths, loadOperatorSettingsWithRevision, type PersistedOperatorSettings } from '#config/settings-store'
 import type { SubmissionSettings } from '#execution/transaction-submission'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
 import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -42,6 +42,7 @@ export type Configuration = MutableStrategy & {
 	settlement: MutableSettlement
 	router: Address | undefined
 	settingsFile: string
+	settingsRevision?: string | undefined
 	submission: SubmissionSettings
 	tokenAddresses: Address[]
 	ui: boolean
@@ -65,7 +66,8 @@ export function runnableOperatorSettings(settingsFile: string, saved: PersistedO
 export async function loadConfiguration(settingsFile = resolve(process.env['OPEN_ORACLE_ARBITRAGER_CONFIG'] ?? defaultConfigurationFile)): Promise<Configuration> {
 	const arguments_ = process.argv.slice(2)
 	if (arguments_.length > 0) throw new Error(`The arbitrager accepts no command-line arguments. Edit ${settingsFile} or use the operator UI.`)
-	const saved = await loadOperatorSettings(settingsFile)
+	const loaded = await loadOperatorSettingsWithRevision(settingsFile)
+	const saved = loaded?.settings
 	if (saved === undefined) throw new Error(`Missing operator configuration at ${settingsFile}. Create it with \`install -m 600 config/operator.example.json ${settingsFile}\`, edit it, and start the bot again.`)
 	await assertOperatorProfileIsolation(settingsFile, saved)
 	const { deployment, network, quorumRpcUrls } = runnableOperatorSettings(settingsFile, saved)
@@ -95,6 +97,7 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		settlement: { ...saved.settlement },
 		router: deployment.uniswapRouter,
 		settingsFile,
+		settingsRevision: loaded?.revision,
 		submission: saved.submission,
 		tokenAddresses: [...new Set([network.rep, ...saved.tokenAddresses])],
 		ui: saved.runtime.ui,

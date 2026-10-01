@@ -1,4 +1,5 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '../execution/process-lock.ts'
 import { logEvent, type BotName } from '../infrastructure/log-event.ts'
 import { publicOperatorFailure } from './public-failures.ts'
 import { dashboardJson } from './security.ts'
@@ -31,5 +32,8 @@ export function categorizedDashboardError(bot: BotName, operation: string, error
  * `fallback`, or with `categorize` a redacted description of what the bot was attempting when the error names one.
  */
 export function publicDashboardError(bot: BotName, error: unknown, status: number, operation: string, fallback: string, categorize = false) {
-	return categorizedDashboardError(bot, operation, error, {}, () => ({ body: { error: categorize ? publicOperatorFailure(errorMessage(error), fallback) : fallback }, status }))
+	return categorizedDashboardError(bot, operation, error, {}, () => {
+		if (error instanceof ExecutionSignerLockHeldError) return { body: { error: signerLockConflictMessage(error) }, status }
+		return { body: { error: categorize ? publicOperatorFailure(errorMessage(error), fallback) : fallback }, status }
+	})
 }

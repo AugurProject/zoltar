@@ -1,3 +1,4 @@
+import { isSignerLockConflictMessage } from '@zoltar/bot-shared/dashboard/public-failures'
 import type { createRetirementDashboard } from './retirement-dashboard.js'
 import { type Workflow } from './workflow-history.js'
 import { fullIdentifier, formatDate, node, setBadge } from './dom.js'
@@ -30,10 +31,12 @@ export function createDashboardHealthView(context: DashboardHealthViewContext) {
 		const networkName = value.network ?? state.configuration?.network ?? 'Network unknown'
 		const chainId = value.chainId ?? state.configuration?.chainId
 		setBadge(elements.networkBadge, chainId === undefined ? networkName : `${networkName} · ${String(chainId)}`, value.network === undefined && state.configuration?.network === undefined ? 'warning' : 'neutral')
+		const signerConflict = value.alerts.some(alert => isSignerLockConflictMessage(alert.message ?? ''))
 		let signerLabel = 'Signer missing'
-		if (value.signerReady === true) signerLabel = 'Signer ready'
+		if (signerConflict) signerLabel = 'Signer unavailable'
+		else if (value.signerReady === true) signerLabel = 'Signer ready'
 		else if (value.wallet !== undefined) signerLabel = 'Read-only — signer not loaded'
-		setBadge(elements.signerBadge, signerLabel, value.signerReady === true ? 'success' : 'warning')
+		setBadge(elements.signerBadge, signerLabel, value.signerReady === true && !signerConflict ? 'success' : 'warning')
 		const recoveryItems = recoveryItemCount(value)
 		setBadge(elements.recoveryBadge, `${recoveryItems.toString()} recovery item${recoveryItems === 1 ? '' : 's'}`, 'warning')
 		elements.recoveryBadge.classList.toggle('hidden', recoveryItems === 0)

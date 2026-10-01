@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
@@ -527,7 +528,12 @@ export async function runChaosLaunchGate(dependencies: ChaosDoctorDependencies =
 			reason: 'persisted configuration has transaction execution disabled',
 		}
 	}
-	return runChaosDoctorWithLoaded(loaded, dependencies)
+	try {
+		return await runChaosDoctorWithLoaded(loaded, dependencies)
+	} catch (error) {
+		if (!loaded.settings.runtime.ui || !(error instanceof ExecutionSignerLockHeldError)) throw error
+		return { checks: { launchDoctor: 'signer-conflict' }, reason: signerLockConflictMessage(error) }
+	}
 }
 
 export function launchGateSummary(report: Awaited<ReturnType<typeof runChaosLaunchGate>>) {

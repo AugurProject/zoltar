@@ -28,7 +28,7 @@ import { dashboardRecord as record, exactDashboardKeys as exactKeys, expectedRev
 import { dashboardState } from './dashboard-state.ts'
 
 /** The chaos bot keeps its signer reserved in every mode, so only the signer hand-off and release methods are needed. */
-export type ChaosProcessLocks = Pick<BotProcessLocks, 'acquireSigner' | 'commitSigner' | 'discardSigner' | 'release'>
+export type ChaosProcessLocks = Pick<BotProcessLocks, 'acquireSigner' | 'commitSigner' | 'discardSigner' | 'release' | 'startupSignerConflict'>
 
 export type ConfigurationState = {
 	path: string
@@ -164,7 +164,7 @@ export function createChaosDashboardController(options: DashboardControllerOptio
 
 	return {
 		getConfiguration: () => dashboardConfiguration(options.configuration),
-		getState: () => dashboardState(options.state, options.configuration),
+		getState: () => dashboardState(options.state, options.configuration, options.locks.startupSignerConflict),
 		hostname: options.hostname,
 		...(options.loopbackPublished === undefined ? {} : { loopbackPublished: options.loopbackPublished }),
 		async setCancellation(value) {

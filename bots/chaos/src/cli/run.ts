@@ -3,7 +3,7 @@ import { assertDurableDeploymentFactory, assertDurableStateFactories } from '../
 
 import { getAddress, privateKeyToAccount, zeroAddress } from '@zoltar/bot-shared/ethereum'
 import { createBotShutdownController, runBotMain, withBotProcessLocks } from '@zoltar/bot-shared/execution/bot-process-locks'
-import { assertSettingsProfileIsolation, loadSettings } from '../config/settings.ts'
+import { assertSettingsProfileIsolation, loadSettings, saveSettings } from '../config/settings.ts'
 import { CHAOS_PROCESS_LOCK_OPTIONS } from '../core/process-lock-options.ts'
 import { executionProfileId, runChaosOperator } from '../runtime/operator.ts'
 import { loadDurableState, saveDurableState } from '../state/operator-state.ts'
@@ -116,12 +116,17 @@ export async function main() {
 			privateKey: loaded.settings.privateKey,
 			stateFile: loaded.settings.runtime.stateFile,
 		},
-		CHAOS_PROCESS_LOCK_OPTIONS,
+		{ ...CHAOS_PROCESS_LOCK_OPTIONS, allowSignerConflict: command.kind === 'operator' && loaded.settings.runtime.ui },
 		shutdown,
 		async locks => {
 			if (command.kind !== 'operator') {
 				await applyRetirementCommand(command, loaded)
 				return
+			}
+			if (locks.startupSignerConflict !== undefined) {
+				loaded.settings = { ...loaded.settings, paused: true, runtime: { ...loaded.settings.runtime, execute: false } }
+				loaded.revision = await saveSettings(loaded.path, loaded.settings, loaded.revision)
+				console.error(locks.startupSignerConflict)
 			}
 			await runChaosOperator(loaded, locks, shutdown)
 		},

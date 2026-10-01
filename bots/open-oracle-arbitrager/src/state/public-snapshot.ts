@@ -1,8 +1,9 @@
 import { publicOpportunity } from '#state/opportunity-snapshot'
-import { publicOperatorFailure, publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
+import { isSignerLockConflictMessage, publicOperatorFailure, publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
 import type { OperationEntry, OperatorSnapshot, PublicOperationEntry, PublicOperatorSnapshot } from '#state/operator-state'
 
 function publicLastError(snapshot: Pick<OperatorSnapshot, 'lastError' | 'lastPollFailureAt' | 'marketAvailability'>) {
+	if (snapshot.lastError !== undefined && isSignerLockConflictMessage(snapshot.lastError)) return snapshot.lastError
 	if (snapshot.marketAvailability?.kind === 'missing-deployment' || snapshot.lastError === undefined) return undefined
 	return snapshot.lastPollFailureAt === undefined ? publicOperatorFailure(snapshot.lastError) : publicPollFailure(snapshot.lastError)
 }

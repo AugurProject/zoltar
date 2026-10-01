@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -27,6 +27,65 @@ const acquireLiquidatorProcessLocks = (settings: Parameters<typeof acquireBotPro
 const acquireChaosProcessLocks = (settings: Parameters<typeof acquireBotProcessLocks>[0], acquirers?: BotProcessLockOptions['acquirers']) => acquireBotProcessLocks(settings, acquirers === undefined ? ALWAYS : { ...ALWAYS, acquirers })
 
 describe('bot process locks', () => {
+	test('opens a dashboard session on signer contention while retaining state ownership and requiring a fresh lock to arm', async () => {
+		const privateKey = `0x${'70'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const signerLockRoot = await stateFile('locks')
+		const owner = await acquireLiquidatorProcessLocks({ chainId: 1, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('owner.json') })
+		releases.push(owner.release)
+		const settings = { chainId: 1, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('dashboard.json') }
+		const dashboard = await acquireBotProcessLocks(settings, { ...ALWAYS, allowSignerConflict: true })
+		releases.push(dashboard.release)
+		expect(dashboard.startupSignerConflict).toContain('liquidator')
+		expect(dashboard.startupSignerConflict).not.toContain(signerLockRoot)
+		await expect(acquireChaosProcessLocks({ ...settings, execute: false, privateKey: undefined })).rejects.toThrow('already locked')
+		await expect(dashboard.enableExecution(address)).rejects.toThrow('already locked')
+		await owner.release()
+		await dashboard.enableExecution(address)
+		expect(dashboard.startupSignerConflict).toBeUndefined()
+		await expect(acquireLiquidatorProcessLocks({ ...settings, stateFile: await stateFile('contender.json') })).rejects.toThrow('already locked')
+	})
+
+	test.each(['replace', 'remove'])('clears a live-only startup conflict after a successful dry-run signer %s while retaining execution locks', async action => {
+		const privateKey = `0x${'74'.repeat(32)}` as const
+		const address = privateKeyToAccount(privateKey).address
+		const replacement = privateKeyToAccount(`0x${'75'.repeat(32)}`).address
+		const signerLockRoot = await stateFile('locks')
+		const settings = { chainId: 1, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('owner.json') }
+		const owner = await acquireLiquidatorProcessLocks(settings)
+		releases.push(owner.release)
+		const dashboard = await acquireBotProcessLocks({ ...settings, stateFile: await stateFile('dashboard.json') }, { ...LIVE_ONLY, allowSignerConflict: true })
+		releases.push(dashboard.release)
+		await dashboard.commitSigner(address, await dashboard.acquireSigner(address))
+		expect(dashboard.startupSignerConflict).toContain('liquidator')
+		const nextAddress = action === 'remove' ? undefined : replacement
+		await dashboard.commitSigner(nextAddress, await dashboard.acquireSigner(nextAddress))
+		expect(dashboard.startupSignerConflict).toBeUndefined()
+		await expect(dashboard.enableExecution(address)).rejects.toThrow('already locked')
+		await dashboard.enableExecution(replacement)
+		await expect(acquireLiquidatorProcessLocks({ ...settings, privateKey: `0x${'75'.repeat(32)}`, stateFile: await stateFile('contender.json') })).rejects.toThrow('already locked')
+	})
+
+	for (const options of [LIVE_ONLY, ALWAYS]) {
+		for (const execute of [true, false]) {
+			test(`${options.label} identifies its signer lock owner after ${execute ? 'live startup' : 'runtime activation'} and signer changes`, async () => {
+				const privateKey = `0x${'68'.repeat(32)}` as const
+				const address = privateKeyToAccount(privateKey).address
+				const signerLockRoot = await stateFile('locks')
+				const locks = await acquireBotProcessLocks({ chainId: 11_155_111, execute, privateKey, signerLockRoot, stateFile: await stateFile('owner.json') }, options)
+				releases.push(locks.release)
+				if (!execute) await locks.enableExecution(address)
+				const path = join(signerLockRoot, `11155111-${address.toLowerCase()}.lock`)
+				expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ bot: options.label, chainId: 11_155_111, pid: process.pid, signer: address })
+				await expect(acquireChaosProcessLocks({ chainId: 11_155_111, execute: true, privateKey, signerLockRoot, stateFile: await stateFile('competitor.json') })).rejects.toThrow(`"bot":"${options.label}"`)
+				const nextAddress = privateKeyToAccount(`0x${'69'.repeat(32)}`).address
+				const nextLock = await locks.acquireSigner(nextAddress)
+				await locks.commitSigner(nextAddress, nextLock)
+				expect(JSON.parse(await readFile(join(signerLockRoot, `11155111-${nextAddress.toLowerCase()}.lock`), 'utf8'))).toMatchObject({ bot: options.label, signer: nextAddress })
+			})
+		}
+	}
+
 	test('retains a partially acquired state lock when its first cleanup attempt fails', async () => {
 		let stateReleases = 0
 		const stateLock = {
@@ -250,12 +309,12 @@ describe('bot process locks', () => {
 		const previous = process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT']
 		process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'] = lockRoot
 		try {
-			const direct = await acquireExecutionSignerLock(11_155_111, address)
+			const direct = await acquireExecutionSignerLock(11_155_111, address, 'test-bot')
 			expect(direct.path).toBe(join(lockRoot, `11155111-${address.toLowerCase()}.lock`))
 			await direct.release()
 			const locks = await acquireLiquidatorProcessLocks({ chainId: 11_155_111, execute: true, privateKey, stateFile: await stateFile('env-root.json') })
 			releases.push(locks.release)
-			await expect(acquireExecutionSignerLock(11_155_111, address, lockRoot)).rejects.toThrow('already locked')
+			await expect(acquireExecutionSignerLock(11_155_111, address, 'test-bot', lockRoot)).rejects.toThrow('already locked')
 		} finally {
 			if (previous === undefined) delete process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT']
 			else process.env['ZOLTAR_BOT_SIGNER_LOCK_ROOT'] = previous

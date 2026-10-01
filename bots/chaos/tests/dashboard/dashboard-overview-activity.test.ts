@@ -1,3 +1,4 @@
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect } from 'bun:test'
@@ -31,16 +32,17 @@ browserTest(
 				{ width: 390, height: 844 },
 			]) {
 				await cdp.command('Emulation.setDeviceMetricsOverride', { ...viewport, deviceScaleFactor: 1, mobile: false })
-				for (const mode of ['keyless', 'read-only', 'signer'] as const) {
+				for (const mode of ['keyless', 'read-only', 'conflict', 'signer'] as const) {
 					current = state({
 						inventory: { eth: '1000000000000000000', rep: [], weth: '2000000000000000000' },
 						inventoryAvailable: mode !== 'keyless',
-						signerReady: mode === 'signer',
+						signerReady: mode === 'signer' || mode === 'conflict',
+						...(mode === 'conflict' ? { alerts: [{ severity: 'error', message: signerLockConflictMessage(new ExecutionSignerLockHeldError('Signer', '{"bot":"liquidator"}', '/protected/lock')) }] } : {}),
 						...(mode === 'keyless' ? {} : { wallet: walletAddress }),
 					})
 					await cdp.command('Page.navigate', { url: `http://127.0.0.1:${dashboard.port}/overview` })
 					const expectedEthText = mode === 'keyless' ? '—' : '1 ETH'
-					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', signer: 'Signer ready' }[mode]
+					const expectedBadge = { keyless: 'Signer missing', 'read-only': 'Read-only — signer not loaded', conflict: 'Signer unavailable', signer: 'Signer ready' }[mode]
 					const ready = `document.getElementById('balance-eth')?.textContent === ${JSON.stringify(expectedEthText)} && document.getElementById('signer-badge')?.textContent === ${JSON.stringify(expectedBadge)}`
 					for (let attempt = 0; attempt < 200; attempt += 1) {
 						if (await cdp.evaluate(ready)) break

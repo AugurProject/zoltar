@@ -44,7 +44,7 @@ function createTransactionTracker(state: OperatorState): TrackTransaction {
  * Validates the configuration, restores durable journals, and starts the control plane and background observers.
  * The returned runtime holds every value a later scan may replace; the context holds the lifetime collaborators.
  */
-export async function startOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown: BotShutdownController | undefined) {
+export async function startOperator(config: Configuration, lockManager: ExecutionLockManager | undefined, initialSignerLock: ExclusiveProcessLock | undefined, shutdown: BotShutdownController | undefined, startupSignerConflict?: string) {
 	validateOperatorConfiguration(config, lockManager)
 	const environment = readBotEnvironment()
 	if (config.execute) await ensureExecutionHistoryWritable(config.historyFile)
@@ -132,6 +132,7 @@ export async function startOperator(config: Configuration, lockManager: Executio
 	const trackTransaction = createTransactionTracker(state)
 	const controlPlane = startOperatorControlPlane({
 		config,
+		...(startupSignerConflict === undefined ? {} : { startupSignerConflict }),
 		dashboardEnvironment: environment.dashboard,
 		deploymentRecovery,
 		fixedState,
