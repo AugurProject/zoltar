@@ -316,7 +316,7 @@ export function useReportingOperations(
 					throw new Error(reportingCopy.forkTriggerChangedSinceReview)
 				}
 				if (preflight.contributionFunding === 'wallet' && (preflight.latestDetails.viewerWalletRepAllowanceAttoRep ?? 0n) < (preflight.walletDepositAmount ?? preflight.actualDepositAmount)) {
-					throw new Error('Approve REP for this security pool before reporting.')
+					throw new Error(reportingCopy.reportingRepApprovalRequired)
 				}
 				if (preflight.contributionFunding === 'wallet' && preflight.latestDetails.status === 'active' && preflight.latestDetails.forkContinuation) {
 					const execute = dependencies.reportOutcomeWithWalletViaVault

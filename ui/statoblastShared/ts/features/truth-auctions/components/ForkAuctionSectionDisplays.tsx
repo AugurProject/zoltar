@@ -63,6 +63,7 @@ export function renderForkAuctionSectionDisplays(model: ForkAuctionSectionModel)
 				selectedOutcome={model.forkAuctionForm.selectedOutcome}
 				selectedOutcomeMigrationChildPool={model.selectedOutcomeMigrationChildPool}
 				selectedOutcomeMigrationChildVault={model.selectedOutcomeMigrationChildVault}
+				vaultMigrationRepAttoRep={model.vaultMigrationRepAttoRep}
 			/>
 		),
 		migrationStatusBadge: <Badge tone={model.migrationStateBadge.tone}>{model.migrationStateBadge.label}</Badge>,

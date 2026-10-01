@@ -725,9 +725,11 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 		}
 		const amount = await driver.evaluate("document.querySelector('#reporting-contribution-amount')?.value")
 		if (typeof amount !== 'string' || amount === '') throw new Error('Missing maximum reporting amount')
-		const approvalLabel = `Approve ${amount} REP`
-		const reportLabel = triggersFork ? `Report ${outcome} & trigger fork · ${amount} REP…` : `Report ${outcome} · ${amount} REP…`
-		const reportedTitle = `Reported ${amount} REP on ${outcome}`
+		// Labels and titles group the integer digits like other displayed amounts, while the input keeps the plain value.
+		const displayedAmount = amount.replace(/^\d+/, whole => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ' '))
+		const approvalLabel = `Approve ${displayedAmount} REP`
+		const reportLabel = triggersFork ? `Report ${outcome} & trigger fork · ${displayedAmount} REP…` : `Report ${outcome} · ${displayedAmount} REP…`
+		const reportedTitle = `Reported ${displayedAmount} REP on ${outcome}`
 		const approvalRequired = await driver.evaluate(`[...document.querySelectorAll('button')].some(button => button.textContent?.trim() === ${JSON.stringify(approvalLabel)} && !button.disabled)`)
 		if (approvalRequired === true) {
 			const desktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_DESKTOP_SCREENSHOT']
@@ -746,7 +748,7 @@ productionInteractionTest('reporting-migration', '?workflow=reporting#/pools?sim
 				await driver.resize({ height: 900, width: 1440 })
 			}
 			await driver.clickButton(approvalLabel)
-			await completeTransactionReview(`Approved ${amount} REP`)
+			await completeTransactionReview(`Approved ${displayedAmount} REP`)
 			await driver.waitForButtonEnabled(reportLabel)
 			const approvedDesktopScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_DESKTOP_SCREENSHOT']
 			const approvedMobileScreenshotPath = process.env['UI_ORDINARY_REPORTING_APPROVED_MOBILE_SCREENSHOT']

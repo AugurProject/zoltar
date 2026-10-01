@@ -1027,6 +1027,15 @@
 	}
 }
 
+/* Reporting fork confirmation: the global input touch-target height would centre the checkbox about 15px below the first label line. The whole label stays the click target, so the box shrinks to one label line and sits on it. */
+.reporting-fork-trigger-warning .escalation-selection-control input {
+	min-height: 0;
+	height: 1lh;
+	margin: 0;
+	font-size: inherit;
+	line-height: inherit;
+}
+
 .withdraw-deposit-list {
 	display: grid;
 	gap: var(--space-3);

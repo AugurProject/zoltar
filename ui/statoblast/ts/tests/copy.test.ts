@@ -14,11 +14,10 @@ test('vault operation copy uses accounting roles', () => {
 test('fork migration empty states are complete templates', () => {
 	expect(forkAuctionCopy.formatNoUnresolvedDeposits('yes')).toBe('No yes unresolved deposits remain for this wallet.')
 	expect(forkAuctionCopy.formatNoClaimableParentEscalationDeposits('Yes')).toBe('No Yes parent escalation deposits are currently available for a direct claim by this wallet.')
-	expect(forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail).toBe('No parent dispute-staked REP is currently visible for a direct claim by the connected wallet.')
-	expect(forkAuctionCopy.parentEscalationClaimEmptyDisputeStakedRepDetail).not.toMatch(/migrat/i)
-	expect(forkAuctionCopy.selectedChildPoolRepReadinessLoading).toContain('pool-held REP')
-	expect(forkAuctionCopy.poolRepAlreadyMigratedDetail).toContain('Pool-held REP')
-	expect(forkAuctionCopy.poolRepStagedForVaultMigrationDetail).toContain('Pool-held REP')
+	expect(forkAuctionCopy.walletDisputeStakedRepEmpty).not.toMatch(/migrat/i)
+	expect(forkAuctionCopy.formatCheckingPoolRepMigratedToChildUniverse('Yes')).toContain('pool-held REP')
+	expect(forkAuctionCopy.formatPoolRepAlreadyMigrated('Yes')).toContain('Pool-held REP')
+	expect(forkAuctionCopy.formatPoolRepStagedForVaultMigration('Yes')).toContain('Pool-held REP')
 })
 
 test('truth-auction settlement copy identifies REP backing-unit credits', () => {

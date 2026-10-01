@@ -1,6 +1,6 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
-import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCurrencyBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { ReportingDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
@@ -10,7 +10,7 @@ import { formatReportingDeadline } from '../lib/reportingViewerStatus.js'
 
 export function getReportingApprovalLabel(amount: bigint | undefined, approvalRequired: boolean) {
 	if (amount === undefined || amount <= 0n) return commonCopy.formatApproveValue(commonCopy.rep)
-	return approvalRequired ? reportingCopy.approveAmountLabel(formatCurrencyInputBalance(amount)) : commonCopy.approvalSatisfied
+	return approvalRequired ? reportingCopy.approveAmountLabel(formatCurrencyBalance(amount)) : commonCopy.approvalSatisfied
 }
 
 type ForkConfirmation = { confirmed: boolean; disabled: boolean; onChange: (confirmed: boolean) => void }

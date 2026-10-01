@@ -207,7 +207,7 @@ export function ReportingSection({
 	const reportTriggersFork = reportingContributionTriggersFork(effectiveReportingDetails, selectedOutcome, selectedAmount)
 	// A confirmation covers one exact fork-triggering report; any change to the pool, side, or amount asks again.
 	const forkConfirmation = useKeyedConfirmation(reportTriggersFork ? `${effectiveReportingDetails?.securityPoolAddress ?? ''}:${selectedOutcome ?? ''}:${selectedAmount?.toString() ?? ''}` : undefined)
-	const reportDisplayAmount = formatCurrencyInputBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)
+	const reportDisplayAmount = formatCurrencyBalance(actualReportDepositAmount ?? selectedAmount ?? 0n)
 	const reportButtonLabel = selectedOutcome === undefined ? reportingCopy.reportOnSelectedSide : commonCopy.launchAction((reportTriggersFork ? reportingCopy.reportAndTriggerForkLabel : reportingCopy.reportAmountLabel)(selectedOutcomeLabel, reportDisplayAmount))
 	const minimumOutcomeChangeContribution = selectedOutcome === undefined ? { amountAttoRep: undefined, reason: SELECT_OUTCOME_PRESET_REASON } : getReportingMinimumOutcomeChangeContribution(effectiveReportingDetails, selectedOutcome)
 	const minimumPresetAmount = minimumOutcomeChangeContribution.amountAttoRep ?? (effectiveReportingDetails?.status === 'not-started' ? effectiveReportingDetails.startBondAttoRep : undefined)
@@ -238,7 +238,10 @@ export function ReportingSection({
 		viewerWalletRepBalanceAttoRep: effectiveReportingDetails?.viewerWalletRepBalanceAttoRep,
 	}
 	const forkConfirmationReason = reportTriggersFork && !forkConfirmation.confirmed ? reportingCopy.forkTriggerConfirmationRequired : undefined
-	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? getReportingReportGuardMessage(reportGuardParameters) ?? forkConfirmationReason
+	const reportPrerequisiteReason = getReportingReportGuardMessage(reportGuardParameters)
+	// The fork confirmation and the REP approval are independent steps, so when both are missing the reason names both instead of hiding the confirmation behind the approval.
+	const reportReadinessReason = forkConfirmationReason !== undefined && reportPrerequisiteReason === reportingCopy.reportingRepApprovalRequired ? reportingCopy.forkTriggerConfirmationAndApprovalRequired : (reportPrerequisiteReason ?? forkConfirmationReason)
+	const reportGuardMessage = vaultFundingLoadingReason ?? fullReportingLoadingReason ?? reportActionGuardMessage ?? reportControlsLockedReason ?? getReportingSubmissionTimingGuard(activeReportingDetails) ?? reportReadinessReason
 	const visiblePresetReasons = presetReasons.filter(reason => reason !== reportingCopy.poolHeldVaultRepBackingEmpty || reportGuardMessage !== reportingCopy.noVaultRepSelectWallet)
 	const reportingApprovalGuardMessage = vaultFundingLoadingReason ?? getReportingReportGuardMessage({ ...reportGuardParameters, requireAllowance: false })
 	const reportingRepApprovalRequired = usesWalletFunding && walletDepositAmount !== undefined && walletDepositAmount > (effectiveReportingDetails?.viewerWalletRepAllowanceAttoRep ?? 0n)
@@ -441,7 +444,7 @@ export function ReportingSection({
 								value={reportingForm.reportAmount}
 							/>
 
-							{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(formatCurrencyInputBalance(maxContributionAmount.amountAttoRep))} /> : undefined}
+							{maxContributionAmount.stopsBelowFork === true && maxContributionAmount.amountAttoRep !== undefined && !reportTriggersFork ? <UserMessage className='detail' detail={reportingCopy.maxBelowForkHint(formatCurrencyBalance(maxContributionAmount.amountAttoRep))} /> : undefined}
 							<ReportingDepositPreview
 								details={effectiveReportingDetails}
 								outcome={selectedOutcome}
@@ -462,7 +465,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && minimumOutcomeChangeContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : minimumOutcomeChangeContribution.reason}
 								>
-									{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : formatCurrencyInputBalance(minimumPresetAmount))}
+									{reportingCopy.minimumPreset(minimumPresetKind, minimumPresetAmount === undefined ? undefined : formatCurrencyBalance(minimumPresetAmount))}
 								</button>
 								<button
 									className='secondary'
@@ -475,7 +478,7 @@ export function ReportingSection({
 									aria-describedby={presetBlocker !== undefined && maxProfitContribution.reason === presetBlocker ? presetBlockerId : undefined}
 									title={reportControlsLocked ? reportControlsLockedReason : maxProfitContribution.reason}
 								>
-									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyInputBalance(maxProfitContribution.amountAttoRep))}
+									{reportingCopy.rewardPreset(maxProfitContribution.amountAttoRep === undefined ? undefined : formatCurrencyBalance(maxProfitContribution.amountAttoRep))}
 								</button>
 							</div>
 							{presetBlocker === undefined ? undefined : <UserMessage id={presetBlockerId} className='detail' detail={presetBlocker} />}
@@ -510,7 +513,7 @@ export function ReportingSection({
 									{usesWalletFunding ? (
 										<TransactionActionButton
 											idleLabel={getReportingApprovalLabel(walletDepositAmount, reportingRepApprovalRequired)}
-											pendingLabel={reportingCopy.approvingAmount(formatCurrencyInputBalance(walletDepositAmount ?? 0n))}
+											pendingLabel={reportingCopy.approvingAmount(formatCurrencyBalance(walletDepositAmount ?? 0n))}
 											onClick={onApproveReportingRep}
 											showDisabledReason={reportingRepApprovalRequired}
 											pending={reportingActiveAction === 'approveReportingRep'}

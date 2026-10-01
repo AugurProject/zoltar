@@ -19,7 +19,8 @@ import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/featu
 import type { AccountState } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { ReportingFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { describe, expect, mock, test } from 'bun:test'
-import { h } from 'preact'
+import { h, render } from 'preact'
+import { act } from 'preact/test-utils'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
 import { createForkAuctionForm, createForkAuctionSectionProps, createForkChildPool, PARENT_POOL_ADDRESS } from './forkAuctionFixtures.js'
 
@@ -727,6 +728,118 @@ describe('ForkAuctionSection', () => {
 		})
 		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate vault to Yes' }))
 		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: 20n, underwritingLimitAttoEth: 3n })
+	})
+
+	const FORKED_VAULT_ADDRESS = getAddress('0x00000000000000000000000000000000000000ab')
+	const POOL_REP_AT_FORK_ATTO_REP = 2_000_000n * 10n ** 18n
+
+	function createSeedStatusReadClient(balances: { childPool: () => bigint; proxy: () => bigint }, onLoad: () => void = () => undefined): Pick<ReadClient, 'readContract'> {
+		const proxyAddress = getAddress('0x00000000000000000000000000000000000000a9')
+		return {
+			readContract: mock(async request => {
+				switch (request.functionName) {
+					case 'getChildUniverseId':
+						onLoad()
+						return 11n
+					case 'getMigrationProxyAddress':
+						return proxyAddress
+					case 'getRepToken':
+						return getAddress('0x00000000000000000000000000000000000000ae')
+					case 'balanceOf':
+						return Array.isArray(request.args) && request.args[0] === proxyAddress ? balances.proxy() : balances.childPool()
+					default:
+						throw new Error(`Unexpected readContract call: ${String(request.functionName)}`)
+				}
+			}) as ReadClient['readContract'],
+		}
+	}
+
+	function createForkedVaultProps(overrides: Partial<ForkAuctionSectionProps> = {}, vaultOverrides: Partial<ListedSecurityPool['vaults'][number]> = {}) {
+		return createProps({
+			accountState: createAccountState({ address: FORKED_VAULT_ADDRESS }),
+			currentStageView: 'migration',
+			currentTimestamp: 50n,
+			forkAuctionDetails: createForkAuctionDetails({
+				auctionableAttoRepAtFork: POOL_REP_AT_FORK_ATTO_REP,
+				currentTime: 50n,
+				migrationEndsAt: 100n,
+				systemState: 'poolForked',
+				truthAuction: undefined,
+				truthAuctionStartedAt: 0n,
+			}),
+			forkMigrationReadClient: createSeedStatusReadClient({ childPool: () => 0n, proxy: () => POOL_REP_AT_FORK_ATTO_REP }),
+			previewPool: createChildPool({
+				vaults: [
+					{
+						claimableFeesAttoEth: 0n,
+						disputeStakedAttoRep: 0n,
+						repBackingUnits: 3n * 10n ** 18n,
+						totalPoolHeldRepBalanceAttoRep: 0n,
+						totalRepBackingUnits: 4n * 10n ** 18n,
+						underwritingLimitAttoEth: 0n,
+						vaultAddress: FORKED_VAULT_ADDRESS,
+						vaultAttoRepBacking: 0n,
+						...vaultOverrides,
+					},
+				],
+			}),
+			securityPools: [],
+			selectedStageView: 'migration',
+			...overrides,
+		})
+	}
+
+	test('shows and reviews the forked vault share of pool-held REP at fork instead of its emptied current backing', async () => {
+		const onMigrateVault = mock((_vault?: { repAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint }) => undefined)
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ onMigrateVault })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const documentQueries = within(document.body)
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(false))
+		expect(documentQueries.getByText('1 500 000.00 REP')).not.toBeNull()
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Migrate vault to Yes' }))
+		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: 1_500_000n * 10n ** 18n, underwritingLimitAttoEth: 0n })
+	})
+
+	test('omits the vault migration REP amount when the vault backing units are unavailable', async () => {
+		const onMigrateVault = mock((_vault?: { repAttoRep: bigint | undefined; underwritingLimitAttoEth: bigint }) => undefined)
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ onMigrateVault }, { repBackingUnits: undefined, totalRepBackingUnits: undefined, underwritingLimitAttoEth: 3n })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(false))
+		expect(document.body.textContent).toContain('REP backing—')
+		fireEvent.click(within(document.body).getByRole('button', { name: 'Migrate vault to Yes' }))
+		expect(onMigrateVault).toHaveBeenCalledWith({ repAttoRep: undefined, underwritingLimitAttoEth: 3n })
+	})
+
+	test('states each migration reason once and keeps the confirmed vault migration state while the seed status refreshes', async () => {
+		let proxyBalance = POOL_REP_AT_FORK_ATTO_REP
+		let seedStatusLoads = 0
+		const forkMigrationReadClient = createSeedStatusReadClient({ childPool: () => 0n, proxy: () => proxyBalance }, () => {
+			seedStatusLoads += 1
+		})
+		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, createForkedVaultProps({ forkMigrationReadClient })))
+		cleanupRenderedComponent = renderedComponent.cleanup
+
+		const stagedReason = 'Pool-held REP for the Yes universe is already staged and moves into the child pool during vault migration.'
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate pool to Yes universe').reason).toBe(stagedReason))
+		const bodyText = document.body.textContent ?? ''
+		expect(bodyText).not.toContain('already been migrated')
+		expect(bodyText.split(stagedReason)).toHaveLength(2)
+		expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').disabled).toBe(false)
+
+		// The vault migration sweeps the staged REP into a child pool the pool list has not loaded yet, so the refresh reads neither balance.
+		proxyBalance = 0n
+		const seedStatusLoadsBeforeRefresh = seedStatusLoads
+		await act(() => {
+			render(h(ForkAuctionSection, createForkedVaultProps({ forkAuctionResult: { action: 'migrateVault', hash: `0x${'2'.repeat(64)}`, securityPoolAddress: PARENT_POOL_ADDRESS, universeId: 1n }, forkMigrationReadClient })), renderedComponent.container)
+		})
+		await waitFor(() => expect(seedStatusLoads).toBeGreaterThan(seedStatusLoadsBeforeRefresh))
+		await new Promise(resolve => setTimeout(resolve, 10))
+		await waitFor(() => expect(getTransactionButtonState(document.body, 'Migrate vault to Yes').reason).toBe('Vault migration is already complete for this wallet.'))
+		expect(getTransactionButtonState(document.body, 'Migrate pool to Yes universe')).toEqual({ disabled: true, reason: stagedReason })
+		expect(document.body.textContent).not.toContain('before moving vault balances')
+		expect(document.body.textContent).not.toContain('Already migrated')
 	})
 
 	test('disables vault migration after the migration window closes', async () => {
@@ -1503,7 +1616,7 @@ describe('ForkAuctionSection', () => {
 	}
 
 	// The live-auction form bids 1 ETH at 1 ETH per REP, so the submit action names both.
-	const LIVE_AUCTION_BID_LABEL = 'Bid 1\u00a0ETH at 1\u00a0ETH/REP'
+	const LIVE_AUCTION_BID_LABEL = 'Bid 1\u00a0ETH at 1\u00a0ETH per REP'
 
 	test('shows the tick price a bid is submitted at and offers to round it up', async () => {
 		const onForkAuctionFormChange = mock((_update: Partial<ForkAuctionSectionProps['forkAuctionForm']>) => undefined)
@@ -1514,7 +1627,7 @@ describe('ForkAuctionSection', () => {
 		const documentQueries = within(document.body)
 		// 1.00005 sits between the 1 and next valid tick prices, so the bid snaps down to 1.
 		expect(document.body.textContent).toContain('Will be submitted at 1\u00a0ETH per REP (nearest valid price below).')
-		expect(documentQueries.getByRole('button', { name: 'Bid 1\u00a0ETH at 1\u00a0ETH/REP' })).not.toBeNull()
+		expect(documentQueries.getByRole('button', { name: LIVE_AUCTION_BID_LABEL })).not.toBeNull()
 		const roundUpPrice = formatTruthAuctionTickPriceInput(1n)
 		fireEvent.click(documentQueries.getByRole('button', { name: `Round up to ${roundUpPrice}` }))
 		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidPrice: roundUpPrice })
@@ -1522,15 +1635,20 @@ describe('ForkAuctionSection', () => {
 
 	test('shows the bid balance and minimum and fills Max below a gas reserve', async () => {
 		const onForkAuctionFormChange = mock((_update: Partial<ForkAuctionSectionProps['forkAuctionForm']>) => undefined)
-		const props = createLiveAuctionProps(createAccountState({ ethBalanceAttoEth: 2n * 10n ** 18n }))
+		const balanceAttoEth = 999_999_989_980_999_999_998_676_937_240n
+		const props = createLiveAuctionProps(createAccountState({ ethBalanceAttoEth: balanceAttoEth }))
 		const renderedComponent = await renderIntoDocument(h(ForkAuctionSection, { ...props, onForkAuctionFormChange }))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
-		expect(document.body.textContent).toContain(`Available: ${formatCurrencyBalance(2n * 10n ** 18n)}\u00a0ETH · Min bid ${formatCurrencyBalance(1n)}\u00a0ETH · Max keeps ${formatCurrencyBalance(10n ** 16n)}\u00a0ETH for gas`)
+		// The hint rounds like other amounts, rounding the balance down, and keeps exact values in the titles.
+		expect(document.body.textContent).toContain('Available: ≈ 999 999 989 980.99 ETH · Min bid 0.0000000000000000010 ETH · Max keeps 0.010 ETH for gas')
+		expect(document.body.querySelector(`[title="${formatCurrencyBalance(balanceAttoEth)} ETH"]`)).not.toBeNull()
 		// An exact tick price needs no rounding notice.
 		expect(document.body.textContent).not.toContain('Will be submitted at')
+		// Submitting the bid is the form's primary action.
+		expect(within(document.body).getByRole('button', { name: LIVE_AUCTION_BID_LABEL }).classList.contains('primary')).toBe(true)
 		fireEvent.click(within(document.body).getByRole('button', { name: 'Max' }))
-		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidAmount: '1.99' })
+		expect(onForkAuctionFormChange).toHaveBeenCalledWith({ submitBidAmount: formatCurrencyInputBalance(balanceAttoEth - 10n ** 16n) })
 	})
 
 	test('keeps fork-auction actions disabled off Sepolia and shows switch-network recovery', async () => {

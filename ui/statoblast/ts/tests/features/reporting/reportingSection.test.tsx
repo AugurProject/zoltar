@@ -484,6 +484,36 @@ describe('ReportingSection', () => {
 			// Dropping below the fork amount cleared the confirmation, so Max stops below the fork again.
 			expect(amountInput().value).toBe('7.999999999999999999')
 		})
+
+		test('wallet-funded fork reports group amounts like the warning and ask for both the confirmation and the approval', async () => {
+			const details = createDynamicReportingDetails({
+				contributionFunding: 'wallet',
+				nonDecisionThresholdAttoRep: rep(225_000n),
+				sides: [
+					{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'invalid', label: 'Invalid', userDeposits: [] },
+					{ balance: rep(225_000n), deposits: [], importedUserDeposits: [], key: 'yes', label: 'Yes', userDeposits: [] },
+					{ balance: 0n, deposits: [], importedUserDeposits: [], key: 'no', label: 'No', userDeposits: [] },
+				],
+				startBondAttoRep: rep(1n),
+				viewerWalletRepAllowanceAttoRep: 0n,
+				viewerWalletRepBalanceAttoRep: rep(300_000n),
+			})
+			const rendered = await renderIntoDocument(<ReportingSectionHarness initialProps={{ reportingDetails: details, reportingForm: createReportingForm({ contributionFunding: 'wallet', reportAmount: '', selectedOutcome: 'no' }) }} />)
+			cleanupRenderedComponent = rendered.cleanup
+			const queries = within(document.body)
+			await act(() => {
+				fireEvent.click(queries.getByRole('button', { name: 'Fill side & trigger fork (225 000 REP)' }))
+			})
+			expect(amountInput().value).toBe('225000')
+			expect(document.querySelector('.reporting-fork-trigger-warning')?.textContent).toContain('225 000 REP')
+			expectTransactionButtonEnabled(document.body, 'Approve 225 000 REP')
+			const label = 'Report No & trigger fork · 225 000 REP…'
+			expectTransactionButtonDisabled(document.body, label, 'Confirm that this report triggers the universe fork and approve REP for this security pool before reporting.')
+			await act(() => {
+				fireEvent.click(queries.getByRole('checkbox', { name: 'I understand this report ends escalation and leads to a universe fork.' }))
+			})
+			expectTransactionButtonDisabled(document.body, label, 'Approve REP for this security pool before reporting.')
+		})
 	})
 
 	test('starts unselected until the user explicitly chooses an outcome side', async () => {

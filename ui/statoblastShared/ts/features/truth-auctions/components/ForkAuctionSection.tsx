@@ -39,6 +39,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		onClick: model.onSubmitBidForSelectedAuction,
 		pending: model.isTruthAuctionDetailsLoading || model.forkAuctionActiveAction === 'submitBid',
 		pendingLabel: model.isTruthAuctionDetailsLoading ? forkAuctionCopy.loadingTruthAuction : forkAuctionCopy.submittingBidTruncated,
+		tone: 'primary',
 	})
 	const submitBidSection = (
 		<ForkAuctionSubmitBidSection
@@ -349,21 +350,17 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					activeReportingDetails={model.activeReportingDetails}
 					claimParentDepositsGuardMessage={model.claimSelectedParentEscalationDepositsGuardMessage}
 					claimSelectionDisabled={model.forkAuctionActiveAction === 'claimParentEscalationDeposits'}
-					connectedWalletVaultSummary={model.connectedWalletVaultSummary}
 					disabled={model.disabled}
 					hasSelectedParentEscalationClaimDeposits={model.hasSelectedParentEscalationClaimDeposits}
 					hasStoredEscalationMigrationEntitlement={model.hasStoredEscalationMigrationEntitlement}
 					hasUnresolvedMigrationDeposits={model.hasUnresolvedMigrationDeposits}
 					hasUnresolvedMigrationState={model.hasUnresolvedMigrationState}
-					hasWalletParentEscalationClaimBalance={model.hasWalletParentEscalationClaimBalance}
-					hasWalletVaultMigrationBalance={model.hasWalletVaultMigrationBalance}
 					isMigrationExpired={model.isMigrationExpired}
-					isVaultMigrationComplete={model.isVaultMigrationComplete}
 					loadingReportingDetails={model.loadingReportingDetails}
 					loadingSelectedOutcomeMigrationSeedStatus={model.loadingSelectedOutcomeMigrationSeedStatus}
-					migratePoolGuardMessage={model.migratePoolToUniverseGuardMessage}
+					migratePoolAvailability={model.migratePoolToUniverseAvailability}
 					migrateUnresolvedGuardMessage={model.migrateUnresolvedEscalationGuardMessage}
-					migrateVaultGuardMessage={model.migrateVaultGuardMessage}
+					migrateVaultAvailability={model.migrateVaultAvailability}
 					migrationBalancesContent={displays.migrationBalancesContent}
 					migrationSummaryCard={migrationSummaryCard}
 					onClaimParentDeposits={model.onClaimSelectedParentEscalationDeposits}
@@ -376,7 +373,6 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					retrySelectedOutcomeMigrationSeedStatus={model.retrySelectedOutcomeMigrationSeedStatus}
 					selectedOutcome={model.forkAuctionForm.selectedOutcome}
 					selectedOutcomeLabel={model.selectedOutcomeLabel}
-					selectedOutcomeMigrationSeedStatus={model.selectedOutcomeMigrationSeedStatus}
 					selectedOutcomeMigrationSeedStatusError={model.selectedOutcomeMigrationSeedStatusError}
 					selectedParentEscalationClaimDeposits={model.selectedParentEscalationClaimDeposits}
 					selectedParentEscalationClaimDepositIndexes={model.selectedParentEscalationClaimDepositIndexes}

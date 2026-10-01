@@ -37,6 +37,7 @@ import { parseQuestionIdInput } from '@zoltar/ui-core-shared/lib/questionId.js'
 import { formatActionTense } from '@zoltar/ui-core-shared/copy/transactionActionTenses.js'
 import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { getDefaultForkAuctionFormState } from '../../markets/lib/marketForm.js'
+import { getForkPoolHeldRepAtForkAttoRep } from '../lib/forkAuction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../../../types/app.js'
 import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
@@ -279,8 +280,7 @@ function useForkAuctionOperationsWithDependencies<TWriteClient>(
 						details.securityPoolAddress,
 						details.universeId,
 						outcomesOverride ?? parseReportingOutcomeListInput(submittedRepMigrationOutcomes, 'REP migration outcomes'),
-						// Mirrors SecurityPoolForker.migrateRepToZoltar: an own fork splits the vault REP snapshot, otherwise the auctionable REP.
-						details.ownForkRepBuckets?.vaultRepAtForkAttoRep ?? details.auctionableAttoRepAtFork,
+						getForkPoolHeldRepAtForkAttoRep(details),
 					)
 				},
 				'Failed to migrate REP to Zoltar',
