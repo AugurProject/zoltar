@@ -1,3 +1,4 @@
+import { ExecutionSignerLockHeldError, ProcessLockHeldError } from '@zoltar/bot-shared/execution/process-lock'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -526,6 +527,40 @@ describe('chaos launch doctor', () => {
 				expect(probed).toBe(false)
 			}
 		}
+	})
+
+	test('lets dashboard startup handle signer contention but still rejects state contention and headless conflicts', async () => {
+		const configured = await settingsFixture('operator.configured-placeholder.json')
+		const live = { ...configured, privateKey: `0x${'66'.repeat(32)}` as const, runtime: { ...configured.runtime, execute: true, ui: true } }
+		const conflict = new ExecutionSignerLockHeldError('Signer', '{"bot":"liquidator"}', '/protected/signer.lock')
+		const dependencies = passiveDoctorDependencies(live, {
+			acquireLocks: async () => {
+				throw conflict
+			},
+		})
+		expect(await runChaosLaunchGate(dependencies)).toMatchObject({ checks: { launchDoctor: 'signer-conflict' } })
+		await expect(runChaosDoctor(dependencies)).rejects.toThrow('already locked')
+		await expect(
+			runChaosLaunchGate(
+				passiveDoctorDependencies(
+					{ ...live, runtime: { ...live.runtime, ui: false } },
+					{
+						acquireLocks: async () => {
+							throw conflict
+						},
+					},
+				),
+			),
+		).rejects.toThrow('already locked')
+		await expect(
+			runChaosLaunchGate(
+				passiveDoctorDependencies(live, {
+					acquireLocks: async () => {
+						throw new ProcessLockHeldError('State', 'owner', '/protected/state.lock')
+					},
+				}),
+			),
+		).rejects.toThrow('already locked')
 	})
 
 	test('skips the startup gate for a paused first-boot template and enforces it for persisted live execution', async () => {

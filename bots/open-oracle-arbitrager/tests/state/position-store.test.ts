@@ -49,7 +49,8 @@ describe('durable OpenOracle position journal', () => {
 
 	test('allows only one process to execute with a signer on a network', async () => {
 		const first = await acquireExecutionSignerLock(31_337, positionAccount)
-		await expect(acquireExecutionSignerLock(31_337, positionAccount)).rejects.toThrow('already locked')
+		expect(JSON.parse(await readFile(first.path, 'utf8'))).toMatchObject({ bot: 'open-oracle-arbitrager', chainId: 31_337, signer: positionAccount })
+		await expect(acquireExecutionSignerLock(31_337, positionAccount)).rejects.toThrow('"bot":"open-oracle-arbitrager"')
 		await first.release()
 		const second = await acquireExecutionSignerLock(31_337, positionAccount)
 		await second.release()

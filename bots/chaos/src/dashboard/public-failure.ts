@@ -2,6 +2,7 @@ import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durab
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { categorizedDashboardError, type PublicDashboardFailure } from '@zoltar/bot-shared/dashboard/public-error'
 import { dashboardJson } from '@zoltar/bot-shared/dashboard/security'
+import { ExecutionSignerLockHeldError, signerLockConflictMessage } from '@zoltar/bot-shared/execution/process-lock'
 import { CONFIGURATION_COMMIT_INDETERMINATE, CONFIGURATION_COMMITTED_SAFELY_PAUSED } from '../runtime/configuration-commit.ts'
 
 // The public JSON responses for failed dashboard mutations. Raw errors reach only the protected process log.
@@ -57,6 +58,7 @@ export function publicFailure(operation: string, error: unknown) {
 }
 
 function publicRequestFailure(operation: string, error: unknown) {
+	if (error instanceof ExecutionSignerLockHeldError) return signerLockConflictMessage(error)
 	if (operation === 'mutation:/api/connectivity') return publicConnectivityFailure(error)
 	if (error instanceof Error && error.message.length > 0) return error.message
 	return 'The dashboard request could not be completed. Review the submitted values and protected bot logs.'

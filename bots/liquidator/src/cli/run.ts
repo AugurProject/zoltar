@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import type { OperatorSettings } from '#config/settings'
-import { assertSettingsProfileIsolation, loadSettings } from '#config/settings-store'
+import { assertSettingsProfileIsolation, loadSettings, saveSettings } from '#config/settings-store'
 import { validateReconciliationIntentChain } from '#core/transaction-reconciliation'
 import { assertIntentSender, loadDurableState, recordActivity } from '#state/operator-state'
 import { privateKeyToAccount } from '@zoltar/bot-shared/ethereum'
@@ -40,6 +40,11 @@ async function preflightNetworkProfile(target: OperatorSettings) {
 }
 
 async function runOperator(loaded: LoadedSettings, processLocks: BotProcessLocks, shutdown: BotShutdownController) {
+	if (processLocks.startupSignerConflict !== undefined) {
+		loaded.settings = { ...loaded.settings, paused: true, runtime: { ...loaded.settings.runtime, execute: false } }
+		loaded.revision = await saveSettings(loaded.path, loaded.settings, loaded.revision)
+		console.error(processLocks.startupSignerConflict)
+	}
 	const { deps, runtime } = await createLiquidatorRuntime(loaded, { preflightNetworkProfile, processLocks, shutdown })
 	const dashboard = startLiquidatorDashboard(runtime, deps)
 	await using _dashboardLifecycle = dashboard === undefined ? undefined : botDashboardLifecycle(dashboard)
@@ -75,7 +80,7 @@ async function main() {
 				privateKey: loaded.settings.privateKey,
 				stateFile: loaded.settings.runtime.stateFile,
 			},
-			LIQUIDATOR_PROCESS_LOCK_OPTIONS,
+			{ ...LIQUIDATOR_PROCESS_LOCK_OPTIONS, allowSignerConflict: loaded.settings.runtime.ui },
 			shutdown,
 			locks => runOperator(loaded, locks, shutdown),
 		)
