@@ -479,7 +479,7 @@ describe('SecurityVaultSection', () => {
 		const openOracle = page.queryByRole('button', { name: 'Open price oracle' })
 		expect(openOracle !== null).toBe(!fresh)
 		if (openOracle !== null) {
-			expect(document.body.textContent).toContain('Open Oracle prices support commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.')
+			expect(document.body.textContent).toContain('A valid Open Oracle price is required for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting, and taking over unassigned commitments.')
 			fireEvent.click(openOracle)
 			expect(openedOracle).toBe(true)
 		}
