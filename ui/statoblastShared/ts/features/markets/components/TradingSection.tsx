@@ -260,7 +260,7 @@ export function TradingSection({
 	}
 	const renderShareMetricValue = (value: bigint | undefined, backing?: bigint) => (
 		<>
-			<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={value} suffix={tradingCopy.sharesUnit} />
+			<CurrencyValue exactWhenRoundedToZero loading={loadingTradingDetails} value={value} />
 			{backing === undefined ? undefined : (
 				<>
 					{' '}

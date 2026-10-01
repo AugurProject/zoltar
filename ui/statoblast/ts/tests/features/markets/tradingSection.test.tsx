@@ -337,7 +337,10 @@ void describe('TradingSection', () => {
 		const hero = document.querySelector('.trading-holdings-hero')
 		if (hero === null) throw new Error('Expected holdings hero')
 		expect(getExactValueTitles(hero, '2 sets')).toHaveLength(1)
-		expect(getExactValueTitles(document.body, '3 shares')).toHaveLength(1)
+		const outcomeRows = document.querySelector('.ranked-bar-list')
+		if (outcomeRows === null) throw new Error('Expected per-outcome holdings')
+		// Each row is already labelled by its outcome, so share counts carry no unit there.
+		expect(Array.from(outcomeRows.querySelectorAll('.currency-value')).filter(element => element.getAttribute('title') === '3')).toHaveLength(1)
 	})
 
 	void test('renders trading content without the workflow strip and launches complete-set actions from the share summary', async () => {
@@ -456,9 +459,9 @@ void describe('TradingSection', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const documentQueries = within(document.body)
-		expect(documentQueries.getAllByText('≈ 1.23 shares').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('0.023 shares').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText(/^0\.00041 (sets|shares)$/).length).toBeGreaterThanOrEqual(2)
+		expect(documentQueries.getAllByText('≈ 1.23').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('0.023').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText(/^0\.00041( sets)?$/).length).toBeGreaterThanOrEqual(2)
 		expect(getExactValueTitles(document.body, '1.234').length).toBeGreaterThan(0)
 		expect(getExactValueTitles(document.body, '0.023').length).toBeGreaterThan(0)
 		expect(getExactValueTitles(document.body, '0.00041').length).toBeGreaterThanOrEqual(2)
@@ -490,7 +493,7 @@ void describe('TradingSection', () => {
 		expect(documentQueries.queryByText('Total across outcomes')).toBeNull()
 		expect(documentQueries.queryByText('Total Collateral Equivalent')).toBeNull()
 		expect(documentQueries.queryByText('Total Shares')).toBeNull()
-		expect(documentQueries.getAllByText(/^1\.00 (sets|shares)$/).length).toBeGreaterThanOrEqual(4)
+		expect(documentQueries.getAllByText(/^1\.00( sets)?$/).length).toBeGreaterThanOrEqual(4)
 		expect(getExactValueTitles(document.body, '1').length).toBeGreaterThanOrEqual(4)
 		expect(document.body.textContent?.includes('1 000 000 000 000 000 000')).toBe(false)
 		expect(getExactValueTitles(document.body, '0.9 ETH')).toHaveLength(4)
