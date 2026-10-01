@@ -419,7 +419,7 @@ export function SecurityVaultSection({
 		<>
 			{currentSelectedVaultDetails !== undefined && !commitmentChangeIsDirect && needsOracleInitialPrice(oracleManagerDetails, hasValidOraclePrice) ? (
 				<div>
-					<InlineHint message={securityPoolCopy.commitmentNeedsOracleReport} />
+					<InlineHint message={securityPoolCopy.vaultActionsNeedOracleReport} />
 					{onViewPriceOracle === undefined ? undefined : (
 						<button type='button' className='secondary' disabled={securityVaultActiveAction !== undefined} onClick={onViewPriceOracle}>
 							{securityPoolCopy.openPriceOracle}
