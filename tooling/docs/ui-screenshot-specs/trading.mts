@@ -79,7 +79,7 @@ export const TRADING_SCREENSHOTS: readonly UiScreenshotSpec[] = [
 		steps: [{ click: 'Details' }, { waitForText: 'Minting capacity' }],
 		expectText: ['Pool facts', 'System state', 'Minting capacity', 'Deploy trading pool'],
 		viewport: pageViewport,
-		crop: { selector: '.section-block', containing: 'Pool facts' },
+		crop: { selector: '.section-block', containing: 'Pool facts', padding: 6 },
 		usedBy: ['tutorials/trading-first-market.html'],
 	},
 	{
