@@ -14,8 +14,13 @@ docker ps --quiet --filter "label=com.docker.compose.service=chaos" --filter "vo
 for /f "usebackq" %%C in ("%chaos_container_list%") do (
     docker stop --time 60 %%C || goto failed
 )
-rem Remove the current project's stopped containers while retaining state volumes.
-docker compose down --remove-orphans --timeout 60 || goto failed
+rem Only tear down a nonempty project; an empty project needs no cleanup.
+docker compose ps --all --quiet --orphans > "%chaos_container_list%" || goto failed
+set "chaos_project_has_containers="
+for /f "usebackq" %%C in ("%chaos_container_list%") do set "chaos_project_has_containers=1"
+if defined chaos_project_has_containers (
+    docker compose down --remove-orphans --timeout 60 || goto failed
+)
 docker compose build || goto failed
 
 docker compose run --rm --no-deps chaos bun src/cli/deployment-upgrade.ts prepare || goto failed

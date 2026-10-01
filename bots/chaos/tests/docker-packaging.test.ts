@@ -71,6 +71,22 @@ describe('chaos Docker packaging', () => {
 		expect(commands.some(command => /docker (?:volume rm|compose down .*--volumes|compose down .* -v|rm)/u.test(command))).toBe(false)
 	})
 
+	test('skips project teardown when no containers remain without hiding cleanup errors', async () => {
+		const commands = batchCommands(await readFile(windowsLauncher, 'utf8'))
+		const list = 'docker compose ps --all --quiet --orphans > "%chaos_container_list%" || goto failed'
+		const mark = 'for /f "usebackq" %%C in ("%chaos_container_list%") do set "chaos_project_has_containers=1"'
+		const guard = 'if defined chaos_project_has_containers ('
+		const teardown = 'docker compose down --remove-orphans --timeout 60 || goto failed'
+		expect(commands).toContain(list)
+		expect(commands).toContain('set "chaos_project_has_containers="')
+		expect(commands).toContain(mark)
+		expect(commands.indexOf(list)).toBeLessThan(commands.indexOf(mark))
+		expect(commands.slice(commands.indexOf(guard), commands.indexOf(guard) + 3)).toEqual([guard, teardown, ')'])
+		expect(commands.indexOf(mark)).toBeLessThan(commands.indexOf(guard))
+		expect(commands.indexOf(teardown)).toBeLessThan(commands.indexOf('docker compose build || goto failed'))
+		expect(commands.filter(command => command.startsWith('docker compose down'))).toEqual([teardown])
+	})
+
 	test('keeps archived retirement explicit and preserves the active configuration', async () => {
 		const commands = batchCommands(await readFile(join(botDirectory, 'retirement.bat'), 'utf8'))
 		expect(commands).toContain('if "%~1"=="" goto list_archives')
