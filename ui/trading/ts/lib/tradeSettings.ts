@@ -6,16 +6,29 @@ import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatter
 export type TradeSettings = Readonly<{ slippageBps: bigint; validityMinutes: bigint }>
 
 export const DEFAULT_TRADE_SETTINGS: TradeSettings = { slippageBps: 50n, validityMinutes: 20n }
-export const SLIPPAGE_PRESETS_BPS: readonly bigint[] = [10n, 50n, 100n]
+export const SLIPPAGE_PRESETS_BPS: readonly bigint[] = [10n, 50n, 100n, 300n]
 export const VALIDITY_PRESETS_MINUTES: readonly bigint[] = [10n, 20n, 60n]
+/** Zero tolerance makes any price movement revert the transaction, so the smallest accepted setting is 0.01%. */
+const MINIMUM_SLIPPAGE_BPS = 1n
 const MAXIMUM_SLIPPAGE_BPS = 500n
+/** Below this, ordinary price movement between quote and inclusion often reverts the transaction. */
+const LOW_SLIPPAGE_WARNING_BPS = 10n
 const MAXIMUM_VALIDITY_MINUTES = 1_440n
 const TRADE_SETTINGS_STORAGE_KEY = 'zoltar.trading.tradeSettings'
 
-/** A slippage percentage from 0% to 5% with at most two decimals, in basis points. */
+function slippageInRange(slippageBps: bigint) {
+	return slippageBps >= MINIMUM_SLIPPAGE_BPS && slippageBps <= MAXIMUM_SLIPPAGE_BPS
+}
+
+/** A slippage percentage from 0.01% to 5% with at most two decimals, in basis points. */
 export function parseSlippagePercent(value: string) {
 	const parsed = tryParseNonNegativeDecimalInput(value.trim(), 2)
-	return parsed !== undefined && parsed <= MAXIMUM_SLIPPAGE_BPS ? parsed : undefined
+	return parsed !== undefined && slippageInRange(parsed) ? parsed : undefined
+}
+
+/** True when the tolerance is accepted but tight enough that transactions are likely to revert. */
+export function isLowSlippage(slippageBps: bigint) {
+	return slippageBps < LOW_SLIPPAGE_WARNING_BPS
 }
 
 /** A whole number of minutes from 1 to 1440. */
@@ -44,7 +57,7 @@ function parseStoredTradeSettings(raw: string | null | undefined): TradeSettings
 	if (typeof parsed !== 'object' || parsed === null) return DEFAULT_TRADE_SETTINGS
 	const slippage = Reflect.get(parsed, 'slippageBps')
 	const validity = Reflect.get(parsed, 'validityMinutes')
-	const slippageBps = typeof slippage === 'string' && /^\d+$/.test(slippage) && BigInt(slippage) <= MAXIMUM_SLIPPAGE_BPS ? BigInt(slippage) : DEFAULT_TRADE_SETTINGS.slippageBps
+	const slippageBps = typeof slippage === 'string' && /^\d+$/.test(slippage) && slippageInRange(BigInt(slippage)) ? BigInt(slippage) : DEFAULT_TRADE_SETTINGS.slippageBps
 	const validityMinutes = typeof validity === 'string' ? (parseValidityMinutes(validity) ?? DEFAULT_TRADE_SETTINGS.validityMinutes) : DEFAULT_TRADE_SETTINGS.validityMinutes
 	return { slippageBps, validityMinutes }
 }

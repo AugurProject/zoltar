@@ -1,14 +1,38 @@
 import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
 import type { ForkTarget } from '../protocol/forks.js'
-import type { SettlementOperation, ShareOutcome } from '../protocol/live.js'
+import type { LiveMarket, SettlementOperation, ShareOutcome } from '../protocol/live.js'
+import { resolvedShareOutcome } from '../lib/marketLabels.js'
+import * as settlementCopy from '../copy/settlement.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
+
+type SettlementLifecycle = Pick<LiveMarket, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>
+type SettlementHoldings = Readonly<{ completeSets: bigint; winningBalance: bigint; directionalBalance: bigint }>
+
+/** Why the selected settlement action cannot run for this market and wallet, or undefined when it can. */
+export function settlementUnavailableReason(operation: SettlementOperation, market: SettlementLifecycle, holdings: SettlementHoldings) {
+	if (market.loadError !== undefined) return settlementCopy.marketDataUnavailableReason
+	if (operation === 'migrate-shares') {
+		if (market.universeForkTime === 0n) return settlementCopy.universeNotForkedReason
+		if (holdings.directionalBalance === 0n) return settlementCopy.noSharesToMigrateReason
+		return undefined
+	}
+	if (operation === 'redeem-complete-set') {
+		if (market.universeForkTime !== 0n) return settlementCopy.universeForkedReason
+		if (market.systemState !== 0) return settlementCopy.poolNotOperationalReason
+		return holdings.completeSets === 0n ? settlementCopy.noCompleteSetsReason : undefined
+	}
+	if (market.systemState !== 0) return settlementCopy.poolNotOperationalReason
+	const winningOutcome = resolvedShareOutcome(market.questionOutcome)
+	if (winningOutcome === undefined) return settlementCopy.questionNotResolvedReason
+	return holdings.winningBalance === 0n ? settlementCopy.noWinningSharesReason(winningOutcome) : undefined
+}
 
 export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetCount: bigint) {
 	return `Fork migration simulation ready at block ${blockNumber.toString()}: the entire selected ${sourceOutcome} balance will be copied into ${targetCount.toString()} selected child ${targetCount === 1n ? 'branch' : 'branches'} and locked in the parent universe.`
 }
 
-export function settlementInputBlocker(operation: SettlementOperation, operationAvailable: boolean, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
-	if (!operationAvailable) return 'The selected settlement action is unavailable for the current lifecycle state or wallet balances'
+export function settlementInputBlocker(operation: SettlementOperation, unavailableReason: string | undefined, completeSetsAttoShares: bigint, parsedAmountAttoShares: bigint | undefined, targetOutcomeIndexes: readonly bigint[], sourceOutcome: ShareOutcome, sourceBalance: bigint | undefined, rate: ShareValueRate) {
+	if (unavailableReason !== undefined) return unavailableReason
 	if (operation === 'redeem-complete-set') {
 		if (parsedAmountAttoShares === undefined || parsedAmountAttoShares === 0n) return 'Enter a valid positive complete-set value'
 		if (parsedAmountAttoShares > completeSetsAttoShares) return `Enter no more than the available complete-set balance of ${formatCollateralEth(completeSetsAttoShares, rate, 'down')}`
