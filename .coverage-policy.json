@@ -32,9 +32,7 @@
 			"minimumFunctions": 79.536,
 			"maximumAllowedUnloadedFiles": 1,
 			"unloadedFilesReviewBy": "2026-11-24",
-			"allowedUnloadedFiles": [
-				"shared/core/ts/evm/uniswapAbis.ts"
-			]
+			"allowedUnloadedFiles": ["shared/core/ts/evm/uniswapAbis.ts"]
 		},
 		"tooling": {
 			"minimumLines": 25.715,
