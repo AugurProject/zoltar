@@ -8,9 +8,8 @@ import { Fragment, isValidElement, type ComponentChildren, type ComponentType, t
  */
 
 /**
- * The classic JSX factory for bot packages that do not depend on Preact themselves. Such a package's `.tsx` page
- * templates declare `@jsxRuntime classic`, `@jsx h` and `@jsxFrag Fragment` and import both names from here, so the
- * compiled markup never imports `preact/jsx-runtime` from a package that cannot resolve it.
+ * Element factories for bot packages that do not depend on Preact themselves. Such packages build page templates with
+ * direct `h(...)` calls, so their code never imports `preact` or `preact/jsx-runtime` from a package that cannot resolve it.
  */
 export { Fragment, h } from 'preact'
 
