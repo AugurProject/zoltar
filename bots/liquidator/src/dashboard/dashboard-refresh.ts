@@ -26,8 +26,10 @@ export function createStateRefresh({ state, view, loadConfiguration }: StateRefr
 				state.pendingProfileStateConfirmed = true
 				await loadConfiguration()
 			}
-		} catch {
+		} catch (error) {
 			if (requestEpoch !== state.profileRequestEpoch) return
+			// The disconnected header shows a fixed public message, so the failure detail is intentionally not rendered.
+			void error
 			view.renderConnectionFailure()
 		}
 	})
