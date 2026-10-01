@@ -197,7 +197,7 @@ Use `GAS_COST_ANVIL_RPC=http://host.docker.internal:8545 bun run gas-costs` when
 
 ## Publishing the UIs to a local IPFS node
 
-With Docker and a local IPFS (Kubo) node running, `bun run ui:publish:local` builds Zoltar, Statoblast, and Trading in Docker and pins all three on that node. Set `IPFS_API` to the node's Kubo API multiaddress when it is not reachable at `/dns4/host.docker.internal/tcp/5001`. On Windows, double-clicking `publish.bat` runs the same steps. `bun run ui:publish:ipfs` publishes through the release publisher image instead.
+With Docker and a local IPFS (Kubo) node running, `bun run ui:publish:local` builds Zoltar, Statoblast, and Trading in Docker and pins all three on that node. Set `IPFS_API` to the node's Kubo API multiaddress when it is not reachable at `/dns4/host.docker.internal/tcp/5001`. On Windows, double-clicking `publish.bat` runs the same command; it needs Bun and the repository dependencies installed. `bun run ui:publish:ipfs` publishes through the release publisher image instead.
 
 ## Agent configuration
 

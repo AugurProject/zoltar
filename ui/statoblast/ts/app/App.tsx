@@ -19,7 +19,7 @@ import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './lib
 import { buildRouteHref, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
-import { STATOBLAST_ROUTES, type Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import { STATOBLAST_ROUTES, type StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
@@ -36,7 +36,7 @@ export function App() {
 	const urlState = useStatoblastUrlState()
 	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolAddress, securityPoolQuestionId, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, vaultAddress } = urlState
 	const { navigate, route } = useHashRoute()
-	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', STATOBLAST_ROUTES)
+	const resolvedRoute = resolveEnumValue<StatoblastRoute>(route, 'not-found', STATOBLAST_ROUTES)
 	const repPrices = useRepPrices()
 	const { repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = repPrices
 	const {

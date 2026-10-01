@@ -4,7 +4,8 @@ import { nextTabIndex } from './app-presentation.ts'
 import { restartActivityQuery } from './app-routing.ts'
 import { isStateTab } from './app-state.ts'
 import type { ScannerViews } from './app-views.ts'
-import { handleActivityDetailDrawerEscape, shouldClearPendingDetailState } from './live-update.ts'
+import { handleActivityDetailDrawerEscape } from './activity-detail-dom.ts'
+import { shouldClearPendingDetailState } from './refresh-presentation.ts'
 import { bindSystemSearchControls } from './system-search-controls.ts'
 
 export const bindActivityFilterControls = (context: ScannerContext, views: ScannerViews): void => {

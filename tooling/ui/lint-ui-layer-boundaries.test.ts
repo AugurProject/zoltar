@@ -87,6 +87,15 @@ test('keeps Statoblast product types out of the generic UI packages', () => {
 	expect(findUiLayerBoundaryViolations('ui/statoblastShared/ts/types/contracts.ts', sourceText)).toEqual([])
 })
 
+test('treats the Statoblast route union as a product type while each application route union keeps its own name', () => {
+	const sourceText = ["export type StatoblastRoute = 'pools' | 'not-found'", "export type ZoltarRoute = 'zoltar' | 'not-found'"].join('\n')
+	for (const packageId of ['coreShared', 'zoltarShared']) {
+		const findings = findUiLayerBoundaryViolations(`ui/${packageId}/ts/types/app.ts`, sourceText)
+		expect(findings.map(finding => [finding.rule, 'declaredName' in finding ? finding.declaredName : undefined])).toEqual([['statoblast-product-type-outside-statoblast-shared', 'StatoblastRoute']])
+	}
+	expect(findUiLayerBoundaryViolations('ui/zoltarShared/ts/types/app.ts', readFileSync('ui/zoltarShared/ts/types/app.ts', 'utf8'))).toEqual([])
+})
+
 test('derives the Statoblast product type denylist from the Statoblast types modules', () => {
 	const modulePath = 'ui/statoblastShared/ts/types/contracts.ts'
 	const statoblastTypesSource = `${readFileSync(modulePath, 'utf8')}\nexport type PoolInsuranceQuote = { premiumAttoEth: bigint }\n`

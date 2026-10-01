@@ -1,46 +1,37 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
 import { requiredElementRole } from '../../browser/dom-elements.ts'
+import { captureActivityDetailFocus, captureDisclosureState, decodedActionLabel, handleActivityDetailDrawerEscape, placeActivityDetailDrawer, reconcileTransactionDialogSnapshot, restoreActivityDetailFocus, restoreDisclosureState, urlWithoutLogDetail, visibleActivityLogCount } from '../../browser/activity-detail-dom.ts'
 import {
-	accountStateDuringStagedRefresh,
-	activityRefreshRetention,
-	approvalTransitionFields,
-	availableSessionSnapshotStorage,
 	canonicalPageLimit,
-	canReuseNetworkStatusPresentation,
-	captureActivityDetailFocus,
-	captureDisclosureState,
-	classifyLiveRecords,
 	collectCanonicalPages,
 	collectCursorCollections,
 	collectDualCursorCollections,
 	compareCanonicalEventPosition,
-	contractDeploymentStatus,
-	contractRegistrySection,
-	createForegroundRefreshGate,
-	createLiveRouteRefreshCoordinator,
-	createSessionSnapshotCache,
-	decodedActionLabel,
-	demoTimelineEvidenceStatus,
-	entityHistoryContinuationPresentation,
-	evidenceStatusLabel,
-	handleActivityDetailDrawerEscape,
-	historyInvalidationEvidencePresentation,
-	historyInvalidationNotice,
-	historyInvalidationReasonLabel,
+	mergeUniqueRecords,
+	paginatedSnapshotWasReplaced,
+	reconcilePaginatedTotal,
+	riskPaginationForCollectedCursors,
+	summarizeHistoryCollections,
+} from '../../browser/canonical-pagination.ts'
+import { contractDeploymentStatus, contractRegistrySection } from '../../browser/contract-registry-status.ts'
+import { demoTimelineEvidenceStatus, evidenceStatusLabel, historyInvalidationEvidencePresentation, historyInvalidationNotice, historyInvalidationReasonLabel, isHistoryInvalidationReason, timelineEntityTypeLabel, timelineOccurrenceFields } from '../../browser/history-evidence.ts'
+import { classifyLiveRecords, createForegroundRefreshGate, createLiveRouteRefreshCoordinator, isCurrentCanonicalGeneration, isCurrentContextRequest, isCurrentLiveRequest, runSerializedOperationsLoad, runWithForegroundReservation } from '../../browser/live-refresh.ts'
+import {
+	canReuseNetworkStatusPresentation,
 	indexerConnectionStatus,
 	indexerHeadFreshness,
 	indexerHeadFreshnessTransitionDelay,
 	indexerLagLabel,
 	indexerProgressEstimate,
-	isCurrentCanonicalGeneration,
-	isCurrentContextRequest,
-	isCurrentLiveRequest,
-	isHistoryInvalidationReason,
-	isNoncanonicalDetailFailure,
 	knownNetworkName,
 	loadInitialNetworkStatus,
-	mergeUniqueRecords,
+	refreshRouteAlongsideNetworkStatus,
+	restoredNetworkSnapshotIsCurrent,
+	showIndexerSyncDetails,
+} from '../../browser/network-freshness.ts'
+import {
+	approvalTransitionFields,
 	operationsCatalogRecordKey,
 	operationsDetailEvidencePanelVisible,
 	operationsDetailHeaderPresentation,
@@ -49,32 +40,22 @@ import {
 	operationsForkChildCount,
 	operationsRiskPresentation,
 	operationsRouteFreshness,
-	paginatedSnapshotWasReplaced,
+} from '../../browser/operations-presentation.ts'
+import {
+	accountStateDuringStagedRefresh,
+	activityRefreshRetention,
+	entityHistoryContinuationPresentation,
+	isNoncanonicalDetailFailure,
 	paginationRequestAllowed,
-	placeActivityDetailDrawer,
 	queuedPaginationPresentation,
-	reconcilePaginatedTotal,
-	reconcileTransactionDialogSnapshot,
 	refreshPresentation,
-	refreshRouteAlongsideNetworkStatus,
 	resolveActivityRefreshDepth,
-	restoreActivityDetailFocus,
-	restoreDisclosureState,
-	restoredNetworkSnapshotIsCurrent,
 	retainedPaginationAvailable,
-	riskPaginationForCollectedCursors,
-	runSerializedOperationsLoad,
-	runWithForegroundReservation,
 	shouldClearPendingDetailState,
 	shouldContinueTransactionRestore,
-	showIndexerSyncDetails,
-	summarizeHistoryCollections,
-	timelineEntityTypeLabel,
-	timelineOccurrenceFields,
 	transactionRetryMode,
-	urlWithoutLogDetail,
-	visibleActivityLogCount,
-} from '../../browser/live-update.ts'
+} from '../../browser/refresh-presentation.ts'
+import { availableSessionSnapshotStorage, createSessionSnapshotCache } from '../../browser/session-snapshot-cache.ts'
 
 test('retains every distinct catalog record across a delayed 251-record live refresh', async () => {
 	const first = Array.from({ length: 100 }, (_, index) => ({ auction_address: `0x${index.toString(16).padStart(40, '0')}` }))

@@ -1,13 +1,11 @@
 import type { PublicSettlementRecord, SettlementCandidateSnapshot, SettlementSnapshot } from '#state/settlement-store'
 import { countLabel, exactAmount, rewardWithdrawalLabel, settlementDecisionReason, settlementQueueCountLabel } from './dashboard-format.js'
-import { decisionBadge, element, row, setText } from './dom.js'
-
-type Link = (value: string, kind: 'address' | 'tx', focusKey: string) => HTMLElement
+import { decisionBadge, element, type ExplorerLink, row, setText } from './dom.js'
 
 const QUEUE_LABELS = ['Report', 'Decision', 'Reason', 'Reward', 'Projected gas', 'Projected net', 'Past deadline', 'Token', 'Coordinator']
 const HISTORY_LABELS = ['Submitted', 'Kind', 'Report', 'Status', 'Reward', 'Projected gas', 'Actual gas', 'Transaction']
 
-function queueRow(candidate: SettlementCandidateSnapshot, link: Link) {
+function queueRow(candidate: SettlementCandidateSnapshot, link: ExplorerLink) {
 	return row(
 		[
 			candidate.reportId,
@@ -24,7 +22,7 @@ function queueRow(candidate: SettlementCandidateSnapshot, link: Link) {
 	)
 }
 
-function historyRow(record: PublicSettlementRecord, link: Link) {
+function historyRow(record: PublicSettlementRecord, link: ExplorerLink) {
 	return row(
 		[
 			new Date(record.submittedAt).toLocaleString(),
@@ -52,7 +50,7 @@ function summaryRow(label: string, value: string) {
 }
 
 /** Settlement thresholds are edited under Settings › Settlement, so the panel states them beside the accrued figures. */
-export function renderSettlements(settlements: SettlementSnapshot, link: Link) {
+export function renderSettlements(settlements: SettlementSnapshot, link: ExplorerLink) {
 	const { settings } = settlements
 	element('settlement-summary').replaceChildren(
 		summaryRow('Settlement', settings.enabled ? `enabled · minimum net ${settings.minimumProfitWeth} ETH · gas cap ${settings.maxGasPriceNanoEth} nanoETH` : 'disabled · enable it under Settings › Settlement'),

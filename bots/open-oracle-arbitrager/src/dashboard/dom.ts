@@ -27,6 +27,9 @@ export function headingRow(labels: readonly string[]) {
 	return tableRow
 }
 
+/** Renders an explorer link for an address or transaction; `focusKey` restores focus across re-renders. */
+export type ExplorerLink = (value: string, kind: 'address' | 'tx', focusKey: string) => HTMLAnchorElement
+
 export function explorerLink(explorerUrl: string, value: string, kind: 'address' | 'tx', focusKey: string) {
 	const anchor = document.createElement('a')
 	anchor.href = `${explorerUrl}/${kind}/${value}`

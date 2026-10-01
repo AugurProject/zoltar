@@ -3,7 +3,7 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
 import { isHexAddressInput, normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
-import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 /** Copies route state (URL pool, question, vault owner, and oracle report) into the form states that mirror it. */
 type RouteFormSync = {
@@ -21,9 +21,9 @@ type Props = {
 	formSync: RouteFormSync
 	loadOracleReport: (reportId: string) => Promise<void>
 	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
-	navigate: (route: Exclude<Route, 'not-found'>) => void
+	navigate: (route: Exclude<StatoblastRoute, 'not-found'>) => void
 	resetSecurityPoolCreation: () => void
-	route: Route
+	route: StatoblastRoute
 	securityPoolAddress: string
 	securityPoolQuestionId: string
 	securityPoolResultHash: string | undefined
@@ -34,15 +34,27 @@ type Props = {
 	walletBootstrapComplete: boolean
 }
 
-function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
+function shouldRefreshSelectedPoolForRoute({
+	environmentReady,
+	route,
+	securityPoolAddress,
+	selectedPoolSecurityPoolAddress,
+	walletBootstrapComplete,
+}: {
+	environmentReady: boolean
+	route: StatoblastRoute
+	securityPoolAddress: string
+	selectedPoolSecurityPoolAddress: string | undefined
+	walletBootstrapComplete: boolean
+}) {
 	return environmentReady && route === 'pools' && walletBootstrapComplete && isHexAddressInput(securityPoolAddress) && selectedPoolSecurityPoolAddress === undefined
 }
 
-function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Route; securityPoolAddress: string }) {
+function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: StatoblastRoute; securityPoolAddress: string }) {
 	return route === 'pools'
 }
 
-function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: Route; securityPoolAddress: string }) {
+function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: StatoblastRoute; securityPoolAddress: string }) {
 	if (route !== 'pools') return undefined
 	const normalizedSecurityPoolAddress = normalizeAddress(securityPoolAddress) ?? ''
 	const normalizedLastSecurityPoolAddress = normalizeAddress(lastSecurityPoolAddress)

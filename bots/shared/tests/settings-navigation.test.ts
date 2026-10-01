@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
-import { settingsGroup, settingsIntro, settingsPage, settingsSection } from '../src/dashboard/settings-markup.ts'
+import { h } from 'preact'
+import { SettingsGroup, SettingsIntro, SettingsPage, SettingsSection } from '../src/dashboard/settings-markup.tsx'
 import { createSettingsNavigation } from '../src/dashboard/settings-navigation.ts'
+import { renderStaticMarkup } from '../src/dashboard/static-markup.ts'
 
 const previousGlobals = new Map<string, PropertyDescriptor | undefined>()
 let view: Window | undefined
@@ -13,11 +15,14 @@ function setup(width: number) {
 		previousGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
 		Object.defineProperty(globalThis, name, { configurable: true, value: name === 'window' ? current : Reflect.get(current, name) })
 	}
-	current.document.body.innerHTML = settingsPage({
-		intro: settingsIntro({ scopeText: 'Test profile' }),
-		sections: ['connect', 'policy', 'advanced'].map(id => settingsSection({ id, title: id, collapsed: id === 'advanced', groups: settingsGroup({ title: id, summary: id, body: '<p>Settings</p>', open: id !== 'advanced' }) })).join(''),
-		steps: ['connect', 'policy', 'advanced'].map(id => ({ id, label: id })),
-	})
+	const sectionIds = ['connect', 'policy', 'advanced']
+	current.document.body.innerHTML = renderStaticMarkup(
+		h(
+			SettingsPage,
+			{ intro: h(SettingsIntro, { scopeText: 'Test profile' }), steps: sectionIds.map(id => ({ id, label: id })) },
+			sectionIds.map(id => h(SettingsSection, { collapsed: id === 'advanced', id, title: id }, h(SettingsGroup, { open: id !== 'advanced', summary: id, title: id }, h('p', null, 'Settings')))),
+		),
+	)
 	createSettingsNavigation()
 	return current
 }

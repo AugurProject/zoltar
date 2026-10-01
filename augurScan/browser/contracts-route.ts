@@ -1,7 +1,8 @@
 import type { ContractRecord, LoadOptions } from './browser-types.ts'
 import type { CanonicalState } from './canonical-state.ts'
-import type { RefreshGate } from './live-update.ts'
-import { isCurrentCanonicalGeneration, isCurrentContextRequest, refreshPresentation } from './live-update.ts'
+import type { RefreshGate } from './live-refresh.ts'
+import { isCurrentCanonicalGeneration, isCurrentContextRequest } from './live-refresh.ts'
+import { refreshPresentation } from './refresh-presentation.ts'
 import { decodeItemsPage, isContractRecord } from './api-decoding.ts'
 import { renderContractsPage } from './contracts-page.ts'
 

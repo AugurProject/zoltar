@@ -2,7 +2,7 @@ import type { ScannerContext } from './app-context.ts'
 import { element, lookup } from './app-dom.ts'
 import type { ScannerState } from './app-state.ts'
 import { eventStreamState } from './app-presentation.ts'
-import { indexerHeadFreshness } from './live-update.ts'
+import { indexerHeadFreshness } from './network-freshness.ts'
 import { networkIndicator } from './network-indicator.ts'
 
 const canonicalIncompleteTitle = 'Chain update refresh incomplete'

@@ -8,12 +8,12 @@ import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appR
 import * as marketCopy from '@zoltar/ui-zoltar-shared/copy/market.js'
 import * as zoltarCopy from '@zoltar/ui-zoltar-shared/copy/zoltar.js'
 import type { ZoltarView } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { ZoltarRoute } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
 	readBackendMessage: string | undefined
-	route: Route
+	route: ZoltarRoute
 	zoltarView: ZoltarView
 }
 

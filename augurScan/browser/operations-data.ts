@@ -1,6 +1,7 @@
 import type { OperationsDetailRoute, PagedOperationsCatalogSection } from './browser-types.ts'
 import { decodeOperationsResponseValue, isJsonRecord, operationRecords, operationsCatalogRecords, operationsRiskPagination, operationsRiskRecords, type JsonRecord, type OperationsResponse } from './api-validation.ts'
-import { collectCanonicalPages, collectCursorCollections, collectDualCursorCollections, operationsCatalogRecordKey, operationsDetailRecordKey, riskPaginationForCollectedCursors } from './live-update.ts'
+import { collectCanonicalPages, collectCursorCollections, collectDualCursorCollections, riskPaginationForCollectedCursors } from './canonical-pagination.ts'
+import { operationsCatalogRecordKey, operationsDetailRecordKey } from './operations-presentation.ts'
 
 export const operationsRiskHistoryKeys = ['stateSnapshots', 'accountingSnapshots', 'lifecycleEvents', 'liquidations'] as const
 export const operationsHistoryOffset = (value: unknown): number | undefined => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined)

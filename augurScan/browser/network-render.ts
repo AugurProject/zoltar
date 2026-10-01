@@ -1,5 +1,5 @@
 import type { CanonicalRecovery, NetworkRecord } from './browser-types.ts'
-import { canReuseNetworkStatusPresentation, indexerHeadFreshness, indexerHeadFreshnessTransitionDelay, indexerLagLabel, indexerProgressEstimate, showIndexerSyncDetails } from './live-update.ts'
+import { canReuseNetworkStatusPresentation, indexerHeadFreshness, indexerHeadFreshnessTransitionDelay, indexerLagLabel, indexerProgressEstimate, showIndexerSyncDetails } from './network-freshness.ts'
 
 export interface NetworkRenderState {
 	latestNetworks: NetworkRecord[]

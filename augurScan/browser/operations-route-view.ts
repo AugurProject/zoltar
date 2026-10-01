@@ -1,6 +1,6 @@
 import { semanticSummary } from './semantic-evidence.ts'
 import type { OperationsCatalogSection, OperationsDetailRoute, OperationsRenderContext } from './browser-types.ts'
-import { approvalTransitionFields } from './live-update.ts'
+import { approvalTransitionFields } from './operations-presentation.ts'
 import { isRecord, operationRecords, type JsonRecord } from './api-validation.ts'
 import { exactUnit } from './format.ts'
 import { shortIdentifier } from './identifier-format.ts'

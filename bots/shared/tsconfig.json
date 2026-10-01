@@ -4,5 +4,5 @@
 		"jsx": "react-jsx",
 		"jsxImportSource": "preact"
 	},
-	"include": ["src/**/*.ts", "tests/**/*.ts"]
+	"include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]
 }

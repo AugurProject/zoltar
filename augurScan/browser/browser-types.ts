@@ -20,7 +20,8 @@ export interface RepEthPriceHistoryRecord {
 
 import { type EntityHistoryCoverageValue, type JsonRecord, type JsonValue } from './api-validation.ts'
 
-import { type ActivityDetailFocusSnapshot, type HistoryInvalidationReason } from './live-update.ts'
+import type { ActivityDetailFocusSnapshot } from './activity-detail-dom.ts'
+import type { HistoryInvalidationReason } from './history-evidence.ts'
 
 declare global {
 	interface Error {

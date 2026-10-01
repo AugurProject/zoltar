@@ -7,7 +7,7 @@ import type { ScannerViews } from './app-views.ts'
 import type { DemoFactory } from './demo-runtime.ts'
 import { utcDateTime } from './format.ts'
 import { createLiveCoordinator } from './live-coordinator.ts'
-import { refreshRouteAlongsideNetworkStatus } from './live-update.ts'
+import { refreshRouteAlongsideNetworkStatus } from './network-freshness.ts'
 
 type DemoRuntime = ReturnType<DemoFactory>
 
