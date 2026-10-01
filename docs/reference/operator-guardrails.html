@@ -51,11 +51,10 @@
 							</tr>
 							<tr>
 								<td>Complete-set capacity</td>
-								<td><a href="./glossary.html#complete-set">Complete-set</a> minting reverts with <code>Fork await</code> while a fork continuation is pending, <code>Escalation mint closed</code> once an Escalation Game exists, <code>Settlement unavailable</code> for zero ETH or a resolved escalation, and <code>Over capacity</code> when <a href="./glossary.html#settlement-collateral">settlement collateral</a> plus the deposit would exceed the pool's total <a href="./glossary.html#underwriting-commitment">underwriting commitments</a>. It reads no oracle price and checks no REP backing, so minters accept the pool's current backing; vault health checks and liquidation cover each full commitment.</td>
+								<td>Like other operational flows, <a href="./glossary.html#complete-set">complete-set</a> minting first requires an unforked universe (<code>Forked</code>) and an <code>Operational</code> pool (<code>Pool inactive</code>). It then reverts with <code>Fork await</code> while a fork continuation is pending, <code>Escalation mint closed</code> once an Escalation Game exists, <code>Settlement unavailable</code> for zero ETH or an inherited fork outcome, <code>Exchange rate undefined</code> when the deposit converts to no shares or outstanding shares have no collateral, and <code>Over capacity</code> when <a href="./glossary.html#settlement-collateral">settlement collateral</a> plus the deposit would exceed the pool's total <a href="./glossary.html#underwriting-commitment">underwriting commitments</a>. Minting reads no oracle price or REP backing; <a href="./invariants.html#bal-03">BAL-03</a> states the rule.</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.createCompleteSet</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.createCompleteSet</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol"><code>SecurityPool.depositRepToVault</code></a>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.createCompleteSet</code></a>
 								</td>
 							</tr>
 							<tr>
@@ -69,7 +68,7 @@
 							</tr>
 							<tr>
 								<td>Retention-rate updates</td>
-								<td>Retention-rate updates no-op when the pool is not <code>Operational</code>; otherwise utilization divides tracked collateral by total underwriting commitments, independent of price and backing. No commitments or an open Escalation Game select the maximum retention rate. Unclaimed sold auction commitment therefore already affects utilization and fee accrual. A later claim changes only its vault assignment, not fee eligibility, total commitment, minting capacity, or retention solely because of that claim.</td>
+								<td>Retention-rate updates no-op when the pool is not <code>Operational</code>; otherwise utilization divides tracked collateral by total underwriting commitments, independent of price and backing. No commitments or any Escalation Game, open or resolved, select the maximum retention rate. Unclaimed sold auction commitment therefore already affects utilization and fee accrual. A later claim changes only its vault assignment, not fee eligibility, total commitment, minting capacity, or retention solely because of that claim.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>
@@ -164,7 +163,7 @@
 							</tr>
 							<tr>
 								<td>Economic denominator</td>
-								<td>Child setup copies the frozen parent's remaining economic claim supply rather than its currently materialized ERC-1155 supply. Complete-set minting and redemption update that denominator; share migration does not because its claims were reserved at fork time.</td>
+								<td><code>startTruthAuction</code> copies the frozen parent's remaining economic claim supply into the child rather than its currently materialized ERC-1155 supply. Complete-set minting and redemption update that denominator; share migration does not because its claims were reserved at fork time.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolForker.sol">SecurityPoolForker.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>
@@ -489,7 +488,7 @@
 							</tr>
 							<tr>
 								<td>Staging guardrails</td>
-								<td>Withdrawal and liquidation amounts must be non-zero. Validity must be positive and no more than five minutes. Withdrawals target the operator's own vault. Liquidation uses explicit operator, receiver, and target roles; receiver and target must differ. A delegated receiver requires a valid bounded approval and queue-time reservation, while the self-receiving operator path requires no signature.</td>
+								<td>Withdrawal and liquidation amounts must be non-zero; a zero underwriting commitment is a valid exit. Validity must be positive and no more than five minutes. Withdrawals and underwriting-commitment changes target the operator's own vault. Liquidation uses explicit operator, receiver, and target roles; receiver and target must differ. A delegated receiver requires a valid bounded approval and queue-time reservation, while the self-receiving operator path requires no signature.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinatorTypes.sol">OpenOraclePriceCoordinatorTypes.sol</a></td>
 							</tr>
 							<tr>
@@ -529,7 +528,7 @@
 							</tr>
 							<tr>
 								<td>Liquidation snapshot</td>
-								<td>A staged liquidation becomes stale if target REP backing units or its underwriting limit (<code>underwritingLimitAttoEth</code>) changes. The underwriting-commitment snapshot bounds the reservation; the proportional-obligation snapshot is historical context. Execution rechecks full-limit target health and the receiver's entire resulting underwriting commitment against live price and backing. REP awards cap at available target units without reducing the accepted underwriting commitment. Successful transfer conserves total underwriting commitments. Residual exposure remains visible and earns fees. See <a href="../explanation/liquidations.html#queue-semantics">queued execution</a>.</td>
+								<td>A staged liquidation becomes stale if target REP backing units or its underwriting commitment (<code>underwritingLimitAttoEth</code>) changes. The underwriting-commitment snapshot bounds the reservation; the proportional-obligation snapshot is historical context. Execution rechecks full-commitment target health and the receiver's entire resulting underwriting commitment against live price and backing. REP awards cap at available target units without reducing the accepted underwriting commitment. Successful transfer conserves total underwriting commitments. Residual exposure remains visible and earns fees. See <a href="../explanation/liquidations.html#queue-semantics">queued execution</a>.</td>
 								<td><a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/OpenOraclePriceCoordinator.sol">OpenOraclePriceCoordinator.sol</a>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPool.sol">SecurityPool.sol</a></td>
 							</tr>
 							<tr>

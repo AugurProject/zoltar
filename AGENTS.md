@@ -153,7 +153,7 @@ checksums against the tracked source pins and never download replacements. `bun 
 | `docs/assets/js/docsData.js` | `bun run docs:build-index` |
 | `docs/assets/js/docsSearchData.js` | `bun run docs:build-index` |
 | `docs/reference/contracts.html` and `docs/reference/contracts/*.html` | `bun run docs:generate-contract-reference` |
-| `docs/assets/screenshots/**` | `bun run docs:screenshots` (captures the specs in `tooling/docs/ui-screenshot-specs.mts` from the walletless simulation); validate with `bun run docs:check-screenshots` |
+| `docs/assets/screenshots/**` | `bun run docs:screenshots` (captures the specs in `tooling/docs/ui-screenshot-specs/<app>.mts` from the walletless simulation); validate with `bun run docs:check-screenshots` |
 | `bots/open-oracle-arbitrager/docs/chart-runtime.js` | `cd bots/open-oracle-arbitrager && bun run build:docs`; validate with `bun run check:generated` |
 | `bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts` and `bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts` | `cd bots/open-oracle-arbitrager && bun run compile-contracts`; validate with `bun run check:generated` |
 | `bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts` | `cd bots/open-oracle-arbitrager && bun run generate:abi`; validate with `bun run check:generated` |

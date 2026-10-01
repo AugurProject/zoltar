@@ -300,6 +300,22 @@
 			"keywords": ["OpenOracle", "parameters", "funding", "callbacks", "estimators"]
 		},
 		{
+			"path": "tutorials/zoltar-first-question.html",
+			"title": "Your first Zoltar question",
+			"summary": "Create a yes-or-no question in the Zoltar registry and find it again.",
+			"section": "tutorials",
+			"topic": "Zoltar",
+			"keywords": ["Zoltar", "question", "registry", "screenshots"]
+		},
+		{
+			"path": "tutorials/statoblast-first-pool.html",
+			"title": "Your first security pool",
+			"summary": "Create a SecurityPool, back it with REP, commit to underwrite it, and mint a complete set.",
+			"section": "tutorials",
+			"topic": "Statoblast",
+			"keywords": ["Statoblast", "SecurityPool", "vault", "underwriting commitment", "OpenOracle", "screenshots"]
+		},
+		{
 			"path": "tutorials/trading-first-market.html",
 			"title": "Your first Trading market",
 			"summary": "Create and seed the trading pool for a SecurityPool in the UI.",

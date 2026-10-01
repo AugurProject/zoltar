@@ -426,16 +426,15 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 	const simulator = document.querySelector<HTMLElement>('#escalation-game-example')
 	const startBond = readInput(simulator, 'startBond', 1)
 	const nonDecisionThreshold = readInput(simulator, 'nonDecisionThreshold', 10)
-	const curve = Array.from({ length: ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS + 1 }, (_, day) => {
-		return {
-			day,
-			bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
-		}
-	})
-	const start = curve[0]
-	const activation = curve[ESCALATION_ACTIVATION_DELAY_DAYS]
-	const end = curve[ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS]
-	if (start === undefined || activation === undefined || end === undefined) {
+	const sampled = Array.from({ length: ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS + 1 }, (_, day) => ({
+		day,
+		bindingCapital: day < ESCALATION_ACTIVATION_DELAY_DAYS ? 0 : computeCanonicalEscalationBindingCapital(startBond, nonDecisionThreshold, day),
+	}))
+	// The contract requires nothing through the activation second and the start bond right after it, so the curve steps up at day 3.
+	const curve = [...sampled.slice(0, ESCALATION_ACTIVATION_DELAY_DAYS), { day: ESCALATION_ACTIVATION_DELAY_DAYS, bindingCapital: 0 }, ...sampled.slice(ESCALATION_ACTIVATION_DELAY_DAYS)]
+	const activation = sampled[ESCALATION_ACTIVATION_DELAY_DAYS]
+	const end = sampled[ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS]
+	if (activation === undefined || end === undefined) {
 		throw new Error('Escalation cost curve must include both endpoints')
 	}
 	return plot({
@@ -465,9 +464,9 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 				x: 'day',
 				y: 'bindingCapital',
 			}),
-			text([{ day: activation.day, label: `day ${activation.day}: activation / ${startBond} REP`, bindingCapital: activation.bindingCapital }], {
+			text([{ day: activation.day, label: spec.width < 900 ? `day ${activation.day}: ${startBond} REP` : `day ${activation.day}: activation, then ${startBond} REP`, bindingCapital: activation.bindingCapital }], {
 				dx: 9,
-				dy: -10,
+				dy: compact ? -56 : -26,
 				fill: 'var(--green, #1d735d)',
 				fontWeight: 700,
 				text: 'label',
@@ -485,11 +484,10 @@ function bindingCapitalThresholdChart(spec: ChartSpec): SVGSVGElement {
 				x: 'day',
 				y: 'bindingCapital',
 			}),
-			text([{ day: 0, label: 'day 0: game starts', bindingCapital: 0 }], { dx: 8, dy: -8, fill: 'var(--ink, currentColor)', fontWeight: 650, text: 'label', textAnchor: 'start', x: 'day', y: 'bindingCapital' }),
 		],
 		style: { background: 'transparent', color: 'var(--ink, currentColor)' },
 		width: spec.width,
-		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: compact ? [0, 52] : [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
+		x: { domain: [0, ESCALATION_ACTIVATION_DELAY_DAYS + ESCALATION_TIME_LENGTH_DAYS], grid: true, label: axes.x, ticks: spec.width < 720 ? [0, 52] : [0, 3, 52], tickFormat: (value: number) => `day ${value}` },
 		y: { domain: [0, Math.max(nonDecisionThreshold * 1.08, 1)], grid: true, label: axes.y, tickFormat: (value: number) => `${value.toFixed(1)} REP` },
 	}) as SVGSVGElement
 }

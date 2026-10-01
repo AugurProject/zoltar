@@ -147,7 +147,7 @@ Published HTML must not contain:
 
 Tutorials and how-to guides that walk through a UI embed screenshots captured from the walletless simulation. They are generated, not hand-made:
 
-- `tooling/docs/ui-screenshot-specs.mts` lists every screenshot: app, simulation scenario, route, the clicks and inputs that reach the state, the visible text it must show, the element to crop to, and the pages that embed it.
+- `tooling/docs/ui-screenshot-specs/<app>.mts` lists each app's screenshots: simulation scenario, route, the clicks, inputs, time travel, and Back navigation that reach the state, the visible text it must show, the element to crop to, and the pages that embed it. `tooling/docs/ui-screenshot-specs.mts` holds the step types and each app's rendering source roots.
 - `bun run docs:screenshots` builds the app from the current checkout, serves it on a free port, and captures them into `docs/assets/screenshots/<app>/<id>.png`, updates the `width` and `height` of every embedding `<img>`, and records a fingerprint of the app's rendering sources. Use `-- --app <app>` or `-- --only <id,id>` to narrow the run, and `-- --sync-sizes` after embedding an existing screenshot on another page.
 - `bun run docs:check-screenshots` verifies that specs, files, and embeds agree, and warns when the app changed after the last capture; `bun run test:plan` suggests the recapture when a documented UI changes.
 

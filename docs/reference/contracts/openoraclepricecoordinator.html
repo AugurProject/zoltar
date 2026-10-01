@@ -44,8 +44,8 @@
 							<td><code>requestPriceIfNeededAndStageOperation(...)</code> with funding when stale</td>
 							<td>Vault owner for self withdrawal or a target change; self-receiving liquidation callers are also supported. While a report is pending, only that report sponsor may stage more operations.</td>
 							<td><code>securityPool.isEscalationResolved()</code> is false; valid self-target for withdrawal or underwriting-limit adjustment; liquidation and withdrawal require positive amounts, while an absolute underwriting limit may be zero to request an exit; and timeout from 1 second through 5 minutes. A committed bounty of at least <code>getRequestPriceCostAttoEth()</code> covered by <code>msg.value</code>, buffered report funding, matching REP, and token approvals are required only when this call opens a new report. The caller must accept any positive unused-ETH refund.</td>
-							<td>Records the operation (<code>0</code> transferred commitment in attoETH, <code>1</code> withdrawal in attoREP, <code>2</code> absolute underwriting commitment in attoETH), executes immediately with a fresh price, or attaches it to a bounded pending settlement batch and opens a report when required. A newly accepted target change consumes any older active target change for the same vault with <code>success=false</code> and <code>Backing target superseded</code>, freeing its settlement slot. When a report opens, the whole committed <code>bountyAttoEth</code> is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.</td>
-							<td><code>StagedOperationQueued</code>, possibly <code>PriceRequested</code>, then <code>ExecutedStagedOperation</code>; authoritative <code>CoordinatorStateCheckpoint</code> records</td>
+							<td>Records the operation (<code>0</code> transferred commitment in attoETH, <code>1</code> withdrawal in attoREP, <code>2</code> absolute underwriting commitment in attoETH), executes immediately with a fresh price; otherwise it attaches it to the pending settlement batch while that batch has room, opening a report when none is pending and the batch was empty, or leaves it active outside the batch for a later <code>executeStagedOperation</code>. A newly accepted target change consumes any older active target change for the same vault with <code>success=false</code> and <code>Backing target superseded</code>, freeing its settlement slot. When a report opens, the whole committed <code>bountyAttoEth</code> is retained as the settler reward regardless of the inclusion-block cost. If unused ETH is positive, the final caller refund uses a low-level callback; rejection rolls back the entire transaction, including any queueing, immediate execution, or newly opened report.</td>
+							<td><code>StagedOperationQueued</code>; <code>PriceRequested</code> when this call opens a report; <code>ExecutedStagedOperation</code> for immediate fresh-price execution or a superseded target change; <code>LiquidationRouteStaged</code> for operation <code>0</code>; authoritative <code>CoordinatorStateCheckpoint</code> records</td>
 						</tr>
 						<tr>
 							<td><code>requestPrice(proposedRepPerEthPrice, requestedInitialAttoWeth, bountyAttoEth)</code> with report funding</td>
@@ -84,7 +84,7 @@
 						</tr>
 						<tr>
 							<td><code>setLiquidationApprovalRegistry(registry)</code></td>
-							<td>Coordinator deployment factory only</td>
+							<td>The <code>PriceCoordinatorDeploymentWorker</code> that deployed the coordinator only, invoked by <code>OpenOraclePriceCoordinatorFactory</code> during deployment</td>
 							<td>Registry is nonzero and no registry was previously installed.</td>
 							<td>Binds the coordinator-local approval registry once.</td>
 							<td>No event; deterministic factory deployment and the public getter identify the registry.</td>
@@ -93,7 +93,7 @@
 							<td><code>setSecurityPool(pool)</code></td>
 							<td>Anyone while <code>securityPool</code> remains zero; normal factory deployment calls atomically</td>
 							<td>Current <code>securityPool</code> is zero; the argument itself is not required to be nonzero.</td>
-							<td>A nonzero value binds the pool permanently. A zero value emits and checkpoints zero but leaves the setter callable. Normal factory deployment supplies the nonzero canonical pool before returning the coordinator.</td>
+							<td>A nonzero value binds the pool permanently. A zero value emits and checkpoints zero but leaves the setter callable. <code>SecurityPoolFactory</code> supplies the nonzero canonical pool in the same deployment transaction, immediately after deploying the pool.</td>
 							<td><code>SecurityPoolSet</code> and <code>CoordinatorStateCheckpoint</code></td>
 						</tr>
 						<tr>

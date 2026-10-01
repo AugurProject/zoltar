@@ -3440,8 +3440,16 @@ span.rep-price-status.stale,
 	display: none;
 }
 
+/* The summary always shows the short form, so it must also override the base rule that hides it until measurement
+   chooses abbreviation; otherwise neither form is visible. */
 .created-pool-summary .address-value-abbreviated {
 	display: inline;
+	visibility: visible;
+}
+
+/* Its measurement box is sized for the hidden full form, so let the short form show whole. */
+.created-pool-summary .address-value-text {
+	overflow: visible;
 }
 
 .existing-pool-identifiers {

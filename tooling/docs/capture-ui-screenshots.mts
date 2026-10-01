@@ -47,7 +47,7 @@ const PAGE_HELPERS = `(() => {
 	window.__docsScreenshot = {
 		click: (text, nth) => {
 			const matches = labelled(text).filter(element => !element.disabled && element.getAttribute('aria-disabled') !== 'true')
-			const target = matches[nth]
+			const target = matches.at(nth)
 			if (target === undefined) return 'No enabled control labelled "' + text + '" (' + matches.length + ' found)'
 			target.scrollIntoView({ block: 'center' })
 			target.click()
@@ -67,6 +67,11 @@ const PAGE_HELPERS = `(() => {
 			const matches = [...document.querySelectorAll(selector)].filter(element => isVisible(element) && (containing === '' || element.innerText.includes(containing)))
 			if (matches.length === 0) return undefined
 			const smallest = matches.reduce((best, element) => (element.contains(best) ? best : best.contains(element) ? element : best))
+			// Show scrollable panels, such as modal bodies, from their start, and measure from an unscrolled page so fixed
+			// dialogs and in-flow content share one coordinate space.
+			for (const element of [smallest, ...smallest.querySelectorAll('*')]) if (element.scrollHeight > element.clientHeight) element.scrollTop = 0
+			for (let ancestor = smallest.parentElement; ancestor !== null; ancestor = ancestor.parentElement) ancestor.scrollTop = 0
+			window.scrollTo(0, 0)
 			// Hide everything beside the target so floating bars and overlapped page content stay out of the image.
 			for (let node = smallest; node.parentElement !== null; node = node.parentElement) {
 				for (const sibling of node.parentElement.children) if (sibling !== node && sibling instanceof HTMLElement) sibling.style.visibility = 'hidden'
@@ -125,7 +130,8 @@ async function runStep(session: DevToolsSession, step: UiScreenshotStep, specId:
 	} else if ('fill' in step) await runHelper(session, `fill(${quote(step.fill)}, ${quote(step.value)})`, context)
 	else if ('waitForText' in step) await session.waitFor(`document.body.innerText.includes(${quote(step.waitForText)})`, { ...waitOptions, message: `${context}: timed out waiting for text "${step.waitForText}"` })
 	else if ('waitForNoText' in step) await session.waitFor(`!document.body.innerText.includes(${quote(step.waitForNoText)})`, { ...waitOptions, message: `${context}: text "${step.waitForNoText}" never disappeared` })
-	else await session.waitFor(`window.__docsScreenshot.enabled(${quote(step.waitForEnabled)})`, { ...waitOptions, message: `${context}: "${step.waitForEnabled}" never became enabled` })
+	else if ('waitForEnabled' in step) await session.waitFor(`window.__docsScreenshot.enabled(${quote(step.waitForEnabled)})`, { ...waitOptions, message: `${context}: "${step.waitForEnabled}" never became enabled` })
+	else await session.evaluate('history.back()')
 	await Bun.sleep(300)
 }
 
@@ -172,8 +178,14 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 			throw new Error(`${error instanceof Error ? error.message : String(error)}\nPage at the time of failure: ${failurePath}`)
 		}
 		await Bun.sleep(SETTLE_MILLISECONDS)
+		if (spec.crop !== undefined) {
+			// Capturing beyond the viewport resizes it mid-capture and shifts viewport-relative layout, so grow the viewport to the page first.
+			const pageHeight = Number(await session.evaluate('document.documentElement.scrollHeight'))
+			await session.send('Emulation.setDeviceMetricsOverride', { width: viewport.width, height: Math.max(viewport.height, pageHeight), deviceScaleFactor: 1, mobile: false })
+			await Bun.sleep(SETTLE_MILLISECONDS)
+		}
 		const clip = spec.crop === undefined ? undefined : await cropRect(session, spec.crop, spec.id)
-		const result = await session.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: clip !== undefined, ...(clip === undefined ? {} : { clip }) })
+		const result = await session.send('Page.captureScreenshot', { format: 'png', ...(clip === undefined ? {} : { clip }) })
 		const data = typeof result === 'object' && result !== null && 'data' in result ? result.data : undefined
 		if (typeof data !== 'string') throw new Error(`Screenshot '${spec.id}': Chromium returned no image data`)
 		const pageErrors = session.issues.filter(issue => issue.kind === 'pageerror')
@@ -188,7 +200,15 @@ async function updateEmbeddingPages(spec: UiScreenshotSpec, outputPath: string, 
 	const size = readPngSize(image)
 	for (const page of spec.usedBy) {
 		const pagePath = path.join(repositoryRoot, 'docs', page)
-		const html = await fs.readFile(pagePath, 'utf8')
+		const html = await fs.readFile(pagePath, 'utf8').catch((error: unknown) => {
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+			throw error
+		})
+		// A screenshot may be captured before the page that embeds it is written; docs:check-screenshots reports the gap.
+		if (html === undefined) {
+			console.warn(`docs/${page} does not exist yet; embed ${outputPath} there, then run 'bun run docs:screenshots -- --sync-sizes'.`)
+			continue
+		}
 		const updated = withScreenshotSize(page, html, outputPath, size)
 		if (updated !== html) await fs.writeFile(pagePath, updated)
 	}

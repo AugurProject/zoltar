@@ -873,7 +873,7 @@ for (const bindMatch of statoblastHtml.matchAll(/bindExample\("([^"]+)"/g)) {
 const chartRuntimeSource = await readFile('docs/charts/chartRuntime.ts', 'utf8')
 assert.doesNotMatch(chartRuntimeSource, /normalizedEscalationCost|escalationCostChart|requiredRepFraction/i, 'escalation chart runtime should use cumulative binding-capital terminology')
 assert.match(chartRuntimeSource, /ESCALATION_ACTIVATION_DELAY_DAYS \+ ESCALATION_TIME_LENGTH_DAYS \+ 1/, 'escalation Plot should sample every day from game start through day 52')
-assert.match(chartRuntimeSource, /ticks: compact \? \[0, 52\] : \[0, 3, 52\]/, 'whitepaper escalation Plot should preserve all milestone ticks on wide screens without colliding day 0 and day 3 on narrow screens')
+assert.match(chartRuntimeSource, /ticks: spec\.width < 720 \? \[0, 52\] : \[0, 3, 52\]/, 'whitepaper escalation Plot should preserve all milestone ticks on wide screens without colliding day 0 and day 3 on narrow screens')
 assert.match(chartRuntimeSource, /label: '● won'[\s\S]*label: '● partial'[\s\S]*label: '● refund'/, 'narrow truth-auction charts should keep a readable non-color status key')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 3), 1, 'canonical escalation fixture should start at the configured start bond on activation')
 assert.equal(computeCanonicalEscalationBindingCapital(1, 10, 52), 10, 'canonical escalation fixture should end at the configured threshold after seven weeks')

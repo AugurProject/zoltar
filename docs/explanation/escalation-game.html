@@ -24,7 +24,7 @@
 				<p>The first deposit after the question ends opens the game. Each deposit adds to its outcome's cumulative balance; it does not have to exceed the leader. Meanwhile the <dfn>required support</dfn> rises along a fixed curve over time. The game's deadline is the moment required support overtakes binding capital, so the deadline moves later only when a deposit raises the median balance. A challenger that stops adding REP lets the rising requirement pass its stake, and the leader wins.</p>
 
 				<figure class="diagram" id="fig-statoblast-escalation-cost-curve">
-					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Required support from day 0 through day 52"><span class="plot-chart-fallback">Required support is zero on days 0–2, equals the start bond on day 3, and reaches the non-decision threshold on day 52.</span></div>
+					<div class="plot-chart" data-plot-chart="fig-statoblast-escalation-cost-curve" data-plot-width="860" data-plot-height="300" role="img" aria-label="Required support from day 0 through day 52"><span class="plot-chart-fallback">Required support is zero through day 3, starts at the start bond just after day 3, and reaches the non-decision threshold on day 52.</span></div>
 					<p class="diagram-caption"><span class="figure-label">Required support.</span> Nothing is required for the first three days. From day 3 the requirement climbs from the start bond to the non-decision threshold, reaching it on day 52. The <a href="../reference/contracts/escalationgame.html#required-support-threshold">EscalationGame reference</a> gives the exact curve.</p>
 				</figure>
 
