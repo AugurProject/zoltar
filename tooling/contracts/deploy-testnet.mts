@@ -640,8 +640,8 @@ export function getDeploymentHelp() {
 
 Load PRIVATE_KEY into the environment from a secret manager or hidden prompt,
 or pass --private-key=0x... if shell history exposure is acceptable.
-Pass RPC and cost limits as uppercase assignments after --, for example:
-  bun run deploy:testnet -- RPC_URL=https://... MAX_FEE_PER_GAS_NANO_ETH=100 MAX_TOTAL_COST_ETH=20
+Pass RPC and cost limits as flags, or as uppercase assignments such as RPC_URL=...:
+  bun run deploy:testnet -- --rpc-url=https://... --max-fee-per-gas-nanoeth=100 --max-total-cost-eth=20
 
   --private-key=0x...    Required unless PRIVATE_KEY is set
   --rpc-url=https://...   Required unless RPC_URL is set
@@ -653,8 +653,8 @@ Sepolia uses Uniswap's published WETH, V3 factory, QuoterV2, and V4 contracts pl
 a deterministic SwapRouter and genesis REP; an Anvil node with the Sepolia chain ID
 receives Uniswap's contracts by replaying their creation transactions. Any other
 chain receives deterministic WETH, genesis REP, and a complete Uniswap deployment.
-The RPC must support Cancun, EIP-1559, and the canonical legacy deployer
-transactions. Ethereum mainnet chain ID 1 is intentionally rejected.`
+The RPC must support Cancun, the Osaka CLZ opcode, EIP-1559, and the canonical
+legacy deployer transactions. Ethereum mainnet chain ID 1 is intentionally rejected.`
 }
 
 function printHelp() {

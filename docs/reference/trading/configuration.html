@@ -68,7 +68,7 @@
 				<h2>What the client derives</h2>
 				<p>The standalone client reads no environment variables. At startup it uses:</p>
 				<ul>
-					<li><strong>Networks:</strong> the build writes <code>core-deployments.json</code> from the root mainnet and Sepolia deployment manifests, with each network's default public RPC URL. The client defaults to the first supported network.</li>
+					<li><strong>Networks:</strong> the build writes <code>core-deployments.json</code> from the mainnet and Sepolia deployment manifests in <code>docs/</code>, with each network's default public RPC URL. The client defaults to the first supported network.</li>
 					<li><strong>RPC override:</strong> <strong>Settings</strong> beside the wallet selects another supported network or accepts an optional HTTPS or loopback HTTP RPC URL.</li>
 					<li><strong>Trading contracts:</strong> the factory and router addresses are computed with the fixed 30 basis-point fee through the core deployment's canonical CREATE2 proxy, and each address is checked for code. If either contract is missing, the connected wallet can deploy it.</li>
 					<li><strong>Markets:</strong> pools are discovered from the canonical <code>SecurityPoolFactory</code> in bounded pages; no market address is hard-coded. Mint capacity follows <a href="../invariants.html#bal-03">BAL-03</a>.</li>

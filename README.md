@@ -20,10 +20,10 @@ The [protocol glossary](https://augurproject.github.io/zoltar/docs/reference/glo
 | Term | Meaning |
 | --- | --- |
 | [Zoltar](https://augurproject.github.io/zoltar/docs/explanation/zoltar.html) | The forkable oracle ledger: it records questions, universes, REP, and forks, and never judges which answer is true. |
-| [Statoblast](https://augurproject.github.io/zoltar/docs/explanation/statoblast.html) | The prediction-market layer on Zoltar: one SecurityPool per question and universe, with local dispute resolution and fork migration. |
+| [Statoblast](https://augurproject.github.io/zoltar/docs/explanation/statoblast.html) | The prediction-market layer on Zoltar: one SecurityPool per question, universe, and pool configuration, with local dispute resolution and fork migration. |
 | [REP](https://augurproject.github.io/zoltar/docs/reference/glossary.html#rep) | Universe-specific reputation tokens used as reporting, dispute, and security capital. |
 | [Universe](https://augurproject.github.io/zoltar/docs/reference/glossary.html#universe) | A Zoltar ledger that can branch; markets and REP balances belong to one universe, and universe 0 is the root. |
-| [Security pool](https://augurproject.github.io/zoltar/docs/reference/glossary.html#security-pool) | The Statoblast contract for one question in one universe; it holds settlement collateral and coordinates shares, vaults, resolution, and migration. |
+| [Security pool](https://augurproject.github.io/zoltar/docs/reference/glossary.html#security-pool) | The Statoblast contract for one question, universe, and pool configuration; it holds settlement collateral and coordinates shares, vaults, resolution, and migration. |
 | [Escalation game](https://augurproject.github.io/zoltar/docs/explanation/escalation-game.html) | The local Statoblast dispute round in which REP accumulates behind Invalid, Yes, and No until one answer wins or the pool forks. |
 | [Fork](https://augurproject.github.io/zoltar/docs/explanation/zoltar.html) | The split of a universe into one child universe per valid answer, each with its own REP, when a dispute cannot be settled locally. |
 | [Truth auction](https://augurproject.github.io/zoltar/docs/explanation/truth-auctions.html) | A Statoblast auction that sells child REP to repair a child pool's ETH collateral shortfall; it does not select truth. |
