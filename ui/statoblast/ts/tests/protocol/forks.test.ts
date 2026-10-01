@@ -5,7 +5,8 @@ import { decodeFunctionData, getAddress, zeroAddress, type Address, type Hex } f
 import { depositRepToVaultToSecurityPool } from '@zoltar/ui-statoblast-shared/protocol/securityVault.js'
 import { finalizeSecurityPoolTruthAuction } from '@zoltar/ui-statoblast-shared/protocol/truthAuctionActions.js'
 import { migrateSharesFromUniverse } from '@zoltar/ui-statoblast-shared/protocol/trading.js'
-import { loadForkAuctionDetails } from '@zoltar/ui-statoblast-shared/protocol/forks.js'
+import { forkZoltarWithOwnEscalation, loadForkAuctionDetails, migrateRepToZoltarFromSecurityPool, migrateSecurityVault } from '@zoltar/ui-statoblast-shared/protocol/forks.js'
+import type { TransactionRequestPreview } from '@zoltar/ui-core-shared/wallet/chainBackend.js'
 import { getForkOutcomeKey } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { statoblast_tokens_ShareToken_ShareToken } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { asWriteClient, createBlockWithTimestamp, createMockLoaderClient, createMockWriteClient, getContractFunctionName } from '@zoltar/ui-core-shared/tests/testUtils/protocolTestSupport.js'
@@ -60,6 +61,20 @@ describe('forks protocol client', () => {
 		await finalizeSecurityPoolTruthAuction(asWriteClient(client), securityPoolAddress, 12n)
 
 		expect(capturedValue).toBeUndefined()
+	})
+
+	test('irreversible fork and migration actions explain their effect in the review step', async () => {
+		const previews: TransactionRequestPreview[] = []
+		const client = asWriteClient(createMockWriteClient(() => undefined))
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await forkZoltarWithOwnEscalation(client, securityPoolAddress, 12n)
+		await migrateRepToZoltarFromSecurityPool(client, securityPoolAddress, 12n, ['yes', 'no'])
+		await migrateSecurityVault(client, securityPoolAddress, 12n, 'invalid')
+		expect(previews.map(preview => [preview.reviewTitle, preview.reviewDescription])).toEqual([
+			['Trigger universe fork', 'Forks the universe on this pool’s question because escalation ended without a decision. The universe splits into Invalid, Yes and No, this pool stops operating, and its REP moves into fork migration. This can’t be undone.'],
+			['Migrate pool REP to Yes, No', 'Moves this pool’s REP attributed to Yes, No into the matching child universe. It affects the whole pool, not just your vault, and can’t be undone.'],
+			['Migrate vault to Invalid', 'Moves all your vault REP and underwriting commitments from this pool to the Invalid universe. This can’t be undone or split across outcomes.'],
+		])
 	})
 
 	test('migrateSharesFromUniverse sorts target outcomes before submission without deduplicating', async () => {

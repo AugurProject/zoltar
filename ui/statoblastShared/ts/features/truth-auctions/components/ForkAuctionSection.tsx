@@ -35,14 +35,17 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		action: 'submitBid',
 		availability: createActionAvailability(model.submitBidGuardMessage),
 		forceEnabled: model.hasSelectedAuctionChildPool,
-		idleLabel: forkAuctionCopy.submitBid,
+		idleLabel: model.submitBidLabel,
 		onClick: model.onSubmitBidForSelectedAuction,
 		pending: model.isTruthAuctionDetailsLoading || model.forkAuctionActiveAction === 'submitBid',
 		pendingLabel: model.isTruthAuctionDetailsLoading ? forkAuctionCopy.loadingTruthAuction : forkAuctionCopy.submittingBidTruncated,
 	})
 	const submitBidSection = (
 		<ForkAuctionSubmitBidSection
+			bidAmountHint={model.bidAmountHint}
+			bidAmountMax={model.bidAmountMax}
 			bidPricePosition={model.liveBidGuidance?.bidPricePosition}
+			bidPriceRounding={model.bidPriceRounding}
 			clearingPrice={model.liveBidGuidance?.clearingPrice}
 			minimumWinningPriceInput={model.liveBidGuidance?.minimumWinningPriceInput}
 			onBidAmountChange={submitBidAmount => model.onForkAuctionFormChange({ submitBidAmount })}

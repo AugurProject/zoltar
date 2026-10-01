@@ -131,7 +131,10 @@ function getBidPriceWarning(bidPricePosition: TruthAuctionBidPricePosition | und
 }
 
 export function ForkAuctionSubmitBidSection({
+	bidAmountHint,
+	bidAmountMax,
 	bidPricePosition,
+	bidPriceRounding,
 	clearingPrice,
 	minimumWinningPriceInput,
 	onBidAmountChange,
@@ -140,7 +143,10 @@ export function ForkAuctionSubmitBidSection({
 	submitBidAmount,
 	submitBidPrice,
 }: {
+	bidAmountHint: string | undefined
+	bidAmountMax: { amount: bigint | undefined; unavailableReason: string | undefined }
 	bidPricePosition: TruthAuctionBidPricePosition | undefined
+	bidPriceRounding: { roundUpPriceInput: string | undefined; submittedPriceInput: string } | undefined
 	clearingPrice: bigint | undefined
 	minimumWinningPriceInput: string | undefined
 	onBidAmountChange: (value: string) => void
@@ -169,8 +175,22 @@ export function ForkAuctionSubmitBidSection({
 						unit={forkAuctionCopy.bidPriceUnit}
 						value={submitBidPrice}
 					/>
-					<AmountField label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
+					<AmountField fillMax={bidAmountMax} hint={bidAmountHint} label={forkAuctionCopy.bidAmount} onChange={onBidAmountChange} unit={commonCopy.eth} value={submitBidAmount} />
 				</div>
+				{bidPriceRounding === undefined ? undefined : (
+					<UserMessage
+						className='detail'
+						tone='warning'
+						detail={forkAuctionCopy.formatRoundedBidPriceNotice(bidPriceRounding.submittedPriceInput)}
+						actions={
+							bidPriceRounding.roundUpPriceInput === undefined ? undefined : (
+								<button className='secondary' onClick={() => (bidPriceRounding.roundUpPriceInput === undefined ? undefined : onBidPriceChange(bidPriceRounding.roundUpPriceInput))} type='button'>
+									{forkAuctionCopy.formatRoundUpBidPrice(bidPriceRounding.roundUpPriceInput)}
+								</button>
+							)
+						}
+					/>
+				)}
 				<div className='actions'>{submitBidAction}</div>
 			</div>
 		</SectionBlock>

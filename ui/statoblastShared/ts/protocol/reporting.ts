@@ -446,7 +446,7 @@ export async function loadReportingDetails(client: ReadClient, securityPoolAddre
 	}
 }
 
-export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet') {
+export async function reportOutcomeInSecurityPool(client: WriteClient, securityPoolAddress: Address, outcome: ReportingOutcomeKey, amountAttoRep: bigint, reviewAmountAttoRep = amountAttoRep, contributionFunding?: 'vault' | 'wallet', triggersFork = false) {
 	const [universeId, escalationGameAddress] = await Promise.all([
 		readSecurityPoolUniverseId(client, securityPoolAddress),
 		client.readContract({
@@ -476,7 +476,8 @@ export async function reportOutcomeInSecurityPool(client: WriteClient, securityP
 		address: securityPoolAddress,
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: useWalletFunding ? 'depositWalletRepToEscalationGame' : 'depositToEscalationGame',
-		reviewTitle: transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)),
+		reviewTitle: triggersFork ? reportingCopy.reportForkReviewTitle(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)) : transactionCopy.reportingAction(getEscalationSideLabel(outcome), formatCurrencyBalance(reviewAmountAttoRep)),
+		reviewDescription: triggersFork ? reportingCopy.reportForkReviewDescription(getEscalationSideLabel(outcome)) : reportingCopy.reportReviewDescription(getEscalationSideLabel(outcome)),
 		reviewAmount: formatCurrencyBalanceWithUnit(reviewAmountAttoRep, commonCopy.rep),
 		args: [getReportingOutcomeValue(outcome), amountAttoRep],
 	}
@@ -547,6 +548,7 @@ export async function withdrawEscalationFromSecurityPool(client: WriteClient, se
 		abi: statoblast_SecurityPool_SecurityPool.abi,
 		functionName: 'withdrawFromEscalationGame',
 		reviewTitle,
+		...(claimAmountAttoRep === 0n ? { reviewDescription: reportingCopy.clearLosingDepositsReviewDescription } : {}),
 		args: [getReportingOutcomeValue(outcome), depositIndexes],
 	}))
 	return {

@@ -844,10 +844,15 @@ describe('useForkAuctionOperations', () => {
 				expect(submitTruthAuctionBid).not.toHaveBeenCalled()
 				expect(onTransactionFailed).toHaveBeenCalledTimes(1)
 				expect(requireHookState(hookState).forkAuctionFeedback?.status.detail).toContain('Truth auction ends too soon to submit a bid')
+				// A failed bid keeps the form so the user can retry.
+				expect(requireHookState(hookState).forkAuctionForm.submitBidAmount).toBe(editedBidAmount)
 			} else {
 				expect(submitTruthAuctionBid).toHaveBeenCalledTimes(1)
 				expect(requireHookState(hookState).forkAuctionResult?.action).toBe('submitBid')
 				expect(onTransactionFailed).not.toHaveBeenCalled()
+				// A successful bid clears its amount so a second click cannot repeat it; the price stays for the next bid.
+				expect(requireHookState(hookState).forkAuctionForm.submitBidAmount).toBe('')
+				expect(requireHookState(hookState).forkAuctionForm.submitBidPrice).toBe(editedBidPrice)
 			}
 		})
 	}
