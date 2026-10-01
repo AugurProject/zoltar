@@ -1,7 +1,7 @@
 import * as appCopy from '@zoltar/ui-core-shared/copy/app.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
-import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import type { OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
 import type { SecurityPoolsView } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-shared/app/lib/appTitle.js'
@@ -9,7 +9,7 @@ import { formatAppDocumentTitle as formatDocumentTitle } from '@zoltar/ui-core-s
 export type AppPageTitleInput = {
 	activeOpenOracleView: OpenOracleView
 	activeSecurityPoolsView: SecurityPoolsView
-	route: Route
+	route: StatoblastRoute
 }
 
 export function getAppPageTitle({ activeOpenOracleView, activeSecurityPoolsView, route }: AppPageTitleInput) {

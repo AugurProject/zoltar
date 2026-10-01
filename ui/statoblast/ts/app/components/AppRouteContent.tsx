@@ -3,7 +3,7 @@ import { DeploymentRouteContent } from '@zoltar/ui-zoltar-shared/features/deploy
 import { NotFoundSection } from '@zoltar/ui-core-shared/app/components/NotFoundSection.js'
 import { OpenOracleSection } from '@zoltar/ui-statoblast-shared/features/open-oracle/components/OpenOracleSection.js'
 import { SecurityPoolsSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolsSection.js'
-import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { shouldRenderAppRouteContent } from '@zoltar/ui-core-shared/app/lib/appRouteGate.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as statoblastAppCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
@@ -23,7 +23,7 @@ type Props = {
 	deploy: ComponentProps<typeof DeploymentRouteContent>
 	openOracle: ComponentProps<typeof OpenOracleSection>
 	readBackendMessage: string | undefined
-	route: Route
+	route: StatoblastRoute
 	securityPools: ComponentProps<typeof SecurityPoolsSection>
 }
 

@@ -1,9 +1,9 @@
 import { createRouting, installRouting, type RoutingConfig } from '@zoltar/ui-core-shared/navigation/routing.js'
-import type { Route } from '../types/app.js'
+import type { ZoltarRoute } from '../types/app.js'
 
-type ZoltarRoute = Exclude<Route, 'not-found'>
+type NavigableZoltarRoute = Exclude<ZoltarRoute, 'not-found'>
 
-const ZOLTAR_ROUTING_CONFIG: RoutingConfig<ZoltarRoute> = {
+const ZOLTAR_ROUTING_CONFIG: RoutingConfig<NavigableZoltarRoute> = {
 	defaultRoute: 'zoltar',
 	routes: [
 		{ hash: '#/deploy', name: 'deploy' },

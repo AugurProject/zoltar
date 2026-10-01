@@ -5,7 +5,7 @@ import { resolveEnumValue, resolveFirstMatchingValue } from '@zoltar/ui-core-sha
 import { setFormField } from '@zoltar/ui-core-shared/hooks/useFormState.js'
 import type { WriteOperationsParameters } from '@zoltar/ui-zoltar-shared/types/app.js'
 import type { OpenOracleSectionProps, OpenOracleView } from '@zoltar/ui-statoblast-shared/features/oracleTypes.js'
-import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import type { StatoblastRoute } from '@zoltar/ui-statoblast-shared/types/app.js'
 
 export function useOpenOracleRoute({
 	accountState,
@@ -22,7 +22,7 @@ export function useOpenOracleRoute({
 	accountState: OpenOracleSectionProps['accountState']
 	activeEnvironmentNonce: number
 	canReadOnchainData: boolean
-	navigate: (route: Exclude<Route, 'not-found'>) => void
+	navigate: (route: Exclude<StatoblastRoute, 'not-found'>) => void
 	openOracleView: string
 	route: string
 	setOpenOracleReport: (reportId: string, historyMode?: 'push' | 'replace') => void
