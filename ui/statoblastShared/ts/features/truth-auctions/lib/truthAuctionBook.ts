@@ -4,6 +4,7 @@ import { findTruthAuctionMinSupportedTick, TRUTH_AUCTION_MAX_TICK, TRUTH_AUCTION
 import { tryParseTruthAuctionAmountInput, tryParseTruthAuctionPriceInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { normalizeNumericInput } from '@zoltar/ui-core-shared/lib/numericInput.js'
+import { getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { TruthAuctionBidView, TruthAuctionMetrics, TruthAuctionTickSummary } from '../../../types/contracts.js'
 import { getTruthAuctionPriceAtTick, getTruthAuctionTickAtPrice } from '../../../protocol/truthAuctionMath.js'
@@ -537,12 +538,10 @@ export function getTruthAuctionBidPriceRounding(submitBidPriceInput: string) {
 	}
 }
 
-/** Gas for a bid stays in the wallet, so Max offers only the balance above this reserve. */
-export const TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH = 10n ** 16n
-
+/** Gas for a bid stays in the wallet, so Max offers only the balance above the shared gas reserve. */
 export function getTruthAuctionMaxBidAmount(walletBalanceAttoEth: bigint | undefined) {
 	if (walletBalanceAttoEth === undefined) return undefined
-	return walletBalanceAttoEth > TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH ? walletBalanceAttoEth - TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH : 0n
+	return getSpendableEthBalance(walletBalanceAttoEth)
 }
 
 /** The bid amount and the price it is submitted at, once both inputs are valid. */

@@ -18,12 +18,12 @@ import {
 	getTruthAuctionOverviewProgress,
 	getTruthAuctionSubmitBidLabelParts,
 	getTruthAuctionWinningThresholdPrice,
-	TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH,
 } from '../lib/truthAuctionBook.js'
 import { buildTruthAuctionBidRows, buildViewerTruthAuctionBidRows, updateTruthAuctionSettlementBidSelection } from '../lib/truthAuctionBidViewModels.js'
 import { getTruthAuctionSettlementAction } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementActionAvailabilityMessage, getTruthAuctionSettlementBidRows, getTruthAuctionSettlementSelectionEstimate } from '../lib/truthAuctionSettlement.js'
 import { formatCurrencyBalance, formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { isPoolQuestionFinalized } from '../../reporting/lib/reportingDomain.js'
 import { deriveSecurityPoolForkStage, deriveSecurityPoolLifecycleState, evaluateSecurityPoolState } from '../../security-pools/lib/securityPoolState.js'
@@ -318,7 +318,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const submitBidLabelParts = getTruthAuctionSubmitBidLabelParts(context.forkAuctionForm.submitBidAmount, context.forkAuctionForm.submitBidPrice)
 	const submitBidLabel = submitBidLabelParts === undefined ? forkAuctionCopy.submitBid : forkAuctionCopy.formatSubmitBidLabel(formatCurrencyInputBalance(submitBidLabelParts.amountAttoEth), submitBidLabelParts.priceInput)
 	const walletBalanceAttoEth = context.accountState.ethBalanceAttoEth
-	const bidAmountHint = walletBalanceAttoEth === undefined || truthAuctionStatus === undefined ? undefined : forkAuctionCopy.formatBidAmountHint(formatCurrencyBalance(walletBalanceAttoEth), formatCurrencyBalance(truthAuctionStatus.minBidSizeAttoEth), formatCurrencyBalance(TRUTH_AUCTION_BID_GAS_RESERVE_ATTO_ETH))
+	const bidAmountHint = walletBalanceAttoEth === undefined || truthAuctionStatus === undefined ? undefined : forkAuctionCopy.formatBidAmountHint(formatCurrencyBalance(walletBalanceAttoEth), formatCurrencyBalance(truthAuctionStatus.minBidSizeAttoEth), formatCurrencyBalance(ETH_GAS_RESERVE_ATTO_ETH))
 	const maxBidAmountAttoEth = getTruthAuctionMaxBidAmount(walletBalanceAttoEth)
 	let maxBidUnavailableReason: string | undefined
 	if (context.accountState.address === undefined) maxBidUnavailableReason = forkAuctionCopy.forkActionWalletRequired

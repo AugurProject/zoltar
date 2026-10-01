@@ -81,7 +81,7 @@ function useSecurityVaultOperationsWithDependencies<TWriteClient>(
 	const securityVaultDetails = useSignal<SecurityVaultDetails | undefined>(undefined)
 	const securityVaultMissing = useSignal(false)
 	const securityVaultError = useSignal<string | undefined>(undefined)
-	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>({ ...getDefaultSecurityVaultFormState(), repWithdrawAmount: '' })
+	const { state: securityVaultForm, setState: updateSecurityVaultForm } = useFormState<SecurityVaultFormState>(getDefaultSecurityVaultFormState())
 	const repBalanceLoader = useErc20BalanceLoader(loadErc20Balance)
 	const repAllowanceLoader = useErc20AllowanceLoader(loadErc20Allowance)
 	const securityVaultActiveAction = useSignal<SecurityVaultActionResult['action'] | undefined>(undefined)

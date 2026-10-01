@@ -28,7 +28,7 @@ export function getDefaultSecurityVaultFormState(): SecurityVaultFormState {
 	return {
 		depositAmount: '',
 		targetHealthFactor: '2',
-		repWithdrawAmount: '0',
+		repWithdrawAmount: '',
 		selectedVaultOwner: '',
 		securityPoolAddress: '',
 		stagedOperationTimeoutMinutes: '5',

@@ -10,6 +10,7 @@ describe('market form defaults', () => {
 		expect(getDefaultSecurityPoolFormState().statoblastSecurityMultiplierBps).toBe('2')
 		expect(getDefaultSecurityPoolFormState().initialReportPriorityFeeNanoEth).toBe('10')
 		expect(getDefaultSecurityVaultFormState().depositAmount).toBe('')
+		expect(getDefaultSecurityVaultFormState().repWithdrawAmount).toBe('')
 		expect(getDefaultSecurityVaultFormState().stagedOperationTimeoutMinutes).toBe('5')
 		expect(getDefaultTradingFormState().selectedShareOutcome).toBe('yes')
 		expect(getDefaultTradingFormState().completeSetAmount).toBe('')
