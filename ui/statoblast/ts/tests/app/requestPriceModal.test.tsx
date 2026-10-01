@@ -787,7 +787,7 @@ test.each(['reverted', 'rejected'] as const)('keeps approvals in place after a %
 	const rendered = await renderIntoDocument(<Harness />)
 	try {
 		const queries = within(document.body)
-		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '2' } }))
+		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'OpenOracle REP per ETH starting price' }), { target: { value: '2' } }))
 		await settle()
 		const form = queries.getByRole('dialog', { name: 'Request new price' })
 		const approvals = ['REP', 'WETH'].map(symbol => within(form).getByRole('button', { name: `${symbol} approved ✓` }))

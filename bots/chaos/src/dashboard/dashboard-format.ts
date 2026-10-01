@@ -7,7 +7,7 @@ export const ecosystemOrder = ['zoltar', 'statoblast', 'open-oracle', 'trading']
 export const ecosystemLabels = new Map<string, string>([
 	['zoltar', 'Zoltar'],
 	['statoblast', 'Statoblast'],
-	['open-oracle', 'Open Oracle'],
+	['open-oracle', 'OpenOracle'],
 	['trading', 'Trading'],
 ])
 

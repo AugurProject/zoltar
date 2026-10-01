@@ -1,6 +1,6 @@
 # Zoltar chaos bot
 
-The chaos bot is a long-running operator that exercises the Zoltar, Statoblast, Open Oracle, and trading ecosystem with real, permissionless transactions. It discovers what its dedicated account can currently do, waits a newly randomized delay from the configured 1–60 minute range, chooses one eligible operation, and executes its durable workflow.
+The chaos bot is a long-running operator that exercises the Zoltar, Statoblast, OpenOracle, and trading ecosystem with real, permissionless transactions. It discovers what its dedicated account can currently do, waits a newly randomized delay from the configured 1–60 minute range, chooses one eligible operation, and executes its durable workflow.
 
 ## Safety at a glance
 
@@ -195,7 +195,7 @@ Any manually created container must mount `zoltar-bot-signer-locks` at `.state/p
 
 ## Coverage and dashboard fixture
 
-The bot covers permissionless Zoltar, Statoblast, Open Oracle, and Trading workflows. The dashboard shows current runtime eligibility; [operation coverage](./OPERATOR_REFERENCE.md#operation-coverage) is the canonical supported-family table.
+The bot covers permissionless Zoltar, Statoblast, OpenOracle, and Trading workflows. The dashboard shows current runtime eligibility; [operation coverage](./OPERATOR_REFERENCE.md#operation-coverage) is the canonical supported-family table.
 
 To inspect the UI without a chain or key:
 
