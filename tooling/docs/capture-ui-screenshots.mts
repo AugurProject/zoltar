@@ -7,7 +7,7 @@ import { createDevToolsSession, type DevToolsSession } from '../ui/browserSmoke.
 import { getChromiumPath } from '../ui/chromiumPath.js'
 import type { UiAppId } from '../ui/appPaths.mts'
 import { UI_SCREENSHOTS, type UiScreenshotCrop, type UiScreenshotSpec, type UiScreenshotStep } from './ui-screenshot-specs.mts'
-import { computeScreenshotFingerprint, readPngSize, readScreenshotFingerprints, SCREENSHOT_FINGERPRINT_PATH, screenshotApp, screenshotAppIds, screenshotOutputPath, withScreenshotSize } from './ui-screenshots.mts'
+import { computeScreenshotFingerprint, readPngSize, readScreenshotFingerprints, SCREENSHOT_FINGERPRINT_PATH, screenshotApp, screenshotAppIds, screenshotOutputPath, pickMatch, updateEmbeddingPages } from './ui-screenshots.mts'
 
 const repositoryRoot = path.resolve(import.meta.dir, '..', '..')
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 }
@@ -24,6 +24,7 @@ free port for the run. --sync-sizes only copies the existing images' sizes into 
 
 // Runs in the page: finds controls by their visible label or accessible name.
 const PAGE_HELPERS = `(() => {
+	const pickMatch = ${pickMatch.toString()}
 	const normalize = value => (value ?? '').replace(/\\s+/g, ' ').trim()
 	const isVisible = element => {
 		const rect = element.getBoundingClientRect()
@@ -47,7 +48,7 @@ const PAGE_HELPERS = `(() => {
 	window.__docsScreenshot = {
 		click: (text, nth) => {
 			const matches = labelled(text).filter(element => !element.disabled && element.getAttribute('aria-disabled') !== 'true')
-			const target = matches.at(nth)
+			const target = pickMatch(matches, nth)
 			if (target === undefined) return 'No enabled control labelled "' + text + '" (' + matches.length + ' found)'
 			target.scrollIntoView({ block: 'center' })
 			target.click()
@@ -196,24 +197,6 @@ async function captureScreenshot(chromiumPath: string, baseUrl: string, spec: Ui
 	}
 }
 
-async function updateEmbeddingPages(spec: UiScreenshotSpec, outputPath: string, image: Uint8Array) {
-	const size = readPngSize(image)
-	for (const page of spec.usedBy) {
-		const pagePath = path.join(repositoryRoot, 'docs', page)
-		const html = await fs.readFile(pagePath, 'utf8').catch((error: unknown) => {
-			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
-			throw error
-		})
-		// A screenshot may be captured before the page that embeds it is written; docs:check-screenshots reports the gap.
-		if (html === undefined) {
-			console.warn(`docs/${page} does not exist yet; embed ${outputPath} there, then run 'bun run docs:screenshots -- --sync-sizes'.`)
-			continue
-		}
-		const updated = withScreenshotSize(page, html, outputPath, size)
-		if (updated !== html) await fs.writeFile(pagePath, updated)
-	}
-}
-
 async function main() {
 	const { values } = parseArgs({ options: { app: { type: 'string' }, only: { type: 'string' }, help: { type: 'boolean' }, 'sync-sizes': { type: 'boolean' } } })
 	if (values.help === true) {
@@ -226,7 +209,7 @@ async function main() {
 	if (values['sync-sizes'] === true) {
 		for (const spec of specs) {
 			const outputPath = screenshotOutputPath(spec)
-			await updateEmbeddingPages(spec, outputPath, await fs.readFile(path.join(repositoryRoot, outputPath)))
+			await updateEmbeddingPages(path.join(repositoryRoot, 'docs'), spec, outputPath, readPngSize(await fs.readFile(path.join(repositoryRoot, outputPath))), console.warn)
 		}
 		return
 	}
@@ -242,7 +225,7 @@ async function main() {
 				const image = await captureScreenshot(chromiumPath, baseUrl, spec)
 				await fs.mkdir(path.dirname(path.join(repositoryRoot, outputPath)), { recursive: true })
 				await fs.writeFile(path.join(repositoryRoot, outputPath), image)
-				await updateEmbeddingPages(spec, outputPath, image)
+				await updateEmbeddingPages(path.join(repositoryRoot, 'docs'), spec, outputPath, readPngSize(image), console.warn)
 				console.log(`Captured ${outputPath}`)
 			}
 		} finally {

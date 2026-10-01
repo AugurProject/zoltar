@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { UiScreenshotSpec } from './ui-screenshot-specs.mts'
-import { extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, readPngSize, withScreenshotSize } from './ui-screenshots.mts'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { extractScreenshotReferences, findScreenshotProblems, isScreenshotSourcePath, pickMatch, readPngSize, updateEmbeddingPages, withScreenshotSize } from './ui-screenshots.mts'
 
 const spec: UiScreenshotSpec = { id: 'buy-ticket', app: 'trading', scenario: 'trading-funded', usedBy: ['tutorials/trading-first-trade.html'] }
 const outputPath = 'docs/assets/screenshots/trading/buy-ticket.png'
@@ -64,5 +67,24 @@ describe('documentation screenshots', () => {
 		expect(isScreenshotSourcePath('trading', 'ui/trading/ts/tests/features/trade.test.tsx')).toBe(false)
 		expect(isScreenshotSourcePath('trading', 'ui/trading/js/index.js')).toBe(false)
 		expect(isScreenshotSourcePath('trading', 'ui/zoltar/ts/app/App.tsx')).toBe(false)
+	})
+
+	test('picks duplicate controls from the start, or from the end with a negative index', () => {
+		expect(pickMatch(['page action', 'dialog action'], 0)).toBe('page action')
+		expect(pickMatch(['page action', 'dialog action'], -1)).toBe('dialog action')
+		expect(pickMatch(['only'], 2)).toBeUndefined()
+	})
+
+	test('updates embedding pages and warns instead of failing for a page that does not exist yet', async () => {
+		const docsRoot = await mkdtemp(join(tmpdir(), 'docs-screenshots-'))
+		try {
+			await writeFile(join(docsRoot, 'existing.html'), '<img src="./assets/screenshots/trading/buy-ticket.png" width="1" height="1" alt="Ticket" />')
+			const warnings: string[] = []
+			await updateEmbeddingPages(docsRoot, { usedBy: ['existing.html', 'missing.html'] }, 'docs/assets/screenshots/trading/buy-ticket.png', { width: 480, height: 1213 }, message => warnings.push(message))
+			expect(await readFile(join(docsRoot, 'existing.html'), 'utf8')).toContain('width="480" height="1213"')
+			expect(warnings).toEqual([expect.stringContaining('docs/missing.html does not exist yet')])
+		} finally {
+			await rm(docsRoot, { recursive: true, force: true })
+		}
 	})
 })

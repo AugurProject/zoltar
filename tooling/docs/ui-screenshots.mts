@@ -124,3 +124,31 @@ export function withScreenshotSize(page: string, html: string, outputPath: strin
 		return withoutSize.replace(/^<img\b/, `<img width="${size.width.toString()}" height="${size.height.toString()}"`)
 	})
 }
+
+/**
+ * Picks the control a click step targets: `nth` counts from the start, and a negative `nth` counts from the end.
+ * Injected into the page as source, so it must stay self-contained.
+ */
+export function pickMatch<T>(matches: readonly T[], nth: number): T | undefined {
+	return matches.at(nth)
+}
+
+/**
+ * Copies a screenshot's size into every page that embeds it. A screenshot may be captured before its page is written,
+ * so a missing page is reported through `warn` and skipped; docs:check-screenshots reports the gap.
+ */
+export async function updateEmbeddingPages(docsRoot: string, spec: Pick<UiScreenshotSpec, 'usedBy'>, outputPath: string, size: ImageSize, warn: (message: string) => void): Promise<void> {
+	for (const page of spec.usedBy) {
+		const pagePath = path.join(docsRoot, page)
+		const html = await fs.readFile(pagePath, 'utf8').catch((error: unknown) => {
+			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined
+			throw error
+		})
+		if (html === undefined) {
+			warn(`docs/${page} does not exist yet; embed ${outputPath} there, then run 'bun run docs:screenshots -- --sync-sizes'.`)
+			continue
+		}
+		const updated = withScreenshotSize(page, html, outputPath, size)
+		if (updated !== html) await fs.writeFile(pagePath, updated)
+	}
+}

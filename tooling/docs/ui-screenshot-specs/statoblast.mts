@@ -15,7 +15,7 @@ const fillCommitment: readonly UiScreenshotStep[] = [...depositRep, { click: 'Se
 const stageCommitment: readonly UiScreenshotStep[] = [...fillCommitment, { click: 'Set commitment limit', nth: -1 }, { waitForText: 'View in staged operations' }]
 // The report settles after eight minutes; ten keeps the staged operation inside its validity window.
 const openReport: readonly UiScreenshotStep[] = [...stageCommitment, { click: 'Show details' }, { click: 'QA controls, prices, and time travel' }, { click: '+10 min' }, { waitForEnabled: '+10 min' }, { click: 'Hide details' }, { click: 'View report' }, { waitForText: 'Ready to settle' }]
-const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Settled report' }, { back: true }, { waitForText: 'Commitment limit changed' }, { click: 'Pool address / refresh' }, { click: 'Refresh pool' }, { waitForText: '10.00 ETH' }]
+const settleAndReturn: readonly UiScreenshotStep[] = [...openReport, { click: 'Settle report' }, { waitForText: 'Settled report' }, { waitForText: 'CONFIRMED' }, { back: true }, { waitForText: 'Commitment limit changed' }, { waitForText: '10.00 ETH' }]
 
 const fillMint: readonly UiScreenshotStep[] = [...settleAndReturn, { click: 'Open shares' }, { click: 'Mint complete sets', nth: -1 }, { waitForText: 'Wallet ETH' }, { fill: 'Mint complete sets amount', value: '1' }, { waitForEnabled: 'Mint complete sets' }]
 
