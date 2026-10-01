@@ -171,13 +171,7 @@ export function SecurityPoolVaultWorkspace({
 											{securityPoolCopy.selectVault}
 										</button>
 										{ownVault ? undefined : (
-											<button
-												aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId}
-												className='secondary'
-												disabled={liquidationBlocker !== undefined}
-												type='button'
-												onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress, vault.underwritingLimitAttoEth)}
-											>
+											<button aria-describedby={liquidationBlocker === undefined ? undefined : liquidationReasonId} className='secondary' disabled={liquidationBlocker !== undefined} type='button' onClick={() => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, vault.vaultAddress)}>
 												{securityPoolCopy.reviewLiquidation}
 											</button>
 										)}
@@ -214,9 +208,7 @@ export function SecurityPoolVaultWorkspace({
 											description: securityPoolCopy.liquidationWorkflowDescription,
 											key: 'liquidate-vault',
 											readiness: blocker === undefined ? 'ready' : 'blocked',
-											...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || blocker !== undefined
-												? {}
-												: { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress, selectedVaultDetails.underwritingLimitAttoEth) }),
+											...(selectedPool === undefined || selectedVaultDetails === undefined || selectedVaultOwner === '' || blocker !== undefined ? {} : { onAction: () => onOpenLiquidationModal(selectedPool.managerAddress, selectedPool.securityPoolAddress, selectedVaultDetails.vaultAddress) }),
 										}
 									})(),
 								]

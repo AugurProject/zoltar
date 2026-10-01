@@ -42,7 +42,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 	latestAccountAddress.current = accountAddress
 	latestEnvironmentRefreshKey.current = environmentRefreshKey
 	const liquidationDebtEthAmount = useSignal('0')
-	const maximumLiquidationDebtAttoEth = useSignal<bigint | undefined>(undefined)
 	const liquidationTargetVault = useSignal('')
 	const liquidationApprovalId = useSignal(`0x${'00'.repeat(32)}`)
 	const liquidationApprovalDetails = useSignal<LiquidationApprovalDetails | undefined>(undefined)
@@ -274,7 +273,7 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		return result !== undefined && getCurrentLiquidationApprovalRequestKey() === requestKey
 	}
 
-	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => {
+	const openLiquidationModal = (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => {
 		nextLiquidationFundingPreviewLoad()
 		liquidationFundingPrice.value = undefined
 		nextLiquidationApprovalLoad()
@@ -288,7 +287,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 		liquidationFundingPreviewLoadingKey.value = undefined
 		liquidationFundingPreviewResolvedKey.value = undefined
 		liquidationManagerAddress.value = managerAddress
-		maximumLiquidationDebtAttoEth.value = maxAmount
 		liquidationSecurityPoolAddress.value = securityPoolAddress
 		liquidationTargetVault.value = vaultAddress
 		receiver.changeReceiverVault(accountAddress ?? '')
@@ -447,7 +445,6 @@ function useSecurityPoolsOverviewWithDependencies<TWriteClient>(
 
 	return {
 		liquidationDebtEthAmount: liquidationDebtEthAmount.value,
-		maximumLiquidationDebtAttoEth: maximumLiquidationDebtAttoEth.value,
 		liquidationManagerAddress: liquidationManagerAddress.value,
 		liquidationFundingPreview: currentLiquidationFundingPreview,
 		liquidationFundingPreviewError: currentLiquidationFundingPreviewError,

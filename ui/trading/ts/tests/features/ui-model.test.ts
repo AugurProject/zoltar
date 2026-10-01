@@ -6,7 +6,20 @@ import { parseNonNegativeDecimalInput, tryParseNonNegativeDecimalInput } from '@
 import { formatTrimmedUnits } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { attoSharesToCollateralAttoEth, averagePriceBps, collateralAttoEthToAttoShares, formatCollateralEth, formatCompleteSetQuantity, formatLpQuantity, formatOutcomeQuantity } from '../../lib/shareValue.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from '../../features/LiveSettlementModel.js'
-import { createSecurityPoolDeploymentIndex, liveBalancesForMarket, marketAcceptsNewRisk, publicErrorMessage, marketNewRiskBlocker, mapWithConcurrency, refreshSecurityPoolDeploymentIndex, registryBlockAnchorIsCanonical, settlementAvailability, shareBalanceScope, type LiveMarket } from '../../protocol/live.js'
+import {
+	createSecurityPoolDeploymentIndex,
+	liveBalancesForMarket,
+	marketAcceptsNewRisk,
+	publicErrorMessage,
+	marketNewRiskBlocker,
+	mapWithConcurrency,
+	refreshSecurityPoolDeploymentIndex,
+	registryBlockAnchorIsCanonical,
+	settlementAvailability,
+	shareBalanceScope,
+	type LiveMarket,
+	type SettlementOperation,
+} from '../../protocol/live.js'
 import { maximumAfterSlippage, minimumAfterSlippage, requireTransactionSlippageBps, requireTransactionValidityMinutes, retainApprovedMaximum, retainApprovedMinimum } from '../../protocol/tradeQuote.js'
 import { broadcastUncertainMessage, discoveryCommitAllowed, livePairInitialized, positionControlsWorkflowLocked, securityPoolAddressFromRoute } from '../../features/liveTradingControllerHelpers.js'
 import { parseSlippagePercent, parseValidityMinutes } from '../../lib/tradeSettings.js'
@@ -420,19 +433,45 @@ describe('standalone trading UI model', () => {
 
 	test('names the specific lifecycle or balance reason a settlement action is unavailable', () => {
 		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 3 }
-		const holdings = { completeSets: 5n, winningBalance: 0n, directionalBalance: 18n }
-		const empty = { completeSets: 0n, winningBalance: 0n, directionalBalance: 0n }
+		const holdings = { invalid: 5n, yes: 7n, no: 6n }
+		const empty = { invalid: 0n, yes: 0n, no: 0n }
 		expect(settlementUnavailableReason('redeem-complete-set', open, holdings)).toBeUndefined()
 		expect(settlementUnavailableReason('redeem-complete-set', open, empty)).toBe('You hold no complete sets. Redeeming needs equal INVALID, YES, and NO.')
+		expect(settlementUnavailableReason('redeem-complete-set', open, undefined)).toBe('You hold no complete sets. Redeeming needs equal INVALID, YES, and NO.')
 		expect(settlementUnavailableReason('redeem-complete-set', { ...open, universeForkTime: 1n }, holdings)).toBe('The universe forked. Migrate your shares to a child universe instead.')
 		expect(settlementUnavailableReason('redeem-complete-set', { ...open, systemState: 1 }, holdings)).toBe('The security pool is not operational, so it cannot pay out ETH.')
 		expect(settlementUnavailableReason('redeem-winning-shares', open, holdings)).toBe('The question has not resolved yet.')
-		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, holdings)).toBe('You hold no NO shares to redeem.')
-		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, winningBalance: 1n })).toBeUndefined()
+		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 0n })).toBe('You hold no NO shares to redeem.')
+		expect(settlementUnavailableReason('redeem-winning-shares', { ...open, questionOutcome: 2 }, { ...holdings, no: 1n })).toBeUndefined()
 		expect(settlementUnavailableReason('migrate-shares', open, holdings)).toBe('The universe has not forked, so there is nothing to migrate.')
 		expect(settlementUnavailableReason('migrate-shares', { ...open, universeForkTime: 1n }, empty)).toBe('You hold no INVALID, YES, or NO shares to migrate.')
 		expect(settlementUnavailableReason('migrate-shares', { ...open, universeForkTime: 1n }, holdings)).toBeUndefined()
 		expect(settlementUnavailableReason('migrate-shares', { ...open, loadError: 'boom' }, holdings)).toBe('Market data is unavailable. Refresh the market.')
+	})
+
+	test('settlement reasons agree with the availability flags for every operation and lifecycle', () => {
+		const open = { loadError: undefined, systemState: 0, universeForkTime: 0n, questionOutcome: 1 }
+		const balances = { invalid: 5n, yes: 7n, no: 6n }
+		const fixtures = [
+			{ name: 'resolved and operational', market: open, balances },
+			{ name: 'forked', market: { ...open, universeForkTime: 1n }, balances },
+			{ name: 'forked and non-operational', market: { ...open, universeForkTime: 1n, systemState: 1 }, balances },
+			{ name: 'non-operational', market: { ...open, systemState: 1 }, balances },
+			{ name: 'unresolved', market: { ...open, questionOutcome: 3 }, balances },
+			{ name: 'zero balances', market: open, balances: { invalid: 0n, yes: 0n, no: 0n } },
+			{ name: 'zero winning balance', market: open, balances: { ...balances, yes: 0n } },
+			{ name: 'balances not loaded', market: open, balances: undefined },
+			{ name: 'load error', market: { ...open, loadError: 'boom' }, balances },
+			{ name: 'forked load error', market: { ...open, universeForkTime: 1n, loadError: 'boom' }, balances },
+		]
+		const operations: readonly SettlementOperation[] = ['redeem-complete-set', 'redeem-winning-shares', 'migrate-shares']
+		for (const fixture of fixtures) {
+			const availability = settlementAvailability(fixture.market, fixture.balances)
+			const flags: Readonly<Record<SettlementOperation, boolean>> = { 'redeem-complete-set': availability.canRedeemCompleteSets, 'redeem-winning-shares': availability.canRedeemWinningShares, 'migrate-shares': availability.canMigrateShares }
+			for (const operation of operations) {
+				expect({ fixture: fixture.name, operation, available: settlementUnavailableReason(operation, fixture.market, fixture.balances) === undefined }).toEqual({ fixture: fixture.name, operation, available: flags[operation] })
+			}
+		}
 	})
 
 	test('never presents unavailable settlement balances as zero', () => {

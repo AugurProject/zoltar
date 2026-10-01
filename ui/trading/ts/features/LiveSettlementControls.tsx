@@ -68,9 +68,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const parsedAmount = parsedAmountAttoEth === undefined ? undefined : collateralAttoEthToAttoShares(parsedAmountAttoEth, market)
 	const targetOutcomeIndexes = useMemo(() => selectedForkTargets.map(target => target.outcomeIndex), [selectedForkTargets])
 	const targetOutcomeKey = targetOutcomeIndexes.map(target => target.toString()).join(',')
-	const directionalBalance = balances === undefined ? 0n : balances.invalid + balances.yes + balances.no
-	const holdings = { completeSets: availability.completeSets, winningBalance: availability.winningBalance, directionalBalance }
-	const unavailableReason = settlementUnavailableReason(operation, market, holdings)
+	const unavailableReason = settlementUnavailableReason(operation, market, balances)
 	const operationAvailable = unavailableReason === undefined
 	let sourceBalance = balances?.no
 	if (sourceOutcome === 'INVALID') sourceBalance = balances?.invalid

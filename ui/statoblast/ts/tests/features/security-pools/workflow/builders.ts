@@ -354,7 +354,6 @@ export function createSecurityPoolWorkflowProps(overrides: Partial<SecurityPoolW
 		closeLiquidationModal: () => undefined,
 		forkAuction: createForkAuctionProps(),
 		liquidationDebtEthAmount: '',
-		maximumLiquidationDebtAttoEth: undefined,
 		liquidationManagerAddress: undefined,
 		liquidationModalOpen: false,
 		liquidationSecurityPoolAddress: undefined,

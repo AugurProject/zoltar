@@ -69,7 +69,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 	// Opens the modal for the connected wallet and fills a one-ETH, five-minute liquidation of vault 0x…01.
 	const fillLiquidationForm = async (state: Awaited<ReturnType<typeof renderHook>>['state']) => {
 		await act(() => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS)
 			state().setLiquidationTargetVault('0x0000000000000000000000000000000000000001')
 			state().setLiquidationAmount('1')
 			state().setLiquidationTimeoutMinutes('5')
@@ -88,7 +88,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		dependencies.loadCoordinatorInitialReportFundingRequirement = loadFunding
 		const { state } = await renderHook(dependencies)
 		await act(async () => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n * 10n ** 18n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS)
 			state().setLiquidationAmount('1')
 			await state().loadLiquidationFundingPreview(zeroAddress, price)
 		})
@@ -107,7 +107,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		dependencies.loadCoordinatorInitialReportFundingRequirement = loadFunding
 		const { state } = await renderHook(dependencies)
 		await act(() => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS)
 		})
 		const automaticLoad = state().loadLiquidationFundingPreview(zeroAddress)
 		await waitFor(() => {
@@ -239,7 +239,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		)
 
 		await act(() => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS)
 		})
 		await act(async () => {
 			await state().loadLiquidationFundingPreview(zeroAddress)
@@ -263,7 +263,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		test('moves a receiver that follows the wallet to the newly connected wallet', async () => {
 			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies())
 			await act(() => {
-				state().openLiquidationModal(zeroAddress, zeroAddress, REP_TOKEN_ADDRESS, 1n)
+				state().openLiquidationModal(zeroAddress, zeroAddress, REP_TOKEN_ADDRESS)
 			})
 			expect(state().liquidationReceiverVault).toBe(WALLET_ADDRESS)
 
@@ -275,7 +275,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			const customReceiver = getAddress('0x00000000000000000000000000000000000000c1')
 			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies())
 			await act(() => {
-				state().openLiquidationModal(zeroAddress, zeroAddress, REP_TOKEN_ADDRESS, 1n)
+				state().openLiquidationModal(zeroAddress, zeroAddress, REP_TOKEN_ADDRESS)
 				state().setLiquidationReceiverVault(customReceiver)
 			})
 
@@ -288,7 +288,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue: mock(async () => 12n) }))
 
 			await act(() => {
-				state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+				state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS)
 			})
 			await act(async () => {
 				await state().loadLiquidationFundingPreview(zeroAddress)
@@ -312,7 +312,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 			const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadCoordinatorInitialReportFundingRequirement, loadOracleManagerQueueOperationEthValue: mock(async () => 12n) }))
 
 			await act(() => {
-				state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+				state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS)
 			})
 			const firstWalletLoad = state().loadLiquidationFundingPreview(zeroAddress)
 			await waitFor(() => {
@@ -342,7 +342,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { rerender, state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadOracleManagerQueueOperationEthValue, queueSecurityPoolLiquidation }), { environmentRefreshKey: 0 })
 
 		await act(() => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, SECOND_WALLET_ADDRESS)
 			state().setLiquidationTargetVault(SECOND_WALLET_ADDRESS)
 			state().setLiquidationAmount('1')
 			state().setLiquidationTimeoutMinutes('5')
@@ -479,7 +479,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		)
 
 		await act(() => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS)
 			state().setLiquidationApprovalId(firstApprovalId)
 		})
 		const firstLoad = state().loadLiquidationApproval()
@@ -511,7 +511,7 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		const { state } = await renderHook(createSecurityPoolsOverviewDependencies({ loadSecurityPoolVaultSummary }))
 
 		await act(() => {
-			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS, 1n)
+			state().openLiquidationModal(zeroAddress, zeroAddress, WALLET_ADDRESS)
 			state().setLiquidationReceiverVault(SECOND_WALLET_ADDRESS)
 		})
 		await act(async () => {

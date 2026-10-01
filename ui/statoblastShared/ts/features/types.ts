@@ -101,7 +101,6 @@ export type SecurityPoolSectionProps = SecurityPoolRouteContentProps & {
 type LiquidationModalStateProps = {
 	closeLiquidationModal: () => void
 	liquidationDebtEthAmount: string
-	maximumLiquidationDebtAttoEth: bigint | undefined
 	liquidationManagerAddress: Address | undefined
 	liquidationFundingPreview?: LiquidationFundingPreview | undefined
 	liquidationFundingPreviewError?: string | undefined
@@ -159,7 +158,7 @@ export type SecurityPoolWorkflowRouteContentProps = LiquidationModalStateProps &
 	loadingSecurityPools: boolean
 	onBrowsePools: () => void
 	onCreatePool: () => void
-	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address, maxAmount: bigint | undefined) => void
+	onOpenLiquidationModal: (managerAddress: Address, securityPoolAddress: Address, vaultAddress: Address) => void
 	onReturnToCurrentUniverse?: () => void
 	onSwitchToPoolUniverse?: (universeId: bigint, securityPoolAddress: string) => void
 	onExecutePendingPoolOperation: (managerAddress: Address, operationId: bigint, securityPoolAddress: Address, universeId: bigint) => void

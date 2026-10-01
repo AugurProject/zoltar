@@ -1,30 +1,29 @@
 import { attoSharesToCollateralAttoEth, formatCollateralEth, formatOutcomeQuantity, type ShareValueRate } from '../lib/shareValue.js'
 import type { ForkTarget } from '../protocol/forks.js'
-import type { LiveMarket, SettlementOperation, ShareOutcome } from '../protocol/live.js'
-import { resolvedShareOutcome } from '../lib/marketLabels.js'
+import { settlementUnavailability, type LiveBalances, type LiveMarket, type SettlementOperation, type SettlementUnavailableReason, type ShareOutcome } from '../protocol/live.js'
 import * as settlementCopy from '../copy/settlement.js'
 import type { BalanceState } from './live/liveTradingTypes.js'
 
 type SettlementLifecycle = Pick<LiveMarket, 'loadError' | 'systemState' | 'universeForkTime' | 'questionOutcome'>
-type SettlementHoldings = Readonly<{ completeSets: bigint; winningBalance: bigint; directionalBalance: bigint }>
+
+const settlementUnavailableCopy = {
+	'market-data-unavailable': settlementCopy.marketDataUnavailableReason,
+	'universe-not-forked': settlementCopy.universeNotForkedReason,
+	'no-shares-to-migrate': settlementCopy.noSharesToMigrateReason,
+	'universe-forked': settlementCopy.universeForkedReason,
+	'pool-not-operational': settlementCopy.poolNotOperationalReason,
+	'no-complete-sets': settlementCopy.noCompleteSetsReason,
+	'question-not-resolved': settlementCopy.questionNotResolvedReason,
+} satisfies Record<Exclude<SettlementUnavailableReason['code'], 'no-winning-shares'>, string>
+
+function settlementUnavailableReasonCopy(reason: SettlementUnavailableReason) {
+	return reason.code === 'no-winning-shares' ? settlementCopy.noWinningSharesReason(reason.outcome) : settlementUnavailableCopy[reason.code]
+}
 
 /** Why the selected settlement action cannot run for this market and wallet, or undefined when it can. */
-export function settlementUnavailableReason(operation: SettlementOperation, market: SettlementLifecycle, holdings: SettlementHoldings) {
-	if (market.loadError !== undefined) return settlementCopy.marketDataUnavailableReason
-	if (operation === 'migrate-shares') {
-		if (market.universeForkTime === 0n) return settlementCopy.universeNotForkedReason
-		if (holdings.directionalBalance === 0n) return settlementCopy.noSharesToMigrateReason
-		return undefined
-	}
-	if (operation === 'redeem-complete-set') {
-		if (market.universeForkTime !== 0n) return settlementCopy.universeForkedReason
-		if (market.systemState !== 0) return settlementCopy.poolNotOperationalReason
-		return holdings.completeSets === 0n ? settlementCopy.noCompleteSetsReason : undefined
-	}
-	if (market.systemState !== 0) return settlementCopy.poolNotOperationalReason
-	const winningOutcome = resolvedShareOutcome(market.questionOutcome)
-	if (winningOutcome === undefined) return settlementCopy.questionNotResolvedReason
-	return holdings.winningBalance === 0n ? settlementCopy.noWinningSharesReason(winningOutcome) : undefined
+export function settlementUnavailableReason(operation: SettlementOperation, market: SettlementLifecycle, balances: Pick<LiveBalances, 'invalid' | 'yes' | 'no'> | undefined) {
+	const reason = settlementUnavailability(operation, market, balances)
+	return reason === undefined ? undefined : settlementUnavailableReasonCopy(reason)
 }
 
 export function migrationSimulationSummary(blockNumber: bigint, sourceOutcome: ShareOutcome, targetCount: bigint) {
