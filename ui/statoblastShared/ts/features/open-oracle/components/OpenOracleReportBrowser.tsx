@@ -18,15 +18,18 @@ import { useLocalBrowseDirectory } from '@zoltar/ui-core-shared/hooks/useLocalBr
 import type { DiscoveredPage } from '@zoltar/ui-core-shared/hooks/usePagedDiscovery.js'
 import { formatRelativeTimestamp, getWallClockTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../../../types/contracts.js'
-import { formatOpenOracleReportPriceUnit, getOpenOracleReportStatus, getOpenOracleReportStatusTone } from '../lib/openOracle.js'
-import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, toCachedOpenOracleReportSummary, type BrowseStatusFilter } from '../lib/reportBrowse.js'
+import { formatOpenOracleReportPriceUnit, getOpenOracleReportProgress, getOpenOracleReportProgressLabel, getOpenOracleReportProgressTone, OPEN_ORACLE_REPORT_PROGRESS_ORDER } from '../lib/openOracle.js'
+import { filterOpenOracleReports, getOpenOracleReportEntityId, openOracleReportDownloadStore, parseReportIdSearch, resolveBrowseStatusFilter, toCachedOpenOracleReportSummary, type BrowseStatusFilter, type OpenOracleBrowseReport } from '../lib/reportBrowse.js'
+import { useChainBlockNumber, useChainTimestamp } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { BROWSE_PAGE_SIZE, getOpenOracleClockLabel, OPEN_ORACLE_PRICE_UNITS, OpenOracleClockValue, renderReportFields } from './OpenOracleReportContent.js'
 
 type UnavailableReport = Readonly<{ reportId: bigint; message: string }>
 type ReceivedReportPage = Readonly<{ page: OpenOracleReportSummaryPage; requestKey: string }>
 
-function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt: number; onSelectReport: (reportId: bigint) => void; report: OpenOracleReportSummary }) {
-	const status = getOpenOracleReportStatus(report)
+type ReportClock = { currentBlockNumber: bigint | undefined; currentTime: bigint | undefined }
+
+function ReportSummaryRecord({ clock, fetchedAt, onSelectReport, report }: { clock: ReportClock; fetchedAt: number; onSelectReport: (reportId: bigint) => void; report: OpenOracleBrowseReport }) {
+	const progress = getOpenOracleReportProgress(report, clock)
 	const reportTitle = openOracleCopy.formatReportBrowseTitle(report.token1Symbol, report.token2Symbol, report.reportId.toString())
 	return (
 		<ComparisonRecord
@@ -34,7 +37,7 @@ function ReportSummaryRecord({ fetchedAt, onSelectReport, report }: { fetchedAt:
 			badge={
 				<div className='open-oracle-report-badges'>
 					<FavoriteToggle app='statoblast' entityLabel={reportTitle} id={getOpenOracleReportEntityId(report.reportId)} kind='oracleReport' />
-					<Badge tone={getOpenOracleReportStatusTone(status)}>{status}</Badge>
+					<Badge tone={getOpenOracleReportProgressTone(progress)}>{getOpenOracleReportProgressLabel(progress)}</Badge>
 					{/* Cached summaries can be stale; opening the report reads it from chain again. */}
 					<span className='open-oracle-report-updated'>{openOracleCopy.formatReportUpdated(formatRelativeTimestamp(BigInt(Math.floor(fetchedAt / 1000)), getWallClockTimestamp()))}</span>
 				</div>
@@ -76,6 +79,8 @@ type OpenOracleReportBrowserProps = {
  */
 export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKey, loadBrowseReports, onOpenReport }: OpenOracleReportBrowserProps) {
 	const [statusFilter, setStatusFilter] = useState<BrowseStatusFilter>('all')
+	// Without a chain timestamp yet, wall-clock time still tells whether a time-based report is ready to settle.
+	const clock: ReportClock = { currentBlockNumber: useChainBlockNumber(), currentTime: useChainTimestamp() ?? getWallClockTimestamp() }
 	const [receivedPage, setReceivedPage] = useState<ReceivedReportPage | undefined>(undefined)
 	// Reports whose stored state cannot be read have no summary to cache; they are listed for the current visit only.
 	const [unavailable, setUnavailable] = useState<{ contextKey: string; reports: readonly UnavailableReport[] }>({ contextKey: '', reports: [] })
@@ -113,7 +118,7 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 	const fetchedAtById = new Map(entries.map(entry => [entry.id, entry.fetchedAt]))
 	const visibleReports = filterOpenOracleReports(
 		entries.map(entry => entry.data),
-		{ normalizedSearchText, statusFilter },
+		{ clock, normalizedSearchText, statusFilter },
 	)
 	const hasActiveFilters = normalizedSearchText !== '' || statusFilter !== 'all'
 	// Unreadable reports belong to the scan, so they appear in the downloaded collection while no filter is active.
@@ -151,7 +156,7 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 					<StateHint key={`unavailable-${report.reportId.toString()}`} presentation={{ key: 'unavailable', badgeLabel: commonCopy.unavailable, badgeTone: 'muted', detail: report.message }} />
 				))}
 				{visibleReports.map(report => (
-					<ReportSummaryRecord key={report.reportId.toString()} fetchedAt={fetchedAtById.get(getOpenOracleReportEntityId(report.reportId)) ?? 0} onSelectReport={onOpenReport} report={report} />
+					<ReportSummaryRecord key={report.reportId.toString()} clock={clock} fetchedAt={fetchedAtById.get(getOpenOracleReportEntityId(report.reportId)) ?? 0} onSelectReport={onOpenReport} report={report} />
 				))}
 			</div>
 		)
@@ -167,9 +172,11 @@ export function OpenOracleReportBrowser({ environmentReady, environmentRefreshKe
 					<span>{commonCopy.status}</span>
 					<select value={statusFilter} onChange={event => setStatusFilter(resolveBrowseStatusFilter(event.currentTarget.value))}>
 						<option value='all'>{openOracleCopy.allStatuses}</option>
-						<option value='Pending'>{commonCopy.pending}</option>
-						<option value='Disputed'>{openOracleCopy.disputed}</option>
-						<option value='Settled'>{commonCopy.settled}</option>
+						{OPEN_ORACLE_REPORT_PROGRESS_ORDER.map(progress => (
+							<option key={progress} value={progress}>
+								{getOpenOracleReportProgressLabel(progress)}
+							</option>
+						))}
 					</select>
 				</label>
 			</div>

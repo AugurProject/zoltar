@@ -18,7 +18,8 @@ export const settlerReward = 'Settler reward'
 export const tokenPair = 'Token pair'
 export const baseToken = 'Base token'
 export const quoteToken = 'Quote token'
-export const openOracleGame = 'Standalone oracle report'
+export const openOracleGame = 'Open Oracle'
+export const standaloneReportSettings = 'Standalone report settings'
 export const formatTokenWithdrawn = (tokenSymbol: CopyTemplateValue) => `${tokenSymbol} withdrawn`
 export const browseReports = 'Browse reports'
 export const reportDirectory = 'Report directory'
@@ -41,7 +42,6 @@ export const reportCreated = 'Report created'
 export const createStandaloneOracleGame = 'Create standalone oracle report'
 export const creating = 'Creating…'
 export const reportAtAGlance = 'Report at a glance'
-export const nextStep = 'Next step'
 export const currentPrice = 'Current price'
 export const currentReportState = 'Current report state'
 export const currentReporter = 'Current reporter'
@@ -53,8 +53,8 @@ export const settlementWalletRequiredReason = commonCopy.formatConnectWalletBefo
 export const economics = 'Economics'
 export const formatDisputeAmountsInvalidReason = (tokenSymbol: string) => `Enter valid dispute amounts before approving ${tokenSymbol}.`
 export const disputeEscalationStopAmountHelpText = 'Base-token amount that ends escalation.'
-export const creationFundingRequirementHelpText = 'ETH funding, including the settler reward.'
-export const ethValueToSend = 'ETH value to send'
+export const ethSent = 'ETH sent'
+export const formatEthSentHint = (amount: CopyTemplateValue) => `The create transaction sends ${amount} ETH, exactly the settler reward.`
 export const formatExactTokenRequiredLabel = (tokenSymbol: string) => `Exact ${tokenSymbol} required`
 export const initialToken1AmountHelpText = 'Base-token amount to report.'
 export const exactToken1Report = 'Base token amount'
@@ -65,7 +65,7 @@ export const initialEconomics = 'Initial economics'
 export const lastReportOpportunity = 'Last report opportunity'
 export const reportLoadError = 'Failed to load Open Oracle reports.'
 export const reportLoadRequired = 'Select a report first.'
-export const escalationMultiplierHelpText = 'Dispute escalation multiplier.'
+export const escalationMultiplierHelpText = 'Each dispute multiplies the base amount by this factor, for example 1.5.'
 export const formatNewAmountMustBeExactDetail = (tokenSymbol: string, amount: string) => `New ${tokenSymbol} amount must be exactly ${amount} for this dispute.`
 export const formatNewAmountRangeDetail = (tokenSymbol: string, minimumAmount: string, maximumAmount: string) => `New ${tokenSymbol} amount must be between ${minimumAmount} and ${maximumAmount} for this dispute.`
 export const oracleBalances = 'Your oracle balances'
@@ -118,6 +118,9 @@ export const notSettled = 'Not settled'
 export const stateHash = 'State hash'
 export const allStatuses = 'All statuses'
 export const disputed = 'Disputed'
+export const awaitingDisputeWindow = 'Waiting for dispute window'
+export const disputeWindowOpen = 'Dispute window open'
+export const readyToSettle = 'Ready to settle'
 export const oracleGamesEmpty = 'No Open Oracle reports found.'
 export const reportFiltersEmpty = 'No downloaded reports match the current search and status filters.'
 export const retryReports = 'Retry'
@@ -140,10 +143,32 @@ export const trackDisputes = 'Track disputes'
 export const formatNewTokenAmountFieldLabel = (tokenSymbol: string) => `New ${tokenSymbol} amount`
 export const reporter = 'Reporter'
 export const parameterDetails = 'Parameter details'
-export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. ETH funding must cover required funding and the settler reward. Dispute settings determine escalation timing and economics.'
+export const standaloneParameterDetails = 'Exact report and escalation-halt amounts use base-token decimals. The create transaction sends the settler reward in ETH. Dispute settings determine escalation timing and economics.'
 
 export const settleReportTitle = (id: bigint) => `Settle report #${id}`
 
 export const settledReportNumber = (id: string) => `Settled report #${id}`
 
 export const settleReport = 'Settle report'
+
+export const formatSecondsDurationHint = (seconds: CopyTemplateValue, duration: CopyTemplateValue) => `${seconds} seconds = ${duration}`
+export const impliedInitialPrice = 'Initial price'
+export const readingTokenMetadata = 'Reading token details…'
+export const formatResolvedToken = (tokenSymbol: CopyTemplateValue, decimals: CopyTemplateValue) => `${tokenSymbol} · ${decimals} decimals`
+export const formatTokenMetadataUnreadable = (role: 'Base' | 'Quote') => `${role} token address is not a readable ERC-20 contract.`
+export const disputeOutcome = 'Dispute summary'
+export const disputeOutcomePending = 'Enter the new amounts to preview what you pay and receive.'
+export const youPay = 'You pay'
+export const disputeFee = 'Dispute fee (to current reporter)'
+export const disputeProtocolFee = 'Protocol fee'
+export const feesIncludedInPayment = 'Fees are included in the amounts you pay.'
+export const creditedToOracleBalance = 'Credited to your oracle balance'
+export const yourNewReport = 'Your new report'
+export const proposedPrice = 'Proposed price'
+export const newBaseAmountFixedHint = 'Set by the report’s escalation rules.'
+export const newQuoteAmountHint = 'The quote amount sets the price you propose.'
+export const disputeSwapTokenPending = 'Determined by the proposed price'
+export const formatReportCreatedDetail = (reportId: CopyTemplateValue) => `Report #${reportId} is live. Open it to track disputes and settlement.`
+export const reportCreatedWithoutIdDetail = 'Your report is live. Find it in the report directory.'
+export const multiplierUnit = '×'
+export const formatDisputeSwapTokenChanged = (newTokenSymbol: CopyTemplateValue, reviewedTokenSymbol: CopyTemplateValue) => `The refreshed report changes this dispute to swap out ${newTokenSymbol} instead of ${reviewedTokenSymbol}. Review the refreshed report and try again.`

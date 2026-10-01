@@ -890,8 +890,9 @@ test('fetches only on demand, fills the editable field, and prepares the fetched
 		await act(() => fireEvent.click(queries.getByRole('button', { name: 'Fetch from Uniswap' })))
 		await settle()
 		expect(fetches).toBe(1)
-		expect(inputValue(queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }))).toBe('1.234567890123456789')
-		expect(prices).toEqual([1_234_567_890_123_456_789n])
+		// The 18-decimal quote is rounded to six significant digits so the editable price stays readable.
+		expect(inputValue(queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }))).toBe('1.23457')
+		expect(prices).toEqual([1_234_570_000_000_000_000n])
 		await act(() => fireEvent.input(queries.getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }), { target: { value: '3.5' } }))
 		await settle()
 		expect(prices.at(-1)).toBe(3_500_000_000_000_000_000n)

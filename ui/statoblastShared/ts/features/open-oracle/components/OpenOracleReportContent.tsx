@@ -5,7 +5,6 @@ import type { ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
-import { EnumDropdown, type EnumDropdownOption } from '@zoltar/ui-core-shared/components/EnumDropdown.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
@@ -32,7 +31,6 @@ export const DISPUTE_REPORT_MODAL: SelectedReportModal = 'dispute'
 const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> = {
 	disputeDelay: 'open-oracle-dispute-delay-error',
 	escalationHalt: 'open-oracle-escalation-halt-error',
-	ethValue: 'open-oracle-eth-value-error',
 	exactToken1Report: 'open-oracle-exact-token1-report-error',
 	feePercentage: 'open-oracle-fee-percentage-error',
 	initialToken2Amount: 'open-oracle-initial-token2-amount-error',
@@ -43,17 +41,9 @@ const OPEN_ORACLE_CREATE_FIELD_ERROR_IDS: Record<OpenOracleCreateField, string> 
 	token1Address: 'open-oracle-token1-address-error',
 	token2Address: 'open-oracle-token2-address-error',
 }
-const OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER: readonly OpenOracleDisputeInputField[] = ['disputeNewAmount1', 'disputeNewAmount2', 'disputeTokenToSwap']
+const OPEN_ORACLE_DISPUTE_INPUT_FIELD_ORDER: readonly OpenOracleDisputeInputField[] = ['disputeNewAmount1', 'disputeNewAmount2']
 export function getOpenOracleCreateFieldErrorId(field: OpenOracleCreateField) {
 	return OPEN_ORACLE_CREATE_FIELD_ERROR_IDS[field]
-}
-/** Matches `FormInput` `liveError`: a mounted polite region, so a new error is announced without interrupting input. */
-function renderOpenOracleFieldError(id: string, message: string | undefined) {
-	return (
-		<div aria-live='polite' className='field-error-live-region'>
-			{message === undefined ? undefined : <UserMessage placement='field' tone='error' id={id} detail={message} />}
-		</div>
-	)
 }
 function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, reportId: string) {
 	switch (field) {
@@ -61,8 +51,6 @@ function getOpenOracleDisputeFieldErrorId(field: OpenOracleDisputeInputField, re
 			return `open-oracle-dispute-new-amount-1-error-${reportId}`
 		case 'disputeNewAmount2':
 			return `open-oracle-dispute-new-amount-2-error-${reportId}`
-		case 'disputeTokenToSwap':
-			return `open-oracle-dispute-token-to-swap-error-${reportId}`
 		default:
 			return assertNever(field)
 	}
@@ -118,6 +106,21 @@ export function getOpenOracleClockLabel(timeType: boolean, timestampLabel: strin
 	return timeType ? timestampLabel : blockLabel
 }
 
+function renderTokenAmounts(amounts: ReadonlyArray<{ amount: bigint | undefined; decimals: number | undefined; symbol: string | undefined }>) {
+	const known = amounts.filter((entry): entry is { amount: bigint; decimals: number; symbol: string } => entry.amount !== undefined && entry.decimals !== undefined && entry.symbol !== undefined)
+	if (known.length === 0 || known.length !== amounts.length) return commonCopy.metricUnavailablePlaceholder
+	return (
+		<span className='open-oracle-token-amounts'>
+			{known.map((entry, index) => (
+				<span key={index.toString()}>
+					{index === 0 ? undefined : ' + '}
+					<CurrencyValue value={entry.amount} suffix={entry.symbol} units={entry.decimals} precision='exact' />
+				</span>
+			))}
+		</span>
+	)
+}
+
 export function renderSelectedReportActionSection({
 	actionMode,
 	disputeSubmission,
@@ -156,10 +159,6 @@ export function renderSelectedReportActionSection({
 	token1Symbol: string
 	token2Symbol: string
 }) {
-	const disputeTokenOptions: EnumDropdownOption<OpenOracleFormState['disputeTokenToSwap']>[] = [
-		{ value: 'token1', label: token1Symbol },
-		{ value: 'token2', label: token2Symbol },
-	]
 	const disputeAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleDisputeAvailability(openOracleReportDetails)
 	const settleAvailability = openOracleReportDetails === undefined ? { canAct: true, message: undefined } : getOpenOracleSettleAvailability(openOracleReportDetails)
 	switch (actionMode) {
@@ -219,9 +218,8 @@ export function renderSelectedReportActionSection({
 				)
 			}
 			const allDisputeInputFieldErrors = disputeSubmission?.inputFieldErrors ?? {}
-			// The token choice is a selection, so its error shows immediately; amount errors wait for blur.
+			// Amount errors wait for blur so typing stays quiet.
 			const disputeInputFieldErrors = {
-				disputeTokenToSwap: allDisputeInputFieldErrors.disputeTokenToSwap,
 				disputeNewAmount1: revealedDisputeFields.has('disputeNewAmount1') ? allDisputeInputFieldErrors.disputeNewAmount1 : undefined,
 				disputeNewAmount2: revealedDisputeFields.has('disputeNewAmount2') ? allDisputeInputFieldErrors.disputeNewAmount2 : undefined,
 			}
@@ -229,13 +227,25 @@ export function renderSelectedReportActionSection({
 			const disputeInputBlockMessageId = firstDisputeInputErrorField === undefined ? `open-oracle-dispute-input-blocker-${disputeReportId}` : getOpenOracleDisputeFieldErrorId(firstDisputeInputErrorField, disputeReportId)
 			const disputeNewAmount1Error = disputeInputFieldErrors.disputeNewAmount1
 			const disputeNewAmount2Error = disputeInputFieldErrors.disputeNewAmount2
-			const disputeTokenToSwapError = disputeInputFieldErrors.disputeTokenToSwap
 			const disputeActionReasonUsesInputBlockMessage = disputeSubmission?.inputBlockMessage?.kind === 'visible' && disputeActionDisabledReason === disputeSubmission.inputBlockMessage.message
 			const disputeActionReasonElementId = (() => {
 				if (sharedApprovalGuardMessage !== undefined) return sharedApprovalGuardMessageId
 				if (disputeActionReasonUsesInputBlockMessage) return disputeInputBlockMessageId
 				return undefined
 			})()
+			const flexibleNewAmount1 = disputeSubmission?.maximumNewAmount1 !== undefined
+			const newAmount1RangeHint =
+				disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.maximumNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined
+					? undefined
+					: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))
+			const swapToken = (() => {
+				if (disputeSubmission?.swapTokenKey === undefined) return { decimals: undefined, symbol: undefined }
+				if (disputeSubmission.swapTokenKey === 'token1') return { decimals: disputeSubmission.token1Decimals, symbol: token1Symbol }
+				return { decimals: disputeSubmission.token2Decimals, symbol: token2Symbol }
+			})()
+			const swapTokenSymbol = swapToken.symbol
+			const swapTokenDecimals = swapToken.decimals
+			const proposedPriceValue = disputeSubmission?.proposedPrice === undefined || openOracleReportDetails === undefined ? commonCopy.metricUnavailablePlaceholder : <CurrencyValue value={disputeSubmission.proposedPrice} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} />
 			const disputeInputBlockDetail =
 				disputeSubmission?.inputBlockMessage !== undefined && firstDisputeInputErrorField === undefined ? <UserMessage className='detail' id={disputeInputBlockMessageId} loading={disputeSubmission.inputBlockMessage.kind === 'hidden-loading'} detail={disputeSubmission.inputBlockMessage.message} /> : undefined
 			return (
@@ -248,41 +258,41 @@ export function renderSelectedReportActionSection({
 									{ label: openOracleCopy.currentReporter, value: openOracleReportDetails.currentReporter === zeroAddress ? commonCopy.none : <AddressValue address={openOracleReportDetails.currentReporter} /> },
 									{ label: openOracleCopy.currentPrice, value: <CurrencyValue value={openOracleReportDetails.price} suffix={formatOpenOracleReportPriceUnit(openOracleReportDetails)} units={OPEN_ORACLE_PRICE_UNITS} /> },
 								])}
-						<label className='field'>
-							<span>{openOracleCopy.tokenToSwapOut}</span>
-							<EnumDropdown
-								ariaDescribedBy={disputeTokenToSwapError === undefined ? undefined : getOpenOracleDisputeFieldErrorId('disputeTokenToSwap', disputeReportId)}
-								ariaLabel={openOracleCopy.tokenToSwapOut}
-								invalid={disputeTokenToSwapError !== undefined}
-								options={disputeTokenOptions}
-								value={openOracleForm.disputeTokenToSwap}
-								onChange={disputeTokenToSwap => onOpenOracleFormChange({ disputeTokenToSwap })}
-							/>
-							{renderOpenOracleFieldError(getOpenOracleDisputeFieldErrorId('disputeTokenToSwap', disputeReportId), disputeTokenToSwapError)}
-						</label>
 						<div className='field-row'>
-							<label className='field'>
-								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
-								<FormInput
-									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}
-									error={disputeNewAmount1Error}
-									errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
-									inputMode='decimal'
-									liveError
-									onBlur={() => onDisputeFieldRevealChange('disputeNewAmount1', true)}
-									onInput={event => {
-										onDisputeFieldRevealChange('disputeNewAmount1', false)
-										onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })
-									}}
-									value={openOracleForm.disputeNewAmount1}
-								/>
-							</label>
+							{flexibleNewAmount1 ? (
+								<label className='field'>
+									<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
+									<FormInput
+										adornment={token1Symbol}
+										aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}
+										error={disputeNewAmount1Error}
+										errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount1', disputeReportId)}
+										hint={newAmount1RangeHint}
+										inputMode='decimal'
+										liveError
+										onBlur={() => onDisputeFieldRevealChange('disputeNewAmount1', true)}
+										onInput={event => {
+											onDisputeFieldRevealChange('disputeNewAmount1', false)
+											onOpenOracleFormChange({ disputeNewAmount1: event.currentTarget.value })
+										}}
+										value={openOracleForm.disputeNewAmount1}
+									/>
+								</label>
+							) : (
+								// Without flexible escalation the report fixes the base amount, so it is shown instead of entered.
+								<MetricField label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}>
+									<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} precision='exact' />
+									<span className='detail'>{openOracleCopy.newBaseAmountFixedHint}</span>
+								</MetricField>
+							)}
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
 								<FormInput
+									adornment={token2Symbol}
 									aria-label={openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}
 									error={disputeNewAmount2Error}
 									errorId={getOpenOracleDisputeFieldErrorId('disputeNewAmount2', disputeReportId)}
+									hint={openOracleCopy.newQuoteAmountHint}
 									inputMode='decimal'
 									liveError
 									onBlur={() => onDisputeFieldRevealChange('disputeNewAmount2', true)}
@@ -294,30 +304,38 @@ export function renderSelectedReportActionSection({
 								/>
 							</label>
 						</div>
-						{disputeSubmission?.expectedNewAmount1 === undefined || disputeSubmission.token1Decimals === undefined ? undefined : (
-							<UserMessage
-								className='detail'
-								detail={
-									disputeSubmission.maximumNewAmount1 === undefined
-										? openOracleCopy.formatNewAmountMustBeExactDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals))
-										: openOracleCopy.formatNewAmountRangeDetail(token1Symbol, formatCurrencyInputBalance(disputeSubmission.expectedNewAmount1, disputeSubmission.token1Decimals), formatCurrencyInputBalance(disputeSubmission.maximumNewAmount1, disputeSubmission.token1Decimals))
-								}
-							/>
-						)}
+						<SectionBlock headingLevel={4} title={openOracleCopy.disputeOutcome} variant='embedded'>
+							<MetricGrid variant='question'>
+								<MetricField label={openOracleCopy.proposedPrice}>{proposedPriceValue}</MetricField>
+								<MetricField label={openOracleCopy.tokenToSwapOut}>{swapTokenSymbol ?? openOracleCopy.disputeSwapTokenPending}</MetricField>
+								<MetricField label={openOracleCopy.youPay}>
+									{renderTokenAmounts([
+										{ amount: disputeSubmission?.token1ContributionAmount, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
+										{ amount: disputeSubmission?.token2ContributionAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
+									])}
+								</MetricField>
+								<MetricField label={openOracleCopy.disputeFee}>{renderTokenAmounts([{ amount: disputeSubmission?.disputeFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
+								<MetricField label={openOracleCopy.disputeProtocolFee}>{renderTokenAmounts([{ amount: disputeSubmission?.protocolFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
+								<MetricField label={openOracleCopy.creditedToOracleBalance}>{renderTokenAmounts([{ amount: disputeSubmission?.token2CreditAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol }])}</MetricField>
+								<MetricField label={openOracleCopy.yourNewReport}>
+									{renderTokenAmounts([
+										{ amount: disputeSubmission?.newAmount1, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
+										{ amount: disputeSubmission?.newAmount2, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
+									])}
+								</MetricField>
+							</MetricGrid>
+							<UserMessage className='detail' detail={swapTokenSymbol === undefined ? openOracleCopy.disputeOutcomePending : openOracleCopy.feesIncludedInPayment} />
+						</SectionBlock>
 						{sharedApprovalGuardMessage === undefined ? undefined : (
 							// The approvals and the dispute share this reason, so while the wallet blocks them it holds their one wallet fix.
 							<WalletActionFixReason availability={disputeActionAvailability} id={sharedApprovalGuardMessageId}>
 								<InlineHint id={sharedApprovalGuardMessageId} message={sharedApprovalGuardMessage} />
 							</WalletActionFixReason>
 						)}
-						{disputeSubmission?.inputBlockMessage === undefined ? (
-							<>
-								{renderDisputeTokenApproval('token1')}
-								{renderDisputeTokenApproval('token2')}
-							</>
-						) : (
-							disputeInputBlockDetail
-						)}
+						{disputeInputBlockDetail}
+						{/* Approval steps stay in place while amounts are invalid; each explains why it is unavailable. */}
+						{renderDisputeTokenApproval('token1')}
+						{renderDisputeTokenApproval('token2')}
 						{!isOnActiveAppChain || disputeSubmission?.blockMessage?.kind !== 'visible' || disputeSubmission.blockMessage === disputeSubmission.inputBlockMessage ? undefined : <UserMessage className='detail' detail={disputeSubmission.blockMessage.message} />}
 						<div className='actions'>
 							<TransactionActionButton
