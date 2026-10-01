@@ -11,12 +11,19 @@ import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutc
 import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 import type { TradingShareBalances } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
+import { ETH_GAS_RESERVE_ATTO_ETH, getSpendableEthBalance } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 
 const PRICE_PRECISION = 10n ** 18n
 
 export const NO_MINT_CAPACITY_NO_ACTIVE_CAPACITY_OWNERSHIP_MESSAGE = 'No mint capacity. No active underwriting commitments.'
 export const NEED_MATCHING_COMPLETE_SET_SHARES_MESSAGE = 'Need matching Invalid, Yes, and No shares to redeem complete sets.'
 export const UNDEFINED_COMPLETE_SET_EXCHANGE_RATE_MESSAGE = 'Minting is unavailable because this pool has complete-set shares but no collateral.'
+export const MINTING_PAUSED_DURING_DISPUTE_MESSAGE = tradingCopy.mintingPausedDuringDispute
+
+/** True while an ordinary or fork-continuation escalation game is open; minting stays closed until the dispute ends. */
+export function isMintingPausedByEscalation(pool: { hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
+	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame
+}
 
 export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares: bigint | undefined) {
 	if (settlementCollateralAttoEth === undefined || shareTokenSupplyAttoShares === undefined) return undefined
@@ -25,7 +32,7 @@ export function hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth:
 
 /** Use contract-reported backing capacity; unknown capacity or an escalation game keeps minting closed. */
 export function getPoolMintingCapacityAttoEth(pool: { mintingCapacityAttoEth?: bigint | undefined; hasForkContinuationEscalationGame: boolean; ordinaryEscalationGameStarted: boolean }) {
-	return pool.ordinaryEscalationGameStarted || pool.hasForkContinuationEscalationGame ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
+	return isMintingPausedByEscalation(pool) ? 0n : (pool.mintingCapacityAttoEth ?? 0n)
 }
 
 export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefined, settlementCollateralAttoEth: bigint | undefined, shareTokenSupplyAttoShares?: bigint | undefined) {
@@ -34,9 +41,11 @@ export function getRemainingMintCapacity(mintingCapacityAttoEth: bigint | undefi
 	return mintingCapacityAttoEth > settlementCollateralAttoEth ? mintingCapacityAttoEth - settlementCollateralAttoEth : 0n
 }
 
+/** The largest mint that fits both the remaining capacity and the wallet ETH left after the gas reserve. */
 export function getMaximumMintAmount(walletEthBalanceAttoEth: bigint | undefined, remainingMintCapacityAttoEth: bigint | undefined) {
 	if (walletEthBalanceAttoEth === undefined || remainingMintCapacityAttoEth === undefined) return undefined
-	return walletEthBalanceAttoEth < remainingMintCapacityAttoEth ? walletEthBalanceAttoEth : remainingMintCapacityAttoEth
+	const spendableEthAttoEth = getSpendableEthBalance(walletEthBalanceAttoEth)
+	return spendableEthAttoEth < remainingMintCapacityAttoEth ? spendableEthAttoEth : remainingMintCapacityAttoEth
 }
 
 export function estimateMintCheckpoint({
@@ -196,6 +205,7 @@ export function isTradingSystemDeployed(deploymentStatuses: DeploymentStatus[]) 
 
 export function getTradingMintGuardMessage({
 	accountAddress,
+	escalationGameActive = false,
 	settlementCollateralAttoEth,
 	ethBalanceAttoEth,
 	mintingCapacityAttoEth,
@@ -206,6 +216,8 @@ export function getTradingMintGuardMessage({
 	totalPoolHeldAttoRep,
 }: {
 	accountAddress: Address | undefined
+	/** An open escalation game closes minting; it explains a zero capacity before any capacity message. */
+	escalationGameActive?: boolean
 	settlementCollateralAttoEth: bigint | undefined
 	ethBalanceAttoEth: bigint | undefined
 	mintingCapacityAttoEth: bigint | undefined
@@ -218,6 +230,7 @@ export function getTradingMintGuardMessage({
 	if (!hasSelectedPool) return 'Select a pool before minting.'
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: commonCopy.formatConnectWalletBefore('minting complete sets') })
 	if (walletGuardState.blocked) return walletGuardState.reason
+	if (escalationGameActive) return MINTING_PAUSED_DURING_DISPUTE_MESSAGE
 
 	const undefinedExchangeRate = hasUndefinedCompleteSetExchangeRate(settlementCollateralAttoEth, shareTokenSupplyAttoShares)
 	if (undefinedExchangeRate === undefined) return 'Loading mint capacity.'
@@ -239,7 +252,8 @@ export function getTradingMintGuardMessage({
 	if (mintAmount <= 0n) return 'Enter a mint amount greater than zero.'
 	if (mintAmount > remainingCapacity) return `Max mint capacity is ${formatCurrencyBalanceWithUnit(remainingCapacity, 'ETH')}.`
 	if (ethBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (mintAmount > ethBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - ethBalanceAttoEth, 'ETH')} in this wallet to mint the selected amount.`
+	const spendableEthAttoEth = getSpendableEthBalance(ethBalanceAttoEth)
+	if (mintAmount > spendableEthAttoEth) return `Need ${formatAdditionalCurrencyBalance(mintAmount - spendableEthAttoEth, 'ETH')} in this wallet to mint the selected amount and keep ${formatCurrencyBalanceWithUnit(ETH_GAS_RESERVE_ATTO_ETH, 'ETH')} for gas.`
 	return undefined
 }
 
@@ -327,9 +341,27 @@ export function getTradingMigrateSharesGuardMessage({
 	return undefined
 }
 
-export function getTradingRedeemSharesGuardMessage({ accountAddress, hasSelectedPool, isOnActiveAppChain }: { accountAddress: Address | undefined; hasSelectedPool: boolean; isOnActiveAppChain: boolean }) {
+/** Without `questionOutcome` only the pool and wallet are checked; with it, the pool must be resolved and the wallet must hold winning shares. */
+export function getTradingRedeemSharesGuardMessage({
+	accountAddress,
+	hasSelectedPool,
+	isOnActiveAppChain,
+	questionOutcome,
+	shareBalances,
+}: {
+	accountAddress: Address | undefined
+	hasSelectedPool: boolean
+	isOnActiveAppChain: boolean
+	questionOutcome?: ReportingOutcomeKey | 'none' | undefined
+	shareBalances?: TradingShareBalances | undefined
+}) {
 	if (!hasSelectedPool) return tradingCopy.shareRedemptionPoolRequiredReason
 	const walletGuardState = getWalletActiveAppChainGuardState({ accountAddress, isOnActiveAppChain, walletRequiredReason: tradingCopy.shareRedemptionWalletRequiredReason })
 	if (walletGuardState.blocked) return walletGuardState.reason
+	if (questionOutcome === undefined) return undefined
+	if (questionOutcome === 'none') return tradingCopy.poolResolutionRequired
+	const winningAttoShares = getSelectedOutcomeShareBalance(shareBalances, questionOutcome)
+	if (winningAttoShares === undefined) return tradingCopy.loadingWalletShareBalances
+	if (winningAttoShares === 0n) return tradingCopy.formatNoWinningSharesReason(getReportingOutcomeLabel(questionOutcome))
 	return undefined
 }

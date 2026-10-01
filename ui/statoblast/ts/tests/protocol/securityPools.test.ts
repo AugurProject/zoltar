@@ -598,6 +598,7 @@ describe('securityPools protocol client', () => {
 		expect(capacity).toEqual({
 			currentRetentionRate: 88n,
 			currentTimestamp: 99n,
+			escalationGameActive: false,
 			feeEndTimestamp,
 			feeIndexRemainder: 0n,
 			lastUpdatedFeeAccumulator: 0n,

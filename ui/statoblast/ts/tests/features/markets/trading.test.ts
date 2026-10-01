@@ -17,7 +17,9 @@ import {
 	getTradingRedeemSharesGuardMessage,
 	hasRepBackedPoolWithNoActiveCapacityOwnership,
 	isTradingSystemDeployed,
+	MINTING_PAUSED_DURING_DISPUTE_MESSAGE,
 } from '@zoltar/ui-statoblast-shared/features/markets/lib/trading.js'
+import { ETH_GAS_RESERVE_ATTO_ETH } from '@zoltar/ui-core-shared/lib/ethGasReserve.js'
 import { getScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
 import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
 
@@ -128,11 +130,43 @@ void describe('trading helpers', () => {
 		expect(getRemainingMintCapacity(undefined, 12n)).toBeUndefined()
 	})
 
-	void test('limits the maximum mint amount by both wallet ETH and remaining capacity', () => {
-		expect(getMaximumMintAmount(3n, 5n)).toBe(3n)
-		expect(getMaximumMintAmount(7n, 5n)).toBe(5n)
+	void test('limits the maximum mint amount by both spendable wallet ETH and remaining capacity', () => {
+		expect(getMaximumMintAmount(3n * TOKEN_PRECISION, 5n * TOKEN_PRECISION)).toBe(3n * TOKEN_PRECISION - ETH_GAS_RESERVE_ATTO_ETH)
+		expect(getMaximumMintAmount(7n * TOKEN_PRECISION, 5n * TOKEN_PRECISION)).toBe(5n * TOKEN_PRECISION)
+		expect(getMaximumMintAmount(ETH_GAS_RESERVE_ATTO_ETH, 5n * TOKEN_PRECISION)).toBe(0n)
 		expect(getMaximumMintAmount(undefined, 5n)).toBeUndefined()
 		expect(getMaximumMintAmount(7n, undefined)).toBeUndefined()
+	})
+
+	void test('keeps the gas reserve in the wallet when validating a mint amount', () => {
+		const mintGuardInput = {
+			accountAddress: '0x1234567890123456789012345678901234567890',
+			settlementCollateralAttoEth: 0n,
+			hasSelectedPool: true,
+			isOnActiveAppChain: true,
+			shareTokenSupplyAttoShares: 0n,
+			totalPoolHeldAttoRep: 0n,
+			mintingCapacityAttoEth: 5n * TOKEN_PRECISION,
+		} as const
+		expect(getTradingMintGuardMessage({ ...mintGuardInput, ethBalanceAttoEth: TOKEN_PRECISION, mintAmountInput: '1' })).toBe('Need 0.01\u00a0more\u00a0ETH in this wallet to mint the selected amount and keep 0.01\u00a0ETH for gas.')
+		expect(getTradingMintGuardMessage({ ...mintGuardInput, ethBalanceAttoEth: TOKEN_PRECISION, mintAmountInput: '0.99' })).toBeUndefined()
+	})
+
+	void test('explains that an escalation game pauses minting before reporting capacity', () => {
+		expect(
+			getTradingMintGuardMessage({
+				accountAddress: '0x1234567890123456789012345678901234567890',
+				escalationGameActive: true,
+				settlementCollateralAttoEth: 0n,
+				ethBalanceAttoEth: TOKEN_PRECISION,
+				hasSelectedPool: true,
+				isOnActiveAppChain: true,
+				mintAmountInput: '0.1',
+				shareTokenSupplyAttoShares: 0n,
+				totalPoolHeldAttoRep: 20n * TOKEN_PRECISION,
+				mintingCapacityAttoEth: 0n,
+			}),
+		).toBe(MINTING_PAUSED_DURING_DISPUTE_MESSAGE)
 	})
 
 	void test('estimates the exact fee checkpoint that runs before minting', () => {
@@ -338,7 +372,7 @@ void describe('trading helpers', () => {
 				totalPoolHeldAttoRep: 0n,
 				mintingCapacityAttoEth: 2n * 10n ** 18n,
 			}),
-		).toBe('Need 0.5\u00a0more\u00a0ETH in this wallet to mint the selected amount.')
+		).toBe('Need 0.51\u00a0more\u00a0ETH in this wallet to mint the selected amount and keep 0.01\u00a0ETH for gas.')
 	})
 
 	void test('blocks minting when migrated complete-set shares have no collateral exchange rate', () => {
@@ -649,5 +683,13 @@ void describe('trading helpers', () => {
 				isOnActiveAppChain: true,
 			}),
 		).toBeUndefined()
+	})
+
+	void test('blocks resolved-share redemption without winning shares in the wallet', () => {
+		const redeemInput = { accountAddress: '0x1234567890123456789012345678901234567890', hasSelectedPool: true, isOnActiveAppChain: true } as const
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'yes', shareBalances: { ...shareBalances, yesAttoShares: 0n } })).toBe('No winning Yes shares to redeem.')
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'invalid', shareBalances: undefined })).toBe('Loading wallet share balances.')
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'no', shareBalances })).toBeUndefined()
+		expect(getTradingRedeemSharesGuardMessage({ ...redeemInput, questionOutcome: 'none', shareBalances })).toBe('Wait for the selected pool to resolve before redeeming shares.')
 	})
 })

@@ -1411,7 +1411,7 @@ describe('SecurityVaultSection', () => {
 
 		const depositDialog = documentQueries.getByRole('dialog', { name: 'Deposit REP' })
 		const depositDialogQueries = within(depositDialog)
-		expect(depositDialog.querySelector('.transaction-object-context')).toBeNull()
+		expect(depositDialog.querySelectorAll('.transaction-object-context')).toHaveLength(1)
 		expect(depositDialogQueries.queryByRole('heading', { name: 'Vault summary' })).toBeNull()
 		expect(depositDialogQueries.getByText('This vault does not exist. Deposit REP to create it.')).not.toBeNull()
 		expect(depositDialogQueries.getByText('REP backing')).not.toBeNull()

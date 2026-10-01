@@ -83,6 +83,18 @@ describe('forks protocol client', () => {
 		expect(result.targetOutcomeIndexes).toEqual([3n, 7n, 7n])
 	})
 
+	test('migrateSharesFromUniverse names the migrated shares and that migration cannot be undone in the review', async () => {
+		const previews: { reviewAmount?: string | undefined; reviewDescription?: string | undefined; reviewTitle?: string | undefined }[] = []
+		const client = { ...createForkMockWriteClient(() => undefined), onTransactionPrepared: (preview: { reviewAmount?: string | undefined; reviewDescription?: string | undefined; reviewTitle?: string | undefined }) => previews.push(preview) }
+
+		await migrateSharesFromUniverse(client, securityPoolAddress, 'no', [1n], 25n * 10n ** 17n)
+
+		expect(previews).toHaveLength(1)
+		expect(previews[0]?.reviewTitle).toBe('Migrate No shares')
+		expect(previews[0]?.reviewAmount).toBe('2.5 No shares')
+		expect(previews[0]?.reviewDescription).toBe('Moves your whole No balance into the selected child universes. Migration cannot be undone.')
+	})
+
 	test('getForkOutcomeKey treats the default root-pool fork outcome as none', () => {
 		expect(getForkOutcomeKey(0n, getAddress('0x0000000000000000000000000000000000000000'))).toBe('none')
 		expect(getForkOutcomeKey(0n, securityPoolAddress)).toBe('invalid')
