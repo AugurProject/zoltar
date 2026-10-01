@@ -511,15 +511,15 @@ describe('OpenOracleSection route create view', () => {
 		// 20 new + 10 bought out + 1 fee (10% of 10) REPv2; the 3 WETH posted comes from the 5 WETH bought out.
 		// Summary amounts use display rounding (payments round up like approvals); the exact amount stays in each value's title.
 		const dialogText = dialog.textContent?.replaceAll(' ', ' ')
-		expect(dialogText).toContain('You pay31 REPv2 + 0 WETH')
+		expect(dialogText).toContain('You pay31.00 REPv2 + 0.00 WETH')
 		expect(dialogText).toContain('Dispute fee (to current reporter)1.00 REPv2')
 		expect(dialogText).toContain('Credited to your oracle balance2.00 WETH')
 		expect(dialogText).toContain('Your new report20.00 REPv2 + 3.00 WETH')
 		const youPayAmounts = within(dialog).getByText('You pay').parentElement?.querySelectorAll('.open-oracle-token-amount')
-		expect([...(youPayAmounts ?? [])].map(amount => amount.textContent)).toEqual(['31\u00a0REPv2', '+\u00a00\u00a0WETH'])
+		expect([...(youPayAmounts ?? [])].map(amount => amount.textContent)).toEqual(['31.00\u00a0REPv2', '+\u00a00.00\u00a0WETH'])
 		expect(youPayAmounts?.[0]?.querySelector('[title]')?.getAttribute('title')).toBe('31 REPv2')
 		// The payment rounds up like the approval controls, so it never reads below the approval it requires.
-		expect(dialogText).toContain('Required REPv231 REPv2')
+		expect(dialogText).toContain('Required REPv231.00 REPv2')
 	})
 
 	test('shows a fixed base amount as a read-only value with its hint below and keeps pending prose out of the value font', async () => {

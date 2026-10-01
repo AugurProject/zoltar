@@ -251,10 +251,19 @@ export function formatCeilingAmount(value: bigint, units = 18): FormattedAmount 
 	return { approximate: compact.approximate, exact, text: compact.text }
 }
 
-/** Upward-rounded approval text with its `≈ ` marker, falling back to the exact amount beyond the compact suffix range. Approval figures share it so the requirement, the shortfall and the button never disagree. */
+/**
+ * Upward-rounded amount in the standard grouped two-decimal form that displayed balances use, with its `≈ ` marker when
+ * rounding changed it. Requirements, shortfalls and payments share it so they never read below what the approval button
+ * (which rounds up the same way, in compact form) approves, and line up with the approved balance shown beside them.
+ */
 export function formatCeilingAmountDisplay(value: bigint, units = 18) {
-	const amount = formatCeilingAmount(value, units)
-	return amount === undefined ? formatCurrencyBalance(value, units) : withApproximateMarker(amount)
+	assertNonNegativeInteger(units, 'Units')
+	if (value < 0n) throw new RangeError('Approval amount must be non-negative')
+	const base = 10n ** BigInt(units)
+	const scale = 100n
+	const rounded = (value * scale + base - 1n) / base
+	const text = `${formatGroupedInteger(rounded / scale)}.${(rounded % scale).toString().padStart(2, '0')}`
+	return (value * scale) % base === 0n ? text : `${APPROXIMATE_MARKER}${text}`
 }
 
 export function formatCeilingAmountWithUnit(value: bigint, unit: string, units = 18) {

@@ -94,7 +94,7 @@ describe('token approval helpers', () => {
 		{ label: 'no next approval amount', nextApprovalAmount: undefined },
 		{ label: 'the exact default target', nextApprovalAmount: shortfallRequirement.targetAmount },
 	])('resolveTokenApprovalStatusMessage formats the needed shortfall in token units with $label', ({ nextApprovalAmount }) => {
-		expect(statusMessage({ nextApprovalAmount })).toBe('Need 1\u00a0more\u00a0ETH approved before submitting the initial report.')
+		expect(statusMessage({ nextApprovalAmount })).toBe('Need 1.00\u00a0more\u00a0ETH approved before submitting the initial report.')
 	})
 
 	test('resolveTokenApprovalStatusMessage rounds a fractional shortfall upward like the approval button', () => {
@@ -103,7 +103,7 @@ describe('token approval helpers', () => {
 	})
 
 	test('resolveTokenApprovalStatusMessage formats a partial custom approval in token units', () => {
-		expect(statusMessage({ draftAmount: '24.5', nextApprovalAmount: 24_500_000_000_000_000_000n })).toBe('Approving 24.5\u00a0ETH will still leave 0.5\u00a0more\u00a0ETH needed before submitting the initial report.')
+		expect(statusMessage({ draftAmount: '24.5', nextApprovalAmount: 24_500_000_000_000_000_000n })).toBe('Approving 24.50\u00a0ETH will still leave 0.50\u00a0more\u00a0ETH needed before submitting the initial report.')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {

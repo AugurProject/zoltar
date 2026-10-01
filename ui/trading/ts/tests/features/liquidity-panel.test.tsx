@@ -113,6 +113,8 @@ describe('liquidity panel', () => {
 			expect(operationButton('Remove').getAttribute('aria-pressed')).toBe('true')
 			expect(operationButton('Add').disabled).toBe(true)
 			expect(operationButton('Add').getAttribute('aria-description')).toBe('Question ended')
+			// Short badge reasons are completed as sentences so they read like the other stacked reasons.
+			expect(document.body.textContent).toContain('Add unavailable: Question ended.')
 		} finally {
 			await rendered.cleanup()
 		}

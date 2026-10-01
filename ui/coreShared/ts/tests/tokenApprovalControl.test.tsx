@@ -81,6 +81,31 @@ describe('TokenApprovalControl', () => {
 		expect(rendered.container.textContent).not.toContain('0.121153846238653846 more')
 	})
 
+	test('shows large required amounts in the same grouped notation as the approved balance', async () => {
+		const rendered = await renderIntoDocument(
+			<TokenApprovalControl
+				actionLabel='depositing REP'
+				allowanceError={undefined}
+				allowanceLoading={false}
+				approvedAmount={2_250_000n * 10n ** 18n}
+				guardMessage={undefined}
+				onApprove={() => undefined}
+				pending={false}
+				pendingLabel='Approving REP…'
+				requiredAmount={2_250_000n * 10n ** 18n}
+				resetKey='deposit'
+				tokenSymbol='REP'
+				tokenUnits={18}
+			/>,
+		)
+		cleanupRenderedComponent = rendered.cleanup
+		const queries = within(rendered.container)
+		const requiredValue = queries.getByText('Required REP').parentElement?.querySelector('.currency-value')
+		const approvedValue = queries.getByText('Approved REP').parentElement?.querySelector('.currency-value')
+		expect(requiredValue?.textContent).toBe('2\u00a0250\u00a0000.00 REP')
+		expect(approvedValue?.textContent).toBe(requiredValue?.textContent)
+	})
+
 	test.each([true, false])('preserves partial and invalid notices with showRequirementNotice=%s', async showRequirementNotice => {
 		const rendered = await renderIntoDocument(
 			<TokenApprovalControl

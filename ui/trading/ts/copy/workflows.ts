@@ -42,7 +42,8 @@ export const formatTradeActivity = (market: string) => `Trade · ${market}`
 export const formatLiquidityActivity = (market: string) => `Liquidity · ${market}`
 export const formatSettlementActivity = (market: string) => `Settlement · ${market}`
 
-/** Names the switcher options a reason applies to, such as `Fork migration unavailable: The universe has not forked…`. */
+/** Names the switcher options a reason applies to, such as `Fork migration unavailable: The universe has not forked…`. Reasons reused from short badge copy get closing punctuation so stacked reasons read as consistent sentences. */
 export function unavailableOperationReason(operationLabels: readonly string[], reason: string) {
-	return `${operationLabels.join(', ')} unavailable: ${reason}`
+	const sentence = /[.!?…]$/.test(reason) ? reason : `${reason}.`
+	return `${operationLabels.join(', ')} unavailable: ${sentence}`
 }
