@@ -89,6 +89,48 @@ describe('forks protocol client', () => {
 		])
 	})
 
+	test('a failed fork-amount read stops the fork before any review or wallet write', async () => {
+		const previews: TransactionRequestPreview[] = []
+		let writes = 0
+		const repTokenAddress = getAddress('0x00000000000000000000000000000000000000e7')
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => {
+					writes += 1
+				},
+				async request => {
+					if (request.functionName === 'getTotalPoolHeldAttoRep') return 4n * 10n ** 18n
+					if (request.functionName === 'escalationGame') return escalationGameAddress
+					if (request.functionName === 'repToken') return repTokenAddress
+					if (request.functionName === 'balanceOf') throw new Error('balanceOf unavailable')
+					throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				},
+			),
+		)
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await expect(forkZoltarWithOwnEscalation(client, securityPoolAddress, 12n)).rejects.toThrow('balanceOf unavailable')
+		expect(previews).toEqual([])
+		expect(writes).toBe(0)
+	})
+
+	test('a pool without an escalation game reviews only its pool-held REP', async () => {
+		const previews: TransactionRequestPreview[] = []
+		const client = asWriteClient(
+			createMockWriteClient(
+				() => undefined,
+				async request => {
+					if (request.functionName === 'getTotalPoolHeldAttoRep') return 4n * 10n ** 18n
+					if (request.functionName === 'escalationGame') return zeroAddress
+					if (request.functionName === 'repToken') return getAddress('0x00000000000000000000000000000000000000e7')
+					throw new Error(`Unexpected readContract function: ${request.functionName}`)
+				},
+			),
+		)
+		client.onTransactionPrepared = preview => previews.push(preview)
+		await forkZoltarWithOwnEscalation(client, securityPoolAddress, 12n)
+		expect(previews.map(preview => preview.reviewTitle)).toEqual(['Trigger universe fork · 4\u00a0REP'])
+	})
+
 	test('migration reviews omit amounts the caller could not supply', async () => {
 		const previews: TransactionRequestPreview[] = []
 		const client = asWriteClient(createMockWriteClient(() => undefined))

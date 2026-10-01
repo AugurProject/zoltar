@@ -266,10 +266,6 @@ export function formatCeilingAmountDisplay(value: bigint, units = 18) {
 	return (value * scale) % base === 0n ? text : `${APPROXIMATE_MARKER}${text}`
 }
 
-export function formatCeilingAmountWithUnit(value: bigint, unit: string, units = 18) {
-	return formatValueWithUnit(formatCeilingAmountDisplay(value, units), unit)
-}
-
 export function formatAdditionalCeilingAmount(value: bigint, unit: string, units = 18) {
 	return `${formatCeilingAmountDisplay(value, units)}\u00a0more\u00a0${unit}`
 }

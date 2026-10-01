@@ -102,8 +102,15 @@ describe('token approval helpers', () => {
 		expect(statusMessage({ nextApprovalAmount: requirement.targetAmount, requiredAmount: requirement.requiredAmount, requirement })).toBe('Need ≈ 0.13\u00a0more\u00a0ETH approved before submitting the initial report.')
 	})
 
+	test('resolveTokenApprovalStatusMessage never rounds the approved amount up to the requirement it falls short of', () => {
+		const requiredAmount = 1_240_000_000_000_000_000n
+		const message = statusMessage({ draftAmount: '1.235', nextApprovalAmount: 1_235_000_000_000_000_000n, requiredAmount })
+		expect(message).toBe('Approving 1.235\u00a0ETH will still leave ≈ 0.01\u00a0more\u00a0ETH needed before submitting the initial report.')
+		expect(message).not.toContain('1.24')
+	})
+
 	test('resolveTokenApprovalStatusMessage formats a partial custom approval in token units', () => {
-		expect(statusMessage({ draftAmount: '24.5', nextApprovalAmount: 24_500_000_000_000_000_000n })).toBe('Approving 24.50\u00a0ETH will still leave 0.50\u00a0more\u00a0ETH needed before submitting the initial report.')
+		expect(statusMessage({ draftAmount: '24.5', nextApprovalAmount: 24_500_000_000_000_000_000n })).toBe('Approving 24.5\u00a0ETH will still leave 0.50\u00a0more\u00a0ETH needed before submitting the initial report.')
 	})
 
 	test('formats unavailable approval status messages with sanitized reasons', () => {
