@@ -19,6 +19,7 @@
 				"ui/statoblast/ts/index.ts",
 				"ui/statoblast/ts/simulation/tevmWorker.ts",
 				"ui/statoblastShared/ts/protocol/contractLabels.ts",
+				"ui/statoblastShared/ts/types/app.ts",
 				"ui/trading/ts/index.ts",
 				"ui/trading/ts/simulation/tevmWorker.ts",
 				"ui/trading/ts/simulation/tradingScenario.ts",
@@ -31,7 +32,9 @@
 			"minimumFunctions": 79.536,
 			"maximumAllowedUnloadedFiles": 1,
 			"unloadedFilesReviewBy": "2026-11-24",
-			"allowedUnloadedFiles": []
+			"allowedUnloadedFiles": [
+				"shared/core/ts/evm/uniswapAbis.ts"
+			]
 		},
 		"tooling": {
 			"minimumLines": 25.715,
@@ -41,7 +44,6 @@
 			"allowedUnloadedFiles": [
 				"solidity/ts/gas-costs.ts",
 				"solidity/ts/trading/deploy/deploy-local.mts",
-				"tooling/ci/run-ci-preflight.mts",
 				"tooling/contracts/build-app-contracts.mts",
 				"tooling/contracts/check-contract-boundaries.mts",
 				"tooling/contracts/check-contract-safety.mts",
@@ -59,9 +61,7 @@
 				"tooling/docs/check-docs-reference-values.mts",
 				"tooling/docs/check-html-format.mts",
 				"tooling/docs/contract-reference-event-sources.mts",
-				"tooling/docs/contract-reference-metadata.mts",
 				"tooling/docs/docs-html-page.mts",
-				"tooling/docs/docs-html-text.mts",
 				"tooling/docs/documentationChartBuild.mts",
 				"tooling/docs/generate-contract-interaction-reference.mts",
 				"tooling/repo/build-shared.mts",
