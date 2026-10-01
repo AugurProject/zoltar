@@ -1,6 +1,6 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { OracleInitialPriceFields, parseOracleInitialPrice, type OracleInitialPriceInput } from './OracleInitialPriceFields.js'
-import { getOracleOperationExecutionMessage, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
+import { getOracleOperationExecutionMessage, getOracleOperationTimingReason, needsOracleInitialPrice } from '../lib/oracleOperationPresentation.js'
 import { InlineHint } from '@zoltar/ui-core-shared/components/InlineHint.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { VaultOperationTimeoutField } from './VaultOperationTimeoutField.js'
@@ -25,7 +25,7 @@ import { balanceShortage } from '@zoltar/ui-core-shared/forms/inputs.js'
 import { tryParseBigIntInput } from '@zoltar/ui-core-shared/forms/integerInput.js'
 import { tryParseRepAmountInput } from '@zoltar/ui-core-shared/forms/formInputs.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'
-import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
+import { getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '../../open-oracle/lib/oracleRequestEth.js'
 import { getSecurityPoolVaultReadinessActions } from '../lib/securityPoolReadiness.js'
 import { isVaultHealthyAtFactor } from '../lib/liquidation.js'
 import { getTargetHealthFactorGuardMessage, getVaultDepositGuardMessage, getVaultRedeemRepGuardMessage, getVaultWithdrawGuardMessage } from '../lib/securityVaultGuards.js'
@@ -117,7 +117,7 @@ export function SecurityVaultSection({
 	const isOnActiveAppChain = isActiveAppChain(accountState?.chainId)
 	const normalizedSecurityVaultForm = {
 		depositAmount: securityVaultForm.depositAmount ?? '',
-		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '0',
+		repWithdrawAmount: securityVaultForm.repWithdrawAmount ?? '',
 		targetHealthFactor: securityVaultForm.targetHealthFactor ?? '0',
 		securityPoolAddress: securityVaultForm.securityPoolAddress ?? '',
 		selectedVaultOwner: securityVaultForm.selectedVaultOwner ?? '',
@@ -144,7 +144,8 @@ export function SecurityVaultSection({
 	]
 	// An empty deposit field means no amount yet rather than an invalid one.
 	const depositAmount = normalizedSecurityVaultForm.depositAmount.trim() === '' ? 0n : tryParseRepAmountInput(normalizedSecurityVaultForm.depositAmount)
-	const withdrawAmount = tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
+	// Like the deposit field, an empty withdrawal field means no amount yet.
+	const withdrawAmount = normalizedSecurityVaultForm.repWithdrawAmount.trim() === '' ? 0n : tryParseRepAmountInput(normalizedSecurityVaultForm.repWithdrawAmount)
 	const stagedOperationTimeoutMinutes = tryParseBigIntInput(normalizedSecurityVaultForm.stagedOperationTimeoutMinutes)
 	const underwritingLimitAttoEth = currentSelectedVaultDetails?.underwritingLimitAttoEth ?? 0n
 	const vaultExistsOnchain = doesSecurityVaultExistOnchain(currentSelectedVaultDetails)
@@ -213,12 +214,12 @@ export function SecurityVaultSection({
 	})
 	const targetHealthFactorGuardMessage = hasPositiveDepositAmount ? getTargetHealthFactorGuardMessage(depositTargetHealthFactor, selectedPoolStatoblastSecurityMultiplierBps) : undefined
 	const depositActionGuardMessage = targetHealthFactorGuardMessage === undefined ? (depositGuardMessage ?? (!hasPositiveDepositAmount ? commonCopy.positiveAmountRequired : undefined)) : undefined
-	const depositAmountNotice = getVaultDepositAmountNotice({ currentVaultRepBackingAttoRep: currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, walletRepShortfallAttoRep })
+	const depositAmountNotice = getVaultDepositAmountNotice({ currentVaultRepBackingAttoRep: currentSelectedVaultDetails?.vaultAttoRepBacking, depositAmount, isDepositBelowMinimum, minimumVaultRepDepositAttoRep, repTokenSymbol, walletRepShortfallAttoRep })
 	const withdrawRepFunding = resolveOracleOperationEthFunding({
 		managerDetails: oracleManagerDetails,
 		priceUsable: hasValidOraclePrice,
 	})
-	const oracleOperationTimingGuard = getOracleOperationTimingGuard(oracleManagerDetails, currentTimestamp, hasValidOraclePrice)
+	const oracleOperationTimingGuard = getOracleOperationTimingReason(oracleManagerDetails, currentTimestamp, hasValidOraclePrice)
 	const withdrawRepGuardMessage =
 		oracleOperationTimingGuard ??
 		getVaultWithdrawGuardMessage({
@@ -410,6 +411,7 @@ export function SecurityVaultSection({
 			repExitGuardMessage={repExitGuardMessage ?? withdrawPrice.error}
 			disabledReasonElementId={repExitGuardMessage === undefined && withdrawPrice.error !== undefined && withdrawInitialPrice.price !== '' ? `${withdrawPriceFieldId}-error` : undefined}
 			repExitMode={effectiveRepExitMode}
+			repTokenSymbol={repTokenSymbol}
 			securityVaultActiveAction={securityVaultActiveAction}
 			walletGuard={{ reason: repExitLauncherBlocker, walletBlocker }}
 		/>
@@ -474,17 +476,17 @@ export function SecurityVaultSection({
 									if (effectiveRepExitMode === 'redeem') {
 										if (redeemableRepAmountAttoRep === undefined) return '—'
 
-										return <CurrencyValue value={redeemableRepAmountAttoRep} suffix={commonCopy.rep} />
+										return <CurrencyValue value={redeemableRepAmountAttoRep} suffix={repTokenSymbol} />
 									}
 									if (maximumWithdrawableAttoRep === undefined) return '—'
 
-									return <CurrencyValue value={maximumWithdrawableAttoRep} suffix={commonCopy.rep} />
+									return <CurrencyValue value={maximumWithdrawableAttoRep} suffix={repTokenSymbol} />
 								})()}
 								{effectiveRepExitMode === 'redeem' || !withdrawalPrice.isEstimate ? undefined : <RepPriceStatusLabel />}
 							</MetricField>
 							{effectiveRepExitMode === 'redeem' ? (
 								<MetricField label={commonCopy.disputeStakedAttoRep}>
-									<CurrencyValue value={currentSelectedVaultDetails.disputeStakedAttoRep} suffix={commonCopy.rep} />
+									<CurrencyValue value={currentSelectedVaultDetails.disputeStakedAttoRep} suffix={repTokenSymbol} />
 								</MetricField>
 							) : (
 								<MetricField label={securityPoolCopy.priceValidUntil}>{oraclePriceValidUntilTimestamp === undefined ? commonCopy.unavailable : <TimestampValue timestamp={oraclePriceValidUntilTimestamp} />}</MetricField>
@@ -529,6 +531,7 @@ export function SecurityVaultSection({
 				</>
 			}
 			repExitMode={effectiveRepExitMode}
+			repTokenSymbol={repTokenSymbol}
 			securityVaultError={securityVaultError}
 			showRepPriceEstimate={effectiveRepExitMode === 'withdraw' && withdrawalPrice.isEstimate}
 			walletRepBalanceError={walletRepBalanceError}

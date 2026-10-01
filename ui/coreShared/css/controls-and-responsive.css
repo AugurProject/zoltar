@@ -1024,6 +1024,12 @@ button.tx-action-wallet-fix {
 	background: transparent;
 }
 
+/* The toolbar names the account by its abbreviated address at every width, as the popover holds the full address.
+ * Capping the slot makes the responsive address measurement abbreviate even when the toolbar has room to spare. */
+.header-toolbar-controls .account-menu {
+	max-width: 14rem;
+}
+
 .account-menu-trigger:hover,
 .account-menu-trigger[aria-expanded="true"] {
 	border-color: var(--interactive-border-hover);

@@ -51,7 +51,13 @@ export function SecurityPoolsSection({ activeView, createPool, loadingUniverseDi
 		<div className='route-view-flow'>
 			{view === 'operate' && hasSelectedPool ? undefined : <RouteHeader description={routeHeader.description} eyebrow={statoblastAppCopy.pools} title={routeHeader.title} />}
 			{view === 'browse' ? <FirstRunRoleGuide /> : undefined}
-			{view === 'browse' ? <SecurityPoolsOverviewSection {...overview} onSelectSecurityPool={onOpenSecurityPool} /> : undefined}
+			{view === 'browse' ? (
+				<SecurityPoolsOverviewSection
+					{...overview}
+					discovery={onLoadUniverseDirectoryPools === undefined ? undefined : { error: securityPoolUniverseDirectoryError, loading: loadingUniverseDirectoryPools === true, onDiscover: onLoadUniverseDirectoryPools, pools: universeDirectoryPools }}
+					onSelectSecurityPool={onOpenSecurityPool}
+				/>
+			) : undefined}
 
 			{view === 'create' ? (
 				<SecurityPoolSection

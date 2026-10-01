@@ -5,6 +5,8 @@ import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import type { LiquidationApprovalDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
+import * as securityPoolCopy from '@zoltar/ui-statoblast-shared/copy/securityPool.js'
+import { getVaultNotLiquidatableReason } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 import {
 	ZERO_LIQUIDATION_APPROVAL_ID,
 	formatHealthFactorBps,
@@ -18,6 +20,7 @@ import {
 	getLiquidationModalTitle,
 	getQueuedLiquidationOperation,
 	getQueuedLiquidationStatus,
+	getVaultLiquidationLauncherBlocker,
 	isDelegatedLiquidationReceiver,
 	isLiquidationApprovalNonceInvalidated,
 	isLiquidationApprovalRouteMismatch,
@@ -200,10 +203,12 @@ describe('liquidation modal guards', () => {
 		expect(findBlockerReason(createBlockerInput({ delegatedReceiver: true, liquidationReceiverVaultSummaryError: 'receiver' }))).toEqual({ reason: 'receiver' })
 		expect(findBlockerReason(createBlockerInput({ delegatedReceiver: false, liquidationReceiverVaultSummaryError: 'receiver' }))).toBeUndefined()
 		expect(findBlockerReason(createBlockerInput({ delegatedReceiver: true, liquidationReceiverVaultSummaryResolved: false }))).toEqual({ reason: liquidationCopy.receiverVaultRequiredBeforeSubmission })
+		// A malformed receiver is reported as an address error before any delegated receiver state is required.
+		expect(findBlockerReason(createBlockerInput({ delegatedReceiver: true, liquidationReceiverVaultSummaryResolved: false, trimmedLiquidationReceiverVault: '0x1234' }))).toEqual({ reason: liquidationCopy.receiverVaultAddressInvalid })
 		expect(findBlockerReason(createBlockerInput({ sameVaultWarning: 'same' }))).toEqual({ reason: 'same' })
 		expect(findBlockerReason(createBlockerInput({ liquidationDebtEthAmount: ' ' }))).toEqual({ reason: liquidationCopy.liquidationAmountRequired })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: undefined }))).toEqual({ reason: liquidationCopy.liquidationTimeoutMinimumReason })
-		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: 301n }))?.reason).toBe('Enter a liquidation timeout of 5 minutes or less.')
+		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationTimeoutSeconds: 301n }))?.reason).toBe('Enter a liquidation timeout of 1–5 minutes.')
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', loadingLiquidationFundingPreview: true }))).toEqual({ loading: true, reason: liquidationCopy.loadingQueueFunding })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationFundingPreviewError: 'funding' }))).toEqual({ reason: 'funding' })
 		expect(findBlockerReason(createBlockerInput({ liquidationExecutionMode: 'queue', liquidationFundingPreviewLoaded: false }))).toEqual({ loading: true, reason: liquidationCopy.loadingQueueFunding })
@@ -239,5 +244,29 @@ describe('liquidation modal guards', () => {
 		expect(getQueuedLiquidationStatus({ ...base, currentPoolOracleManagerDetails: undefined })).toBe('refreshing')
 		expect(getQueuedLiquidationStatus(base)).toBe('executed')
 		expect(getQueuedLiquidationStatus({ ...base, currentTimestamp: 400n })).toBe('missing')
+	})
+})
+
+describe('vault liquidation launcher', () => {
+	const ready = { hasWallet: true, isOnActiveAppChain: true, liquidationEnabled: true, notLiquidatableReason: undefined, vaultExistsOnchain: true, vaultLoaded: true, wrongNetworkReason: 'Switch network' }
+
+	test('reports the first launcher blocker in priority order', () => {
+		expect(getVaultLiquidationLauncherBlocker(ready)).toBeUndefined()
+		expect(getVaultLiquidationLauncherBlocker({ ...ready, hasWallet: false, isOnActiveAppChain: false })).toBe(securityPoolCopy.liquidationWalletRequiredReason)
+		expect(getVaultLiquidationLauncherBlocker({ ...ready, isOnActiveAppChain: false, vaultLoaded: false })).toBe('Switch network')
+		expect(getVaultLiquidationLauncherBlocker({ ...ready, vaultLoaded: false, vaultExistsOnchain: false })).toBe(securityPoolCopy.loadingVault)
+		expect(getVaultLiquidationLauncherBlocker({ ...ready, vaultExistsOnchain: false, liquidationEnabled: false })).toBe(securityPoolCopy.missingVaultDetail)
+		expect(getVaultLiquidationLauncherBlocker({ ...ready, liquidationEnabled: false, notLiquidatableReason: 'healthy' })).toBe(securityPoolCopy.liquidationUnavailableReason)
+		expect(getVaultLiquidationLauncherBlocker({ ...ready, notLiquidatableReason: 'healthy' })).toBe('healthy')
+	})
+
+	test('explains why a vault is not liquidatable only at a known protocol price', () => {
+		const vault = { claimableFeesAttoEth: 0n, disputeStakedAttoRep: 0n, underwritingLimitAttoEth: 2n * 10n ** 18n, vaultAddress: zeroAddress, vaultAttoRepBacking: 17n * 10n ** 18n }
+		const base = { repPerEthPrice: 10n ** 18n, statoblastSecurityMultiplierBps: 20_000n, targetVaultSummary: vault }
+		expect(getVaultNotLiquidatableReason({ ...base, repPerEthPrice: undefined })).toBeUndefined()
+		expect(getVaultNotLiquidatableReason(base)).toBe('This vault is not undercollateralized at the current Open Oracle price.')
+		expect(getVaultNotLiquidatableReason({ ...base, targetVaultSummary: { ...vault, vaultAttoRepBacking: 10n ** 18n } })).toBeUndefined()
+		expect(getVaultNotLiquidatableReason({ ...base, targetVaultSummary: { ...vault, underwritingLimitAttoEth: 0n } })).toBe(liquidationCopy.targetHasNoCommitmentReason)
+		expect(getVaultNotLiquidatableReason({ ...base, targetVaultSummary: { ...vault, badDebtAttoEth: 1n, vaultAttoRepBacking: 10n ** 18n } })).toBe(liquidationCopy.targetBadDebtReason)
 	})
 })

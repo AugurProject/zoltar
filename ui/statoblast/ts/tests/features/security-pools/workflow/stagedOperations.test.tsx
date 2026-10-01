@@ -289,6 +289,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			await renderSelectedPool({
 				...liquidationTargetProps,
 				poolOracleManagerDetails: immediateLiquidationOracle(),
+				liquidationModalOpen: true,
 				securityPoolOverviewResult: { action: 'queueLiquidation', hash: '0x00000000000000000000000000000000000000000000000000000000000000c1', securityPoolAddress: zeroAddress },
 				securityPools: [managedPool()],
 			})
@@ -302,6 +303,7 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			await renderSelectedPool({
 				...liquidationTargetProps,
 				poolOracleManagerDetails: immediateLiquidationOracle(),
+				liquidationModalOpen: true,
 				securityPoolOverviewResult: { action: 'queueLiquidation', hash: '0x00000000000000000000000000000000000000000000000000000000000000c2', securityPoolAddress: zeroAddress, stagedExecution: liquidationFailure(13n) },
 				securityPools: [managedPool()],
 			})

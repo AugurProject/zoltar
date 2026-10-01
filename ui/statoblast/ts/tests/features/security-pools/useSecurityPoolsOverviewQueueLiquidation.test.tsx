@@ -152,6 +152,33 @@ describe('useSecurityPoolsOverview queueLiquidation', () => {
 		expect(queueSecurityPoolLiquidation).toHaveBeenCalledWith(expect.anything(), zeroAddress, '0x0000000000000000000000000000000000000001', 10n ** 18n, 5n * 60n, 0n, '0x0000000000000000000000000000000000000001', `0x${'00'.repeat(32)}`, undefined)
 	})
 
+	test('keeps the dialog closed when a liquidation the user closed while pending fails', async () => {
+		const queueOperationValue = createDeferred<bigint>()
+		const { state } = await renderHook(
+			createSecurityPoolsOverviewDependencies({
+				loadOracleManagerQueueOperationEthValue: mock(async () => await queueOperationValue.promise),
+				loadSecurityPoolPage: unexpectedPageLoad(),
+				queueSecurityPoolLiquidation: mock(async () => {
+					throw new Error('queued liquidation failure')
+				}),
+			}),
+		)
+		await fillLiquidationForm(state)
+
+		const queuePromise = act(async () => {
+			await state().queueLiquidation(zeroAddress, zeroAddress)
+		})
+		await act(() => {
+			state().closeLiquidationModal()
+		})
+		queueOperationValue.resolve(0n)
+		await queuePromise
+
+		// The failure reaches the transaction toast; the dismissed dialog does not reopen.
+		expect(state().liquidationModalOpen).toBe(false)
+		expect(state().securityPoolLiquidationError).toBeUndefined()
+	})
+
 	test('ignores stale modal errors after the user edits the form', async () => {
 		const queueOperationValue = createDeferred<bigint>()
 		const { state } = await renderHook(
