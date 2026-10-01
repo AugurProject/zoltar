@@ -87,7 +87,7 @@ export function PoolActionCard({ currentTimestamp, currentView, items, onChange 
 						else if (tab !== undefined)
 							control = (
 								<button type='button' className='secondary pool-action-open' onClick={() => onChange(tab)}>
-									{copy.actionButtonLabels[tab]}
+									<span>{copy.actionButtonLabels[tab]}</span>
 									<span aria-hidden='true'>→</span>
 								</button>
 							)
