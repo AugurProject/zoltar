@@ -24,10 +24,10 @@ describe('TokenApprovalControl', () => {
 		[1000000000000000001n, 18, '≈ 1.01', '1.000000000000000001'],
 		[1n, 18, '≈ 0.01', '0.000000000000000001'],
 		[180n, 2, '1.8', '1.8'],
-		[1234567n, 0, '≈ 1.24M', '1 234 567'],
-		[999999n, 0, '≈ 1M', '999 999'],
-		[1000001n * 10n ** 18n, 18, '≈ 1.01M', '1 000 001'],
-		[10n ** 30n + 1n, 0, undefined, '1 000 000 000 000 000 000 000 000 000 001'],
+		[1234567n, 0, '≈ 1.24M', '1\u00a0234\u00a0567'],
+		[999999n, 0, '≈ 1M', '999\u00a0999'],
+		[1000001n * 10n ** 18n, 18, '≈ 1.01M', '1\u00a0000\u00a0001'],
+		[10n ** 30n + 1n, 0, undefined, '1\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0000\u00a0001'],
 	])('rounds button amounts upward while approving the exact value %s', async (amount, units, label, exact) => {
 		const approvals: (bigint | undefined)[] = []
 		const rendered = await renderIntoDocument(

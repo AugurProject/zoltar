@@ -94,6 +94,7 @@ describe('settlement panel', () => {
 			expect(document.body.textContent).not.toContain('lifecycle state or wallet balances')
 			expect(operationButton('Fork migration').disabled).toBe(true)
 			expect(operationButton('Fork migration').getAttribute('aria-description')).toBe('The universe has not forked, so there is nothing to migrate.')
+			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Fork migration unavailable: The universe has not forked, so there is nothing to migrate.'])
 			// Without complete sets there is nothing to fill, and the action names the missing INVALID.
 			expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Max')).toBe(false)
 			const redeem = buttonByLabel('Redeem complete sets')

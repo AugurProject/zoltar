@@ -858,7 +858,7 @@ function parseDisplayedAttoAmount(value: unknown, unit: string) {
 	if (typeof value !== 'string' || !value.endsWith(` ${unit}`)) throw new Error(`Expected an exact ${unit} amount, got ${String(value)}`)
 	const [whole = '', fraction = ''] = value
 		.slice(0, -unit.length - 1)
-		.replaceAll(' ', '')
+		.replaceAll(/\s/g, '')
 		.split('.')
 	if (!/^[0-9]+$/.test(whole) || !/^[0-9]{0,18}$/.test(fraction)) throw new Error(`Expected an exact ${unit} amount, got ${value}`)
 	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
@@ -896,7 +896,7 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	// With a commitment above 0, the ended pool blocks redemption and explains the exit path.
 	const blockedBody = await driver.waitForBodyText('Set your commitment limit to 0 ETH before redeeming REP.')
 	expect(blockedBody).toContain('Commitment limit\n80.00 ETH')
-	expect(blockedBody).toContain('Vault REP backing\n10 000.00 REP')
+	expect(blockedBody).toContain('Vault REP backing\n10\u00a0000.00 REP')
 	expect(JSON.parse(String(await readButtonDisabledReason(driver, 'Redeem REP')))).toEqual({ disabled: true, reason: 'Set your commitment limit to 0 ETH before redeeming REP. The pool keeps vault REP locked while the vault still has a commitment.' })
 
 	// The resolved question makes the price coordinator reject staged operations, so the change goes straight to the pool.
@@ -907,7 +907,7 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	await driver.clickButton('Set commitment limit', 1)
 	await driver.waitForTransactionStatus('Confirmed', 'Set commitment limit')
 	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('setUnderwritingLimit')
-	expect(await readTechnicalTransactionRow(driver, 'Contract')).toStartWith('Security Pool (')
+	expect(await readTechnicalTransactionRow(driver, 'Contract')).toStartWith('Security Pool0x')
 	await driver.waitForBodyText('Commitment limit changed')
 	const exitedBody = await driver.waitForBodyText('Commitment limit\n0 ETH')
 	expect(exitedBody).not.toContain('Queued')
@@ -919,7 +919,7 @@ productionInteractionTest('ended-pool-exit', '?workflow=ended#/pools?simulate=1&
 	expect(await readTechnicalTransactionRow(driver, 'Function')).toBe('redeemRepFromVault')
 	await driver.clickButton('Dismiss')
 	const redeemedBody = await driver.waitForBodyText('No redeemable REP is available for this vault.')
-	expect(redeemedBody).not.toContain('Vault REP backing\n10 000.00 REP')
+	expect(redeemedBody).not.toContain('Vault REP backing\n10\u00a0000.00 REP')
 	expect(await readWalletRepAttoRep()).toBe(walletRepBeforeRedemption + 10_000n * 10n ** 18n)
 })
 

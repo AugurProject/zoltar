@@ -74,8 +74,10 @@ export function isValidLiquidationApprovalId(liquidationApprovalId: string) {
 	return /^0x[0-9a-fA-F]{64}$/.test(liquidationApprovalId) && liquidationApprovalId !== ZERO_LIQUIDATION_APPROVAL_ID
 }
 
+/** Only a valid address other than the connected account delegates the liquidation; unfinished or invalid text stays an input error instead. */
 export function isDelegatedLiquidationReceiver(accountAddress: Address | undefined, liquidationReceiverVault: string) {
-	return accountAddress !== undefined && liquidationReceiverVault.trim() !== '' && !sameAddress(accountAddress, liquidationReceiverVault.trim())
+	const receiverVault = tryParseAddressInput(liquidationReceiverVault)
+	return accountAddress !== undefined && receiverVault !== undefined && !sameAddress(accountAddress, receiverVault)
 }
 
 export function isLiquidationApprovalRouteMismatch({

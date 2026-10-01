@@ -26,14 +26,27 @@ function getTransactionBadge(tone: GlobalTransactionPresentation['tone']): { lab
 	return { tone: 'warning', label: transactionCopy.attention }
 }
 
+/** Splits an address value, either bare or labelled as `Contract name (0x…)`, so it can render with the shared address component. */
+function parseAddressDetailValue(value: ComponentChildren) {
+	if (typeof value !== 'string') return undefined
+	if (/^0x[0-9a-fA-F]{40}$/.test(value)) return { address: value, label: undefined }
+	const labelled = /^(.+) \((0x[0-9a-fA-F]{40})\)$/.exec(value)
+	const [, label, address] = labelled ?? []
+	return label === undefined || address === undefined ? undefined : { address, label }
+}
+
 function TransactionDetailValue({ value }: { value: ComponentChildren }) {
-	if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(value)) return <>{value}</>
-	const explorerUrl = buildAddressExplorerUrl(getActiveNetworkProfile(), value)
+	const addressValue = parseAddressDetailValue(value)
+	if (addressValue === undefined) return <>{value}</>
+	const { address, label } = addressValue
+	const explorerUrl = buildAddressExplorerUrl(getActiveNetworkProfile(), address)
+	// A long address abbreviates to fit its column rather than wrapping into a narrow stack of characters.
 	return (
 		<span className='global-transaction-identifier'>
-			<AddressValue address={value} responsiveAbbreviation />
+			{label === undefined ? undefined : <span className='global-transaction-identifier-label'>{label}</span>}
+			<AddressValue address={address} responsiveAbbreviation />
 			{explorerUrl === undefined ? undefined : (
-				<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(value)}>
+				<a href={explorerUrl} target='_blank' rel='noreferrer' aria-label={transactionCopy.formatViewAddressOnExplorer(address)}>
 					{transactionCopy.explorer}
 				</a>
 			)}
