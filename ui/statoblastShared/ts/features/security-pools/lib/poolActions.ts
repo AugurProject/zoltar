@@ -1,5 +1,5 @@
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import type { TradingShareBalances } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TradingShareBalances } from '../../../types/contracts.js'
 import type { PoolLifecycleStep } from './poolLifecycle.js'
 import type { SecurityPoolStateModel } from './securityPoolState.js'
 import type { SecurityPoolReportingStage } from './securityPoolState/types.js'

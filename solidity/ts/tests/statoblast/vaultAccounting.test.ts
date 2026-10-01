@@ -1,4 +1,5 @@
 import { statoblast_EscalationGame_EscalationGame, statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, statoblast_tokens_ShareToken_ShareToken } from '../../types/contractArtifact'
+import { formatStorageSlot } from '../../testSupport/storage'
 import {
 	depositRepToVault,
 	depositToEscalationGame,
@@ -27,7 +28,7 @@ import { deployOriginSecurityPool, ensureDeploymentStatusOracleDeployed, getDepl
 import { approveAndDepositRepToVault, manipulatePriceOracle, manipulatePriceOracleAndPerformOperation, setVaultCapacityFixture } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveToken, getERC20Balance, ensureProxyDeployerDeployed, setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
-import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES, MAX_UINT256 } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
@@ -49,12 +50,10 @@ const depositRepToVaultEvent = {
 	type: 'event',
 } as const
 
-const MAX_UINT256 = 2n ** 256n - 1n
-
 describe('Statoblast: vault accounting', () => {
 	const fixture = useStatoblastVaultAccountingFixture()
 
-	const { getAnvilWindowEthereum, setBaselineSnapshot, initializeStatoblastBaseline, formatStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, reportedRepEthPrice, MAX_RETENTION_RATE, outcomes, transferRepToAddress, getVaultRepClaim, finalizeQuestionAsYesWithoutFork } = fixture
+	const { getAnvilWindowEthereum, setBaselineSnapshot, initializeStatoblastBaseline, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, reportedRepEthPrice, MAX_RETENTION_RATE, outcomes, transferRepToAddress, getVaultRepClaim, finalizeQuestionAsYesWithoutFork } = fixture
 
 	let mockWindow: StatoblastVaultAccountingFixture['mockWindow']
 	let client: StatoblastVaultAccountingFixture['client']

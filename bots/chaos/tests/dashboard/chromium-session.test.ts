@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from 'bun:test'
-import { startChromiumSession } from './chromium-session.ts'
+import { startChromiumSession } from '../support/chromium.ts'
 
 test('restarts only a timed-out Chromium initialization before any UI assertions run', async () => {
 	const logged = spyOn(console, 'warn').mockImplementation(() => {})

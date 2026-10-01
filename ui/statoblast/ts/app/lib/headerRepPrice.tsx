@@ -2,7 +2,7 @@ import type { ComponentChildren } from 'preact'
 import type { RepPriceFailure, RepPriceSource } from '@zoltar/ui-core-shared/lib/repPriceSource.js'
 import * as appCopy from '@zoltar/ui-statoblast-shared/copy/app.js'
 import { RepPriceStatusLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/components/RepPriceStatusLabel.js'
-import { renderRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
+import { renderUiRepPriceSourceLabel } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/repPriceSource.js'
 import { describeRepPriceStatus, type ResolvedRepPrice } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/uiPriceOracle.js'
 
 type HeaderRepPerEthPrice = {
@@ -35,7 +35,7 @@ export function getHeaderRepPerEthPrice({
 }): HeaderRepPerEthPrice {
 	const usesOpenOracle = repPrice.source === 'open-oracle' || (repPrice.source === undefined && repPrice.setting === 'open-oracle')
 	const status = describeRepPriceStatus(repPrice, currentTimestamp)
-	const sourceLabel = usesOpenOracle ? renderRepPriceSourceLabel('open-oracle', undefined) : renderRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)
+	const sourceLabel = usesOpenOracle ? renderUiRepPriceSourceLabel('open-oracle', undefined) : renderUiRepPriceSourceLabel(repPerEthSource, repPerEthSourceUrl)
 	const unavailableLabel = (() => {
 		if (repPrice.price !== undefined || !usesOpenOracle) return undefined
 		return hasSelectedPool ? status.title : appCopy.openPoolForOraclePrice

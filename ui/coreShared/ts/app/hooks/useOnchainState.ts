@@ -1,5 +1,4 @@
 import { readOperationClient, runReadOperation } from '../../lib/readOperation.js'
-import { signalValues } from '../../lib/signalValues.js'
 import { batch, useComputed, useSignal } from '@preact/signals'
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
@@ -570,40 +569,37 @@ export function useOnchainState({ activeEnvironmentNonce = 0, enableChainClock =
 	}, [activeEnvironmentNonce, enableChainClock, environmentReady.value, readBackendMessage.value, readBackendValidated.value])
 
 	const isBootstrappingEnvironment = useComputed(() => environmentReadyLoad.isLoading.value || getActiveBackend().isBootstrapping === true)
-	return Object.assign(
-		signalValues({
-			isBootstrappingEnvironment,
-			accountState: accountState,
-			chainClockError: chainClockError,
-			currentBlockNumber: currentBlockNumber,
-			currentTimestamp: currentTimestamp,
-			deploymentStatusError: deploymentStatusError,
-			deploymentStatuses: deploymentStatuses,
-			errorMessage: errorMessage,
-			errorMessages: errorMessages,
-			readBackendMessage: readBackendMessage,
-			readBackendValidated: readBackendValidated,
-			readBackendStatus: readBackendStatus,
-			environmentBootstrapError: environmentBootstrapError,
-			environmentBootstrapLabel: environmentBootstrapLabel,
-			environmentBootstrapProgress: environmentBootstrapProgress,
-			environmentReady: environmentReady,
-			hasInjectedWallet: hasInjectedWallet,
-			hasLoadedDeploymentStatuses: deploymentStatusesLoaded,
-			isConnectingWallet: isConnectingWallet,
-			isManagingWallet: isManagingWallet,
-			isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading,
-			isRefreshing: walletStateLoad.isLoading,
-			applicationDeploymentComplete: applicationDeploymentComplete,
-			walletBootstrapComplete: walletBootstrapComplete,
-		}),
-		{
-			changeWallet,
-			connectWallet,
-			refreshState,
-			setDeploymentStatuses,
-			disconnectWallet,
-			switchNetwork,
-		},
-	)
+	// Signals stay inside the hook; consumers receive the values read during this render.
+	return {
+		isBootstrappingEnvironment: isBootstrappingEnvironment.value,
+		accountState: accountState.value,
+		chainClockError: chainClockError.value,
+		currentBlockNumber: currentBlockNumber.value,
+		currentTimestamp: currentTimestamp.value,
+		deploymentStatusError: deploymentStatusError.value,
+		deploymentStatuses: deploymentStatuses.value,
+		errorMessage: errorMessage.value,
+		errorMessages: errorMessages.value,
+		readBackendMessage: readBackendMessage.value,
+		readBackendValidated: readBackendValidated.value,
+		readBackendStatus: readBackendStatus.value,
+		environmentBootstrapError: environmentBootstrapError.value,
+		environmentBootstrapLabel: environmentBootstrapLabel.value,
+		environmentBootstrapProgress: environmentBootstrapProgress.value,
+		environmentReady: environmentReady.value,
+		hasInjectedWallet: hasInjectedWallet.value,
+		hasLoadedDeploymentStatuses: deploymentStatusesLoaded.value,
+		isConnectingWallet: isConnectingWallet.value,
+		isManagingWallet: isManagingWallet.value,
+		isLoadingDeploymentStatuses: deploymentStatusLoad.isLoading.value,
+		isRefreshing: walletStateLoad.isLoading.value,
+		applicationDeploymentComplete: applicationDeploymentComplete.value,
+		walletBootstrapComplete: walletBootstrapComplete.value,
+		changeWallet,
+		connectWallet,
+		refreshState,
+		setDeploymentStatuses,
+		disconnectWallet,
+		switchNetwork,
+	}
 }

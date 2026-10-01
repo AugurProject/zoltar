@@ -1,3 +1,5 @@
+import { compareBigint } from '@zoltar/core-shared/math/bigint'
+
 /** Canonical base-10 JSON representation of an unsigned EVM integer. */
 export type CanonicalUintString = string
 
@@ -8,6 +10,11 @@ export type CanonicalUintString = string
 export function canonicalUintString(value: bigint): CanonicalUintString {
 	if (value < 0n) throw new Error('Cannot serialize a negative value as an unsigned integer')
 	return value.toString()
+}
+
+/** Three-way comparison of canonical unsigned integer strings for sort callbacks. */
+export function compareUnsignedStrings(left: CanonicalUintString, right: CanonicalUintString) {
+	return compareBigint(BigInt(left), BigInt(right))
 }
 
 const MAXIMUM_DATE_MILLISECONDS = 8_640_000_000_000_000n

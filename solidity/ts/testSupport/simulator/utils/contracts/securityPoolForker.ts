@@ -94,7 +94,7 @@ export const migrateVault = async (client: WriteClient, securityPoolAddress: Add
 		}),
 	)
 
-export const backingUnitsToAttoRep = async (client: ReadClient, securityPoolAddress: Address, repBackingUnits: bigint): Promise<bigint> =>
+export const forkerBackingUnitsToAttoRep = async (client: ReadClient, securityPoolAddress: Address, repBackingUnits: bigint): Promise<bigint> =>
 	await client.readContract({
 		abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi,
 		functionName: 'backingUnitsToAttoRep',

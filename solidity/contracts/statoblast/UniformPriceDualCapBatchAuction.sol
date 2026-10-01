@@ -73,6 +73,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_;
 	}
 
+	/// @notice Owner-only: starts the auction with an ETH raise cap and a REP sale cap.
 	function startAuction(uint256 _attoEthRaiseCap, uint256 _maxAttoRepBeingSold) public {
 		require(owner == msg.sender, 'Only the auction owner can start the auction');
 		require(auctionStarted == 0, 'Auction has already been started');
@@ -91,6 +92,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		emit AuctionStarted(auctionStarted, auctionStarted + UniformPriceDualCapBatchAuctionStorage.AUCTION_TIME, _attoEthRaiseCap, _maxAttoRepBeingSold, minBidSizeAttoEth);
 	}
 
+	/// @notice Places `msg.value` as a bid at `tick` while bidding is open.
 	function submitBid(int256 tick) external payable isOperational {
 		require(msg.value >= minBidSizeAttoEth, 'Auction bid is smaller than the minimum bid size');
 		require(msg.value <= type(uint128).max, 'Auction bid too high');
@@ -106,6 +108,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		emit BidSubmitted(msg.sender, tick, bidIndex, msg.value, bidsAtTick[tick][bidIndex].cumulativeBidAttoEth);
 	}
 
+	/// @notice Owner-only: after bidding ends, fixes the clearing result and sends the raised ETH to the owner.
 	function finalize() external {
 		require(!finalized, 'Auction has already been finalized');
 		require(msg.sender == owner, 'Only the auction owner can finalize');
@@ -137,6 +140,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		require(sent, 'Auction failed to send raised ETH to the owner');
 	}
 
+	/// @notice Returns the ETH finalization would send and the REP it would sell under the current bids.
 	function previewFinalization() external view returns (uint256 raisedAttoEthToSend, uint256 repPurchasedAttoRep) {
 		(bool hitCap, int256 foundTick, uint256 accumulatedBidAttoEth, ) = computeClearing();
 		(, , repPurchasedAttoRep, raisedAttoEthToSend) = _computeFinalizationOutcome(hitCap, foundTick, accumulatedBidAttoEth);
@@ -184,6 +188,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		);
 	}
 
+	/// @notice Returns whether current active bids fund the auction, the clearing tick, the accumulated ETH, and the ETH filled at that tick.
 	function computeClearing()
 		public
 		view
@@ -193,6 +198,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			UniformPriceDualCapBatchAuctionStorage.computeClearing(nodes, root, UniformPriceDualCapBatchAuctionStorage.ClearingConfig({attoEthRaiseCap: attoEthRaiseCap, maxAttoRepBeingSold: maxAttoRepBeingSold, underfundedThreshold: underfundedThreshold}));
 	}
 
+	/// @notice Owner-only: settles `withdrawFor`'s finalized bids, crediting ETH refunds and returning REP filled and pro-rata allocations.
 	function withdrawBids(address withdrawFor, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices, uint256 proRataTotal, uint256 secondaryProRataTotal, uint256 repBackingUnitsTotal)
 		external
 		returns (
@@ -223,59 +229,14 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 			uint256 cumulativeWinningBidBeforeAttoEth =
 				UniformPriceDualCapBatchAuctionStorage.getActiveBidAttoEthAboveTick(nodes, root, tick) +
 					activeCumulativeBidBeforeAttoEth;
-			uint256 bidUsedAttoEth;
-			uint256 attoRepFilled;
-			uint256 refundAttoEth;
-			BidSettlementStatus status;
-
-			if (underfunded) {
-				if (underfundedWinningAttoEth > 0 && tick >= clearingTick) {
-					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth);
-					status = BidSettlementStatus.Winning;
-				} else {
-					refundAttoEth = bid.bidAmountAttoEth;
-					status = BidSettlementStatus.Losing;
-				}
-			} else {
-				if (tick < clearingTick) {
-					refundAttoEth = bid.bidAmountAttoEth;
-					status = BidSettlementStatus.Losing;
-				} else if (tick > clearingTick) {
-					bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bid.bidAmountAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
-					status = BidSettlementStatus.Winning;
-				} else {
-					uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
-					uint256 cumulativeBidAttoEth = previousCumulativeBidAttoEth + bid.bidAmountAttoEth;
-					if (ethFilledAtClearingAttoEth <= previousCumulativeBidAttoEth) {
-						bidUsedAttoEth = 0;
-					} else if (ethFilledAtClearingAttoEth >= cumulativeBidAttoEth) {
-						bidUsedAttoEth = bid.bidAmountAttoEth;
-					} else {
-						bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
-					}
-					if (bidUsedAttoEth > bid.bidAmountAttoEth) bidUsedAttoEth = bid.bidAmountAttoEth;
-					attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
-					refundAttoEth = bid.bidAmountAttoEth - bidUsedAttoEth;
-					if (bidUsedAttoEth == 0) {
-						status = BidSettlementStatus.Losing;
-					} else if (bidUsedAttoEth == bid.bidAmountAttoEth) {
-						status = BidSettlementStatus.Winning;
-					} else {
-						status = BidSettlementStatus.PartiallyFilled;
-					}
-				}
-			}
-			if (attoRepFilled > 0) {
-				// Use the same REP interval as the fill calculation, fixed by tick and FIFO
-				// position. Cumulative floors telescope to the entire backing-unit budget.
-				uint256 cumulativeRepBeforeAttoRep =
-					underfunded
-						? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
-						: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
-				totalRepBackingUnitsAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
-			}
+			(
+				uint256 bidUsedAttoEth,
+				uint256 attoRepFilled,
+				uint256 refundAttoEth,
+				BidSettlementStatus status
+			) = _computeBidFill(tick, bid.bidAmountAttoEth, activeCumulativeBidBeforeAttoEth, cumulativeWinningBidBeforeAttoEth, clearingPriceLocal);
+			if (attoRepFilled > 0)
+				totalRepBackingUnitsAllocation += _allocateRepBackingUnits(cumulativeWinningBidBeforeAttoEth, attoRepFilled, repBackingUnitsTotal, clearingPriceLocal);
 			totalFilledAttoRep += attoRepFilled;
 			totalProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, proRataTotal, attoEthRaised);
 			totalSecondaryProRataAllocation += UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, secondaryProRataTotal, attoEthRaised);
@@ -287,10 +248,64 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_creditRefund(withdrawFor, totalRefundAttoEth);
 	}
 
+	/// @dev Splits one bid into used ETH, REP filled, and refund under the finalized clearing state.
+	/// Underfunded auctions fill every bid at or above the clearing tick against the whole REP sale cap;
+	/// funded auctions fill ticks above clearing fully and ration the clearing tick in FIFO order.
+	function _computeBidFill(int256 tick, uint256 bidAmountAttoEth, uint256 activeCumulativeBidBeforeAttoEth, uint256 cumulativeWinningBidBeforeAttoEth, uint256 clearingPriceLocal)
+		private
+		view
+		returns (uint256 bidUsedAttoEth, uint256 attoRepFilled, uint256 refundAttoEth, BidSettlementStatus status)
+	{
+		if (underfunded) {
+			if (underfundedWinningAttoEth > 0 && tick >= clearingTick) {
+				attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidAmountAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth);
+				return (bidAmountAttoEth, attoRepFilled, 0, BidSettlementStatus.Winning);
+			}
+			return (0, 0, bidAmountAttoEth, BidSettlementStatus.Losing);
+		}
+		if (tick < clearingTick) return (0, 0, bidAmountAttoEth, BidSettlementStatus.Losing);
+		if (tick > clearingTick) {
+			attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidAmountAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
+			return (bidAmountAttoEth, attoRepFilled, 0, BidSettlementStatus.Winning);
+		}
+		uint256 previousCumulativeBidAttoEth = activeCumulativeBidBeforeAttoEth;
+		uint256 cumulativeBidAttoEth = previousCumulativeBidAttoEth + bidAmountAttoEth;
+		if (ethFilledAtClearingAttoEth <= previousCumulativeBidAttoEth) {
+			bidUsedAttoEth = 0;
+		} else if (ethFilledAtClearingAttoEth >= cumulativeBidAttoEth) {
+			bidUsedAttoEth = bidAmountAttoEth;
+		} else {
+			bidUsedAttoEth = ethFilledAtClearingAttoEth - previousCumulativeBidAttoEth;
+		}
+		if (bidUsedAttoEth > bidAmountAttoEth) bidUsedAttoEth = bidAmountAttoEth;
+		attoRepFilled = UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeWinningBidBeforeAttoEth, bidUsedAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
+		refundAttoEth = bidAmountAttoEth - bidUsedAttoEth;
+		if (bidUsedAttoEth == 0) {
+			status = BidSettlementStatus.Losing;
+		} else if (bidUsedAttoEth == bidAmountAttoEth) {
+			status = BidSettlementStatus.Winning;
+		} else {
+			status = BidSettlementStatus.PartiallyFilled;
+		}
+	}
+
+	/// @dev Uses the same REP interval as the fill calculation, fixed by tick and FIFO
+	/// position. Cumulative floors telescope to the entire backing-unit budget.
+	function _allocateRepBackingUnits(uint256 cumulativeWinningBidBeforeAttoEth, uint256 attoRepFilled, uint256 repBackingUnitsTotal, uint256 clearingPriceLocal) private view returns (uint256) {
+		uint256 cumulativeRepBeforeAttoRep =
+			underfunded
+				? Math.mulDiv(cumulativeWinningBidBeforeAttoEth, totalAttoRepPurchased, underfundedWinningAttoEth)
+				: Math.mulDiv(cumulativeWinningBidBeforeAttoEth, UniformPriceDualCapBatchAuctionStorage.PRICE_PRECISION, clearingPriceLocal);
+		return
+			UniformPriceDualCapBatchAuctionStorage.allocateFromCumulativePosition(cumulativeRepBeforeAttoRep, attoRepFilled, repBackingUnitsTotal, totalAttoRepPurchased);
+	}
+
+	/// @notice Before finalization, refunds the caller's bids below the current funded clearing tick as credited ETH.
 	function refundLosingBids(IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		_refundLosingBids(msg.sender, tickIndices);
 	}
 
+	/// @notice Owner-only: `refundLosingBids` on behalf of `bidder`.
 	function refundLosingBidsFor(address bidder, IUniformPriceDualCapBatchAuction.TickIndex[] calldata tickIndices) external {
 		require(msg.sender == owner, 'Only the auction owner can refund losing bids on behalf of bidders');
 		_refundLosingBids(bidder, tickIndices);
@@ -333,6 +348,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_creditRefund(bidder, totalRefundAttoEth);
 	}
 
+	/// @notice Sends the caller's credited ETH refunds.
 	function withdrawPendingEthRefund() external {
 		uint256 amountAttoEth = pendingEthRefundsAttoEth[msg.sender];
 		require(amountAttoEth > 0, 'Auction has no credited ETH refund');
@@ -349,18 +365,22 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		emit EthRefundCredited(bidder, amountAttoEth, pendingAmountAttoEth);
 	}
 
+	/// @notice Returns the price at `tick`.
 	function tickToPrice(int256 tick) public pure returns (uint256 price) {
 		return UniformPriceDualCapBatchAuctionStorage.tickToPrice(tick);
 	}
 
+	/// @notice Returns the bid summary for `tick`.
 	function getTickSummary(int256 tick) external view returns (IUniformPriceDualCapBatchAuction.TickSummary memory) {
 		return _buildTickSummary(tick);
 	}
 
+	/// @notice Returns the number of distinct ticks that ever received a bid.
 	function getTickCount() external view returns (uint256) {
 		return seenTicks.length;
 	}
 
+	/// @notice Returns summaries of ticks that ever received a bid, in first-bid order.
 	function getTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
 		uint256 end = _sliceEnd(offset, limit, seenTicks.length);
 		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
@@ -371,6 +391,7 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		}
 	}
 
+	/// @notice Returns summaries of ticks with active bids, highest tick first.
 	function getActiveTickPage(uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.TickSummary[] memory summaries) {
 		uint256 end = _sliceEnd(offset, limit, activeTickCount);
 		if (end <= offset) return new IUniformPriceDualCapBatchAuction.TickSummary[](0);
@@ -379,10 +400,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		_fillActiveTickPage(root, offset, summaries, 0);
 	}
 
+	/// @notice Returns the number of bids ever placed at `tick`.
 	function getBidCountAtTick(int256 tick) external view returns (uint256) {
 		return bidsAtTick[tick].length;
 	}
 
+	/// @notice Returns bids at `tick` in submission order.
 	function getBidPageAtTick(int256 tick, uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.BidView[] memory bidViews) {
 		uint256 total = bidsAtTick[tick].length;
 		uint256 end = _sliceEnd(offset, limit, total);
@@ -394,10 +417,12 @@ contract UniformPriceDualCapBatchAuction is IUniformPriceDualCapBatchAuction {
 		}
 	}
 
+	/// @notice Returns the number of bids placed by `bidder`.
 	function getBidderBidCount(address bidder) external view returns (uint256) {
 		return bidderBidRefs[bidder].length;
 	}
 
+	/// @notice Returns `bidder`'s bids in submission order.
 	function getBidderBidPage(address bidder, uint256 offset, uint256 limit) external view returns (IUniformPriceDualCapBatchAuction.BidView[] memory bidViews) {
 		uint256 total = bidderBidRefs[bidder].length;
 		uint256 end = _sliceEnd(offset, limit, total);

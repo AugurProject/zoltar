@@ -1,4 +1,5 @@
 import { getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
 import { beforeEach, describe, test } from 'bun:test'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
@@ -7,7 +8,7 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { addressString, rpow } from '../../testSupport/simulator/utils/bigint'
 import { createWriteClient, writeContractAndWait } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { getTotalRepPurchasedAttoRep } from '../../testSupport/simulator/utils/contracts/auction'
+import { getTotalRepPurchasedAttoRep, getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/auction'
 import { getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import {
 	attoSharesToAttoEth,
@@ -34,7 +35,7 @@ import {
 	withdrawFromEscalationGame,
 } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, getMigratedAttoRep, getQuestionOutcome, getSecurityPoolForkerForkData, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { balanceOfShares, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { balanceOfShares, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction, requestPriceIfNeededAndStageOperation } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveAndDepositRepToVault, manipulatePriceOracle, setVaultCapacityFixture, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -47,7 +48,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, getVaultRepClaim, finalizeQuestionAsYesWithoutFork, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
+	const { reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, MAX_RETENTION_RATE, outcomes, getVaultRepClaim, finalizeQuestionAsYesWithoutFork, triggerExternalForkForSecurityPool, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -397,8 +398,8 @@ describe('Statoblast: fork migration', () => {
 			await createCompleteSet(client, securityPoolAddresses.securityPool, 10n)
 			await triggerExternalForkForSecurityPool(undefined, 'aggregate-only fee dust source')
 
-			const firstVaultSlot = getMappingStorageSlot(client.account.address, 16n)
-			const secondVaultSlot = getMappingStorageSlot(secondVaultClient.account.address, 16n)
+			const firstVaultSlot = getAddressMappingStorageSlot(client.account.address, 16n)
+			const secondVaultSlot = getAddressMappingStorageSlot(secondVaultClient.account.address, 16n)
 			await mockWindow.addStateOverrides({
 				[securityPoolAddresses.securityPool]: {
 					stateDiff: {

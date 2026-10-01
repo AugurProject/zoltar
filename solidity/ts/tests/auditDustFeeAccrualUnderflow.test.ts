@@ -6,21 +6,19 @@ import assert from '../testSupport/simulator/utils/assert'
 import type { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import { createWriteClient, type WriteClient } from '../testSupport/simulator/utils/clients'
-import { DAY, TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { DAY, TEST_ADDRESSES, GENESIS_UNIVERSE, STATOBLAST_SECURITY_MULTIPLIER_BPS } from '../testSupport/simulator/utils/constants'
 import { addressString } from '../testSupport/simulator/utils/bigint'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 import { approveAndDepositRepToVault } from '../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getSecurityPoolAddresses } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { createQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, makeQuestion } from '../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 import { createCompleteSet, getSettlementCollateralAttoEth, getShareTokenSupplyAttoShares, getTotalAccruedFees, redeemCompleteSet, redeemFees, updateSettlementCollateral } from '../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_SecurityPool_SecurityPool } from '../types/contractArtifact'
 
 const PRICE_PRECISION = 10n ** 18n
 const BLOCK_TIME = 12n
-const genesisUniverse = 0n
-const statoblastSecurityMultiplierBps = 20_000n
 
 describe('Audit PoC: dust settlement collateral fee accrual', () => {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -34,24 +32,15 @@ describe('Audit PoC: dust settlement collateral fee accrual', () => {
 		await setupTestAccounts(mockWindow)
 		await ensureZoltarDeployed(client)
 		await ensureInfraDeployed(client)
-		const questionData = {
-			title: 'dust fee accrual',
-			description: '',
-			startTime: 0n,
-			endTime: (await mockWindow.getTime()) + 365n * DAY,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		const questionData = makeQuestion('dust fee accrual', (await mockWindow.getTime()) + 365n * DAY)
 		const outcomes = ['Yes', 'No']
 		const questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
-		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
-		securityPool = getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).securityPool
+		await deployOriginSecurityPool(client, GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS)
+		securityPool = getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).securityPool
 		const minimumVaultRepDepositAttoRep = await client.readContract({ abi: statoblast_SecurityPool_SecurityPool.abi, address: securityPool, functionName: 'minimumVaultRepDepositAttoRep' })
 		await approveAndDepositRepToVault(client, minimumVaultRepDepositAttoRep, questionId)
-		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), genesisUniverse, questionId, statoblastSecurityMultiplierBps).openOraclePriceCoordinator)
+		await manipulatePriceOracle(client, mockWindow, getSecurityPoolAddresses(addressString(0x0n), GENESIS_UNIVERSE, questionId, STATOBLAST_SECURITY_MULTIPLIER_BPS).openOraclePriceCoordinator)
 		await setUnderwritingLimit(client, securityPool, minimumVaultRepDepositAttoRep / 2n)
 		await setBaselineSnapshot()
 	})

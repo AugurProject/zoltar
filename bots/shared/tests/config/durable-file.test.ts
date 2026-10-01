@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { appendFileDurably, contentRevision, durableFilesystem, parseJsonDocument, readFileIfPresent, serializeWritesToPath, writeFileAtomically, writeRevisionedFile, type DurableAppendFilesystem, type DurableWriteFilesystem } from '../../src/config/durable-file.ts'
+import { appendFileDurably, contentRevision, durableFilesystem, parseJsonDocument, readFileIfPresent, serializeWritesToPath, writeDurableStateFile, writeFileAtomically, writeRevisionedFile, type DurableAppendFilesystem, type DurableWriteFilesystem } from '../../src/config/durable-file.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -219,6 +219,16 @@ test('path write queues run same-path operations one at a time in call order', a
 	await expect(first).rejects.toThrow('first failed')
 	await expect(second).resolves.toBe('second result')
 	expect(events).toEqual(['first:start', 'other', 'first:end', 'second'])
+})
+
+test('durable state files refuse oversized contents and write queued snapshots in call order', async () => {
+	const directory = await temporaryDirectory()
+	const path = join(directory, 'nested', 'state.json')
+	await expect(writeDurableStateFile(path, 'x'.repeat(9), { label: 'Test state', maximumBytes: 8 })).rejects.toThrow('Test state exceeds the 8-byte safety limit')
+	expect(await readFileIfPresent(path)).toBeUndefined()
+	await Promise.all([writeDurableStateFile(path, 'first\n', { label: 'Test state', maximumBytes: 8 }), writeDurableStateFile(join(directory, 'nested', '.', 'state.json'), 'second\n', { label: 'Test state', maximumBytes: 8 })])
+	expect(await readFile(path, 'utf8')).toBe('second\n')
+	expect((await stat(path)).mode & 0o777).toBe(0o600)
 })
 
 test('JSON documents report the labelled syntax error', () => {

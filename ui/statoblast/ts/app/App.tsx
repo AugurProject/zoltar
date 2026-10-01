@@ -8,18 +8,18 @@ import { AppStatusNotices } from '@zoltar/ui-core-shared/app/components/AppStatu
 import { ProtocolAppFrame } from '@zoltar/ui-core-shared/app/components/ProtocolAppFrame.js'
 import { AppRouteContent } from './components/AppRouteContent.js'
 import { OverviewPanels } from '@zoltar/ui-core-shared/app/components/OverviewPanels.js'
-import { useAppRouteEffects } from './useAppRouteEffects.js'
+import { useAppRouteEffects } from './hooks/useAppRouteEffects.js'
 import { useProtocolAppShell } from '@zoltar/ui-zoltar-shared/features/appShell/hooks/useProtocolAppShell.js'
 import { useHashRoute } from '@zoltar/ui-core-shared/app/hooks/useHashRoute.js'
 import { useMarketCreation } from '@zoltar/ui-statoblast-shared/features/markets/hooks/useMarketCreation.js'
 import { useRepPrices } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useRepPrices.js'
 import { useStatoblastUrlState } from './hooks/useStatoblastUrlState.js'
 import { initializeStatoblastActiveEnvironment } from './activeEnvironment.js'
-import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './appPageTitle.js'
+import { applicationTitle, formatAppDocumentTitle, getAppPageTitle } from './lib/appPageTitle.js'
 import { buildRouteHref, getTopLevelRouteSearch, parseRouteHash } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { resolveEnumValue } from '@zoltar/ui-core-shared/forms/viewState.js'
 import { onchainStateDependencies } from './onchainStateDependencies.js'
-import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+import { STATOBLAST_ROUTES, type Route } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { statoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 import { getStatoblastDeploymentSections } from '@zoltar/ui-statoblast-shared/features/deployment/deploymentSections.js'
 import { getInvalidStatoblastRouteState } from './lib/routeValidation.js'
@@ -33,32 +33,12 @@ import { useSecurityPoolsRoute } from './hooks/useSecurityPoolsRoute.js'
 export function App() {
 	const [uiPriceOracle, setUiPriceOracle] = useState(readUiPriceOracle)
 	const [selectedPoolRefreshNonce, setSelectedPoolRefreshNonce] = useState(0)
-	const {
-		activeUniverseId,
-		poolBrowseState,
-		vaultAddress,
-		vaultView,
-		setPoolBrowseState,
-		setVaultAddress,
-		setVaultView,
-		openSecurityPoolInUniverse,
-		openOracleReportId: urlOpenOracleReportId,
-		openOracleView,
-		securityPoolsView,
-		securityPoolAddress,
-		securityPoolQuestionId,
-		selectedPoolView,
-		setActiveUniverseId,
-		setOpenOracleReport,
-		setOpenOracleView,
-		setSecurityPoolsView,
-		setSecurityPoolAddress,
-		setSecurityPoolQuestionId,
-		setSelectedPoolView,
-	} = useStatoblastUrlState()
+	const urlState = useStatoblastUrlState()
+	const { activeUniverseId, openOracleReportId: urlOpenOracleReportId, openOracleView, securityPoolAddress, securityPoolQuestionId, selectedPoolView, setActiveUniverseId, setOpenOracleReport, setOpenOracleView, setSecurityPoolsView, vaultAddress } = urlState
 	const { navigate, route } = useHashRoute()
-	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', ['deploy', 'pools', 'open-oracle', 'not-found'])
-	const { repPerEthFailure, repPerEthPrice, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = useRepPrices()
+	const resolvedRoute = resolveEnumValue<Route>(route, 'not-found', STATOBLAST_ROUTES)
+	const repPrices = useRepPrices()
+	const { repPerEthFailure, repPerEthSource, repPerEthSourceUrl, repUsdcFailure, repUsdcPrice, repUsdcSource, repUsdcSourceUrl, isLoadingRepPrices, isRefreshingRepPrices, refreshRepPrices } = repPrices
 	const {
 		accountState,
 		activeEnvironmentNonce,
@@ -102,7 +82,7 @@ export function App() {
 		environmentRefreshKey: activeEnvironmentNonce,
 	})
 	const { zoltarUniverse, zoltarUniverseError } = marketCreation
-	const { activeOpenOracleView, loadOracleReport, onViewPendingReport, openOracleRouteContentProps, openOraclePriceCoordinator, setOpenOracleForm } = useOpenOracleRoute({
+	const { activeOpenOracleView, loadOracleReport, onViewPendingReport, openOracleRouteContentProps, openOraclePriceCoordinator, setOpenOracleReportId } = useOpenOracleRoute({
 		accountState,
 		activeEnvironmentNonce,
 		canReadOnchainData,
@@ -114,40 +94,13 @@ export function App() {
 		urlOpenOracleReportId,
 		walletScopedHookConfig,
 	})
-	const { activeSecurityPoolsView, loadSecurityPools, resetSecurityPoolCreation, securityPoolResult, securityPoolsRouteContentProps, selectedPool, selectedPoolRepPrice, setForkAuctionForm, setSecurityPoolForm, setSecurityVaultForm, setTradingForm, tradingResult, updateReportingForm } = useSecurityPoolsRoute({
-		inlineOracle: openOracleRouteContentProps,
-		accountState,
-		activeEnvironmentNonce,
-		activeUniverseId,
-		canReadOnchainData,
-		currentTimestamp,
-		deploymentStatuses,
+	const { activeSecurityPoolsView, formSync, loadSecurityPools, resetSecurityPoolCreation, securityPoolResult, securityPoolsRouteContentProps, selectedPool, selectedPoolRepPrice, tradingResult } = useSecurityPoolsRoute({
+		context: { accountState, activeEnvironmentNonce, activeUniverseId, canReadOnchainData, currentTimestamp, deploymentStatuses, route, uiPriceOracle, walletBootstrapComplete, walletScopedAccountAddress, walletScopedHookConfig },
 		marketCreation,
-		poolBrowseState,
-		setPoolBrowseState,
-		vaultView,
-		setVaultAddress,
-		setVaultView,
-		onViewPendingReport,
-		openSecurityPoolInUniverse,
-		openOraclePriceCoordinator,
-		repPerEthPrice,
-		repPerEthSource,
-		repPerEthSourceUrl,
-		route,
-		securityPoolAddress,
-		securityPoolsView,
-		selectedPoolRefreshNonce,
-		selectedPoolView,
-		setSecurityPoolAddress,
-		setSecurityPoolQuestionId,
-		setSecurityPoolsView,
-		setSelectedPoolRefreshNonce,
-		setSelectedPoolView,
-		uiPriceOracle,
-		walletBootstrapComplete,
-		walletScopedAccountAddress,
-		walletScopedHookConfig,
+		openOracle: { inlineOracle: openOracleRouteContentProps, onViewPendingReport, priceCoordinator: openOraclePriceCoordinator },
+		repPrices,
+		selectedPoolRefresh: { nonce: selectedPoolRefreshNonce, setNonce: setSelectedPoolRefreshNonce },
+		urlState,
 	})
 	const overviewProps = {
 		...overviewWalletProps,
@@ -186,6 +139,7 @@ export function App() {
 		applicationDeploymentMissing,
 		environmentReady: canReadOnchainData,
 		activeEnvironmentNonce,
+		formSync: { ...formSync, setOpenOracleReportId },
 		loadOracleReport: async reportId => await loadOracleReport(reportId),
 		loadSecurityPools: async requestedSecurityPoolAddress => await loadSecurityPools(requestedSecurityPoolAddress),
 		navigate,
@@ -195,13 +149,6 @@ export function App() {
 		securityPoolQuestionId,
 		securityPoolResultHash: securityPoolResult?.deployPoolHash,
 		selectedPoolSecurityPoolAddress: selectedPool?.securityPoolAddress,
-		setForkAuctionFormSecurityPoolAddress: nextSecurityPoolAddress => setForkAuctionForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
-		setOpenOracleFormReportId: reportId => setOpenOracleForm(current => ({ ...current, reportId })),
-		setReportingFormSecurityPoolAddress: nextSecurityPoolAddress => updateReportingForm({ securityPoolAddress: nextSecurityPoolAddress }),
-		setSecurityVaultFormSelectedVaultOwner: nextSelectedVaultOwner => setSecurityVaultForm(current => (current.selectedVaultOwner === nextSelectedVaultOwner ? current : { ...current, selectedVaultOwner: nextSelectedVaultOwner })),
-		setSecurityVaultFormSecurityPoolAddress: nextSecurityPoolAddress => setSecurityVaultForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
-		setSecurityPoolFormMarketId: marketId => setSecurityPoolForm(current => (current.marketId === marketId ? current : { ...current, marketId })),
-		setTradingFormSecurityPoolAddress: nextSecurityPoolAddress => setTradingForm(current => (current.securityPoolAddress === nextSecurityPoolAddress ? current : { ...current, securityPoolAddress: nextSecurityPoolAddress })),
 		tradingResultHash: tradingResult?.hash,
 		urlOpenOracleReportId,
 		urlVaultAddress: vaultAddress,

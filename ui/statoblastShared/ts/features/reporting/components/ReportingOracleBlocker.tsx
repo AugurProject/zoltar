@@ -8,7 +8,7 @@ import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface
 import { TransactionActionButton } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { ErrorNotice } from '@zoltar/ui-core-shared/components/ErrorNotice.js'
 import { getOpenOracleSettleAvailability } from '../../open-oracle/lib/openOracle.js'
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 import type { WalletActionBlocker } from '@zoltar/ui-core-shared/types/components.js'
 import { isActiveAppChain } from '@zoltar/ui-core-shared/wallet/network.js'

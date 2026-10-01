@@ -7,7 +7,7 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { UniverseLink } from '@zoltar/ui-core-shared/components/UniverseLink.js'
 import type { UserMessagePresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
 import { UniverseName } from '@zoltar/ui-core-shared/components/UniverseNames.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 
 export function SecurityPoolUniverseMismatchNotice({
 	activeUniverseId,

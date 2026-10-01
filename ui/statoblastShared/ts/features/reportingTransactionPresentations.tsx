@@ -9,7 +9,7 @@ import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { getReportingOutcomeLabel } from './reporting/lib/reporting.js'
 import { buildIntent, buildPresentation, getPoolUniverseTransactionRows, withWarning } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
 import type { PoolUniverseTransactionContext } from '@zoltar/ui-core-shared/transactions/transactionPresentations.js'
-import type { OpenOracleActionResult, ReportingActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, ReportingActionResult } from '../types/contracts.js'
 import * as priceRequestCopy from '../copy/priceRequest.js'
 
 type ReportingTransactionContext = PoolUniverseTransactionContext & {

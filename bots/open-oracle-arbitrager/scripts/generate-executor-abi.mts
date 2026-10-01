@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { executorArtifact } from '#contracts/artifacts.generated'
@@ -18,7 +19,7 @@ if (process.argv.includes('--check')) {
 	try {
 		current = await readFile(outputPath, 'utf8')
 	} catch (error) {
-		throw new Error(`Generated executor ABI is missing: ${error instanceof Error ? error.message : String(error)}`)
+		throw new Error(`Generated executor ABI is missing: ${errorMessage(error)}`)
 	}
 	if (current !== generated) throw new Error('Generated OpenOracle arbitrager executor ABI is stale; run bun run generate:abi')
 } else {

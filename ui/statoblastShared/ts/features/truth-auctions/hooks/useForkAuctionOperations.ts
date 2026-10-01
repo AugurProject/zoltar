@@ -28,7 +28,8 @@ import { parseTruthAuctionAmountInput, parseTruthAuctionPriceInput } from '@zolt
 import { getDefaultForkAuctionFormState } from '../../markets/lib/marketForm.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { ForkAuctionFormState, WriteOperationsParameters } from '../../../types/app.js'
-import type { ForkAuctionActionResult, ForkAuctionDetails, ReportingOutcomeKey, TruthAuctionSettlementMode } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionActionResult, ForkAuctionDetails, TruthAuctionSettlementMode } from '../../../types/contracts.js'
 import type { SettlementSelectedBid } from '../../types.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 

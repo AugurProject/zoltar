@@ -1,5 +1,6 @@
 import type { Hex } from '@zoltar/bot-shared/ethereum'
 import { nonemptyString as validateNonemptyString } from '@zoltar/bot-shared/infrastructure/json-validation'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 
 export { hash32 as hash, normalizedHash32, record as requiredRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
@@ -30,11 +31,9 @@ export function unsignedIntegerString(value: unknown, label: string) {
 	return value
 }
 
-const MAXIMUM_UINT256 = (1n << 256n) - 1n
-
 export function uint256String(value: unknown, label: string) {
 	const parsed = unsignedIntegerString(value, label)
-	if (BigInt(parsed) > MAXIMUM_UINT256) throw new Error(`${label} exceeds uint256`)
+	if (BigInt(parsed) > maxUint256) throw new Error(`${label} exceeds uint256`)
 	return parsed
 }
 

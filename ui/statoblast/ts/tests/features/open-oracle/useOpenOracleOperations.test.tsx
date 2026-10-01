@@ -6,7 +6,7 @@ import { installActiveEnvironmentForTesting } from '@zoltar/ui-core-shared/lib/a
 import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-core-shared/tests/testUtils/domTestLifecycle.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { useOpenOracleOperations, type UseOpenOracleOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleOperations.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'

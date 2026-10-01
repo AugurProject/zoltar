@@ -8,15 +8,15 @@ import { MetricGrid } from '@zoltar/ui-core-shared/components/MetricGrid.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { SectionBlock } from '@zoltar/ui-core-shared/components/SectionBlock.js'
-import { SecurityPoolLink } from '../../security-pools/components/SecurityPoolLink.js'
-import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
+import { StatoblastSecurityPoolLink } from '../../security-pools/components/StatoblastSecurityPoolLink.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { AUCTION_TIME_SECONDS, getForkAuctionStageLabel, getForkAuctionStageView } from '../lib/forkAuction.js'
 import { formatCurrencyInputBalance, formatRoundedCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { type ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import type { ForkAuctionDetails, ListedSecurityPool, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '../../../types/contracts.js'
 
 export { clampPercentage, getFinalizeTruthAuctionGuardMessage, getMigrationStateBadge, getMigrationWindowClosedGuardMessage, getStartTruthAuctionGuardMessage, getTruthAuctionBypassReason, getTruthAuctionStateBadge, isFullReadClient } from './ForkAuctionPresentationState.js'
 
@@ -93,10 +93,6 @@ export function renderTruthAuctionPriceValue(value: bigint | undefined, fallback
 export function renderAddress(address: string | undefined) {
 	if (address === undefined) return commonCopy.metricUnavailablePlaceholder
 	return <AddressValue address={address} />
-}
-export function renderTimestamp({ displayTimestamp, fallbackText }: { displayTimestamp: bigint | undefined; fallbackText: string }) {
-	if (displayTimestamp === undefined) return fallbackText
-	return <TimestampValue timestamp={displayTimestamp} />
 }
 export function renderTruthAuctionSettlementSelectionSummary({
 	estimatedAssignedUnderwritingLimitAttoEth,
@@ -327,9 +323,9 @@ function renderChildSecurityPoolsSection({ auctionOutcomeSelector, childSecurity
 								<span>
 									<AddressValue address={pool.securityPoolAddress} />
 								</span>
-								<SecurityPoolLink securityPoolAddress={pool.securityPoolAddress} universeId={pool.universeId}>
+								<StatoblastSecurityPoolLink securityPoolAddress={pool.securityPoolAddress} universeId={pool.universeId}>
 									{forkAuctionCopy.openSecurityPool}
-								</SecurityPoolLink>
+								</StatoblastSecurityPoolLink>
 							</div>
 						</article>
 					))}

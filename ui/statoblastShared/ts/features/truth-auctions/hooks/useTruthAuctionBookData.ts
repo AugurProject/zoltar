@@ -6,7 +6,8 @@ import { createConnectedReadClient } from '@zoltar/ui-core-shared/wallet/clients
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { sortTruthAuctionBidsByPriority, sortTruthAuctionTickSummariesDescending } from '../lib/truthAuctionBook.js'
 import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import type { ReadClient, TruthAuctionBidView, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TruthAuctionBidView, TruthAuctionTickSummary } from '../../../types/contracts.js'
 import { useTruthAuctionPaginationState } from './useTruthAuctionPaginationState.js'
 
 const TRUTH_AUCTION_TICK_PAGE_SIZE = 25

@@ -1,4 +1,4 @@
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import * as securityPoolCopy from '../../../copy/securityPool.js'
 

@@ -6,7 +6,8 @@ import {
 	projectEscalationDeposit,
 	type EscalationBalanceTuple,
 } from '@zoltar/statoblast-shared/escalationGame/escalationMath'
-import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails, EscalationDeposit, EscalationSide, ImportedEscalationDeposit, ReportingDetails } from '../../../types/contracts.js'
 import { formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 type ReportingAmountSuggestion = {
 	amountAttoRep: bigint | undefined

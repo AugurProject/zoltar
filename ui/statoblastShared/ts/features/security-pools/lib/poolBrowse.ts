@@ -2,7 +2,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { matchesLocalSearch, type LocalBrowseEntry } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { createDownloadedEntityStore } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue, readStoredMarketDetails } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { getPoolMintingCapacityAttoEth, getRemainingMintCapacity } from '../../markets/lib/trading.js'
 import { deriveSecurityPoolLifecycleState, evaluateSecurityPoolState, type SecurityPoolLifecycleState } from './securityPoolState.js'
 

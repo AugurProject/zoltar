@@ -8,7 +8,7 @@ import { installFakeEnvironmentLifecycle, requireHookState } from '@zoltar/ui-co
 import { createFakeBackend } from '@zoltar/ui-core-shared/tests/testUtils/fakeBackend.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
-import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails, SecurityVaultDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { TransactionIntent } from '@zoltar/ui-core-shared/types/components.js'
 import { useSecurityVaultOperations, type UseSecurityVaultOperationsDependencies } from '@zoltar/ui-statoblast-shared/features/security-pools/hooks/useSecurityVaultOperations.js'
 import { describe, expect, mock, test } from 'bun:test'

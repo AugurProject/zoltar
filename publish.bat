@@ -1,4 +1,5 @@
 @echo off
+REM Double-click entry point for Windows. `bun run ui:publish:local` runs the same steps on any platform.
 setlocal EnableExtensions DisableDelayedExpansion
 pushd "%~dp0" || exit /b 1
 

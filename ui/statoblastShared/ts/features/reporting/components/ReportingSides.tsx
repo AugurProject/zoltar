@@ -4,7 +4,8 @@ import * as reportingCopy from '../../../copy/reporting.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { ProgressMeter } from '@zoltar/ui-core-shared/components/ProgressMeter.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { ReportingDetails, ReportingOutcomeKey, EscalationDeposit } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails, EscalationDeposit } from '../../../types/contracts.js'
 import { EscalationSide } from './EscalationSide.js'
 
 export function ReportingSides({

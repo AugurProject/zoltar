@@ -9,6 +9,7 @@ import {
 	OutcomeState
 } from './EscalationGameTypes.sol';
 import { BinaryOutcomes } from './BinaryOutcomes.sol';
+import { DelegateCall } from './DelegateCall.sol';
 
 abstract contract EscalationGameStorage {
 	uint256 internal constant ACTIVATION_DELAY = 3 days;
@@ -101,11 +102,7 @@ abstract contract EscalationGameStorage {
 		)
 	{
 		(bool success, bytes memory data) = address(this).staticcall(abi.encodeWithSignature('getInheritedClaimAllocation(uint8,uint256,uint256,uint256)', outcomeIndex, amountAttoRep, cumulativeAmountAttoRep, leafIndex));
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(data, 32), mload(data))
-			}
-		}
+		if (!success) DelegateCall.bubbleRevert(data);
 		require(data.length == 128, 'Invalid allocation response');
 		return abi.decode(data, (uint256, uint256, uint256, uint256));
 	}

@@ -2,7 +2,8 @@ import { expect, spyOn, test } from 'bun:test'
 import { ScannerDatabase } from '../../src/database.ts'
 import { concatHex, encodeAbiParameters, encodeFunctionData, getAddress, type Hex, toHex, zeroHash } from '../../src/ethereum.ts'
 import { abiForKind } from '../../src/abi-catalog.ts'
-import { NetworkIndexer } from '../../src/indexer/block-ingestion.ts'
+import { indexBlock } from '../../src/indexer/ingestion-operations.ts'
+import { createNetworkIndexer } from '../../src/indexer/network-state.ts'
 import type { ContractMetadata } from '../../src/types.ts'
 
 const oracle = getAddress('0x1000000000000000000000000000000000000001')
@@ -41,7 +42,7 @@ for (const mode of ['direct', 'registered wrapper', 'unregistered wrapper', 'nes
 			},
 		})
 		const database = new ScannerDatabase('postgres://unused')
-		const indexer = new NetworkIndexer({ id: 'test', name: 'Test', chainId: 31337, rpcUrls: [server.url.href], startBlock: 10n, confirmationDepth: 0n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal)
+		const indexer = createNetworkIndexer({ id: 'test', name: 'Test', chainId: 31337, rpcUrls: [server.url.href], startBlock: 10n, confirmationDepth: 0n, explorerBaseUrl: '', nativeSymbol: 'ETH', contracts: [] }, database, new AbortController().signal)
 		const contracts = new Map<string, ContractMetadata>([[oracle.toLowerCase(), { address: oracle, kind: 'openOracle', label: 'Oracle', provenance: 'manifest' }]])
 		if (mode === 'registered wrapper') contracts.set(manager.toLowerCase(), { address: manager, kind: 'delegationManager', label: 'Manager', provenance: 'manifest' })
 		let input = deposit
@@ -53,18 +54,18 @@ for (const mode of ['direct', 'registered wrapper', 'unregistered wrapper', 'nes
 		// A token-free, unknown protocol log selects the transaction for indexing.
 		// Neither this log nor the receipt can reveal the token address or decimals.
 		const log = { address: oracle, blockHash: block.hash, blockNumber: 10n, transactionHash, transactionIndex: 0n, logIndex: 0n, topics: [zeroHash], data: '0x' as const }
-		const header = spyOn(indexer, 'getBlockHeader').mockResolvedValue(block)
-		const transaction = spyOn(indexer.client, 'getTransaction').mockResolvedValue({ blockHash: block.hash, blockNumber: 10n, from: sender, gas: 100_000n, hash: transactionHash, input, nonce: 0n, to, transactionIndex: 0n, value: 0n })
-		const receipt = spyOn(indexer.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: block.hash, blockNumber: 10n, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to, transactionHash, transactionIndex: 0n })
+		const readBlockHeader = async () => block
+		const transaction = spyOn(indexer.providers.client, 'getTransaction').mockResolvedValue({ blockHash: block.hash, blockNumber: 10n, from: sender, gas: 100_000n, hash: transactionHash, input, nonce: 0n, to, transactionIndex: 0n, value: 0n })
+		const receipt = spyOn(indexer.providers.client, 'getTransactionReceipt').mockResolvedValue({ blockHash: block.hash, blockNumber: 10n, cumulativeGasUsed: 100_000n, from: sender, gasUsed: 100_000n, logs: [log], status: 'success', to, transactionHash, transactionIndex: 0n })
 		try {
-			const result = await indexer.indexBlock(10n, 10n, contracts, new Map(), undefined, block, [log], async () => [])
+			const result = await indexBlock(indexer, 10n, 10n, contracts, new Map(), undefined, block, [log], async () => [], readBlockHeader)
 			expect(result.block.transactions[0]?.receipt).toMatchObject({ callTraceStatus: 'unavailable' })
 			expect(reads.sort()).toEqual(['decimals', 'name', 'symbol'])
 			expect(result.block.tokenMetadata).toEqual([{ address: token, decimals: 6, name: 'Unknown Token', symbol: 'TKN', readBlock: 10n }])
 			expect(result.block.transactions[0]?.decoded.summary).toContain('amount=1.500001 TKN')
 			expect(result.block.transactions[0]?.decoded.summary).not.toContain('base units')
 		} finally {
-			for (const mock of [header, transaction, receipt]) mock.mockRestore()
+			for (const mock of [transaction, receipt]) mock.mockRestore()
 			server.stop(true)
 			await database.close()
 		}

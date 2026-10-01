@@ -1,6 +1,7 @@
 import { appendFile } from 'node:fs/promises'
 import * as process from 'node:process'
 import { createWalletClient, defineChain, formatEther, http, keccak256, parseUnits, privateKeyToAccount, type Account, type Address, type Chain, type Hash, type Hex } from '@zoltar/core-shared/evm/ethereum'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { getBootstrapDescendantAddresses } from '../../ui/statoblastShared/ts/protocol/deploymentHelpers.ts'
 import { PROXY_DEPLOYER_RUNTIME_CODE } from '@zoltar/core-shared/deployment/deploymentAddresses'
 import { assertStaticDeploymentArtifactRuntimeCodeHashes, CANONICAL_DEPLOYER_RAW_GAS_PRICE, CANONICAL_DEPLOYER_RAW_TRANSACTION_COST, getProxyDeployerActivity, getProxyDeployerFundingShortfall } from '../../ui/zoltarShared/ts/protocol/deployment.ts'
@@ -290,9 +291,7 @@ export function createBudgetedTransactionSender(wallet: BudgetedWallet, account:
 			try {
 				await wallet.call({ ...estimationRequest, gas: MAX_SIGNABLE_TRANSACTION_GAS })
 			} catch (simulationError) {
-				const simulationReason = simulationError instanceof Error ? simulationError.message : String(simulationError)
-				const estimateReason = estimateError instanceof Error ? estimateError.message : String(estimateError)
-				throw new Error(`Gas estimation failed (${estimateReason}) and the ${MAX_SIGNABLE_TRANSACTION_GAS.toString()} gas fallback simulation also failed (${simulationReason})`, { cause: estimateError })
+				throw new Error(`Gas estimation failed (${errorMessage(estimateError)}) and the ${MAX_SIGNABLE_TRANSACTION_GAS.toString()} gas fallback simulation also failed (${errorMessage(simulationError)})`, { cause: estimateError })
 			}
 			log(
 				formatDeploymentLogBranch('Gas estimate unavailable', [
@@ -398,16 +397,14 @@ export async function assertRequiredEvmCompatible(client: Pick<WriteClient, 'cal
 	try {
 		cancunResult = await client.call({ data: CANCUN_CAPABILITY_PROBE })
 	} catch (error) {
-		const reason = error instanceof Error ? error.message : String(error)
-		throw new Error(`RPC chain ${chainId.toString()} does not support the Cancun EVM opcodes required by Zoltar and Uniswap V4: ${reason}`)
+		throw new Error(`RPC chain ${chainId.toString()} does not support the Cancun EVM opcodes required by Zoltar and Uniswap V4: ${errorMessage(error)}`)
 	}
 	if (cancunResult.data !== CANCUN_CAPABILITY_RESULT) throw new Error(`RPC chain ${chainId.toString()} returned an invalid Cancun EVM capability result`)
 	let osakaResult: Awaited<ReturnType<WriteClient['call']>>
 	try {
 		osakaResult = await client.call({ data: OSAKA_CAPABILITY_PROBE })
 	} catch (error) {
-		const reason = error instanceof Error ? error.message : String(error)
-		throw new Error(`RPC chain ${chainId.toString()} does not support the Osaka CLZ opcode required by the compiled Zoltar contracts: ${reason}`)
+		throw new Error(`RPC chain ${chainId.toString()} does not support the Osaka CLZ opcode required by the compiled Zoltar contracts: ${errorMessage(error)}`)
 	}
 	if (osakaResult.data !== OSAKA_CAPABILITY_RESULT) throw new Error(`RPC chain ${chainId.toString()} returned an invalid Osaka EVM capability result`)
 }

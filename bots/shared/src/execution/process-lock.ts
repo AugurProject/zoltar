@@ -1,8 +1,9 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, readFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { dlopen } from 'bun:ffi'
+import { signerLockRootEnvironment } from '../config/environment.ts'
 import { getAddress, type Address } from '../ethereum.ts'
 
 type ProcessLockFileHandle = {
@@ -141,7 +142,7 @@ export async function acquireExclusiveProcessLock(lockPath: string, subject: str
 				try {
 					current = await filesystem.readFile(lockPath, 'utf8')
 				} catch (error) {
-					throw new Error(`Process lock ${lockPath} disappeared before release: ${error instanceof Error ? error.message : String(error)}`)
+					throw new Error(`Process lock ${lockPath} disappeared before release: ${errorMessage(error)}`)
 				}
 				if (current !== payload) throw new Error(`Process lock ${lockPath} changed ownership before release`)
 				await handle.close()
@@ -159,19 +160,8 @@ export function acquireFileProcessLock(path: string, label: string, filesystem?:
 	return acquireExclusiveProcessLock(`${resolvedPath}.lock`, `${label} ${resolvedPath}`, { file: resolvedPath }, filesystem)
 }
 
-const EXECUTION_SIGNER_LOCK_ROOT_ENVIRONMENT_VARIABLE = 'ZOLTAR_BOT_SIGNER_LOCK_ROOT'
-
-/**
- * Every bot resolves the signer lock root here so processes that share a signer coordinate through the same directory. An
- * unset or empty `ZOLTAR_BOT_SIGNER_LOCK_ROOT` falls back to a per-host temporary directory.
- */
-function configuredExecutionSignerLockRoot(environment: Readonly<Record<string, string | undefined>> = process.env) {
-	const configured = environment[EXECUTION_SIGNER_LOCK_ROOT_ENVIRONMENT_VARIABLE]
-	if (configured === undefined || configured.trim() === '') return join(tmpdir(), 'zoltar-bot-locks')
-	return configured
-}
-
-function executionSignerLockPath(chainId: number, account: Address, lockRoot = configuredExecutionSignerLockRoot()) {
+/** Every bot resolves the signer lock root through the shared environment, so processes sharing a signer use one directory. */
+function executionSignerLockPath(chainId: number, account: Address, lockRoot = signerLockRootEnvironment()) {
 	if (!Number.isSafeInteger(chainId) || chainId <= 0) throw new Error('Execution signer lock chain id is invalid')
 	const signer = getAddress(account)
 	if (lockRoot.trim() === '') throw new Error('Execution signer lock root cannot be empty')

@@ -1,3 +1,5 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { logEvent } from '@zoltar/bot-shared/infrastructure/log-event'
 import { requireDeployedContractsOnce } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { MAINNET_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
@@ -215,7 +217,7 @@ export async function discoverTokenPools(
 		const constantProduct = venues.flatMap((venue, venueIndex) => {
 			const result = results[base + fees.length + venueIndex]
 			if (result === undefined || result.status === 'failure') {
-				console.error(`venue=${venue.name} token=${token} skipped=${result === undefined ? 'missing pair read' : result.error.message}`)
+				logEvent('arbitrager', 'venuePairSkipped', { venue: venue.name, token, reason: result === undefined ? 'missing pair read' : result.error.message }, 'warning')
 				return []
 			}
 			const address = requiredRpcAddress(result.result, `${venue.name} pair`)
@@ -281,7 +283,7 @@ export async function loadTokenMarkets(
 						venue: 'Uniswap V3',
 					})
 				} catch (error) {
-					console.error(`pool=${pool.address} marketSnapshotSkipped=${error instanceof Error ? error.message : String(error)}`)
+					logEvent('arbitrager', 'marketSnapshotSkipped', { pool: pool.address, reason: errorMessage(error) }, 'warning')
 				}
 			}
 			for (const [poolIndex, pool] of discovered.constantProduct.entries()) {
@@ -302,7 +304,7 @@ export async function loadTokenMarkets(
 						venue: pool.venue,
 					})
 				} catch (error) {
-					console.error(`pool=${pool.address} marketSnapshotSkipped=${error instanceof Error ? error.message : String(error)}`)
+					logEvent('arbitrager', 'marketSnapshotSkipped', { pool: pool.address, reason: errorMessage(error) }, 'warning')
 				}
 			}
 			let balance: string | undefined
@@ -313,7 +315,7 @@ export async function loadTokenMarkets(
 			}
 			snapshots.push({ address: token, balance, ...metadata, pools })
 		} catch (error) {
-			console.error(`token=${token} marketDiscoverySkipped=${error instanceof Error ? error.message : String(error)}`)
+			console.error(`token=${token} marketDiscoverySkipped=${errorMessage(error)}`)
 		}
 	}
 	return snapshots

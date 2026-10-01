@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityPoolVaultSummary } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
 import { getDeterministicLiquidationFailureReason, getLiquidationExecutionFailureDetail, getLiquidationFailureReason, getMaxLiquidationAmount, isLiquidationBeyondMinPriceDistance } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/liquidation.js'
 

@@ -23,9 +23,9 @@ import { TransactionActionButton } from '@zoltar/ui-core-shared/components/Trans
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getReportPresentation } from '@zoltar/ui-core-shared/lib/userCopy.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
+import type { OpenOracleFormState } from '../../../types/app.js'
 import {
 	formatOpenOracleFeePercentage,
 	formatOpenOracleReportPriceUnit,

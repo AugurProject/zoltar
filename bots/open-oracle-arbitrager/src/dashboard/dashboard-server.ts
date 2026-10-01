@@ -7,14 +7,15 @@ import type { OperatorSnapshot, StrategySettings } from '#state/operator-state'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED, RESUME_REQUIRES_CONFIGURED_CHAIN } from '#state/executor-deployment-recovery'
 import { publicOperatorSnapshot } from '#state/public-snapshot'
 import type { SettlementSettings } from '#state/settlement-store'
-import { publicOperatorFailure, publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
+import { publicPollFailure } from '@zoltar/bot-shared/dashboard/public-failures'
+import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
 import { boundedDashboardJson, closingDashboardJson as closingJson, dashboardRequestIsSameOrigin, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { join } from 'node:path'
 import { operatorHeader } from './header.ts'
-import { settingsPageMarkup } from './settings-page.ts'
+import { settingsPageMarkup } from './settings-page.tsx'
 
 type DashboardController = {
 	getConfiguration?: () => unknown | Promise<unknown>
@@ -46,12 +47,6 @@ const CHAIN_CONFIGURATION_REQUIRED = 'Select and save the chain and RPC endpoint
 
 async function requireConfiguredChain(controller: DashboardController) {
 	if (!(await controller.isNetworkConfigured())) throw new Error(CHAIN_CONFIGURATION_REQUIRED)
-}
-
-function publicError(error: unknown, status: number, operation: string, fallback: string, categorize = false) {
-	const message = errorMessage(error)
-	console.error(`dashboardOperation=${operation} failed=${message}`)
-	return json({ error: categorize ? publicOperatorFailure(message, fallback) : fallback }, status)
 }
 
 function publicConfigurationUpdateError(error: unknown, conflict: boolean) {
@@ -231,8 +226,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(publicOperatorSnapshot(await controller.getSnapshot()))
 				} catch (error) {
-					const message = errorMessage(error)
-					console.error(`dashboardOperation=state-read failed=${message}`)
+					const message = logDashboardFailure('arbitrager', 'state-read', error)
 					return json({ error: publicPollFailure(message, 'load the latest operator state for the dashboard') }, 503)
 				}
 			}
@@ -241,7 +235,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.getConfiguration === undefined) throw new Error('Complete configuration is unavailable')
 					return json(await controller.getConfiguration())
 				} catch (error) {
-					return publicError(error, 503, 'configuration-read', 'Complete configuration is unavailable. Retry or check protected bot logs for details.')
+					return publicDashboardError('arbitrager', error, 503, 'configuration-read', 'Complete configuration is unavailable. Retry or check protected bot logs for details.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/configuration') {
@@ -252,7 +246,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					return json(await controller.updateConfiguration(await boundedDashboardJson(request)))
 				} catch (error) {
 					const conflict = error instanceof Error && error.name === CONFIGURATION_REVISION_CONFLICT
-					return publicError(error, conflict ? 409 : 400, 'configuration-update', publicConfigurationUpdateError(error, conflict))
+					return publicDashboardError('arbitrager', error, conflict ? 409 : 400, 'configuration-update', publicConfigurationUpdateError(error, conflict))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/settings') {
@@ -261,7 +255,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json({ settings: await controller.updateStrategy(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'strategy-update', 'Strategy settings could not be saved. Review the submitted values and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'strategy-update', 'Strategy settings could not be saved. Review the submitted values and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/settlement') {
@@ -271,7 +265,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateSettlement === undefined) throw new Error('Settlement configuration is unavailable')
 					return json({ settlement: await controller.updateSettlement(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'settlement-update', publicFieldValidationError(error, 'Settlement ', 'Settlement settings could not be saved. Review the submitted values and protected bot logs.'))
+					return publicDashboardError('arbitrager', error, 400, 'settlement-update', publicFieldValidationError(error, 'Settlement ', 'Settlement settings could not be saved. Review the submitted values and protected bot logs.'))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/runtime-limits') {
@@ -281,7 +275,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateRuntimeLimits === undefined) throw new Error('Runtime limit configuration is unavailable')
 					return json({ runtime: await controller.updateRuntimeLimits(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'runtime-limits-update', publicFieldValidationError(error, 'Runtime ', 'Risk limits could not be saved. Review the submitted values and protected bot logs.'))
+					return publicDashboardError('arbitrager', error, 400, 'runtime-limits-update', publicFieldValidationError(error, 'Runtime ', 'Risk limits could not be saved. Review the submitted values and protected bot logs.'))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/centralized-markets') {
@@ -291,7 +285,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateCentralizedMarkets === undefined) throw new Error('Market source configuration is unavailable')
 					return json({ centralizedMarkets: await controller.updateCentralizedMarkets(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'centralized-markets-update', publicMarketUpdateError(error))
+					return publicDashboardError('arbitrager', error, 400, 'centralized-markets-update', publicMarketUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/execution') {
@@ -301,7 +295,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateExecution === undefined) throw new Error('Execution mode configuration is unavailable')
 					return json(await controller.updateExecution(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'execution-update', publicExecutionUpdateError(error))
+					return publicDashboardError('arbitrager', error, 400, 'execution-update', publicExecutionUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/submission') {
@@ -310,7 +304,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'submission-update', publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the submitted values and protected bot logs.' }))
+					return publicDashboardError('arbitrager', error, 400, 'submission-update', publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the submitted values and protected bot logs.' }))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
@@ -318,7 +312,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 				try {
 					return json(await controller.updateConnectivity(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'connectivity-update', publicConnectivityUpdateError(error))
+					return publicDashboardError('arbitrager', error, 400, 'connectivity-update', publicConnectivityUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/network-profile') {
@@ -327,7 +321,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.switchNetworkProfile === undefined) throw new Error('Chain profile switching is unavailable')
 					return closingJson(await controller.switchNetworkProfile(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'network-profile-switch', 'The chain profile could not be activated. Review protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'network-profile-switch', 'The chain profile could not be activated. Review protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/deployment') {
@@ -337,7 +331,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateDeployment === undefined) throw new Error('Deployment configuration is unavailable')
 					return json({ deployment: await controller.updateDeployment(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'deployment-update', 'Deployment settings could not be saved. Review the submitted values and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'deployment-update', 'Deployment settings could not be saved. Review the submitted values and protected bot logs.')
 				}
 			}
 			if (request.method === 'POST' && url.pathname === '/api/executor-deployment') {
@@ -347,7 +341,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.deployExecutor === undefined) throw new Error('Executor deployment is unavailable')
 					return json(await controller.deployExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'executor-deployment', publicExecutorDeploymentError(error))
+					return publicDashboardError('arbitrager', error, 400, 'executor-deployment', publicExecutorDeploymentError(error))
 				}
 			}
 			if (request.method === 'POST' && url.pathname === '/api/executor-prediction') {
@@ -357,7 +351,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.predictExecutor === undefined) throw new Error('Executor prediction is unavailable')
 					return json(await controller.predictExecutor(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'executor-prediction', 'Executor prediction could not be completed. Review the submitted salt and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/approved-universes') {
@@ -367,7 +361,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.setApprovedUniverses === undefined) throw new Error('Universe approval is unavailable')
 					return json({ approvedUniverses: await controller.setApprovedUniverses(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'universe-approval', 'Universe approval could not be saved. Select only one outcome per fork and review protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'universe-approval', 'Universe approval could not be saved. Select only one outcome per fork and review protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/tokens') {
@@ -377,7 +371,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.updateTokens === undefined) throw new Error('Token configuration is unavailable')
 					return json({ tokenAddresses: await controller.updateTokens(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicError(error, 400, 'token-update', 'Token settings could not be saved. Review the submitted addresses and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'token-update', 'Token settings could not be saved. Review the submitted addresses and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/signer') {
@@ -386,7 +380,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json(await controller.updateSigner(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicError(error, 400, 'signer-update', 'Signer settings could not be changed. Review the submitted action and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'signer-update', 'Signer settings could not be changed. Review the submitted action and protected bot logs.')
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/paused') {
@@ -398,7 +392,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await controller.setPaused(value['paused'])
 					return json({ paused: value['paused'] })
 				} catch (error) {
-					return publicError(error, 400, 'pause-update', publicPauseUpdateError(error))
+					return publicDashboardError('arbitrager', error, 400, 'pause-update', publicPauseUpdateError(error))
 				}
 			}
 			return undefined

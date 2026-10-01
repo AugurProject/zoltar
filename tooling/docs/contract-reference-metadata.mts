@@ -32,24 +32,13 @@ export type ContractReference = {
 	sourcePath: string
 }
 
-export type AssemblyDelegateCall = {
-	abiSignature: string
-	argumentOffsets: Array<{ argument: string; offset: string }>
-	calldataLength: string
-	selector: string
-	sourcePath: string
-	targetEntrypointSignature: string
-	targetFunctionName: string
-	targetSourcePath: string
-}
-
 export const outputPath = 'docs/reference/contracts.html'
 export const contractPagesDirectory = 'docs/reference/contracts'
 
 export function contractPageOutputPath(contractName: string): string {
 	return `${contractPagesDirectory}/${contractName.toLowerCase()}.html`
 }
-export const expectedProductionSoliditySourceFingerprint = 'a906f2e53f3ddc13826f6ba6f7ea6bae699459d3beece7b201917ee73bbe8cb8'
+export const expectedProductionSoliditySourceFingerprint = 'd7b2e6c1c16fa90a0f449de344c6c9aada5fca3874501b8142fff05795ca63a6'
 
 export const documentedEventSchemas: Array<{ name: string; parameters: string; sourcePath: string }> = [
 	{
@@ -239,26 +228,6 @@ export const assemblyEventEmissions: Array<{
 		signature: 'CarryDepositConsumed(uint256,uint256,address,uint8,uint256,uint8,uint256,bytes32,bytes32)',
 		signatureConstant: 'CARRY_DEPOSIT_CONSUMED_SIGNATURE',
 		sourcePath: 'solidity/contracts/statoblast/EscalationGameCarry.sol',
-	},
-]
-
-export const assemblyDelegateCalls: AssemblyDelegateCall[] = [
-	{
-		abiSignature: 'emitForkSnapshotEvents(address,address,address,uint256,uint256,uint256)',
-		argumentOffsets: [
-			{ argument: 'parent', offset: '0x04' },
-			{ argument: 'migrationProxy', offset: '0x24' },
-			{ argument: 'sourceGame', offset: '0x44' },
-			{ argument: 'totalPoolHeldRepAtForkAttoRep', offset: '0x64' },
-			{ argument: 'disputeStakedRepAtForkAttoRep', offset: '0x84' },
-			{ argument: 'resultingLockedAttoRep', offset: '0xa4' },
-		],
-		calldataLength: '0xc4',
-		selector: '0x408d33da',
-		sourcePath: 'solidity/contracts/statoblast/SecurityPoolForker.sol',
-		targetEntrypointSignature: 'external(ISecurityPool,address,address,uint256,uint256,uint256)',
-		targetFunctionName: 'emitForkSnapshotEvents',
-		targetSourcePath: 'solidity/contracts/statoblast/SecurityPoolEventEmitter.sol',
 	},
 ]
 

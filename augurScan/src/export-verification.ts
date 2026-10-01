@@ -1,5 +1,6 @@
 import { decodeOpaqueCursor, isJsonArray } from './cursor-codec.ts'
 import type { JsonValue } from './ethereum.ts'
+import { plainRecord as record } from './record-serialization.ts'
 
 const POSTGRES_BIGINT_MAX = 9_223_372_036_854_775_807n
 
@@ -39,8 +40,6 @@ type CursorBoundary = {
 	readonly total: string
 	readonly lastKey: ExportKey
 }
-
-const record = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
 
 const decimal = (value: unknown, name: string): string => {
 	if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value) || BigInt(value) > POSTGRES_BIGINT_MAX) throw new Error(`${name} must be a non-negative PostgreSQL bigint`)

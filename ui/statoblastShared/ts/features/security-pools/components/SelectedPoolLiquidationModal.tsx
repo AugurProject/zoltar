@@ -1,5 +1,5 @@
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
-import type { ListedSecurityPool, OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails } from '../../../types/contracts.js'
 import type { SecurityPoolWorkflowRouteContentProps } from '../../types.js'
 import type { SecurityPoolStateModel } from '../lib/securityPoolState.js'
 import { LiquidationModal } from './LiquidationModal.js'

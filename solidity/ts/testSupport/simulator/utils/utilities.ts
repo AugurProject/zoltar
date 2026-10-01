@@ -3,6 +3,7 @@ import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/
 import { ReadClient, WriteClient, writeContractAndWait } from './clients'
 import { GENESIS_REPUTATION_TOKEN, PROXY_DEPLOYER_ADDRESS, TEST_ADDRESSES } from './constants'
 import { addressString } from './bigint'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../storage'
 import { Address } from '@zoltar/core-shared/evm/ethereum'
 import { ABIS } from '../../../abi/abis'
 import { AnvilWindowEthereum } from '../AnvilWindowEthereum'
@@ -27,10 +28,6 @@ function shortStringStorageValue(value: string) {
 	const byteLength = valueHex.length / 2
 	if (byteLength > 31) throw new Error('Token metadata exceeds Solidity short-string storage')
 	return BigInt(`0x${valueHex.padEnd(62, '0')}${(byteLength * 2).toString(16).padStart(2, '0')}`)
-}
-
-function storageSlot(slot: bigint) {
-	return `0x${slot.toString(16).padStart(64, '0')}`
 }
 
 export function requireArray(value: unknown, context: string): unknown[] {
@@ -66,7 +63,7 @@ const mintETH = async (anvilWindowEthereum: AnvilWindowEthereum, mintAmounts: { 
 
 const mintERC20 = async (anvilWindowEthereum: AnvilWindowEthereum, erc20Address: Address, mintAmounts: { address: Address; amount: bigint }[], balanceSlot: bigint = 2n) => {
 	const overrides = mintAmounts.map(mintAmount => {
-		const encodedKeySlotHash = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [mintAmount.address, balanceSlot]))
+		const encodedKeySlotHash = formatStorageSlot(getAddressMappingStorageSlot(mintAmount.address, balanceSlot))
 		return { key: encodedKeySlotHash, value: mintAmount.amount }
 	})
 	const stateSets: Record<string, bigint> = {}
@@ -123,8 +120,8 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			code: bytes,
 			stateDiff: {
-				[storageSlot(3n)]: shortStringStorageValue('Reputation'),
-				[storageSlot(4n)]: shortStringStorageValue('REP'),
+				[formatStorageSlot(3n)]: shortStringStorageValue('Reputation'),
+				[formatStorageSlot(4n)]: shortStringStorageValue('REP'),
 			},
 		},
 	})
@@ -144,7 +141,7 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 	await anvilWindowEthereum.addStateOverrides({
 		[addressString(GENESIS_REPUTATION_TOKEN)]: {
 			stateDiff: {
-				[storageSlot(2n)]: TOTAL_REP_SUPPLY_ATTO_REP,
+				[formatStorageSlot(2n)]: TOTAL_REP_SUPPLY_ATTO_REP,
 				[theoreticalSupplySlot]: TOTAL_REP_SUPPLY_ATTO_REP,
 			},
 		},
@@ -159,9 +156,9 @@ export const setupTestAccounts = async (anvilWindowEthereum: AnvilWindowEthereum
 		[wethAddress]: {
 			code: wethBytes,
 			stateDiff: {
-				[storageSlot(0n)]: shortStringStorageValue('Wrapped Ether'),
-				[storageSlot(1n)]: shortStringStorageValue('WETH'),
-				[storageSlot(2n)]: 18n,
+				[formatStorageSlot(0n)]: shortStringStorageValue('Wrapped Ether'),
+				[formatStorageSlot(1n)]: shortStringStorageValue('WETH'),
+				[formatStorageSlot(2n)]: 18n,
 			},
 		},
 	})

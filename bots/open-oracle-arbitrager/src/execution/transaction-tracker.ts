@@ -6,7 +6,7 @@ import { sendRawTransactionToRpc } from '#monitoring/connectivity'
 import type { TransactionActivity } from '#state/operator-state'
 import { decimalSignedEth, decimalWeth } from '#state/operator-state'
 import type { Account, Address, Chain, Hex, PublicClient, TransactionReplacement, Transport, WalletClient } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 type ReadClient = PublicClient<Transport, Chain>
 type WriteClient = WalletClient<Transport, Chain, Account>

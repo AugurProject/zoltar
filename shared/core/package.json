@@ -43,6 +43,11 @@
 			"bun": "./ts/errors/errorChain.ts",
 			"default": "./js/errors/errorChain.js"
 		},
+		"./errors/errorMessage": {
+			"types": "./ts/errors/errorMessage.ts",
+			"bun": "./ts/errors/errorMessage.ts",
+			"default": "./js/errors/errorMessage.js"
+		},
 		"./math/bigint": {
 			"types": "./ts/math/bigint.ts",
 			"bun": "./ts/math/bigint.ts",

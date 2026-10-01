@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
 import { ISecurityPool, ISecurityPoolFactory } from '../statoblast/interfaces/ISecurityPool.sol';
+import { IERC165 } from '../statoblast/interfaces/IERC165.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { ITwoWayConstantProductFactory } from './interfaces/ITwoWayConstantProductFactory.sol';
 import { ITwoWayConstantProductPair } from './interfaces/ITwoWayConstantProductPair.sol';
@@ -188,7 +189,7 @@ contract TwoWayConstantProductRouter is IERC1155Receiver {
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == 0x01ffc9a7;
+		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == type(IERC165).interfaceId;
 	}
 
 	receive() external payable {

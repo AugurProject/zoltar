@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { getAddress, isAddress } from './ethereum.ts'
 import type { ManifestContract } from './types.ts'
 
@@ -13,7 +14,7 @@ export const parseManifestValue = (value: unknown, filename: string): readonly M
 		try {
 			assertAbiCoverage([entry[2]])
 		} catch (error) {
-			throw new Error(`${filename} contract ${index}: ${error instanceof Error ? error.message : String(error)}`)
+			throw new Error(`${filename} contract ${index}: ${errorMessage(error)}`)
 		}
 		const key = address.toLowerCase()
 		if (addresses.has(key)) throw new Error(`${filename} contract ${index} duplicates address ${address}`)

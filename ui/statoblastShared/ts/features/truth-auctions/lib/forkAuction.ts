@@ -1,4 +1,5 @@
-import type { ForkOutcomeKey, SecurityPoolSystemState, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkOutcomeKey, SecurityPoolSystemState } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TruthAuctionMetrics } from '../../../types/contracts.js'
 import { getTimeRemaining as getSharedTimeRemaining } from '@zoltar/ui-core-shared/lib/time.js'
 import { deriveHasForkActivity } from '../../../protocol/forkActivity.js'
 

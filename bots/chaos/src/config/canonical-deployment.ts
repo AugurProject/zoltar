@@ -4,7 +4,7 @@ import { canonicalCoreDeployment, canonicalUniswapDeployment } from '@zoltar/bot
 import type { Address } from '@zoltar/bot-shared/ethereum'
 import { MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import type { DeploymentSettings } from './settings.ts'
-import { tradingRootDeploymentPlans } from '../operations/trading.ts'
+import { tradingRootDeploymentPlans } from '../operations/trading/roots.ts'
 
 export function canonicalDeployment(chainId: number): DeploymentSettings {
 	const core = canonicalCoreDeployment(chainId === MAINNET_CHAIN_ID ? mainnet : sepolia)

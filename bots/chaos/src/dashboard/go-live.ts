@@ -1,4 +1,4 @@
-import { renderExecutionMode, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
+import { quorumRpcRow, renderExecutionMode, type ReadinessRow } from '@zoltar/bot-shared/dashboard/readiness'
 import { shorten } from '@zoltar/bot-shared/dashboard/dom'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 
@@ -110,8 +110,6 @@ function readinessRows(snapshot: GoLiveSnapshot, configuration: GoLiveConfigurat
 	const paused = snapshot.paused === true && configuration.paused === true
 	const wallet = configuration.wallet ?? snapshot.wallet
 	const signer = configuration.hasSigner === true
-	const requiredQuorumRpcs = String(configuration.rpcQuorum) === '2' ? 2 : 0
-	const quorumRpcs = configuration.connectivity?.quorumRpcUrls.length ?? 0
 	const scanComplete = snapshot.topology.complete === true && snapshot.lastScannedBlock !== undefined
 	let rpcDetail = 'Save the RPC endpoints under Connect'
 	if (configuration.networkConfigured === true) rpcDetail = snapshot.rpcHealth.chainReady === true ? `Ready for ${snapshot.network ?? 'the configured chain'}` : 'Read quorum is not healthy yet'
@@ -122,7 +120,7 @@ function readinessRows(snapshot: GoLiveSnapshot, configuration: GoLiveConfigurat
 		{ detail: paused ? 'Paused' : 'Pause the bot before changing execution mode', label: 'Bot paused', ready: paused },
 		{ detail: signerDetail, label: 'Transaction signer', ready: signer },
 		{ detail: rpcDetail, label: 'Chain and RPC endpoints', ready: configuration.networkConfigured === true && snapshot.rpcHealth.chainReady === true },
-		{ detail: `${quorumRpcs.toString()} configured · ${requiredQuorumRpcs.toString()} required`, label: 'Independent quorum RPCs', ready: quorumRpcs >= requiredQuorumRpcs },
+		quorumRpcRow(configuration.connectivity?.quorumRpcUrls.length ?? 0, configuration.rpcQuorum),
 		reservePolicyRow(configuration),
 		{ detail: scanComplete ? `Complete at block ${String(snapshot.lastScannedBlock)}` : 'Waiting for a complete canonical scan', label: 'Canonical scan', ready: scanComplete },
 		inventoryRow(snapshot, configuration),

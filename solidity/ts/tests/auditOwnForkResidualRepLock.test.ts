@@ -14,7 +14,7 @@ import assert from '../testSupport/simulator/utils/assert'
 import { describe, test } from 'bun:test'
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
 import { getVaultCount, getTotalRepBackingUnits, redeemRepFromVault } from '../testSupport/simulator/utils/contracts/securityPool'
-import { backingUnitsToAttoRep as forkerBackingUnitsToAttoRep, getOwnForkRepBuckets } from '../testSupport/simulator/utils/contracts/securityPoolForker'
+import { forkerBackingUnitsToAttoRep, getOwnForkRepBuckets } from '../testSupport/simulator/utils/contracts/securityPoolForker'
 import { useStatoblastEscalationMigrationFixture } from './statoblast/fixture'
 
 describe('Own-fork continuation residual settlement regression', () => {

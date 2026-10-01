@@ -14,15 +14,8 @@ export class LogScanError extends Error {
 	}
 }
 
-function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
-	for (const current of errorChain(error)) {
-		if (visit(current)) return true
-	}
-	return false
-}
-
 function logRangeLimitError(error: unknown) {
-	return walkErrorCauses(error, current => {
+	return [...errorChain(error)].some(current => {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()
 		if (message.includes('fromblock exceeds toblock')) return false

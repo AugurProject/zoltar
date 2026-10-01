@@ -7,6 +7,7 @@ import { EscalationGameProofVerifier } from '../EscalationGameProofVerifier.sol'
 import { BinaryOutcomes } from '../BinaryOutcomes.sol';
 import { EscalationGameClaimDelegate } from '../EscalationGameClaimDelegate.sol';
 import { ISecurityPoolForker } from '../interfaces/ISecurityPoolForker.sol';
+import { Create2Deployment } from './Create2Deployment.sol';
 
 contract EscalationGameFactory {
 	uint256 private constant CREATION_CODE_CHUNK_SIZE = 24_000;
@@ -81,17 +82,7 @@ contract EscalationGameFactory {
 		// Code storage is cheaper to deploy and read than one storage slot per 32-byte
 		// word, while two fixed parts keep each carrier below EIP-170.
 		bytes memory initCode = abi.encodePacked(creationCode, abi.encode(securityPool, securityPool.repToken(), proofVerifier, claimDelegate));
-		address deployed;
-		assembly {
-			deployed := create2(0, add(initCode, 0x20), mload(initCode), 0)
-			if iszero(deployed) {
-				let revertDataSize := returndatasize()
-				if gt(revertDataSize, 0) {
-					returndatacopy(0, 0, revertDataSize)
-					revert(0, revertDataSize)
-				}
-			}
-		}
+		address deployed = Create2Deployment.deploy(initCode, 0);
 		require(deployed != address(0x0), 'Escalation game deployment failed');
 		gameImplementation = EscalationGame(deployed);
 	}

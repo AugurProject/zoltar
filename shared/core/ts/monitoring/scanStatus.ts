@@ -10,14 +10,17 @@ type ScanSample = {
 
 type ScanNetwork = { chainId: number; name: string }
 
+/** Parses a `SCAN_BLOCK_TIME_MS` override; `undefined` means no override. */
+export function parseScanBlockTimeOverride(override: string | undefined): number | undefined {
+	if (override === undefined) return undefined
+	const value = Number(override)
+	if (!Number.isSafeInteger(value) || value <= 0) throw new Error('SCAN_BLOCK_TIME_MS must be a positive integer')
+	return value
+}
+
 /** Override is independent of polling cadence. Unknown custom chains have no assumed block interval. */
 export function scanBlockTimeMs(chainId: number, override?: string): number | undefined {
-	if (override !== undefined) {
-		const value = Number(override)
-		if (!Number.isSafeInteger(value) || value <= 0) throw new Error('SCAN_BLOCK_TIME_MS must be a positive integer')
-		return value
-	}
-	return chainId === 1 || chainId === 11_155_111 ? 12_000 : undefined
+	return parseScanBlockTimeOverride(override) ?? (chainId === 1 || chainId === 11_155_111 ? 12_000 : undefined)
 }
 
 const singleLine = (value: string) => value.replace(/[\p{C}\p{Zl}\p{Zp}]/gu, ' ')

@@ -1,14 +1,14 @@
 import { allocatedWinningPayout } from './claim-payout.ts'
 import { bagCarryPeaks, compareBigintAscending, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '../../shared/core/ts/evm/carryProof.ts'
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { abiForKind } from './abi-catalog.ts'
 import { type Abi, type AbiValue, type Address, type Hex, getAddress, parseAbi, zeroAddress } from './ethereum.ts'
 import type { StateRead } from './snapshots.ts'
 
 const ZERO: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'
 const allocationAbi = parseAbi(['function getInheritedClaimAllocation(uint8 outcomeIndex,uint256 amountAttoRep,uint256 cumulativeAmountAttoRep,uint256 leafIndex) view returns (uint256 sourceAmountAttoRep,uint256 retainedAmountAttoRep,uint256 rewardAmountAttoRep,uint256 retainedCumulativeAttoRep)'])
-const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object'
 const object = (value: unknown): Record<string, unknown> => {
-	if (!isRecord(value)) throw new Error('Invalid claim state object')
+	if (!isObjectRecord(value)) throw new Error('Invalid claim state object')
 	return value
 }
 const uint = (value: unknown): bigint => {

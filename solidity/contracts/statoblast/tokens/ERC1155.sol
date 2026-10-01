@@ -13,10 +13,9 @@ import { IERC1155Receiver } from '../interfaces/IERC1155Receiver.sol';
  * Originally based on code by Enjin: https://github.com/enjin/erc-1155
  */
 contract ERC1155 is IERC1155 {
-	bytes4 private constant ERC1155_RECEIVED_SELECTOR = 0xf23a6e61;
-	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = 0xbc197c81;
+	bytes4 private constant ERC1155_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155Received.selector;
+	bytes4 private constant ERC1155_BATCH_RECEIVED_SELECTOR = IERC1155Receiver.onERC1155BatchReceived.selector;
 	bytes4 private constant ERC1155_INTERFACE_ID = 0xd9b67a26;
-	bytes4 private constant ERC165_INTERFACE_ID = 0x01ffc9a7;
 
 	// Mapping from token ID to account balances
 	mapping(uint256 => mapping(address => uint256)) public _balances;
@@ -30,7 +29,7 @@ contract ERC1155 is IERC1155 {
 	constructor() {}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == ERC165_INTERFACE_ID || interfaceId == ERC1155_INTERFACE_ID;
+		return interfaceId == type(IERC165).interfaceId || interfaceId == ERC1155_INTERFACE_ID;
 	}
 
 	/**

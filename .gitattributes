@@ -1,5 +1,8 @@
-# Generated outputs should stay untracked. These attributes keep accidental
-# tracked diffs out of normal review views.
+# Linguist attributes for generated and vendored outputs mirror tooling/repo/generated-artifacts.ts;
+# `bun run check:generated-policy` keeps them in sync. Ignored outputs are marked so accidental tracked
+# diffs stay out of normal review views; tracked outputs are collapsed because their generators own them.
+
+# Ignored build outputs.
 /shared/*/js/** linguist-generated=true
 /solidity/artifacts/** linguist-generated=true
 /solidity/ts/types/contractArtifact.ts linguist-generated=true
@@ -8,10 +11,22 @@
 /ui/coreShared/ts/abis.ts linguist-generated=true
 /ui/coreShared/ts/contractArtifact.ts linguist-generated=true
 /ui/statoblastShared/ts/contractArtifact.ts linguist-generated=true
-/ui/trading/ts/generated/** linguist-generated=true
-
-# Bundled UI dependencies are build outputs, not source.
+/ui/trading/ts/generated/contractArtifact.ts linguist-generated=true
 /ui/*/vendor/** linguist-vendored=true
+
+# Tracked generated outputs, each with a freshness check.
+/docs/assets/js/*.js linguist-generated=true
+/docs/reference/contracts.html linguist-generated=true
+/docs/reference/contracts/*.html linguist-generated=true
+/bots/shared/src/contracts/abi.generated.ts linguist-generated=true
+/bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts linguist-generated=true
+/bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts linguist-generated=true
+/bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts linguist-generated=true
+/bots/open-oracle-arbitrager/docs/chart-runtime.js linguist-generated=true
+/augurScan/config/dependency-abis.json linguist-vendored=true
+
+# This vendored artifact is checked byte-for-byte against a pinned SHA-256 digest, so it keeps LF endings.
+/scripts/artifacts/uniswap-deployment.json linguist-generated=true text eol=lf
 
 # Third-party Solidity sources are intentionally vendored for compilation.
 /solidity/contracts/statoblast/openOracle/openzeppelin/** linguist-vendored=true
@@ -22,6 +37,3 @@
 # Shell entrypoints must retain Unix line endings so their shebangs are executable
 # inside Linux containers, including when the repository is checked out on Windows.
 *.sh text eol=lf
-
-# This vendored artifact is checked byte-for-byte against a pinned SHA-256 digest.
-/scripts/artifacts/uniswap-deployment.json text eol=lf

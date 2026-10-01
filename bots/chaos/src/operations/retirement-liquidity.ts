@@ -1,5 +1,7 @@
 import { amount } from './planning.ts'
-import { buildRouterRemovePlan, minimumAfterSlippage, poolForPair, removableLiquidityQuote } from './trading.ts'
+import { poolForPair } from './trading/pool-state.ts'
+import { minimumAfterSlippage, removableLiquidityQuote } from './trading/pricing.ts'
+import { buildRouterRemovePlan } from './trading/router-owned.ts'
 import type { EcosystemSnapshot, PlanningOptions } from './types.ts'
 
 export function buildRetirementLiquidityRemovalPlan(snapshot: EcosystemSnapshot, options: PlanningOptions) {

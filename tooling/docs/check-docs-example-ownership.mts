@@ -32,10 +32,14 @@ async function assertExplanationPagesDelegateToReference(): Promise<void> {
 	assert.doesNotMatch(truthAuctionsHtml, /class="equation"/, 'truth auction explanation must not repeat the tick price formula')
 }
 
+const SOLIDITY_TIME_UNIT_SECONDS: Record<string, bigint> = { seconds: 1n, minutes: 60n, hours: 3_600n, days: 86_400n, weeks: 604_800n }
+
 function solidityConstant(source: string, name: string, sourceLabel: string): bigint {
-	const match = source.match(new RegExp(`\\b${name} = (-?\\d[\\d_]*)`))
-	assert.ok(match?.[1] !== undefined, `${sourceLabel} must define ${name} as an integer literal`)
-	return BigInt(match[1].replaceAll('_', ''))
+	const match = source.match(new RegExp(`\\b${name} = (-?\\d[\\d_]*)(?: (seconds|minutes|hours|days|weeks))?`))
+	assert.ok(match?.[1] !== undefined, `${sourceLabel} must define ${name} as an integer literal, optionally with a Solidity time unit`)
+	const unitSeconds = match[2] === undefined ? 1n : SOLIDITY_TIME_UNIT_SECONDS[match[2]]
+	assert.ok(unitSeconds !== undefined, `${sourceLabel} uses an unsupported time unit for ${name}`)
+	return BigInt(match[1].replaceAll('_', '')) * unitSeconds
 }
 
 function solidityFunction(source: string, name: string, sourceLabel: string): string {

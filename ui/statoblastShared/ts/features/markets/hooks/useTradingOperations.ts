@@ -20,7 +20,8 @@ import { createTradingSuccessPresentation, createTradingTransactionIntent, creat
 import { buildWriteActionConfig, runWriteAction, type WriteActionContext } from '@zoltar/ui-core-shared/transactions/writeAction.js'
 import { refreshWalletStateOnly } from '@zoltar/ui-core-shared/lib/refreshState.js'
 import type { TradingFormState, WriteOperationsParameters } from '../../../types/app.js'
-import type { DeploymentStatus, TradingActionResult, TradingDetails, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { DeploymentStatus, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TradingActionResult, TradingDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseTradingOperationsParameters = WriteOperationsParameters & {

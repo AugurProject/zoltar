@@ -1,6 +1,6 @@
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { formatCurrencyBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
 import * as glossaryCopy from '../../../copy/glossary.js'
 import { GlossaryTerm } from '../../glossary/components/GlossaryTerm.js'

@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { recordActivity, saveDurableState, type PendingTransactionIntent } from '../state/operator-state.ts'
 import { observePendingTransaction, type PendingTransactionObservationInput } from '../state/pending-transaction-observation.ts'
 import { TransactionAwaitingRecovery } from './receipt-validation.ts'
@@ -23,7 +24,7 @@ export async function retainUnreadableReceiptEvidence(environment: ExecutionEnvi
 	delete intent.recoveryBlocker
 	observePendingTransaction(intent, { head, includedBlock, kind: 'evidence-unavailable' })
 	await persist(environment)
-	return new TransactionAwaitingRecovery(intent.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
+	return new TransactionAwaitingRecovery(intent.label, intent.hash, `confirmed receipt evidence is temporarily unavailable: ${errorMessage(error)}`)
 }
 
 export async function retainClosedSubmissionWindow(environment: ExecutionEnvironment, intent: PendingTransactionIntent) {

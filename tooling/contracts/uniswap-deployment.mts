@@ -6,6 +6,7 @@ import { assertCanonicalRawTransactionFeeCompatible, CANONICAL_DEPLOYER_RAW_TRAN
 import { PROXY_DEPLOYER_ADDRESS, ZERO_SALT } from '../../ui/zoltarShared/ts/protocol/zoltarDeploymentHelpers.ts'
 import type { WriteClient } from '../../ui/coreShared/ts/wallet/chainBackend.ts'
 import { getUniswapNetworkDeployment, SEPOLIA_CHAIN_ID, type UniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { statoblast_WETH9_WETH9 } from '../../solidity/ts/types/contractArtifact.ts'
 import type { PublishedContract } from './published-contracts.mts'
 
@@ -389,7 +390,7 @@ async function broadcastCanonicalCreate2Deployer(client: WriteClient, allowInsuf
 		try {
 			return await resolveCreate2DeployerBroadcastRace(client, error, wait)
 		} catch (resolvedError) {
-			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical CREATE2 deployer raw transaction before signer funding: ${resolvedError instanceof Error ? resolvedError.message : String(resolvedError)}`, { cause: resolvedError })
+			if (allowInsufficientFunds) throw new Error(`RPC rejected the canonical CREATE2 deployer raw transaction before signer funding: ${errorMessage(resolvedError)}`, { cause: resolvedError })
 			throw resolvedError
 		}
 	}

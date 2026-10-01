@@ -1,6 +1,6 @@
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { deriveSecurityPoolLifecycleState, type SecurityPoolLifecycleState } from './securityPoolState.js'
 import type { SecurityPoolReportingStage } from './securityPoolState/types.js'
 import type { SelectedPoolView } from './securityPoolWorkflow.js'

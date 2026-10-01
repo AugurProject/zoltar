@@ -80,9 +80,9 @@
 			"bun": "./ts/features/security-pools/components/RepPriceStatusLabel.tsx",
 			"default": "./js/features/security-pools/components/RepPriceStatusLabel.js"
 		},
-		"./features/security-pools/components/SecurityPoolLink.js": {
-			"bun": "./ts/features/security-pools/components/SecurityPoolLink.tsx",
-			"default": "./js/features/security-pools/components/SecurityPoolLink.js"
+		"./features/security-pools/components/StatoblastSecurityPoolLink.js": {
+			"bun": "./ts/features/security-pools/components/StatoblastSecurityPoolLink.tsx",
+			"default": "./js/features/security-pools/components/StatoblastSecurityPoolLink.js"
 		},
 		"./features/security-pools/components/SecurityPoolSection.js": {
 			"bun": "./ts/features/security-pools/components/SecurityPoolSection.tsx",
@@ -291,6 +291,10 @@
 		"./types/app.js": {
 			"bun": "./ts/types/app.ts",
 			"default": "./js/types/app.js"
+		},
+		"./types/contracts.js": {
+			"bun": "./ts/types/contracts.ts",
+			"default": "./js/types/contracts.js"
 		},
 		"./copy/openOracle.js": {
 			"bun": "./ts/copy/openOracle.ts",

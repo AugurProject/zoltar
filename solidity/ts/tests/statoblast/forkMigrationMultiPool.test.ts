@@ -7,7 +7,7 @@ import assert from '../../testSupport/simulator/utils/assert'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
-import { getTotalRepPurchasedAttoRep } from '../../testSupport/simulator/utils/contracts/auction'
+import { getTotalRepPurchasedAttoRep, getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/auction'
 import { getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
 import { getScalarOutcomeIndex } from '../../testSupport/simulator/utils/contracts/scalarOutcome'
 import {
@@ -25,7 +25,7 @@ import {
 	redeemShares,
 } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { claimAuctionProceeds, claimForkedEscalationDeposits, createChildUniverse, finalizeTruthAuction, getMigratedAttoRep, getOwnForkRepBuckets, getQuestionOutcome, initiateSecurityPoolFork, migrateRepToZoltar, migrateVault, startTruthAuction } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { balanceOfShares, balanceOfSharesInAttoEth, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { balanceOfShares, balanceOfSharesInAttoEth, getLastPrice, getQuestionEndDate, migrateShares, OperationType, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveAndDepositRepToVault, manipulatePriceOracleAndPerformOperation, setVaultCapacityFixture, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { forkUniverse, getRepTokenAddress, getTotalTheoreticalSupply, getZoltarAddress, getZoltarForkThreshold } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'

@@ -1,9 +1,9 @@
 import { Document, Element, Window } from 'happy-dom'
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { repositoryRoot as repositoryRootPath } from '../repo/root.mts'
-import { repositorySourcePath } from './repository-source-links.mts'
+import { repositorySourceTarget } from './repository-source-links.mts'
 
 type ParsedHtmlDocument = {
 	docsDirectory: string
@@ -455,16 +455,17 @@ async function validateLocalLink(parsedDocument: ParsedHtmlDocument, href: strin
 }
 
 async function validateRepositorySourceLink(href: string, sourceRelativePath: string, failures: ValidationFailure[]): Promise<void> {
-	const repositoryPath = repositorySourcePath(href)
-	if (repositoryPath === undefined) return
-	if (repositoryPath.startsWith('docs/')) {
+	const target = repositorySourceTarget(href)
+	if (target === undefined) return
+	if (target.path.startsWith('docs/')) {
 		failures.push({ message: `links to documentation through the repository instead of a relative route "${href}"`, relativePath: sourceRelativePath })
 		return
 	}
 	try {
-		await access(path.join(repositoryRootPath, repositoryPath))
+		const entry = await stat(path.join(repositoryRootPath, target.path))
+		if (target.kind === 'directory' ? !entry.isDirectory() : !entry.isFile()) failures.push({ message: `links to a repository ${target.kind === 'directory' ? 'file through a directory' : 'directory through a file'} URL "${href}"`, relativePath: sourceRelativePath })
 	} catch (error) {
-		failures.push({ message: `links to missing repository file "${href}": ${formatUnknownError(error)}`, relativePath: sourceRelativePath })
+		failures.push({ message: `links to missing repository ${target.kind} "${href}": ${formatUnknownError(error)}`, relativePath: sourceRelativePath })
 	}
 }
 

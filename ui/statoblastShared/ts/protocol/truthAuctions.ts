@@ -1,6 +1,7 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction } from '../contractArtifact.js'
-import type { ReadClient, TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TruthAuctionBidView, TruthAuctionBidderBidPage, TruthAuctionTickBidPage, TruthAuctionTickPage, TruthAuctionTickSummary } from '../types/contracts.js'
 import { requireAddressValue, requireArrayValue, requireBigintValue, requireBooleanValue, requireObjectValue } from './decoders.js'
 import { getProtocolPageOffset } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 

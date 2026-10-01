@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import { BinaryOutcomes } from '../statoblast/BinaryOutcomes.sol';
 import { ISecurityPool, SystemState } from '../statoblast/interfaces/ISecurityPool.sol';
 import { ISecurityPoolForker } from '../statoblast/interfaces/ISecurityPoolForker.sol';
+import { IERC165 } from '../statoblast/interfaces/IERC165.sol';
 import { IERC1155Receiver } from '../statoblast/interfaces/IERC1155Receiver.sol';
 import { Math } from '../statoblast/openOracle/openzeppelin/contracts/utils/math/Math.sol';
 import { ITradingShareToken } from './interfaces/ITradingShareToken.sol';
@@ -59,7 +60,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	constructor(address _factory, ISecurityPool _securityPool, uint256 _feeBps, address predeploymentShareSink) {
 		require(_factory != address(0), 'Factory is zero');
 		require(address(_securityPool) != address(0), 'Security pool is zero');
-		require(_feeBps < 10_000, 'Invalid fee');
+		require(_feeBps < TwoWayConstantProductMath.BPS_DENOMINATOR, 'Invalid fee');
 		require(predeploymentShareSink != address(0), 'Share sink is zero');
 		factory = _factory;
 		securityPool = _securityPool;
@@ -224,7 +225,7 @@ contract TwoWayConstantProductPair is TradingLiquidityToken, IERC1155Receiver {
 	}
 
 	function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
-		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == 0x01ffc9a7;
+		return interfaceId == type(IERC1155Receiver).interfaceId || interfaceId == type(IERC165).interfaceId;
 	}
 
 	function _validateReceivedShare(address operator, uint256 id) private view {

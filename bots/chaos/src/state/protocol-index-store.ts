@@ -6,6 +6,7 @@ import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { encodeAbiParameters, getAddress, keccak256, type Address, type Hash, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '#operations/types'
+import { compareUnsignedStrings } from '../core/units.ts'
 import { assertExactKeys, nonemptyString, normalizedHash32 as hash, requiredRecord, unsignedIntegerString } from './validators.ts'
 
 const PROTOCOL_INDEX_REFERENCE_VERSION = 1
@@ -106,14 +107,6 @@ function boundedUnsignedString(value: unknown, label: string, bits: number) {
 	if (parsed.length > maximumDigits) throw new Error(`${label} exceeds uint${bits.toString()}`)
 	if (BigInt(parsed) >= 1n << BigInt(bits)) throw new Error(`${label} exceeds uint${bits.toString()}`)
 	return parsed
-}
-
-function compareUnsignedStrings(left: string, right: string) {
-	const leftValue = BigInt(left)
-	const rightValue = BigInt(right)
-	if (leftValue < rightValue) return -1
-	if (leftValue > rightValue) return 1
-	return 0
 }
 
 function compareSignedStrings(left: string, right: string) {

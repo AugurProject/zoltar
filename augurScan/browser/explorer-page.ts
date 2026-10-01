@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { callTraceRows } from './call-trace.ts'
 import { isRecord } from './api-validation.ts'
 import { exactNumber, exactUnit, utcDateTime } from './format.ts'
@@ -119,7 +120,7 @@ export const renderExplorerPage = async (path: string, chainId: string, api: (pa
 			const retry = node('button', 'state-retry explorer-retry', 'Retry')
 			retry.type = 'button'
 			retry.addEventListener('click', () => void renderExplorerPage(path, chainId, api))
-			content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', error instanceof Error ? error.message : String(error)), retry, link('Back to activity', '/'))
+			content.replaceChildren(node('h2', '', error instanceof Error && error.status === 404 ? 'Page not found' : 'Evidence unavailable'), node('p', 'system-status error', errorMessage(error)), retry, link('Back to activity', '/'))
 		}
 		content.removeAttribute('aria-busy')
 		return false

@@ -1,8 +1,7 @@
 import { formatMultiplier } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { isVaultHealthyAtFactor } from './liquidation.js'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails, SecurityVaultDetails } from '../../../types/contracts.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getOracleManagerPriceValidUntilTimestamp } from '../../../protocol/oracleTiming.js'
 

@@ -1,6 +1,8 @@
 {
 	"extends": "../tsconfig.base.json",
 	"compilerOptions": {
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact",
 		"paths": {
 			"@zoltar/bot-shared/contracts/abi": ["../shared/src/contracts/abi.generated.ts"],
 			"@zoltar/bot-shared/*": ["../shared/src/*"],
@@ -10,5 +12,5 @@
 		},
 		"resolveJsonModule": true
 	},
-	"include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mts", "docs/**/*.ts"]
+	"include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "scripts/**/*.mts", "docs/**/*.ts"]
 }

@@ -1,7 +1,7 @@
 import { openOracleAbi } from '@zoltar/bot-shared/contracts/abi'
 import { bigintToSafeNumber, encodeAbiParameters, getAddress, hexToBytes, keccak256, zeroAddress, zeroHash, type Address, type Chain, type Hash, type PublicClient, type Transport } from '@zoltar/bot-shared/ethereum'
 import { sameAddress } from '@zoltar/core-shared/evm/address'
-import type { CanonicalUintString } from '../core/units.ts'
+import { compareUnsignedStrings, type CanonicalUintString } from '../core/units.ts'
 import { eventTopic } from '../operations/planning.ts'
 import type { AuctionBidSnapshot, AuctionRefundSnapshot, ChildRepSplitProgressSnapshot, EscalationDepositSnapshot, MigrationRepSplitProgressSnapshot, OracleGameSnapshot } from '../operations/types.ts'
 import { ChaosProtocolIndexReorgError, fetchProtocolLogs, protocolLogPrefixAvailable, recoverPrunedProtocolLogs, requireCanonicalBlock, validatePreviousProtocolIndex } from './protocol-index-context.ts'
@@ -340,14 +340,6 @@ function refundEpisodeGeneration(log: CanonicalLogPosition) {
 
 function activeEscalationDeposits(source: readonly EscalationDepositSnapshot[]) {
 	return source.filter(deposit => !deposit.claimed).map(deposit => ({ ...deposit }))
-}
-
-function compareUnsignedStrings(left: string, right: string) {
-	const leftValue = BigInt(left)
-	const rightValue = BigInt(right)
-	if (leftValue < rightValue) return -1
-	if (leftValue > rightValue) return 1
-	return 0
 }
 
 function sortedMigrationRepSplits(source: readonly MigrationRepSplitProgressSnapshot[]) {

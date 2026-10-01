@@ -4,7 +4,7 @@ import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { createTruthAuctionSettlementActionState, getTruthAuctionSettlementAction, reduceTruthAuctionSettlementActionState } from '../lib/truthAuctionSettlementActionState.js'
 import { getTruthAuctionSettlementBidKey, getTruthAuctionSettlementSelectionState, type TruthAuctionSettlementBidRow } from '../lib/truthAuctionSettlement.js'
 import type { ForkWorkflowSelectionStage } from '../../security-pools/lib/securityPoolWorkflow.js'
-import type { ForkAuctionActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionActionResult } from '../../../types/contracts.js'
 import type { SettlementSelectedBid } from '../../types.js'
 
 type SettlementBidKeyUpdater = string[] | ((currentKeys: string[]) => string[])

@@ -7,7 +7,7 @@ import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
 import { OpenOraclePriceValue } from '../../open-oracle/components/OpenOraclePriceValue.js'
 import { getQuestionTitle, Question } from '@zoltar/ui-core-shared/components/Question.js'
 import { SecurityPoolSummaryMetrics } from './SecurityPoolSummaryMetrics.js'
-import { SecurityPoolLink } from './SecurityPoolLink.js'
+import { StatoblastSecurityPoolLink } from './StatoblastSecurityPoolLink.js'
 import { ReadOnlyDetailAccordion } from '@zoltar/ui-core-shared/components/ReadOnlyDetailAccordion.js'
 import { TimestampValue } from '@zoltar/ui-core-shared/components/TimestampValue.js'
 import { UpdatedAgo } from '@zoltar/ui-core-shared/components/UpdatedAgo.js'
@@ -18,7 +18,8 @@ import { PoolCapacitySummary } from './PoolCapacitySummary.js'
 import * as copy from '../../../copy/poolWorkspace.js'
 import { getSecurityPoolStatusBadgeLabel, getSecurityPoolStatusBadgeTone } from '../lib/securityPoolLabels.js'
 import type { SecurityPoolLifecycleState } from '../lib/securityPoolState.js'
-import type { ListedSecurityPool, MarketDetails, OracleManagerDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool, OracleManagerDetails } from '../../../types/contracts.js'
 
 type SecurityPoolObjectHeaderProps = {
 	currentPoolOracleManagerDetails: OracleManagerDetails | undefined
@@ -103,7 +104,7 @@ export function SecurityPoolReferenceDetails(props: SecurityPoolObjectHeaderProp
 					) : undefined}
 					{summaryPool.parent === zeroAddress ? undefined : (
 						<MetricField label={securityPoolCopy.parentPool}>
-							<SecurityPoolLink securityPoolAddress={summaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
+							<StatoblastSecurityPoolLink securityPoolAddress={summaryPool.parent} selectedPoolView={selectedPoolView} universeId={selectedPoolParentPool?.universeId} />
 						</MetricField>
 					)}
 				</SecurityPoolSummaryMetrics>

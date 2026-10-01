@@ -8,6 +8,7 @@ import { OpenOracle } from '../openOracle/OpenOracle.sol';
 import { ReputationToken } from '../../ReputationToken.sol';
 import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { LiquidationApprovalRegistry } from '../LiquidationApprovalRegistry.sol';
+import { Create2Deployment } from './Create2Deployment.sol';
 
 contract CreationCodeChunk {
 	constructor(bytes memory data) {
@@ -83,14 +84,9 @@ contract PriceCoordinatorDeploymentWorker {
 	function deploy(bytes calldata constructorArguments, bytes32 salt) external returns (OpenOraclePriceCoordinator) {
 		require(msg.sender == factory, 'Only factory');
 		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), constructorArguments);
-		address deployed;
-		assembly ('memory-safe') {
-			deployed := create2(0, add(initCode, 0x20), mload(initCode), salt)
-			if iszero(deployed) {
-				returndatacopy(0, 0, returndatasize())
-				revert(0, returndatasize())
-			}
-		}
+		address deployed = Create2Deployment.deploy(initCode, salt);
+		// Keep the historical data-free failure when the constructor reverts without data.
+		require(deployed != address(0));
 		return OpenOraclePriceCoordinator(deployed);
 	}
 

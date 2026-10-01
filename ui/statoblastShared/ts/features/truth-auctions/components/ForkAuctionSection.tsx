@@ -25,11 +25,13 @@ import { REPORTING_OUTCOME_DROPDOWN_OPTIONS } from '../../reporting/lib/reportin
 import type { ForkAuctionSectionProps } from '../../types.js'
 import { type DisplayMetric, ForkAuctionOutcomeStage, ForkAuctionMigrationSummaryCard, FORK_MIGRATION_DURATION, ForkWorkflowStageNavigator, renderAddress, renderMetricValue, renderTruthAuctionPriceValue, renderTruthAuctionSettlementSelectionSummary, sameBigIntRecord } from './ForkAuctionPresentation.js'
 import { useForkAuctionSectionState } from '../hooks/useForkAuctionSectionState.js'
+import { renderForkAuctionSectionDisplays } from './ForkAuctionSectionDisplays.js'
 
 export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const model = useForkAuctionSectionState(props)
+	const displays = renderForkAuctionSectionDisplays(model)
 
-	const submitBidAction = model.renderStageActionButton({
+	const submitBidAction = displays.renderStageActionButton({
 		action: 'submitBid',
 		availability: createActionAvailability(model.submitBidGuardMessage),
 		forceEnabled: model.hasSelectedAuctionChildPool,
@@ -104,11 +106,11 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	})()
 	const auctionStatusMetrics: DisplayMetric[] = [
 		{ label: forkAuctionCopy.truthAuctionAddress, value: renderAddress(model.auctionTruthAuctionAddress) },
-		{ label: forkAuctionCopy.started, value: model.startedDisplay },
-		{ label: commonCopy.ends, value: model.endsDisplay },
-		{ label: forkAuctionCopy.ethRaisedPerCap, value: model.ethRaisedCapDisplay },
+		{ label: forkAuctionCopy.started, value: displays.startedDisplay },
+		{ label: commonCopy.ends, value: displays.endsDisplay },
+		{ label: forkAuctionCopy.ethRaisedPerCap, value: displays.ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
-		{ label: forkAuctionCopy.clearingPrice, value: model.clearingPriceDisplay },
+		{ label: forkAuctionCopy.clearingPrice, value: displays.clearingPriceDisplay },
 		{ label: AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 		{ label: forkAuctionCopy.minBidSizeAttoEth, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.truthAuctionStatus.minBidSizeAttoEth} suffix={commonCopy.eth} /> },
@@ -117,7 +119,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const settlementStatusMetrics: DisplayMetric[] = [
 		{ label: AUCTIONED_UNDERWRITING_LIMIT_ATTO_ETH_LABEL, value: model.selectedAuctionContext === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.selectedAuctionContext.auctionedUnderwritingLimitAttoEth} suffix={commonCopy.eth} /> },
 		{ label: forkAuctionCopy.settlementAvailable, value: model.settlementAvailableDisplay },
-		{ label: forkAuctionCopy.ethRaisedPerCap, value: model.ethRaisedCapDisplay },
+		{ label: forkAuctionCopy.ethRaisedPerCap, value: displays.ethRaisedCapDisplay },
 		{ label: forkAuctionCopy.repPurchasedAttoRep, value: model.truthAuctionStatus === undefined ? model.truthAuctionFallback : <CurrencyValue value={model.displayedRepSoldAttoRep} suffix={commonCopy.rep} /> },
 		{ label: forkAuctionCopy.pendingRefund, value: pendingRefundDisplay },
 	]
@@ -132,7 +134,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				<span>{commonCopy.outcome}</span>
 				<div className='fork-workflow-outcome-selector-row'>
 					<EnumDropdown options={REPORTING_OUTCOME_DROPDOWN_OPTIONS} value={model.forkAuctionForm.selectedOutcome} onChange={selectedOutcome => model.onForkAuctionFormChange({ selectedOutcome })} />
-					{model.renderSelectedOutcomeChildPoolLink()}
+					{displays.renderSelectedOutcomeChildPoolLink()}
 				</div>
 			</label>
 		</div>
@@ -153,7 +155,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				displayedEthRaisedAttoEth={model.displayedEthRaisedAttoEth}
 				displayedRepSoldAttoRep={model.displayedRepSoldAttoRep}
 				ended={biddingClosed}
-				endsDisplay={model.endsDisplay}
+				endsDisplay={displays.endsDisplay}
 				attoEthRaiseCap={model.truthAuctionStatus.attoEthRaiseCap}
 				ethRaisedProgress={model.ethRaisedProgress}
 				maxAttoRepBeingSold={model.truthAuctionStatus.maxAttoRepBeingSold}
@@ -167,14 +169,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					const reservePrice = getTruthAuctionReservePrice(model.truthAuctionStatus)
 					return reservePrice === undefined ? undefined : renderTruthAuctionPriceValue(reservePrice)
 				})()}
-				startedDisplay={model.startedDisplay}
+				startedDisplay={displays.startedDisplay}
 				winningThresholdPriceDisplay={model.winningThresholdPrice === undefined ? undefined : renderTruthAuctionPriceValue(model.winningThresholdPrice)}
 			/>
 		)
 	})()
 	const migrationSummaryCard = (
 		<ForkAuctionMigrationSummaryCard
-			badge={model.migrationStatusBadge}
+			badge={displays.migrationStatusBadge}
 			forkAuctionDetails={model.forkAuctionDetails}
 			forkTypeDisplay={model.resolvedForkTypeLabel}
 			migratedRepDisplay={migrationRepDisplay}
@@ -250,7 +252,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		selectedRefundCount: model.selectedRefundSettlementBidRows.length,
 		selectedRowCount: model.selectedSettlementBidRows.length,
 	})
-	const settlementActionButton = model.renderStageActionButton({
+	const settlementActionButton = displays.renderStageActionButton({
 		action: model.settlementAction,
 		availability: createActionAvailability(model.settlementActionAvailabilityMessage),
 		forceEnabled: model.hasSelectedAuctionChildPool,
@@ -269,7 +271,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 	const withdrawRefundAction =
 		model.onWithdrawAuctionRefund === undefined
 			? undefined
-			: model.renderStageActionButton({
+			: displays.renderStageActionButton({
 					action: 'withdrawAuctionRefund',
 					availability: createActionAvailability(pendingRefundWithdrawalAvailability),
 					forceEnabled: model.hasSelectedAuctionChildPool,
@@ -308,7 +310,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					}))
 				}}
 				renderSettlementAction={({ guardMessage, outcome, sideLabel }) =>
-					model.renderStageActionButton({
+					displays.renderStageActionButton({
 						action: 'settleForkedEscalation',
 						availability: createActionAvailability(guardMessage),
 						idleLabel: forkAuctionCopy.formatSettleSelectedValueForkCarriedDeposits(sideLabel),
@@ -325,7 +327,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 		)
 	})()
 	const forkWorkflowStageNavigator = !model.hasLoadedPoolContext ? undefined : <ForkWorkflowStageNavigator currentStage={model.currentWorkflowStage} onStageChange={model.onSelectedStageViewChange} selectedStage={model.selectedStage} />
-	const startTruthAuctionAction = model.renderStageActionButton({
+	const startTruthAuctionAction = displays.renderStageActionButton({
 		action: 'startTruthAuction',
 		availability: createActionAvailability(!model.hasSelectedAuctionChildPool ? forkAuctionCopy.formatMissingChildUniverseDetail(model.selectedAuctionLabel) : model.startTruthAuctionAvailabilityMessage),
 		forceEnabled: model.hasSelectedAuctionChildPool,
@@ -359,14 +361,14 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 					migratePoolGuardMessage={model.migratePoolToUniverseGuardMessage}
 					migrateUnresolvedGuardMessage={model.migrateUnresolvedEscalationGuardMessage}
 					migrateVaultGuardMessage={model.migrateVaultGuardMessage}
-					migrationBalancesContent={model.migrationBalancesContent}
+					migrationBalancesContent={displays.migrationBalancesContent}
 					migrationSummaryCard={migrationSummaryCard}
 					onClaimParentDeposits={model.onClaimSelectedParentEscalationDeposits}
 					onMigratePool={model.onMigrateSelectedOutcomeRepToZoltar}
 					onMigrateUnresolved={model.onMigrateUnresolvedEscalationSubmit}
 					onMigrateVault={model.onMigrateVaultSubmit}
 					onParentDepositSelectionChange={model.setSelectedParentEscalationClaimDepositIndexes}
-					renderAction={model.renderStageActionButton}
+					renderAction={displays.renderStageActionButton}
 					reportingDetails={model.reportingDetails}
 					retrySelectedOutcomeMigrationSeedStatus={model.retrySelectedOutcomeMigrationSeedStatus}
 					selectedOutcome={model.forkAuctionForm.selectedOutcome}
@@ -390,7 +392,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				disabled={model.disabled}
 				hasStartedTruthAuction={model.hasStartedTruthAuction}
 				importedForkSettlementSection={importedForkSettlementSection}
-				renderSelectedOutcomeChildPoolNotice={model.renderSelectedOutcomeChildPoolNotice}
+				renderSelectedOutcomeChildPoolNotice={displays.renderSelectedOutcomeChildPoolNotice}
 				selectedStage={model.selectedStage}
 				showChildSecurityPools={!model.isViewingOwnAuction}
 				selectedStageAheadMessage={model.selectedStageAheadMessage}
@@ -398,7 +400,7 @@ export function ForkAuctionSection(props: ForkAuctionSectionProps) {
 				shouldShowVisualization={model.shouldShowTruthAuctionVisualization}
 				startTruthAuctionSection={startTruthAuctionSection}
 				submitBidSection={submitBidSection}
-				truthAuctionEndedNotice={model.truthAuctionEndedNotice}
+				truthAuctionEndedNotice={displays.truthAuctionEndedNotice}
 				truthAuctionHero={truthAuctionHero}
 				truthAuctionMarketViewSection={truthAuctionMarketViewSection}
 				truthAuctionSettlementSection={truthAuctionSettlementSection}

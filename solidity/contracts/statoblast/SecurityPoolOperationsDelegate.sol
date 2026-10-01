@@ -15,6 +15,8 @@ import { ISecurityPoolForker } from './interfaces/ISecurityPoolForker.sol';
 import { EscalationGame } from './EscalationGame.sol';
 import { EscalationGameFactory } from './factories/EscalationGameFactory.sol';
 import { IShareToken } from './interfaces/IShareToken.sol';
+import { DelegateCall } from './DelegateCall.sol';
+import { IQuestionEndTime, IZoltarForkState } from './interfaces/IZoltarForkState.sol';
 
 interface ISecurityPoolRepDepositContext {
 	function escalationGameFactory() external view returns (EscalationGameFactory);
@@ -34,21 +36,13 @@ interface ISecurityPoolRepDepositContext {
 	function zoltar() external view returns (address);
 }
 
-interface IZoltarForkState {
-	function getNonDecisionThresholdAttoRep(uint248 universeId) external view returns (uint256);
-	function getForkTime(uint248 universeId) external view returns (uint256);
-}
-
-interface IQuestionEndTime {
-	function getQuestionEndDate(uint256 questionId) external view returns (uint256);
-}
-
 contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	using SafeERC20Ops for IERC20;
 
 	event RepDepositedToVault(address indexed vault, uint256 attoRepAmount, uint256 repBackingUnits, uint256 totalRepBackingUnits);
 	event AwaitingForkContinuationSet(bool awaitingForkContinuation);
 
+	/// @notice Pool delegatecall target: accrues pool fees and moves `vault`'s fee share into its claimable fees.
 	function updateVaultFees(address vault) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		pool.updateSettlementCollateral();
@@ -96,16 +90,19 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		return true;
 	}
 
+	/// @notice Decodes an `Error(string)` revert payload into its reason, or returns a generic failure message.
 	function decodeError(bytes calldata result) external pure returns (string memory reason) {
 		if (result.length < 68 || bytes4(result[:4]) != bytes4(keccak256('Error(string)')))
 			return 'Delegate call failed';
 		return abi.decode(result[4:], (string));
 	}
 
+	/// @notice Pool delegatecall target: sets the caller's vault underwriting limit.
 	function setUnderwritingLimit(uint256 limitAttoEth) external {
 		_setUnderwritingLimit(msg.sender, limitAttoEth);
 	}
 
+	/// @notice Pool delegatecall target, coordinator-only: sets `vault`'s underwriting limit.
 	function setVaultUnderwritingLimit(address vault, uint256 limitAttoEth) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(msg.sender == address(pool.openOraclePriceCoordinator()), 'Unauthorized');
@@ -144,6 +141,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		require(SecurityPoolUtils.isVaultHealthy(pool.backingUnitsToAttoRep(securityVaults[vault].repBackingUnits), disputeStakedAttoRep, limitAttoEth, pool.openOraclePriceCoordinator().lastPrice(), statoblastSecurityMultiplierBps), 'Vault backing insufficient');
 	}
 
+	/// @notice Pool delegatecall target, forker-only: makes a recovered commitment fee-eligible after checking the vault's backing.
 	function activateRecoveredCommitment(address vault, uint256 commitmentAttoEth) external {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(msg.sender == pool.securityPoolForker(), 'Only forker');
@@ -162,12 +160,12 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 
 	event EscalationGameSet(EscalationGame escalationGame);
 
+	/// @notice Pool delegatecall target: deposits the caller's wallet REP into the escalation game, deploying the game if needed.
 	function depositWalletRepToEscalationGame(BinaryOutcomes.BinaryOutcome outcome, uint256 maximumDepositAttoRep) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		IZoltarForkState zoltar = IZoltarForkState(pool.zoltar());
 		uint248 universeId = pool.universeId();
-		require(zoltar.getForkTime(universeId) == 0, 'Forked');
-		require(systemState == SystemState.Operational, 'Pool inactive');
+		_requireUnforkedOperational(zoltar.getForkTime(universeId));
 		require(!awaitingForkContinuation, 'Fork await');
 		if (address(escalationGame) == address(0)) {
 			require(block.timestamp > IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()), 'Question active');
@@ -181,10 +179,12 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		escalationGame.recordDepositFromSecurityPool(msg.sender, outcome, depositedAttoRep, resultingCumulativeAttoRep);
 	}
 
+	/// @notice Pool delegatecall target: deposits REP from the caller into the caller's vault.
 	function depositRepToVault(uint256 attoRepAmount, uint256 targetHealthFactorBps) external {
 		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps);
 	}
 
+	/// @notice Pool delegatecall target: deposits the caller's REP into the caller's vault after a permit, falling back to an existing allowance.
 	function depositRepToVaultWithPermit(uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		require(pool.universeId() != 0, 'Genesis REP does not support permit');
@@ -197,6 +197,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		_depositRepToVault(msg.sender, attoRepAmount, targetHealthFactorBps);
 	}
 
+	/// @notice Pool delegatecall target: deposits `owner`'s REP into `owner`'s vault through an ERC-3009 authorization bound to this operation.
 	function depositRepToVaultWithAuthorization(address owner, uint256 attoRepAmount, uint256 targetHealthFactorBps, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s) external {
 		ISecurityPoolRepDepositContext pool = ISecurityPoolRepDepositContext(address(this));
 		require(pool.universeId() != 0, 'Genesis REP does not support authorization');
@@ -237,8 +238,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _requireVaultAdmissionOpen(ISecurityPoolRepDepositContext pool) private view {
-		require(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()) == 0, 'Forked');
-		require(systemState == SystemState.Operational, 'Pool inactive');
+		_requireUnforkedOperational(IZoltarForkState(pool.zoltar()).getForkTime(pool.universeId()));
 		if (pool.isEscalationResolved()) revert('Escalation resolved');
 		if (
 			block.timestamp >= IQuestionEndTime(pool.questionData()).getQuestionEndDate(pool.questionId()) &&
@@ -247,17 +247,13 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 	}
 
 	function _delegateEvent(address emitter, bytes memory callData) private {
-		(bool success, bytes memory result) = emitter.delegatecall(callData);
-		if (!success) {
-			assembly ('memory-safe') {
-				revert(add(result, 0x20), mload(result))
-			}
-		}
+		DelegateCall.invoke(emitter, callData);
 	}
 
+	/// @notice Pool delegatecall target: resumes the paused fork-continuation escalation game and clears the awaiting flag.
+	/// @dev This is permissionless for liveness. The immutable carry commitment was
+	/// installed during child initialization, so resumption does no unbounded work.
 	function resumeForkedEscalationGame() external {
-		// This is permissionless for liveness. The immutable carry commitment was
-		// installed during child initialization, so resumption does no unbounded work.
 		if (!awaitingForkContinuation || systemState != SystemState.Operational)
 			revert('Fork continuation unavailable');
 		escalationGame.resumeFromFork();
@@ -266,6 +262,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		emit AwaitingForkContinuationSet(false);
 	}
 
+	/// @notice Pool delegatecall target: burns `redeemer`'s winning shares and returns the settlement collateral owed.
 	function redeemShares(IShareToken shareToken, ISecurityPoolForker forker, uint248 universeId, address redeemer) external returns (uint256 winningSharesBurnedAttoShares, uint256 settlementCollateralRedeemedAttoEth) {
 		BinaryOutcomes.BinaryOutcome outcome = forker.getQuestionOutcome(ISecurityPool(payable(address(this))));
 		require(outcome != BinaryOutcomes.BinaryOutcome.None, 'Question not final');
@@ -285,6 +282,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		}
 	}
 
+	/// @notice Pool delegatecall target: burns `redeemer`'s complete sets and returns the settlement collateral owed.
 	function redeemCompleteSet(IShareToken shareToken, uint248 universeId, address redeemer, uint256 amountAttoShares) external returns (uint256 settlementCollateralRedeemedAttoEth) {
 		settlementCollateralRedeemedAttoEth =
 			amountAttoShares == 0 || shareTokenSupplyAttoShares == 0
@@ -301,6 +299,7 @@ contract SecurityPoolOperationsDelegate is SecurityPoolSettlementDelegate {
 		}
 	}
 
+	/// @notice Pool delegatecall target: moves commitment and REP backing from an unhealthy target vault to a receiver vault that must remain healthy.
 	function performBundledLiquidation(LiquidationExecutionRequest calldata request) external returns (uint256 debtToMoveAttoEth, uint256 underwritingLimitToMoveAttoEth, uint256 badDebtAttoEth) {
 		ISecurityPool pool = ISecurityPool(payable(address(this)));
 		require(request.receiverVault != request.targetVault && request.receiverVault != address(0), 'Receiver bad');

@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 import { Window } from 'happy-dom'
-import { repMarketConsensusPanel, renderRepMarketConsensusPanel, renderRepMarketConsensusError } from '../src/dashboard/rep-market-consensus.ts'
+import { repMarketConsensusPanel, renderRepMarketConsensus, renderRepMarketConsensusError } from '../src/dashboard/rep-market-consensus.ts'
 import { rpcConnectivityFields } from '../src/dashboard/rpc-connectivity.ts'
 
-const values = { cexPrice: '20', dexPrice: '21', guardedPrice: '20.5', dexBidDepth: '5 ETH', dexAskDepth: '6 ETH', cexBidDepth: '7 ETH', cexAskDepth: '8 ETH', sources: '2 CEX · 1 DEX' }
+const consensus = { cex: { sourceCount: 2 }, dex: { askDepthEth: '6', bidDepthEth: '5', priceRepPerEth: '21', reliable: true, sourceCount: 1 }, priceRepPerEth: '20.5', reasons: [], reliable: true }
 
 test('consensus panel renders metrics, safe observation text, empty states and retained refresh failures', () => {
 	const window = new Window()
@@ -14,8 +14,10 @@ test('consensus panel renders metrics, safe observation text, empty states and r
 		expect(document.querySelector('[aria-busy="true"]')).not.toBeNull()
 		renderRepMarketConsensusError(document)
 		expect(document.querySelector('td')?.textContent).toContain('unavailable')
-		const model = { values, status: 'Reliable', emptyText: 'No observations', observations: [{ exchange: '<script>bad()</script>', market: 'REP/ETH', price: '20', bidDepth: '7 ETH', askDepth: '8 ETH', observed: '12:00' }] }
-		renderRepMarketConsensusPanel(document, model)
+		const market = { askDepthEth: '8', bidDepthEth: '7', observations: [{ askDepthEth: '8', bidDepthEth: '7', exchangeId: '<script>bad()</script>', observedAt: 0, priceRepPerEth: '20', repMarket: 'REP/ETH' }], priceRepPerEth: '20', reasons: ['stale'], reliable: false }
+		renderRepMarketConsensus(document, market, consensus)
+		expect(document.querySelector('#centralized-market-status')?.textContent).toBe('Reliable independent CEX + DEX consensus')
+		expect(Array.from(document.querySelectorAll('dd'), value => value.textContent)).toEqual(['20', '21', '20.5', '5 ETH', '6 ETH', '7 ETH', '8 ETH', '2 CEX · 1 DEX'])
 		expect(document.querySelectorAll('dl').length).toBe(8)
 		expect(document.querySelectorAll('tbody td').length).toBe(6)
 		expect(document.querySelector('script')).toBeNull()
@@ -24,9 +26,14 @@ test('consensus panel renders metrics, safe observation text, empty states and r
 		renderRepMarketConsensusError(document)
 		expect(document.querySelector('#centralized-market-status')?.textContent).toContain('last observations')
 		expect(document.querySelectorAll('tbody td').length).toBe(6)
-		renderRepMarketConsensusPanel(document, { ...model, observations: [] })
+		renderRepMarketConsensus(document, { ...market, observations: [] }, undefined)
+		expect(document.querySelector('#centralized-market-status')?.textContent).toBe('stale')
+		expect(document.querySelector('#centralized-market-source-count')?.textContent).toBe('0 CEX')
 		expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('6')
-		expect(document.querySelector('tbody td')?.textContent).toBe('No observations')
+		expect(document.querySelector('tbody td')?.textContent).toBe('Add public exchange sources in the operator configuration.')
+		renderRepMarketConsensus(document, undefined, { ...consensus, reasons: ['thin DEX depth'], reliable: false })
+		expect(document.querySelector('#centralized-market-status')?.textContent).toBe('thin DEX depth')
+		expect(document.querySelector('#guarded-market-price')?.textContent).toBe('—')
 		expect(document.querySelector('#centralized-market-status')?.getAttribute('role')).toBe('status')
 	} finally {
 		Object.defineProperty(globalThis, 'document', { configurable: true, value: previousDocument })

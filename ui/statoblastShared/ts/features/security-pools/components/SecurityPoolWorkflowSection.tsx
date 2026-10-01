@@ -14,7 +14,7 @@ import { useForkWorkflowSelectionState } from '../../truth-auctions/hooks/useFor
 import { useSelectedPoolRefreshEffects } from '../hooks/useSelectedPoolRefreshEffects.js'
 import { useSelectedVaultWorkflowState, type SelectedVaultView } from '../hooks/useSelectedVaultWorkflowState.js'
 import type { SecurityPoolWorkflowRouteContentProps, ViewTabOption } from '../../types.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '../../../types/contracts.js'
 import { buildRouteHref, getCurrentRouteHash, getRouteHashSearch } from '@zoltar/ui-core-shared/navigation/routing.js'
 import { POOLS_ROUTE_HASH, parsePoolsRouteHash, writePoolsLocationSearch } from '../../../lib/statoblastLocation.js'
 import { SecurityPoolObjectHeader, SecurityPoolReferenceDetails } from './SecurityPoolObjectHeader.js'

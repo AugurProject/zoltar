@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { boolean, integer, nonemptyString, optionalRecord, record } from '../src/infrastructure/json-validation.ts'
-import { errorMessage } from '../src/infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 test('JSON validators preserve values and reject invalid shapes and boundaries', () => {
 	const input = { enabled: false }

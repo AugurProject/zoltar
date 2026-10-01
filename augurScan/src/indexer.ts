@@ -4,7 +4,8 @@ import type { NetworkConfig } from './types.ts'
 
 export * from './indexer/planning.ts'
 
-import { NetworkIndexer } from './indexer/block-ingestion.ts'
+import { run } from './indexer/network-lifecycle.ts'
+import { createNetworkIndexer } from './indexer/network-state.ts'
 
 export const startIndexers = (
 	networks: readonly NetworkConfig[],
@@ -13,7 +14,7 @@ export const startIndexers = (
 	options: {
 		readonly provenance?: EvidenceProvenance
 	} = {},
-): readonly Promise<void>[] => networks.map(network => runIndexerTask(network.id, () => new NetworkIndexer(network, database, signal, options).run()))
+): readonly Promise<void>[] => networks.map(network => runIndexerTask(network.id, () => run(createNetworkIndexer(network, database, signal, options))))
 
 const runIndexerTask = async (networkId: string, run: () => Promise<void>): Promise<void> => {
 	try {

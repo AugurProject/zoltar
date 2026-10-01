@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { assertDurableDeploymentFactory, assertDurableStateFactories, assertSepoliaDurableFactory } from '../config/deployment-state.ts'
@@ -264,7 +265,7 @@ export async function probeChaosDoctor(settings: OperatorSettings, wallet: `0x${
 			const readerUrl = readerUrls[index]
 			if (readerUrl === undefined) throw new Error(`RPC ${endpoint} is missing its configured URL`)
 			await requireDeployedContracts(client, deploymentRoots, anchor.blockNumber).catch(error => {
-				throw new Error(`RPC ${endpoint}: ${error instanceof Error ? error.message : String(error)}`)
+				throw new Error(`RPC ${endpoint}: ${errorMessage(error)}`)
 			})
 			const [finalized, logs] = await Promise.all([finalizedBlockIdentity(readerUrl), probeDoctorLogRange(client, deploymentAddresses, settings.runtime.protocolStartBlock, anchor.blockNumber, BigInt(settings.runtime.protocolLogBlockSpan))])
 			const codeRoots = deploymentRoots.length

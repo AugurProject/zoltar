@@ -1,5 +1,5 @@
 import { getAddress, privateKeyToAccount, type Address, type Hex } from '../ethereum.ts'
-import { errorMessage } from '../infrastructure/error-message.ts'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { acquireExecutionSignerLock, acquireFileProcessLock, type ExclusiveProcessLock } from './process-lock.ts'
 
 export type BotLockSettings = {
@@ -36,7 +36,7 @@ class BotProcessLockAcquisitionError extends Error {
 	readonly releaseProcessLocks: () => Promise<void>
 
 	constructor(acquisitionCause: unknown, releaseProcessLocks: () => Promise<void>) {
-		super(acquisitionCause instanceof Error ? acquisitionCause.message : String(acquisitionCause), { cause: acquisitionCause })
+		super(errorMessage(acquisitionCause), { cause: acquisitionCause })
 		this.name = 'BotProcessLockAcquisitionError'
 		this.acquisitionCause = acquisitionCause
 		this.releaseProcessLocks = releaseProcessLocks

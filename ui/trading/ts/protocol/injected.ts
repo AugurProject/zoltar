@@ -1,14 +1,8 @@
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { InjectedEthereum } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 export { createWalletContextSubscription, subscribeToWalletContextChanges } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 export type { InjectedEthereum, WalletContextChangeEvent } from '@zoltar/ui-core-shared/wallet/injectedEthereum.js'
 
-declare global {
-	interface Window {
-		ethereum?: InjectedEthereum
-	}
-}
-
-export function getInjectedEthereum() {
+/** Returns the active chain backend's provider, falling back to the browser-injected wallet. */
+export function getActiveInjectedProvider() {
 	return getActiveBackend().getProvider() ?? window.ethereum
 }

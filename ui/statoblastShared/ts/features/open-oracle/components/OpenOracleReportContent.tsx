@@ -22,8 +22,8 @@ import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { OpenOracleFormState } from '@zoltar/ui-zoltar-shared/types/app.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleFormState } from '../../../types/app.js'
+import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
 export const BROWSE_PAGE_SIZE = 10
 export const OPEN_ORACLE_PRICE_UNITS = 30

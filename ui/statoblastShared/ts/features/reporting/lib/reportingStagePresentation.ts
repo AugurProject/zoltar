@@ -5,7 +5,8 @@ import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails } from '../../../types/contracts.js'
 import { ESCALATION_GAME_ACTIVATION_DELAY, getEscalationPhase, isPoolQuestionFinalized } from './reportingDomain.js'
 
 function getResolvedReportingOutcomeLabel(reportingDetails: ReportingDetails) {

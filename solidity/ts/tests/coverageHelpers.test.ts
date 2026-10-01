@@ -21,7 +21,7 @@ import { AnvilWindowEthereum } from '../testSupport/simulator/AnvilWindowEthereu
 import { useIsolatedAnvilNode } from '../testSupport/simulator/useIsolatedAnvilNode'
 import assert from '../testSupport/simulator/utils/assert'
 import { createWriteClient, type WriteClient, writeContractAndWait } from '../testSupport/simulator/utils/clients'
-import { TEST_ADDRESSES } from '../testSupport/simulator/utils/constants'
+import { TEST_ADDRESSES, MAX_UINT256 } from '../testSupport/simulator/utils/constants'
 import { applyLibraries } from '../testSupport/simulator/utils/contracts/deployStatoblast'
 import { OPEN_ORACLE_SECURITY_MULTIPLIER_BPS, ORACLE_GAS_UNITS_FOR_ONE_DISPUTE, ORACLE_TARGET_PRICE_ERROR_FOR_DISPUTE } from '@zoltar/statoblast-shared/initialReport/oracleInitialReport'
 import { setupTestAccounts } from '../testSupport/simulator/utils/utilities'
@@ -48,7 +48,6 @@ const SCALAR_DECIMALS = 18n
 const ATTO_REP = 10n ** 18n
 const MAX_INT256 = 2n ** 255n - 1n
 const MIN_INT256 = -(2n ** 255n)
-const MAX_UINT256 = 2n ** 256n - 1n
 const DEFAULT_ANVIL_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 
 type CoverageFileSummary = {

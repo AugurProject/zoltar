@@ -5,15 +5,8 @@ export { LogScanError, type LogRange }
 
 const DEFAULT_LATEST_LOG_BLOCKS = 256n
 
-function walkErrorCauses(error: unknown, visit: (current: object) => boolean) {
-	for (const current of errorChain(error)) {
-		if (visit(current)) return true
-	}
-	return false
-}
-
 export function historyUnavailableError(error: unknown) {
-	return walkErrorCauses(error, current => {
+	return [...errorChain(error)].some(current => {
 		if (!('message' in current) || typeof current.message !== 'string') return false
 		const message = current.message.toLowerCase()
 		return message.includes('history unavailable') || message.includes('historical data unavailable') || message.includes('missing trie node') || message.includes('pruned') || message.includes('block is out of range') || message.includes('requested data is not available')
