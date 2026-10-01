@@ -107,6 +107,14 @@
 	color: var(--text-secondary);
 }
 
+/* Unavailable options read as unavailable at a glance: muted text, a dashed outline, and a not-allowed cursor. */
+.view-tabs.segmented .view-tab:disabled:not(.active),
+.view-tabs.segmented .view-tab[aria-disabled="true"]:not(.active) {
+	border: 1px dashed var(--disabled-control-border);
+	color: var(--disabled-control-text);
+	cursor: not-allowed;
+}
+
 .view-tabs.segmented .view-tab.active {
 	background: var(--interactive-bg-active);
 	border-color: var(--border-active);

@@ -132,6 +132,8 @@ describe('liquidity panel', () => {
 			expect(operationButton('Initialize').getAttribute('aria-pressed')).toBe('true')
 			expect(operationButton('Add').getAttribute('aria-description')).toBe('Initialize the pool first.')
 			expect(operationButton('Remove').getAttribute('aria-description')).toBe('The pool has no liquidity yet.')
+			// The reasons are also visible text, so touch users do not depend on a hover tooltip.
+			expect(Array.from(document.querySelectorAll('.operation-switcher-reasons li')).map(item => item.textContent)).toEqual(['Add unavailable: Initialize the pool first.', 'Remove unavailable: The pool has no liquidity yet.'])
 		} finally {
 			await empty.cleanup()
 		}

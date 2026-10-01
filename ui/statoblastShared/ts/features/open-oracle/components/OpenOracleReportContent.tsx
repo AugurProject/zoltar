@@ -1,7 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
-import type { ComponentChildren } from 'preact'
+import { Fragment, type ComponentChildren } from 'preact'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { AddressValue } from '@zoltar/ui-core-shared/components/AddressValue.js'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
@@ -112,10 +112,14 @@ function renderTokenAmounts(amounts: ReadonlyArray<{ amount: bigint | undefined;
 	return (
 		<span className='open-oracle-token-amounts'>
 			{known.map((entry, index) => (
-				<span key={index.toString()}>
-					{index === 0 ? undefined : ' + '}
-					<CurrencyValue value={entry.amount} suffix={entry.symbol} units={entry.decimals} precision='exact' />
-				</span>
+				<Fragment key={index.toString()}>
+					{index === 0 ? undefined : ' '}
+					{/* The plus sign stays with the amount it introduces, so a wrapped sum never leaves it on a line of its own. */}
+					<span className='open-oracle-token-amount'>
+						{index === 0 ? undefined : '+\u00a0'}
+						<CurrencyValue value={entry.amount} suffix={entry.symbol} units={entry.decimals} />
+					</span>
+				</Fragment>
 			))}
 		</span>
 	)
@@ -280,10 +284,13 @@ export function renderSelectedReportActionSection({
 								</label>
 							) : (
 								// Without flexible escalation the report fixes the base amount, so it is shown instead of entered.
-								<MetricField label={openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}>
-									<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} precision='exact' />
-									<span className='detail'>{openOracleCopy.newBaseAmountFixedHint}</span>
-								</MetricField>
+								<div className='field'>
+									<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token1Symbol)}</span>
+									<strong className='field-read-only-value'>
+										<CurrencyValue value={disputeSubmission?.expectedNewAmount1} suffix={token1Symbol} units={disputeSubmission?.token1Decimals ?? 18} precision='exact' />
+									</strong>
+									<UserMessage placement='field' detail={openOracleCopy.newBaseAmountFixedHint} />
+								</div>
 							)}
 							<label className='field'>
 								<span>{openOracleCopy.formatNewTokenAmountFieldLabel(token2Symbol)}</span>
@@ -307,7 +314,10 @@ export function renderSelectedReportActionSection({
 						<SectionBlock headingLevel={4} title={openOracleCopy.disputeOutcome} variant='embedded'>
 							<MetricGrid variant='question'>
 								<MetricField label={openOracleCopy.proposedPrice}>{proposedPriceValue}</MetricField>
-								<MetricField label={openOracleCopy.tokenToSwapOut}>{swapTokenSymbol ?? openOracleCopy.disputeSwapTokenPending}</MetricField>
+								{/* The pending explanation is prose, so it uses body text rather than the value font. */}
+								<MetricField label={openOracleCopy.tokenToSwapOut} valueClassName={swapTokenSymbol === undefined ? 'metric-field-prose' : ''} valueTagName={swapTokenSymbol === undefined ? 'span' : 'strong'}>
+									{swapTokenSymbol ?? openOracleCopy.disputeSwapTokenPending}
+								</MetricField>
 								<MetricField label={openOracleCopy.youPay}>
 									{renderTokenAmounts([
 										{ amount: disputeSubmission?.token1ContributionAmount, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },

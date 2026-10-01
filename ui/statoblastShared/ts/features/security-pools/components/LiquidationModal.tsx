@@ -238,7 +238,11 @@ export function LiquidationModal({
 	})
 	// With a usable pool oracle price, Max uses the same price as the protocol guard; a queued liquidation can only estimate it with the UI price.
 	const liquidationMaxActionAmount = hasUsableOraclePrice ? protocolLiquidationMaxAmount : computedLiquidationMaxAmount
-	const liquidationMaxUnavailableReason = liquidationMaxActionAmount === undefined ? liquidationCopy.maxTransferableNeedsPrice : liquidationCopy.maxTransferableNone
+	const liquidationMaxUnavailableReason = (() => {
+		if (liquidationMaxActionAmount !== undefined) return liquidationCopy.maxTransferableNone
+		return liquidationExecutionMode === 'queue' ? liquidationCopy.maxTransferableQueuedNeedsPrice : liquidationCopy.maxTransferableNeedsPrice
+	})()
+	const liquidationMaxUnavailable = liquidationMaxActionAmount === undefined || liquidationMaxActionAmount <= 0n
 	const liquidationMaximumAmount = protocolLiquidationMaxAmount !== undefined && protocolLiquidationMaxAmount > 0n ? protocolLiquidationMaxAmount : undefined
 	const deterministicLiquidationReason = getDeterministicLiquidationFailureReason({
 		callerVaultSummary: receiverVaultSummary,
@@ -372,7 +376,14 @@ export function LiquidationModal({
 						<>
 							<label className='field'>
 								<span>{liquidationCopy.boundedApprovalId}</span>
-								<FormInput hint={liquidationCopy.boundedApprovalIdHelp} placeholder={commonCopy.hexValuePlaceholder} spellcheck={false} value={liquidationApprovalId} onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value)} />
+								{/* The unset approval ID is the zero ID; showing it would read as a filled-in value, so the field stays empty with a short placeholder. */}
+								<FormInput
+									hint={liquidationCopy.boundedApprovalIdHelp}
+									placeholder={commonCopy.hexValuePlaceholder}
+									spellcheck={false}
+									value={liquidationApprovalId === ZERO_LIQUIDATION_APPROVAL_ID ? '' : liquidationApprovalId}
+									onInput={event => onLiquidationApprovalIdChange(event.currentTarget.value.trim() === '' ? ZERO_LIQUIDATION_APPROVAL_ID : event.currentTarget.value)}
+								/>
 								<UserMessage placement='field' as='span' detail={liquidationCopy.receiverOperatorEconomics} />
 							</label>
 							{loadingLiquidationApproval ? <UserMessage className='detail' announcement='polite' detail={liquidationCopy.loadingBoundedApproval} /> : null}
@@ -387,7 +398,11 @@ export function LiquidationModal({
 					) : null}
 					<AmountField
 						fillMax={{ amount: liquidationMaxActionAmount, unavailableReason: liquidationMaxUnavailableReason }}
-						hint={liquidationMaximumAmount === undefined ? undefined : liquidationCopy.formatMaxTransferableHint(formatCurrencyBalanceWithUnit(liquidationMaximumAmount, commonCopy.eth))}
+						hint={(() => {
+							if (liquidationMaximumAmount !== undefined) return liquidationCopy.formatMaxTransferableHint(formatCurrencyBalanceWithUnit(liquidationMaximumAmount, commonCopy.eth))
+							// A disabled Max explains itself in visible text, not only in its tooltip.
+							return liquidationMaxUnavailable ? liquidationMaxUnavailableReason : undefined
+						})()}
 						label={liquidationCopy.requestedLiquidationDebt}
 						maximum={liquidationMaximumAmount}
 						onChange={onLiquidationAmountChange}

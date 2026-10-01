@@ -720,9 +720,9 @@ describe('Open Oracle helpers', () => {
 
 	test('open oracle fee and multiplier formatters render human values', () => {
 		expect(formatOpenOracleFeePercentage(10_000n)).toBe('0.1%')
-		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9 007 199 254 740 991.12345%')
+		expect(formatOpenOracleFeePercentage(BigInt(Number.MAX_SAFE_INTEGER) * 100_000n + 12_345n)).toBe('9\u00a0007\u00a0199\u00a0254\u00a0740\u00a0991.12345%')
 		expect(formatOpenOracleMultiplier(140n)).toBe('1.4×')
-		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9 007 199 254 740 991.01×')
+		expect(formatOpenOracleMultiplier(BigInt(Number.MAX_SAFE_INTEGER) * 100n + 1n)).toBe('9\u00a0007\u00a0199\u00a0254\u00a0740\u00a0991.01×')
 	})
 
 	test('open oracle create form parser accepts user-facing decimal values', () => {

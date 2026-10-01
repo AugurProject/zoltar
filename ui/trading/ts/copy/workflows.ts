@@ -41,3 +41,8 @@ export function revalidatingAfterReceipt(status: string) {
 export const formatTradeActivity = (market: string) => `Trade · ${market}`
 export const formatLiquidityActivity = (market: string) => `Liquidity · ${market}`
 export const formatSettlementActivity = (market: string) => `Settlement · ${market}`
+
+/** Names the switcher options a reason applies to, such as `Fork migration unavailable: The universe has not forked…`. */
+export function unavailableOperationReason(operationLabels: readonly string[], reason: string) {
+	return `${operationLabels.join(', ')} unavailable: ${reason}`
+}

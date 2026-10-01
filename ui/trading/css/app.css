@@ -75,6 +75,22 @@
 	gap: var(--space-4);
 	min-width: 0;
 }
+/* A disabled switcher option states its reason under the switcher, so touch users see it without a hover tooltip. */
+.operation-switcher {
+	display: grid;
+	gap: var(--space-2);
+	min-width: 0;
+}
+.operation-switcher-reasons {
+	display: grid;
+	gap: var(--space-1);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	color: var(--muted);
+	font-size: var(--font-caption);
+	line-height: var(--line-height-body);
+}
 .market-stack {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);

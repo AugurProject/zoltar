@@ -102,5 +102,6 @@ export const liquidationUnavailableReason = 'Liquidation is unavailable in this 
 
 export const formatMaxTransferableHint = (amount: string) => `Max transferable: ${amount}`
 export const maxTransferableNeedsPrice = 'A REP price is needed to estimate the transferable commitment.'
+export const maxTransferableQueuedNeedsPrice = 'Max needs a REP price to estimate the transferable commitment. Enter an amount instead; a queued liquidation is checked against the oracle price when it executes.'
 export const maxTransferableNone = 'No commitment is transferable at the current price.'
 export const targetHasNoCommitmentReason = 'This vault has no commitment to liquidate.'

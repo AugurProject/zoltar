@@ -116,7 +116,7 @@ describe('security vault guards', () => {
 				withdrawableRepAmountAttoRep: 2_500n * 10n ** 18n,
 				walletBalanceAttoEth: 1n,
 			}),
-		).toBe('Reduce the withdrawal to 2 500\u00a0REP or less.')
+		).toBe('Reduce the withdrawal to 2\u00a0500\u00a0REP or less.')
 	})
 
 	test('blocks approval and oracle manager actions until required state is loaded', () => {

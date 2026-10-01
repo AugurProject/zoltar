@@ -482,7 +482,7 @@ describe('SecurityVaultSection', () => {
 		expect(describedBy).toEqual(['Enter 1–5 whole minutes.', '1–5 whole minutes; expires after oracle settlement.'])
 	})
 
-	test('uses the pool REP token symbol for withdrawal amounts and labels', async () => {
+	test('uses the pool’s REP token symbol for withdrawal amounts and labels', async () => {
 		cleanupRenderedComponent = (
 			await renderIntoDocument(
 				<SecurityVaultSection

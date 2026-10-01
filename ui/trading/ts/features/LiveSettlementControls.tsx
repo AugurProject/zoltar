@@ -23,12 +23,12 @@ import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
 import { WarningSurface } from '@zoltar/ui-core-shared/components/WarningSurface.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { forkMigrationBatchBlocker, forkMigrationBatchWarning, migrationSimulationSummary, settlementBalanceLabel, settlementInputBlocker, settlementUnavailableReason } from './LiveSettlementModel.js'
 import { operationOption } from './live/operationOption.js'
+import { OperationSwitcher } from './OperationSwitcher.js'
 import { useSettlementWorkflowController } from './live/useSettlementWorkflowController.js'
 import { resolveSettlementAvailability } from './live/actionAvailability.js'
 
@@ -170,7 +170,7 @@ export function LiveSettlementControls({ balances, balanceError, networkMismatch
 	const completeSetHint = redeemableAttoEth === undefined ? undefined : settlementCopy.completeSetsHeld(formatCompleteSetQuantity(availability.completeSets, 4, 'down'), formatCollateralEth(availability.completeSets, market, 'down'))
 	return (
 		<div className='settlement-controls'>
-			<ViewTabs ariaLabel={settlementCopy.operationLabel} semantics='switcher' variant='segmented' size='compact' value={operation} onChange={selectOperation} options={operationOptions} />
+			<OperationSwitcher ariaLabel={settlementCopy.operationLabel} value={operation} onChange={selectOperation} options={operationOptions} />
 			{(() => {
 				if (operation === 'redeem-complete-set')
 					return (

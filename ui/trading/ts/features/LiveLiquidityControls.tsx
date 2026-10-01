@@ -17,7 +17,6 @@ import { useId } from 'preact/hooks'
 import { DataGrid } from '@zoltar/ui-core-shared/components/DataGrid.js'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
 import { MetricField } from '@zoltar/ui-core-shared/components/MetricField.js'
-import { ViewTabs } from '@zoltar/ui-core-shared/components/ViewTabs.js'
 import type { LiveWorkflowPanelProps } from './live/liveTradingTypes.js'
 import { BalanceLoadError } from './LiveTradingTransactionUi.js'
 import { liquidityOperationAvailable, useLiquidityWorkflowController } from './live/useLiquidityWorkflowController.js'
@@ -25,6 +24,7 @@ import { resolveLiquidityAvailability } from './live/actionAvailability.js'
 import { panelWalletStep, QuotedTransactionPanel } from './QuotedTransactionPanel.js'
 import { outcomeSharesValueAttoEth, type LiquidityPreview } from './live/liquidityEstimate.js'
 import { operationOption } from './live/operationOption.js'
+import { OperationSwitcher } from './OperationSwitcher.js'
 
 export type LiveLiquidityServices = Readonly<{
 	publicErrorMessage: typeof publicErrorMessage
@@ -109,7 +109,7 @@ export function LiveLiquidityControls({
 	return (
 		<div className='liquidity-controls'>
 			{balanceState === 'error' && networkMismatchReason === undefined ? <BalanceLoadError message={liquidityCopy.balancesUnavailable(balanceError ?? liquidityCopy.balanceRefreshFallback)} retry={retryBalances} disabled={workflowLocked} /> : null}
-			<ViewTabs ariaLabel={liquidityCopy.operationLabel} semantics='switcher' variant='segmented' size='compact' value={operation} onChange={selectOperation} options={operationOptions} />
+			<OperationSwitcher ariaLabel={liquidityCopy.operationLabel} value={operation} onChange={selectOperation} options={operationOptions} />
 			<FormField id={amountId} label={operation === 'remove' ? liquidityCopy.lpTokenAmount : liquidityCopy.ethAmount}>
 				<FormInput
 					id={amountId}

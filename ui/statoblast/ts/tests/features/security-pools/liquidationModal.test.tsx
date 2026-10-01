@@ -2461,6 +2461,44 @@ describe('LiquidationModal', () => {
 		expect(within(document.body).getAllByText('Enter a valid receiver vault address.').length).toBeGreaterThan(0)
 		expect(document.body.textContent).not.toContain('Receiver vault state must be loaded')
 		expect(getTransactionButtonState(document.body, 'Execute vault liquidation').disabled).toBe(true)
+		// Invalid text is not another receiver yet, so the delegated-receiver warning and approval field stay hidden.
+		expect(document.body.textContent).not.toContain('Receiver accepts liquidation liabilities')
+		expect(within(document.body).queryByRole('textbox', { name: /^Bounded approval ID/ })).toBeNull()
+	})
+
+	test('shows an unset bounded approval ID as an empty field with a short placeholder', async () => {
+		const approvalIdChanges: string[] = []
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: true }),
+			liquidationReceiverVault: getAddress('0x0000000000000000000000000000000000000002'),
+			onLiquidationApprovalIdChange: value => {
+				approvalIdChanges.push(value)
+			},
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		expect(document.body.textContent).toContain('Receiver accepts liquidation liabilities')
+		const approvalIdInput = within(document.body).getByRole('textbox', { name: /^Bounded approval ID/ })
+		if (!(approvalIdInput instanceof HTMLInputElement)) throw new Error('Expected the approval ID input')
+		expect(approvalIdInput.value).toBe('')
+		expect(approvalIdInput.getAttribute('placeholder')).toBe('0x...')
+		fireEvent.input(approvalIdInput, { target: { value: `0x${'22'.repeat(32)}` } })
+		fireEvent.input(approvalIdInput, { target: { value: ' ' } })
+		// Clearing the field restores the unset zero ID rather than submitting blank text.
+		expect(approvalIdChanges).toEqual([`0x${'22'.repeat(32)}`, `0x${'00'.repeat(32)}`])
+	})
+
+	test('explains in visible text why Max is unavailable while a liquidation queues without a price', async () => {
+		const renderedComponent = await renderLiquidationModal({
+			currentPoolOracleManagerDetails: createOracleManagerDetails({ isPriceValid: false }),
+			repPerEthPrice: undefined,
+			uiPriceOracle: 'uniswap',
+		})
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const maxButton = within(document.body).getByRole('button', { name: 'Max' })
+		if (!(maxButton instanceof HTMLButtonElement)) throw new Error('Expected liquidation Max button')
+		expect(maxButton.disabled).toBe(true)
+		const hint = within(document.body).getByText(/^Max needs a REP price to estimate the transferable commitment\./)
+		expect(hint.classList.contains('field-hint')).toBe(true)
 	})
 
 	test('states the 1–5 minute timeout range and flags an out-of-range timeout inline', async () => {

@@ -1191,6 +1191,11 @@
 	padding-block: var(--space-2);
 }
 
+/* A wrapped sum breaks before its plus sign, never between the sign and its amount. */
+.open-oracle-token-amount {
+	white-space: nowrap;
+}
+
 .open-oracle-report-actions .action-launcher-card {
 	grid-template-rows: minmax(2.5rem, 1fr) auto;
 }

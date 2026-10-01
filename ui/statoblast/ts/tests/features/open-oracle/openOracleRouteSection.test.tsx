@@ -509,10 +509,51 @@ describe('OpenOracleSection route create view', () => {
 		expect(dialog.textContent).toContain('Token to swap outREPv2')
 		expect(dialog.textContent).toContain('Proposed price0.15 WETH per REPv2')
 		// 20 new + 10 bought out + 1 fee (10% of 10) REPv2; the 3 WETH posted comes from the 5 WETH bought out.
-		expect(dialog.textContent).toContain('You pay31 REPv2 + 0 WETH')
-		expect(dialog.textContent).toContain('Dispute fee (to current reporter)1 REPv2')
-		expect(dialog.textContent).toContain('Credited to your oracle balance2 WETH')
-		expect(dialog.textContent).toContain('Your new report20 REPv2 + 3 WETH')
+		// Summary amounts use display rounding; the exact amount stays in each value's title.
+		const dialogText = dialog.textContent?.replaceAll(' ', ' ')
+		expect(dialogText).toContain('You pay31.00 REPv2 + 0.00 WETH')
+		expect(dialogText).toContain('Dispute fee (to current reporter)1.00 REPv2')
+		expect(dialogText).toContain('Credited to your oracle balance2.00 WETH')
+		expect(dialogText).toContain('Your new report20.00 REPv2 + 3.00 WETH')
+		const youPayAmounts = within(dialog).getByText('You pay').parentElement?.querySelectorAll('.open-oracle-token-amount')
+		expect([...(youPayAmounts ?? [])].map(amount => amount.textContent)).toEqual(['31.00 REPv2', '+ 0.00 WETH'])
+		expect(youPayAmounts?.[0]?.querySelector('[title]')?.getAttribute('title')).toBe('31 REPv2')
+	})
+
+	test('shows a fixed base amount as a read-only value with its hint below and keeps pending prose out of the value font', async () => {
+		const tokenUnits = 10n ** 18n
+		const openOracleReportDetails = createOpenOracleReportDetails({
+			currentAmount1: 10n * tokenUnits,
+			currentAmount2: 5n * tokenUnits,
+			currentReporter: '0x3000000000000000000000000000000000000000',
+			currentTime: 200n,
+			disputeDelay: 10n,
+			escalationHalt: 20n * tokenUnits,
+			multiplier: 20_000n,
+			reportTimestamp: 100n,
+			settlementTime: 200n,
+		})
+		const renderedComponent = await renderIntoDocument(
+			<OpenOracleSection
+				{...createOpenOracleSectionProps({
+					activeView: 'selected-report',
+					openOracleForm: { ...getDefaultOpenOracleFormState(), reportId: openOracleReportDetails.reportId.toString() },
+					openOracleReportDetails,
+				})}
+			/>,
+		)
+		cleanupRenderedComponent = renderedComponent.cleanup
+		const documentQueries = within(document.body)
+		fireEvent.click(documentQueries.getByRole('button', { name: 'Dispute & swap' }))
+		const dialog = documentQueries.getByRole('dialog', { name: 'Dispute & swap' })
+		const fixedAmountField = within(dialog).getByText('New REPv2 amount').parentElement
+		expect(fixedAmountField?.querySelector('.field-read-only-value')?.textContent).toBe('20 REPv2')
+		const hint = within(dialog).getByText('Set by the report’s escalation rules.')
+		expect(hint.classList.contains('field-hint')).toBe(true)
+		expect(hint.closest('.field-read-only-value, strong')).toBeNull()
+		// Without a valid quote amount the swap token is still pending; its explanation is prose, not a value.
+		const pendingSwapToken = within(dialog).getByText('Determined by the proposed price')
+		expect(pendingSwapToken.closest('strong')).toBeNull()
 	})
 
 	test('hides a revealed dispute amount error when another report is selected', async () => {

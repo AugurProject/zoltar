@@ -143,6 +143,10 @@ describe('liquidation modal guards', () => {
 		expect(isDelegatedLiquidationReceiver(OPERATOR, '')).toBe(false)
 		expect(isDelegatedLiquidationReceiver(OPERATOR, ` ${OPERATOR.toLowerCase()} `)).toBe(false)
 		expect(isDelegatedLiquidationReceiver(OPERATOR, RECEIVER)).toBe(true)
+		expect(isDelegatedLiquidationReceiver(OPERATOR, ` ${RECEIVER.toLowerCase()} `)).toBe(true)
+		// Unfinished or invalid receiver text is an input error, not a delegated receiver.
+		expect(isDelegatedLiquidationReceiver(OPERATOR, '0x1234')).toBe(false)
+		expect(isDelegatedLiquidationReceiver(OPERATOR, 'not an address')).toBe(false)
 	})
 
 	test('detects approval route mismatches and nonce invalidation', () => {

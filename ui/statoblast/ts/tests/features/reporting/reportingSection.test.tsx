@@ -374,7 +374,7 @@ describe('ReportingSection', () => {
 	test('shows nonzero tiny fork progress and grouped amounts', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps({ reportingDetails: createReportingDetails({ nonDecisionThresholdAttoRep: rep(225000n) }) })))
 		cleanupRenderedComponent = rendered.cleanup
-		expect(document.body.textContent).toContain('second side at 5 / 225 000 REP (<0.01%)')
+		expect(document.body.textContent).toContain('second side at 5 / 225\u00a0000 REP (<0.01%)')
 	})
 	test('keeps active phase visible, scales bars to fork threshold and hides premature settlement', async () => {
 		const rendered = await renderIntoDocument(h(ReportingSection, createProps()))
