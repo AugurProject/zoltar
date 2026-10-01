@@ -623,7 +623,7 @@ for (const functionName of ['requestPrice', 'requestPriceIfNeededAndStageOperati
 				expect(transactionSteps.value?.steps[0]?.failure?.message).toContain('already pending')
 			} else {
 				expect(value).toBe(hash)
-				expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n, gas: 120002n })
+				expect(sendTransaction).toHaveBeenCalledWith({ to: account, data: '0x1234', value: 2n, gas: 150002n })
 				expect(sendTransaction).toHaveBeenCalledTimes(1)
 			}
 		})
@@ -655,7 +655,7 @@ test.each([undefined, 90000n, 200000n])('submits a fee-aware buffered contract g
 	} as const
 	expect(await reviewed.writeContract(parameters)).toBe(hash)
 	expect(estimateGas).toHaveBeenCalledWith({ account: client.account, to: account, data: encodeFunctionData(parameters), value: 2n, gasPrice: 2n })
-	expect(writeContract).toHaveBeenCalledWith({ ...parameters, gas: gas === 200000n ? gas : 120002n })
+	expect(writeContract).toHaveBeenCalledWith({ ...parameters, gas: gas === 200000n ? gas : 150002n })
 })
 
 for (const diagnostic of ['out-of-gas', 'unavailable'] as const) {

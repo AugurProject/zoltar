@@ -140,8 +140,8 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 			if (transaction.functionName === 'requestPrice' || transaction.functionName === 'requestPriceIfNeededAndStageOperation' || transaction.functionName === 'requestPriceIfNeededAndStageLiquidation') {
 				const gasPrice = await client.getGasPrice()
 				const estimate = await client.estimateGas({ account: client.account, to: transaction.contractAddress, data: transaction.data, value: transaction.value, gasPrice: gasPrice > 0n ? gasPrice : 1n })
-				// Submit the fee-aware estimate with 20% headroom, rather than letting a fee-free wallet estimate replace it.
-				const bufferedGas = (estimate * 120n + 99n) / 100n
+				// Reserve execution headroom for refunds and nested calls when an RPC returns gas spent instead of the minimum successful limit.
+				const bufferedGas = (estimate * 150n + 99n) / 100n
 				if (gas === undefined || gas < bufferedGas) gas = bufferedGas
 				await validate()
 				if (!environment.isCurrent()) throw new Error('The network changed. Review the action again.')
