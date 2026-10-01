@@ -20,7 +20,7 @@ import { loadOpenOracleReportSummaries } from '../../../protocol/openOracle.js'
 import { getWrongNetworkReason } from '@zoltar/ui-core-shared/wallet/network.js'
 import { getWalletConnectionActiveAppChainGuardState, withWalletGuardFirst } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { WalletActionFixReason } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
-import { formatCurrencyInputBalance } from '@zoltar/ui-core-shared/lib/formatters.js'
+import { formatCeilingAmountDisplay, formatCurrencyBalance, formatCurrencyInputBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { OpenOracleFormState } from '../../../types/app.js'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import type { OpenOracleSectionProps } from '../../oracleTypes.js'
@@ -106,7 +106,8 @@ export function getOpenOracleClockLabel(timeType: boolean, timestampLabel: strin
 	return timeType ? timestampLabel : blockLabel
 }
 
-function renderTokenAmounts(amounts: ReadonlyArray<{ amount: bigint | undefined; decimals: number | undefined; symbol: string | undefined }>) {
+/** `roundUp` rounds like the approval controls, so a payment never reads below the amount its approval requires. */
+function renderTokenAmounts(amounts: ReadonlyArray<{ amount: bigint | undefined; decimals: number | undefined; symbol: string | undefined }>, roundUp = false) {
 	const known = amounts.filter((entry): entry is { amount: bigint; decimals: number; symbol: string } => entry.amount !== undefined && entry.decimals !== undefined && entry.symbol !== undefined)
 	if (known.length === 0 || known.length !== amounts.length) return commonCopy.metricUnavailablePlaceholder
 	return (
@@ -117,7 +118,13 @@ function renderTokenAmounts(amounts: ReadonlyArray<{ amount: bigint | undefined;
 					{/* The plus sign stays with the amount it introduces, so a wrapped sum never leaves it on a line of its own. */}
 					<span className='open-oracle-token-amount'>
 						{index === 0 ? undefined : '+\u00a0'}
-						<CurrencyValue value={entry.amount} suffix={entry.symbol} units={entry.decimals} />
+						{roundUp ? (
+							<span className='currency-value' title={`${formatCurrencyBalance(entry.amount, entry.decimals)} ${entry.symbol}`}>
+								{formatValueWithUnit(formatCeilingAmountDisplay(entry.amount, entry.decimals), entry.symbol)}
+							</span>
+						) : (
+							<CurrencyValue value={entry.amount} suffix={entry.symbol} units={entry.decimals} />
+						)}
 					</span>
 				</Fragment>
 			))}
@@ -319,10 +326,13 @@ export function renderSelectedReportActionSection({
 									{swapTokenSymbol ?? openOracleCopy.disputeSwapTokenPending}
 								</MetricField>
 								<MetricField label={openOracleCopy.youPay}>
-									{renderTokenAmounts([
-										{ amount: disputeSubmission?.token1ContributionAmount, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
-										{ amount: disputeSubmission?.token2ContributionAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
-									])}
+									{renderTokenAmounts(
+										[
+											{ amount: disputeSubmission?.token1ContributionAmount, decimals: disputeSubmission?.token1Decimals, symbol: token1Symbol },
+											{ amount: disputeSubmission?.token2ContributionAmount, decimals: disputeSubmission?.token2Decimals, symbol: token2Symbol },
+										],
+										true,
+									)}
 								</MetricField>
 								<MetricField label={openOracleCopy.disputeFee}>{renderTokenAmounts([{ amount: disputeSubmission?.disputeFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
 								<MetricField label={openOracleCopy.disputeProtocolFee}>{renderTokenAmounts([{ amount: disputeSubmission?.protocolFeeAmount, decimals: swapTokenDecimals, symbol: swapTokenSymbol }])}</MetricField>
