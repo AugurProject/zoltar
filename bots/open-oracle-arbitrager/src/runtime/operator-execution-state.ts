@@ -16,9 +16,9 @@ function applyCentralizedMarketSettings<TSettings>(config: { centralizedMarkets:
 	clearMarketEvidenceForSourceChange(state)
 }
 
-function applyLookbackBlockSetting(config: { lookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
-	const changed = config.lookbackBlocks !== nextLookbackBlocks
-	config.lookbackBlocks = nextLookbackBlocks
+function applyLookbackBlockSetting(config: { logLookbackBlocks: bigint }, nextLookbackBlocks: bigint) {
+	const changed = config.logLookbackBlocks !== nextLookbackBlocks
+	config.logLookbackBlocks = nextLookbackBlocks
 	return changed
 }
 
@@ -65,9 +65,9 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		applyCentralizedMarketSettings(config, state, pending.centralizedMarkets)
 		pending.centralizedMarkets = undefined
 	}
-	if (pending.lookbackBlocks !== undefined) {
-		reportScanReset = applyLookbackBlockSetting(config, pending.lookbackBlocks)
-		pending.lookbackBlocks = undefined
+	if (pending.logLookbackBlocks !== undefined) {
+		reportScanReset = applyLookbackBlockSetting(config, pending.logLookbackBlocks)
+		pending.logLookbackBlocks = undefined
 	}
 	if (pending.maxHedgeSlippageBps !== undefined) {
 		config.maxHedgeSlippageBps = pending.maxHedgeSlippageBps
@@ -94,9 +94,9 @@ export function applyQueuedExecutionSettings(config: Configuration, state: Opera
 		config.settlement = pending.settlement
 		pending.settlement = undefined
 	}
-	if (pending.rpcQuorum !== undefined) {
-		config.rpcQuorum = pending.rpcQuorum
-		pending.rpcQuorum = undefined
+	if (pending.pollMilliseconds !== undefined) {
+		config.pollMilliseconds = pending.pollMilliseconds
+		pending.pollMilliseconds = undefined
 	}
 	if (pending.strategy !== undefined) {
 		applyStrategy(config, pending.strategy)

@@ -2,7 +2,7 @@ import { type Configuration } from '#config/configuration'
 import { type PersistedOperatorSettings } from '#config/settings-store'
 import { deployExecutorCreate2 } from '#execution/create2-executor'
 import { executorDeploymentIntentPath, loadExecutorDeploymentIntent } from '#execution/executor-deployment-store'
-import { type ConnectivitySettings } from '#monitoring/connectivity'
+import { type ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
 import { EXECUTOR_DEPLOYMENT_MESSAGES, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED } from '#state/executor-deployment-recovery'
 import { type Hex } from '@zoltar/bot-shared/ethereum'
 import { configuredReadRpcEndpointMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
@@ -41,7 +41,7 @@ export function requireActivePersistedNetwork(activeNetwork: Configuration['netw
 	if (persistedNetwork !== activeNetwork) throw new Error(EXECUTOR_DEPLOYMENT_MESSAGES.waitForSavedNetwork)
 }
 
-export function requireActivePersistedRpcQuorum(activeRpcQuorum: Configuration['rpcQuorum'], persistedRpcQuorum: PersistedOperatorSettings['rpcQuorum']) {
+export function requireActivePersistedRpcQuorum(activeRpcQuorum: Configuration['rpcQuorum'], persistedRpcQuorum: PersistedOperatorSettings['connectivity']['rpcQuorum']) {
 	if (persistedRpcQuorum !== activeRpcQuorum) throw new Error(EXECUTOR_DEPLOYMENT_MESSAGES.waitForSavedRpcQuorum)
 }
 

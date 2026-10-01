@@ -1,5 +1,5 @@
 {
-	"version": 1,
+	"version": 2,
 	"connectivity": {
 		"publicRpcUrls": ["https://broadcast.custom-chain.example.invalid"],
 		"quorumRpcUrls": ["https://read-secondary.custom-chain.example.invalid", "https://read-tertiary.custom-chain.example.invalid"],
@@ -25,8 +25,8 @@
 	"privateKey": null,
 	"runtime": {
 		"execute": false,
-		"lifecyclePollMilliseconds": 12000,
 		"once": false,
+		"pollMilliseconds": 12000,
 		"protocolLogBlockSpan": 50000,
 		"protocolStartBlock": "0",
 		"stateFile": ".state/chaos.custom-chain-placeholder.json",

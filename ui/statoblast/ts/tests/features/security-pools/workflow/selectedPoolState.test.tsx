@@ -279,7 +279,7 @@ describe('SecurityPoolWorkflowSection: selected pool state', () => {
 		expect(documentQueries.getByText('Collateral in use / capacity')).not.toBeNull()
 		expect(documentQueries.getByText('Pool-held REP')).not.toBeNull()
 		expect(documentQueries.queryByText('Total Underwriting commitments')).toBeNull()
-		expect(documentQueries.getByText('Open Oracle price')).not.toBeNull()
+		expect(documentQueries.getByText('OpenOracle price')).not.toBeNull()
 		expect(documentQueries.queryByText('Current oracle price')).toBeNull()
 		expect(documentQueries.queryByText('Oracle Expires In')).toBeNull()
 		expect(document.body.querySelectorAll('.selected-pool-object-header')).toHaveLength(1)

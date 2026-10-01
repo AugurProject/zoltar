@@ -4,6 +4,7 @@ import { securityPoolAbi } from '@zoltar/bot-shared/contracts/abi'
 import { canonicalLifecyclePresence, evaluateOperationCatalog } from '../../src/operations/catalog.ts'
 import { eligibleOperationPlans, urgentOperationPlans } from '../support/operation-plans.ts'
 import type { StagedOperationSnapshot } from '../../src/operations/types.ts'
+import { safeOraclePriceDeadline } from '../../src/operations/statoblast/planning.ts'
 import { address, snapshotFixture } from './fixture.ts'
 
 const options = {
@@ -139,5 +140,19 @@ describe('safe liquidation operations', () => {
 			['statoblast.staged.execute', false],
 			['statoblast.staged.expire', true],
 		])
+	})
+	test('uses the one-hour Sepolia oracle price validity window like the coordinator', () => {
+		const sepolia = stagedFixture(1)
+		sepolia.snapshot.chainId = 11155111
+		sepolia.pool.lastOracleSettlementTimestamp = (BigInt(sepolia.snapshot.anchor.timestamp) - 600n).toString()
+		sepolia.pool.oraclePriceValid = true
+		expect(safeOraclePriceDeadline(sepolia.snapshot, sepolia.pool, options)).toBe(BigInt(sepolia.snapshot.anchor.timestamp) + 3000n)
+		expect(urgentOperationPlans(sepolia.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')?.deadlineTimestamp).toBe('2000003000')
+
+		const local = stagedFixture(1)
+		local.pool.lastOracleSettlementTimestamp = (BigInt(local.snapshot.anchor.timestamp) - 600n).toString()
+		local.pool.oraclePriceValid = true
+		expect(safeOraclePriceDeadline(local.snapshot, local.pool, options)).toBeUndefined()
+		expect(urgentOperationPlans(local.snapshot, options).find(candidate => candidate.definitionId === 'statoblast.staged.execute')).toBeUndefined()
 	})
 })

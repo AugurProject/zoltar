@@ -1,5 +1,5 @@
 import { allocatedWinningPayout } from './claim-payout.ts'
-import { bagCarryPeaks, compareBigintAscending, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '../../shared/core/ts/evm/carryProof.ts'
+import { bagCarryPeaks, compareBigintAscending, buildCarryMerkleMountainRangeProof, buildCarryPeakHeights, createSparseNullifier, hashCarryLeaf, type CarryLeaf } from '@zoltar/core-shared/evm/carryProof'
 import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
 import { abiForKind } from './abi-catalog.ts'
 import { type Abi, type AbiValue, type Address, type Hex, getAddress, parseAbi, zeroAddress } from './ethereum.ts'

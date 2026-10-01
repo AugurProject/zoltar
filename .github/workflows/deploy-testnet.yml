@@ -52,8 +52,7 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: |
-          bun install --frozen-lockfile
+        run: bun run projects:setup
 
       - name: Prepare contract artifacts
         run: bun ./tooling/contracts/ensure-contract-artifacts.mts --headless

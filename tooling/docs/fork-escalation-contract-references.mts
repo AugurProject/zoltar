@@ -2,10 +2,10 @@ import type { ContractReference } from './contract-reference-metadata.mts'
 
 export const forkEscalationContractReferences: ContractReference[] = [
 	{
-		compiledAbiFingerprint: 'c34478103a1804c8de4dcbcd49690e8864d3ca9afc9148d2bea9d5fbf5ccae3d',
+		compiledAbiFingerprint: 'cbde7d4ca1c41aa7a92d04162002915ae0edbcf1e47ae3cf9328a0603356d840',
 		name: 'SecurityPoolForker',
 		purpose: 'Freezes parent pools, creates selected child pools, migrates vault and escalation state, and settles collateral-repair [Truth Auctions](./glossary.html#truth-auction).',
-		readAbiFingerprint: '278455ca0fe2ccf4ffe8682e913ee946cea32e3e54c70dd59e803e121dd140c1',
+		readAbiFingerprint: '44f89debf797ddb63c2614a513b7d04dfe528074f30a513ae53c700d9627fb51',
 		readSurface:
 			'Use `zoltar`, `forkData`, `getUnassignedPosition`, `isEscalationDepositClaimedDirectly`, `getEscalationDepositId`, `getDirectlyClaimedEscalationPrincipal`, `isEscalationWinnerHaircutPaidByFork`, `getEscalationMigrationEntitlementStatus`, `getOwnForkRepBuckets`, `getOwnForkMigrationStatus`, `getMigrationProxyAddress`, `getQuestionOutcome`, `attoRepToBackingUnits`, and `backingUnitsToAttoRep` to reconstruct fork progress and preview migration conversions. `forkData` includes cumulative migrated REP and the fork-activation timestamp. `getUnassignedPosition` returns pending REP backing units, underwriting commitment, raw auction bad debt, that debt’s generation, and the auction-finalization fee index; consumers count the debt only while its generation equals the pool snapshot’s current `badDebtGeneration`.',
 		readDeclarations: [
@@ -102,7 +102,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 				effect: "Copies the frozen parent's remaining economic claim supply into the child, closes migration accounting, and either reopens a fully backed child or starts its repair auction.",
 				declarations: [{ name: 'startTruthAuction' }],
 				preconditions: 'Child migration window ended; pool is in fork migration; required child REP is available. If unresolved escalation existed at fork, any game reported during immediate completion passes the [child-game trust boundary](#child-game-trust-boundary).',
-				signals: '`ShareTokenSupplySet` and `TruthAuctionStarted`; immediate no-auction completion also emits `TruthAuctionFinalized`, pool accounting checkpoints, and `ForkContinuationResumed` for an unresolved continuation',
+				signals: '`ShareTokenSupplySet`, then `TruthAuctionStarted` when an auction starts; immediate no-auction completion instead emits `TruthAuctionFinalized`, pool accounting checkpoints, and `ForkContinuationResumed` for an unresolved continuation',
 			},
 			{
 				call: '`finalizeTruthAuction(securityPool)`',
@@ -162,7 +162,7 @@ export const forkEscalationContractReferences: ContractReference[] = [
 		],
 	},
 	{
-		compiledAbiFingerprint: '0cd67689ccaf5934b894e93259c66b744503d45986e0bca94f3ba978908a86c9',
+		compiledAbiFingerprint: '4b56e4d5ffb33e8069757425ff28959cc54d714529927f0b71f221a4e03a1ebd',
 		name: 'EscalationGame',
 		purpose: 'Escrows outcome REP, raises the running resolution cost, detects [non-decision](./glossary.html#non-decision-threshold), and settles local or carried deposits.',
 		readAbiFingerprint: '758abbd7c7c8651a4529ea9dd79049f8eb134075cde6fa80042ad2ec3151a30b',

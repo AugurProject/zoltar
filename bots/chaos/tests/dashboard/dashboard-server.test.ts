@@ -303,7 +303,7 @@ describe('chaos dashboard server', () => {
 				networkConfigured: true,
 				paused: false,
 				privateKey: '__redacted__',
-				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
+				runtime: { execute: true, pollMilliseconds: 12_000 },
 				scheduler: { maximumDelaySeconds: 3_600 },
 				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
 				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
@@ -369,7 +369,7 @@ describe('chaos dashboard server', () => {
 				networkConfigured: true,
 				paused: false,
 				privateKey: '__redacted__',
-				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
+				runtime: { execute: true, pollMilliseconds: 12_000 },
 				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
 				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 			},
@@ -416,7 +416,7 @@ describe('chaos dashboard server', () => {
 				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
 				networkConfigured: true,
 				paused: false,
-				runtime: { execute: true, lifecyclePollMilliseconds: 12_000 },
+				runtime: { execute: true, pollMilliseconds: 12_000 },
 				strategy: { maximumEthPerOperation: '0.03', maximumGasCostEth: '0.02', maximumRepPerOperation: '5', minimumEthReserve: '0.05', minimumRepReserve: '10' },
 				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 			},
@@ -491,7 +491,7 @@ describe('chaos dashboard server', () => {
 				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
 				networkConfigured: true,
 				paused: false,
-				runtime: { execute: false, lifecyclePollMilliseconds: 12_000 },
+				runtime: { execute: false, pollMilliseconds: 12_000 },
 			},
 		}
 		const baseState = {
@@ -526,7 +526,7 @@ describe('chaos dashboard server', () => {
 				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
 				networkConfigured: true,
 				paused: false,
-				runtime: { execute: false, lifecyclePollMilliseconds: 12_000 },
+				runtime: { execute: false, pollMilliseconds: 12_000 },
 				scheduler: { maximumDelaySeconds: 3_600 },
 			},
 		}
@@ -1193,7 +1193,7 @@ describe('chaos dashboard server', () => {
 			settings: {
 				connectivity: { publicRpcUrls: [`https://public.example/private?token=${secret}`] },
 				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
-				runtime: { lifecyclePollMilliseconds: 12_000 },
+				runtime: { pollMilliseconds: 12_000 },
 				submission: { minimumBundleRelaySuccesses: 2, mode: 'private', relayUrls: [`https://relay-one.example/private?token=${secret}`, `https://relay-two.example/private?token=${secret}`] },
 			},
 		}
@@ -1223,7 +1223,7 @@ describe('chaos dashboard server', () => {
 			settings: {
 				connectivity: { publicRpcUrls: [`https://public.example/private?token=${secret}`] },
 				network: { chainId: 11_155_111, maximumBlockIntervalSeconds: 60 },
-				runtime: { lifecyclePollMilliseconds: 12_000 },
+				runtime: { pollMilliseconds: 12_000 },
 				submission: { minimumBundleRelaySuccesses: 1, mode: 'public', relayUrls: [] },
 			},
 		}

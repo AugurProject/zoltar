@@ -444,7 +444,7 @@ export async function loadOpenOracleWithdrawableBalances(client: Pick<ReadClient
 				functionName: 'tokenHolder',
 				args: [holder, token],
 			}),
-			'Open Oracle token holder balance',
+			'OpenOracle token holder balance',
 		)
 	const [rawAttoEth, rawToken1, rawToken2] = await Promise.all([loadBalance(zeroAddress), loadBalance(token1), loadBalance(token2)])
 	const availableBalance = (balance: bigint) => (balance > 1n ? balance - 1n : 0n)

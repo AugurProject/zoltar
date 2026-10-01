@@ -53,7 +53,7 @@ assert.match(readme, /Uniswap V2, V3, or hookless V4/)
 assert.match(readme, /### Executor public surface/)
 assert.match(readme, /`dispute` is a lower-level, unhedged funding helper/)
 assert.match(readme, /legacy\s+journal without durable dispute evidence is marked for manual reconciliation/)
-assert.match(readme, /`runtime\.lookbackBlocks` to `0` to disable event discovery, or from `1` through\s+`256`/)
+assert.match(readme, /`runtime\.logLookbackBlocks` to `0` to disable event discovery, or from `1` through\s+`256`/)
 
 const dashboardRoutes = new Set(['/overview', '/operations', '/games', '/markets', '/settings'])
 for (const match of readme.matchAll(/\]\((http:\/\/127\.0\.0\.1:4173\/[^)]*)\)/g)) {

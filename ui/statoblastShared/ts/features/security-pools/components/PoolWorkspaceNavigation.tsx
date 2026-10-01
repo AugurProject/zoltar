@@ -80,7 +80,7 @@ export type PoolOracleStatus = {
 	requestWalletBlocker?: WalletActionBlocker | undefined
 }
 
-/** The pool's Open Oracle price with its validity or pending countdown, and the one action that moves it forward: view the pending report or request a new price. */
+/** The pool's OpenOracle price with its validity or pending countdown, and the one action that moves it forward: view the pending report or request a new price. */
 export function PoolOracleStatusRow({ needsPrice, oracle, onRequestPrice, onViewReport }: { needsPrice: boolean; oracle: PoolOracleStatus; onRequestPrice: () => void; onViewReport: (id: bigint) => void }) {
 	const pendingReportId = oracle.pendingReportId !== undefined && oracle.pendingReportId > 0n ? oracle.pendingReportId : undefined
 	let action = undefined

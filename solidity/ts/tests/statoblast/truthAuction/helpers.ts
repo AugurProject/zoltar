@@ -11,7 +11,7 @@ import { approveAndDepositRepToVault, setVaultCapacityFixture } from '../../../t
 import { approveToken } from '../../../testSupport/simulator/utils/utilities'
 import { DAY, TEST_ADDRESSES } from '../../../testSupport/simulator/utils/constants'
 import { createWriteClient, writeContractAndWait, type WriteClient } from '../../../testSupport/simulator/utils/clients'
-import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { decodeEventLog, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
 import { getContractOutput, loadContractsJson, normalizeStorageLayout } from '../../contractArtifactHelpers'
 import type { StatoblastTruthAuctionFixture } from '../fixture'
 
@@ -21,6 +21,16 @@ export function getFeeEpochEndTimeStorageSlot(): bigint {
 	const feeEpochStorage = poolStorageLayout.find(entry => entry.label === 'feeEpochEndTime')
 	if (feeEpochStorage === undefined) throw new Error('SecurityPool storage layout is missing feeEpochEndTime')
 	return BigInt(feeEpochStorage.slot)
+}
+
+/** Decodes the `TruthAuctionStarted` events the security pool forker emitted in `hash`. */
+export async function getTruthAuctionStartedEvents(client: WriteClient, hash: Hash) {
+	const receipt = await client.waitForTransactionReceipt({ hash })
+	const forker = getInfraContractAddresses().securityPoolForker.toLowerCase()
+	return receipt.logs
+		.filter(log => log.address.toLowerCase() === forker)
+		.map(log => decodeEventLog({ abi: statoblast_SecurityPoolForker_SecurityPoolForker.abi, data: log.data, topics: log.topics }))
+		.filter(log => log.eventName === 'TruthAuctionStarted')
 }
 
 export async function getPendingAuctionRefund(client: WriteClient, truthAuction: Address, bidder: Address) {

@@ -85,11 +85,9 @@ async function startControlPlane(parameters: { deploymentRecovery?: DeploymentRe
 	const settings = parseOperatorSettings({
 		...example,
 		// An unconfigured operator has not saved any RPC endpoints yet.
-		...(networkConfigured ? { connectivity: { publicRpcUrls: [parameters.readRpcUrl ?? 'https://public.example/'], readRpcUrl: parameters.readRpcUrl ?? 'https://read.example/' } } : { connectivity: undefined }),
-		deployment: { ...example.deployment, quorumRpcUrls: parameters.quorumRpcUrls ?? [] },
+		...(networkConfigured ? { connectivity: { publicRpcUrls: [parameters.readRpcUrl ?? 'https://public.example/'], quorumRpcUrls: parameters.quorumRpcUrls ?? [], readRpcUrl: parameters.readRpcUrl ?? 'https://read.example/', rpcQuorum: parameters.rpcQuorum ?? 1 } } : { connectivity: undefined }),
 		network: 'sepolia',
 		networkConfigured,
-		rpcQuorum: parameters.rpcQuorum ?? 1,
 		runtime: { ...example.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl'), uiPort: await unusedPort() },
 	})
 	await saveOperatorSettings(settingsFile, settings)
@@ -148,21 +146,24 @@ test('focused settlement, risk-limit, and market-source forms persist their sect
 	expect(pending.settlement?.maxGasPriceAttoEthPerGas).toBe(25n * 10n ** 9n)
 
 	const runtime = await put('/api/runtime-limits', {
-		lookbackBlocks: '32',
-		maxHedgeSlippageBps: '75',
+		logLookbackBlocks: 32,
+		maxHedgeSlippageBps: 75,
+		pollMilliseconds: 5_000,
 		riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' },
 	})
 	expect(runtime.status, await runtime.clone().text()).toBe(200)
 	expect(await runtime.json()).toEqual({
-		runtime: { lookbackBlocks: '32', maxHedgeSlippageBps: '75', riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } },
+		runtime: { logLookbackBlocks: 32, maxHedgeSlippageBps: 75, pollMilliseconds: 5_000, riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } },
 	})
-	expect(pending.lookbackBlocks).toBe(32n)
+	expect(pending.logLookbackBlocks).toBe(32n)
 	expect(pending.maxHedgeSlippageBps).toBe(75n)
+	expect(pending.pollMilliseconds).toBe(5_000)
 	expect(pending.riskLimits?.maxConcurrentPositions).toBe(3)
 	expect((await publicState())['queuedSettings']).toEqual(['risk', 'settlement'])
-	expect((await put('/api/runtime-limits', { lookbackBlocks: '50000', maxHedgeSlippageBps: '75', riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } })).status).toBe(400)
-	expect(pending.lookbackBlocks).toBe(32n)
-	expect((await put('/api/runtime-limits', { execute: true, lookbackBlocks: '32', maxHedgeSlippageBps: '75', riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } })).status).toBe(400)
+	expect((await put('/api/runtime-limits', { logLookbackBlocks: 50_000, maxHedgeSlippageBps: 75, pollMilliseconds: 5_000, riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } })).status).toBe(400)
+	expect(pending.logLookbackBlocks).toBe(32n)
+	expect((await put('/api/runtime-limits', { logLookbackBlocks: '32', maxHedgeSlippageBps: 75, pollMilliseconds: 5_000, riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } })).status).toBe(400)
+	expect((await put('/api/runtime-limits', { execute: true, logLookbackBlocks: 32, maxHedgeSlippageBps: 75, pollMilliseconds: 5_000, riskLimits: { lifecycleGasReserveWeth: '0.02', maxConcurrentPositions: 3, maxDailyGasSpendWeth: '0.1', maxPositionNotionalWeth: '2', maxTotalLockedWeth: '4' } })).status).toBe(400)
 
 	const markets = await put('/api/centralized-markets', {
 		...example.centralizedMarkets,
@@ -186,7 +187,8 @@ test('focused settlement, risk-limit, and market-source forms persist their sect
 
 	const saved = await loadOperatorSettings(settingsFile)
 	expect(saved?.settlement.enabled).toBe(true)
-	expect(saved?.runtime.lookbackBlocks).toBe(32n)
+	expect(saved?.runtime.logLookbackBlocks).toBe(32n)
+	expect(saved?.runtime.pollMilliseconds).toBe(5_000)
 	expect(saved?.runtime.riskLimits.maxTotalLockedAttoWeth).toBe(4n * 10n ** 18n)
 	expect(saved?.runtime.execute).toBe(false)
 	expect(saved?.centralizedMarkets.minimumSourceCount).toBe(1)
@@ -323,7 +325,7 @@ test('execution mode binds to a queued signer and skips lock acquisition when th
 	expect(requeued.pending.privateKey).toBe(runningKey)
 })
 
-test('the RPC endpoints form saves quorum RPC URLs into the deployment section and queues them without touching identities', async () => {
+test('the RPC endpoints form saves quorum RPC URLs into the connectivity section and queues them without touching the deployment', async () => {
 	const readRpcUrl = mockSepoliaRpc()
 	const quorumOne = mockSepoliaRpc()
 	const quorumTwo = mockSepoliaRpc()
@@ -334,29 +336,31 @@ test('the RPC endpoints form saves quorum RPC URLs into the deployment section a
 	expect(saved.status, await saved.clone().text()).toBe(200)
 	expect(await saved.json()).toEqual({ connectivity: request.connectivity, network: 'sepolia', quorumRpcUrls: [quorumOne, quorumTwo], rpcQuorum: 2 })
 	const after = await loadOperatorSettings(settingsFile)
-	expect(after?.deployment.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
-	expect(after?.deployment.openOracle).toBe(before?.deployment.openOracle)
-	expect(after?.deployment.uniswapV3Enabled).toBe(before?.deployment.uniswapV3Enabled)
-	expect(pending.deployment?.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
-	expect(pending.deployment?.executor).toBe(config.operatorSettings.deployment.executor)
-	expect(pending.connectivity?.readRpcUrl).toBe(readRpcUrl)
+	expect(after?.connectivity.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
+	expect(after?.connectivity.rpcQuorum).toBe(2)
+	expect(after?.deployment).toEqual(before?.deployment)
+	expect(pending.deployment).toBeUndefined()
+	expect(pending.connectivity).toEqual({ publicRpcUrls: [readRpcUrl], quorumRpcUrls: [quorumOne, quorumTwo], readRpcUrl, rpcQuorum: 2 })
+	expect(config.operatorSettings.deployment.executor).toBe(before?.deployment.executor)
 	expect(state.operationLog[0]?.message).toBe('Network and RPC configuration verified and saved')
-	expect((await publicState())['queuedSettings']).toEqual(['connectivity', 'deployment'])
+	expect((await publicState())['queuedSettings']).toEqual(['connectivity'])
 
 	// A quorum URL sharing the read RPC origin is rejected before anything is written.
 	const collision = await put('/api/connectivity', { ...request, quorumRpcUrls: [`${readRpcUrl}alternate`] })
 	expect(collision.status).toBe(400)
 	expect(await collision.json()).toEqual({ error: 'Read RPC quorum must use independent origins; changing only the URL path does not create an independent provider' })
-	expect((await loadOperatorSettings(settingsFile))?.deployment.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
-	expect(pending.deployment?.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
+	expect((await loadOperatorSettings(settingsFile))?.connectivity.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
+	expect(pending.connectivity?.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
 
-	// Resubmitting the same URLs leaves the deployment section alone.
-	const unchanged = await put('/api/connectivity', request)
+	// A request without quorum readers keeps the saved ones.
+	const { quorumRpcUrls: _quorumRpcUrls, ...withoutQuorumReaders } = request
+	const unchanged = await put('/api/connectivity', withoutQuorumReaders)
 	expect(unchanged.status).toBe(200)
-	expect(pending.deployment?.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
+	expect((await loadOperatorSettings(settingsFile))?.connectivity.quorumRpcUrls).toEqual([quorumOne, quorumTwo])
+	expect(pending.deployment).toBeUndefined()
 	const tooMany = await put('/api/connectivity', { ...request, quorumRpcUrls: Array.from({ length: 9 }, (_, index) => `https://quorum-${index.toString()}.example/`) })
 	expect(tooMany.status).toBe(400)
-	expect(await tooMany.json()).toEqual({ error: 'Quorum RPC URLs must contain no more than 8 URLs' })
+	expect(await tooMany.json()).toEqual({ error: 'At most 8 read quorum RPC URLs are supported' })
 })
 
 test('deployment saves merge only the submitted fields into the latest stored section', async () => {
@@ -367,8 +371,9 @@ test('deployment saves merge only the submitted fields into the latest stored se
 	const afterVenues = await loadOperatorSettings(settingsFile)
 	expect(afterVenues?.deployment.uniswapV4Enabled).toBe(true)
 	expect(afterVenues?.deployment.uniswapV3Enabled).toBe(false)
-	expect(afterVenues?.deployment.quorumRpcUrls).toEqual([quorumOne])
-	expect(pending.deployment?.quorumRpcUrls).toEqual([quorumOne])
+	expect(afterVenues?.connectivity.quorumRpcUrls).toEqual([quorumOne])
+	expect(pending.deployment?.uniswapV4Enabled).toBe(true)
+	expect((await put('/api/deployment', { quorumRpcUrls: [] })).status).toBe(400)
 	expect((await put('/api/deployment', { deploymentManifest: null })).status).toBe(400)
 	expect((await put('/api/deployment', { executor: '0x0000000000000000000000000000000000000001' })).status).toBe(400)
 	expect((await loadOperatorSettings(settingsFile))?.deployment.uniswapV4Enabled).toBe(true)

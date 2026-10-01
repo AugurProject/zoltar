@@ -21,7 +21,6 @@ import {
 	getVaultRepExitAmountLabel,
 	type VaultLauncherBlockerContext,
 } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVaultAvailability.js'
-import { MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP } from '@zoltar/ui-statoblast-shared/features/security-pools/lib/securityVault.js'
 
 const ACCOUNT = getAddress('0x1111111111111111111111111111111111111111')
 
@@ -106,9 +105,9 @@ describe('security vault availability', () => {
 	})
 
 	test('prefers the wallet shortfall notice over the minimum deposit notice', () => {
-		expect(getVaultDepositAmountNotice({ depositAmount: 1n, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, walletRepShortfallAttoRep: 10n ** 18n })).toBe(securityPoolCopy.formatInsufficientRepBalanceDetail('1'))
-		expect(getVaultDepositAmountNotice({ depositAmount: 1n, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, walletRepShortfallAttoRep: 0n })).toBeDefined()
-		expect(getVaultDepositAmountNotice({ depositAmount: 1n, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, walletRepShortfallAttoRep: undefined })).toBeUndefined()
+		expect(getVaultDepositAmountNotice({ depositAmount: 1n, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: 10n * 10n ** 18n, walletRepShortfallAttoRep: 10n ** 18n })).toBe(securityPoolCopy.formatInsufficientRepBalanceDetail('1'))
+		expect(getVaultDepositAmountNotice({ depositAmount: 1n, isDepositBelowMinimum: true, minimumVaultRepDepositAttoRep: 10n * 10n ** 18n, walletRepShortfallAttoRep: 0n })).toBeDefined()
+		expect(getVaultDepositAmountNotice({ depositAmount: 1n, isDepositBelowMinimum: false, minimumVaultRepDepositAttoRep: 10n * 10n ** 18n, walletRepShortfallAttoRep: undefined })).toBeUndefined()
 	})
 
 	test('asks for a refresh or retry only when the vault is not loaded and not auto-loading', () => {

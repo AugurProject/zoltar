@@ -25,6 +25,14 @@ describe('operator networks', () => {
 	})
 })
 
+test('takes the default RPC, chain name, and explorer from the shared chain definitions', () => {
+	expect(defaultRpcUrl('mainnet')).toBe('https://ethereum.dark.florist')
+	expect(defaultRpcUrl('sepolia')).toBe('https://ethereum-sepolia-rpc.publicnode.com')
+	expect(networkConfiguration('mainnet').chain.name).toBe('Ethereum mainnet')
+	expect(networkConfiguration('mainnet').explorerUrl).toBe('https://etherscan.io')
+	expect(networkConfiguration('sepolia').explorerUrl).toBe('https://sepolia.etherscan.io')
+})
+
 test('uses the published Uniswap factory and QuoterV2 for Sepolia CLI defaults', () => {
 	const network = networkConfiguration('sepolia')
 	expect(network.factory).toBe('0x0227628f3F023bb0B980b67D528571c95c6DaC1c')

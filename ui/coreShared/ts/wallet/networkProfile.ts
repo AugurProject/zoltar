@@ -1,5 +1,5 @@
 import { defineChain, getAddress, type Address, type Hash } from '@zoltar/core-shared/evm/ethereum'
-import { mainnet, type Chain } from '@zoltar/core-shared/evm/ethereum'
+import { mainnet, sepolia, type Chain } from '@zoltar/core-shared/evm/ethereum'
 import { SEPOLIA_GENESIS_REP_ADDRESS } from '../lib/sepoliaDeploymentConfig.js'
 import { getUniswapNetworkDeployment, MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { DEFAULT_NETWORK, MAINNET_ENABLED } from './networkAvailability.js'
@@ -29,21 +29,6 @@ export const MAINNET_WETH_ADDRESS = MAINNET_UNISWAP.wethAddress
 const MAINNET_USDC_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' satisfies Address
 const SEPOLIA_USDC_ADDRESS = getAddress('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238')
 
-const sepoliaChain = defineChain({
-	id: 11155111,
-	name: 'Sepolia',
-	nativeCurrency: {
-		decimals: 18,
-		name: 'Sepolia Ether',
-		symbol: 'ETH',
-	},
-	rpcUrls: {
-		default: {
-			http: ['https://ethereum-sepolia-rpc.publicnode.com'],
-		},
-	},
-})
-
 const simulationChain = defineChain({
 	id: 1337,
 	name: 'Browser simulation',
@@ -67,7 +52,7 @@ export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 	id: 'mainnet',
 	isSupportedAppChain: true,
 	repPricingMode: 'uniswap',
-	transactionExplorerBaseUrl: 'https://etherscan.io/tx/',
+	transactionExplorerBaseUrl: `${mainnet.blockExplorers.default.url}/tx/`,
 	uniswapPoolExplorerBaseUrl: 'https://app.uniswap.org/explore/pools/ethereum',
 	uniswapV3FactoryAddress: MAINNET_UNISWAP.uniswapV3FactoryAddress,
 	uniswapV3QuoterAddress: MAINNET_UNISWAP.uniswapV3QuoterAddress,
@@ -77,14 +62,14 @@ export const MAINNET_NETWORK_PROFILE: NetworkProfile = {
 }
 
 export const SEPOLIA_NETWORK_PROFILE: NetworkProfile = {
-	chain: sepoliaChain,
+	chain: sepolia,
 	chainIdHex: '0xaa36a7',
 	displayName: 'Sepolia',
 	genesisRepTokenAddress: SEPOLIA_GENESIS_REP_ADDRESS,
 	id: 'sepolia',
 	isSupportedAppChain: true,
 	repPricingMode: 'uniswap',
-	transactionExplorerBaseUrl: 'https://sepolia.etherscan.io/tx/',
+	transactionExplorerBaseUrl: `${sepolia.blockExplorers.default.url}/tx/`,
 	uniswapPoolExplorerBaseUrl: 'https://app.uniswap.org/explore/pools/ethereum_sepolia',
 	uniswapV3FactoryAddress: SEPOLIA_UNISWAP.uniswapV3FactoryAddress,
 	uniswapV3QuoterAddress: SEPOLIA_UNISWAP.uniswapV3QuoterAddress,

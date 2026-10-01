@@ -1,10 +1,7 @@
 import { MAX_PRIORITY_FEE_PER_GAS } from '@zoltar/bot-shared/execution/transaction-submission'
+import { parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 
-function parseDecimalWeth(value: string) {
-	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
-}
+const parseDecimalWeth = (value: string) => parseDecimalAmount(value, 'WETH amount')
 
 export type RiskLimits = {
 	lifecycleGasReserveAttoWeth: bigint

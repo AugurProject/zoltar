@@ -16,13 +16,13 @@ import type { ExecutionLockManager } from '#execution/execution-locks'
 import { persistSignerSettingsWithProvisionalLock } from '#execution/execution-locks'
 import type { SignerOperationGate } from '@zoltar/bot-shared/execution/signer-operation-gate'
 import { validateSubmissionSettings, type SubmissionSettings } from '#execution/transaction-submission'
-import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, presetNetworkChainId, updateSubmissionEndpointChecks, validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
+import { checkConnectivity, checkSubmissionEndpoints, endpointLabel, presetNetworkChainId, updateSubmissionEndpointChecks } from '@zoltar/bot-shared/monitoring/connectivity'
+import { type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
 import { operatorStatusAfterPause, type SyncCursor } from '@zoltar/bot-shared/monitoring/block-sync'
 import { loadExecutionHistory, operatorSnapshot, queuedSignerChange, recordOperation, type MutableStrategy, type OperatorSnapshotFixedState, type OperatorState } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
 import { acquireExecutionSignerLock, acquirePositionJournalLock, loadPositionJournal, type ExclusiveProcessLock } from '#state/position-store'
-import { checkIndependentRpcChains, splitQuorumRpcUrls, updateOperatorConnectivity } from './connectivity-update.ts'
-import { configuredQuorumRpcUrlMinimum, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { checkIndependentRpcChains, updateOperatorConnectivity } from './connectivity-update.ts'
 import { networkConfiguration } from '#config/network'
 import { type RiskLimits } from '#core/safety-controls'
 import type { CentralizedMarketSettings } from '@zoltar/bot-shared/monitoring/centralized-markets'
@@ -35,10 +35,11 @@ import { createOperatorSettingsControls, queuedSettingsSections } from './operat
 
 export type PendingOperatorUpdates = {
 	centralizedMarkets: CentralizedMarketSettings | undefined
-	connectivity: ConnectivitySettings | undefined
+	/** Applied at the scan boundary to the primary and public RPCs, the quorum readers, and the agreement requirement. */
+	connectivity: QuorumConnectivitySettings | undefined
 	deployment: DeploymentSettings | undefined
 	execute: boolean | undefined
-	lookbackBlocks: bigint | undefined
+	logLookbackBlocks: bigint | undefined
 	maxHedgeSlippageBps: bigint | undefined
 	network: Configuration['network'] | undefined
 	operatorSettings: PersistedOperatorSettings | undefined
@@ -47,8 +48,8 @@ export type PendingOperatorUpdates = {
 	privateKey: Hex | undefined
 	persistedPrivateKey: Hex | undefined
 	persistedTokenAddresses: Address[] | undefined
+	pollMilliseconds: number | undefined
 	riskLimits: RiskLimits | undefined
-	rpcQuorum: RpcQuorumRequirement | undefined
 	settlement: MutableSettlement | undefined
 	signerLock: ExclusiveProcessLock | undefined
 	signerUpdate: boolean
@@ -57,13 +58,18 @@ export type PendingOperatorUpdates = {
 	tokenAddresses: Address[] | undefined
 }
 
+/** The primary and public RPCs alone, as the dashboard snapshot and connectivity response report them. */
+function endpointConnectivity(connectivity: QuorumConnectivitySettings) {
+	return { publicRpcUrls: connectivity.publicRpcUrls, readRpcUrl: connectivity.readRpcUrl }
+}
+
 async function preflightOperatorProfile(settingsFile: string, target: PersistedOperatorSettings) {
 	const chain = runnableOperatorSettings(settingsFile, target).network.chain
 	const deploymentIntent = await loadExecutorDeploymentIntentForChain(executorDeploymentIntentPath(settingsFile, target.network), chain.id)
 	if (deploymentIntent !== undefined) await assertStoredExecutorDeploymentIntent(deploymentIntent, chain.id)
 	if (target.networkConfigured) {
 		await checkConnectivity(target.connectivity, chain.id)
-		await checkIndependentRpcChains(target.deployment.quorumRpcUrls, chain.id)
+		await checkIndependentRpcChains(target.connectivity.quorumRpcUrls, chain.id)
 		await checkSubmissionEndpoints(target.submission, chain.id)
 	}
 	let journalLock: ExclusiveProcessLock | undefined
@@ -104,7 +110,7 @@ export function startOperatorControlPlane(parameters: {
 		connectivity: undefined,
 		deployment: undefined,
 		execute: undefined,
-		lookbackBlocks: undefined,
+		logLookbackBlocks: undefined,
 		maxHedgeSlippageBps: undefined,
 		network: undefined,
 		operatorSettings: undefined,
@@ -113,9 +119,9 @@ export function startOperatorControlPlane(parameters: {
 		privateKey: undefined,
 		persistedPrivateKey: undefined,
 		persistedTokenAddresses: undefined,
+		pollMilliseconds: undefined,
 		riskLimits: undefined,
 		settlement: undefined,
-		rpcQuorum: undefined,
 		signerLock: undefined,
 		signerUpdate: false,
 		strategy: undefined,
@@ -153,10 +159,11 @@ export function startOperatorControlPlane(parameters: {
 			if (loaded === undefined) throw new Error('Operator configuration file is missing')
 			return {
 				configuration: serializeOperatorSettings(loaded.settings, true),
+				effectiveRpcQuorum: loaded.settings.connectivity.rpcQuorum,
 				revision: loaded.revision,
 			}
 		},
-		getSnapshot: () => signerConflictSnapshot(operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity ?? config.connectivity, snapshotFixedState(), config.riskLimits, queuedSettingsSections(pending))),
+		getSnapshot: () => signerConflictSnapshot(operatorSnapshot(state, pending.strategy ?? config, pending.submission ?? config.submission, pending.connectivity === undefined ? config.connectivity : endpointConnectivity(pending.connectivity), snapshotFixedState(), config.riskLimits, queuedSettingsSections(pending))),
 		isNetworkConfigured: () => config.networkConfigured,
 		hostname: config.uiHost,
 		...parameters.dashboardEnvironment,
@@ -180,7 +187,8 @@ export function startOperatorControlPlane(parameters: {
 			}),
 		updateConfiguration: value =>
 			queueSettingsUpdate(async () => {
-				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).length !== 2 || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string') throw new Error('Complete configuration updates require configuration and revision')
+				if (typeof value !== 'object' || value === null || Array.isArray(value) || Object.keys(value).some(key => key !== 'configuration' && key !== 'revision' && key !== 'effectiveRpcQuorum') || !('configuration' in value) || !('revision' in value) || typeof value.revision !== 'string')
+					throw new Error('Complete configuration updates require configuration and revision')
 				const revision = value.revision
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined || latest.revision !== revision) throw operatorConfigurationRevisionConflict()
@@ -200,7 +208,7 @@ export function startOperatorControlPlane(parameters: {
 				const expectedChainId = presetNetworkChainId(next.network)
 				if (next.networkConfigured) {
 					await checkConnectivity(next.connectivity, expectedChainId)
-					await checkIndependentRpcChains(next.deployment.quorumRpcUrls, expectedChainId)
+					await checkIndependentRpcChains(next.connectivity.quorumRpcUrls, expectedChainId)
 					await checkSubmissionEndpoints(next.submission, expectedChainId)
 				}
 				if (!next.paused) await requireNoPendingExecutorDeployment(config.settingsFile, config.network.name)
@@ -236,8 +244,9 @@ export function startOperatorControlPlane(parameters: {
 					pending.connectivity = next.connectivity
 					pending.deployment = next.deployment
 					pending.execute = next.runtime.execute
-					pending.lookbackBlocks = next.runtime.lookbackBlocks
+					pending.logLookbackBlocks = next.runtime.logLookbackBlocks
 					pending.maxHedgeSlippageBps = next.runtime.maxHedgeSlippageBps
+					pending.pollMilliseconds = next.runtime.pollMilliseconds
 					if (!config.networkConfigured && next.networkConfigured) {
 						pending.network = networkConfiguration(next.network)
 					}
@@ -247,7 +256,6 @@ export function startOperatorControlPlane(parameters: {
 					pending.persistedTokenAddresses = tokens.persisted
 					pending.privateKey = signer.privateKey
 					pending.riskLimits = next.runtime.riskLimits
-					pending.rpcQuorum = next.rpcQuorum
 					pending.settlement = { ...next.settlement }
 					pending.signerLock = nextPendingSignerLock
 					pending.signerUpdate = true
@@ -303,27 +311,24 @@ export function startOperatorControlPlane(parameters: {
 				if (latest.settings.networkConfigured) {
 					if (typeof value !== 'object' || value === null || Array.isArray(value) || !('network' in value) || value.network !== latest.settings.network) throw new Error('Select the chain profile before saving its RPC settings')
 				}
-				const quorum = splitQuorumRpcUrls(value, latest.settings.deployment, latest.settings.network)
 				const next = await updateOperatorConnectivity({
 					activeNetwork: latest.settings.network,
 					activeRpcQuorum: config.rpcQuorum,
-					deployment: quorum.deployment,
 					endpointState: state,
 					execute: config.execute || latest.settings.runtime.execute,
 					persist: async update => {
-						await persistSettings(update({ ...latest.settings, deployment: quorum.deployment }), latest.revision)
+						await persistSettings(update(latest.settings), latest.revision)
 					},
+					savedQuorumRpcUrls: latest.settings.connectivity.quorumRpcUrls,
 					submission: latest.settings.submission,
-					value: quorum.value,
+					value,
 				})
 				if (!config.networkConfigured) {
 					pending.network = networkConfiguration(next.network)
 				}
-				if (quorum.deploymentChanged) pending.deployment = quorum.deployment
 				// The market document only changes here when the profile's asset identity does; an unchanged one must not look queued.
 				const activeMarkets = pending.centralizedMarkets ?? config.centralizedMarkets
 				if (next.centralizedMarkets.assetAddress.toLowerCase() !== activeMarkets.assetAddress.toLowerCase() || next.centralizedMarkets.assetChainId !== activeMarkets.assetChainId) pending.centralizedMarkets = next.centralizedMarkets
-				pending.rpcQuorum = next.rpcQuorum
 				pending.connectivity = next.connectivity
 				recordOperation(state, {
 					category: 'configuration',
@@ -334,9 +339,9 @@ export function startOperatorControlPlane(parameters: {
 					reportId: undefined,
 				})
 				return {
-					connectivity: next.connectivity,
+					connectivity: endpointConnectivity(next.connectivity),
 					network: next.network,
-					quorumRpcUrls: quorum.deployment.quorumRpcUrls,
+					quorumRpcUrls: next.connectivity.quorumRpcUrls,
 					rpcQuorum: next.rpcQuorum,
 				}
 			})
@@ -346,11 +351,7 @@ export function startOperatorControlPlane(parameters: {
 				const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 				if (latest === undefined) throw operatorConfigurationRevisionConflict()
 				const next = mergeStoredDeploymentUpdate(latest.settings.deployment, value, latest.settings.network)
-				if ((config.execute || latest.settings.runtime.execute) && next.quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(latest.settings.rpcQuorum)) throw new Error('Live execution requires at least two independent quorum RPCs (three read endpoints total)')
 				assertFocusedDeploymentCompatible(next.rep, latest.settings.centralizedMarkets)
-				validateIndependentReadRpcUrls(latest.settings.connectivity.readRpcUrl, next.quorumRpcUrls)
-				const expectedChainId = presetNetworkChainId(latest.settings.network)
-				await checkIndependentRpcChains(next.quorumRpcUrls, expectedChainId)
 				const persistedTokens = prepareDeploymentTokenTransition(latest.settings.tokenAddresses, undefined, latest.settings.deployment.rep, next.rep)
 				await acquireConfigurationSignerOperation(signerOperationGate)
 				try {
@@ -403,7 +404,7 @@ export function startOperatorControlPlane(parameters: {
 					const latest = await loadOperatorSettingsWithRevision(config.settingsFile)
 					if (latest === undefined) throw operatorConfigurationRevisionConflict()
 					requireActivePersistedNetwork(config.network.name, latest.settings.network)
-					requireActivePersistedRpcQuorum(config.rpcQuorum, latest.settings.rpcQuorum)
+					requireActivePersistedRpcQuorum(config.rpcQuorum, latest.settings.connectivity.rpcQuorum)
 					requirePausedExecutorDeployment(config.execute, state.paused)
 					if (lockManager === undefined) throw new Error('Executor deployment signer lock management is unavailable')
 					// A queued arming already holds this signer's lock; re-acquiring would hand back the same retained lock and release it below.
@@ -424,8 +425,8 @@ export function startOperatorControlPlane(parameters: {
 						...(parameters.isStopping === undefined ? {} : { isStopping: parameters.isStopping }),
 						persistIntent: intent => persistExecutorDeploymentIntentForRecovery(intentPath, intent, parameters.deploymentRecovery),
 						privateKey,
-						quorumRpcUrls: latest.settings.deployment.quorumRpcUrls,
-						rpcQuorum: latest.settings.rpcQuorum,
+						quorumRpcUrls: latest.settings.connectivity.quorumRpcUrls,
+						rpcQuorum: latest.settings.connectivity.rpcQuorum,
 						salt: plan.salt,
 					})
 					const next = { ...plannedDeployment, executor: deployed.address }

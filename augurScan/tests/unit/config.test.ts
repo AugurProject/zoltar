@@ -8,6 +8,7 @@ import { loadNetworks } from '../../src/config.ts'
 import { parseManifestValue } from '../../src/manifest.ts'
 import networkDefinitions from '../../config/networks.json'
 import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
+import { mainnet, sepolia } from '@zoltar/core-shared/evm/ethereum'
 
 const projectRoot = path.resolve(import.meta.dir, '..', '..')
 
@@ -164,6 +165,15 @@ describe('network configuration', () => {
 		expect(networks[0]?.nativeSymbol).toBe('SepoliaETH')
 		expect(networks[0]?.startBlock).toBe(8_123_456n)
 		expect(networks[0]?.contracts.length).toBeGreaterThan(10)
+	})
+
+	test('takes each block explorer from the shared chain definitions', async () => {
+		process.env['NETWORKS'] = networkDefinitions.map(({ id }) => id).join(',')
+		const explorers = (await loadNetworks()).map(({ chainId, explorerBaseUrl }) => [chainId, explorerBaseUrl])
+		expect(explorers).toEqual([
+			[mainnet.id, mainnet.blockExplorers.default.url],
+			[sepolia.id, sepolia.blockExplorers.default.url],
+		])
 	})
 
 	test('rejects a negative history boundary', async () => {

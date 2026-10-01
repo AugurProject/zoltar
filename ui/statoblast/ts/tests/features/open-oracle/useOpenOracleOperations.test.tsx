@@ -195,7 +195,7 @@ async function invokeOpenOracleApproval(state: UseOpenOracleOperationsState, act
 describe('useOpenOracleOperations', () => {
 	const { trackCleanup } = installFakeEnvironmentLifecycle({ accountAddress: WALLET_ADDRESS, installActiveEnvironment: installActiveEnvironmentForTesting })
 
-	test('uses consistent Open Oracle capitalization in disconnected-wallet recovery', async () => {
+	test('uses consistent OpenOracle capitalization in disconnected-wallet recovery', async () => {
 		const dependencies = createOpenOracleOperationsDependencies()
 		let hookState: UseOpenOracleOperationsState | undefined
 		const Harness = createHarness(
@@ -212,7 +212,7 @@ describe('useOpenOracleOperations', () => {
 			await requireHookState(hookState).approveToken1(1n)
 		})
 
-		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating Open Oracle.')
+		expect(requireHookState(hookState).openOracleFeedback?.status.detail).toBe('Connect a wallet before operating OpenOracle.')
 	})
 
 	test('distinguishes unsubmitted, missing, and failed report lookups', async () => {

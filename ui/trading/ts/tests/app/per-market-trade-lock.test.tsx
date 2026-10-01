@@ -83,8 +83,8 @@ describe('per-market trade lock in the application shell', () => {
 		await act(async () => actionButton('Connect wallet').click())
 		await waitFor(() => expect(document.body.textContent).toContain('Wallet: 5 ETH'))
 		await typeAmount('0.01')
-		await waitFor(() => expect(actionButton('Buy YES').disabled).toBeFalse())
-		await act(async () => actionButton('Buy YES').click())
+		await waitFor(() => expect(actionButton('Buy Yes').disabled).toBeFalse())
+		await act(async () => actionButton('Buy Yes').click())
 		await waitFor(() => expect(transactionActivity.value.entries.map(entry => entry.hash)).toEqual([firstHash]))
 
 		// Only the first market waits for its trade: the second market's ticket and its action stay usable.
@@ -95,8 +95,8 @@ describe('per-market trade lock in the application shell', () => {
 		await waitFor(() => expect(document.body.textContent).toContain('Wallet: 5 ETH'))
 		expect(document.body.textContent).not.toContain('Transaction in progress.')
 		await typeAmount('0.01')
-		await waitFor(() => expect(actionButton('Buy YES').disabled).toBeFalse())
-		await act(async () => actionButton('Buy YES').click())
+		await waitFor(() => expect(actionButton('Buy Yes').disabled).toBeFalse())
+		await act(async () => actionButton('Buy Yes').click())
 		// Both trades are pending at once, each recorded against its own market.
 		await waitFor(() => expect(transactionActivity.value.entries).toHaveLength(2))
 		expect(submittedMarkets).toEqual([firstMarket.pool, secondMarket.pool])

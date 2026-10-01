@@ -41,11 +41,9 @@ test('reconciles a journal only when the configured read quorum agrees the execu
 		settingsFile,
 		parseOperatorSettings({
 			...example,
-			connectivity: { publicRpcUrls: ['https://public.example/'], readRpcUrl: 'https://read.example/' },
-			deployment: { ...example.deployment, quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'] },
+			connectivity: { publicRpcUrls: ['https://public.example/'], quorumRpcUrls: ['https://quorum-one.example/', 'https://quorum-two.example/'], readRpcUrl: 'https://read.example/', rpcQuorum: 2 },
 			network: 'sepolia',
 			networkConfigured: true,
-			rpcQuorum: 2,
 			runtime: { ...example.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') },
 		}),
 	)

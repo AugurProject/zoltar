@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { parseStrategy } from '../../src/config/settings.ts'
-import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForOpenInterest, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
+import { BPS_DENOMINATOR, PRICE_PRECISION, conservativeLiquidationRep, evaluateCandidate, liquidationExecutionAllowed, requiredRepForUnderwritingLimit, selectAllowedCandidate, surplusRepForWithdrawal, vaultHealthBps, type PoolRiskContext, type VaultPosition } from '../../src/core/strategy.ts'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
 import { storedStrategyFixture } from '../support/strategy-settings.ts'
 
@@ -44,6 +44,20 @@ function pool(): PoolRiskContext {
 }
 
 describe('dynamic-capacity liquidation strategy', () => {
+	test('matches SecurityPoolUtils when the pool holds no REP or has no backing units', () => {
+		const settings = strategy()
+		settings.minimumRewardValueAttoEth = 0n
+		settings.maximumAttoRepPerPool = 10_000n * PRICE_PRECISION
+		for (const conversion of [{ denominator: 0n }, { totalAttoRep: 0n }, { denominator: 0n, totalAttoRep: 0n }]) {
+			const unconvertiblePool = { ...pool(), ...conversion }
+			for (const openInterestAttoEth of [25n * PRICE_PRECISION, 75n * PRICE_PRECISION]) {
+				const candidate = evaluateCandidate(unconvertiblePool, vault(targetAddress, 300n * PRICE_PRECISION, openInterestAttoEth), vault(callerAddress, 0n, 0n), settings)
+				expect(candidate?.debtToMoveAttoEth).toBe(25n * PRICE_PRECISION)
+				expect(candidate?.vaultAttoRepBackingToTransfer).toBe(0n)
+			}
+		}
+	})
+
 	test('matches the protocol bundled debt, capacity, and fixed-bonus transfer', () => {
 		const settings = strategy()
 		settings.maximumLiquidationDebtAttoEth = 75n * PRICE_PRECISION
@@ -135,14 +149,14 @@ describe('dynamic-capacity liquidation strategy', () => {
 	})
 
 	test('rounds required REP upward across the protocol health calculation', () => {
-		expect(requiredRepForOpenInterest(1n, 20_000n, PRICE_PRECISION, 12_500n)).toBe(3n)
+		expect(requiredRepForUnderwritingLimit(1n, 20_000n, PRICE_PRECISION, 12_500n)).toBe(3n)
 	})
 
 	test('uses dispute-staked REP only for associated backing, not free backing', () => {
 		const target = vault(targetAddress, 400n * PRICE_PRECISION, 25n * PRICE_PRECISION)
 		target.disputeStakedAttoRep = 100n * PRICE_PRECISION
 		expect(vaultHealthBps(target.vaultAttoRepBacking, target.openInterestAttoEth, 20_000n, 10n * PRICE_PRECISION, target.disputeStakedAttoRep)).toBe(10_000n)
-		expect(requiredRepForOpenInterest(target.openInterestAttoEth, 20_000n, 10n * PRICE_PRECISION, 10_000n, target.disputeStakedAttoRep)).toBe(400n * PRICE_PRECISION)
+		expect(requiredRepForUnderwritingLimit(target.openInterestAttoEth, 20_000n, 10n * PRICE_PRECISION, 10_000n, target.disputeStakedAttoRep)).toBe(400n * PRICE_PRECISION)
 	})
 
 	test('never treats a stale pool price as executable', () => {

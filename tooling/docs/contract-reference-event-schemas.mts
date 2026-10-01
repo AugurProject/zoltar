@@ -67,12 +67,12 @@ export const documentedEventSchemas: Array<{ name: string; parameters: string; s
 	},
 	{
 		name: 'ChildDisputeStakedRepMaterialized',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 attoRepAmount,uint256 resultingDisputeStakedRepBalanceAttoRep',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,address indexed childGame,uint256 outcomeIndex,uint256 amountAttoRep,uint256 resultingDisputeStakedRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	},
 	{
 		name: 'PoolHeldRepSweptToChild',
-		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 attoRepAmount,uint256 resultingChildPoolHeldRepBalanceAttoRep',
+		parameters: 'ISecurityPool indexed parentPool,ISecurityPool indexed childPool,uint256 indexed outcomeIndex,uint256 amountAttoRep,uint256 resultingChildPoolHeldRepBalanceAttoRep',
 		sourcePath: 'solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol',
 	},
 	{
@@ -189,4 +189,4 @@ export const assemblyEventEmissions: Array<{
 	},
 ]
 
-export const referencedEventAbiFingerprint = '6ad8398e35b856a20565b49884ac37714a824e94d0e84714c1d388a0de9fe4ad'
+export const referencedEventAbiFingerprint = 'df4964e4f91bbe9749dccb3b2de9e0a152af2157db109cff60bd31b227963608'

@@ -45,9 +45,10 @@ Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that `127.0.0.1` mapp
 Each chain profile saves its own RPC agreement requirement. The default is `1`, so
 the primary read RPC is sufficient and independent quorum RPCs are optional. Select
 agreement `2` in **Chain and RPC connectivity** and configure two independent quorum
-RPC URLs when that chain must retain a two-reader policy. `ZOLTAR_BOT_RPC_QUORUM`
-only supplies the migration default for an older profile that has no saved policy;
-values other than `1` or `2` stop that migration.
+RPC URLs when that chain must retain a two-reader policy. `ZOLTAR_BOT_RPC_QUORUM` (`1` or `2`, default `1`) supplies the
+agreement requirement whenever a profile omits `connectivity.rpcQuorum`, including an
+unconfigured profile; a saved `connectivity.rpcQuorum` takes precedence, and any other
+value stops settings parsing.
 
 Save the chain and RPCs in **Chain and RPC connectivity**, finish the remaining
 configuration, and resume only after reviewing the saved settings. Run
@@ -105,6 +106,11 @@ Set `ZOLTAR_LIQUIDATOR_CONFIG` to use another operator file. The bot accepts no
 command-line arguments. It refuses to load a configuration or durable state file that
 is a symbolic link, is not owned by the bot user, or has a mode other than `0600`. The dashboard defaults to
 `http://127.0.0.1:4183`.
+
+The operator file is `version: 2`. A saved `version: 1` file still loads: its
+string `desiredPools[].statoblastSecurityMultiplierBps` values become JSON numbers,
+and the next save writes version 2. Like every key ending in `Bps`, the multiplier
+is a JSON number; it must exceed `10000`.
 
 The dashboard's **Chain and RPC connectivity** form is the source of network and
 endpoint selection. It chain-checks the read, public-submission, and independent

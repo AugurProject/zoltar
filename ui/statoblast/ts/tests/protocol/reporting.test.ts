@@ -410,6 +410,7 @@ describe('reporting protocol client', () => {
 				if (request.functionName === 'getQuestionOutcome') return 3
 				if (request.functionName === 'getForkTime') return 123n
 				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkData') return [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, false, 0n, 0n]
 				if (request.functionName === 'forkContinuation') return false
 				if (request.functionName === 'repToken') return repTokenAddress
 				if (request.functionName === 'balanceOf') return 100n
@@ -442,6 +443,54 @@ describe('reporting protocol client', () => {
 		if (yesSide === undefined) throw new Error('Expected yes side')
 		expect(yesSide.userDeposits).toHaveLength(1)
 		expect(yesSide.importedUserDeposits).toEqual([])
+	})
+
+	// Contract migration checks use the pool's forkActivationTime + MIGRATION_TIME (SecurityPoolForker), not the universe fork time.
+	test.each([
+		{ blockTimestamp: 123n + 4_838_400n + 1n, forkActivationTime: 500n, expected: 'migration-required' },
+		{ blockTimestamp: 500n + 4_838_400n, forkActivationTime: 500n, expected: 'migration-required' },
+		{ blockTimestamp: 500n + 4_838_400n + 1n, forkActivationTime: 500n, expected: 'migration-expired' },
+		{ blockTimestamp: 123n + 4_838_400n + 1n, forkActivationTime: 0n, expected: 'migration-required' },
+	] as const)('loadReportingDetails anchors the migration deadline to the pool fork activation time ($forkActivationTime, $blockTimestamp)', async ({ blockTimestamp, forkActivationTime, expected }) => {
+		const questionTuple = ['Question', 'Description', 1n, 2n, 2n, 0n, 100n, ''] as const
+		const forkDataReads: unknown[] = []
+		const client = {
+			getBlock: async () => createBlockWithTimestamp(blockTimestamp),
+			getCode: async () => '0x1234' as Hex,
+			multicall: createMulticallStub(async request => {
+				const functionName = getContractFunctionName(request.contracts[0])
+				if (functionName === 'questionId') return [1n, escalationGameAddress, 20n, 3n, zoltarAddress, 5n, 0n, 3n, zeroAddress]
+				if (functionName === 'questions') return [questionTuple, 10n]
+				throw new Error(`Unexpected multicall contract: ${functionName}`)
+			}),
+			readContract: createReadContractStub(async request => {
+				if (request.functionName === 'startBondAttoRep') return 7n
+				if (request.functionName === 'nonDecisionThresholdAttoRep') return 50n
+				if (request.functionName === 'activationTime') return 12n
+				if (request.functionName === 'totalCostAttoRep') return 22n
+				if (request.functionName === 'getBindingCapitalAttoRep') return 11n
+				if (request.functionName === 'getOutcomeState') return { balance: 1n }
+				if (request.functionName === 'getEscalationGameEndDate') return 150n
+				if (request.functionName === 'getQuestionOutcome') return 3
+				if (request.functionName === 'getForkTime') return 123n
+				if (request.functionName === 'hasReachedNonDecision') return false
+				if (request.functionName === 'forkContinuation') return false
+				if (request.functionName === 'getForkThresholdAttoRep') return 100n
+				if (request.functionName === 'getOutcomeLabels') return ['Yes', 'No']
+				if (request.functionName === 'getDepositsByOutcome') return []
+				if (request.functionName === 'forkData') {
+					forkDataReads.push(request.args)
+					return [0n, zeroAddress, 0n, 0n, 0n, 0n, 0n, 0n, false, true, 0n, forkActivationTime]
+				}
+				throw new Error(`Unexpected readContract function: ${request.functionName}`)
+			}),
+		} as unknown as Parameters<typeof loadReportingDetails>[0]
+
+		const details = await loadReportingDetails(client, securityPoolAddress, undefined)
+
+		if (details.status !== 'active') throw new Error('Expected active reporting details')
+		expect(details.settlementState).toBe(expected)
+		expect(forkDataReads).toEqual([[securityPoolAddress]])
 	})
 
 	test('loadReportingDetails keeps parent settlement locked when the unrelated external fork happened after escalation ended', async () => {

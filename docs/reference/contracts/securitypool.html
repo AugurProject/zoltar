@@ -21,8 +21,8 @@
 				<p>Price-sensitive withdrawal, commitment-increase, and liquidation calls depend on <a href="../security-model.html#assumption-a16">A16 timely inclusion</a>, <a href="../security-model.html#assumption-a21">A21 genesis REP and WETH behavior</a>, <a href="../security-model.html#assumption-a19">A19 observable correctable price</a>, and <a href="../security-model.html#assumption-a06">A06 lifecycle executors</a>. User-initiated pool calls additionally depend on <a href="../security-model.html#assumption-a28">A28 account authority</a>.</p>
 				<h2 id="interactions">State-changing interactions</h2>
 				<p>Vault owners set their <a href="../glossary.html#underwriting-commitment">underwriting commitments</a> with <code>setUnderwritingLimit(limitAttoEth)</code> or coordinator operation <code>SetVaultUnderwritingLimit</code> (2). The coordinator-only fallback is <code>setVaultUnderwritingLimit(vault, limitAttoEth)</code>. Increases require fresh-price backing for the entire resulting underwriting commitment and open admission. Reductions, including zero exits, require remaining aggregate commitments to cover tracked settlement collateral. Fee weights checkpoint before mutation; no-op updates preserve fee remainders. Limits survive empty settlement epochs. <code>UnderwritingLimitSet</code> and accounting checkpoints report successful changes.</p>
-				<!-- Validated read ABI fingerprint: 72ea85adc5344959c83ac9c530d2feb8acc1b46b1645ee6c1ce9237bbd0efc92 -->
-				<!-- Validated complete compiled ABI fingerprint: b9e9c91c060e7c2d56b56d429f9288c15ff921d1eb9838261f8aeb37258a35db -->
+				<!-- Validated read ABI fingerprint: 9a1fd89f52b252ecbe5f71586c5396279656674e65e3fcf13473f751fc270bc3 -->
+				<!-- Validated complete compiled ABI fingerprint: 08e3c1adfd5e6f2dd4f476f8f462bc7c2ca0e29ceeceb97c0009cd46bbb976d0 -->
 				<table>
 					<thead>
 						<tr>
@@ -49,7 +49,7 @@
 							<td><code>UnderwritingLimitSet</code> and accounting checkpoints; no-op calls preserve state</td>
 						</tr>
 						<tr>
-							<td><code>depositRepToVault(attoRepAmount, targetHealthFactorBps)</code></td>
+							<td><code>depositRepToVault(amountAttoRep, targetHealthFactorBps)</code></td>
 							<td>Vault owner</td>
 							<td>Operational and unforked; <code>isEscalationResolved()</code> is false; the transaction timestamp is strictly before the question end time unless the pool has an inherited fork-continuation game; deposit amount is positive; target backing ratio is at least <code>statoblastSecurityMultiplierBps</code> and resulting vault REP meets the configured supply-scaled minimum. This input does not authorize a commitment.</td>
 							<td>Prices proportional REP backing units before receiving the transfer, including authorization deposits, then credits only those units. Depositing REP never changes the underwriting commitment.</td>
@@ -93,14 +93,14 @@
 						<tr>
 							<td><code>depositWalletRepToEscalationGame(outcome, maximumDepositAttoRep)</code></td>
 							<td>REP holder with a token allowance for the pool</td>
-							<td>Question end has passed before starting a game; pool operational in an unforked universe, without an inherited fixed outcome or pending fork continuation; game is not a fork continuation; outcome and amount accepted; sufficient wallet REP and pool allowance. No existing vault or oracle price is required.</td>
+							<td>Question end time reached (<code>block.timestamp &gt;= endTime</code>) before starting a game; pool operational in an unforked universe, without an inherited fixed outcome or pending fork continuation; game is not a fork continuation; outcome and amount accepted; sufficient wallet REP and pool allowance. No existing vault or oracle price is required.</td>
 							<td>Starts an ordinary game if needed and transfers the accepted REP directly from the caller into game escrow. Records the caller as depositor without minting vault backing units or underwriting commitments. Also accepts deposits if another reporter has already started the ordinary game.</td>
 							<td><code>EscalationGameSet</code> on first deposit; game emits <code>LocalDepositAppended</code> and <code>DepositOnOutcome</code></td>
 						</tr>
 						<tr>
 							<td><code>depositToEscalationGame(outcome, maxAmount)</code></td>
 							<td>Vault owner</td>
-							<td>Question end has passed; pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve both full-commitment backing requirements; a fresh price is required when total underwriting commitment is nonzero.</td>
+							<td>Question end time reached (<code>block.timestamp &gt;= endTime</code>); pool operational in an unforked universe, without an inherited fixed outcome, and not awaiting continuation. On the first deposit, the live non-decision threshold must exceed one attoREP; outcome and amount accepted; the remaining vault and aggregate pool totals each preserve both full-commitment backing requirements; a fresh price is required when total underwriting commitment is nonzero.</td>
 							<td>Deploys the local game on the first deposit. The game factory uses the configured start bond while it is below the live non-decision threshold; if tracked REP supply later makes it too large, the factory uses <code>nonDecisionThresholdAttoRep - 1</code> instead. Repeat deposits use the existing game's stored <code>startBondAttoRep</code> and <code>nonDecisionThresholdAttoRep</code>. Every accepted deposit removes enough REP backing units and escrows dispute-staked REP on the selected outcome.</td>
 							<td><code>EscalationGameSet</code> on first deposit; <code>DepositToEscalationGame</code></td>
 						</tr>
@@ -140,7 +140,7 @@
 							<td>Accrual <code>PoolAccountingCheckpoint</code> when due; <code>VaultAccountingCheckpoint</code> when the vault index, remainder, or claimable fee balance changes; an additional <code>PoolAccountingCheckpoint</code> when pool accounting changes; no event when neither accrual nor vault or pool accounting changes</td>
 						</tr>
 						<tr>
-							<td><code>withdrawRepFromVault(vault, attoRepAmount)</code></td>
+							<td><code>withdrawRepFromVault(vault, amountAttoRep)</code></td>
 							<td>This pool's <code>OpenOraclePriceCoordinator</code> only</td>
 							<td>Fresh coordinator price; operational pool in an unforked universe; <code>isEscalationResolved()</code> is false; no vault REP escrow. The remaining vault backing must meet both upward-rounded associated-REP and pool-held-REP requirements for its full underwriting commitment, with equality healthy. The remaining aggregate backing must also cover the entire total underwriting commitment under both backing constraints. A withdrawal cannot implicitly exit a commitment.</td>
 							<td>Removes the requested proportional REP backing units, or all backing units when the requested remainder would fall below the REP minimum; preserves the vault and aggregate underwriting commitments; recalculates retention; and transfers the resulting withdrawable REP to <code>vault</code>.</td>

@@ -15,6 +15,11 @@ export type DeploymentStepRow = {
 	label: string
 }
 
+/** Lets narrow screens wrap a Solidity identifier between its camelCase words instead of mid-word. */
+function withIdentifierBreaks(label: string) {
+	return label.split(/(?<=[a-z0-9])(?=[A-Z])/u).flatMap((word, index) => (index === 0 ? [word] : [<wbr key={index} />, word]))
+}
+
 /** The contract rows of a deployment route: status badge, contract name, address, status detail, and the deploy action. */
 export function DeploymentStepList({ steps }: { steps: readonly DeploymentStepRow[] }) {
 	return (
@@ -24,7 +29,7 @@ export function DeploymentStepList({ steps }: { steps: readonly DeploymentStepRo
 					<div className='contract-copy'>
 						<div className='contract-topline'>
 							{step.badge === undefined ? undefined : <Badge tone={step.badge.tone}>{step.badge.label}</Badge>}
-							<h3>{step.label}</h3>
+							<h3>{withIdentifierBreaks(step.label)}</h3>
 						</div>
 						<p className='address'>
 							<ReadOnlyAddressValue address={step.address} />

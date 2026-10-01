@@ -15,7 +15,7 @@ type ReportDiscovery = { kind: 'head-unchanged' } | { discoversReportsFromCoordi
 /** Rebuilds the report set from the OpenOracle logs in the lookback window, newest ranges first. */
 async function discoverReportsFromLogs(runtime: OperatorRuntime, context: OperatorContext, scanCursor: SyncCursor, blockNumber: bigint) {
 	const { config } = context
-	const recentRange = latestLogRange(blockNumber, config.lookbackBlocks)
+	const recentRange = latestLogRange(blockNumber, config.logLookbackBlocks)
 	const fromBlock = scanCursor.nextBlock > recentRange.fromBlock ? scanCursor.nextBlock : recentRange.fromBlock
 	for (const range of newestFirstScanRanges(fromBlock, blockNumber, MAX_LOG_SCAN_RANGE)) {
 		const logs = await fetchLogsWithAdaptiveRanges({ nextBlock: range.fromBlock }, range.toBlock, MAX_LOG_SCAN_RANGE, requestedRange =>
@@ -49,11 +49,11 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 	const executionReady = runtime.positions.every(position => position.historyOutbox === undefined) && scan.nextError === undefined
 	const discoversReportsFromCoordinators = config.coordinatorAddresses.length !== 0
 	runtime.cursor ??=
-		discoversReportsFromCoordinators || config.lookbackBlocks === 0n
+		discoversReportsFromCoordinators || config.logLookbackBlocks === 0n
 			? initialCursor(blockNumber, 0n)
 			: {
 					...initialCursor(blockNumber, 0n),
-					nextBlock: latestLogRange(blockNumber, config.lookbackBlocks).fromBlock,
+					nextBlock: latestLogRange(blockNumber, config.logLookbackBlocks).fromBlock,
 				}
 	const cursor = runtime.cursor
 	const replacedMarketHead = await clearOrphanedDexEvidenceForHeadReplacement({ hash: cursor.lastHeadHash, number: cursor.lastHeadNumber }, { hash: blockHash, number: blockNumber }, state, previousBlockNumber =>
@@ -65,7 +65,7 @@ export async function discoverReports(runtime: OperatorRuntime, context: Operato
 		const pendingReports = config.execute ? await pendingCoordinatorReportsWithQuorum(runtime.readClients, config, blockNumber) : await pendingCoordinatorReports(runtime.client, config, blockNumber)
 		applyCoordinatorReports(runtime.reports, pendingReports)
 		runtime.cachedLogs = []
-	} else if (config.lookbackBlocks > 0n) {
+	} else if (config.logLookbackBlocks > 0n) {
 		await discoverReportsFromLogs(runtime, context, scanCursor, blockNumber)
 	} else {
 		runtime.cachedLogs = []

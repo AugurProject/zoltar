@@ -67,7 +67,7 @@ export function publicCandidateCount(value: string | number | undefined) {
 	return count <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(count) : count.toString()
 }
 
-export function formatDuration(totalSeconds: number) {
+export function formatClockDuration(totalSeconds: number) {
 	const seconds = Math.max(0, Math.floor(totalSeconds))
 	const hours = Math.floor(seconds / 3_600)
 	const minutes = Math.floor((seconds % 3_600) / 60)

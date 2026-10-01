@@ -24,7 +24,6 @@
         "@scure/base": "2.2.0",
         "@solidity-parser/parser": "0.20.2",
         "@types/node": "25.9.0",
-        "@zoltar/zoltar-shared": "workspace:1.0.0",
         "abitype": "1.3.0",
         "bun-types": "1.4.2",
         "elkjs": "0.12.0",
@@ -43,8 +42,8 @@
       },
     },
     "augurScan": {
-      "name": "augur-scan",
-      "version": "0.1.0",
+      "name": "@zoltar/augur-scan",
+      "version": "1.0.0",
       "dependencies": {
         "@noble/hashes": "2.2.0",
         "@observablehq/plot": "0.6.17",
@@ -137,6 +136,7 @@
         "micro-eth-signer": "0.18.1",
       },
       "devDependencies": {
+        "bun-types": "1.4.2",
         "typescript": "5.8.2",
       },
     },
@@ -237,6 +237,7 @@
         "preact": "10.26.4",
       },
       "devDependencies": {
+        "@zoltar/zoltar-shared": "workspace:1.0.0",
         "bun-types": "1.4.2",
         "typescript": "5.8.2",
       },
@@ -253,6 +254,7 @@
         "@zoltar/statoblast-shared": "workspace:1.0.0",
         "@zoltar/ui-core-shared": "workspace:1.0.0",
         "@zoltar/ui-zoltar-shared": "workspace:1.0.0",
+        "@zoltar/zoltar-shared": "workspace:1.0.0",
         "preact": "10.26.4",
       },
       "devDependencies": {
@@ -736,6 +738,8 @@
 
     "@vitest/utils": ["@vitest/utils@4.1.11", "", { "dependencies": { "@vitest/pretty-format": "4.1.11", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-zTCVGpyFsGWBhllOyKlTw/vnr6D9qxsfSDyfbyZmTyjHw5N/VuvzHpHoQjm2ZJzn4RJgx5w4r7V0er69CmLgPQ=="],
 
+    "@zoltar/augur-scan": ["@zoltar/augur-scan@workspace:augurScan"],
+
     "@zoltar/bot-shared": ["@zoltar/bot-shared@workspace:bots/shared"],
 
     "@zoltar/chaos": ["@zoltar/chaos@workspace:bots/chaos"],
@@ -781,8 +785,6 @@
     "asynckit": ["asynckit@0.4.0", "", {}, "sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q=="],
 
     "atomic-sleep": ["atomic-sleep@1.0.0", "", {}, "sha512-kNOjDqAh7px0XWNI+4QbzoiR/nTkHAWNud2uvnJquD1/x5a7EQZMJT0AczqK0Qn67oY/TTQ1LbUKajZpp3I9tQ=="],
-
-    "augur-scan": ["augur-scan@workspace:augurScan"],
 
     "available-typed-arrays": ["available-typed-arrays@1.0.7", "", { "dependencies": { "possible-typed-array-names": "^1.0.0" } }, "sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ=="],
 

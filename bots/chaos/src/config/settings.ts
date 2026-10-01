@@ -4,9 +4,10 @@ import { PRESERVE_PRIVATE_KEY, signerCandidate } from '@zoltar/bot-shared/config
 import { getAddress, zeroAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import { validateSubmissionSettings, type SubmissionSettings } from '@zoltar/bot-shared/execution/transaction-submission'
 import { boolean, formatDecimalAmount, integer, nonemptyString, parseDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
-import { presetNetworkChainId, validateConnectivitySettings, validateIndependentReadRpcUrls, type ConnectivitySettings, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
+import { parseQuorumConnectivitySettings, type QuorumConnectivitySettings } from '@zoltar/bot-shared/monitoring/quorum-connectivity'
 import { MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
-import { configuredQuorumRpcUrlMinimum, rpcQuorumRequirement, type RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
+import { configuredQuorumRpcUrlMinimum } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { resolve } from 'node:path'
 import { CHAOS_OPERATION_CATALOG } from '../operations/catalog.ts'
@@ -65,7 +66,8 @@ export type StrategySettings = {
 
 type RuntimeSettings = {
 	execute: boolean
-	lifecyclePollMilliseconds: number
+	/** The main loop interval between lifecycle scan cycles. */
+	pollMilliseconds: number
 	once: boolean
 	protocolLogBlockSpan: number
 	protocolStartBlock: bigint
@@ -93,8 +95,11 @@ type CustomNetworkSettings = {
 
 type OperatorNetworkSettings = PresetNetworkSettings | CustomNetworkSettings
 
+/** Version 2 renamed `runtime.lifecyclePollMilliseconds` to `runtime.pollMilliseconds`, the main loop key every bot shares. */
+const SETTINGS_VERSION = 2
+
 export type OperatorSettings = {
-	connectivity: (ConnectivitySettings & { quorumRpcUrls: string[]; rpcQuorum: RpcQuorumRequirement }) | undefined
+	connectivity: QuorumConnectivitySettings | undefined
 	deployment: DeploymentSettings
 	discovery: DiscoverySettings
 	network: OperatorNetworkSettings
@@ -105,7 +110,7 @@ export type OperatorSettings = {
 	scheduler: SchedulerSettings
 	strategy: StrategySettings
 	submission: SubmissionSettings
-	version: 1
+	version: typeof SETTINGS_VERSION
 }
 
 export type SettingsFilesystem = Omit<RevisionedFileFilesystem, 'open'> & {
@@ -170,24 +175,6 @@ function parseNetwork(value: unknown): OperatorSettings['network'] {
 	}
 }
 
-function parseConnectivity(value: unknown): NonNullable<OperatorSettings['connectivity']> {
-	const connectivity = requiredRecord(value, 'connectivity')
-	assertExactKeys(connectivity, ['publicRpcUrls', 'quorumRpcUrls', 'readRpcUrl', 'rpcQuorum'], [], 'connectivity')
-	const parsed = validateConnectivitySettings({
-		publicRpcUrls: connectivity['publicRpcUrls'],
-		readRpcUrl: connectivity['readRpcUrl'],
-	})
-	const quorumValues = connectivity['quorumRpcUrls']
-	if (!Array.isArray(quorumValues) || quorumValues.some(candidate => typeof candidate !== 'string')) throw new Error('connectivity.quorumRpcUrls must contain only RPC URLs')
-	const quorumRpcUrls = validateIndependentReadRpcUrls(
-		parsed.readRpcUrl,
-		quorumValues.map(value => String(value)),
-	)
-	const rpcQuorum = connectivity['rpcQuorum'] === undefined ? rpcQuorumRequirement() : integer(connectivity['rpcQuorum'], 'connectivity.rpcQuorum', 1, 2)
-	if (rpcQuorum !== 1 && rpcQuorum !== 2) throw new Error('connectivity.rpcQuorum must be 1 or 2')
-	return { ...parsed, quorumRpcUrls, rpcQuorum }
-}
-
 function parseDiscovery(value: unknown): DiscoverySettings {
 	const discovery = requiredRecord(value, 'discovery')
 	const keys = ['maxPools', 'maxQuestions', 'maxStagedOperationsPerPool', 'maxUniverses', 'maxVaultsPerPool'] as const
@@ -207,15 +194,15 @@ function parseDiscovery(value: unknown): DiscoverySettings {
 
 function parseRuntime(value: unknown): RuntimeSettings {
 	const runtime = requiredRecord(value, 'runtime')
-	assertExactKeys(runtime, ['execute', 'lifecyclePollMilliseconds', 'once', 'protocolLogBlockSpan', 'protocolStartBlock', 'stateFile', 'ui', 'uiHost', 'uiPort'], [], 'runtime')
+	assertExactKeys(runtime, ['execute', 'once', 'pollMilliseconds', 'protocolLogBlockSpan', 'protocolStartBlock', 'stateFile', 'ui', 'uiHost', 'uiPort'], [], 'runtime')
 	if (runtime['uiHost'] !== '127.0.0.1' && runtime['uiHost'] !== '0.0.0.0') throw new Error('runtime.uiHost must be 127.0.0.1 or 0.0.0.0')
 	const once = boolean(runtime['once'], 'runtime.once')
 	const ui = boolean(runtime['ui'], 'runtime.ui')
 	if (once && ui) throw new Error('runtime.once and runtime.ui cannot both be enabled')
 	return {
 		execute: boolean(runtime['execute'], 'runtime.execute'),
-		lifecyclePollMilliseconds: integer(runtime['lifecyclePollMilliseconds'], 'runtime.lifecyclePollMilliseconds', 1_000, 60_000),
 		once,
+		pollMilliseconds: integer(runtime['pollMilliseconds'], 'runtime.pollMilliseconds', 1_000, 60_000),
 		protocolLogBlockSpan: integer(runtime['protocolLogBlockSpan'], 'runtime.protocolLogBlockSpan', 1, 50_000),
 		protocolStartBlock: BigInt(uint256String(runtime['protocolStartBlock'], 'runtime.protocolStartBlock')),
 		stateFile: filePath(runtime['stateFile'], 'runtime.stateFile'),
@@ -315,13 +302,25 @@ function parseDeploymentPin(value: unknown, network: OperatorSettings['network']
 	return deployment
 }
 
+/**
+ * Upgrades an older saved document to the current shape, so files and dashboard-saved settings written by an earlier
+ * release keep loading. Version 1 named the main loop interval `runtime.lifecyclePollMilliseconds`.
+ */
+function migrateSettingsDocument(root: Record<string, unknown>): Record<string, unknown> {
+	if (root['version'] === SETTINGS_VERSION) return root
+	if (root['version'] !== 1) throw new Error('operator settings version must be 1 or 2')
+	const runtime = root['runtime']
+	if (typeof runtime !== 'object' || runtime === null || Array.isArray(runtime) || !('lifecyclePollMilliseconds' in runtime) || 'pollMilliseconds' in runtime) return { ...root, version: SETTINGS_VERSION }
+	const { lifecyclePollMilliseconds, ...rest } = runtime
+	return { ...root, runtime: { ...rest, pollMilliseconds: lifecyclePollMilliseconds }, version: SETTINGS_VERSION }
+}
+
 export function parseSettings(value: unknown, preservedPrivateKey?: Hex): OperatorSettings {
-	const root = requiredRecord(value, 'operator settings')
+	const root = migrateSettingsDocument(requiredRecord(value, 'operator settings'))
 	// Accept the obsolete field so existing saved configurations can migrate; never use its addresses.
 	assertExactKeys(root, ['connectivity', ...('deployment' in root ? ['deployment'] : []), ...('deploymentPin' in root ? ['deploymentPin'] : []), 'discovery', 'network', 'networkConfigured', 'paused', 'privateKey', 'runtime', 'scheduler', 'strategy', 'submission', 'version'], [], 'operator settings')
-	if (root['version'] !== 1) throw new Error('operator settings version must be 1')
 	const networkConfigured = boolean(root['networkConfigured'], 'networkConfigured')
-	const connectivity = root['connectivity'] === null ? undefined : parseConnectivity(root['connectivity'])
+	const connectivity = root['connectivity'] === null ? undefined : parseQuorumConnectivitySettings(root['connectivity'])
 	if (networkConfigured !== (connectivity !== undefined)) throw new Error(networkConfigured ? 'A configured network requires connectivity' : 'An unconfigured network cannot retain connectivity')
 	if (root['privateKey'] === PRESERVE_PRIVATE_KEY && preservedPrivateKey === undefined) throw new Error('A redacted private key can only preserve an existing saved signer')
 	const privateKeyValue = root['privateKey'] === PRESERVE_PRIVATE_KEY ? preservedPrivateKey : root['privateKey']
@@ -339,7 +338,7 @@ export function parseSettings(value: unknown, preservedPrivateKey?: Hex): Operat
 		scheduler: parseScheduler(root['scheduler']),
 		strategy: parseStrategy(root['strategy']),
 		submission: validateSubmissionSettings(root['submission']),
-		version: 1,
+		version: SETTINGS_VERSION,
 	}
 	if (!settings.networkConfigured && (!settings.paused || settings.runtime.execute)) throw new Error('An unconfigured network requires paused dry-run mode')
 	if (settings.runtime.execute && settings.privateKey === undefined) throw new Error('Live execution requires privateKey')
@@ -386,7 +385,7 @@ export function serializedSettings(settings: OperatorSettings, redactPrivateKey 
 			workflowValidForBlocks: Number(settings.strategy.workflowValidForBlocks),
 		},
 		submission: settings.submission,
-		version: 1,
+		version: SETTINGS_VERSION,
 	}
 }
 

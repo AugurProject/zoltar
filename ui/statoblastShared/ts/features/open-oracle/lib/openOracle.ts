@@ -80,7 +80,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppCh
 	const walletGuardState = getWalletConnectionActiveAppChainGuardState({
 		isOnActiveAppChain,
 		walletConnected,
-		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone Open Oracle report'),
+		walletRequiredReason: commonCopy.formatConnectWalletBefore('creating a standalone OpenOracle report'),
 	})
 	if (walletGuardState.blocked) return walletGuardState.reason
 	const ethValue = tryParseDecimalInput(ethValueInput)
@@ -90,7 +90,7 @@ export function getOpenOracleCreateGuardMessage({ ethValueInput, isOnActiveAppCh
 	// Standalone reports are ERC-20 pairs, so the contract needs exactly the settler reward in ETH; the create validation enforces the same rule.
 	if (ethValue !== settlerRewardAttoEth) return 'ETH value to send must equal the settler reward for ERC-20 token pairs.'
 	if (walletBalanceAttoEth === undefined) return 'Loading wallet ETH balance.'
-	if (ethValue > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethValue - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone Open Oracle report.`
+	if (ethValue > walletBalanceAttoEth) return `Need ${formatAdditionalCurrencyBalance(ethValue - walletBalanceAttoEth, 'ETH')} in this wallet to create the selected standalone OpenOracle report.`
 	return undefined
 }
 
@@ -265,7 +265,7 @@ export function getOpenOracleCreateValidationMessage(parameters: { form: OpenOra
 	return getOpenOracleCreateValidation(parameters).message
 }
 export function getOpenOracleReportStatus(report: Pick<OpenOracleReportSummary, 'currentReporter' | 'disputeOccurred' | 'isDistributed' | 'reportTimestamp'>): OpenOracleReportStatus {
-	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('Open Oracle report is missing its atomic initial report')
+	if (report.reportTimestamp === 0n || report.currentReporter === zeroAddress) throw new Error('OpenOracle report is missing its atomic initial report')
 	if (report.isDistributed) return 'Settled'
 	if (report.disputeOccurred) return 'Disputed'
 	return 'Pending'

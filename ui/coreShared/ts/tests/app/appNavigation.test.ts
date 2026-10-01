@@ -6,7 +6,7 @@ import { createSecondaryNavigation, resolveSecondaryNavigation, withDeploymentTa
 const deploymentTab = { hash: '#/deploy', label: 'Deploy', route: 'deploy' }
 const primaryTabs = [
 	{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
-	{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
+	{ hash: '#/open-oracle', label: 'OpenOracle', route: 'open-oracle' },
 ]
 
 describe('app navigation', () => {

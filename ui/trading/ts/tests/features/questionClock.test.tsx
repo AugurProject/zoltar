@@ -134,7 +134,7 @@ describe('probability bar', () => {
 			const rendered = await renderIntoDocument(h(ProbabilityBar, { yesPercent }))
 			try {
 				const labels = [...rendered.container.querySelectorAll('.probability__labels span')].map(label => label.textContent)
-				expect(labels).toEqual([`Conditional YES ${yes}%`, `Conditional NO ${no}%`])
+				expect(labels).toEqual([`Conditional Yes ${yes}%`, `Conditional No ${no}%`])
 			} finally {
 				await rendered.cleanup()
 			}

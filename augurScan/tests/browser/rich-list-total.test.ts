@@ -9,5 +9,5 @@ test('shows the largest individual REP holding when token rows are capped', () =
 		largest_rep_symbol: 'REP',
 		rep_balances: Array.from({ length: 100 }, () => ({ balance: '1000000000000000000' })),
 	}
-	expect(richListLargestRep(item)).toBe('101.000000000000000001 REP · 0x1234…7890')
+	expect(richListLargestRep(item)).toBe('101.000000000000000001 REP · 0x123456…567890')
 })

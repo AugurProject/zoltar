@@ -1,4 +1,13 @@
-const DEFAULT_RPC_URL = 'https://ethereum.dark.florist'
+import { mainnet, type Chain } from '@zoltar/core-shared/evm/ethereum'
+
+/** The first default HTTP RPC URL of a chain definition, the single source for read RPC fallbacks. */
+export function getChainDefaultRpcUrl(chain: Chain) {
+	const url = chain.rpcUrls.default.http[0]
+	if (url === undefined) throw new Error(`No default RPC URL is configured for ${chain.name}`)
+	return url
+}
+
+const DEFAULT_RPC_URL = getChainDefaultRpcUrl(mainnet)
 const RPC_URL_SEARCH_PARAM = 'rpcUrl'
 const RPC_URL_STORAGE_KEY = 'zoltar.rpcUrl'
 const RPC_URLS_STORAGE_KEY = 'zoltar.rpcUrls'

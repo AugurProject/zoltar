@@ -5,7 +5,7 @@ import { parseChainId, sameChainId } from './chainId.js'
 import { getNetworkSwitchTarget } from './networkProfile.js'
 
 const COMMON_CHAIN_NAMES = new Map<bigint, string>([
-	[1n, 'Ethereum'],
+	[1n, 'Ethereum mainnet'],
 	[10n, 'Optimism'],
 	[25n, 'Cronos'],
 	[56n, 'BNB Smart Chain'],

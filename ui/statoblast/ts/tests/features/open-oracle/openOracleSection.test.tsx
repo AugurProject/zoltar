@@ -523,7 +523,7 @@ void describe('OpenOracleSection', () => {
 		}
 	})
 
-	void test('opens on favorite reports from the browser cache without reading Open Oracle', async () => {
+	void test('opens on favorite reports from the browser cache without reading OpenOracle', async () => {
 		let browseLoadAttempts = 0
 		const browse = await renderBrowseSection(
 			{
@@ -631,9 +631,9 @@ void describe('OpenOracleSection', () => {
 	void test('confirms an empty registry only after a scan', async () => {
 		const browse = await renderBrowseSection({ loadBrowseReports: async pageIndex => createReportPage(pageIndex, 0n, []) })
 		try {
-			expect(within(document.body).queryByText('No Open Oracle reports found.')).toBeNull()
+			expect(within(document.body).queryByText('No OpenOracle reports found.')).toBeNull()
 			await clickButton('Discover reports')
-			expect(within(document.body).getByRole('status').textContent).toContain('No Open Oracle reports found.')
+			expect(within(document.body).getByRole('status').textContent).toContain('No OpenOracle reports found.')
 		} finally {
 			await browse.cleanup()
 		}
@@ -645,7 +645,7 @@ void describe('OpenOracleSection', () => {
 		try {
 			await clickButton('Discover reports')
 			expect(browse.container.textContent).toContain(message)
-			expect(browse.container.textContent).not.toContain('No Open Oracle reports found.')
+			expect(browse.container.textContent).not.toContain('No OpenOracle reports found.')
 		} finally {
 			await browse.cleanup()
 		}
@@ -662,11 +662,11 @@ void describe('OpenOracleSection', () => {
 		try {
 			const documentQueries = within(document.body)
 			await clickButton('Discover reports')
-			expect(documentQueries.getByRole('alert', { name: /Failed to load Open Oracle reports/ })).not.toBeNull()
-			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+			expect(documentQueries.getByRole('alert', { name: /Failed to load OpenOracle reports/ })).not.toBeNull()
+			expect(documentQueries.queryByText('No OpenOracle reports found.')).toBeNull()
 			await clickButton('Retry')
 			expect(browseLoadAttempts).toBe(2)
-			expect(documentQueries.queryByText('No Open Oracle reports found.')).toBeNull()
+			expect(documentQueries.queryByText('No OpenOracle reports found.')).toBeNull()
 		} finally {
 			await browse.cleanup()
 		}

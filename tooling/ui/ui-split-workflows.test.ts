@@ -630,8 +630,8 @@ ${command}`,
 		for (const packageId of uiPackageIds) {
 			expect(deployWorkflow).not.toContain(`(cd ui/${packageId} && bun install --frozen-lockfile)`)
 		}
-		expect(deployWorkflow).toContain('bun install --frozen-lockfile')
-		expect(deployWorkflow).not.toContain('(cd solidity && bun install --frozen-lockfile)')
+		expect(deployWorkflow).toContain('run: bun run projects:setup')
+		expect(deployWorkflow).not.toContain('bun install')
 		expect(deployWorkflow).not.toContain('bun run ui:build:apps')
 		expect(deployWorkflow).toContain('bun ./tooling/contracts/ensure-contract-artifacts.mts --headless')
 		expect(deployWorkflow).toContain('bun ./tooling/contracts/run-deploy-testnet.mts --help')
