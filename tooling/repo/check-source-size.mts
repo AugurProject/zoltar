@@ -19,17 +19,71 @@ export type SourceSizeFinding = {
 
 export const isProductionSource = (file: string): boolean => productionRoots.test(file) && sourceExtension.test(file) && !excludedSegment.test(file) && !excludedFile.test(file)
 
-export const countSourceLines = (source: string): number => {
+const countPhysicalLines = (source: string): number => {
 	if (source === '') return 0
 	const lines = source.split(/\r?\n/)
 	return lines.at(-1) === '' ? lines.length - 1 : lines.length
 }
 
+// Counts Solidity lines that contain only comments, both NatSpec (`///` and `/**` blocks) and plain (`//` and `/*` blocks).
+// A line that mixes code with a comment, or that is blank, is not comment-only.
+export const countSolidityCommentOnlyLines = (source: string): number => {
+	let commentOnlyLines = 0
+	let lineHasCode = false
+	let lineHasComment = false
+	let state: 'code' | 'line-comment' | 'block-comment' | 'string' = 'code'
+	let stringQuote = ''
+	const finishLine = () => {
+		if (lineHasComment && !lineHasCode) commentOnlyLines += 1
+		lineHasCode = false
+		lineHasComment = state === 'block-comment'
+	}
+	for (let index = 0; index < source.length; index += 1) {
+		const character = source[index]
+		const next = source[index + 1]
+		if (character === '\n') {
+			if (state === 'line-comment') state = 'code'
+			finishLine()
+			continue
+		}
+		if (state === 'line-comment' || character === '\r') continue
+		if (state === 'block-comment') {
+			if (character === '*' && next === '/') {
+				state = 'code'
+				index += 1
+			}
+			continue
+		}
+		if (state === 'string') {
+			if (character === '\\') index += 1
+			else if (character === stringQuote) state = 'code'
+			continue
+		}
+		if (character === '/' && (next === '/' || next === '*')) {
+			state = next === '/' ? 'line-comment' : 'block-comment'
+			lineHasComment = true
+			index += 1
+			continue
+		}
+		if (character === undefined || /\s/.test(character)) continue
+		lineHasCode = true
+		if (character === '"' || character === "'") {
+			state = 'string'
+			stringQuote = character
+		}
+	}
+	if (source !== '' && !source.endsWith('\n')) finishLine()
+	return commentOnlyLines
+}
+
+// Solidity comment-only lines are excluded so NatSpec and explanatory comments never push a contract over its size limit.
+export const countSourceLines = (source: string, file: string): number => countPhysicalLines(source) - (file.endsWith('.sol') ? countSolidityCommentOnlyLines(source) : 0)
+
 export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowances: ReadonlyMap<string, SourceSizeAllowance> = sourceSizeAllowances, limit = productionSourceLineLimit): SourceSizeFinding[] {
 	const findings: SourceSizeFinding[] = []
 	const validAllowances = new Map<string, SourceSizeAllowance>()
 	for (const [file, allowance] of allowances) {
-		const lines = files.has(file) ? countSourceLines(files.get(file) ?? '') : 0
+		const lines = files.has(file) ? countSourceLines(files.get(file) ?? '', file) : 0
 		let valid = true
 		if (!isProductionSource(file)) {
 			findings.push({ detail: 'allowances may only name production source files', file, lines, limit: allowance.maxLines, kind: 'invalid-allowance-path' })
@@ -47,7 +101,7 @@ export function inspectSourceSizes(files: ReadonlyMap<string, string>, allowance
 	}
 	for (const [file, source] of files) {
 		if (!isProductionSource(file)) continue
-		const lines = countSourceLines(source)
+		const lines = countSourceLines(source, file)
 		const allowance = validAllowances.get(file)
 		if (allowance === undefined && lines > limit) findings.push({ file, lines, limit, kind: 'oversized' })
 		else if (allowance !== undefined && lines > allowance.maxLines) findings.push({ file, lines, limit: allowance.maxLines, kind: 'allowance-exceeded' })
