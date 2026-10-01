@@ -2,31 +2,22 @@ import type { createSelectionControls } from './selection-controls.js'
 import type { createOperationDialog } from './operation-dialog.js'
 import { node, setBadge, statusLabel } from './dom.js'
 import { type OperationEvaluation } from './dashboard-data.ts'
+import type { DashboardElements } from './dashboard-elements.ts'
+import { classificationLabel, displayedClassification, ecosystemLabels, ecosystemOrder, normalizeEcosystem, operationIsIndependentlyExecutable, parsePositiveNumber, publicCandidateCount } from './dashboard-format.ts'
 
 type DashboardCatalogViewContext = {
-	catalogFilter: HTMLSelectElement
-	catalogClassificationFilter: HTMLSelectElement
-	catalogEligibilityFilter: HTMLSelectElement
-	catalogSignature: string
-	normalizeEcosystem: (value: string | undefined) => string
-	displayedClassification: (value: OperationEvaluation) => string | undefined
-	operationIsIndependentlyExecutable: (value: OperationEvaluation) => boolean
-	publicCandidateCount: (value: string | number | undefined) => string | number | undefined
-	catalogCaption: HTMLParagraphElement
-	catalogRowCache: Map<string, { row: HTMLTableRowElement; signature: string }>
-	classificationLabel: (value: string | undefined) => 'Lifecycle obligation' | 'Excluded: dangerous' | 'Role restricted' | 'Workflow prerequisite' | 'Randomly selectable' | 'Coverage alias' | 'Classification unavailable'
+	elements: DashboardElements
 	operationDialog: ReturnType<typeof createOperationDialog>
 	selectionControls: ReturnType<typeof createSelectionControls>
-	catalogRows: HTMLDivElement
 	renderCatalogGroups: (rows: HTMLTableRowElement[]) => void
 	updateSelectionControls: () => void
-	ecosystemOrder: readonly ['zoltar', 'statoblast', 'open-oracle', 'trading']
-	parsePositiveNumber: (value: string | number | undefined) => number | undefined
-	ecosystemLabels: Map<string, string>
-	ecosystemGrid: HTMLDivElement
 }
 
 export function createDashboardCatalogView(context: DashboardCatalogViewContext) {
+	const { elements } = context
+	const catalogRowCache = new Map<string, { row: HTMLTableRowElement; signature: string }>()
+	let catalogSignature = ''
+
 	function normalizedCatalogCopy(value: string) {
 		return value
 			.trim()
@@ -37,16 +28,16 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 
 	function renderCatalog(values: OperationEvaluation[]) {
 		if (document.querySelector('#operation-dialog[open]') !== null) return
-		const selectedEcosystem = context.catalogFilter.value
-		const selectedClassification = context.catalogClassificationFilter.value
-		const selectedEligibility = context.catalogEligibilityFilter.value
+		const selectedEcosystem = elements.catalogFilter.value
+		const selectedClassification = elements.catalogClassificationFilter.value
+		const selectedEligibility = elements.catalogEligibilityFilter.value
 		const signature = JSON.stringify({ values, selectedEcosystem, selectedClassification, selectedEligibility })
-		if (signature === context.catalogSignature) return
-		context.catalogSignature = signature
+		if (signature === catalogSignature) return
+		catalogSignature = signature
 		const filtered = values.filter(value => {
-			if (selectedEcosystem !== 'all' && context.normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
-			if (selectedClassification !== 'all' && context.displayedClassification(value) !== selectedClassification) return false
-			const independentlyExecutable = context.operationIsIndependentlyExecutable(value)
+			if (selectedEcosystem !== 'all' && normalizeEcosystem(value.ecosystem) !== selectedEcosystem) return false
+			if (selectedClassification !== 'all' && displayedClassification(value) !== selectedClassification) return false
+			const independentlyExecutable = operationIsIndependentlyExecutable(value)
 			const eligible = independentlyExecutable && value.enabled !== false && value.eligible === true
 			let eligibility = 'blocked'
 			if (!independentlyExecutable) eligibility = 'not-selectable'
@@ -54,18 +45,18 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			else if (eligible) eligibility = 'eligible'
 			return selectedEligibility === 'all' || selectedEligibility === eligibility
 		})
-		const candidateTotal = filtered.reduce((total, value) => total + BigInt(context.publicCandidateCount(value.candidateCount) ?? 0), 0n)
-		context.catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
+		const candidateTotal = filtered.reduce((total, value) => total + BigInt(publicCandidateCount(value.candidateCount) ?? 0), 0n)
+		elements.catalogCaption.textContent = `${filtered.length.toString()} of ${values.length.toString()} classified catalog entr${values.length === 1 ? 'y' : 'ies'} shown · ${candidateTotal.toString()} live candidate${candidateTotal === 1n ? '' : 's'}.`
 		const rows = filtered.map(value => {
 			const key = value.id ?? ''
 			const rowSignature = JSON.stringify(value)
-			const reused = context.catalogRowCache.get(key)
+			const reused = catalogRowCache.get(key)
 			// Reusing an unchanged row keeps its checkbox, focus, and layout untouched across polls.
 			if (reused !== undefined && reused.signature === rowSignature) return reused.row
 			const row = document.createElement('tr')
 			const enabled = value.enabled !== false
-			const independentlyExecutable = context.operationIsIndependentlyExecutable(value)
-			const displayClassification = context.displayedClassification(value)
+			const independentlyExecutable = operationIsIndependentlyExecutable(value)
+			const displayClassification = displayedClassification(value)
 			const eligible = independentlyExecutable && enabled && value.eligible === true
 			let displayedBlockers: string[] = []
 			if (!eligible) {
@@ -88,13 +79,13 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			if (displayClassification === 'excluded-dangerous') classificationTone = 'error'
 			else if (displayClassification === 'role-restricted' || displayClassification === 'prerequisite' || displayClassification === 'coverage-alias') classificationTone = 'neutral'
 			else if (displayClassification === 'lifecycle-obligation') classificationTone = 'info'
-			setBadge(classificationBadge, context.classificationLabel(displayClassification), classificationTone)
+			setBadge(classificationBadge, classificationLabel(displayClassification), classificationTone)
 			classificationCell.append(classificationBadge)
 			const riskCell = node('td')
 			const riskBadge = node('span')
 			setBadge(riskBadge, statusLabel(value.risk ?? 'standard'), value.risk === 'irreversible' || value.risk === 'high' ? 'warning' : 'neutral')
 			riskCell.append(riskBadge)
-			const candidatesCell = node('td', 'mono', String(context.publicCandidateCount(value.candidateCount) ?? 0))
+			const candidatesCell = node('td', 'mono', String(publicCandidateCount(value.candidateCount) ?? 0))
 			const eligibilityCell = node('td')
 			nameCell.dataset['label'] = 'Operation'
 			classificationCell.dataset['label'] = 'Classification'
@@ -118,14 +109,14 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			open.addEventListener('click', () => context.operationDialog.open(value))
 			nameCell.append(open)
 			if (value.classification === 'selectable' && independentlyExecutable && value.id !== undefined) context.selectionControls.appendToggle(nameCell, value.id, value.label ?? value.id)
-			row.dataset['ecosystem'] = context.normalizeEcosystem(value.ecosystem)
+			row.dataset['ecosystem'] = normalizeEcosystem(value.ecosystem)
 			row.dataset['operationId'] = key
 			row.append(nameCell, classificationCell, riskCell, candidatesCell, eligibilityCell)
-			context.catalogRowCache.set(key, { row, signature: rowSignature })
+			catalogRowCache.set(key, { row, signature: rowSignature })
 			return row
 		})
 		if (rows.length === 0) {
-			context.catalogRows.replaceChildren(node('p', 'empty-state', 'No operations match this filter.'))
+			elements.catalogRows.replaceChildren(node('p', 'empty-state', 'No operations match this filter.'))
 			return
 		}
 		context.renderCatalogGroups(rows)
@@ -133,15 +124,15 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 	}
 
 	function renderEcosystems(values: OperationEvaluation[]) {
-		const cards = context.ecosystemOrder.map(ecosystem => {
-			const operations = values.filter(value => context.normalizeEcosystem(value.ecosystem) === ecosystem && context.operationIsIndependentlyExecutable(value))
+		const cards = ecosystemOrder.map(ecosystem => {
+			const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
 			const enabled = operations.filter(value => value.enabled !== false)
 			const eligible = enabled.filter(value => value.eligible === true)
-			const candidates = eligible.reduce((total, value) => total + (context.parsePositiveNumber(value.candidateCount) ?? 0), 0)
+			const candidates = eligible.reduce((total, value) => total + (parsePositiveNumber(value.candidateCount) ?? 0), 0)
 			const card = node('article', 'panel ecosystem-card')
 			card.dataset['ecosystem'] = ecosystem
 			const heading = node('div', 'panel-heading')
-			heading.append(node('h3', undefined, context.ecosystemLabels.get(ecosystem) ?? ecosystem))
+			heading.append(node('h3', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem))
 			const readiness = node('span')
 			if (eligible.length > 0) setBadge(readiness, 'Ready', 'success')
 			else if (operations.length === 0) setBadge(readiness, 'Discovering', 'neutral')
@@ -183,7 +174,7 @@ export function createDashboardCatalogView(context: DashboardCatalogViewContext)
 			if (summary !== undefined) card.append(summary)
 			return card
 		})
-		context.ecosystemGrid.replaceChildren(...cards)
+		elements.ecosystemGrid.replaceChildren(...cards)
 	}
 	return { renderCatalog, renderEcosystems }
 }

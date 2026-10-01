@@ -1,18 +1,17 @@
 import { beforeAll, beforeEach } from 'bun:test'
 import assert from '../../testSupport/simulator/utils/assert'
-import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
-import type { Abi, Address, Hash } from '@zoltar/core-shared/evm/ethereum'
+import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { AnvilWindowEthereum } from '../../testSupport/simulator/AnvilWindowEthereum'
 import { useIsolatedAnvilNode } from '../../testSupport/simulator/useIsolatedAnvilNode'
 
 import { pickFixtureProperties } from '../../testSupport/pickFixtureProperties'
 import { createWriteClient, WriteClient } from '../../testSupport/simulator/utils/clients'
-import { DAY, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
+import { DAY, GENESIS_UNIVERSE, STATOBLAST_SECURITY_MULTIPLIER_BPS, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { setupTestAccounts } from '../../testSupport/simulator/utils/utilities'
 import { addressString } from '../../testSupport/simulator/utils/bigint'
 import { approveAndDepositRepToVault } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { deployOriginSecurityPool, ensureInfraDeployed, getInfraContractAddresses, getSecurityPoolAddresses } from '../../testSupport/simulator/utils/contracts/deployStatoblast'
-import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
+import { createQuestion, makeQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
 import { getQuestionId } from '@zoltar/zoltar-shared/questions/questionId'
 
 import { ensureZoltarDeployed, getRepTokenAddress } from '../../testSupport/simulator/utils/contracts/zoltar'
@@ -20,36 +19,6 @@ import { ensureZoltarDeployed, getRepTokenAddress } from '../../testSupport/simu
 import { createStatoblastTruthAuctionScenarioHelpers } from './truthAuctionScenarioHelpers'
 import { getSecurityVault, backingUnitsToAttoRep } from '../../testSupport/simulator/utils/contracts/securityPool'
 import { statoblast_factories_SecurityPoolFactory_SecurityPoolFactory, test_statoblast_OwnForkEscalationClaimHarness_OwnForkEscalationClaimHarness } from '../../types/contractArtifact'
-
-const getMigrationProxyAddressAbi = [
-	{
-		inputs: [
-			{
-				internalType: 'contract ISecurityPool',
-				name: 'securityPool',
-				type: 'address',
-			},
-		],
-		name: 'getMigrationProxyAddress',
-		outputs: [
-			{
-				internalType: 'address',
-				name: '',
-				type: 'address',
-			},
-		],
-		stateMutability: 'view',
-		type: 'function',
-	},
-] as const satisfies Abi
-
-function formatStorageSlot(slot: bigint) {
-	return `0x${slot.toString(16).padStart(64, '0')}`
-}
-
-function getMappingStorageSlot(key: Address, mappingSlot: bigint) {
-	return BigInt(keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [key, mappingSlot])))
-}
 
 function useStatoblastTestFixture() {
 	const { getAnvilWindowEthereum, setBaselineSnapshot } = useIsolatedAnvilNode()
@@ -76,8 +45,8 @@ function useStatoblastTestFixture() {
 		displayValueMax: bigint
 		answerUnit: string
 	}
-	const genesisUniverse = 0n
-	const statoblastSecurityMultiplierBps = 20_000n
+	const genesisUniverse = GENESIS_UNIVERSE
+	const statoblastSecurityMultiplierBps = STATOBLAST_SECURITY_MULTIPLIER_BPS
 	const reportedRepEthPrice = 10n * 10n ** 18n
 	const testInternalSenderBalance = 10n ** 18n
 	const MAX_RETENTION_RATE = 999_999_996_848_000_000n // ≈90% yearly
@@ -158,16 +127,7 @@ function useStatoblastTestFixture() {
 		await ensureInfraDeployed(client)
 		const currentTimestamp = await mockWindow.getTime()
 		questionEndDate = currentTimestamp + 365n * DAY
-		questionData = {
-			title: EXTRA_INFO,
-			description: '',
-			startTime: 0n,
-			endTime: questionEndDate,
-			numTicks: 0n,
-			displayValueMin: 0n,
-			displayValueMax: 0n,
-			answerUnit: '',
-		}
+		questionData = makeQuestion(EXTRA_INFO, questionEndDate)
 		questionId = getQuestionId(questionData, outcomes)
 		await createQuestion(client, questionData, outcomes)
 		await deployOriginSecurityPool(client, genesisUniverse, questionId, statoblastSecurityMultiplierBps)
@@ -222,9 +182,6 @@ function useStatoblastTestFixture() {
 		getAnvilWindowEthereum,
 		setBaselineSnapshot,
 		initializeStatoblastBaseline,
-		getMigrationProxyAddressAbi,
-		formatStorageSlot,
-		getMappingStorageSlot,
 		reportBond,
 		PRICE_PRECISION,
 		repDeposit,
@@ -254,8 +211,6 @@ function useStatoblastTestFixture() {
 export function useStatoblastDeploymentAndOwnForkEscalationFixture() {
 	const fixture = useStatoblastTestFixture()
 	return pickFixtureProperties(fixture, [
-		'formatStorageSlot',
-		'getMappingStorageSlot',
 		'reportBond',
 		'repDeposit',
 		'genesisUniverse',
@@ -277,7 +232,7 @@ export type StatoblastDeploymentAndOwnForkEscalationFixture = ReturnType<typeof 
 
 export function useStatoblastEscalationMigrationFixture() {
 	const fixture = useStatoblastTestFixture()
-	return pickFixtureProperties(fixture, ['getMigrationProxyAddressAbi', 'formatStorageSlot', 'getMappingStorageSlot', 'reportBond', 'repDeposit', 'genesisUniverse', 'statoblastSecurityMultiplierBps', 'outcomes', 'getYesChildPool', 'mockWindow', 'client', 'securityPoolAddresses', 'questionData', 'questionId'] as const)
+	return pickFixtureProperties(fixture, ['reportBond', 'repDeposit', 'genesisUniverse', 'statoblastSecurityMultiplierBps', 'outcomes', 'getYesChildPool', 'mockWindow', 'client', 'securityPoolAddresses', 'questionData', 'questionId'] as const)
 }
 
 export type StatoblastEscalationMigrationFixture = ReturnType<typeof useStatoblastEscalationMigrationFixture>
@@ -285,9 +240,6 @@ export type StatoblastEscalationMigrationFixture = ReturnType<typeof useStatobla
 export function useStatoblastForkMigrationFixture() {
 	const fixture = useStatoblastTestFixture()
 	return pickFixtureProperties(fixture, [
-		'getMigrationProxyAddressAbi',
-		'formatStorageSlot',
-		'getMappingStorageSlot',
 		'reportBond',
 		'PRICE_PRECISION',
 		'repDeposit',
@@ -323,9 +275,6 @@ export type StatoblastReceiveGuardsFixture = ReturnType<typeof useStatoblastRece
 export function useStatoblastTruthAuctionFixture() {
 	const fixture = useStatoblastTestFixture()
 	return pickFixtureProperties(fixture, [
-		'formatStorageSlot',
-		'getMappingStorageSlot',
-		'getMigrationProxyAddressAbi',
 		'PRICE_PRECISION',
 		'reportBond',
 		'repDeposit',
@@ -355,7 +304,6 @@ export function useStatoblastVaultAccountingFixture() {
 		'getAnvilWindowEthereum',
 		'setBaselineSnapshot',
 		'initializeStatoblastBaseline',
-		'formatStorageSlot',
 		'reportBond',
 		'repDeposit',
 		'genesisUniverse',

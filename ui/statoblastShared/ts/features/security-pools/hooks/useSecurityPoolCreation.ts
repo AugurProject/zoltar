@@ -23,7 +23,8 @@ import { getDefaultSecurityPoolFormState, tryParseStatoblastSecurityMultiplierBp
 import { tryParseInitialReportPriorityFeeInput } from '../lib/priorityFee.js'
 import { validateMarketForm } from '@zoltar/ui-zoltar-shared/features/questions/lib/questionCreation.js'
 import type { MarketFormState, SecurityPoolFormState, TransactionLifecycleParameters, WriteOperationContext } from '../../../types/app.js'
-import type { DeploymentStatus, MarketDetails, SecurityPoolCreationResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { DeploymentStatus, MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityPoolCreationResult } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 type UseSecurityPoolCreationParameters = TransactionLifecycleParameters &
@@ -375,7 +376,7 @@ export function useSecurityPoolCreation({
 		securityPoolError: securityPoolError.value,
 		securityPoolForm: securityPoolForm.value,
 		securityPoolResult: securityPoolResult.value,
-		securityPoolReviewSignal: securityPoolReview.value?.signal,
+		securityPoolReviewAbortSignal: securityPoolReview.value?.signal,
 		poolCreationMarketDetails: poolCreationMarketDetails.value,
 		dismissSecurityPoolReview,
 		resetSecurityPoolCreation,

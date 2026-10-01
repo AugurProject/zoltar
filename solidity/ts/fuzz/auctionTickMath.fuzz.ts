@@ -9,13 +9,11 @@ import { ensureInfraDeployed } from '../testSupport/simulator/utils/contracts/de
 import { getUniformPriceDualCapBatchAuctionAddress } from '../testSupport/simulator/utils/contracts/deployments'
 import { deployUniformPriceDualCapBatchAuction } from '../testSupport/simulator/utils/contracts/auction'
 import { ensureZoltarDeployed } from '../testSupport/simulator/utils/contracts/zoltar'
-import { tickToPrice } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
+import { tickToPrice, TRUTH_AUCTION_MAX_TICK as MAX_TICK, TRUTH_AUCTION_MIN_TICK as MIN_TICK } from '@zoltar/statoblast-shared/statoblast/truthAuctionTickMath'
 import { priceToClosestTick } from '../testSupport/truthAuctionTicks'
 import { createWriteClient, WriteClient } from '../testSupport/simulator/utils/clients'
 import { contractExists, setupTestAccounts } from '../testSupport/simulator/utils/utilities'
 
-const MIN_TICK = -524288n
-const MAX_TICK = 524288n
 const FUZZ_CASES = 2_000
 const INDEPENDENT_PRICE_VECTORS = [
 	[-1000n, 904841941932768878n],

@@ -1,4 +1,6 @@
 import { decodeEventLog } from '@zoltar/core-shared/evm/ethereum'
+import { getEthRaiseCapAttoEth } from '../../testSupport/simulator/utils/contracts/auction'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import { beforeEach, describe, test } from 'bun:test'
 import { SystemState } from '../../testSupport/simulator/types/statoblastTypes'
 import { QuestionOutcome } from '../../testSupport/simulator/types/types'
@@ -47,7 +49,7 @@ import {
 	migrateVaultWithUnresolvedEscalation,
 	startTruthAuction,
 } from '../../testSupport/simulator/utils/contracts/securityPoolForker'
-import { balanceOfShares, getEthRaiseCapAttoEth, getLastPrice, getQuestionEndDate, migrateShares, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
+import { balanceOfShares, getLastPrice, getQuestionEndDate, migrateShares, participateAuction } from '../../testSupport/simulator/utils/contracts/statoblast'
 import { approveAndDepositRepToVault, manipulatePriceOracle, setVaultCapacityFixture, triggerOwnGameFork } from '../../testSupport/simulator/utils/contracts/statoblastTestUtils'
 import { addRepToMigrationBalance, forkUniverse, getMigrationRepBalanceAttoRep, getRepTokenAddress, getTotalTheoreticalSupply, getUniverseData, getZoltarAddress, getZoltarForkThreshold, splitMigrationRep } from '../../testSupport/simulator/utils/contracts/zoltar'
 import { createQuestion } from '../../testSupport/simulator/utils/contracts/zoltarQuestionData'
@@ -61,7 +63,7 @@ import { useStatoblastForkMigrationFixture, type StatoblastForkMigrationFixture 
 describe('Statoblast: fork migration', () => {
 	const fixture = useStatoblastForkMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, transferRepToAddress, triggerExternalForkForSecurityPool, getYesChildPool, forkOwnGameAfterQuestionEnd } = fixture
+	const { reportBond, PRICE_PRECISION, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, transferRepToAddress, triggerExternalForkForSecurityPool, getYesChildPool, forkOwnGameAfterQuestionEnd } = fixture
 
 	let mockWindow: StatoblastForkMigrationFixture['mockWindow']
 
@@ -688,7 +690,7 @@ describe('Statoblast: fork migration', () => {
 
 			const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
 			const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
-			const firstChildBalanceSlot = formatStorageSlot(getMappingStorageSlot(client.account.address, 0n))
+			const firstChildBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 			await mockWindow.addStateOverrides({
 				[firstChildRepToken]: {
 					stateDiff: {

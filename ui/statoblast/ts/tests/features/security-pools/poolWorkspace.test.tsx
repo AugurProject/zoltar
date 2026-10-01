@@ -8,7 +8,7 @@ import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import type { SecurityPoolWorkflowRouteContentProps } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import { SecurityPoolWorkflowSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityPoolWorkflowSection.js'
 import { PoolActionCard } from '@zoltar/ui-statoblast-shared/features/security-pools/components/PoolStagePanel.js'

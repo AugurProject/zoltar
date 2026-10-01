@@ -7,7 +7,7 @@ import { requiredBigint, requiredTuple } from '#core/rpc-validation'
 import { v4QuotePlan } from '#core/uniswap-v4'
 import { constantProductExactInput, constantProductExactOutput } from '#core/venue-strategy'
 import { getAddress } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 type QuoteConfiguration = Pick<Configuration, 'network' | 'router' | 'v2Router' | 'v4PoolManager' | 'v4Quoter'>
 type QuoteAmounts = { sellAmount: bigint; buyAmount: bigint; replacementAttoWeth: bigint }

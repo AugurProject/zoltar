@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { watch } from 'node:fs'
 import path from 'node:path'
 
@@ -33,7 +34,7 @@ const drainBuilds = async (): Promise<void> => {
 			try {
 				await build('build:browser')
 			} catch (error) {
-				console.error(error instanceof Error ? error.message : String(error))
+				console.error(errorMessage(error))
 			}
 		} while (buildQueued)
 	} finally {

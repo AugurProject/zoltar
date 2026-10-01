@@ -6,7 +6,8 @@ import { createMarketDetails as marketDetailsFixture } from '@zoltar/ui-core-sha
 /// <reference types="bun-types" />
 
 import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
-import type { ActiveReportingDetails, MarketDetails, ReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { MarketDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails, ReportingDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import {
 	getEscalationDepositClaimAmount,
 	getHypotheticalClaimAmount,

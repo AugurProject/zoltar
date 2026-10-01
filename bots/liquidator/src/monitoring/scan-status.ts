@@ -11,6 +11,7 @@ export function cycleFailureMessage(disposition: ReturnType<typeof operationalFa
 	return execute ? 'Live execution paused after a safety fault' : 'Scan cycle failed'
 }
 
-export function createLiquidatorScanReport(network: { chainId: number; name: string }, readHead: () => Promise<bigint>) {
-	return startScanReport({ network, blockTimeMs: scanBlockTimeMs(network.chainId, process.env['SCAN_BLOCK_TIME_MS']), readHead })
+/** `blockTimeOverrideMs` is the operator's `SCAN_BLOCK_TIME_MS`, read once at startup through the shared bot environment. */
+export function createLiquidatorScanReport(network: { chainId: number; name: string }, readHead: () => Promise<bigint>, blockTimeOverrideMs: number | undefined) {
+	return startScanReport({ network, blockTimeMs: blockTimeOverrideMs ?? scanBlockTimeMs(network.chainId), readHead })
 }

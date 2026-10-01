@@ -502,14 +502,6 @@ export const participateAuction = async (client: WriteClient, auctionAddress: Ad
 	)
 	return tick
 }
-export const getEthRaiseCapAttoEth = async (client: ReadClient, auctionAddress: Address) =>
-	await client.readContract({
-		abi: statoblast_UniformPriceDualCapBatchAuction_UniformPriceDualCapBatchAuction.abi,
-		functionName: 'attoEthRaiseCap',
-		address: auctionAddress,
-		args: [],
-	})
-
 export const balanceOfShares = async (client: ReadClient, shareTokenAddress: Address, universeId: bigint, account: Address) =>
 	await client.readContract({
 		abi: statoblast_tokens_ShareToken_ShareToken.abi,

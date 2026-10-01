@@ -9,7 +9,7 @@ import { fireEvent, waitFor, within } from '@zoltar/ui-core-shared/tests/testUti
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installTestRouting } from '@zoltar/ui-core-shared/tests/testUtils/testRouting.js'
 import { expectTransactionButtonEnabled } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import { describe, expect, mock, test } from 'bun:test'
 import { h, render } from 'preact'

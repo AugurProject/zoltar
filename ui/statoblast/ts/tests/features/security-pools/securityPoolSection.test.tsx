@@ -74,7 +74,7 @@ describe('SecurityPoolSection', () => {
 		controller.setPlan([{ title: 'Create security pool', description: 'Pool parameters are fixed at deployment.', contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const pendingReview = controller.review()
 		const onDismissSecurityPoolReview = mock(() => review.abort())
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: true, securityPoolReviewSignal: review.signal })))
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: true, securityPoolReviewAbortSignal: review.signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
@@ -89,7 +89,7 @@ describe('SecurityPoolSection', () => {
 		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
 		await expect(pendingReview).rejects.toThrow('Remaining transactions canceled')
 		await act(() => {
-			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewSignal: undefined })), renderedComponent.container)
+			render(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolReviewAbortSignal: undefined })), renderedComponent.container)
 		})
 		expect(document.activeElement).toBe(queries.getByRole('button', { name: 'Create pool' }))
 		expect((queries.getByRole('textbox', { name: 'Security multiplier' }) as HTMLInputElement).disabled).toBe(false)
@@ -100,7 +100,7 @@ describe('SecurityPoolSection', () => {
 		const controller = createTransactionStepController(review.signal)
 		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		controller.startWithoutReview(0)
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolCreating: true, securityPoolReviewSignal: review.signal })))
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolCreating: true, securityPoolReviewAbortSignal: review.signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
@@ -117,7 +117,7 @@ describe('SecurityPoolSection', () => {
 		const pendingReview = controller.review()
 		controller.failed({ kind: 'rejected', message: 'User rejected the request' })
 		const onDismissSecurityPoolReview = mock(() => review.abort())
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolError: 'User rejected the request', securityPoolReviewSignal: review.signal })))
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: false, securityPoolError: 'User rejected the request', securityPoolReviewAbortSignal: review.signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		const queries = within(document.body)
@@ -154,7 +154,7 @@ describe('SecurityPoolSection', () => {
 		controller.setPlan([{ title: 'Create security pool', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const pendingReview = controller.review()
 		const onDismissSecurityPoolReview = mock(() => review.abort())
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: true, securityPoolReviewSignal: review.signal })))
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ onDismissSecurityPoolReview, securityPoolCreating: true, securityPoolReviewAbortSignal: review.signal })))
 		expect(onDismissSecurityPoolReview).not.toHaveBeenCalled()
 		await renderedComponent.unmount()
 		expect(onDismissSecurityPoolReview).toHaveBeenCalledTimes(1)
@@ -173,7 +173,7 @@ describe('SecurityPoolSection', () => {
 					marketResult: { createQuestionHash: zeroHash, marketType: 'binary', questionId: '0x03' },
 					onCreateQuestionAndSecurityPool: () => undefined,
 					securityPoolCreating: true,
-					securityPoolReviewSignal: review.signal,
+					securityPoolReviewAbortSignal: review.signal,
 				}),
 			),
 		)
@@ -192,7 +192,7 @@ describe('SecurityPoolSection', () => {
 		const controller = createTransactionStepController(other.signal)
 		controller.setPlan([{ title: 'Request price', description: undefined, contractAddress: undefined, contractLabel: undefined, spender: undefined, amount: undefined, ethValueAttoEth: 0n }])
 		const pendingReview = controller.review()
-		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolReviewSignal: new AbortController().signal })))
+		const renderedComponent = await renderIntoDocument(h(SecurityPoolSection, createProps({ securityPoolReviewAbortSignal: new AbortController().signal })))
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expect(within(document.body).queryByText('Request price')).toBeNull()

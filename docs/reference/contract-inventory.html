@@ -205,15 +205,17 @@
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/SecurityPoolDeployer.sol"><code>SecurityPoolDeployer.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/ShareTokenFactory.sol"><code>ShareTokenFactory.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/UniformPriceDualCapBatchAuctionFactory.sol"><code>UniformPriceDualCapBatchAuctionFactory.sol</code></a
-									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol"><code>OpenOraclePriceCoordinatorFactory.sol</code></a>
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/OpenOraclePriceCoordinatorFactory.sol"><code>OpenOraclePriceCoordinatorFactory.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/factories/Create2Deployment.sol"><code>Create2Deployment.sol</code></a>
 								</td>
-								<td>Deterministic deployment entrypoints for pool, share-token, oracle-coordinator, escalation-game, and auction instances.</td>
+								<td>Deterministic deployment entrypoints for pool, share-token, oracle-coordinator, escalation-game, and auction instances, plus the shared CREATE2 helper library they use.</td>
 							</tr>
 							<tr>
 								<td>Migration, settlement, liquidation, and storage modules</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolStorage.sol"><code>SecurityPoolStorage.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCallForwarder.sol"><code>DelegateCallForwarder.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/DelegateCall.sol"><code>DelegateCall.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolSettlementDelegate.sol"><code>SecurityPoolSettlementDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolOperationsDelegate.sol"><code>SecurityPoolOperationsDelegate.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/SecurityPoolMigrationProxy.sol"><code>SecurityPoolMigrationProxy.sol</code></a
@@ -236,6 +238,9 @@
 								<td>Protocol interfaces</td>
 								<td>
 									<a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IEscalationGame.sol"><code>IEscalationGame.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IEscalationGameDelegateContexts.sol"><code>IEscalationGameDelegateContexts.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolDeploymentWorkerConfiguration.sol"><code>ISecurityPoolDeploymentWorkerConfiguration.sol</code></a
+									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/IZoltarForkState.sol"><code>IZoltarForkState.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPool.sol"><code>ISecurityPool.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolForker.sol"><code>ISecurityPoolForker.sol</code></a
 									>, <a href="https://github.com/AugurProject/zoltar/blob/main/solidity/contracts/statoblast/interfaces/ISecurityPoolForkerChildEscalationGameInitializer.sol"><code>ISecurityPoolForkerChildEscalationGameInitializer.sol</code></a

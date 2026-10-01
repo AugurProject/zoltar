@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { EndpointCheckFailure, type EndpointCheck } from '../monitoring/connectivity.ts'
 
 const SHARED_VALIDATION_MESSAGES = new Set([
@@ -94,7 +95,7 @@ function checkFailure(check: EndpointCheck) {
 }
 
 export function publicConnectivityError(error: unknown, options: { fallback: string; validationMessages?: ReadonlySet<string> }) {
-	const message = error instanceof Error ? error.message : String(error)
+	const message = errorMessage(error)
 	if (SHARED_VALIDATION_MESSAGES.has(message) || options.validationMessages?.has(message) === true) return message
 	if (error instanceof EndpointCheckFailure) {
 		const failures = error.checks.filter(check => check.status === 'failed')

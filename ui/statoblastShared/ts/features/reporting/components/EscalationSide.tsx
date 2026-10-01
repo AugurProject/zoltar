@@ -3,7 +3,7 @@ import * as forkAuctionCopy from '../../../copy/reportingEscalation.js'
 import type { JSX } from 'preact'
 import { CurrencyValue } from '@zoltar/ui-core-shared/components/CurrencyValue.js'
 import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
-import type { EscalationDeposit } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { EscalationDeposit } from '../../../types/contracts.js'
 
 type EscalationSideDisplay = {
 	balance: bigint | undefined

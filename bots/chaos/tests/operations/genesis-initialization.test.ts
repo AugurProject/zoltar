@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { evaluateSelectableOperationDefinition } from '../../src/operations/catalog.ts'
-import { TRADING_OPERATIONS } from '../../src/operations/trading.ts'
+import { TRADING_OPERATIONS } from '../../src/operations/trading/catalog.ts'
 import { genesisInitializationDefinitionId, type GenesisInitializationState } from '../../src/runtime/selection.ts'
 import { address, snapshotFixture } from './fixture.ts'
 

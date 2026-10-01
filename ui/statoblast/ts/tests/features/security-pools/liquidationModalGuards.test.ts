@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getAddress, zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
-import type { LiquidationApprovalDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, SecurityPoolOverviewActionResult } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import * as liquidationCopy from '@zoltar/ui-statoblast-shared/copy/liquidation.js'
 import {
 	ZERO_LIQUIDATION_APPROVAL_ID,

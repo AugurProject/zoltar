@@ -8,7 +8,7 @@ import { loadCoordinatorInitialReportFundingRequirement, loadOracleManagerDetail
 import { loadSecurityPoolLineage, loadSecurityPoolPage, loadSecurityPoolVaultSummary as loadProtocolSecurityPoolVaultSummary } from '../../../protocol/securityPools.js'
 import { createConnectedReadClient, createWalletWriteClient } from '@zoltar/ui-core-shared/wallet/clients.js'
 import { getActiveBackend } from '@zoltar/ui-core-shared/lib/activeEnvironment.js'
-import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails, ListedSecurityPool, SecurityPoolPage, SecurityPoolVaultSummary } from '../../../types/contracts.js'
 
 /** The chain reads and writes the security-pools overview uses; tests replace them. */
 type SecurityPoolsOverviewReadClient = {

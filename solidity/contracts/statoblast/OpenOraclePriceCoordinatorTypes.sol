@@ -3,6 +3,9 @@ pragma solidity 0.8.35;
 
 // price oracle
 uint256 constant PRICE_VALID_FOR_SECONDS = 5 minutes;
+// Sepolia test deployments have sparse oracle activity, so their prices stay valid longer.
+uint256 constant SEPOLIA_CHAIN_ID = 11155111;
+uint256 constant SEPOLIA_PRICE_VALID_FOR_SECONDS = 1 hours;
 uint256 constant MAX_OPERATION_VALID_FOR_SECONDS = 5 minutes;
 uint256 constant OPEN_ORACLE_PERCENTAGE_PRECISION = 1e7;
 // Keeps the request bounty strictly above the settlement gas product so the settler reward has a positive buffer.

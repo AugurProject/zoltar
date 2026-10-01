@@ -1,50 +1,23 @@
 import { type Workflow } from './workflow-history.js'
 import { formatDate, node, setBadge, statusLabel, statusTone } from './dom.js'
 import { pendingTransactionSummary } from './pending-transaction-summary.js'
-import { type Snapshot, type OperationEvaluation, type Obligation, type PendingTransaction } from './dashboard-data.ts'
+import { type Snapshot, type OperationEvaluation, type PendingTransaction } from './dashboard-data.ts'
+import type { DashboardElements } from './dashboard-elements.ts'
+import { ecosystemLabel, ecosystemLabels, ecosystemOrder, normalizeEcosystem, obligationDetail, operationIsIndependentlyExecutable, transactionIdentifier, transactionLine } from './dashboard-format.ts'
+import type { DashboardState } from './dashboard-state.ts'
 
-type DashboardRecoveryViewContext = {
-	currentWorkflow: HTMLDivElement
-	ecosystemLabel: (value: string | undefined) => string
-	transactionIdentifier: (hash: string, type: string) => HTMLSpanElement
-	ecosystemOrder: readonly ['zoltar', 'statoblast', 'open-oracle', 'trading']
-	normalizeEcosystem: (value: string | undefined) => string
-	operationIsIndependentlyExecutable: (value: OperationEvaluation) => boolean
-	ecosystemLabels: Map<string, string>
-	coverageSummary: HTMLDivElement
-	pendingCount: HTMLSpanElement
-	obligationCount: HTMLSpanElement
-	obligationFields: HTMLFieldSetElement
-	workflowFields: HTMLFieldSetElement
-	workflowRecoveryPanel: HTMLElement
-	workflowRecoverySummary: HTMLDivElement
-	workflowForm: HTMLFormElement
-	obligationForm: HTMLFormElement
-	replacementForm: HTMLFormElement
-	cancellationForm: HTMLFormElement
-	candidateForm: HTMLFormElement
-	obligationIdInput: HTMLSelectElement
-	replacementFields: HTMLFieldSetElement
-	cancellationFields: HTMLFieldSetElement
-	candidateFields: HTMLFieldSetElement
-	pendingTransactions: HTMLDivElement
-	transactionLine: (prefix: string, hash: string | undefined, type: string) => HTMLElement
-	obligations: HTMLDivElement
-	obligationDetail: (obligation: Obligation) => string
-}
-
-export function createDashboardRecoveryView(context: DashboardRecoveryViewContext) {
+export function createDashboardRecoveryView({ state, elements }: { state: DashboardState; elements: DashboardElements }) {
 	function renderWorkflow(value: Workflow | undefined, pendingTransactions: readonly PendingTransaction[]) {
 		if (value === undefined) {
-			context.currentWorkflow.className = 'empty-state'
-			context.currentWorkflow.textContent = 'No operation is in progress.'
+			elements.currentWorkflow.className = 'empty-state'
+			elements.currentWorkflow.textContent = 'No operation is in progress.'
 			return
 		}
-		context.currentWorkflow.className = ''
+		elements.currentWorkflow.className = ''
 		const heading = node('div', 'workflow-heading')
 		const copy = node('div')
 		copy.append(node('strong', undefined, value.label ?? value.operationId ?? 'Active workflow'))
-		copy.append(node('p', undefined, `${context.ecosystemLabel(value.ecosystem)} · started ${formatDate(value.startedAt)}`))
+		copy.append(node('p', undefined, `${ecosystemLabel(value.ecosystem)} · started ${formatDate(value.startedAt)}`))
 		const status = node('span')
 		setBadge(status, value.status === undefined ? 'In progress' : statusLabel(value.status), statusTone(value.status))
 		heading.append(copy, status)
@@ -61,7 +34,7 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 			status.dataset['stepStatus'] = step.status?.trim().toLowerCase() || 'waiting'
 			detail.append(status)
 			if (step.txHash !== undefined) {
-				const hash = context.transactionIdentifier(step.txHash, 'workflow transaction hash')
+				const hash = transactionIdentifier(state.configuration?.explorerUrl, step.txHash, 'workflow transaction hash')
 				hash.classList.add('step-hash')
 				hash.dataset['stepHash'] = ''
 				detail.append(hash)
@@ -70,18 +43,18 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 			steps.append(row)
 		}
 		if (value.steps.length === 0) steps.append(node('li', undefined, 'Workflow state is being prepared.'))
-		context.currentWorkflow.replaceChildren(heading, ...(waitingTransaction === undefined ? [] : [transactionWaitNote(waitingTransaction)]), steps)
+		elements.currentWorkflow.replaceChildren(heading, ...(waitingTransaction === undefined ? [] : [transactionWaitNote(waitingTransaction)]), steps)
 	}
 
 	function renderCoverage(values: OperationEvaluation[]) {
-		const cards = context.ecosystemOrder.map(ecosystem => {
-			const operations = values.filter(value => context.normalizeEcosystem(value.ecosystem) === ecosystem && context.operationIsIndependentlyExecutable(value))
+		const cards = ecosystemOrder.map(ecosystem => {
+			const operations = values.filter(value => normalizeEcosystem(value.ecosystem) === ecosystem && operationIsIndependentlyExecutable(value))
 			const eligible = operations.filter(value => value.enabled !== false && value.eligible === true).length
 			const card = node('div', 'coverage-card')
-			card.append(node('span', undefined, context.ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`), node('small', undefined, 'eligible operations'))
+			card.append(node('span', undefined, ecosystemLabels.get(ecosystem) ?? ecosystem), node('strong', undefined, `${eligible.toString()}/${operations.length.toString()}`), node('small', undefined, 'eligible operations'))
 			return card
 		})
-		context.coverageSummary.replaceChildren(...cards)
+		elements.coverageSummary.replaceChildren(...cards)
 	}
 
 	function transactionWaitNote(transaction: PendingTransaction) {
@@ -93,18 +66,18 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 	}
 
 	function renderRecovery(value: Snapshot) {
-		context.pendingCount.textContent = value.pendingTransactions.length.toString()
-		context.obligationCount.textContent = value.obligations.length.toString()
-		context.obligationFields.disabled = value.paused !== true || value.obligations.length === 0
+		elements.pendingCount.textContent = value.pendingTransactions.length.toString()
+		elements.obligationCount.textContent = value.obligations.length.toString()
+		elements.obligationFields.disabled = value.paused !== true || value.obligations.length === 0
 		const recoverableWorkflow = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? value.currentWorkflow : undefined
-		context.workflowRecoveryPanel.hidden = recoverableWorkflow === undefined
-		context.workflowFields.disabled = value.paused !== true || recoverableWorkflow === undefined
+		elements.workflowRecoveryPanel.hidden = recoverableWorkflow === undefined
+		elements.workflowFields.disabled = value.paused !== true || recoverableWorkflow === undefined
 		if (recoverableWorkflow !== undefined) {
 			const label = recoverableWorkflow.label ?? recoverableWorkflow.operationId ?? 'Partial workflow'
-			context.workflowRecoverySummary.replaceChildren(node('strong', undefined, label), node('span', 'badge warning', statusLabel(recoverableWorkflow.status)), node('p', 'muted', `Workflow ${recoverableWorkflow.id ?? 'ID unavailable'} · ${recoverableWorkflow.operationId ?? 'Operation unavailable'}`))
+			elements.workflowRecoverySummary.replaceChildren(node('strong', undefined, label), node('span', 'badge warning', statusLabel(recoverableWorkflow.status)), node('p', 'muted', `Workflow ${recoverableWorkflow.id ?? 'ID unavailable'} · ${recoverableWorkflow.operationId ?? 'Operation unavailable'}`))
 		}
-		const selectedObligation = context.obligationIdInput.value
-		context.obligationIdInput.replaceChildren(
+		const selectedObligation = elements.obligationIdInput.value
+		elements.obligationIdInput.replaceChildren(
 			...value.obligations.map(obligation => {
 				const option = document.createElement('option')
 				option.value = obligation.id ?? ''
@@ -113,33 +86,33 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 			}),
 		)
 		if (value.obligations.some(obligation => obligation.id === selectedObligation)) {
-			context.obligationIdInput.value = selectedObligation
+			elements.obligationIdInput.value = selectedObligation
 		}
-		context.replacementFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
-		context.cancellationFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
+		elements.replacementFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
+		elements.cancellationFields.disabled = value.paused !== true || value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
 		const queuedCandidate = value.pendingTransactions[0]?.replacementHash ?? value.pendingTransactions[0]?.cancellationHash
-		context.candidateFields.disabled = value.paused !== true || queuedCandidate === undefined
-		context.replacementForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
-		context.cancellationForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
-		context.candidateForm.hidden = queuedCandidate === undefined
-		context.workflowForm.hidden = recoverableWorkflow === undefined
-		context.obligationForm.hidden = value.obligations.length === 0
+		elements.candidateFields.disabled = value.paused !== true || queuedCandidate === undefined
+		elements.replacementForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.cancellationHash !== undefined
+		elements.cancellationForm.hidden = value.pendingTransactions.length !== 1 || value.pendingTransactions[0]?.replacementHash !== undefined
+		elements.candidateForm.hidden = queuedCandidate === undefined
+		elements.workflowForm.hidden = recoverableWorkflow === undefined
+		elements.obligationForm.hidden = value.obligations.length === 0
 		if (value.pendingTransactions.length === 0) {
-			context.pendingTransactions.className = 'stack-list empty-state'
-			context.pendingTransactions.textContent = 'No transaction requires confirmation.'
+			elements.pendingTransactions.className = 'stack-list empty-state'
+			elements.pendingTransactions.textContent = 'No transaction requires confirmation.'
 		} else {
-			context.pendingTransactions.className = 'stack-list'
-			context.pendingTransactions.replaceChildren(
+			elements.pendingTransactions.className = 'stack-list'
+			elements.pendingTransactions.replaceChildren(
 				...value.pendingTransactions.map(transaction => {
 					const row = node('div', 'stack-row')
 					const copy = node('div')
 					copy.append(node('strong', undefined, transaction.label ?? transaction.operationId ?? 'Pending transaction'))
-					copy.append(context.transactionLine(`Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
+					copy.append(transactionLine(state.configuration?.explorerUrl, `Nonce ${String(transaction.nonce ?? '—')}`, transaction.hash, 'pending transaction hash'))
 					if (transaction.replacementHash !== undefined) {
-						copy.append(context.transactionLine('Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
+						copy.append(transactionLine(state.configuration?.explorerUrl, 'Replacement queued', transaction.replacementHash, 'replacement transaction hash'))
 					}
 					if (transaction.cancellationHash !== undefined) {
-						copy.append(context.transactionLine('Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
+						copy.append(transactionLine(state.configuration?.explorerUrl, 'Cancellation queued', transaction.cancellationHash, 'cancellation transaction hash'))
 					}
 					const status = node('span')
 					setBadge(status, statusLabel(transaction.status ?? 'pending'), statusTone(transaction.status ?? 'pending'))
@@ -149,16 +122,16 @@ export function createDashboardRecoveryView(context: DashboardRecoveryViewContex
 			)
 		}
 		if (value.obligations.length === 0) {
-			context.obligations.className = 'stack-list empty-state'
-			context.obligations.textContent = 'No follow-up obligation is due.'
+			elements.obligations.className = 'stack-list empty-state'
+			elements.obligations.textContent = 'No follow-up obligation is due.'
 		} else {
-			context.obligations.className = 'stack-list'
-			context.obligations.replaceChildren(
+			elements.obligations.className = 'stack-list'
+			elements.obligations.replaceChildren(
 				...value.obligations.map(obligation => {
 					const row = node('div', 'stack-row')
 					const copy = node('div')
 					copy.append(node('strong', undefined, obligation.label ?? obligation.operationId ?? 'Lifecycle obligation'))
-					copy.append(node('small', undefined, context.obligationDetail(obligation)))
+					copy.append(node('small', undefined, obligationDetail(obligation)))
 					const status = node('span')
 					const automaticRetryWaiting = obligation.status === 'deferred' && obligation.notBefore !== undefined
 					setBadge(status, automaticRetryWaiting ? 'Retry waiting' : statusLabel(obligation.status ?? 'pending'), automaticRetryWaiting ? 'warning' : statusTone(obligation.status ?? 'pending'))

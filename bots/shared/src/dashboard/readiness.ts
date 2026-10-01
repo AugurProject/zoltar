@@ -1,7 +1,24 @@
-import { element, setText } from './dom.ts'
+import { element, setText, shorten } from './dom.ts'
 
 /** One prerequisite in a readiness checklist. Advisory rows inform without blocking: the bot tolerates them, so they are not prerequisites. */
 export type ReadinessRow = { advisory?: true; detail: string; label: string; ready: boolean }
+
+/** The signer row: ready once an address is active (or queued), shown shortened. */
+export function signerRow(address: string | undefined, missingDetail = 'Set one under Execution wallet'): ReadinessRow {
+	return { detail: address === undefined ? missingDetail : shorten(address), label: 'Execution signer', ready: address !== undefined }
+}
+
+/** Agreement 2 needs two independent quorum RPCs beside the read RPC; agreement 1 needs none. */
+export function quorumRpcRow(configuredQuorumRpcs: number, rpcQuorum: number | string | undefined): ReadinessRow {
+	const required = String(rpcQuorum) === '2' ? 2 : 0
+	return { detail: `${configuredQuorumRpcs.toString()} configured · ${required.toString()} required`, label: 'Independent quorum RPCs', ready: configuredQuorumRpcs >= required }
+}
+
+/** Private delivery needs at least one relay; the public mempool needs nothing more. */
+export function relayDeliveryRow(mode: 'private' | 'public', relayCount: number): ReadinessRow {
+	if (mode === 'public') return { detail: 'Public mempool', label: 'Delivery', ready: true }
+	return { detail: `Private · ${relayCount.toString()} relay${relayCount === 1 ? '' : 's'}`, label: 'Delivery', ready: relayCount > 0 }
+}
 
 /** The screen-reader status beside each row; an unmet advisory row is optional rather than a missing prerequisite. */
 function readinessStatus(row: ReadinessRow) {

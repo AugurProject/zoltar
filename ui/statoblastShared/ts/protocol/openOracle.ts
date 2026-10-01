@@ -7,7 +7,8 @@ import { getOpenOracleDisputeSwapTokenKey } from './openOracleMath.js'
 import { getOpenOracleCreateParameterValidationMessage } from './openOracleValidation.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
-import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, ReadClient, OpenOracleReportSummary, OpenOracleReportSummaryPage, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient, WriteClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleActionResult, OpenOracleWithdrawableBalances, OpenOracleReportSummary, OpenOracleReportSummaryPage } from '../types/contracts.js'
 import { getProtocolPageOffset, hasTimestampAndNumber } from '@zoltar/ui-zoltar-shared/protocol/helpers.js'
 import { type WriteContractClient, readRequiredMulticall, writeContractAndWait } from '@zoltar/ui-zoltar-shared/protocol/core.js'
 import { getOpenOracleAddress } from './deploymentHelpers.js'
@@ -69,7 +70,7 @@ function getOpenOracleSettleGasLimit(game: Pick<OpenOracleStatePreimage['game'],
 	return required > OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT ? required : OPEN_ORACLE_DEFAULT_SETTLE_GAS_LIMIT
 }
 
-export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('@zoltar/ui-core-shared/types/contracts.js').OpenOracleReportDetails> {
+export async function loadOpenOracleReportDetails(client: ReadClient, openOracleAddress: Address, reportId: bigint): Promise<import('../types/contracts.js').OpenOracleReportDetails> {
 	const [storedState, stateHash, block] = await Promise.all([
 		loadOpenOracleStoredState(client, openOracleAddress, reportId).catch(error => {
 			if (error instanceof Error && error.message === `Oracle report #${reportId.toString()} does not exist`) throw createOpenOracleReportMissingError(reportId)

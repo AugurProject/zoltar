@@ -1,6 +1,7 @@
 import { publicWorkflowStep } from './public-workflow-step.ts'
 import { publicActivity } from './public-activity.ts'
 import { publicConnectivityError } from '@zoltar/bot-shared/dashboard/connectivity-error'
+import { logDashboardFailure, publicDashboardError } from '@zoltar/bot-shared/dashboard/public-error'
 import { dashboardRequestIsSameOrigin, boundedDashboardJson, dashboardJson as json, dashboardSecurityHeaders as securityHeaders } from '@zoltar/bot-shared/dashboard/security'
 import { startBotDashboardServer } from '@zoltar/bot-shared/dashboard/server'
 import { CONFIGURATION_REVISION_CONFLICT } from '@zoltar/bot-shared/config/durable-file'
@@ -815,7 +816,7 @@ function chaosReadinessMetrics(readiness: ReturnType<typeof publicChaosReadiness
 }
 
 function publicFailure(operation: string, error: unknown) {
-	console.error(`chaosDashboardOperation=${operation} failed=${error instanceof Error ? error.message : String(error)}`)
+	logDashboardFailure('chaos', operation, error)
 	if (error instanceof Error && error.name === CONFIGURATION_COMMITTED_SAFELY_PAUSED) {
 		return json(
 			{
@@ -915,7 +916,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						}
 						return json(readiness, readiness.ready ? 200 : 503)
 					} catch (error) {
-						console.error(`chaosDashboardOperation=readiness-read failed=${error instanceof Error ? error.message : String(error)}`)
+						logDashboardFailure('chaos', 'readiness-read', error)
 						return json({ blockers: ['runtime_snapshot_unavailable'], ready: false }, 503)
 					}
 				}
@@ -926,11 +927,10 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						await mutationBarrier
 						const [stateResult, configurationResult] = await Promise.allSettled([controller.getState(), controller.getConfiguration()])
 						if (stateResult.status === 'rejected') throw stateResult.reason
-						if (configurationResult.status === 'rejected') console.error('chaosDashboardOperation=configuration-read-for-health failed=configuration unavailable')
+						if (configurationResult.status === 'rejected') logDashboardFailure('chaos', 'configuration-read-for-health', 'configuration unavailable')
 						return json(publicChaosState(stateResult.value, configurationResult.status === 'fulfilled' ? configurationResult.value : undefined))
 					} catch (error) {
-						console.error(`chaosDashboardOperation=state-read failed=${error instanceof Error ? error.message : String(error)}`)
-						return json({ error: 'Dashboard state is temporarily unavailable. Automatic recovery remains active.' }, 503)
+						return publicDashboardError('chaos', error, 503, 'state-read', 'Dashboard state is temporarily unavailable. Automatic recovery remains active.')
 					}
 				}
 				if (url.pathname === '/api/configuration') {
@@ -938,8 +938,7 @@ export function startDashboardServer(port: number, controller: ChaosDashboardCon
 						await mutationBarrier
 						return json({ ...publicChaosConfiguration(await controller.getConfiguration()), configurationCommitIndeterminate })
 					} catch (error) {
-						console.error(`chaosDashboardOperation=configuration-read failed=${error instanceof Error ? error.message : String(error)}`)
-						return json({ error: 'Dashboard configuration is temporarily unavailable.' }, 503)
+						return publicDashboardError('chaos', error, 503, 'configuration-read', 'Dashboard configuration is temporarily unavailable.')
 					}
 				}
 			}

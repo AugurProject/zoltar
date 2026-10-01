@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { keccak256, type Address, type BlockTransaction, type Hex, type JsonValue } from '../ethereum.ts'
 import { endpointLabel } from '../monitoring/connectivity.ts'
 import { isEndpointRejection } from './transaction-rejection.ts'
@@ -226,10 +227,6 @@ function responseError(response: JsonRpcResponse, status: number) {
 	return `Relay returned HTTP ${status.toString()} without a JSON-RPC result`
 }
 
-function rejectionMessage(reason: unknown) {
-	return reason instanceof Error ? reason.message : String(reason)
-}
-
 function distinctRelayOriginCount(relayUrls: readonly string[]) {
 	return new Set(relayUrls.map(endpointLabel)).size
 }
@@ -360,7 +357,7 @@ export async function simulateSignedBundleEveryRelay(parameters: {
 		const relayUrl = parameters.relayUrls[index]
 		if (relayUrl === undefined) throw new Error('Missing relay URL for bundle simulation result')
 		if (result.status === 'fulfilled') successful.push({ relayUrl, simulation: result.value })
-		else failedTargets.push({ error: rejectionMessage(result.reason), target: endpointLabel(relayUrl) })
+		else failedTargets.push({ error: errorMessage(result.reason), target: endpointLabel(relayUrl) })
 	}
 	const successfulOriginCount = distinctRelayOriginCount(successful.map(result => result.relayUrl))
 	if (successfulOriginCount < minimumSuccessfulRelays) {
@@ -417,7 +414,7 @@ export async function submitSignedBundle(parameters: {
 		if (relay === undefined) throw new Error('Missing relay URL for bundle submission result')
 		const target = endpointLabel(relay)
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
-		else failedTargets.push({ error: rejectionMessage(result.reason), target })
+		else failedTargets.push({ error: errorMessage(result.reason), target })
 	}
 	const acceptedOriginCount = new Set(acceptedTargets).size
 	if (acceptedOriginCount < minimumSuccessfulRelays) {
@@ -476,7 +473,7 @@ export async function submitSignedTransaction(parameters: {
 			if (rpcUrl === undefined) throw new Error('Missing public RPC URL for submission result')
 			const target = endpointLabel(rpcUrl)
 			if (result.status === 'fulfilled' && result.value.toLowerCase() === parameters.hash.toLowerCase()) acceptedTargets.push(target)
-			else if (result.status === 'rejected') failedTargets.push({ error: rejectionMessage(result.reason), rejected: isEndpointRejection(result.reason), target })
+			else if (result.status === 'rejected') failedTargets.push({ error: errorMessage(result.reason), rejected: isEndpointRejection(result.reason), target })
 			else failedTargets.push({ error: `Public RPC returned unexpected transaction hash ${result.value}`, target })
 		}
 		if (acceptedTargets.length === 0) {
@@ -509,7 +506,7 @@ export async function submitSignedTransaction(parameters: {
 		if (relay === undefined) throw new Error('Missing relay URL for submission result')
 		const target = endpointLabel(relay)
 		if (result.status === 'fulfilled') acceptedTargets.push(target)
-		else failedTargets.push({ error: result.reason instanceof Error ? result.reason.message : String(result.reason), target })
+		else failedTargets.push({ error: errorMessage(result.reason), target })
 	}
 	const acceptedOriginCount = new Set(acceptedTargets).size
 	if (acceptedOriginCount < settings.minimumBundleRelaySuccesses) {
@@ -535,7 +532,7 @@ export function mergeSubmissionFailures(previous: readonly SubmissionTargetResul
 			? error.failedTargets
 			: [
 					{
-						error: error instanceof Error ? error.message : String(error),
+						error: errorMessage(error),
 						target: 'private relay resubmission',
 					},
 				]

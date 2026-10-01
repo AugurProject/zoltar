@@ -6,7 +6,7 @@ import type { RuntimeState } from './runtime-state.ts'
 export type { RuntimeState, RuntimeTopologySummary, WalletBalanceState } from './runtime-state.ts'
 import { link, mkdir, open, readFile, readdir, rename, rm } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { parseJsonDocument, readOwnerFile, serializeWritesToPath, writeFileAtomically } from '@zoltar/bot-shared/config/durable-file'
+import { parseJsonDocument, readOwnerFile, serializeWritesToPath, writeBoundedFileAtomically } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
 import { getAddress, keccak256, parseTransaction, recoverTransactionAddress, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { ChaosProtocolIndex } from '#monitoring/protocol-index'
@@ -1088,8 +1088,12 @@ function snapshotDurableState(state: PersistableDurableState) {
 }
 
 async function persistDurableStateSnapshot(path: string, chainId: number, contents: string, filesystem: StateFilesystem, protocolIndex: PrevalidatedProtocolIndex) {
-	if (Buffer.byteLength(contents, 'utf8') > MAXIMUM_STATE_BYTES) throw new Error(`Chaos-bot state exceeds the ${MAXIMUM_STATE_BYTES.toString()}-byte safety limit`)
-	await writeFileAtomically(path, contents, { beforeCommit: temporaryPath => loadDurableStateFile(temporaryPath, chainId, filesystem, path, protocolIndex), filesystem })
+	await writeBoundedFileAtomically(path, contents, {
+		beforeCommit: temporaryPath => loadDurableStateFile(temporaryPath, chainId, filesystem, path, protocolIndex),
+		filesystem,
+		label: 'Chaos-bot state',
+		maximumBytes: MAXIMUM_STATE_BYTES,
+	})
 }
 
 export async function saveDurableState(path: string, state: PersistableDurableState, filesystem: StateFilesystem = stateFilesystem) {

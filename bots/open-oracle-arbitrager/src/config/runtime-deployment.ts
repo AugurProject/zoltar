@@ -12,7 +12,7 @@ import { compactFinalityWindow, ConnectivityDegradedError } from '@zoltar/bot-sh
 import type { ReadClient } from '#core/operator-types'
 import { availableSettledValues, quorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { rpcQuorumDescription } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { endpointLabel } from '#monitoring/connectivity'
 import type { OperatorState } from '#state/operator-state'
 

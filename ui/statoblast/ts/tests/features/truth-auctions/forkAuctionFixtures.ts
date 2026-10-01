@@ -1,6 +1,6 @@
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { createAccountState } from '@zoltar/ui-core-shared/tests/testUtils/accountFixtures.js'
-import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionDetails, ListedSecurityPool } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import type { ForkAuctionSectionProps } from '@zoltar/ui-statoblast-shared/features/types.js'
 import type { ForkAuctionFormState } from '@zoltar/ui-statoblast-shared/types/app.js'
 import { createSelectedPool } from '../security-pools/workflow/builders.js'

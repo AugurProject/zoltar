@@ -49,7 +49,7 @@ abstract contract EscalationGameEscrow is EscalationGameCarry {
 		onlySecurityPoolOrForker
 		returns (uint256[3] memory sourcePrincipalByOutcomeAttoRep, uint256[3] memory childRepByOutcomeAttoRep)
 	{
-		require(repReceiver != address(0x0), 'REP receiver zero');
+		require(repReceiver != address(0x0), 'Recipient is zero');
 		return _exportForkedEscrowByOutcome(vault, repReceiver, true);
 	}
 

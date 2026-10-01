@@ -6,7 +6,7 @@ import { requiredBigint, requiredBigintArray, requiredTuple } from '#core/rpc-va
 import { STANDARD_UNISWAP_FEES } from '#core/uniswap-v4'
 import type { DiscoveredTokenPools } from '#monitoring/market-monitor'
 import { readContractAtBlock, type Address } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 
 function meanTick(tickCumulatives: readonly bigint[], seconds: bigint) {
 	const oldTick = tickCumulatives[0]

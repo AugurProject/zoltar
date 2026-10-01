@@ -1,6 +1,6 @@
 import { hasOraclePriceSubmissionWindow } from './oracleTiming.js'
 import * as securityPoolCopy from '../copy/securityPool.js'
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails } from '../types/contracts.js'
 
 export function resolveOracleOperationEthFunding({ managerDetails, priceUsable }: { managerDetails: OracleManagerDetails | undefined; priceUsable?: boolean | undefined }) {
 	if (managerDetails === undefined) return undefined

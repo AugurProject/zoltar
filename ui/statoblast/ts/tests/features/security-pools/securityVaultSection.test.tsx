@@ -13,7 +13,7 @@ import { renderIntoDocument as renderWithoutTimestamp } from '@zoltar/ui-core-sh
 import { createWalletActions, expectWalletFixDescribesAction } from '@zoltar/ui-core-shared/tests/testUtils/walletActions.js'
 import { WalletActionsProvider } from '@zoltar/ui-core-shared/components/WalletActionFix.js'
 import { expectTransactionButtonDisabled, expectTransactionButtonEnabled, getTransactionButtonState } from '@zoltar/ui-core-shared/tests/testUtils/transactionActionButton.js'
-import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { ChainTimestampContext } from '@zoltar/ui-core-shared/wallet/chainTimestamp.js'
 import { SecurityVaultSection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SecurityVaultSection.js'
 import { SelectedVaultSummarySection } from '@zoltar/ui-statoblast-shared/features/security-pools/components/SelectedVaultSummarySection.js'

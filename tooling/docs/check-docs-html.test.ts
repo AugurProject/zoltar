@@ -5,6 +5,7 @@ import path from 'node:path'
 import { validateDocsHtml } from './check-docs-html.mts'
 
 const repositorySource = 'https://github.com/AugurProject/zoltar/blob/main/'
+const repositoryDirectory = 'https://github.com/AugurProject/zoltar/tree/main/'
 
 test('docs HTML validation resolves repository source links against the checkout', async () => {
 	const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'docs-html-check-'))
@@ -17,6 +18,10 @@ test('docs HTML validation resolves repository source links against the checkout
 				<a href="${repositorySource}solidity/contracts/Zoltar.sol#L1">present with fragment</a>
 				<a href="${repositorySource}solidity/contracts/DoesNotExist.sol">missing</a>
 				<a href="${repositorySource}docs/documentation.html">documentation through the repository</a>
+				<a href="${repositoryDirectory}solidity/contracts">present directory</a>
+				<a href="${repositoryDirectory}solidity/DoesNotExist">missing directory</a>
+				<a href="${repositoryDirectory}solidity/contracts/Zoltar.sol">file through a directory URL</a>
+				<a href="${repositorySource}solidity/contracts">directory through a file URL</a>
 				<a href="../outside.json">relative link that escapes the documentation directory</a>
 				<a href="./assets/addresses.json#entry">relative link inside the documentation directory</a>
 			</main><script src="./assets/js/responsiveDocs.js"></script></body></html>`,
@@ -24,10 +29,13 @@ test('docs HTML validation resolves repository source links against the checkout
 		await writeFile(path.join(fixtureRoot, 'outside.json'), '{}')
 		await writeFile(path.join(docsDirectory, 'assets', 'addresses.json'), '{}')
 		const failures = (await validateDocsHtml(docsDirectory)).map(failure => failure.message).filter(message => message.includes('repository') || message.includes('documentation directory'))
-		expect(failures).toHaveLength(3)
+		expect(failures).toHaveLength(6)
 		expect(failures[0]).toStartWith(`links to missing repository file "${repositorySource}solidity/contracts/DoesNotExist.sol": `)
 		expect(failures[1]).toBe(`links to documentation through the repository instead of a relative route "${repositorySource}docs/documentation.html"`)
-		expect(failures[2]).toBe('links outside the documentation directory "../outside.json"; link repository files through their GitHub source URL')
+		expect(failures[2]).toStartWith(`links to missing repository directory "${repositoryDirectory}solidity/DoesNotExist": `)
+		expect(failures[3]).toBe(`links to a repository file through a directory URL "${repositoryDirectory}solidity/contracts/Zoltar.sol"`)
+		expect(failures[4]).toBe(`links to a repository directory through a file URL "${repositorySource}solidity/contracts"`)
+		expect(failures[5]).toBe('links outside the documentation directory "../outside.json"; link repository files through their GitHub source URL')
 	} finally {
 		await rm(fixtureRoot, { force: true, recursive: true })
 	}

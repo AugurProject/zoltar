@@ -8,8 +8,8 @@ import { tryParseTradingAmountInput } from '@zoltar/ui-core-shared/forms/formInp
 import { getReportingOutcomeLabel } from '../../reporting/lib/reporting.js'
 import { rpow } from '@zoltar/statoblast-shared/statoblast/retentionRate'
 import { isValidScalarOutcomeIndex } from '@zoltar/ui-core-shared/lib/scalarOutcome.js'
-import type { DeploymentStatus } from '@zoltar/ui-core-shared/types/contracts.js'
-import type { ReportingOutcomeKey, TradingShareBalances, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { DeploymentStatus, ReportingOutcomeKey, ZoltarUniverseSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TradingShareBalances } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 const PRICE_PRECISION = 10n ** 18n

@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import { Math } from './openOracle/openzeppelin/contracts/utils/math/Math.sol';
+import { SecurityPoolUtils } from './SecurityPoolUtils.sol';
 
 library UniformPriceDualCapBatchAuctionStorage {
 	struct Node {
@@ -31,7 +32,8 @@ library UniformPriceDualCapBatchAuctionStorage {
 	uint256 internal constant AUCTION_TIME = 1 weeks;
 	int256 internal constant MIN_TICK = -524288;
 	int256 internal constant MAX_TICK = 524288;
-	uint256 internal constant PRICE_PRECISION = 1e18;
+	// Shares the pool price scale so auction clearing prices and REP/ETH prices use one unit.
+	uint256 internal constant PRICE_PRECISION = SecurityPoolUtils.PRICE_PRECISION;
 
 	function allocateFromCumulativePosition(uint256 cumulativeAmountBefore, uint256 amountUsed, uint256 allocationNumerator, uint256 denominator) internal pure returns (uint256 allocation) {
 		if (amountUsed == 0 || allocationNumerator == 0 || denominator == 0) return 0;

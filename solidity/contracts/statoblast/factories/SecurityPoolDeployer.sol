@@ -11,6 +11,7 @@ import { OpenOraclePriceCoordinator } from '../OpenOraclePriceCoordinator.sol';
 import { EscalationGameFactory } from './EscalationGameFactory.sol';
 import { SecurityPoolEventEmitter } from '../SecurityPoolEventEmitter.sol';
 import { CreationCodeStorage } from './OpenOraclePriceCoordinatorFactory.sol';
+import { Create2Deployment } from './Create2Deployment.sol';
 
 contract SecurityPoolDeployer {
 	ISecurityPoolFactory immutable factory;
@@ -53,17 +54,7 @@ contract SecurityPoolDeploymentWorker {
 		// Keep SecurityPool init code in code chunks so this worker's runtime stays below EIP-170
 		// without paying storage-write gas during the factory deployment.
 		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), abi.encode(securityPoolForker, questionData, escalationGameFactory, openOraclePriceCoordinator, shareToken, openOracle, parent, zoltar, universeId, questionId, statoblastSecurityMultiplierBps, truthAuction));
-		address deployed;
-		assembly {
-			deployed := create2(0, add(initCode, 0x20), mload(initCode), 0)
-			if iszero(deployed) {
-				let revertDataSize := returndatasize()
-				if gt(revertDataSize, 0) {
-					returndatacopy(0, 0, revertDataSize)
-					revert(0, revertDataSize)
-				}
-			}
-		}
+		address deployed = Create2Deployment.deploy(initCode, 0);
 		require(deployed != address(0x0), 'Security pool deployment failed');
 		return ISecurityPool(payable(deployed));
 	}

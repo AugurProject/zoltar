@@ -1,4 +1,5 @@
 import { concatHex, encodeAbiParameters, getAddress, keccak256, toHex, zeroHash, type Address, type Hash } from '@zoltar/bot-shared/ethereum'
+import { maxUint256 } from '@zoltar/core-shared/evm/ethereum'
 
 import { type CanonicalUintString } from '../core/units.ts'
 
@@ -8,9 +9,7 @@ const CARRY_NULLIFIER_DEPTH = 64
 
 const MAXIMUM_CARRY_LEAF_COUNT = 1n << BigInt(CARRY_MMR_MAXIMUM_PEAKS)
 
-const MAXIMUM_UINT256 = (1n << 256n) - 1n
-
-const MAXIMUM_UINT256_DECIMAL = MAXIMUM_UINT256.toString()
+const MAXIMUM_UINT256_DECIMAL = maxUint256.toString()
 
 const NULLIFIER_PATH_MASK = (1n << BigInt(CARRY_NULLIFIER_DEPTH)) - 1n
 

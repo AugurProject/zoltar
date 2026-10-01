@@ -7,13 +7,33 @@ import { walkFiles } from '../repo/walk.mts'
 const uiPackageIds = ['coreShared', 'zoltarShared', 'statoblastShared', 'zoltar', 'statoblast', 'trading'] as const
 const uiSourceRoots = uiPackageIds.map(packageId => path.join(projectRoot, 'ui', packageId, 'ts'))
 
+type ImportBoundaryRule = 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary' | 'cross-package-private-subpath'
+
 export type UiLayerBoundaryFinding = {
 	column: number
 	file: string
 	line: number
-	rule: 'features-must-not-import-app' | 'shared-layers-must-not-import-app' | 'shared-layers-must-not-import-features' | 'test-layers-must-follow-ownership' | 'cross-package-import-boundary' | 'cross-package-private-subpath'
-	specifier: string
+} & ({ rule: ImportBoundaryRule; specifier: string } | { rule: 'statoblast-product-type-outside-statoblast-shared'; declaredName: string })
+
+// Statoblast product types live in ui/statoblastShared/ts/types; the generic UI packages must not declare them again.
+const statoblastProductTypeModules = ['ui/statoblastShared/ts/types/contracts.ts', 'ui/statoblastShared/ts/types/app.ts']
+
+/** Names of the type aliases and interfaces a module declares and exports itself; re-exports of other packages' types are not product types. */
+export function collectExportedTypeNames(sourcePath: string, sourceText: string): Set<string> {
+	const sourceFile = ts.createSourceFile(sourcePath, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+	const names = new Set<string>()
+	for (const statement of sourceFile.statements) {
+		if (!ts.isTypeAliasDeclaration(statement) && !ts.isInterfaceDeclaration(statement)) continue
+		if (statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword) === true) names.add(statement.name.text)
+	}
+	return names
 }
+
+// Every application declares its own route union under the same name, so it is not a Statoblast product type.
+const perApplicationTypeNames = new Set(['Route'])
+const statoblastProductTypeNames: ReadonlySet<string> = new Set(statoblastProductTypeModules.flatMap(modulePath => [...collectExportedTypeNames(modulePath, readFileSync(path.join(projectRoot, modulePath), 'utf8'))]).filter(name => !perApplicationTypeNames.has(name)))
+
+const genericUiPackagePattern = /^ui\/(?:coreShared|zoltarShared)\/ts\//
 
 function isWithin(candidatePath: string, directoryPath: string) {
 	return candidatePath === directoryPath || candidatePath.startsWith(`${directoryPath}/`)
@@ -46,7 +66,7 @@ const allowedCrossPackageImports: Record<string, readonly string[]> = {
 	trading: ['coreShared', 'zoltarShared', 'statoblastShared'],
 }
 
-function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundaryFinding['rule'] | undefined {
+function getViolatedRule(sourcePath: string, specifier: string): ImportBoundaryRule | undefined {
 	const sourcePackageMatch = appPackagePattern.exec(sourcePath)
 	if (sourcePackageMatch === null) return undefined
 	const sourcePackage = sourcePackageMatch[1]
@@ -92,7 +112,7 @@ function getViolatedRule(sourcePath: string, specifier: string): UiLayerBoundary
 	return undefined
 }
 
-export function findUiLayerBoundaryViolations(sourcePath: string, sourceText: string): UiLayerBoundaryFinding[] {
+export function findUiLayerBoundaryViolations(sourcePath: string, sourceText: string, productTypeNames: ReadonlySet<string> = statoblastProductTypeNames): UiLayerBoundaryFinding[] {
 	const sourceFile = ts.createSourceFile(sourcePath, sourceText, ts.ScriptTarget.Latest, true, sourcePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
 	const findings: UiLayerBoundaryFinding[] = []
 
@@ -109,7 +129,12 @@ export function findUiLayerBoundaryViolations(sourcePath: string, sourceText: st
 		})
 	}
 
+	const declaresGenericUiTypes = genericUiPackagePattern.test(sourcePath)
 	const visit = (node: ts.Node): void => {
+		if (declaresGenericUiTypes && (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) && productTypeNames.has(node.name.text)) {
+			const position = sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile))
+			findings.push({ column: position.character + 1, file: sourcePath, line: position.line + 1, rule: 'statoblast-product-type-outside-statoblast-shared', declaredName: node.name.text })
+		}
 		if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined && ts.isStringLiteralLike(node.moduleSpecifier)) recordSpecifier(node.moduleSpecifier)
 		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
 			const [specifier] = node.arguments
@@ -183,7 +208,10 @@ async function main() {
 	if (findings.length === 0 && manifestFindings.length === 0) return
 
 	if (findings.length > 0) console.error('UI dependencies must point inward: app may compose features, while shared layers must never depend on app or feature ownership.')
-	for (const finding of findings) console.error(`${finding.file}:${finding.line}:${finding.column} - ${finding.rule}: ${finding.specifier}`)
+	for (const finding of findings) {
+		const subject = finding.rule === 'statoblast-product-type-outside-statoblast-shared' ? `type ${finding.declaredName} is declared by ${statoblastProductTypeModules.join(' or ')}` : finding.specifier
+		console.error(`${finding.file}:${finding.line}:${finding.column} - ${finding.rule}: ${subject}`)
+	}
 	for (const finding of manifestFindings) console.error(`ui/${finding.packageId}/package.json - ${finding.detail}`)
 	process.exitCode = 1
 }

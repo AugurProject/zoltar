@@ -2,7 +2,7 @@ import type { OpenOracleSelectedReportActionMode } from './openOracle.js'
 import { assertNever } from '@zoltar/ui-core-shared/lib/assert.js'
 import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 
 type OpenOracleStageReport = Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'disputeDelay' | 'reportTimestamp' | 'timeType'>
 

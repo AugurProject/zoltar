@@ -20,23 +20,24 @@ import {
 	uniswapV4PoolIds,
 	uniswapV4SwapEvent,
 } from './planning.ts'
-import type { NetworkIndexer } from './block-ingestion.ts'
+import { getBlockHeader, type HistoricalStateContext, historicalCodeUnavailable, rememberHistoricalCodeUnavailable, discoverStateStartBlock, rpcFailureReason } from './network-provider.ts'
+import type { NetworkIndexerState, ProviderState } from './network-state.ts'
 
-export async function queryLogs(this: NetworkIndexer, toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<readonly Log[]> {
+async function queryLogs(providers: ProviderState, toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<readonly Log[]> {
 	const filteredKinds = new Set(['uniswapV2Factory', 'uniswapV3Factory', 'uniswapV4PoolManager'])
 	const inputsOfKind = (kind: string): readonly LogScanInput[] => inputs.filter(({ address }) => contracts.get(address.toLowerCase())?.kind === kind)
 	const ordinaryInputs = inputs.filter(({ address }) => !filteredKinds.has(contracts.get(address.toLowerCase())?.kind ?? ''))
 	const groups = rpcLogQueryGroups(ordinaryInputs)
-	const ordinaryPages = await mapLimit(groups, 3, group => this.logClient.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
+	const ordinaryPages = await mapLimit(groups, 3, group => providers.logClient.getLogs({ address: group.addresses, fromBlock: group.fromBlock, toBlock }))
 	const tokenPairs = uniswapV2V3TokenPairs(contracts.values())
 	const v2Queries = inputsOfKind('uniswapV2Factory').flatMap(input => tokenPairs.map(tokens => ({ input, ...tokens })))
-	const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) => this.logClient.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
+	const v2Pages = await mapLimit(v2Queries, 3, ({ input, token0, token1 }) => providers.logClient.getLogs({ address: input.address, event: uniswapV2PairCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
 	const v3Queries = inputsOfKind('uniswapV3Factory').flatMap(input => tokenPairs.map(tokens => ({ input, ...tokens })))
-	const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) => this.logClient.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
+	const v3Pages = await mapLimit(v3Queries, 3, ({ input, token0, token1 }) => providers.logClient.getLogs({ address: input.address, event: uniswapV3PoolCreatedEvent, args: { token0, token1 }, fromBlock: input.fromBlock, toBlock }))
 	const poolIdGroups = chunks(uniswapV4PoolIds(contracts), 25)
 	const v4Queries = inputsOfKind('uniswapV4PoolManager').flatMap(input => poolIdGroups.map(ids => ({ input, ids })))
-	const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) => this.logClient.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
-	const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) => this.logClient.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
+	const initializePages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, event: uniswapV4InitializeEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
+	const swapPages = await mapLimit(v4Queries, 3, ({ input, ids }) => providers.logClient.getLogs({ address: input.address, event: uniswapV4SwapEvent, args: { id: ids }, fromBlock: input.fromBlock, toBlock }))
 	const unique = new Map<string, Log>()
 	for (const log of [...ordinaryPages.flat(), ...v2Pages.flat(), ...v3Pages.flat(), ...initializePages.flat(), ...swapPages.flat()]) {
 		const position = requireLogPosition(log)
@@ -51,47 +52,48 @@ export async function queryLogs(this: NetworkIndexer, toBlock: bigint, inputs: r
 	})
 }
 
-export async function getLogsForInputs(this: NetworkIndexer, toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+async function getLogsForInputs(providers: ProviderState, toBlock: bigint, inputs: readonly LogScanInput[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
 	const range = await queryCanonicalLogRange(
 		toBlock,
-		async () => (await this.getBlockHeader(toBlock)).hash,
-		() => this.queryLogs(toBlock, inputs, contracts),
+		async () => (await getBlockHeader(providers, toBlock)).hash,
+		() => queryLogs(providers, toBlock, inputs, contracts),
 	)
 	return { logs: range.items, endBlockHash: range.endBlockHash }
 }
 
-export async function getLogs(this: NetworkIndexer, fromBlock: bigint, toBlock: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
-	return await this.getLogsForInputs(
+async function getLogs(providers: ProviderState, fromBlock: bigint, toBlock: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>): Promise<{ readonly logs: readonly Log[]; readonly endBlockHash: Hash }> {
+	return await getLogsForInputs(
+		providers,
 		toBlock,
 		addresses.map(address => ({ address, fromBlock, startBlock: fromBlock })),
 		contracts,
 	)
 }
 
-export async function planDeploymentAwareLogScan(this: NetworkIndexer, contracts: readonly ContractMetadata[], fromBlock: bigint, toBlock: bigint): Promise<DeploymentAwareLogPlan> {
+async function planDeploymentAwareLogScan(state: HistoricalStateContext, contracts: readonly ContractMetadata[], fromBlock: bigint, toBlock: bigint): Promise<DeploymentAwareLogPlan> {
 	for (let attempt = 0; attempt < 2; attempt++) {
 		try {
 			return await planDeploymentAwareLogScanFromRpc(
 				contracts,
 				fromBlock,
 				toBlock,
-				this.network.startBlock,
-				(address, blockNumber) => this.client.getBytecode({ address, blockNumber }),
-				async blockNumber => unixSecondsToDate((await this.getBlockHeader(blockNumber)).timestamp, 'Deployment scan block timestamp'),
-				(contract, error) => this.rememberHistoricalCodeUnavailable(contract.address, error),
-				this.historicalCodeUnavailable(),
-				this.stateStartBlock,
+				state.network.startBlock,
+				(address, blockNumber) => state.providers.client.getBytecode({ address, blockNumber }),
+				async blockNumber => unixSecondsToDate((await getBlockHeader(state.providers, blockNumber)).timestamp, 'Deployment scan block timestamp'),
+				(contract, error) => rememberHistoricalCodeUnavailable(state, contract.address, error),
+				historicalCodeUnavailable(state.providers),
+				state.stateBoundary.startBlock,
 			)
 		} catch (error) {
 			if (!isPrunedHistoricalStateError(error) || attempt > 0) throw error
-			await this.discoverStateStartBlock(await this.client.getBlockNumber(), this.stateStartBlock, true)
+			await discoverStateStartBlock(state, await state.providers.client.getBlockNumber(), state.stateBoundary.startBlock, true)
 		}
 	}
 	throw new Error('Deployment-aware log planning state boundary retry was exhausted')
 }
 
 export async function getNextLogSegment(
-	this: NetworkIndexer,
+	state: HistoricalStateContext,
 	fromBlock: bigint,
 	maximumToBlock: bigint,
 	contracts: readonly ContractMetadata[],
@@ -121,12 +123,12 @@ export async function getNextLogSegment(
 			const range = await queryCanonicalLogRange(
 				rangeEnd,
 				async () => {
-					rangeEndHeader = await this.getBlockHeader(rangeEnd)
+					rangeEndHeader = await getBlockHeader(state.providers, rangeEnd)
 					return rangeEndHeader.hash
 				},
 				async () => {
-					plan = await this.planDeploymentAwareLogScan(contracts, rangeStart, rangeEnd)
-					return await this.queryLogs(rangeEnd, plan.inputs, contractMap)
+					plan = await planDeploymentAwareLogScan(state, contracts, rangeStart, rangeEnd)
+					return await queryLogs(state.providers, rangeEnd, plan.inputs, contractMap)
 				},
 			)
 			endBlockHash = range.endBlockHash
@@ -135,7 +137,7 @@ export async function getNextLogSegment(
 			successfulPlan = plan
 			return range.items
 		},
-		(failedFrom, failedTo, retryTo, error) => console.warn(`[${this.network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${this.rpcFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+		(failedFrom, failedTo, retryTo, error) => console.warn(`[${state.network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${rpcFailureReason(state.providers, error)}); retrying #${failedFrom}-#${retryTo}`),
 		isSplittableLogRangeError,
 	)
 	if (endBlockHash === undefined) throw new Error(`RPC did not anchor log range through block ${segment.toBlock}`)
@@ -150,7 +152,7 @@ export async function getNextLogSegment(
 	}
 }
 
-export async function getAllLogs(this: NetworkIndexer, fromBlock: bigint, toBlock: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, expectedBlockHash: (blockNumber: bigint) => Promise<Hash>): Promise<readonly Log[]> {
+export async function getAllLogs(state: Pick<NetworkIndexerState, 'network' | 'providers'>, fromBlock: bigint, toBlock: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, expectedBlockHash: (blockNumber: bigint) => Promise<Hash>): Promise<readonly Log[]> {
 	const logs: Log[] = []
 	let cursor = fromBlock
 	while (cursor <= toBlock) {
@@ -159,11 +161,11 @@ export async function getAllLogs(this: NetworkIndexer, fromBlock: bigint, toBloc
 			toBlock,
 			runtimeConfig.logScanRangeSize,
 			async (rangeStart, rangeEnd) => {
-				const range = await this.getLogs(rangeStart, rangeEnd, addresses, contracts)
+				const range = await getLogs(state.providers, rangeStart, rangeEnd, addresses, contracts)
 				if (range.endBlockHash !== (await expectedBlockHash(rangeEnd))) throw new ChainContinuityError(`Canonical chain changed after querying logs through block ${rangeEnd}`)
 				return range.logs
 			},
-			(failedFrom, failedTo, retryTo, error) => console.warn(`[${this.network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${this.rpcFailureReason(error)}); retrying #${failedFrom}-#${retryTo}`),
+			(failedFrom, failedTo, retryTo, error) => console.warn(`[${state.network.id}] RPC log range #${failedFrom}-#${failedTo} failed (${rpcFailureReason(state.providers, error)}); retrying #${failedFrom}-#${retryTo}`),
 			isSplittableLogRangeError,
 		)
 		logs.push(...segment.items)
@@ -172,7 +174,7 @@ export async function getAllLogs(this: NetworkIndexer, fromBlock: bigint, toBloc
 	return logs
 }
 
-export function mergeLogs(this: NetworkIndexer, target: Map<bigint, Log[]>, logs: readonly Log[]): void {
+export function mergeLogs(target: Map<bigint, Log[]>, logs: readonly Log[]): void {
 	for (const log of logs) {
 		const position = requireLogPosition(log)
 		const existing = target.get(position.blockNumber) ?? []
@@ -193,8 +195,8 @@ export function mergeLogs(this: NetworkIndexer, target: Map<bigint, Log[]>, logs
 	}
 }
 
-export async function getKnownLogs(this: NetworkIndexer, blockNumber: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, blockHash: Hash): Promise<Log[]> {
-	const range = await this.getLogs(blockNumber, blockNumber, addresses, contracts)
+export async function getKnownLogs(providers: ProviderState, blockNumber: bigint, addresses: readonly Address[], contracts: ReadonlyMap<string, ContractMetadata>, blockHash: Hash): Promise<Log[]> {
+	const range = await getLogs(providers, blockNumber, blockNumber, addresses, contracts)
 	if (range.endBlockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)
 	for (const log of range.logs) {
 		if (requireLogPosition(log).blockHash !== blockHash) throw new ChainContinuityError(`RPC log response changed while indexing block ${blockNumber}`)

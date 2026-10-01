@@ -13,7 +13,7 @@ import { TokenApprovalControl } from '@zoltar/ui-core-shared/components/TokenApp
 import { TransactionActionButton, TransactionActionGroup } from '@zoltar/ui-core-shared/components/TransactionActionButton.js'
 import { withWalletBlocker, withWalletGuardFirst, type WalletGuard } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import type { ReadinessAction } from '@zoltar/ui-core-shared/types/components.js'
-import type { SecurityVaultDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { SecurityVaultDetails } from '../../../types/contracts.js'
 import type { SecurityVaultSectionProps } from '../../types.js'
 import type { VaultRepExitMode } from '../lib/securityVaultAvailability.js'
 

@@ -1,7 +1,8 @@
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as forkAuctionCopy from '../../../copy/forkAuction.js'
 import { getVisualRatio } from '@zoltar/ui-core-shared/lib/visualMetrics.js'
-import type { ReadClient, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TruthAuctionMetrics } from '../../../types/contracts.js'
 
 export function getStartTruthAuctionGuardMessage({ currentTimestamp, migrationEndsAt }: { currentTimestamp: bigint | undefined; migrationEndsAt: bigint | undefined }) {
 	if (migrationEndsAt === undefined) return forkAuctionCopy.migrationTimingIsUnavailable

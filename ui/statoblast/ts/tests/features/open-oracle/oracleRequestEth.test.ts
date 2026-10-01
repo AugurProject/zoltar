@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { getOracleOperationTimingGuard, getOracleRequestEthGuardMessage, resolveOracleOperationEthFunding } from '@zoltar/ui-statoblast-shared/features/open-oracle/lib/oracleRequestEth.js'
-import type { OracleManagerDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OracleManagerDetails } from '@zoltar/ui-statoblast-shared/types/contracts.js'
 import { createOracleManagerDetails as createBaseOracleManagerDetails } from '../security-pools/workflow/builders.js'
 
 function createOracleManagerDetails(overrides: Partial<OracleManagerDetails> = {}): OracleManagerDetails {

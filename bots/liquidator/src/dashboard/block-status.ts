@@ -1,3 +1,4 @@
+import { blockStatusLabel } from '@zoltar/bot-shared/dashboard/block-status'
 type Observation = { deploymentCheckedBlock?: string | undefined; deploymentCheckedTimestamp?: string | undefined; lastScannedBlock?: string | undefined; lastScannedTimestamp?: string | undefined; lastScanAt?: string | undefined; scanning?: boolean | undefined }
 
 function compactDuration(seconds: number) {
@@ -9,14 +10,8 @@ function compactDuration(seconds: number) {
 }
 
 export function blockStatusText(snapshot: Observation | undefined, now = Date.now()) {
-	const block = snapshot?.deploymentCheckedBlock ?? snapshot?.lastScannedBlock
-	if (block === undefined) return 'Block — · waiting for first observation'
-	const timestamp = snapshot?.deploymentCheckedTimestamp ?? snapshot?.lastScannedTimestamp
-	if (timestamp === undefined || !/^(?:0|[1-9]\d*)$/.test(timestamp)) return `Block ${block} · timestamp unavailable`
-	const milliseconds = Number(timestamp) * 1_000
-	if (!Number.isSafeInteger(milliseconds)) return `Block ${block} · timestamp unavailable`
-	const age = compactDuration(Math.floor(Math.abs(now - milliseconds) / 1_000))
-	return now >= milliseconds ? `Block ${block} · seen ${age} ago` : `Block ${block} · ${age} ahead of local clock`
+	// A deployment check observes a newer block than the last completed scan while contracts are missing.
+	return blockStatusLabel(snapshot?.deploymentCheckedBlock ?? snapshot?.lastScannedBlock, snapshot?.deploymentCheckedTimestamp ?? snapshot?.lastScannedTimestamp, now, compactDuration)
 }
 
 export function scanStatusText(snapshot: Observation) {

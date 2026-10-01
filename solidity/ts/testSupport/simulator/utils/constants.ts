@@ -19,3 +19,9 @@ export const DAY = 86400n
 
 // High-gas statoblast setup paths can outgrow Anvil/viem estimates in tests.
 export const HIGH_GAS_SIMULATOR_WRITE_GAS = 25_000_000n
+
+export const MAX_UINT256 = 2n ** 256n - 1n
+
+// Default test deployment coordinates: the genesis universe and a 200% pool security multiplier.
+export const GENESIS_UNIVERSE = 0n
+export const STATOBLAST_SECURITY_MULTIPLIER_BPS = 20_000n

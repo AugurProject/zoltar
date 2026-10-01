@@ -61,18 +61,22 @@ contract Zoltar {
 		emit UniverseInitialized(0, 0, 0, 0, ReputationToken(address(_genesisReputationToken)), 0, genesisSupply);
 	}
 
+	/// @notice Returns the universe's fork timestamp, or zero if it has not forked.
 	function getForkTime(uint248 universeId) external view returns (uint256) {
 		return universes[universeId].forkTime;
 	}
 
+	/// @notice Returns whether the universe's recorded fork question id equals `questionId`.
 	function forkQuestionMatches(uint248 universeId, uint256 questionId) external view returns (bool) {
 		return universes[universeId].forkQuestionId == questionId;
 	}
 
+	/// @notice Returns the universe's REP token.
 	function getRepToken(uint248 universeId) external view returns (ReputationToken) {
 		return universes[universeId].reputationToken;
 	}
 
+	/// @notice Returns the universe's theoretical REP supply divided by the fork threshold divisor, rounded up.
 	function getForkThresholdAttoRep(uint248 universeId) public view returns (uint256) {
 		uint256 theoreticalSupplyAttoRep = getUniverseTheoreticalSupplyAttoRep(universeId);
 		return
@@ -80,15 +84,18 @@ contract Zoltar {
 			(theoreticalSupplyAttoRep % forkThresholdDivisor == 0 ? 0 : 1);
 	}
 
+	/// @notice Returns half of the universe's fork threshold, rounded up.
 	function getNonDecisionThresholdAttoRep(uint248 universeId) public view returns (uint256) {
 		uint256 forkThresholdAttoRep = getForkThresholdAttoRep(universeId);
 		return forkThresholdAttoRep / 2 + (forkThresholdAttoRep % 2);
 	}
 
+	/// @notice Returns the universe's theoretical REP supply.
 	function getUniverseTheoreticalSupplyAttoRep(uint248 universeId) public view returns (uint256) {
 		return universeTheoreticalSupplies[universeId];
 	}
 
+	/// @notice Forks an unforked universe on an ended question, burning the fork threshold from the caller and crediting it to migration net of the burn haircut.
 	function forkUniverse(uint248 universeId, uint256 questionId) public {
 		_forkUniverse(msg.sender, universeId, questionId);
 	}
@@ -121,9 +128,9 @@ contract Zoltar {
 		emit UniverseForked(owner, universeId, questionId, universes[universeId].forkTime, forkThresholdAttoRep, migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
 
-	// Burns REP without creating migration credit. Escalation games use this path
-	// when their question resolves without paying the winner haircut through an
-	// own-question universe fork.
+	/// @notice Burns the caller's REP in `universeId` without creating migration credit.
+	/// @dev Escalation games use this path when their question resolves without paying
+	/// the winner haircut through an own-question universe fork.
 	function burnRep(uint248 universeId, uint256 amountAttoRep) external {
 		_burnRepFor(msg.sender, universeId, amountAttoRep);
 	}
@@ -151,10 +158,12 @@ contract Zoltar {
 		}
 	}
 
+	/// @notice Returns the deterministic child universe id for `outcomeIndex`.
 	function getChildUniverseId(uint248 universeId, uint256 outcomeIndex) public pure returns (uint248) {
 		return uint248(uint256(keccak256(abi.encode(universeId, outcomeIndex))));
 	}
 
+	/// @notice Deploys the child universe and REP token for a valid outcome of a forked universe; callable by anyone.
 	function deployChild(uint248 universeId, uint256 outcomeIndex) public {
 		Universe storage universe = universes[universeId];
 		require(universe.forkTime != 0, 'Universe has not forked, so child universes are unavailable');
@@ -174,6 +183,7 @@ contract Zoltar {
 		emit ChildReputationTokenInitialized(childUniverseId, childReputationToken, repNumber);
 	}
 
+	/// @notice Returns a page of the universe's deployed child universes in deployment order.
 	function getDeployedChildUniverses(uint248 universeId, uint256 startIndex, uint256 count)
 		external
 		view
@@ -202,7 +212,7 @@ contract Zoltar {
 		return startIndex + count;
 	}
 
-	// stores rep in the migration balance for a universe
+	/// @notice Burns the caller's REP in a forked universe and credits it 1:1 to the caller's migration balance.
 	function addRepToMigrationBalance(uint248 universeId, uint256 amountAttoRep) public {
 		_addRepToMigrationBalance(msg.sender, universeId, amountAttoRep);
 	}
@@ -215,6 +225,7 @@ contract Zoltar {
 		migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep += amountAttoRep;
 		emit MigrationRepAdded(owner, universeId, amountAttoRep, migrationRepBalances[owner][universeId].migrationRepBalanceAttoRep, universeTheoreticalSupplies[universeId]);
 	}
+	/// @notice Mints `amountAttoRep` of child REP to the caller in each selected outcome universe, capped per child by the caller's migration balance.
 	function splitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes) public {
 		require(universes[universeId].forkTime != 0, 'Universe has not forked, so migration REP cannot be split');
 		require(amountAttoRep > 0, 'Split amount must be greater than zero');
@@ -222,11 +233,13 @@ contract Zoltar {
 		_splitRep(universeId, amountAttoRep, outcomeIndexes);
 	}
 
+	/// @notice Optionally adds `preparationAttoRep` to the caller's migration balance, then calls `splitMigrationRep`.
 	function prepareAndSplitMigrationRep(uint248 universeId, uint256 amountAttoRep, uint256[] memory outcomeIndexes, uint256 preparationAttoRep) external {
 		if (preparationAttoRep > 0) addRepToMigrationBalance(universeId, preparationAttoRep);
 		splitMigrationRep(universeId, amountAttoRep, outcomeIndexes);
 	}
 
+	/// @notice Returns how much migration REP `migrator` has minted into each listed child universe.
 	function getChildMigrationRepAmountsAttoRep(address migrator, uint248 universeId, uint248[] calldata childUniverseIds) external view returns (uint256[] memory amountsAttoRep) {
 		AddressRepMigration storage migration = migrationRepBalances[migrator][universeId];
 		amountsAttoRep = new uint256[](childUniverseIds.length);
@@ -255,6 +268,7 @@ contract Zoltar {
 		}
 	}
 
+	/// @notice Returns `migrator`'s migration REP balance in `universeId`.
 	function getMigrationRepBalanceAttoRep(address migrator, uint248 universeId) public view returns (uint256 migrationRepBalanceAttoRep) {
 		return migrationRepBalances[migrator][universeId].migrationRepBalanceAttoRep;
 	}

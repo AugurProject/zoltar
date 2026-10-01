@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { advanceRollbackQueue } from './inclusion-journal.ts'
 import { commitReceiptDisposition as commitRecoveryDisposition } from './receipt-disposition.ts'
 import { formatDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
@@ -205,7 +206,7 @@ async function assertRecoveryPolicy(environment: ExecutionEnvironment, intent: P
 	try {
 		assertOperationPrincipalCaps(durableWorkflowPlan(workflow), environment.settings.strategy)
 	} catch (error) {
-		throw new RecoveryPolicyBlocked(error instanceof Error ? error.message : String(error), error)
+		throw new RecoveryPolicyBlocked(errorMessage(error), error)
 	}
 	try {
 		await assertFreshWalletAssetDebits(environment, step, anchor)
@@ -351,7 +352,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 		assertExecutionActive(environment)
 		if (deferral === undefined) environment.assertSubmissionReady?.()
 	} catch (error) {
-		const reason = error instanceof Error ? error.message : String(error)
+		const reason = errorMessage(error)
 		deferral =
 			error instanceof RecoveryPolicyBlocked
 				? {
@@ -391,7 +392,7 @@ async function resubmitIntent(environment: ExecutionEnvironment, intent: Pending
 			signMessage: account.signMessage,
 		})
 	} catch (error) {
-		throw new TransactionAwaitingRecovery(intent.label, intent.hash, error instanceof Error ? error.message : String(error))
+		throw new TransactionAwaitingRecovery(intent.label, intent.hash, errorMessage(error))
 	}
 	intent.status = 'submitted'
 	intent.submissionBlock ??= anchor.number
@@ -631,7 +632,7 @@ async function verifyRecoveredReplacement(environment: ExecutionEnvironment, int
 	try {
 		observations = await recoveredReceiptObservations(environment, intent, successful)
 	} catch (error) {
-		throw new TransactionAwaitingRecovery(intent.label, replacementHash, `replacement evidence is temporarily unavailable: ${error instanceof Error ? error.message : String(error)}`)
+		throw new TransactionAwaitingRecovery(intent.label, replacementHash, `replacement evidence is temporarily unavailable: ${errorMessage(error)}`)
 	}
 	let evidenceDisposition: ReceiptEvidenceDisposition
 	try {

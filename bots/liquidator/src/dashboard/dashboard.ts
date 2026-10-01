@@ -1,4 +1,4 @@
-import { renderRepMarketConsensusError, renderRepMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
+import { renderRepMarketConsensus, renderRepMarketConsensusError } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { decodeConfiguration, decodeSnapshot, decodeMarketProbe, type Configuration, type Snapshot, type MarketSourceRow, type Universe } from './api-validation.ts'
 import { renderActivities } from './activity-panel.tsx'
 import { renderMarketSources } from './market-source-panel.tsx'
@@ -7,9 +7,10 @@ import { createPoolBrowser } from './pool-browser.ts'
 import { createUniverseExplorer } from '@zoltar/bot-shared/dashboard/universe-explorer'
 import { readinessGuidance } from './readiness-status.js'
 import { blockStatusText, scanStatusText } from './block-status.js'
+import { renderBlockStatus as renderSharedBlockStatus } from '@zoltar/bot-shared/dashboard/block-status'
 import { endpointHealthDetail, endpointRow, renderDisconnectedHeader, setAttentionBadge } from '@zoltar/bot-shared/dashboard/components'
 import { confirmOperatorAction, reviewChangeRows } from '@zoltar/bot-shared/dashboard/confirmation'
-import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS } from '@zoltar/bot-shared/dashboard/polling'
+import { CONFIGURATION_REQUEST_TIMEOUT_MS, PROFILE_SWITCH_REQUEST_TIMEOUT_MESSAGE, PROFILE_SWITCH_REQUEST_TIMEOUT_MS, requestWithTimeout, singleFlight, STATE_REQUEST_TIMEOUT_MS, waitForProfileReconnect } from '@zoltar/bot-shared/dashboard/polling'
 import { closeResumePreflight, openResumePreflight } from '@zoltar/bot-shared/dashboard/resume-preflight'
 import { createSectionNavigation } from '@zoltar/bot-shared/dashboard/section-navigation'
 import { createSettingsNavigation } from '@zoltar/bot-shared/dashboard/settings-navigation'
@@ -105,8 +106,7 @@ function updatePoolBrowser() {
 }
 
 function renderBlockStatus(snapshot = currentSnapshot) {
-	blockStatus.textContent = blockStatusText(snapshot)
-	element('header-block-status', HTMLParagraphElement).textContent = blockStatus.textContent
+	renderSharedBlockStatus(blockStatusText(snapshot), [blockStatus])
 }
 
 function setMutationControlsEnabled(enabled: boolean) {
@@ -169,11 +169,6 @@ function pauseButtonLabel(pauseRequestPending: boolean | undefined, paused: bool
 function pauseButtonAction(snapshot: Snapshot) {
 	if (!snapshot.paused) return 'pause'
 	return snapshot.execute ? 'confirm-resume' : 'resume'
-}
-
-function consensusStatusText(consensus: { reasons: readonly string[]; reliable: boolean } | undefined, reliableLabel: string) {
-	if (consensus === undefined) return undefined
-	return consensus.reliable ? reliableLabel : consensus.reasons.join(' · ')
 }
 
 function runStatusLabel(snapshot: Snapshot) {
@@ -270,30 +265,7 @@ function renderRecovery(snapshot: Snapshot) {
 }
 
 function renderCentralizedMarket(snapshot: Snapshot) {
-	const market = snapshot.centralizedMarket
-	const consensus = snapshot.marketConsensus
-	renderRepMarketConsensusPanel(document, {
-		status: market === undefined ? (consensusStatusText(consensus, 'Reliable DEX consensus') ?? 'No market sources configured') : (consensusStatusText(consensus, 'Reliable independent CEX + DEX consensus') ?? (market.reliable ? 'Reliable CEX estimate' : market.reasons.join(' · '))),
-		emptyText: 'Add public exchange sources in the operator configuration.',
-		values: {
-			cexPrice: market?.priceRepPerEth ?? '—',
-			dexPrice: consensus?.dex.reliable === true ? consensus.dex.priceRepPerEth : '—',
-			guardedPrice: consensus?.reliable === true ? (consensus.priceRepPerEth ?? '—') : '—',
-			dexBidDepth: consensus === undefined ? '—' : `${consensus.dex.bidDepthEth} ETH`,
-			dexAskDepth: consensus === undefined ? '—' : `${consensus.dex.askDepthEth} ETH`,
-			cexBidDepth: market === undefined ? '—' : `${market.bidDepthEth} ETH`,
-			cexAskDepth: market === undefined ? '—' : `${market.askDepthEth} ETH`,
-			sources: consensus === undefined ? `${market?.observations.length ?? 0} CEX` : `${consensus.cex.sourceCount.toString()} CEX · ${consensus.dex.sourceCount.toString()} DEX`,
-		},
-		observations: (market?.observations ?? []).map(observation => ({
-			exchange: observation.exchangeId,
-			market: observation.repMarket,
-			price: observation.priceRepPerEth,
-			bidDepth: `${observation.bidDepthEth} ETH`,
-			askDepth: `${observation.askDepthEth} ETH`,
-			observed: new Date(observation.observedAt).toLocaleTimeString(),
-		})),
-	})
+	renderRepMarketConsensus(document, snapshot.centralizedMarket, snapshot.marketConsensus)
 }
 
 function universeState(universe: Universe) {
@@ -507,12 +479,13 @@ networkName.addEventListener('change', async () => {
 })
 
 async function waitForNetworkProfile(network: string) {
-	for (let attempt = 0; attempt < 40; attempt++) {
-		await new Promise(resolve => setTimeout(resolve, 500))
-		await refresh()
-		if (pendingNetworkProfile === undefined && currentConfiguration?.network?.name === network) return
-	}
-	actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. It keeps retrying automatically.', true)
+	await waitForProfileReconnect(
+		async () => {
+			await refresh()
+			return pendingNetworkProfile === undefined && currentConfiguration?.network?.name === network ? 'reconnected' : 'waiting'
+		},
+		() => actionStatus(networkStatus, 'The profile was saved, but the dashboard did not reconnect in time. It keeps retrying automatically.', true),
+	)
 }
 
 networkForm.addEventListener('submit', async event => {

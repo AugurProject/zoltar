@@ -1,10 +1,10 @@
 import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
-type AppRoute = 'deploy' | 'not-found' | 'zoltar'
+import type { Route } from '@zoltar/ui-zoltar-shared/types/app.js'
 
 type Props = {
 	applicationDeploymentMissing: boolean
-	navigate: (route: 'deploy' | 'zoltar') => void
-	route: AppRoute
+	navigate: (route: Exclude<Route, 'not-found'>) => void
+	route: Route
 }
 
 export function useAppRouteEffects({ applicationDeploymentMissing, navigate, route }: Props) {

@@ -3,7 +3,7 @@ import { Window } from 'happy-dom'
 import { repMarketConsensusPanel } from '@zoltar/bot-shared/dashboard/rep-market-consensus'
 import { expectHeaderNotices } from '../../../shared/tests/support/dashboard-header.ts'
 import { operatorHeader } from '../../src/dashboard/header.ts'
-import { settingsPageMarkup } from '../../src/dashboard/settings-page.ts'
+import { settingsPageMarkup } from '../../src/dashboard/settings-page.tsx'
 
 async function dashboardFixture() {
 	const source = await Bun.file(new URL('../../src/dashboard/index.html', import.meta.url)).text()

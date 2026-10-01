@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { findUiExportsManifestViolations, findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
+import { collectExportedTypeNames, findUiExportsManifestViolations, findUiLayerBoundaryViolations } from './lint-ui-layer-boundaries.mts'
 
 test('rejects static, dynamic, exported, and type imports from UI features', () => {
 	const findings = findUiLayerBoundaryViolations(
@@ -8,7 +8,7 @@ test('rejects static, dynamic, exported, and type imports from UI features', () 
 		["import { helper } from '../features/reporting/lib/helper.js'", "export { value } from '../features/markets/lib/value.js'", "type State = import('../features/universes/lib/state.js').State", "const feature = import('../features/open-oracle/lib/feature.js')"].join('\n'),
 	)
 
-	expect(findings.map(finding => finding.specifier)).toEqual(['../features/reporting/lib/helper.js', '../features/markets/lib/value.js', '../features/universes/lib/state.js', '../features/open-oracle/lib/feature.js'])
+	expect(findings.map(finding => ('specifier' in finding ? finding.specifier : undefined))).toEqual(['../features/reporting/lib/helper.js', '../features/markets/lib/value.js', '../features/universes/lib/state.js', '../features/open-oracle/lib/feature.js'])
 })
 
 test('rejects feature imports from app composition', () => {
@@ -73,6 +73,34 @@ test('rejects test imports that bypass mirrored ownership', () => {
 	for (const [sourcePath, sourceText] of cases) {
 		expect(findUiLayerBoundaryViolations(sourcePath, sourceText).map(finding => finding.rule)).toEqual(['test-layers-must-follow-ownership'])
 	}
+})
+
+test('keeps Statoblast product types out of the generic UI packages', () => {
+	const sourceText = ['export type ListedSecurityPool = { vaultCount: bigint }', 'interface ReportingFormState { reportAmount: string }', 'export type MarketDetails = { questionId: string }'].join('\n')
+	for (const packageId of ['coreShared', 'zoltarShared']) {
+		const findings = findUiLayerBoundaryViolations(`ui/${packageId}/ts/types/contracts.ts`, sourceText)
+		expect(findings.map(finding => [finding.rule, 'declaredName' in finding ? finding.declaredName : undefined])).toEqual([
+			['statoblast-product-type-outside-statoblast-shared', 'ListedSecurityPool'],
+			['statoblast-product-type-outside-statoblast-shared', 'ReportingFormState'],
+		])
+	}
+	expect(findUiLayerBoundaryViolations('ui/statoblastShared/ts/types/contracts.ts', sourceText)).toEqual([])
+})
+
+test('derives the Statoblast product type denylist from the Statoblast types modules', () => {
+	const modulePath = 'ui/statoblastShared/ts/types/contracts.ts'
+	const statoblastTypesSource = `${readFileSync(modulePath, 'utf8')}\nexport type PoolInsuranceQuote = { premiumAttoEth: bigint }\n`
+	const productTypeNames = collectExportedTypeNames(modulePath, statoblastTypesSource)
+	const genericTypesSource = ['export type PoolInsuranceQuote = { premiumAttoEth: bigint }', 'export type MarketDetails = { questionId: string }'].join('\n')
+
+	expect(findUiLayerBoundaryViolations('ui/coreShared/ts/types/contracts.ts', genericTypesSource)).toEqual([])
+	expect(findUiLayerBoundaryViolations('ui/coreShared/ts/types/contracts.ts', genericTypesSource, productTypeNames)).toEqual([{ column: 13, declaredName: 'PoolInsuranceQuote', file: 'ui/coreShared/ts/types/contracts.ts', line: 1, rule: 'statoblast-product-type-outside-statoblast-shared' }])
+})
+
+test('collects only the type names a module declares and exports itself', () => {
+	const sourceText = ["export type { AccountState } from './core.js'", 'export type SecurityPoolFormState = { marketId: string }', 'export interface VaultView { owner: string }', 'type LocalHelper = string', "export const ROUTES = ['pools'] as const"].join('\n')
+
+	expect([...collectExportedTypeNames('ui/statoblastShared/ts/types/app.ts', sourceText)]).toEqual(['SecurityPoolFormState', 'VaultView'])
 })
 
 test('exports manifest guard requires existing source targets and explicit tsx entries', () => {

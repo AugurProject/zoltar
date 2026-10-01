@@ -16,3 +16,10 @@ export function useFormState<T>(defaultState: T) {
 	}
 	return { state, setState }
 }
+
+export type FormStateSetter<T> = (updater: (current: T) => T) => void
+
+/** Sets one form field, keeping the current form object when the value is unchanged. */
+export function setFormField<T, K extends keyof T>(setForm: FormStateSetter<T>, key: K, value: T[K]) {
+	setForm(current => (current[key] === value ? current : { ...current, [key]: value }))
+}

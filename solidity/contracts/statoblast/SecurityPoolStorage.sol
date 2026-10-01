@@ -44,6 +44,13 @@ abstract contract SecurityPoolStorage {
 	/// @dev Initial pools use the question end; an activated child uses max until resolution or its next fork fixes the cutoff.
 	uint256 internal feeEpochEndTime;
 
+	/// @dev Shared operational guard for the pool and its operations delegate. Callers pass the
+	/// universe fork time so each keeps its own Zoltar lookup; the fork check reverts first.
+	function _requireUnforkedOperational(uint256 forkTime) internal view {
+		require(forkTime == 0, 'Forked');
+		require(systemState == SystemState.Operational, 'Pool inactive');
+	}
+
 	function _getVaultBadDebtAttoEth(address vault) internal view returns (uint256 badDebtAttoEth) {
 		VaultBadDebt storage vaultBadDebt = vaultBadDebtByVault[vault];
 		if (vaultBadDebt.generation == badDebtGeneration) return vaultBadDebt.badDebtAttoEth;

@@ -1,0 +1,165 @@
+import { useEffect, useRef } from 'preact/hooks'
+import type { Address } from '@zoltar/core-shared/evm/ethereum'
+import { useMissingDeploymentRedirect } from '@zoltar/ui-core-shared/app/hooks/useMissingDeploymentRedirect.js'
+import { isHexAddressInput, normalizeAddress } from '@zoltar/ui-core-shared/lib/address.js'
+import { useOpenOracleRouteSync } from '@zoltar/ui-statoblast-shared/features/open-oracle/hooks/useOpenOracleRouteSync.js'
+import type { Route } from '@zoltar/ui-statoblast-shared/types/app.js'
+
+/** Copies route state (URL pool, question, vault owner, and oracle report) into the form states that mirror it. */
+type RouteFormSync = {
+	setOpenOracleReportId: (reportId: string) => void
+	setSecurityPoolAddress: (securityPoolAddress: string) => void
+	setSecurityPoolQuestionId: (questionId: string) => void
+	setSelectedVaultOwner: (selectedVaultOwner: string) => void
+}
+
+type Props = {
+	accountAddress: Address | undefined
+	applicationDeploymentMissing: boolean
+	activeEnvironmentNonce: number
+	environmentReady: boolean
+	formSync: RouteFormSync
+	loadOracleReport: (reportId: string) => Promise<void>
+	loadSecurityPools: (securityPoolAddress?: string) => Promise<boolean | void>
+	navigate: (route: Exclude<Route, 'not-found'>) => void
+	resetSecurityPoolCreation: () => void
+	route: Route
+	securityPoolAddress: string
+	securityPoolQuestionId: string
+	securityPoolResultHash: string | undefined
+	selectedPoolSecurityPoolAddress: string | undefined
+	tradingResultHash: string | undefined
+	urlVaultAddress?: string | undefined
+	urlOpenOracleReportId: string
+	walletBootstrapComplete: boolean
+}
+
+function shouldRefreshSelectedPoolForRoute({ environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete }: { environmentReady: boolean; route: Route; securityPoolAddress: string; selectedPoolSecurityPoolAddress: string | undefined; walletBootstrapComplete: boolean }) {
+	return environmentReady && route === 'pools' && walletBootstrapComplete && isHexAddressInput(securityPoolAddress) && selectedPoolSecurityPoolAddress === undefined
+}
+
+function shouldSyncSecurityPoolAddressToRouteForms({ route }: { route: Route; securityPoolAddress: string }) {
+	return route === 'pools'
+}
+
+function getSelectedVaultOwnerForRoutePoolChange({ accountAddress, lastSecurityPoolAddress, route, securityPoolAddress }: { accountAddress: Address | undefined; lastSecurityPoolAddress: string | undefined; route: Route; securityPoolAddress: string }) {
+	if (route !== 'pools') return undefined
+	const normalizedSecurityPoolAddress = normalizeAddress(securityPoolAddress) ?? ''
+	const normalizedLastSecurityPoolAddress = normalizeAddress(lastSecurityPoolAddress)
+	if (normalizedSecurityPoolAddress === normalizedLastSecurityPoolAddress) return undefined
+	if (normalizedSecurityPoolAddress === '') return ''
+	return accountAddress?.toString() ?? ''
+}
+
+export function useAppRouteEffects({
+	accountAddress,
+	applicationDeploymentMissing,
+	activeEnvironmentNonce,
+	environmentReady,
+	formSync,
+	loadOracleReport,
+	loadSecurityPools,
+	navigate,
+	resetSecurityPoolCreation,
+	route,
+	securityPoolAddress,
+	securityPoolQuestionId,
+	securityPoolResultHash,
+	selectedPoolSecurityPoolAddress,
+	tradingResultHash,
+	urlOpenOracleReportId,
+	urlVaultAddress,
+	walletBootstrapComplete,
+}: Props) {
+	const loadSecurityPoolsRef = useRef(loadSecurityPools)
+	const lastRequestedSecurityPoolAddress = useRef<string | undefined>(undefined)
+	const lastSelectedPoolEnvironmentNonce = useRef<number | undefined>(undefined)
+	const lastVaultAccountAddress = useRef<Address | undefined>(accountAddress)
+	const lastUrlVaultAddress = useRef<string | undefined>(undefined)
+	const lastSelectedSecurityPoolAddress = useRef<string | undefined>(undefined)
+	const lastSyncedSecurityPoolQuestionId = useRef<string | undefined>(undefined)
+	const lastHandledSecurityPoolResultHash = useRef<string | undefined>(undefined)
+	const lastHandledTradingResultHash = useRef<string | undefined>(undefined)
+
+	loadSecurityPoolsRef.current = loadSecurityPools
+	const { setOpenOracleReportId, setSecurityPoolAddress, setSecurityPoolQuestionId, setSelectedVaultOwner } = formSync
+	useOpenOracleRouteSync({ activeEnvironmentNonce, environmentReady, isOpenOracleRoute: route === 'open-oracle', loadOracleReport, reportId: urlOpenOracleReportId, setOpenOracleFormReportId: setOpenOracleReportId })
+	useMissingDeploymentRedirect({ isDeploymentRoute: route === 'deploy', missing: applicationDeploymentMissing, navigateToDeployment: () => navigate('deploy') })
+
+	useEffect(() => {
+		if (route !== 'pools') {
+			lastSyncedSecurityPoolQuestionId.current = undefined
+			return
+		}
+		if (lastSyncedSecurityPoolQuestionId.current === securityPoolQuestionId) return
+		lastSyncedSecurityPoolQuestionId.current = securityPoolQuestionId
+		resetSecurityPoolCreation()
+		setSecurityPoolQuestionId(securityPoolQuestionId)
+	}, [resetSecurityPoolCreation, route, securityPoolQuestionId, setSecurityPoolQuestionId])
+
+	useEffect(() => {
+		if (!shouldSyncSecurityPoolAddressToRouteForms({ route, securityPoolAddress })) return
+		setSecurityPoolAddress(securityPoolAddress)
+	}, [route, securityPoolAddress, setSecurityPoolAddress])
+
+	useEffect(() => {
+		const nextSelectedVaultOwner = getSelectedVaultOwnerForRoutePoolChange({
+			accountAddress,
+			lastSecurityPoolAddress: lastSelectedSecurityPoolAddress.current,
+			route,
+			securityPoolAddress,
+		})
+		if (route === 'pools' && urlVaultAddress !== undefined && (lastUrlVaultAddress.current !== urlVaultAddress || nextSelectedVaultOwner !== undefined)) setSelectedVaultOwner(urlVaultAddress)
+		else if (route === 'pools' && urlVaultAddress === undefined && (lastUrlVaultAddress.current !== undefined || lastVaultAccountAddress.current !== accountAddress)) setSelectedVaultOwner(nextSelectedVaultOwner ?? accountAddress?.toString() ?? '')
+		else if (nextSelectedVaultOwner !== undefined) setSelectedVaultOwner(nextSelectedVaultOwner)
+		lastUrlVaultAddress.current = urlVaultAddress
+		lastVaultAccountAddress.current = accountAddress
+		if (route !== 'pools') {
+			lastSelectedSecurityPoolAddress.current = undefined
+			return
+		}
+		lastSelectedSecurityPoolAddress.current = normalizeAddress(securityPoolAddress) ?? ''
+	}, [accountAddress, route, securityPoolAddress, setSelectedVaultOwner, urlVaultAddress])
+
+	useEffect(() => {
+		const previousEnvironmentNonce = lastSelectedPoolEnvironmentNonce.current
+		if (previousEnvironmentNonce === undefined) lastSelectedPoolEnvironmentNonce.current = activeEnvironmentNonce
+		const selectedPoolEnvironmentChanged = previousEnvironmentNonce !== undefined && previousEnvironmentNonce !== activeEnvironmentNonce
+		if (
+			!selectedPoolEnvironmentChanged &&
+			!shouldRefreshSelectedPoolForRoute({
+				environmentReady,
+				route,
+				securityPoolAddress,
+				selectedPoolSecurityPoolAddress,
+				walletBootstrapComplete,
+			})
+		) {
+			if (route !== 'pools' || securityPoolAddress === '' || selectedPoolSecurityPoolAddress !== undefined || !environmentReady || !walletBootstrapComplete) lastRequestedSecurityPoolAddress.current = undefined
+			return
+		}
+		if (!environmentReady || route !== 'pools' || !isHexAddressInput(securityPoolAddress) || !walletBootstrapComplete) return
+		const requestKey = `${activeEnvironmentNonce}:${securityPoolAddress}`
+		if (lastRequestedSecurityPoolAddress.current === requestKey) return
+		lastRequestedSecurityPoolAddress.current = requestKey
+		lastSelectedPoolEnvironmentNonce.current = activeEnvironmentNonce
+		void loadSecurityPoolsRef.current(securityPoolAddress)
+	}, [activeEnvironmentNonce, environmentReady, route, securityPoolAddress, selectedPoolSecurityPoolAddress, walletBootstrapComplete])
+
+	// A create or trade result refreshes pools once per new transaction hash; later pool changes do not replay it.
+	useEffect(() => {
+		if (!environmentReady) return
+		if (route !== 'pools') return
+		if (securityPoolResultHash === undefined || lastHandledSecurityPoolResultHash.current === securityPoolResultHash) return
+		lastHandledSecurityPoolResultHash.current = securityPoolResultHash
+		void loadSecurityPoolsRef.current(securityPoolAddress === '' ? undefined : securityPoolAddress)
+	}, [environmentReady, route, securityPoolAddress, securityPoolResultHash])
+
+	useEffect(() => {
+		if (!environmentReady) return
+		if (route !== 'pools') return
+		if (tradingResultHash === undefined || lastHandledTradingResultHash.current === tradingResultHash || !isHexAddressInput(securityPoolAddress)) return
+		lastHandledTradingResultHash.current = tradingResultHash
+		void loadSecurityPoolsRef.current(securityPoolAddress)
+	}, [environmentReady, route, securityPoolAddress, tradingResultHash])
+}

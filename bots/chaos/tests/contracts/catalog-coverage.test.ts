@@ -1,6 +1,6 @@
 import { carryStorageAbi } from '../../src/contracts/carry-storage-abi.ts'
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import * as ts from 'typescript'
 import * as contractAbis from '@zoltar/bot-shared/contracts/abi'
@@ -466,7 +466,8 @@ describe('contract operation classification', () => {
 
 	test('routes every prerequisite selector through workflow steps and validates semantic aliases', () => {
 		const stepSelectors = new Set<string>()
-		for (const file of ['open-oracle.ts', 'statoblast.ts', 'statoblast/complete-sets.ts', 'trading.ts', 'zoltar.ts']) {
+		const tradingFiles = readdirSync(path.resolve(import.meta.dir, '../../src/operations/trading')).map(file => `trading/${file}`)
+		for (const file of ['open-oracle.ts', 'statoblast.ts', 'statoblast/complete-sets.ts', ...tradingFiles, 'zoltar.ts']) {
 			for (const selector of operationStepSelectors(path.resolve(import.meta.dir, '../../src/operations', file))) stepSelectors.add(selector)
 		}
 		for (const entry of MUTATING_CONTRACT_SURFACE.filter(candidate => candidate.classification === 'prerequisite')) {

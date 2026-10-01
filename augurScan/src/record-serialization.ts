@@ -1,3 +1,8 @@
+import { isObjectRecord } from '@zoltar/core-shared/validation/guards'
+
+/** Copies the own enumerable fields of a non-array object; any other value becomes an empty record. */
+export const plainRecord = (value: unknown): Record<string, unknown> => (isObjectRecord(value) && !Array.isArray(value) ? Object.fromEntries(Object.entries(value)) : {})
+
 export const parsedJsonColumn = (value: unknown): unknown => {
 	if (typeof value !== 'string') return value
 	try {
@@ -8,7 +13,4 @@ export const parsedJsonColumn = (value: unknown): unknown => {
 	}
 }
 
-export const jsonRecord = (value: unknown): Record<string, unknown> => {
-	const parsed = parsedJsonColumn(value)
-	return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? Object.fromEntries(Object.entries(parsed)) : {}
-}
+export const jsonRecord = (value: unknown): Record<string, unknown> => plainRecord(parsedJsonColumn(value))

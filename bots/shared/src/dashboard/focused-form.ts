@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { setText } from './dom.ts'
 import { setFormSubmitting } from './form-state.ts'
 
@@ -21,7 +22,7 @@ export function createFocusedFormSubmitter({ refresh, syncControls }: FocusedFor
 			outcome = await save()
 		} catch (error) {
 			onError?.(error)
-			outcome = error instanceof Error ? error.message : String(error)
+			outcome = errorMessage(error)
 		}
 		setFormSubmitting(formId, false)
 		syncControls()

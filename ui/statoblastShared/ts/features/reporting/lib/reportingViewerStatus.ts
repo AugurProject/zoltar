@@ -2,7 +2,7 @@ import { getDisplayedLeadingEscalationOutcome, getReportingOutcomeLabel } from '
 import { formatCurrencyInputBalance, formatCurrencyBalance, formatRelativeTimestamp, formatTimestamp } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { metricUnavailablePlaceholder } from '@zoltar/ui-core-shared/copy/common.js'
 import { protocolGuideHref } from '@zoltar/ui-core-shared/copy/app.js'
-import type { ActiveReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
 import { getHypotheticalClaimAmount, getReportingMinimumOutcomeChangeContribution } from './reportingDomain.js'
 

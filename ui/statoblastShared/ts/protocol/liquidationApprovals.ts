@@ -1,6 +1,7 @@
 import type { Address, Hex } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_LiquidationApprovalRegistry_LiquidationApprovalRegistry, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '../contractArtifact.js'
-import type { LiquidationApprovalDetails, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { LiquidationApprovalDetails } from '../types/contracts.js'
 
 export type LiquidationApprovalParams = {
 	securityPool: Address

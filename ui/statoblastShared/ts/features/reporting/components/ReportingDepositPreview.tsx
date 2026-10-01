@@ -1,6 +1,7 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { formatCurrencyInputBalance, formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { ReportingDetails, ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingOutcomeKey } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReportingDetails } from '../../../types/contracts.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as reportingCopy from '../../../copy/reporting.js'
 import { previewReportingDeadline } from '../lib/reportingDomain.js'

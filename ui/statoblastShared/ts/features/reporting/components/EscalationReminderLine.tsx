@@ -1,6 +1,6 @@
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useEffect, useState } from 'preact/hooks'
-import type { ActiveReportingDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ActiveReportingDetails } from '../../../types/contracts.js'
 import * as copy from '../../../copy/reporting.js'
 import { buildEscalationReminder } from '../lib/escalationReminder.js'
 import { formatReportingDeadline, getViewerStatusSentence } from '../lib/reportingViewerStatus.js'

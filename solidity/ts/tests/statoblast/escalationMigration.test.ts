@@ -1,4 +1,5 @@
 import { statoblast_EscalationGame_EscalationGame, statoblast_SecurityPoolForker_SecurityPoolForker } from '../../types/contractArtifact'
+import { formatStorageSlot, getAddressMappingStorageSlot } from '../../testSupport/storage'
 import {
 	createCompleteSet,
 	depositRepToVault,
@@ -41,7 +42,6 @@ import { approveToken, contractExists, getChildUniverseId, getERC20Balance } fro
 import { DAY, GENESIS_REPUTATION_TOKEN, TEST_ADDRESSES } from '../../testSupport/simulator/utils/constants'
 import { createWriteClient } from '../../testSupport/simulator/utils/clients'
 import { REPUTATION_TOKEN_THEORETICAL_SUPPLY_SLOT } from '@zoltar/zoltar-shared/constants'
-import { encodeAbiParameters, keccak256 } from '@zoltar/core-shared/evm/ethereum'
 import { approximatelyEqual, strictEqualTypeSafe, ensureDefined } from '../../testSupport/simulator/utils/testUtils'
 import assert from '../../testSupport/simulator/utils/assert'
 import { beforeEach, describe, test } from 'bun:test'
@@ -71,7 +71,7 @@ const RECURSIVE_CARRY_MIGRATION_GAS_LIMIT = 30_000_000n
 describe('Statoblast: escalation migration', () => {
 	const fixture = useStatoblastEscalationMigrationFixture()
 
-	const { formatStorageSlot, getMappingStorageSlot, reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, getYesChildPool } = fixture
+	const { reportBond, repDeposit, genesisUniverse, statoblastSecurityMultiplierBps, outcomes, getYesChildPool } = fixture
 
 	let mockWindow: StatoblastEscalationMigrationFixture['mockWindow']
 	let client: StatoblastEscalationMigrationFixture['client']
@@ -542,7 +542,7 @@ describe('Statoblast: escalation migration', () => {
 		const parentYesDepositsBeforeMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const parentNoDepositsBeforeMigration = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.No)
 
-		const parentForkDataSlot = getMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
+		const parentForkDataSlot = getAddressMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
 		const ownForkChildRepAtForkSlot = formatStorageSlot(parentForkDataSlot + 11n)
 		await mockWindow.addStateOverrides({
 			[getInfraContractAddresses().securityPoolForker]: {
@@ -1006,7 +1006,7 @@ describe('Statoblast: escalation migration', () => {
 
 		await triggerOwnGameFork(client, securityPoolAddresses.securityPool)
 
-		const parentForkDataSlot = getMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
+		const parentForkDataSlot = getAddressMappingStorageSlot(securityPoolAddresses.securityPool, 0n)
 		const ownForkChildRepAtForkSlot = formatStorageSlot(parentForkDataSlot + 11n)
 		await mockWindow.addStateOverrides({
 			[getInfraContractAddresses().securityPoolForker]: {
@@ -1512,7 +1512,7 @@ describe('Statoblast: escalation migration', () => {
 
 		const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
 		const childForkThreshold = await getZoltarForkThreshold(client, yesUniverse)
-		const childBalanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [attackerClient.account.address, 0n]))
+		const childBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(attackerClient.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[childRepToken]: {
 				stateDiff: {
@@ -1560,7 +1560,7 @@ describe('Statoblast: escalation migration', () => {
 		}
 		const unrelatedQuestionId = getQuestionId(unrelatedQuestionData, outcomes)
 		const forkInitiator = createWriteClient(mockWindow, TEST_ADDRESSES[2])
-		const forkInitiatorBalanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [forkInitiator.account.address, 0n]))
+		const forkInitiatorBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(forkInitiator.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[addressString(GENESIS_REPUTATION_TOKEN)]: {
 				stateDiff: {
@@ -1655,7 +1655,7 @@ describe('Statoblast: escalation migration', () => {
 
 		const childRepToken = await getRepToken(client, yesSecurityPool.securityPool)
 		const childForkThreshold = await getZoltarForkThreshold(client, yesUniverse)
-		const childBalanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [client.account.address, 0n]))
+		const childBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(client.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[childRepToken]: {
 				stateDiff: {
@@ -1721,7 +1721,7 @@ describe('Statoblast: escalation migration', () => {
 
 		const firstChildRepToken = await getRepToken(client, firstChildPool.securityPool)
 		const firstChildForkThreshold = await getZoltarForkThreshold(client, firstChildUniverse)
-		const firstChildBalanceSlot = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [attackerClient.account.address, 0n]))
+		const firstChildBalanceSlot = formatStorageSlot(getAddressMappingStorageSlot(attackerClient.account.address, 0n))
 		await mockWindow.addStateOverrides({
 			[firstChildRepToken]: {
 				stateDiff: {

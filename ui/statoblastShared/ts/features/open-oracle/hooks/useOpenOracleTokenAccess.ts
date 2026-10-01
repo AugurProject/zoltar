@@ -5,7 +5,7 @@ import { useLoadController } from '@zoltar/ui-core-shared/hooks/useLoadControlle
 import { getErrorMessage } from '@zoltar/ui-core-shared/lib/errors.js'
 import { useRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import type { TokenApprovalState } from '@zoltar/ui-core-shared/transactions/tokenApproval.js'
-import type { OpenOracleReportDetails } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 import { getOpenOracleAddress } from '../../../protocol/deploymentHelpers.js'
 import { toTokenAccessReadResult, type OpenOracleRawReadResult, type OpenOracleTokenAccessLoadResult, type RefreshOpenOracleTokenAccessOptions, type TokenAccessLoadResult } from '../lib/openOracleTokenAccess.js'
 import { toReadError, type OptionalReadResult } from '@zoltar/ui-core-shared/lib/optionalReadResult.js'

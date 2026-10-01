@@ -2,7 +2,7 @@ import { zeroAddress } from '@zoltar/core-shared/evm/ethereum'
 import { matchesLocalSearch } from '@zoltar/ui-core-shared/lib/localEntityBrowse.js'
 import { createDownloadedEntityStore } from '@zoltar/ui-core-shared/lib/localEntityStore.js'
 import { decodeStoredValue } from '@zoltar/ui-core-shared/lib/storedValueReader.js'
-import type { OpenOracleReportSummary } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { OpenOracleReportSummary } from '../../../types/contracts.js'
 import { getOpenOracleReportStatus } from './openOracle.js'
 
 export type BrowseStatusFilter = 'all' | 'Pending' | 'Disputed' | 'Settled'

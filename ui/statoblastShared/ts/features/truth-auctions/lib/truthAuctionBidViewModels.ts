@@ -4,7 +4,7 @@ import { getTruthAuctionSettlementBidKey } from './truthAuctionSettlement.js'
 import { sameAddress } from '@zoltar/ui-core-shared/lib/address.js'
 import { getTruthAuctionBidDisposition, getTruthAuctionBidSettlementEstimate, getTruthAuctionDispositionClassName, getTruthAuctionPriceAtTick } from './truthAuctionBook.js'
 import { formatCurrencyInputBalance, formatValueWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
-import type { TruthAuctionBidView, TruthAuctionMetrics } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { TruthAuctionBidView, TruthAuctionMetrics } from '../../../types/contracts.js'
 
 type LocalSettlementBidStatus = 'claimed' | 'refunded'
 

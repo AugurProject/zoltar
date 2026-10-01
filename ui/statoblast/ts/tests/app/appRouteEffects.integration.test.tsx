@@ -5,13 +5,24 @@ import { fireEvent, within } from '@zoltar/ui-core-shared/tests/testUtils/querie
 import { render } from 'preact'
 import { useState } from 'preact/hooks'
 import { act } from 'preact/test-utils'
-import { useAppRouteEffects } from '../../app/useAppRouteEffects.js'
+import { useAppRouteEffects } from '../../app/hooks/useAppRouteEffects.js'
 import { useStatoblastUrlState } from '../../app/hooks/useStatoblastUrlState.js'
 import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/domEnvironment.js'
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { installStatoblastRouting } from '@zoltar/ui-statoblast-shared/lib/routing.js'
 
 type RouteEffectsProps = Parameters<typeof useAppRouteEffects>[0]
+type RouteFormSyncOverrides = Partial<RouteEffectsProps['formSync']>
+
+function createFormSync(overrides: RouteFormSyncOverrides = {}): RouteEffectsProps['formSync'] {
+	return {
+		setOpenOracleReportId: () => undefined,
+		setSecurityPoolAddress: () => undefined,
+		setSecurityPoolQuestionId: () => undefined,
+		setSelectedVaultOwner: () => undefined,
+		...overrides,
+	}
+}
 
 function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEffectsProps {
 	return {
@@ -19,6 +30,7 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		activeEnvironmentNonce: 0,
 		applicationDeploymentMissing: false,
 		environmentReady: true,
+		formSync: createFormSync(),
 		loadOracleReport: async () => undefined,
 		loadSecurityPools: async () => undefined,
 		navigate: () => undefined,
@@ -28,13 +40,6 @@ function createDefaultProps(overrides: Partial<RouteEffectsProps> = {}): RouteEf
 		securityPoolQuestionId: '',
 		securityPoolResultHash: undefined,
 		selectedPoolSecurityPoolAddress: undefined,
-		setForkAuctionFormSecurityPoolAddress: () => undefined,
-		setOpenOracleFormReportId: () => undefined,
-		setReportingFormSecurityPoolAddress: () => undefined,
-		setSecurityVaultFormSelectedVaultOwner: () => undefined,
-		setSecurityVaultFormSecurityPoolAddress: () => undefined,
-		setSecurityPoolFormMarketId: () => undefined,
-		setTradingFormSecurityPoolAddress: () => undefined,
 		tradingResultHash: undefined,
 		urlOpenOracleReportId: '',
 		walletBootstrapComplete: true,
@@ -56,7 +61,7 @@ function SecurityPoolQuestionRouteHarness() {
 			resetSecurityPoolCreation: () => setHasCreationResult(false),
 			route: 'pools',
 			securityPoolQuestionId,
-			setSecurityPoolFormMarketId: setMarketId,
+			formSync: createFormSync({ setSecurityPoolQuestionId: setMarketId }),
 		}),
 	)
 	return hasCreationResult ? <div id='creation-result'>Previous pool created</div> : <div id='market-id'>{marketId}</div>
@@ -68,7 +73,7 @@ function OpenOracleReportRouteHarness() {
 	useAppRouteEffects(
 		createDefaultProps({
 			route: 'open-oracle',
-			setOpenOracleFormReportId: setReportId,
+			formSync: createFormSync({ setOpenOracleReportId: setReportId }),
 			urlOpenOracleReportId: openOracleReportId,
 		}),
 	)
@@ -501,41 +506,28 @@ describe('app route effects integration', () => {
 
 	test('clears route-backed pool forms when the selected pool address is cleared', async () => {
 		const dom = installDomEnvironment('http://localhost/#/pools')
-		const securityVaultUpdates: string[] = []
+		const securityPoolAddressUpdates: string[] = []
 		const selectedVaultUpdates: string[] = []
-		const tradingUpdates: string[] = []
-		const forkUpdates: string[] = []
-		const reportingUpdates: string[] = []
 
 		const { cleanup } = await renderIntoDocument(
 			<RouteEffectsHarness
 				{...createDefaultProps({
 					route: 'pools',
 					securityPoolAddress: '',
-					setForkAuctionFormSecurityPoolAddress: value => {
-						forkUpdates.push(value)
-					},
-					setReportingFormSecurityPoolAddress: value => {
-						reportingUpdates.push(value)
-					},
-					setSecurityVaultFormSelectedVaultOwner: value => {
-						selectedVaultUpdates.push(value)
-					},
-					setSecurityVaultFormSecurityPoolAddress: value => {
-						securityVaultUpdates.push(value)
-					},
-					setTradingFormSecurityPoolAddress: value => {
-						tradingUpdates.push(value)
-					},
+					formSync: createFormSync({
+						setSecurityPoolAddress: value => {
+							securityPoolAddressUpdates.push(value)
+						},
+						setSelectedVaultOwner: value => {
+							selectedVaultUpdates.push(value)
+						},
+					}),
 				})}
 			/>,
 		)
 
-		expect(securityVaultUpdates).toEqual([''])
+		expect(securityPoolAddressUpdates).toEqual([''])
 		expect(selectedVaultUpdates).toEqual([''])
-		expect(tradingUpdates).toEqual([''])
-		expect(forkUpdates).toEqual([''])
-		expect(reportingUpdates).toEqual([''])
 
 		await cleanup()
 		dom.cleanup()
@@ -548,9 +540,11 @@ describe('app route effects integration', () => {
 			accountAddress: '0x84834d4Dccea071b363e53952BD300F7bf56a009',
 			route: 'pools',
 			securityPoolAddress: '0x1111111111111111111111111111111111111111',
-			setSecurityVaultFormSelectedVaultOwner: value => {
-				selectedVaultUpdates.push(value)
-			},
+			formSync: createFormSync({
+				setSelectedVaultOwner: value => {
+					selectedVaultUpdates.push(value)
+				},
+			}),
 		})
 
 		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...initialProps} />)
@@ -584,14 +578,14 @@ describe('app route effects integration', () => {
 			route: 'pools',
 			securityPoolAddress: '0x3333333333333333333333333333333333333333',
 			urlVaultAddress: owner,
-			setSecurityVaultFormSelectedVaultOwner: value => updates.push(value),
+			formSync: createFormSync({ setSelectedVaultOwner: value => updates.push(value) }),
 		})
 		const { cleanup, container } = await renderIntoDocument(<RouteEffectsHarness {...props} />)
 		try {
 			expect(updates).toEqual([owner])
 			await act(() => render(<RouteEffectsHarness {...props} />, container))
 			expect(updates).toEqual([owner])
-			await act(() => render(<RouteEffectsHarness {...props} setSecurityVaultFormSelectedVaultOwner={value => updates.push(value)} />, container))
+			await act(() => render(<RouteEffectsHarness {...props} formSync={createFormSync({ setSelectedVaultOwner: value => updates.push(value) })} />, container))
 			expect(updates).toEqual([owner])
 			await act(() => render(<RouteEffectsHarness {...props} urlVaultAddress={undefined} />, container))
 			expect(updates.at(-1)).toBe(account)

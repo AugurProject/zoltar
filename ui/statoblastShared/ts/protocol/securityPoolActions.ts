@@ -1,6 +1,7 @@
 import type { Address, Hash } from '@zoltar/core-shared/evm/ethereum'
 import { statoblast_SecurityPool_SecurityPool } from '../contractArtifact.js'
-import type { ForkAuctionAction, ForkAuctionActionResult, ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ReadClient } from '@zoltar/ui-core-shared/types/contracts.js'
+import type { ForkAuctionAction, ForkAuctionActionResult } from '../types/contracts.js'
 
 export async function readSecurityPoolUniverseId(client: Pick<ReadClient, 'readContract'>, securityPoolAddress: Address) {
 	return await client.readContract({

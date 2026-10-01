@@ -1,3 +1,4 @@
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { availableParallelism } from 'node:os'
 import { cleanupFoundryAnvilState } from './cleanup-foundry-anvil-state.mts'
 import { runBunTestProcess } from './run-bun-test-process.mts'
@@ -9,7 +10,7 @@ const cleanupStaleAnvilState = async (phase: 'before' | 'after') => {
 		const result = await cleanupFoundryAnvilState()
 		if (result.deletedCount > 0) console.warn(`Deleted ${result.deletedCount} stale Anvil state director${result.deletedCount === 1 ? 'y' : 'ies'} ${phase} tests`)
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error)
+		const message = errorMessage(error)
 		console.warn(`Failed to clean stale Anvil state directories ${phase} tests: ${message}`)
 	}
 }

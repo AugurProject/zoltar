@@ -4,6 +4,7 @@ import type { ConnectivitySettings } from '#monitoring/connectivity'
 import type { StoredRuntimeLimits } from '#config/settings-store'
 import type { SettlementSettings } from '#state/settlement-store'
 import { array, booleanValue, decode, numberValue, object, oneOf, optional, stringValue } from '@zoltar/bot-shared/dashboard/response-validation'
+import { isRecord } from '@zoltar/bot-shared/infrastructure/json-validation'
 
 export type DashboardDeployment = {
 	quorumRpcUrls: readonly string[]
@@ -49,12 +50,11 @@ export const isRuntimeLimits = object<StoredRuntimeLimits>({
 	riskLimits: object<StoredRuntimeLimits['riskLimits']>({ lifecycleGasReserveWeth: stringValue, maxConcurrentPositions: numberValue, maxDailyGasSpendWeth: stringValue, maxPositionNotionalWeth: stringValue, maxTotalLockedWeth: stringValue }),
 })
 const isExecutionMode = object<{ execute: boolean }>({ execute: booleanValue })
-const isRecordValue = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 const isConnectivity = object<ConnectivitySettings>({ publicRpcUrls: array(stringValue), readRpcUrl: stringValue })
 export const decodeSettings = (value: unknown) => decode(value, object<{ settings: StrategySettings }>({ settings: isStrategySettings }), 'strategy response')
 export const decodeSettlement = (value: unknown) => decode(value, object<{ settlement: SettlementSettings }>({ settlement: isSettlementSettings }), 'settlement response')
 export const decodeRuntimeLimits = (value: unknown) => decode(value, object<{ runtime: StoredRuntimeLimits }>({ runtime: isRuntimeLimits }), 'risk limit response')
-export const decodeCentralizedMarkets = (value: unknown) => decode(value, object<{ centralizedMarkets: Record<string, unknown> }>({ centralizedMarkets: isRecordValue }), 'market source response')
+export const decodeCentralizedMarkets = (value: unknown) => decode(value, object<{ centralizedMarkets: Record<string, unknown> }>({ centralizedMarkets: isRecord }), 'market source response')
 export const decodeExecution = (value: unknown) => decode(value, isExecutionMode, 'execution mode response')
 export const decodeSubmission = (value: unknown) => decode(value, object<{ submission: SubmissionSettings }>({ submission: isSubmissionSettings }), 'submission response')
 export const decodeDeployment = (value: unknown) => decode(value, object<{ deployment: DashboardDeployment }>({ deployment: isDeploymentSettings }), 'deployment response')

@@ -1,7 +1,7 @@
 import { endpointLabel } from '#monitoring/connectivity'
 import type { NetworkConfiguration } from '#config/network'
 import type { Chain, PublicClient, Transport } from '@zoltar/bot-shared/ethereum'
-import { errorMessage } from '@zoltar/bot-shared/infrastructure/error-message'
+import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
 import { availableSettledValues, quorumValue, settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
 import { ConnectivityDegradedError } from '@zoltar/bot-shared/monitoring/resilience'
 import type { RpcQuorumRequirement } from '@zoltar/bot-shared/monitoring/rpc-quorum-policy'
