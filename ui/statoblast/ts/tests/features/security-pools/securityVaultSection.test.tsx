@@ -479,13 +479,15 @@ describe('SecurityVaultSection', () => {
 		const openOracle = page.queryByRole('button', { name: 'Open price oracle' })
 		expect(openOracle !== null).toBe(!fresh)
 		if (openOracle !== null) {
-			expect(document.body.textContent).toContain('A new Open Oracle report is needed')
+			expect(document.body.textContent).toContain('A valid Open Oracle REP/ETH price is needed for commitment changes, vault REP withdrawals, liquidations, vault-funded reporting while commitments remain, and taking over unassigned commitments.')
+			expect(document.body.textContent).toContain('If the price is missing or expired and no report is pending')
 			fireEvent.click(openOracle)
 			expect(openedOracle).toBe(true)
 		}
 		fireEvent.click(page.getByRole('button', { name: 'Set commitment limit' }))
 		const dialog = page.getByRole('dialog', { name: 'Set commitment limit' })
 		const fields = [...dialog.querySelectorAll('input')]
+		if (!fresh) expect(dialog.textContent).toContain('A new Open Oracle report is needed to change the commitment limit.')
 		if (!fresh) expect(fields[0]?.getAttribute('id')).toBe(within(dialog).getByRole('textbox', { name: 'Open Oracle REP per ETH starting price' }).id)
 	})
 
