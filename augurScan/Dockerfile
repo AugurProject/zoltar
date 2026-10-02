@@ -63,6 +63,7 @@ COPY shared/core/package.json ./shared/core/
 COPY shared/statoblast/package.json ./shared/statoblast/
 COPY --from=dependencies /workspace/augurScan/node_modules ./augurScan/node_modules
 COPY --from=dependencies /workspace/shared/core/node_modules ./shared/core/node_modules
+COPY --from=dependencies /workspace/shared/statoblast/node_modules ./shared/statoblast/node_modules
 COPY augurScan/config ./augurScan/config
 COPY --from=metadata-build /workspace/augurScan/config ./augurScan/config
 COPY augurScan/schema.sql ./augurScan/schema.sql
