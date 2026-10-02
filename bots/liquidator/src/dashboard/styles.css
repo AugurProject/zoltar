@@ -71,11 +71,6 @@ textarea:focus-visible {
 	outline-offset: 2px;
 }
 
-.topbar {
-	display: block;
-	padding: 0.8rem clamp(1rem, 4vw, 3rem) 0;
-}
-
 h1,
 h2,
 p {
@@ -101,7 +96,6 @@ h2 {
 	text-transform: uppercase;
 }
 
-.topbar-actions,
 .section-heading,
 .form-actions {
 	display: flex;
@@ -281,13 +275,6 @@ section,
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.search {
-	display: grid;
-	gap: 0.25rem;
-	color: var(--muted);
-	font-size: 0.75rem;
-}
-
 input,
 select,
 textarea {
@@ -301,15 +288,10 @@ textarea {
 }
 
 textarea {
-	min-height: 20rem;
+	min-height: 7rem;
 	resize: vertical;
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	line-height: 1.45;
-}
-
-#network-form textarea,
-#submission-form textarea {
-	min-height: 7rem;
 }
 
 input[type="checkbox"] {
@@ -343,40 +325,9 @@ caption {
 	text-transform: uppercase;
 }
 
-.universe-shell td {
-	overflow-wrap: anywhere;
-}
-
 .source-shell td {
 	min-width: 0;
 	overflow-wrap: anywhere;
-}
-
-@media (min-width: 42.01rem) {
-	.universe-shell table {
-		table-layout: fixed;
-	}
-
-	.universe-shell th:nth-child(1) {
-		width: 8%;
-	}
-
-	.universe-shell th:nth-child(2) {
-		width: 30%;
-	}
-
-	.universe-shell th:nth-child(3) {
-		width: 18%;
-	}
-
-	.universe-shell th:nth-child(4) {
-		width: 12%;
-	}
-
-	.universe-shell th:nth-child(5),
-	.universe-shell th:nth-child(6) {
-		width: 16%;
-	}
 }
 
 th,
@@ -415,22 +366,6 @@ td small {
 	padding: 1.4rem;
 	color: var(--muted);
 	text-align: center;
-}
-
-.two-column {
-	display: grid;
-	grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
-	grid-template-rows: auto 1fr;
-	align-items: start;
-	gap: 1rem;
-}
-
-.two-column > * {
-	min-width: 0;
-}
-
-.two-column > :first-child {
-	grid-row: 1 / span 2;
 }
 
 .recovery-list {
@@ -502,10 +437,6 @@ td small {
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 	}
 
-	.two-column {
-		grid-template-columns: 1fr;
-	}
-
 	.operations-grid {
 		grid-template-columns: 1fr;
 	}
@@ -527,17 +458,8 @@ td small {
 		text-align: left;
 	}
 
-	.topbar-actions {
-		justify-content: flex-start;
-	}
-
 	#network-badge {
 		font-size: 0.68rem;
-	}
-
-	.topbar-actions .action-status {
-		flex-basis: 100%;
-		order: 1;
 	}
 
 	button.compact {
@@ -553,10 +475,6 @@ td small {
 	.settings-group,
 	#settings {
 		scroll-margin-top: 11.5rem;
-	}
-
-	.search {
-		width: 100%;
 	}
 
 	.table-shell {
@@ -801,4 +719,24 @@ body[data-page="pools"] #network-badge::before {
 	align-items: baseline;
 	gap: 6px;
 	font-size: 12px;
+}
+
+/* Market editor: each list or group heading sits on one row with its add or remove action. */
+.panel-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	margin: 1rem 0 0.75rem;
+}
+.panel-heading h3,
+.panel-heading h4 {
+	margin: 0;
+}
+
+.recovery-card a {
+	display: inline-block;
+	margin-bottom: 0.6rem;
+	font-size: 0.82rem;
 }

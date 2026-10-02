@@ -73,7 +73,7 @@ const PAUSE_UPDATE_MESSAGES = new Set([CHAIN_CONFIGURATION_REQUIRED, RESUME_REQU
 function publicPauseUpdateError(error: unknown) {
 	const message = errorMessage(error)
 	if (PAUSE_UPDATE_MESSAGES.has(message)) return message
-	return 'The bot run state could not be changed. Refresh current state and check protected bot logs.'
+	return 'The bot run state could not be changed. Wait for the next state update and check protected bot logs.'
 }
 
 const FORWARDED_EXECUTOR_DEPLOYMENT_MESSAGES = new Set<string>([CHAIN_CONFIGURATION_REQUIRED, ...Object.values(EXECUTOR_DEPLOYMENT_MESSAGES)])
@@ -89,6 +89,54 @@ function publicExecutorDeploymentError(error: unknown) {
 function publicFieldValidationError(error: unknown, prefix: string, fallback: string) {
 	const message = errorMessage(error)
 	return message.startsWith(prefix) ? message : fallback
+}
+
+const PROFILE_SWITCH_IN_PROGRESS = 'Chain profile switching is in progress; retry after the dashboard reconnects'
+
+/** Strategy validation names the offending field by its form label and its bounds, never a path, URL, or secret. */
+const STRATEGY_FIELD_MESSAGE = /^(?:Maximum spot\/TWAP ticks|Minimum return|Minimum profit|Minimum remaining blocks|Minimum remaining seconds|TWAP window) must [A-Za-z0-9 ,.-]+$/
+
+function publicStrategyUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (message === PROFILE_SWITCH_IN_PROGRESS || message === CHAIN_CONFIGURATION_REQUIRED || STRATEGY_FIELD_MESSAGE.test(message)) return message
+	return 'Strategy settings could not be saved. Review the submitted values and protected bot logs.'
+}
+
+const SIGNER_UPDATE_MESSAGES = new Set([CHAIN_CONFIGURATION_REQUIRED, PROFILE_SWITCH_IN_PROGRESS, 'Execution requires an active signer', 'Private key must be null or a 32-byte 0x-prefixed value'])
+
+/** Signer refusals name the operator step that unblocks them; the submitted key and everything else stay in protected logs. */
+function publicSignerUpdateError(error: unknown) {
+	const message = errorMessage(error)
+	if (message === 'Execution requires an active signer') return 'Live execution requires an active signer. Switch to dry run under Execution mode before removing it.'
+	if (SIGNER_UPDATE_MESSAGES.has(message)) return message
+	return 'Signer settings could not be changed. Review the submitted action and protected bot logs.'
+}
+
+const SUBMISSION_VALIDATION_MESSAGES = new Set([
+	CHAIN_CONFIGURATION_REQUIRED,
+	PROFILE_SWITCH_IN_PROGRESS,
+	'At most 8 relay URLs are supported',
+	'Invalid relay URL',
+	'Minimum bundle relay successes must be an integer between 1 and 8',
+	'Minimum bundle relay successes must be an integer between 1 and the configured private relay count',
+	'Private relay acceptance threshold requires distinct relay origins',
+	'Private submission requires at least one relay URL',
+	'Relay URL must use HTTPS or loopback HTTP',
+	'Relay URLs must not contain embedded credentials',
+	'Relay URLs must not contain fragments',
+	'Relay URLs must not contain query parameters',
+	'Relay URLs must not exceed 2048 characters',
+	'Submission mode must be public or private',
+])
+
+const PROFILE_SWITCH_MESSAGES = new Set([PROFILE_SWITCH_IN_PROGRESS, EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED, 'Chain profile must be mainnet or sepolia'])
+
+/** Profile switch refusals name the operator step that unblocks them; preflight RPC and file detail stays in protected logs. */
+function publicProfileSwitchError(error: unknown) {
+	const message = errorMessage(error)
+	if (message === EXECUTOR_DEPLOYMENT_RECOVERY_REQUIRED) return 'Recover the pending executor deployment under Settings › Venues and executor before switching chains.'
+	if (PROFILE_SWITCH_MESSAGES.has(message)) return message
+	return 'The chain profile could not be activated. Review protected bot logs.'
 }
 
 /** Market policy validation names the offending field of the operator's own document; anything else stays in protected logs. */
@@ -255,7 +303,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json({ settings: await controller.updateStrategy(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicDashboardError('arbitrager', error, 400, 'strategy-update', 'Strategy settings could not be saved. Review the submitted values and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'strategy-update', publicStrategyUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/settlement') {
@@ -304,7 +352,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json({ submission: await controller.updateSubmission(await boundedDashboardJson(request)) })
 				} catch (error) {
-					return publicDashboardError('arbitrager', error, 400, 'submission-update', publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the submitted values and protected bot logs.' }))
+					return publicDashboardError('arbitrager', error, 400, 'submission-update', publicConnectivityError(error, { fallback: 'Submission settings could not be saved. Review the submitted values and protected bot logs.', validationMessages: SUBMISSION_VALIDATION_MESSAGES }))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/connectivity') {
@@ -321,7 +369,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					if (controller.switchNetworkProfile === undefined) throw new Error('Chain profile switching is unavailable')
 					return closingJson(await controller.switchNetworkProfile(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicDashboardError('arbitrager', error, 400, 'network-profile-switch', 'The chain profile could not be activated. Review protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'network-profile-switch', publicProfileSwitchError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/deployment') {
@@ -380,7 +428,7 @@ export function startDashboardServer(port: number, controller: DashboardControll
 					await requireConfiguredChain(controller)
 					return json(await controller.updateSigner(await boundedDashboardJson(request)))
 				} catch (error) {
-					return publicDashboardError('arbitrager', error, 400, 'signer-update', 'Signer settings could not be changed. Review the submitted action and protected bot logs.')
+					return publicDashboardError('arbitrager', error, 400, 'signer-update', publicSignerUpdateError(error))
 				}
 			}
 			if (request.method === 'PUT' && url.pathname === '/api/paused') {

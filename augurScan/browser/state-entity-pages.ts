@@ -2,7 +2,7 @@ import { questionIdHex } from './identifier-format.ts'
 import { isRecord } from './api-validation.ts'
 import { semanticFields } from './semantic-evidence.ts'
 import type { EntityHistory, QuestionRecord, StateCatalog, StateEntity, StateTab, UniverseRecord } from './browser-types.ts'
-import { exactUnit } from './format.ts'
+import { exactUnit, utcDateTime } from './format.ts'
 import { short, shortIdentifier } from './identifier-format.ts'
 import { questionDateLabel, questionStatus } from './question-time.ts'
 import type { createStateComponents } from './state-components.ts'
@@ -89,7 +89,7 @@ export const renderQuestionDetailPage = async (deps: StateEntityDeps, question: 
 	definition.append(outcomes)
 	const timeline = element('div', 'timeline')
 	for (const [label, value] of [
-		['Created', `${new Date(question.created_timestamp).toLocaleDateString('en-GB', { timeZone: 'UTC' })} UTC`],
+		['Created', utcDateTime(question.created_timestamp)],
 		['Starts', questionDateLabel(question.start_time)],
 		['Ends', questionDateLabel(question.end_time)],
 	] as const)
@@ -191,7 +191,7 @@ export const renderUniverseDetailPage = async (deps: StateEntityDeps, universe: 
 		metricCard('Theoretical REP supply', exactUnit(universe.theoretical_supply_atto_rep, 18, 'REP')),
 		metricCard('Child universes', number(universe.child_count)),
 		metricCard('Security pools', number(universe.pool_count)),
-		metricCard('Fork time', universe.active_fork_time ? new Date(universe.active_fork_time).toLocaleDateString('en-GB') : 'Not forked'),
+		metricCard('Fork time', universe.active_fork_time ? utcDateTime(universe.active_fork_time) : 'Not forked'),
 	)
 	fragment.append(metrics)
 	fragment.append(

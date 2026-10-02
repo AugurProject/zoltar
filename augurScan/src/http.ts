@@ -137,6 +137,40 @@ type RequestTimeoutServer = {
 
 const STATIC_ASSET_CACHE_CONTROL = 'no-cache'
 
+export const SECURITY_HEADERS = {
+	'content-security-policy': "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+	'referrer-policy': 'no-referrer',
+	'x-content-type-options': 'nosniff',
+	'x-frame-options': 'DENY',
+}
+
+const STATIC_CONTENT_TYPES = new Map([
+	['.html', 'text/html; charset=utf-8'],
+	['.css', 'text/css; charset=utf-8'],
+	['.js', 'text/javascript; charset=utf-8'],
+	['.json', 'application/json; charset=utf-8'],
+	['.map', 'application/json; charset=utf-8'],
+	['.txt', 'text/plain; charset=utf-8'],
+	['.svg', 'image/svg+xml'],
+	['.png', 'image/png'],
+	['.ico', 'image/x-icon'],
+	['.woff2', 'font/woff2'],
+])
+
+/** Responses are served with nosniff, so an unknown extension must not be labelled as HTML. */
+export const staticContentType = (pathname: string): string => {
+	const extensionStart = pathname.lastIndexOf('.')
+	const extension = extensionStart < 0 ? '' : pathname.slice(extensionStart).toLowerCase()
+	return STATIC_CONTENT_TYPES.get(extension) ?? 'application/octet-stream'
+}
+
+export const withSecurityHeaders = (response: Response, securityHeaders: Readonly<Record<string, string>>): Response => {
+	for (const [name, value] of Object.entries(securityHeaders)) {
+		if (!response.headers.has(name)) response.headers.set(name, value)
+	}
+	return response
+}
+
 export const staticAssetResponse = (body: BodyInit, securityHeaders: Readonly<Record<string, string>>, contentType: string) => new Response(body, { headers: { ...securityHeaders, 'cache-control': STATIC_ASSET_CACHE_CONTROL, 'content-type': contentType } })
 
 export const indexerHealthUnavailableResponse = (ownership: readonly { readonly networkId: string }[]): Response => Response.json({ status: 'unknown', ownership }, { status: 503 })

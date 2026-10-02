@@ -40,8 +40,13 @@ registerProfileControls(context)
 registerUniverseForm(context)
 registerPauseControls(context)
 const sectionNavigation = createSectionNavigation(link => dashboardPaths.has(new URL(link.href).pathname))
-registerFocusedSettingsForms({ api, refresh, syncControls: controls.syncControls })
-// The universe explorer keeps its selection outside form controls, so its signature is the sorted selection.
+// Each focused save also refreshes the read-only operator file view, which would otherwise keep showing the file from before the save.
+const refreshAfterSave = async () => {
+	await refresh()
+	void configuration.refreshConfigurationView()
+}
+registerFocusedSettingsForms({ api, refresh: refreshAfterSave, syncControls: controls.syncControls })
+// The universe explorer is mounted outside the form, so the form's signature is the sorted selection alone.
 trackForm('tokens-form', { extra: () => [...state.approvedUniverseIds].sort().join(','), section: 'universes' })
 registerConnectivityForm(context)
 registerExecutorDeploymentForm(context)

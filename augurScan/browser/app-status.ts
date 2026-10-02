@@ -1,7 +1,7 @@
 import type { ScannerContext } from './app-context.ts'
 import { element, lookup } from './app-dom.ts'
 import type { ScannerState } from './app-state.ts'
-import { eventStreamState } from './app-presentation.ts'
+import { eventStreamState, setTextIfChanged } from './app-presentation.ts'
 import { indexerHeadFreshness } from './network-freshness.ts'
 import { networkIndicator } from './network-indicator.ts'
 
@@ -57,9 +57,19 @@ export const updateConnectionStatus = (context: ScannerContext): void => {
 		now: Date.now() + liveState.serverClockOffsetMs,
 		freshnessThresholdMs: liveState.networkFreshnessThresholdMs,
 	})
-	elements.connection.className = `connection ${status.tone}`
-	lookup('#connection-label').textContent = status.label
-	elements.connection.title = status.title
+	const className = `connection ${status.tone}`
+	if (elements.connection.className !== className) elements.connection.className = className
+	const label = lookup('#connection-label')
+	const statusNode = label.querySelector<HTMLElement>('.connection-status') ?? element('span', 'connection-status')
+	// The per-block number sits in a nested region that is not announced; only status changes reach the polite live region.
+	const blockNode = label.querySelector<HTMLElement>('.connection-block') ?? element('span', 'connection-block')
+	if (statusNode.parentElement !== label || blockNode.parentElement !== label) {
+		blockNode.setAttribute('aria-live', 'off')
+		label.replaceChildren(statusNode, blockNode)
+	}
+	setTextIfChanged(statusNode, status.statusLabel)
+	setTextIfChanged(blockNode, status.blockLabel)
+	if (elements.connection.title !== status.title) elements.connection.title = status.title
 }
 
 export const updateFreshness = (context: ScannerContext): void => {
@@ -69,8 +79,8 @@ export const updateFreshness = (context: ScannerContext): void => {
 	if (canonicalState.refreshRequired) {
 		const banner = lookup('#freshness-banner')
 		banner.hidden = false
-		lookup('#freshness-title').textContent = 'Chain update refresh incomplete'
-		lookup('#freshness-detail').textContent = 'A chain update was recorded, but the content refresh failed. Retrying automatically.'
+		setTextIfChanged(lookup('#freshness-title'), 'Chain update refresh incomplete')
+		setTextIfChanged(lookup('#freshness-detail'), 'A chain update was recorded, but the content refresh failed. Retrying automatically.')
 		return
 	}
 	if (liveState.awaitingResumedNetworkStatus) {
@@ -85,8 +95,8 @@ export const updateFreshness = (context: ScannerContext): void => {
 	if (staleHead !== undefined) {
 		const banner = lookup('#freshness-banner')
 		banner.hidden = false
-		lookup('#freshness-title').textContent = 'RPC chain head is stale'
-		lookup('#freshness-detail').textContent = `Newest observed block is ${context.age(staleHead.indexed_timestamp)}; block-based catch-up status may be misleading.`
+		setTextIfChanged(lookup('#freshness-title'), 'RPC chain head is stale')
+		setTextIfChanged(lookup('#freshness-detail'), `Newest observed block is ${context.age(staleHead.indexed_timestamp)}; block-based catch-up status may be misleading.`)
 		return
 	}
 	const stale = networkRenderState.latestNetworks.filter(network => String(network.chain_id) === context.selectedChainId()).filter(network => !network.last_success_at || Date.now() + liveState.serverClockOffsetMs - new Date(network.last_success_at).getTime() > liveState.networkFreshnessThresholdMs)
@@ -96,8 +106,8 @@ export const updateFreshness = (context: ScannerContext): void => {
 		return
 	}
 	banner.hidden = false
-	lookup('#freshness-title').textContent = 'Selected network is not updating'
-	lookup('#freshness-detail').textContent = 'Showing the last committed database state.'
+	setTextIfChanged(lookup('#freshness-title'), 'Selected network is not updating')
+	setTextIfChanged(lookup('#freshness-detail'), 'Showing the last committed database state.')
 }
 
 export const completeCanonicalRefresh = (context: ScannerContext, richList: { readonly items: readonly unknown[]; readonly total: number }): void => {

@@ -145,7 +145,9 @@ export function createHeaderView(state: DashboardState, elements: DashboardEleme
 	}
 
 	/** Marks the header disconnected after a failed state poll, keeping what the last snapshot showed. */
-	function renderDisconnected(snapshot: Snapshot | undefined) {
+	function renderDisconnected(snapshot: Snapshot | undefined, reason: 'incompatible' | 'unreachable' = 'unreachable') {
+		const message =
+			reason === 'incompatible' ? 'The bot answered with state this dashboard cannot read. Reload the page to load the dashboard version that matches the running bot; automatic retry stays active.' : 'State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.'
 		let lastKnownModeLabel: string | undefined
 		if (snapshot !== undefined) lastKnownModeLabel = snapshot.execute ? 'Live armed' : 'Dry run'
 		renderDisconnectedHeader({
@@ -159,7 +161,7 @@ export function createHeaderView(state: DashboardState, elements: DashboardEleme
 			retainedAttentionCount: snapshot === undefined ? 0 : Math.max(recoveryWorkCount(snapshot), snapshot.alerts.length),
 			runStatusBadge: elements.runStatusBadge,
 			runStatusBadgeClassName: 'badge warning',
-			showNotice: title => setGlobalError('State polling failed. Automatic retry is active; use the next successful poll before making an execution decision.', title),
+			showNotice: title => setGlobalError(message, title),
 		})
 	}
 

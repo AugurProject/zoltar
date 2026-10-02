@@ -1,4 +1,5 @@
 import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
+import { connectivityScope } from './configuration-draft-scope.ts'
 import type { Configuration } from './dashboard-data.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { operationIsIndependentlyExecutable } from './dashboard-format.ts'
@@ -38,7 +39,10 @@ function parseReserve(input: HTMLInputElement, name: string, requirement: 'live-
 export function registerSettingsForms({ state, elements, settingsDraft, put, refresh, reconcileUnknownMutation, renderConfiguration }: SettingsFormsContext) {
 	const { connectivityFields, discardConnectivityButton, saveConnectivityButton, connectivityStatus, readRpcUrlInput, quorumRpcUrlsInput, publicRpcUrlsInput, rpcQuorumInput } = elements
 	connectivityFields.addEventListener('input', () => {
-		if (!state.connectivityDraftDirty) state.connectivityDraftRevision = state.configuration?.revision
+		if (!state.connectivityDraftDirty) {
+			state.connectivityDraftRevision = state.configuration?.revision
+			state.connectivityDraftScope = state.configuration === undefined ? undefined : connectivityScope(state.configuration)
+		}
 		state.connectivityDraftDirty = true
 		discardConnectivityButton.disabled = false
 	})
@@ -47,6 +51,7 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 		state.connectivityDraftDirty = false
 		state.connectivityDraftConflict = false
 		state.connectivityDraftRevision = configuration?.revision
+		state.connectivityDraftScope = configuration === undefined ? undefined : connectivityScope(configuration)
 		readRpcUrlInput.value = configuration?.connectivity?.readRpcUrl ?? ''
 		quorumRpcUrlsInput.value = configuration?.connectivity?.quorumRpcUrls.join('\n') ?? ''
 		publicRpcUrlsInput.value = configuration?.connectivity?.publicRpcUrls.join('\n') ?? ''
@@ -108,7 +113,7 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 					saveConnectivityButton.disabled = true
 					discardConnectivityButton.disabled = false
 				} else if (error instanceof Error && error.name === 'ConfigurationRevisionConflict') {
-					connectivityStatus.textContent = 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.'
+					connectivityStatus.textContent = state.connectivityDraftConflict ? 'Configuration changed elsewhere. Discard this RPC draft and re-enter the complete replacement set before saving.' : 'Another setting was saved first; these RPC fields were not affected. Save again to apply this draft.'
 				} else connectivityStatus.textContent = error instanceof Error ? error.message : 'RPC settings could not be saved.'
 			} finally {
 				connectivityFields.disabled = !mutationReconciled || state.configurationCommitIndeterminate
@@ -183,7 +188,10 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 					},
 				}
 				const policyChanges = executionPolicyReviewRows(configuration, policyPatch)
-				if (policyChanges.length > 0 && !(await confirmOperatorAction({ title: 'Review execution policy', description: 'These limits and permissions apply before the next selection cycle.', changes: policyChanges, confirmLabel: 'Save policy' }))) return
+				if (policyChanges.length > 0 && !(await confirmOperatorAction({ title: 'Review execution policy', description: 'These limits and permissions apply before the next selection cycle.', changes: policyChanges, confirmLabel: 'Save policy' }))) {
+					settingsSaveStatus.textContent = 'Save cancelled. Your edits are still unsaved.'
+					return
+				}
 				await put('/api/settings', {
 					revision: state.settingsRevision,
 					patch: policyPatch,
@@ -206,6 +214,8 @@ export function registerSettingsForms({ state, elements, settingsDraft, put, ref
 					settingsDraft.conflict = true
 					saveSettingsButton.disabled = true
 					discardSettingsButton.disabled = false
+				} else if (error instanceof Error && error.name === 'ConfigurationRevisionConflict' && !settingsDraft.conflict) {
+					settingsSaveStatus.textContent = 'Another setting was saved first; these policy fields were not affected. Save again to apply this draft.'
 				} else settingsSaveStatus.textContent = error instanceof Error ? error.message : 'Settings could not be saved.'
 			} finally {
 				const latest = state.configuration

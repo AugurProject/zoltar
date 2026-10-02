@@ -12,6 +12,7 @@
 	<body>
 		<!-- operator-header -->
 		<main>
+			<div id="configuration-status" class="notice hidden" role="status"></div>
 
 			<section id="overview" data-page-content="overview" aria-labelledby="overview-title">
 				<div class="section-heading">
@@ -39,7 +40,6 @@
 			</section>
 
 			<section id="pools" data-page-content="pools" aria-label="Pools">
-				<div id="configuration-status" class="notice hidden" role="status"></div>
 				<div id="pool-browser"></div>
 			</section>
 
@@ -87,10 +87,10 @@
 							<p class="eyebrow">Durable transaction journal</p>
 							<h2 id="recovery-title">Transaction recovery</h2>
 						</div>
-						<button id="recheck-recovery" class="secondary compact" type="button">Recheck evidence</button>
+						<button id="recheck-recovery" class="secondary compact" type="button">Refresh</button>
 					</div>
 					<p id="recovery-guidance" class="muted">New execution remains blocked while an intent is ambiguous. Pause the bot before reconciling a finalized replacement or cancellation.</p>
-					<div id="recovery-list" class="recovery-list"><p class="empty">No pending transaction intents.</p></div>
+					<div id="recovery-list" class="recovery-list"><p class="empty">No pending recovery work.</p></div>
 				</section>
 				<section aria-labelledby="activity-title">
 					<div class="section-heading">
@@ -98,7 +98,7 @@
 							<p class="eyebrow">Latest decisions</p>
 						<h2 id="activity-title">Recent activity</h2>
 					</div>
-					<label>Filter <select id="activity-filter"><option value="all">All activity</option><option value="failed">Failures</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option></select></label>
+					<label>Filter <select id="activity-filter"><option value="all">All activity</option><option value="failed">Failures</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="reverted">Reverted</option><option value="dry-run">Dry run</option><option value="info">Information</option></select></label>
 					</div>
 					<ol id="activity-list" class="activity-list">
 						<li class="empty">No activity yet</li>

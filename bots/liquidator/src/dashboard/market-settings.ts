@@ -1,6 +1,8 @@
 import { confirmOperatorAction, reviewChangeRows } from '@zoltar/bot-shared/dashboard/confirmation'
+import { formIsSubmitting, setFormSubmitting } from '@zoltar/bot-shared/dashboard/form-state'
 import { type Configuration, decodeConfiguration, decodeMarketProbe } from './api-validation.ts'
 import type { MutationControls } from './dashboard-controls.ts'
+import type { ConfigurationSource } from './dashboard-configuration.ts'
 import type { DashboardElements } from './dashboard-elements.ts'
 import { actionStatus, put } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
@@ -12,7 +14,7 @@ type MarketSettingsContext = {
 	state: DashboardState
 	elements: DashboardElements
 	controls: MutationControls
-	populateConfiguration: (configuration: Configuration) => void
+	populateConfiguration: (configuration: Configuration, source?: ConfigurationSource) => void
 }
 
 /** Returns the market-source table to the configured source admission instead of the latest probe. */
@@ -31,11 +33,13 @@ export function clearMarketSourceProbe(state: DashboardState, elements: Dashboar
 
 /** Wires the market configuration form and the source probe, whose rows replace the configured admission until dismissed. */
 export function registerMarketSettings({ state, elements, controls, populateConfiguration }: MarketSettingsContext) {
-	const { marketConfigurationFields, marketConfigurationSaveStatus, marketSourceTestStatus, testMarketSourcesButton } = elements
+	const { marketConfigurationSaveStatus, marketSourceTestStatus, testMarketSourcesButton } = elements
 
 	elements.marketConfigurationForm.addEventListener('submit', async event => {
 		event.preventDefault()
-		marketConfigurationFields.disabled = true
+		if (formIsSubmitting('market-configuration-form')) return
+		// The submitting latch keeps the form locked across polls through the review and the request.
+		setFormSubmitting('market-configuration-form', true)
 		actionStatus(marketConfigurationSaveStatus, 'Validating…')
 		try {
 			const value = readMarketConfiguration()
@@ -51,20 +55,25 @@ export function registerMarketSettings({ state, elements, controls, populateConf
 				actionStatus(marketConfigurationSaveStatus, '')
 				return
 			}
+			actionStatus(marketConfigurationSaveStatus, 'Saving…')
 			const configuration = decodeConfiguration(await put('/api/market-configuration', value))
 			showConfiguredAdmission(state, elements)
 			actionStatus(marketSourceTestStatus, '')
-			populateConfiguration(configuration)
+			populateConfiguration(configuration, 'market-configuration-form')
 			actionStatus(marketConfigurationSaveStatus, 'Saved; changes apply on the next scan')
 		} catch (error) {
 			actionStatus(marketConfigurationSaveStatus, publicFailure(error, 'Could not save market configuration. Review the fields and retry.'), true)
 		} finally {
-			marketConfigurationFields.disabled = controls.chainSettingsLocked()
+			setFormSubmitting('market-configuration-form', false)
+			controls.syncControls()
 		}
 	})
 
 	testMarketSourcesButton.addEventListener('click', async () => {
+		if (state.marketSourceProbePending) return
 		const requestEpoch = state.profileRequestEpoch
+		// The pending latch keeps the button locked across polls so one click starts one probe.
+		state.marketSourceProbePending = true
 		testMarketSourcesButton.disabled = true
 		actionStatus(marketSourceTestStatus, 'Testing saved CEX and DEX sources…')
 		try {
@@ -88,7 +97,8 @@ export function registerMarketSettings({ state, elements, controls, populateConf
 			if (state.snapshot !== undefined) renderMarketSources(state.snapshot.marketSources)
 			actionStatus(marketSourceTestStatus, publicFailure(error, 'Could not test saved market sources. Check the bot logs and retry.'), true)
 		} finally {
-			testMarketSourcesButton.disabled = controls.chainSettingsLocked()
+			state.marketSourceProbePending = false
+			controls.syncControls()
 		}
 	})
 

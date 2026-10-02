@@ -1,3 +1,4 @@
+import { formatAtomicAmount } from '@zoltar/bot-shared/dashboard/amount'
 import { formatDate, fullIdentifier, node, transactionExplorerUrl } from './dom.js'
 import type { Obligation, OperationEvaluation, Snapshot } from './dashboard-data.ts'
 
@@ -75,14 +76,15 @@ export function formatClockDuration(totalSeconds: number) {
 	return hours > 0 ? `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}` : `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
 }
 
-export function formatRelative(value: string | undefined) {
+export function formatRelative(value: string | undefined, now = Date.now()) {
 	if (value === undefined) return 'Waiting for first scan'
 	const timestamp = new Date(value).getTime()
 	if (!Number.isFinite(timestamp)) return 'Scan time unavailable'
-	const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1_000))
+	const seconds = Math.max(0, Math.floor((now - timestamp) / 1_000))
 	if (seconds < 60) return `Scanned ${seconds.toString()}s ago`
 	if (seconds < 3_600) return `Scanned ${Math.floor(seconds / 60).toString()}m ago`
-	return `Scanned ${Math.floor(seconds / 3_600).toString()}h ago`
+	if (seconds < 86_400) return `Scanned ${Math.floor(seconds / 3_600).toString()}h ago`
+	return `Scanned ${Math.floor(seconds / 86_400).toString()}d ago`
 }
 
 export function obligationDetail(obligation: Obligation) {
@@ -96,4 +98,10 @@ export function obligationDetail(obligation: Obligation) {
 export function recoveryItemCount(value: Snapshot) {
 	const selectableContinuation = value.currentWorkflow?.classification === 'selectable' && value.currentWorkflow.status === 'waiting-continuation' ? 1 : 0
 	return value.pendingTransactions.length + value.obligations.length + selectableContinuation
+}
+
+/** The ETH a step sends, in ETH; a value the planner did not report as a base-unit integer is shown as it arrived. */
+export function stepValueLabel(value: string) {
+	const formatted = formatAtomicAmount(value, 'ETH')
+	return formatted === 'Unavailable' ? value : formatted
 }

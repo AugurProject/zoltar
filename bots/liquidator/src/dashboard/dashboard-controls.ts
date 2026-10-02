@@ -1,3 +1,4 @@
+import { formIsSubmitting } from '@zoltar/bot-shared/dashboard/form-state'
 import type { DashboardElements } from './dashboard-elements.ts'
 import type { DashboardState } from './dashboard-state.ts'
 import type { registerGoLiveForms } from './go-live-forms.ts'
@@ -40,12 +41,13 @@ export function createMutationControls({ state, elements, pools, goLiveForms }: 
 		const chainSettingsAvailable = configurationAvailable && state.pendingNetworkProfile === undefined && configuration?.networkConfigured === true
 		const resumeAvailable = configurationAvailable && state.pendingNetworkProfile === undefined && state.configurationConnected && configuration?.networkConfigured === true
 		renderPauseControls(resumeAvailable)
-		elements.networkFields.disabled = !configurationAvailable || state.pendingNetworkProfile !== undefined
-		elements.marketConfigurationFields.disabled = !chainSettingsAvailable
-		elements.strategyFields.disabled = !chainSettingsAvailable
+		// A save in flight keeps its fieldset locked regardless of the connection state so a poll cannot reopen it.
+		elements.networkFields.disabled = !configurationAvailable || state.pendingNetworkProfile !== undefined || formIsSubmitting('network-form')
+		elements.marketConfigurationFields.disabled = !chainSettingsAvailable || formIsSubmitting('market-configuration-form')
+		elements.strategyFields.disabled = !chainSettingsAvailable || formIsSubmitting('strategy-form')
 		// Execution mode is judged against the live snapshot, so it stays locked until one has arrived.
 		goLiveForms().setEnabled(chainSettingsAvailable, state.snapshot !== undefined)
-		elements.testMarketSourcesButton.disabled = !chainSettingsAvailable
+		elements.testMarketSourcesButton.disabled = !chainSettingsAvailable || state.marketSourceProbePending
 		elements.recheckRecovery.disabled = !chainSettingsAvailable
 		if (!chainSettingsAvailable) {
 			for (const control of document.querySelectorAll<HTMLInputElement | HTMLButtonElement>('#recovery-list input, #recovery-list button')) control.disabled = true

@@ -28,11 +28,15 @@ interface AddressProfileRouteDeps {
 	retryCanonicalViewOr: (fallback: () => Promise<boolean>) => Promise<boolean>
 }
 
+const addressProfileKey = (chainId: string, address: string): string => `${chainId}:${address.toLowerCase()}`
+
 export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 	const { renderAddressProfile, element, api, selectedChainId, requiredChainId, isDemo, canonicalState, errorMessage, retryCanonicalViewOr } = deps
 	const $ = deps.lookup
 	let version = 0
 	let currentAddressProfile: RichListRecord | undefined
+	let renderedProfileKey: string | undefined
+	let renderedProfileSignature: string | undefined
 	let currentAddressPortfolioDepths: { readonly chainId: string; readonly address: string; readonly forks: number; readonly lp: number; readonly reports: number } | undefined
 	const decodeOperationsResponse = decodeOperationsResponseValue
 	const loadAddressPortfolioSnapshot = async (address: string, targets: Readonly<Record<'forks' | 'lp' | 'reports', number>>): Promise<OperationsResponse> => {
@@ -77,7 +81,6 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		const canonicalGeneration = canonicalState.dataGeneration
 		const requestVersion = ++version
 		const content = $('#address-profile-content')
-		const hadProfile = content.querySelector<HTMLElement>('[data-live-key]') !== null
 		const requestedAddress = (location.pathname.startsWith('/address/') ? location.pathname.slice('/address/'.length) : deps.getPageUrl().searchParams.get('address'))?.toLowerCase()
 		const backParams = new URLSearchParams({ chainId: requiredChainId() })
 		if (isDemo) backParams.set('demo', '1')
@@ -88,10 +91,18 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 			return false
 		}
 		const address = requestedAddress
+		const profileKey = addressProfileKey(requiredChainId(), address)
+		// Only a profile rendered for this exact chain and address may stay visible while it refreshes.
+		const hadProfile = renderedProfileKey === profileKey && content.querySelector<HTMLElement>('[data-live-key]') !== null
+		if (!hadProfile) {
+			currentAddressProfile = undefined
+			renderedProfileKey = undefined
+			renderedProfileSignature = undefined
+		}
 		const presentation = refreshPresentation({ live })
 		content.setAttribute('aria-busy', String(presentation.busy))
 		if (presentation.loadingState) content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
-		if (presentation.loadingState && !hadProfile) content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
+		if (!hadProfile) content.replaceChildren(element('p', 'detail-status', 'Loading address activity…'), element('div', 'loading-line'))
 		try {
 			const retainedPortfolioDepths = currentAddressPortfolioDepths?.chainId === requiredChainId() && currentAddressPortfolioDepths.address === address ? currentAddressPortfolioDepths : { chainId: requiredChainId(), address, forks: 0, lp: 0, reports: 0 }
 			const portfolioTargets = {
@@ -131,7 +142,14 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 						vault_positions: [],
 						...portfolio.data,
 					}
-			renderAddressProfile(item, transactions.items, interactions.items, { live, portfolioFocusKind: portfolioTarget?.kind })
+			const signature = JSON.stringify([item, transactions.items, interactions.items])
+			if (live && hadProfile && portfolioTarget === undefined && signature === renderedProfileSignature) {
+				// An unchanged profile keeps its nodes so focus and open disclosures survive the refresh.
+				content.querySelector<HTMLElement>('.address-refresh-error')?.remove()
+				content.setAttribute('aria-busy', 'false')
+			} else renderAddressProfile(item, transactions.items, interactions.items, { live: live && hadProfile, portfolioFocusKind: portfolioTarget?.kind })
+			renderedProfileKey = profileKey
+			renderedProfileSignature = signature
 			currentAddressProfile = item
 			currentAddressPortfolioDepths = {
 				chainId: requiredChainId(),
@@ -181,6 +199,8 @@ export const createAddressProfileRoute = (deps: AddressProfileRouteDeps) => {
 		clear() {
 			currentAddressProfile = undefined
 			currentAddressPortfolioDepths = undefined
+			renderedProfileKey = undefined
+			renderedProfileSignature = undefined
 		},
 	}
 }

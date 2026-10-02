@@ -5,13 +5,15 @@ import { clearLiveTimers } from './app-state.ts'
 import { completeCanonicalRefresh, showCanonicalDialogStatus, syncCanonicalDialogStatus, updateConnectionStatus, updateFreshness } from './app-status.ts'
 import type { ScannerViews } from './app-views.ts'
 import type { DemoFactory } from './demo-runtime.ts'
-import { utcDateTime } from './format.ts'
+import { eventStreamState, tickRelativeTimes } from './app-presentation.ts'
 import { createLiveCoordinator } from './live-coordinator.ts'
+import { shouldPollRouteRefresh } from './live-refresh.ts'
 import { refreshRouteAlongsideNetworkStatus } from './network-freshness.ts'
 
 type DemoRuntime = ReturnType<DemoFactory>
 
 const suspendedTimersThresholdMs = 10_000
+const routePollIntervalMs = 12_000
 
 /** Connects the live event stream coordinator and publishes its refresh entry points through the context links. */
 export const createLiveUpdates = (context: ScannerContext, views: ScannerViews, demo: DemoRuntime | undefined) => {
@@ -81,6 +83,9 @@ export const bindLiveLifecycle = (context: ScannerContext, network: NetworkContr
 		liveState.stream?.close()
 		liveState.stream = undefined
 		liveState.streamHasOpened = false
+		if (liveState.streamReconnectTimer !== undefined) clearTimeout(liveState.streamReconnectTimer)
+		liveState.streamReconnectTimer = undefined
+		liveState.streamReconnectAttempts = 0
 		clearLiveTimers(context.state)
 	})
 
@@ -96,13 +101,15 @@ export const bindLiveLifecycle = (context: ScannerContext, network: NetworkContr
 		liveState.lastTimeTickAt = now
 		// A large gap between ticks means timers were suspended (system sleep with the tab visible); hidden tabs resume via visibilitychange instead.
 		if (!document.hidden && tickGapMs > suspendedTimersThresholdMs) void refreshResumedPage(context, network)
-		for (const node of document.querySelectorAll<HTMLElement>('[data-time]')) node.textContent = node.classList.contains('cell-time') ? `${utcDateTime(node.dataset['time'])} · ${context.age(node.dataset['time'])}` : context.age(node.dataset['time'])
+		if (!document.hidden) tickRelativeTimes(document, context.age)
 	}, 1000)
 
 	setInterval(() => {
 		if (document.hidden) return
-		void refreshRouteAlongsideNetworkStatus(network.loadNetworks, () => context.links.requestRouteRefresh(1))
-	}, 12_000)
+		// Block notifications already refresh the route while the stream is delivering them; the poll then only keeps network status current.
+		if (shouldPollRouteRefresh(eventStreamState(liveState.stream) === 'open', liveState.lastStreamRefreshAt, Date.now(), routePollIntervalMs)) void refreshRouteAlongsideNetworkStatus(network.loadNetworks, () => context.links.requestRouteRefresh(1))
+		else void network.loadNetworks()
+	}, routePollIntervalMs)
 
 	document.addEventListener('visibilitychange', () => {
 		if (!document.hidden) void refreshResumedPage(context, network)

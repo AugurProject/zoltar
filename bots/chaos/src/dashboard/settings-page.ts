@@ -166,7 +166,7 @@ function ChaosSettingsPage() {
 				h(
 					'form',
 					{ id: 'complete-configuration-form' },
-					h('button', { id: 'load-complete-configuration', class: 'button button-secondary', type: 'button' }, 'Discard changes'),
+					h('button', { id: 'load-complete-configuration', class: 'button button-secondary', type: 'button' }, 'Load configuration'),
 					h(
 						'fieldset',
 						{ id: 'complete-configuration-fields', disabled: true },

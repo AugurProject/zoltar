@@ -39,14 +39,46 @@ export async function requestJson(path: string, timeoutMilliseconds: number, ini
 	return value
 }
 
+let mutationsInFlight = 0
+let settledMutationCount = 0
+let mutationWaiters: (() => void)[] = []
+
+/**
+ * Resolves once none of this page's mutations is in flight. The server answers state and configuration reads only after
+ * its mutation queue drains, so a read sent during a long mutation would exceed the short read timeout and report a
+ * healthy bot as unavailable.
+ */
+export function mutationsSettled() {
+	if (mutationsInFlight === 0) return Promise.resolve()
+	return new Promise<void>(resolve => {
+		mutationWaiters.push(resolve)
+	})
+}
+
+/** Counts this page's settled mutations, so a refresh can tell that its read began before one of them finished. */
+export function settledMutations() {
+	return settledMutationCount
+}
+
 export async function put(path: string, value: unknown, timeoutMilliseconds = mutationRequestTimeoutMilliseconds) {
 	const body = JSON.stringify(value)
 	if (body === undefined) throw new Error('Dashboard mutation body is not serializable')
-	return await requestJson(path, timeoutMilliseconds, {
-		body,
-		headers: { 'content-type': 'application/json' },
-		method: 'PUT',
-	})
+	mutationsInFlight += 1
+	try {
+		return await requestJson(path, timeoutMilliseconds, {
+			body,
+			headers: { 'content-type': 'application/json' },
+			method: 'PUT',
+		})
+	} finally {
+		mutationsInFlight -= 1
+		settledMutationCount += 1
+		if (mutationsInFlight === 0) {
+			const waiters = mutationWaiters
+			mutationWaiters = []
+			for (const resolve of waiters) resolve()
+		}
+	}
 }
 
 export type DashboardPut = typeof put

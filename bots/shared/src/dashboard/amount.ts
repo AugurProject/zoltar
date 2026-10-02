@@ -2,13 +2,15 @@
 export function formatAmount(value: string | number | undefined, unit: string) {
 	if (value === undefined) return 'Unavailable'
 	if (typeof value === 'number' && (!Number.isFinite(value) || (Number.isInteger(value) && !Number.isSafeInteger(value)))) return 'Unavailable'
-	const raw = String(value)
+	const raw = Object.is(value, -0) ? '0' : String(value)
 	if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) return 'Unavailable'
 	const negative = raw.startsWith('-')
 	const unsigned = negative ? raw.slice(1) : raw
 	const [integer = '0', fractional = ''] = unsigned.split('.')
 	const fraction = fractional.replace(/0+$/, '')
-	const normalized = `${negative ? '-' : ''}${integer}${fraction === '' ? '' : `.${fraction}`}`
+	// A value that rounds away to nothing is plain zero, never `-0`.
+	const sign = negative && (integer !== '0' || fraction !== '') ? '-' : ''
+	const normalized = `${sign}${integer}${fraction === '' ? '' : `.${fraction}`}`
 	return `${normalized} ${unit}`
 }
 

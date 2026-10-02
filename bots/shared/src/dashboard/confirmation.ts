@@ -55,13 +55,18 @@ let active = false
 export function confirmOperatorAction(options: Confirmation): Promise<boolean> {
 	if (active) return Promise.resolve(false)
 	active = true
+	// Unmounting a modal dialog does not hand focus back, so the control that opened it is remembered and refocused.
+	const opener = document.activeElement
 	return new Promise(resolve => {
 		const mount = document.createElement('div')
 		document.body.append(mount)
 		function finish(confirmed: boolean) {
+			const dialog = mount.querySelector('dialog')
+			if (dialog?.open === true) dialog.close()
 			render(null, mount)
 			mount.remove()
 			active = false
+			if (opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true })
 			void resolve(confirmed)
 		}
 		function Dialog() {

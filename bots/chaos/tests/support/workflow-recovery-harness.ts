@@ -11,6 +11,8 @@ type WorkflowRecoveryDashboard = ReturnType<typeof startDashboardServer>
 /** Inputs the dashboard controller reads on every request and the mutations it records; the staged steps change them between checks. */
 export type WorkflowRecoveryFixture = {
 	configurationRevision: string
+	/** Extra saved public RPCs, so a step can change the saved endpoint set under an unsaved RPC draft. */
+	additionalPublicRpcUrls: string[]
 	readonly connectivityMutations: unknown[]
 	delayNextConnectivityMutation: boolean
 	executeMode: boolean
@@ -50,6 +52,7 @@ export function startWorkflowRecoveryDashboard(): WorkflowRecoveryServer {
 	const firstScenario = scenarios[0]
 	if (firstScenario === undefined) throw new Error('Recovery scenarios are required')
 	const fixture: WorkflowRecoveryFixture = {
+		additionalPublicRpcUrls: [],
 		configurationRevision: 'fixture-1',
 		connectivityMutations: [],
 		delayNextConnectivityMutation: true,
@@ -70,7 +73,7 @@ export function startWorkflowRecoveryDashboard(): WorkflowRecoveryServer {
 			revision: fixture.configurationRevision,
 			settings: {
 				connectivity: {
-					publicRpcUrls: [`https://submit.example/?token=${rpcSecret}`],
+					publicRpcUrls: [`https://submit.example/?token=${rpcSecret}`, ...fixture.additionalPublicRpcUrls],
 					quorumRpcUrls: ['https://read-two.example/?api_key=private', 'https://read-three.example/private'],
 					readRpcUrl: `https://operator:${rpcSecret}@read-one.example/private`,
 					rpcQuorum: 2,

@@ -22,3 +22,14 @@ export function markCurrentPage(link: Element, current: boolean) {
 	if (current) link.setAttribute('aria-current', 'page')
 	else link.removeAttribute('aria-current')
 }
+
+/**
+ * Height of the operator header while it is pinned to the viewport top, and zero while it scrolls with the page (as it
+ * does on narrow viewports). Scroll offsets must clear only chrome that actually covers the content.
+ */
+export function stickyShellHeight(root: Document) {
+	const shell = root.querySelector<HTMLElement>('.operator-shell')
+	if (shell === null) return 0
+	const position = root.defaultView?.getComputedStyle(shell).position
+	return position === 'sticky' || position === 'fixed' ? shell.getBoundingClientRect().height : 0
+}

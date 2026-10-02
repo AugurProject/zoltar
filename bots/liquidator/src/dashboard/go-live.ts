@@ -26,13 +26,13 @@ function readinessRows(snapshot: Snapshot, configuration: Configuration): Readin
 	let marketDetail = 'No market sources configured'
 	if (consensus !== undefined) marketDetail = consensus.reliable ? 'Reliable' : 'Guarded · unavailable'
 	return [
-		signerRow(snapshot.wallet),
+		signerRow(snapshot.wallet, 'Set one under Execution signer'),
 		networkRow(configuration),
 		quorumRpcRow(configuration.connectivity?.quorumRpcUrls.length ?? 0, configuration.connectivity?.rpcQuorum),
 		canonicalContractsRow(snapshot),
 		relayDeliveryRow(configuration.submission.mode, configuration.submission.relayUrls.length),
 		{ advisory: true, detail: `${snapshot.metrics.approvedUniverseCount.toString()} approved`, label: 'Approved universes', ready: snapshot.metrics.approvedUniverseCount > 0 },
-		{ advisory: true, detail: `${snapshot.metrics.selectedPoolCount.toString()} selected · ${snapshot.metrics.eligiblePoolCount.toString()} eligible`, label: 'Monitored pools', ready: snapshot.metrics.selectedPoolCount > 0 },
+		{ advisory: true, detail: `${snapshot.metrics.selectedPoolCount.toString()} supported · ${snapshot.metrics.eligiblePoolCount.toString()} eligible`, label: 'Supported pools', ready: snapshot.metrics.selectedPoolCount > 0 },
 		{ advisory: true, detail: marketDetail, label: 'Market evidence', ready: consensus?.reliable === true },
 	]
 }

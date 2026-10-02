@@ -12,7 +12,7 @@ export const operatorHeader = renderOperatorHeader({
 					<button id="pause-button" class="secondary" type="button">Pause</button>
 					<span id="pause-status" class="action-status" role="alert"></span>`,
 	notices: `<div id="global-error" class="notice error hidden" role="alert"></div>
-			<ul id="operator-alerts" class="operator-alerts hidden" aria-atomic="true" aria-label="Operator alerts" aria-live="assertive" role="alert"></ul>`,
+			<div aria-atomic="true" aria-live="assertive" role="alert"><ul id="operator-alerts" class="operator-alerts hidden" aria-label="Operator alerts"></ul></div>`,
 	navigation: `<a href="/overview">Overview</a>
 				<a href="/pools">Pool work</a>
 				<a href="/markets">Market evidence</a>

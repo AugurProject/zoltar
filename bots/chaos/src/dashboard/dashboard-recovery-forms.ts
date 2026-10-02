@@ -3,6 +3,7 @@ import type { RecoveryContextRefresh, RecoveryContexts } from './dashboard-recov
 import type { ReconcileUnknownMutation } from './dashboard-refresh.ts'
 import type { DashboardPut } from './dashboard-requests.ts'
 import type { DashboardState } from './dashboard-state.ts'
+import { setRecoveryFormSubmitting } from './recovery-form-lock.ts'
 import { registerWorkflowReconciliation } from './workflow-reconciliation.js'
 
 type RecoveryFormsContext = {
@@ -35,7 +36,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				replacementStatus.textContent = 'Enter a 32-byte transaction hash.'
 				return
 			}
-			replacementFields.disabled = true
+			setRecoveryFormSubmitting(replacementFields, true)
 			replacementStatus.textContent = 'Queuing verification…'
 			let mutationReconciled = true
 			try {
@@ -51,6 +52,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				mutationReconciled = !reconciliation.handled || reconciliation.reconciled
 				if (!reconciliation.handled) replacementStatus.textContent = error instanceof Error ? error.message : 'Could not queue replacement verification.'
 			} finally {
+				setRecoveryFormSubmitting(replacementFields, false)
 				const { snapshot } = state
 				replacementFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.pendingTransactions.length !== 1 || snapshot.pendingTransactions[0]?.cancellationHash !== undefined
 			}
@@ -80,7 +82,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				cancellationStatus.textContent = 'Enter a detailed audit reason (at least 12 characters).'
 				return
 			}
-			cancellationFields.disabled = true
+			setRecoveryFormSubmitting(cancellationFields, true)
 			cancellationStatus.textContent = 'Queuing verification…'
 			let mutationReconciled = true
 			try {
@@ -100,6 +102,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				mutationReconciled = !reconciliation.handled || reconciliation.reconciled
 				if (!reconciliation.handled) cancellationStatus.textContent = error instanceof Error ? error.message : 'Could not queue nonce cancellation verification.'
 			} finally {
+				setRecoveryFormSubmitting(cancellationFields, false)
 				const { snapshot } = state
 				cancellationFields.disabled = !mutationReconciled || snapshot?.paused !== true || snapshot.pendingTransactions.length !== 1 || snapshot.pendingTransactions[0]?.replacementHash !== undefined
 			}
@@ -125,7 +128,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				candidateStatus.textContent = 'Enter a detailed audit reason (at least 12 characters).'
 				return
 			}
-			candidateFields.disabled = true
+			setRecoveryFormSubmitting(candidateFields, true)
 			candidateStatus.textContent = 'Clearing candidate…'
 			let mutationReconciled = true
 			try {
@@ -144,6 +147,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				mutationReconciled = !reconciliation.handled || reconciliation.reconciled
 				if (!reconciliation.handled) candidateStatus.textContent = error instanceof Error ? error.message : 'Could not clear the recovery candidate.'
 			} finally {
+				setRecoveryFormSubmitting(candidateFields, false)
 				const { snapshot } = state
 				const candidate = snapshot?.pendingTransactions[0]?.replacementHash ?? snapshot?.pendingTransactions[0]?.cancellationHash
 				candidateFields.disabled = !mutationReconciled || snapshot?.paused !== true || candidate === undefined
@@ -195,7 +199,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				obligationStatus.textContent = 'Enter a detailed audit reason (at least 12 characters).'
 				return
 			}
-			obligationFields.disabled = true
+			setRecoveryFormSubmitting(obligationFields, true)
 			obligationStatus.textContent = 'Saving reconciliation…'
 			let mutationReconciled = true
 			try {
@@ -215,6 +219,7 @@ export function registerRecoveryForms({ state, elements, contexts, put, refresh,
 				mutationReconciled = !reconciliation.handled || reconciliation.reconciled
 				if (!reconciliation.handled) obligationStatus.textContent = error instanceof Error ? error.message : 'Lifecycle reconciliation failed.'
 			} finally {
+				setRecoveryFormSubmitting(obligationFields, false)
 				obligationFields.disabled = !mutationReconciled || state.snapshot?.paused !== true || (state.snapshot?.obligations.length ?? 0) === 0
 			}
 		})()

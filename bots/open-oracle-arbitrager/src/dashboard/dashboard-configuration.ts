@@ -1,4 +1,5 @@
 import { errorMessage } from '@zoltar/core-shared/errors/errorMessage'
+import { confirmOperatorAction } from '@zoltar/bot-shared/dashboard/confirmation'
 import { markFormClean } from '@zoltar/bot-shared/dashboard/form-state'
 import { CONFIGURATION_REQUEST_TIMEOUT_MS, requestWithTimeout, waitForProfileReconnect } from '@zoltar/bot-shared/dashboard/polling'
 import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
@@ -8,9 +9,9 @@ import type { DashboardElements } from './dashboard-elements.ts'
 import { configurationNetwork, isConfigurationEnvelope, persistedConnectivity } from './dashboard-format.ts'
 import { api } from './dashboard-requests.ts'
 import type { DashboardState, NetworkProfile } from './dashboard-state.ts'
-import { setText } from './dom.ts'
+import { element, setText } from './dom.ts'
 import { renderHealth } from './overview-panels.ts'
-import { applyQuorumRpcUrls, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, setLoadedRpcQuorum } from './settings-forms.ts'
+import { applyQuorumRpcUrls, dirtySettingsPanels, loadCentralizedMarkets, loadDeployment, loadExecutionMode, loadRuntimeLimits, loadSettings, loadSettlement, loadSubmission, setLoadedRpcQuorum } from './settings-forms.ts'
 import { renderSettingsInsights } from './settings-insights.ts'
 
 type ConfigurationContext = {
@@ -50,9 +51,11 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		if (focused === undefined) {
 			elements.readRpcUrl.value = ''
 			elements.publicRpcUrls.value = ''
+			state.savedConnectivity = undefined
 			controls.showPersistedNetwork(selectedNetwork)
 		} else {
 			loadConnectivity(focused.connectivity)
+			state.savedConnectivity = { ...focused.connectivity, quorumRpcUrls: focused.quorumRpcUrls, rpcQuorum: focused.rpcQuorum }
 			controls.showPersistedNetwork(focused.network)
 		}
 		state.connectivityLoaded = true
@@ -81,6 +84,7 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		loadDeployment(deployment, 'configuration')
 		state.deploymentLoaded = true
 		state.approvedUniverseIds = new Set(approvedUniverses)
+		state.savedUniverseIds = new Set(approvedUniverses)
 		state.tokensLoaded = true
 		markFormClean('tokens-form')
 		loadRuntimeLimits(runtime)
@@ -128,6 +132,32 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		}
 	}
 
+	/**
+	 * Refreshes only the read-only operator file view after a save, so the copy the operator takes from it is the file
+	 * the bot just wrote. The focused forms keep their values, including edits in other panels.
+	 */
+	async function refreshConfigurationView() {
+		if (state.configurationLoading || !state.configurationLoaded || state.pendingNetworkProfile !== undefined) return
+		const requestEpoch = state.profileRequestEpoch
+		// Looked up before the request so a response that outlives the page writes to a detached element instead of failing.
+		const status = element('configuration-status')
+		try {
+			const envelope = await requestWithTimeout(signal => api('/api/configuration', { signal }), CONFIGURATION_REQUEST_TIMEOUT_MS, 'Configuration request timed out.')
+			if (requestEpoch !== state.profileRequestEpoch || state.configurationLoading || !isConfigurationEnvelope(envelope)) return
+			elements.configurationJson.value = prettyJson(envelope.configuration)
+			status.textContent = ''
+		} catch (error) {
+			if (requestEpoch === state.profileRequestEpoch) status.textContent = `This view may be out of date: ${errorMessage(error)} Use Reload configuration to retry.`
+		}
+	}
+
+	/** Reloads every form from the operator file once the operator accepts losing the edits that reload would replace. */
+	async function reloadDiscardingEdits() {
+		const dirty = dirtySettingsPanels()
+		if (dirty.length !== 0 && !(await confirmOperatorAction({ title: 'Discard unsaved changes', description: `Reloading replaces every form with the saved operator file. Unsaved edits will be lost in: ${dirty.join(', ')}.`, confirmLabel: 'Discard and reload' }))) return
+		await loadCompleteConfiguration()
+	}
+
 	async function waitForNetworkProfile(network: NetworkProfile) {
 		const requestEpoch = state.profileRequestEpoch
 		await waitForProfileReconnect(
@@ -152,7 +182,7 @@ export function createConfigurationLoader({ state, elements, controls, refresh }
 		)
 	}
 
-	return { loadCompleteConfiguration, waitForNetworkProfile, loadConnectivity }
+	return { loadCompleteConfiguration, reloadDiscardingEdits, refreshConfigurationView, waitForNetworkProfile, loadConnectivity }
 }
 
 export type ConfigurationLoader = ReturnType<typeof createConfigurationLoader>

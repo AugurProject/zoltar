@@ -1,4 +1,5 @@
 import type { Snapshot } from './dashboard-data.ts'
+import { setRecoveryFormSubmitting } from './recovery-form-lock.ts'
 
 const WORKFLOW_CONFIRMATION = 'ABANDON PARTIAL WORKFLOW'
 
@@ -46,7 +47,7 @@ export function registerWorkflowReconciliation(options: Options) {
 				status.textContent = `Type ${WORKFLOW_CONFIRMATION} to confirm this action.`
 				return
 			}
-			fields.disabled = true
+			setRecoveryFormSubmitting(fields, true)
 			syncSubmit()
 			status.textContent = 'Saving reconciliation…'
 			let mutationReconciled = true
@@ -61,6 +62,7 @@ export function registerWorkflowReconciliation(options: Options) {
 				mutationReconciled = !reconciliation.handled || reconciliation.reconciled
 				if (!reconciliation.handled) status.textContent = error instanceof Error ? error.message : 'Partial workflow reconciliation failed.'
 			} finally {
+				setRecoveryFormSubmitting(fields, false)
 				const latest = getSnapshot()
 				fields.disabled = !mutationReconciled || latest?.paused !== true || latest.currentWorkflow?.status !== 'waiting-continuation'
 				syncSubmit()

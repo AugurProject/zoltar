@@ -54,7 +54,12 @@ const executionModeForm = registerExecutionModeForm({
 	refresh: () => controller.refresh(),
 	snapshot: () => state.snapshot,
 })
-const retirementDashboard = createRetirementDashboard({ current: () => state.snapshot, put: async value => await put('/api/retirement', value), refresh: async () => await controller.refresh() })
+const retirementDashboard = createRetirementDashboard({
+	current: () => state.snapshot,
+	put: async value => await put('/api/retirement', value),
+	reconcile: (error, status) => controller.reconcileUnknownMutation(error, status, 'state'),
+	refresh: async () => await controller.refresh(),
+})
 const selectionControls = createSelectionControls({
 	put,
 	refresh: () => controller.refresh(),
@@ -91,7 +96,11 @@ const controller = createDashboardRefresh({
 const { refresh, reconcileUnknownMutation, requestRecoveryContextRefresh } = controller
 const recoveryContexts = createRecoveryContexts(elements)
 
-registerSectionNavigation()
+registerSectionNavigation(() => {
+	// The alert actions and the complete-configuration loader depend on the page shown.
+	if (state.snapshot !== undefined) renderOperatorAlerts(elements.operatorAlerts, state.snapshot.alerts)
+	completeConfigurationForm.renderAvailability()
+})
 
 elements.rpcHealthRetryButton.addEventListener('click', () => void refresh())
 for (const context of recoveryContexts.all) context.retryButton.addEventListener('click', () => void requestRecoveryContextRefresh(context))
@@ -124,6 +133,9 @@ window.addEventListener('focus', () => void refresh())
 document.addEventListener('visibilitychange', () => {
 	if (document.visibilityState === 'visible') void refresh()
 })
-window.setInterval(settingsView.renderCountdown, 1_000)
+window.setInterval(() => {
+	settingsView.renderCountdown()
+	healthView.renderScanAge()
+}, 1_000)
 window.setInterval(() => void refresh(), stateRefreshMilliseconds)
 void refresh()

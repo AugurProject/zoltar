@@ -1,7 +1,31 @@
 import * as Plot from '@observablehq/plot'
 import type { ChartDefinition, ProtocolAddressLinkOptions } from './browser-types.ts'
 import { chartTokenValue, chartValueBounds } from './chart-values.ts'
-import { exactUnit } from './format.ts'
+import { exactUnit, utcDateTime } from './format.ts'
+
+// One colour per series position; the plotted line and its legend swatch both read this list.
+const chartSeriesColors = ['#56d7d0', '#f0b35d', '#a78bfa', '#34d399', '#fb7185', '#60a5fa', '#facc15', '#f472b6'] as const
+
+const chartSeriesColor = (index: number): string => chartSeriesColors[index % chartSeriesColors.length] ?? chartSeriesColors[0]
+
+const legendSwatch = (color: string): SVGSVGElement => {
+	const namespace = 'http://www.w3.org/2000/svg'
+	const swatch = document.createElementNS(namespace, 'svg')
+	swatch.setAttribute('class', 'chart-swatch')
+	swatch.setAttribute('width', '22')
+	swatch.setAttribute('height', '10')
+	swatch.setAttribute('viewBox', '0 0 22 10')
+	swatch.setAttribute('aria-hidden', 'true')
+	const line = document.createElementNS(namespace, 'line')
+	line.setAttribute('x1', '0')
+	line.setAttribute('y1', '5')
+	line.setAttribute('x2', '22')
+	line.setAttribute('y2', '5')
+	line.setAttribute('stroke', color)
+	line.setAttribute('stroke-width', '2')
+	swatch.append(line)
+	return swatch
+}
 
 export const createStateComponents = (element: <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => HTMLElementTagNameMap[K], protocolAddressLink: (address: string | null, options?: ProtocolAddressLinkOptions) => HTMLAnchorElement) => {
 	const staticField = (label: string, value: string | number | bigint | null | undefined) => {
@@ -18,7 +42,10 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 
 	const metricCard = (label: string, value: string, detail?: string) => {
 		const card = element('div', 'metric-card')
-		card.append(element('span', '', label), element('strong', '', value))
+		const figure = element('strong', '', value)
+		// Long exact values can be clipped by the card; the full value stays available on hover.
+		figure.title = value
+		card.append(element('span', '', label), figure)
 		if (detail !== undefined) card.append(element('small', '', detail))
 		return card
 	}
@@ -34,14 +61,14 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 		return numeric !== undefined && numeric !== null && String(numeric).trim() !== '' && Number.isFinite(Number(numeric))
 	}
 
-	const lineChart = <T extends { timestamp: string }>(rows: T[], definitions: ChartDefinition<T>[], { sharedRange, axisUnit = '', zeroBaseline = false }: { sharedRange?: readonly [number, number] | undefined; axisUnit?: string | undefined; zeroBaseline?: boolean } = {}) => {
-		const series = definitions.flatMap((definition, index) =>
+	const lineChart = <T extends { timestamp: string }>(rows: T[], definitions: ChartDefinition<T>[], colors: ReadonlyMap<string, string>, { sharedRange, axisUnit = '', zeroBaseline = false }: { sharedRange?: readonly [number, number] | undefined; axisUnit?: string | undefined; zeroBaseline?: boolean } = {}) => {
+		const series = definitions.flatMap(definition =>
 			rows.flatMap(row => {
 				const raw = row[definition.key]
 				if (!hasChartValue(raw)) return []
 				const value = chartTokenValue(chartNumericValue(raw), definition.decimals ?? 18)
 				const timestamp = chartTimestamp(row.timestamp)
-				return Number.isFinite(value) && timestamp > 0 ? [{ timestamp: new Date(timestamp), value, name: definition.label, color: index === 0 ? '#56d7d0' : '#f0b35d' }] : []
+				return Number.isFinite(value) && timestamp > 0 ? [{ timestamp: new Date(timestamp), value, name: definition.label }] : []
 			}),
 		)
 		const bounds = chartValueBounds(
@@ -57,9 +84,11 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			style: { background: 'transparent', color: '#a9bdc8' },
 			x: { type: 'utc', label: null, ticks: 5 },
 			y: { label: axisUnit || null, tickFormat: '.12~g', grid: true, domain: [bounds.minimum, bounds.maximum] },
-			color: { legend: definitions.length > 1 },
+			color: { domain: definitions.map(definition => definition.label), range: definitions.map((definition, index) => colors.get(definition.label) ?? chartSeriesColor(index)), legend: false },
 			marks: [Plot.lineY(series, { x: 'timestamp', y: 'value', stroke: 'name', tip: true }), Plot.dot(series, { x: 'timestamp', y: 'value', stroke: 'name', r: 2 })],
 		})
+		// Plot's injected stylesheet is blocked by the content security policy; the page stylesheet carries the same rules.
+		chart.querySelector('style')?.remove()
 		chart.setAttribute('role', 'img')
 		chart.setAttribute('aria-label', `${definitions.map(definition => definition.label).join(', ')} over time`)
 		chart.classList.add('time-chart')
@@ -90,13 +119,21 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 		const card = element('section', 'chart-card')
 		const heading = element('div', 'chart-heading')
 		heading.append(element('h4', '', title))
-		const legend = element('div', 'chart-legend')
-		for (const { label, className = '' } of [...definitions, ...legendItems]) {
-			const item = element('span')
-			item.append(element('i', className === '' ? '' : `chart-${className}`), document.createTextNode(label))
-			legend.append(item)
+		const colors = new Map(definitions.map((definition, index) => [definition.label, chartSeriesColor(index)]))
+		if (availableDefinitions.length > 0) {
+			const legend = element('div', 'chart-legend')
+			for (const [index, { label }] of definitions.entries()) {
+				const item = element('span')
+				item.append(legendSwatch(chartSeriesColor(index)), document.createTextNode(` ${label}`))
+				legend.append(item)
+			}
+			for (const { label, className = '' } of legendItems) {
+				const item = element('span')
+				item.append(element('i', className === '' ? '' : `chart-${className}`), document.createTextNode(label))
+				legend.append(item)
+			}
+			heading.append(legend)
 		}
-		if (availableDefinitions.length > 0) heading.append(legend)
 		card.append(heading)
 		if (rows.length === 0) card.append(element('p', 'data-note', emptyMessage))
 		else if (availableDefinitions.length === 0) card.append(element('p', 'data-note', 'Chart values are unavailable in these checkpoints.'))
@@ -116,10 +153,10 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			if (independentlyScaled) {
 				for (const definition of availableDefinitions) {
 					const series = element('section', 'chart-series')
-					series.append(element('h5', '', definition.label), lineChart(rows, [definition], { axisUnit: definition.unit, zeroBaseline }))
+					series.append(element('h5', '', definition.label), lineChart(rows, [definition], colors, { axisUnit: definition.unit, zeroBaseline }))
 					viewport.append(series)
 				}
-			} else viewport.append(lineChart(rows, availableDefinitions, { sharedRange, zeroBaseline, axisUnit: axisUnit ?? (new Set(availableDefinitions.map(definition => definition.unit)).size === 1 ? availableDefinitions[0]?.unit : undefined) }))
+			} else viewport.append(lineChart(rows, availableDefinitions, colors, { sharedRange, zeroBaseline, axisUnit: axisUnit ?? (new Set(availableDefinitions.map(definition => definition.unit)).size === 1 ? availableDefinitions[0]?.unit : undefined) }))
 			const dataDisclosure = document.createElement('details')
 			dataDisclosure.className = 'chart-data-disclosure'
 			dataDisclosure.append(element('summary', '', 'View exact chart data'))
@@ -134,7 +171,7 @@ export const createStateComponents = (element: <K extends keyof HTMLElementTagNa
 			const body = document.createElement('tbody')
 			for (const row of rows) {
 				const tableRow = document.createElement('tr')
-				const time = element('th', '', new Date(chartTimestamp(row.timestamp)).toLocaleString())
+				const time = element('th', '', utcDateTime(chartTimestamp(row.timestamp)))
 				time.setAttribute('scope', 'row')
 				tableRow.append(time)
 				for (const { key, decimals = 18, unit = '' } of definitions) {

@@ -19,6 +19,7 @@ body {
 
 #retirement-summary,
 #retirement-destination,
+#retirement-details,
 #retirement-residual-evidence {
 	overflow-wrap: anywhere;
 }
@@ -27,6 +28,18 @@ body {
 	display: none;
 }
 
+#retirement-details[hidden],
+#retirement-details [hidden] {
+	display: none;
+}
+
+#retirement-details h4 {
+	margin: 0.9rem 0 0;
+	font-size: 0.84rem;
+}
+
+#retirement-blockers,
+#retirement-positions,
 #retirement-residual-list {
 	display: grid;
 	gap: 0.45rem;
@@ -137,31 +150,6 @@ input[type="checkbox"] {
 	outline-offset: 2px;
 }
 
-.topbar {
-	padding: 1rem clamp(1rem, 4vw, 3rem) 0;
-	background: var(--operator-background);
-}
-
-.brand {
-	display: flex;
-	align-items: center;
-	gap: 0.85rem;
-}
-
-.brand-mark {
-	display: grid;
-	place-items: center;
-	width: 2.7rem;
-	height: 2.7rem;
-	border: 1px solid rgb(119 224 181 / 45%);
-	border-radius: 0.75rem;
-	background: linear-gradient(145deg, rgb(119 224 181 / 22%), rgb(49 189 137 / 4%));
-	color: var(--operator-accent);
-	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-	font-size: 1.2rem;
-	font-weight: 800;
-}
-
 h1,
 h2,
 h3,
@@ -208,10 +196,6 @@ h3 {
 
 .mono {
 	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.topbar-actions {
-	flex-wrap: wrap;
 }
 
 .action-status {
@@ -295,15 +279,6 @@ main {
 	justify-content: space-between;
 	gap: 2rem;
 	margin-bottom: 1.4rem;
-}
-
-.section-status {
-	text-align: right;
-}
-
-.section-status p {
-	margin-bottom: 0.2rem;
-	font-size: 0.78rem;
 }
 
 .overview-layout {
@@ -776,10 +751,6 @@ dd {
 	background: var(--operator-surface);
 }
 
-.table-scroll-hint {
-	display: none;
-}
-
 table {
 	width: 100%;
 	min-width: 72rem;
@@ -813,11 +784,6 @@ table {
 	width: 9%;
 }
 
-.table-shell th:nth-child(6),
-.table-shell td:nth-child(6) {
-	width: 31%;
-}
-
 .table-shell td,
 .table-shell .badge {
 	overflow-wrap: anywhere;
@@ -827,13 +793,6 @@ table {
 	max-width: 100%;
 	text-align: center;
 	white-space: normal;
-}
-
-caption {
-	padding: 0.9rem 1rem;
-	border-bottom: 1px solid var(--operator-border);
-	color: var(--operator-muted);
-	text-align: left;
 }
 
 th,
@@ -1254,19 +1213,7 @@ tbody tr:last-child td {
 	}
 }
 
-@media (max-width: 80rem) {
-	.table-scroll-hint {
-		display: block;
-		margin: 0 0 0.65rem;
-		font-size: 0.76rem;
-	}
-}
-
 @media (max-width: 48rem) {
-	.topbar {
-		position: relative;
-	}
-
 	.topology-panel {
 		scroll-margin-top: 0;
 	}
@@ -1276,10 +1223,6 @@ tbody tr:last-child td {
 		align-items: stretch;
 		flex-direction: column;
 		gap: 0.8rem;
-	}
-
-	.section-status {
-		text-align: left;
 	}
 
 	.ecosystem-grid {
@@ -1295,10 +1238,6 @@ tbody tr:last-child td {
 		flex: 1;
 	}
 
-	[data-page-content="catalog"] .table-scroll-hint {
-		display: none;
-	}
-
 	[data-page-content="catalog"] .table-shell {
 		overflow-x: visible;
 		border: 0;
@@ -1310,15 +1249,6 @@ tbody tr:last-child td {
 		width: 100%;
 		min-width: 0;
 		table-layout: auto;
-	}
-
-	[data-page-content="catalog"] .table-shell caption {
-		display: block;
-		width: 100%;
-		margin-bottom: 0.75rem;
-		border: 1px solid var(--operator-border);
-		border-radius: 0.65rem;
-		background: var(--operator-surface);
 	}
 
 	[data-page-content="catalog"] .table-shell thead {
@@ -1372,13 +1302,11 @@ tbody tr:last-child td {
 	}
 
 	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(1),
-	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5),
-	[data-page-content="catalog"] .catalog-operation-rows > tr > td.empty-state {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5) {
 		grid-column: 1 / -1;
 	}
 
-	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5),
-	[data-page-content="catalog"] .catalog-operation-rows > tr > td.empty-state {
+	[data-page-content="catalog"] .catalog-operation-rows > tr > td:nth-child(5) {
 		border-bottom: 0;
 	}
 
@@ -1399,10 +1327,6 @@ tbody tr:last-child td {
 }
 
 @media (max-width: 42rem) {
-	.topbar {
-		padding-inline: 0.85rem;
-	}
-
 	main {
 		padding: 1.35rem 0.85rem 4rem;
 	}

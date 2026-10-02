@@ -120,7 +120,7 @@ export type Snapshot = {
 	paused?: boolean | undefined
 	pendingTransactions: PendingTransaction[]
 	profileId?: string | undefined
-	retirement?: { blockers: unknown[]; finalSweepStartedAt?: string | undefined; positions: unknown[]; recipient?: string | undefined; requestedAt?: string | undefined; status?: string | undefined; updatedAt?: string | undefined } | undefined
+	retirement?: ReturnType<typeof parsePublicRetirement>
 	rpcHealth: RpcHealth
 	submissionHealth: SubmissionHealth
 	safetyPaused?: boolean | undefined
