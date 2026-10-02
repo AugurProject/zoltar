@@ -26,7 +26,7 @@ const tradingFactoryAbi = tradingContracts['contracts/trading/TwoWayConstantProd
 type PairDeployment = Readonly<{ securityPool: Address; shareToken: Address; universeId: bigint }>
 export type TradingPairIndex = SecurityPoolDeploymentIndex<PairDeployment, { blockNumber: bigint; blockHash: Hash }>
 
-export function createTradingPairIndex(): TradingPairIndex {
+function createTradingPairIndex(): TradingPairIndex {
 	return createSecurityPoolDeploymentIndex()
 }
 

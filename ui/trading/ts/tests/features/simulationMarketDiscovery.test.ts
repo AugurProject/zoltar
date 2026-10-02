@@ -5,7 +5,7 @@ import { installDomEnvironment } from '@zoltar/ui-core-shared/tests/testUtils/do
 import { renderIntoDocument } from '@zoltar/ui-core-shared/tests/testUtils/renderIntoDocument.js'
 import { waitFor } from '@zoltar/ui-core-shared/tests/testUtils/queries.js'
 import type { WalletSummaryState } from '../../lib/walletSummaryState.js'
-import { discoverAddressedMarket, discoverTradingMarketPage, createTradingPairIndex } from '../../protocol/marketDiscovery.js'
+import { discoverAddressedMarket, discoverTradingMarketPage, type TradingPairIndex } from '../../protocol/marketDiscovery.js'
 import { getAddress, type Address } from '@zoltar/core-shared/evm/ethereum'
 import { latestBlockIdentity } from '../../protocol/tradeQuote.js'
 import { liveTradingControllerServices } from '../../features/liveTradingControllerHelpers.js'
@@ -15,7 +15,7 @@ import { installActiveEnvironmentForTesting, resetActiveEnvironmentForTesting } 
 import { getInfraContractAddresses, PROXY_DEPLOYER_ADDRESS } from '@zoltar/ui-statoblast-shared/protocol/deploymentHelpers.js'
 import { activateSimulationBackendProfile, createBootstrappedSimulationBackendWithRetry, type SimulationBackend } from '@zoltar/ui-core-shared/tests/simulation/testUtils.js'
 import { deploymentConfigurationForPlan, getTradingDeploymentPlan } from '../../protocol/deployment.js'
-import { discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
+import { createSecurityPoolDeploymentIndex, discoverLiveUniverseMarketPage, loadLiveBalances, marketNewRiskBlocker } from '../../protocol/live.js'
 import { DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO } from '../../simulation/index.js'
 
 for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIMULATION_SCENARIO])
@@ -121,7 +121,7 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						await addressed.cleanup()
 					}
 				}
-				const pairIndex = createTradingPairIndex()
+				const pairIndex: TradingPairIndex = createSecurityPoolDeploymentIndex()
 				pairIndex.key = `${configuration.chainId}:${configuration.factory}:${configuration.rpcUrl}:0`
 				pairIndex.anchor = await latestBlockIdentity(client)
 				pairIndex.deployments = Array.from({ length: 1_001 }, (_value, i) => ({ securityPool: getAddress(`0x${(i + 100_000).toString(16).padStart(40, '0')}`), shareToken: addressedPool, universeId: 0n }))
@@ -157,13 +157,10 @@ for (const scenario of [DEPLOYED_TRADING_SIMULATION_SCENARIO, FUNDED_TRADING_SIM
 						await waitFor(() => expect(summary?.status).toBe('ready'), { timeout: 10_000 })
 						expect(rendered.container.textContent).not.toContain('Connect a wallet to load')
 						if (route !== 'portfolio') {
-							// Lookup routes are list-first: they show their workflow's candidates above the address lookup.
-							const listsSecurityPools = route === 'create-market'
-							const expectedMarkets = listsSecurityPools === (scenario === DEPLOYED_TRADING_SIMULATION_SCENARIO) ? 1 : 0
-							expect(rendered.container.querySelector(listsSecurityPools ? '.open-pool-form' : 'form.market-list-search')).not.toBeNull()
-							expect(rendered.container.querySelectorAll('.market-record')).toHaveLength(expectedMarkets)
-							expect(rendered.container.textContent).not.toContain('Pair not created')
-							expect(rendered.container.textContent).not.toContain('Conditional prices only')
+							// Fresh browser lists have no favorites; simulation registry seeding does not trigger scans.
+							expect(rendered.container.querySelector('form.market-list-search')).not.toBeNull()
+							expect(rendered.container.querySelectorAll('.market-record')).toHaveLength(0)
+							expect(rendered.container.querySelector('.discovery-control')).toBeNull()
 						}
 					} finally {
 						await rendered.cleanup()
