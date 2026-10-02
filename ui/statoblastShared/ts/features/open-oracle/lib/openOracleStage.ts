@@ -4,7 +4,6 @@ import { formatDuration } from '@zoltar/ui-core-shared/lib/formatters.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { LifecycleStagePresentation } from '@zoltar/ui-zoltar-shared/features/types.js'
-import * as openOracleCopy from '../../../copy/openOracle.js'
 import type { OpenOracleReportDetails } from '../../../types/contracts.js'
 
 type OpenOracleStageReport = Pick<OpenOracleReportDetails, 'currentBlockNumber' | 'currentTime' | 'disputeDelay' | 'reportTimestamp' | 'timeType'> & Partial<Pick<OpenOracleReportDetails, 'coordinatorPriceValidUntilTimestamp' | 'settlementTimestamp'>>

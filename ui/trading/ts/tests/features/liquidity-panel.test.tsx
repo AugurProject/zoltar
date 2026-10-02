@@ -147,16 +147,16 @@ describe('liquidity panel', () => {
 			await typeAmount('1')
 			const estimate = document.querySelector('section[aria-label="Liquidity estimate"]')
 			expect(estimate?.textContent).toContain('1 LP')
-			expect(estimate?.textContent).toContain('1 INVALID')
+			expect(estimate?.textContent).toContain('1 Invalid')
 			expect(estimate?.textContent).toContain('Connect a wallet for an exact quote.')
 			await act(() => operationButton('Remove').click())
 			await typeAmount('5')
 			const removal = document.querySelector('section[aria-label="Liquidity estimate"]')
-			expect(removal?.textContent).toContain('5 YES')
-			expect(removal?.textContent).toContain('5 NO')
+			expect(removal?.textContent).toContain('5 Yes')
+			expect(removal?.textContent).toContain('5 No')
 			expect(removal?.textContent).toContain('Worth about 5 ETH at the current pool price')
-			expect(document.body.textContent).toContain('Removing liquidity returns YES and NO shares to your wallet, not ETH. Next, sell them on the Trade tab')
-			expect(document.body.textContent).not.toContain('raw YES and NO')
+			expect(document.body.textContent).toContain('Removing liquidity returns Yes and No shares to your wallet, not ETH. Next, sell them on the Trade tab')
+			expect(document.body.textContent).not.toContain('raw Yes and No')
 		} finally {
 			await rendered.cleanup()
 		}
@@ -165,7 +165,7 @@ describe('liquidity panel', () => {
 	test('points a closed-market removal to complete-set redemption', async () => {
 		const rendered = await renderPanel(closedMarket, false)
 		try {
-			expect(document.body.textContent).toContain('redeem them with matching INVALID as complete sets on the Settlement tab')
+			expect(document.body.textContent).toContain('redeem them with matching Invalid shares as complete sets on the Settlement tab')
 		} finally {
 			await rendered.cleanup()
 		}

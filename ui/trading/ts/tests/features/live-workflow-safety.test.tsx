@@ -312,13 +312,13 @@ describe('live workflow safety boundary', () => {
 		deferSecondPortfolioBalance = true
 		await show('portfolio')
 		// Each pool's balance lands on its own: the first is listed while the deferred second is not yet shown as a holding.
-		await waitForDom(() => document.querySelector(`[data-portfolio-pool="${pool}"]`)?.textContent?.includes('1 YES') === true, 'first portfolio pool')
+		await waitForDom(() => document.querySelector(`[data-portfolio-pool="${pool}"]`)?.textContent?.includes('1 Yes') === true, 'first portfolio pool')
 		expect(document.querySelector(`[data-portfolio-pool="${secondPool}"]`)).toBeNull()
 		expect(document.querySelector('.portfolio-positions [role="status"]')?.textContent).toContain('Loading balances')
 		secondPortfolioBalance.resolve(undefined)
 		await waitForDom(() => document.querySelectorAll('[data-portfolio-pool]').length === 2, 'both portfolio pools')
-		expect(document.querySelector(`[data-portfolio-pool="${secondPool}"]`)?.textContent).toContain('4 YES')
-		expect(document.querySelector(`[data-portfolio-pool="${pool}"]`)?.textContent).toContain('1 YES')
+		expect(document.querySelector(`[data-portfolio-pool="${secondPool}"]`)?.textContent).toContain('4 Yes')
+		expect(document.querySelector(`[data-portfolio-pool="${pool}"]`)?.textContent).toContain('1 Yes')
 		childBalanceStarted = createDeferred<undefined>()
 		deferChildDiscovery = true
 		render(liveTradingView('portfolio', { selectedUniverseId: '2' }), rendered.container)

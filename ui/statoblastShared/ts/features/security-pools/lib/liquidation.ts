@@ -201,10 +201,10 @@ export function getVaultNotLiquidatableReason({
 	targetVaultSummary: SecurityPoolVaultSummary
 }) {
 	if (repPerEthPrice === undefined || statoblastSecurityMultiplierBps === undefined || repPerEthPrice <= 0n || statoblastSecurityMultiplierBps <= 0n) return undefined
-	const openInterestAttoEth = getVaultOpenInterestAttoEth(targetVaultSummary)
-	if (openInterestAttoEth === undefined) return undefined
-	if (openInterestAttoEth === 0n) return liquidationCopy.targetHasNoCommitmentReason
-	return getBadDebtReason(targetVaultSummary, undefined) ?? getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, openInterestAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary })
+	const underwritingLimitAttoEth = getVaultUnderwritingLimitAttoEth(targetVaultSummary)
+	if (underwritingLimitAttoEth === undefined) return undefined
+	if (underwritingLimitAttoEth === 0n) return liquidationCopy.targetHasNoCommitmentReason
+	return getBadDebtReason(targetVaultSummary, undefined) ?? getTargetLiquidatabilityReason({ minLiquidationPriceDistanceBps, underwritingLimitAttoEth, repPerEthPrice, statoblastSecurityMultiplierBps, targetVaultSummary })
 }
 
 export function getMaxLiquidationAmount({

@@ -612,7 +612,7 @@ describe('trading deployment setup', () => {
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('Deploy Trading factory')
+		await waitForText('Deploy TwoWayConstantProductFactory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
 		await waitForText(`The connected wallet must use ${core.chainName}.`)
@@ -645,7 +645,7 @@ describe('trading deployment setup', () => {
 		}
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('Deploy Trading factory')
+		await waitForText('Deploy TwoWayConstantProductFactory')
 		await connectDeploymentWallet(rendered.container)
 		await waitForConnectedWallet(rendered.container)
 		await waitFor(() => expect(rendered.container.querySelector<HTMLButtonElement>('.tx-action-button')?.disabled).toBe(false))
@@ -683,9 +683,9 @@ describe('trading deployment setup', () => {
 		const services: TradingDeploymentSetupServices = { createPublicClient: () => deploymentClient(), loadCoreDeployments: async () => [core] }
 		const rendered = await renderIntoDocument(<TradingDeploymentSetup onComplete={() => undefined} services={services} />)
 		cleanupRendered = rendered.cleanup
-		await waitForText('Deploy Trading factory')
+		await waitForText('Deploy TwoWayConstantProductFactory')
 		expect(rendered.container.textContent).toContain(`Deploying to${core.chainName}`)
-		expect(rendered.container.textContent).toContain('Deployment takes two wallet transactions: Trading factory, then Trading router.')
+		expect(rendered.container.textContent).toContain('Deployment takes two wallet transactions: TwoWayConstantProductFactory, then TwoWayConstantProductRouter.')
 		expect(rendered.container.textContent).not.toContain('has no core deployment')
 		await rendered.cleanup()
 		const otherCore = { ...core, chainId: 17_000, chainName: 'Holesky', id: 'holesky' }

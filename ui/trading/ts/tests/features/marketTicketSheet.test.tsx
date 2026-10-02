@@ -38,10 +38,10 @@ test('on narrow screens the ticket collapses to a bottom bar whose outcome butto
 		const panel = rendered.container.querySelector('.market-ticket__panel')
 		expect(panel?.hasAttribute('hidden')).toBe(true)
 		expect(panel?.getAttribute('role')).toBeNull()
-		expect(buttonNamed(rendered.container, 'Buy YES at a conditional 62%').textContent).toBe('Buy YES 62%')
+		expect(buttonNamed(rendered.container, 'Buy Yes at a conditional 62%').textContent).toBe('Buy Yes 62%')
 		// Without a holding the bar offers only the two buys.
 		expect(rendered.container.querySelectorAll('.market-ticket-bar button')).toHaveLength(2)
-		await act(() => buttonNamed(rendered.container, 'Buy NO at a conditional 38%').click())
+		await act(() => buttonNamed(rendered.container, 'Buy No at a conditional 38%').click())
 		expect(picks).toEqual([{ mode: 'entry', side: 'NO' }])
 		expect(panel?.hasAttribute('hidden')).toBe(false)
 		expect(panel?.getAttribute('role')).toBe('dialog')
@@ -99,8 +99,8 @@ test('a holder gets a Sell entry in the bottom bar that opens the ticket on the 
 	const picks: TicketSelection[] = []
 	const rendered = await renderSheet(picks, false, { sellSide: 'NO' })
 	try {
-		expect(Array.from(rendered.container.querySelectorAll('.market-ticket-bar button')).map(button => button.textContent)).toEqual(['Buy YES 62%', 'Buy NO 38%', 'Sell NO'])
-		await act(() => buttonNamed(rendered.container, 'Sell NO').click())
+		expect(Array.from(rendered.container.querySelectorAll('.market-ticket-bar button')).map(button => button.textContent)).toEqual(['Buy Yes 62%', 'Buy No 38%', 'Sell No'])
+		await act(() => buttonNamed(rendered.container, 'Sell No').click())
 		expect(picks).toEqual([{ mode: 'exit', side: 'NO' }])
 		expect(rendered.container.querySelector('.market-ticket__panel')?.getAttribute('role')).toBe('dialog')
 	} finally {
@@ -114,13 +114,13 @@ test('the collapsed bar keeps a running transaction in view and reopens the tick
 	const dom = installDomEnvironment()
 	const restoreViewport = stubViewport(true)
 	const picks: TicketSelection[] = []
-	const rendered = await renderSheet(picks, false, { activity: { text: 'Waiting for Buy YES to confirm…', settled: false } })
+	const rendered = await renderSheet(picks, false, { activity: { text: 'Waiting for Buy Yes to confirm…', settled: false } })
 	try {
 		const bar = rendered.container.querySelector('.market-ticket-bar')
-		expect(bar?.querySelector('[role="status"]')?.textContent).toBe('Waiting for Buy YES to confirm…')
+		expect(bar?.querySelector('[role="status"]')?.textContent).toBe('Waiting for Buy Yes to confirm…')
 		// The buys are replaced by the progress while the market's transaction runs.
-		expect(Array.from(bar?.querySelectorAll('button') ?? []).map(button => button.textContent)).toEqual(['Waiting for Buy YES to confirm…'])
-		await act(() => buttonNamed(rendered.container, 'Waiting for Buy YES to confirm…').click())
+		expect(Array.from(bar?.querySelectorAll('button') ?? []).map(button => button.textContent)).toEqual(['Waiting for Buy Yes to confirm…'])
+		await act(() => buttonNamed(rendered.container, 'Waiting for Buy Yes to confirm…').click())
 		expect(picks).toEqual([])
 		expect(rendered.container.querySelector('.market-ticket__panel')?.getAttribute('role')).toBe('dialog')
 	} finally {
@@ -133,11 +133,11 @@ test('the collapsed bar keeps a running transaction in view and reopens the tick
 test('a settled result stays in the collapsed bar until the sheet is opened on it', async () => {
 	const dom = installDomEnvironment()
 	const restoreViewport = stubViewport(true)
-	const rendered = await renderSheet([], false, { activity: { text: 'Buy YES confirmed', settled: true } })
+	const rendered = await renderSheet([], false, { activity: { text: 'Buy Yes confirmed', settled: true } })
 	try {
-		await act(() => buttonNamed(rendered.container, 'Buy YES confirmed').click())
+		await act(() => buttonNamed(rendered.container, 'Buy Yes confirmed').click())
 		await act(() => buttonNamed(rendered.container, 'Close ticket').click())
-		expect(Array.from(rendered.container.querySelectorAll('.market-ticket-bar button')).map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Buy YES at a conditional 62%', 'Buy NO at a conditional 38%'])
+		expect(Array.from(rendered.container.querySelectorAll('.market-ticket-bar button')).map(button => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Buy Yes at a conditional 62%', 'Buy No at a conditional 38%'])
 	} finally {
 		await rendered.cleanup()
 		restoreViewport()

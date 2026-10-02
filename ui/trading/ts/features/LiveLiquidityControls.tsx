@@ -182,16 +182,16 @@ function LiquidityPreviewSection({ preview, market, estimated, busy, blockNumber
 					<p className='detail'>{liquidityCopy.youReceive}</p>
 					{preview.operation === 'remove' ? (
 						<ul className='portfolio-holdings'>
-							<li className='portfolio-holding-yes'>{formatOutcomeQuantity(preview.yesOut, liquidityCopy.yes)}</li>
-							<li className='portfolio-holding-no'>{formatOutcomeQuantity(preview.noOut, liquidityCopy.no)}</li>
+							<li className='portfolio-holding-yes'>{formatOutcomeQuantity(preview.yesOut, shareOutcome.yes)}</li>
+							<li className='portfolio-holding-no'>{formatOutcomeQuantity(preview.noOut, shareOutcome.no)}</li>
 						</ul>
 					) : (
 						<>
 							<strong className='decision-amount'>{formatLpQuantity(preview.liquidity)}</strong>
 							<ul className='portfolio-holdings'>
-								<li>{formatOutcomeQuantity(preview.invalidReturned, liquidityCopy.invalid)}</li>
-								{preview.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeQuantity(preview.yesReturned, liquidityCopy.yes)}</li>}
-								{preview.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeQuantity(preview.noReturned, liquidityCopy.no)}</li>}
+								<li>{formatOutcomeQuantity(preview.invalidReturned, shareOutcome.invalid)}</li>
+								{preview.yesReturned === 0n ? undefined : <li className='portfolio-holding-yes'>{formatOutcomeQuantity(preview.yesReturned, shareOutcome.yes)}</li>}
+								{preview.noReturned === 0n ? undefined : <li className='portfolio-holding-no'>{formatOutcomeQuantity(preview.noReturned, shareOutcome.no)}</li>}
 							</ul>
 						</>
 					)}
@@ -205,7 +205,7 @@ function LiquidityPreviewSection({ preview, market, estimated, busy, blockNumber
 							<>
 								<MetricField label={liquidityCopy.completeSetSharesCreated}>{formatCompleteSetQuantity(preview.completeSets)}</MetricField>
 								<MetricField label={liquidityCopy.sharesDeposited}>
-									{formatOutcomeQuantity(preview.yesUsed, liquidityCopy.yes)} / {formatOutcomeQuantity(preview.noUsed, liquidityCopy.no)}
+									{formatOutcomeQuantity(preview.yesUsed, shareOutcome.yes)} / {formatOutcomeQuantity(preview.noUsed, shareOutcome.no)}
 								</MetricField>
 							</>
 						)}

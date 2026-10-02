@@ -1,7 +1,7 @@
 import { tryGetSecurityPoolSystemState } from '@zoltar/ui-core-shared/lib/contractEnums.js'
 import { liveCopy } from '../copy/live.js'
 import * as outcomeCopy from '../copy/outcomes.js'
-import { resolvedShareOutcome, type ShareOutcome } from '../protocol/settlement.js'
+import { resolvedShareOutcome } from '../protocol/settlement.js'
 
 /** Contract question outcome index 3 is the unresolved sentinel; anything else outside the reported range is unexpected. */
 export function questionOutcomeLabel(questionOutcome: number) {

@@ -105,7 +105,7 @@ describe('settlement panel', () => {
 			expect(Array.from(document.querySelectorAll('button')).some(button => button.textContent?.trim() === 'Max')).toBe(false)
 			const redeem = buttonByLabel('Redeem complete sets')
 			expect(redeem.disabled).toBe(true)
-			expect(describedText(redeem)).toContain('You hold no complete sets. Redeeming needs equal INVALID, YES, and NO.')
+			expect(describedText(redeem)).toContain('You hold no complete sets. Redeeming needs equal Invalid, Yes, and No shares.')
 		} finally {
 			await rendered.cleanup()
 		}

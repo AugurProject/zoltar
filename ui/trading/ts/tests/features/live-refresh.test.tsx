@@ -484,7 +484,7 @@ describe('live market refresh', () => {
 		const expectedCompleteSets = largestExitForLongShares({ ...discoveredMarket, longOutcome: 'YES', longShares: 5n * 10n ** 17n })
 		// The chain prices this exit well above the estimate, so the submission stops before the wallet opens.
 		const discoveriesBeforeSubmit = discoveries
-		await act(async () => buttonByLabel('Sell YES').click())
+		await act(async () => buttonByLabel('Sell Yes').click())
 		await waitForDom(() => document.querySelector('[role="tabpanel"] .notice.warning') !== null, 'price-moved notice')
 		expect(exitRequests).toEqual([expectedCompleteSets])
 		// A re-quote is a prompt to review, not a failure.
@@ -683,11 +683,11 @@ describe('live market refresh', () => {
 			Reflect.set(window, 'matchMedia', originalMatchMedia)
 		}
 		await waitForDom(() => document.querySelector('.outcome-picker') !== null, 'trade ticket')
-		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('NO')
+		expect(document.querySelector('.outcome-picker button[aria-pressed="true"]')?.textContent).toBe('No')
 		expect(document.querySelector('.trade-ticket-switchers .view-tabs:not(.outcome-picker) button[aria-pressed="true"]')?.textContent).toBe('Sell')
 		// The selection stays in the hash, so a refresh restores it.
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-no`)
-		await act(async () => buttonByLabel('YES').click())
+		await act(async () => buttonByLabel('Yes').click())
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1&ticket=sell-yes`)
 		await act(async () => buttonByLabel('Buy').click())
 		expect(window.location.hash).toBe(`#/market/${pool}?simulate=1`)
