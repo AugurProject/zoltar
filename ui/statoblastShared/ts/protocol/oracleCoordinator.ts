@@ -390,9 +390,9 @@ export async function fundCoordinatorInitialReport(client: WriteClient, managerA
 		{ token: fundingRequirement.reputationTokenAddress, required: expectedRep, limit: fundingRequirement.initialReportAmount2 },
 	]) {
 		actions.push({
-			step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit] },
+			step: { functionName: 'approve', contractAddress: funding.token, args: [managerAddress, funding.limit], ...(extra.repAttoRep > 0n ? { approvalPurpose: 'Oracle report' } : {}) },
 			isRequired: async () => (await client.readContract({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, managerAddress] })) < funding.required,
-			execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, funding.limit] })),
+			execute: async () => await writeContractAndWait(client, () => ({ address: funding.token, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [managerAddress, funding.limit], ...(extra.repAttoRep > 0n ? { approvalPurpose: 'Oracle report' } : {}) })),
 		})
 	}
 	await runFundingTransactions(client, actions, {

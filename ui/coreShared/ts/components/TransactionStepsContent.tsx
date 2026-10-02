@@ -151,6 +151,7 @@ function TransactionStepsActions({ cancelable = true, contextKey, includeWrapAct
 									<div key={index} className={`transaction-plan-action${step.approval === undefined || final ? ' transaction-plan-action-wide' : ''}${final ? ' transaction-plan-action-final' : ''}`} {...(active && pending ? { ref: pendingActionRef, tabIndex: -1 } : {})}>
 										{step.approval !== undefined ? (
 											<TokenApprovalControl
+												approvalPurpose={step.approval.purpose}
 												compact
 												completedLabel={completedLabel}
 												showRequirementNotice={false}

@@ -4,7 +4,7 @@ export const transactionErrorMessages = {
 	fullGasLimit: 'Transaction failed after using its full gas limit. Open the transaction details before retrying.',
 	canceledOrReplaced: 'Transaction canceled or replaced.',
 	confirmationUnavailable: 'Could not confirm the transaction. Check its status before retrying.',
-	insufficientApproval: 'Approval confirmed, but it is below the report requirement. Review funding again to approve the required total before continuing.',
+	insufficientApproval: 'Approval confirmed, but it is below the required amount. Review funding again to approve the required total before continuing.',
 	reviewCanceled: 'Remaining transactions canceled. Transactions already sent are unchanged.',
 	walletRejected: 'Action canceled in wallet.',
 }

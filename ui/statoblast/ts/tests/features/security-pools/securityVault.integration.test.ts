@@ -1,3 +1,5 @@
+import { createReviewedClient } from '@zoltar/ui-statoblast-shared/protocol/reviewedClient.js'
+import { transactionSteps } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { submitVaultOperations } from '@zoltar/ui-statoblast-shared/protocol/vaultOperations.js'
 import { statoblast_SecurityPool_SecurityPool, statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator } from '@zoltar/ui-statoblast-shared/contractArtifact.js'
 import { handleOracleReporting, manipulatePriceOracle } from '../../../../../../solidity/ts/testSupport/simulator/utils/contracts/statoblastTestUtils'
@@ -80,6 +82,60 @@ describe('Security vault integration', () => {
 		expect((await loadQueuedVaultOperationState(uiReadClient, manager, result)).status).toBe('executed')
 		expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.underwritingLimitAttoEth).toBe(50n * 10n ** 18n)
 	})
+
+	for (const fresh of [true, false]) {
+		for (const sufficient of [true, false]) {
+			test(`edits the pool deposit approval and guards the batch (fresh=${fresh}, sufficient=${sufficient})`, async () => {
+				const manager = await uiReadClient.readContract({ address: securityPoolAddress, abi: statoblast_SecurityPool_SecurityPool.abi, functionName: 'openOraclePriceCoordinator' })
+				if (fresh) await manipulatePriceOracle(client, mockWindow, manager)
+				const scope = new AbortController()
+				const reviewed = createReviewedClient(uiWriteClient, undefined, scope.signal)
+				const action = submitVaultOperations(reviewed, securityPoolAddress, { depositAttoRep: depositAmount, changeCommitment: true, commitmentAttoEth: 50n * 10n ** 18n, liquidations: [], withdrawAttoRep: 0n, minimumReceiverHealthFactorBps: 10_000n, validForSeconds: 300n }, 10n ** 18n).catch((error: unknown) => error)
+				try {
+					for (let attempt = 0; attempt < 200 && transactionSteps.value?.steps[0]?.phase !== 'review'; attempt += 1) await new Promise(resolve => setTimeout(resolve, 10))
+					const approval = transactionSteps.value?.steps[0]
+					expect(approval?.spender).toBe(securityPoolAddress)
+					expect(approval?.approval?.requiredAmount).toBe(depositAmount)
+					expect(approval?.approval?.tokenSymbol).toBe('REP')
+					expect(approval?.approval?.purpose).toBe('Vault deposit')
+					if (!fresh) expect(transactionSteps.value?.steps.filter(step => step.spender === manager && step.approval !== undefined).every(step => step.approval?.purpose === 'Oracle report')).toBe(true)
+					transactionSteps.value?.confirmStep(0, sufficient ? 2n * depositAmount : depositAmount / 2n)
+					if (!sufficient) {
+						const rejection = await action
+						expect(rejection).toBeInstanceOf(Error)
+						if (!(rejection instanceof Error)) throw new Error('Expected insufficient approval failure')
+						expect(rejection.message).toContain('below the required amount')
+						const vault = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+						if (vault === undefined) throw new Error('Expected empty vault')
+						expect(await loadErc20Allowance(uiReadClient, vault.repToken, walletAddress, securityPoolAddress)).toBe(depositAmount / 2n)
+						expect((await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress))?.vaultAttoRepBacking).toBe(0n)
+						expect((await loadOracleManagerDetails(uiReadClient, manager)).pendingReportId).toBe(0n)
+						return
+					}
+					let completed = false
+					void action.then(() => {
+						completed = true
+					})
+					for (let attempt = 0; attempt < 1000 && !completed; attempt += 1) {
+						const workflow = transactionSteps.value
+						const index = workflow?.steps.findIndex(step => step.phase === 'review')
+						if (index !== undefined && index >= 0) workflow?.confirmStep(index)
+						await new Promise(resolve => setTimeout(resolve, 10))
+					}
+					const result = await action
+					expect(result).not.toBeInstanceOf(Error)
+					const details = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)
+					expect(details?.vaultAttoRepBacking).toBe(depositAmount)
+					if (details === undefined) throw new Error('Expected deposited vault')
+					expect(await loadErc20Allowance(uiReadClient, details.repToken, walletAddress, securityPoolAddress)).toBe(depositAmount)
+				} finally {
+					scope.abort()
+					transactionSteps.value?.cancel()
+					await action
+				}
+			})
+		}
+	}
 
 	test('approves and deposits REP into the selected vault and reports REP units correctly', async () => {
 		const initialVaultDetails = await loadSecurityVaultDetails(uiReadClient, securityPoolAddress, walletAddress)

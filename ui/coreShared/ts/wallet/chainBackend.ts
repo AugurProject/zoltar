@@ -37,6 +37,9 @@ export type TransactionPlanStep = Pick<TransactionRequestPreview, 'functionName'
 	Partial<TransactionRequestPreview> & {
 		/** Token funding can belong to a coordinator called by a separate execution contract. */
 		fundingSpender?: Address
+		/** Minimum allowance for an approval prerequisite outside oracle report funding. */
+		requiredApprovalAmount?: bigint
+		approvalPurpose?: string
 		validateBeforeSubmit?: () => Promise<void>
 		refreshFundingRequirements?: () => Promise<TransactionPlanStep['tokenFunding']>
 		optional?: boolean

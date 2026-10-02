@@ -11,7 +11,7 @@ import { humanizeTransactionAction } from '@zoltar/ui-core-shared/transactions/t
 import { createTransactionStepController, type TransactionStepDetails } from '@zoltar/ui-core-shared/transactions/transactionSteps.js'
 import { createTransactionFailure, createTransactionFailureError } from '@zoltar/ui-core-shared/transactions/transactionLifecycle.js'
 
-async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
+async function describeTransaction(client: WriteClient, preview: TransactionRequestPreview & Pick<TransactionPlanStep, 'optional' | 'tokenFunding' | 'oracleOutcome' | 'approvalPurpose'>, requiredApprovalAmount?: bigint): Promise<TransactionStepDetails> {
 	const action = transactionCopy.reviewedActions[preview.functionName]
 	const details: TransactionStepDetails = {
 		proposedRepPerEthPrice: preview.functionName === 'requestPrice' && typeof preview.args?.[0] === 'bigint' ? preview.args[0] : undefined,
@@ -66,7 +66,7 @@ async function describeTransaction(client: WriteClient, preview: TransactionRequ
 		details.amount = formatValueWithUnit(formatApprovalAmount(amount), symbol)
 		if (requiredApprovalAmount !== undefined) {
 			const approvedAmount = await client.readContract({ address: preview.contractAddress, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, details.spender] })
-			details.approval = { requiredAmount: requiredApprovalAmount, recommendedAmount: amount > requiredApprovalAmount ? amount : undefined, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
+			details.approval = { purpose: preview.approvalPurpose, requiredAmount: requiredApprovalAmount, recommendedAmount: amount > requiredApprovalAmount ? amount : undefined, approvedAmount, tokenSymbol: symbol, tokenUnits: Number(decimals) }
 			details.amount = formatValueWithUnit(formatApprovalAmount(requiredApprovalAmount), symbol)
 		}
 	} catch (error) {
@@ -96,7 +96,7 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 						describeTransaction(
 							client,
 							{ account: client.account, args: undefined, chainName: client.chain.name, value: undefined, ...step },
-							plan?.find(candidate => candidate.tokenFunding !== undefined && (candidate.fundingSpender ?? candidate.contractAddress) === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
+							step.requiredApprovalAmount ?? plan?.find(candidate => candidate.tokenFunding !== undefined && (candidate.fundingSpender ?? candidate.contractAddress) === step.args?.[0])?.tokenFunding?.find(funding => funding.tokenAddress === step.contractAddress)?.amount,
 						),
 					),
 				),
@@ -131,10 +131,12 @@ export function createReviewedClient(client: WriteClient, validate: () => Promis
 				const [spender] = transaction.args ?? []
 				if (transaction.functionName !== 'approve' || typeof spender !== 'string' || selectedAmount < 0n || selectedAmount > maxUint256) throw new Error('Invalid token approval selection.')
 				approvalArgs = [getAddress(spender), selectedAmount]
-				const requiredAmount = plan
-					?.filter(step => (step.fundingSpender ?? step.contractAddress) === spender)
-					.flatMap(step => step.tokenFunding ?? [])
-					.find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
+				const requiredAmount =
+					expected.requiredApprovalAmount ??
+					plan
+						?.filter(step => (step.fundingSpender ?? step.contractAddress) === spender)
+						.flatMap(step => step.tokenFunding ?? [])
+						.find(funding => funding.tokenAddress === transaction.contractAddress)?.amount
 				partialApproval = requiredAmount !== undefined && selectedAmount < requiredAmount
 				transaction = { ...transaction, args: approvalArgs, data: encodeFunctionData({ abi: ABIS.mainnet.erc20, functionName: 'approve', args: approvalArgs }) }
 			}

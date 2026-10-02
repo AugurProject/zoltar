@@ -62,7 +62,7 @@ export async function submitVaultOperations(client: WriteClient, pool: Address, 
 			? []
 			: [
 					{
-						step: { functionName: 'approve', contractAddress: initial.repToken, args: [pool, input.depositAttoRep] },
+						step: { functionName: 'approve', contractAddress: initial.repToken, args: [pool, input.depositAttoRep], requiredApprovalAmount: input.depositAttoRep, approvalPurpose: 'Vault deposit' },
 						isRequired: async () => (await client.readContract({ address: initial.repToken, abi: ABIS.mainnet.erc20, functionName: 'allowance', args: [client.account.address, pool] })) < input.depositAttoRep,
 						execute: async () => await writeContractAndWait(client, () => ({ address: initial.repToken, abi: ABIS.mainnet.erc20, functionName: 'approve', args: [pool, input.depositAttoRep] })),
 					},
