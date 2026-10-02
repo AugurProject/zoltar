@@ -53,7 +53,7 @@ dispute while preserving the wallet as the replacement reporter. After the dispu
 window, the bot settles the final report, withdraws the position's exact OpenOracle
 balances, and closes its durable position record only after canonical receipts and
 exact asset recovery pass the finality policy through 12 canonical descendants. By
-default the primary reader is sufficient. When the saved `rpcQuorum` setting is `2`,
+default the primary reader is sufficient. When the saved `connectivity.rpcQuorum` setting is `2`,
 at least two readers must be available and every available reader must agree. If a later reporter replaces
 the bot, it derives the exact one-token credit from the authenticated old and new
 report amounts, withdraws only that amount through a parent-bound executor call,
@@ -110,7 +110,7 @@ for the report lifecycle assumptions and economics used by the arbitrager.
   are deployed. Coordinators and REP tokens come
   from the canonical pool and universe registries, subject to universe approval.
 - One primary read RPC. Optional independent quorum RPCs add corroboration; when
-  the saved `rpcQuorum` setting is `2`, configure two or more in addition to the primary. Only a retryable transport failure
+  the saved `connectivity.rpcQuorum` setting is `2`, configure two or more `connectivity.quorumRpcUrls` in addition to the primary. Only a retryable transport failure
   makes a reader unavailable. Live execution requires the configured number of responses, and every responding reader must
   agree exactly. Under the opt-in two-reader policy, one transport-unavailable reader is reported as degraded without
   stopping an otherwise healthy quorum; a malformed or contradictory response is a
@@ -157,7 +157,7 @@ bun install --frozen-lockfile
 ```
 
 Copy the paused example and run the executable with no arguments. On first start,
-save the chain and RPC endpoints through **Chain and RPC endpoints** in the dashboard;
+save the chain and RPC endpoints through **Chain and RPC connectivity** in the dashboard;
 then work down the Settings steps (Connect, Markets, Trading policy, Go live) before
 enabling execution:
 
@@ -215,14 +215,15 @@ port binding. Keep `ZOLTAR_BOT_DASHBOARD_LOOPBACK_PUBLISHED` paired with that
 
 The saved RPC agreement requirement defaults to `1`, so the primary read RPC is
 sufficient and independent quorum RPCs are optional. To require two agreeing readers,
-select **2 · require two agreeing independent RPCs** in **Chain and RPC endpoints**
+select **2 · require two agreeing independent RPCs** in **Chain and RPC connectivity**
 and enter two independent quorum RPC URLs in the same form so one endpoint may be
 unavailable. The saved agreement requirement and endpoint set apply automatically at
-the next scan boundary. `ZOLTAR_BOT_RPC_QUORUM` only supplies the migration default for
-a configuration file that has no saved policy; values other than `1` or `2` stop that
-migration.
+the next scan boundary. `ZOLTAR_BOT_RPC_QUORUM` (`1` or `2`, default `1`) supplies the
+agreement requirement whenever a profile omits `connectivity.rpcQuorum`, including an
+unconfigured profile; a saved `connectivity.rpcQuorum` takes precedence, and any other
+value stops settings parsing.
 
-In **Chain and RPC endpoints**, select the chain, enter its read, public, and quorum RPC
+In **Chain and RPC connectivity**, select the chain, enter its read, public, and quorum RPC
 URLs, and save so every endpoint is checked against that chain. The Settings page is
 grouped into setup steps with a jump bar: **1 · Connect** (chain and RPCs), **2 ·
 Markets** (approved universes, venues and the executor, REP market sources), **3 ·
@@ -283,7 +284,7 @@ at the newest agreed head. With no new head the bot remains **Running** without
 re-evaluating or writing duplicate price samples.
 
 Coordinator-free diagnostic mode is an explicitly bounded fallback. Set
-`runtime.lookbackBlocks` to `0` to disable event discovery, or from `1` through
+`runtime.logLookbackBlocks` to `0` to disable event discovery, or from `1` through
 `256` to inspect that many latest blocks. It starts with the newest block and never
 walks back toward genesis. The bounded response prevents permissionless event
 volume from producing an unbounded RPC request.
@@ -304,12 +305,12 @@ are no longer pending are removed from the live cache; confirmed bot transaction
 history remains in the execution history file. In coordinator-free diagnostic mode,
 the startup lookback backfills report events but not historical pool prices. At most
 256 reports and 64 permissionlessly observed tokens are retained so event spam
-cannot create ever-growing per-block work. Increase `runtime.lookbackBlocks` only
+cannot create ever-growing per-block work. Increase `runtime.logLookbackBlocks` only
 when broader diagnostic event history is operationally important.
 
 ## Run on Sepolia
 
-Choose Sepolia in **Chain and RPC endpoints**. The bot saves the current chain
+Choose Sepolia in **Chain and RPC connectivity**. The bot saves the current chain
 profile, pauses at a safe scan boundary, releases its current chain locks, and loads
 the selected profile without exiting the process or restarting the container. The
 browser reconnects automatically.
@@ -348,7 +349,11 @@ URLs:
 PRIVATE_KEY=0xYourLocalDevelopmentKey ETH_RPC_URL=http://localhost:8545 bun run deploy-executor -- --network=sepolia
 ```
 
-When the saved `rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
+Without `--rpc-url` or `ETH_RPC_URL`, the command reads from the shared chain default:
+`https://ethereum.dark.florist` on mainnet and `https://ethereum-sepolia-rpc.publicnode.com`
+on Sepolia, the same defaults the protocol UIs use.
+
+When the saved `connectivity.rpcQuorum` setting is `2`, the three read RPCs must use independent origins. Before broadcasting, the command
 requires exact quorum agreement on chain, proxy and destination code, pending nonce,
 gas estimate, and gas price, then syncs the signed intent beside the active operator
 configuration as `<operator-config>.<network>.executor-deployment.json`. Each chain's
@@ -726,27 +731,38 @@ it does not override any value inside the document. Its chain profiles use the
 `<operator-config>.mainnet.profile` and `<operator-config>.sepolia.profile` sibling
 paths. This locator is useful for service managers and tests. Select the chain and
 enter the read and public RPC URLs in **Chain and RPC
-endpoints**. Every endpoint is checked against the selected chain before it is
+connectivity**. Every endpoint is checked against the selected chain before it is
 saved. Initial chain selection applies immediately, while quorum and RPC changes
 apply at the next scan boundary. To operate another chain, select its saved chain
 profile in the dashboard. Configure the reader set required
-by the saved RPC agreement requirement in the same form before enabling execution. The default policy uses the primary reader alone. Independent quorum
+by the saved RPC agreement requirement in the same **Chain and RPC connectivity** form
+(`connectivity.quorumRpcUrls`) before enabling execution. The default policy uses the primary reader alone. Independent quorum
 readers are required only when the saved requirement is `2`.
 
 Direct file editing is an offline workflow: stop the bot, edit the configuration,
 and restart it. While the bot is running, use the dashboard only; do not edit the
 file concurrently with a dashboard save.
 
-Save changes in the dashboard's focused forms. They cover chain connectivity
-with the quorum RPC URLs, approved universes, venues, the
-REP market source policy, strategy, risk limits and event lookback, third-party
-settlement, the signer, submission, and execution mode. Each form's save button stays
-disabled until an edit differs from the loaded values, an **Unsaved changes** badge
-marks edited panels, and a **Queued · next scan** badge marks sections the bot has
-saved but not yet applied at a scan boundary. The read-only **Complete configuration**
-view shows the current file for copying, including the process-fixed runtime fields
-(paths, dashboard bind, and `once`), which cannot change while the bot runs. A saved
-private key appears as `__PRESERVE_SAVED_PRIVATE_KEY__`, never as key material.
+Save changes in the dashboard's focused forms, which write the versioned file, now
+`version: 5`. They cover chain connectivity with the quorum RPC URLs, approved
+universes, venues, the REP market source policy, strategy, the risk limits and scanning
+form (risk limits, event lookback, polling), third-party settlement, the signer,
+submission, and execution mode. Each form's save button stays disabled until an edit
+differs from the loaded values, an **Unsaved changes** badge marks edited panels, and a
+**Queued · next scan** badge marks sections the bot has saved but not yet applied at a
+scan boundary. The read-only **Complete configuration** view shows the current file for
+copying, including the process-fixed runtime fields (paths, dashboard bind, and
+`once`), which cannot change while the bot runs. A saved private key appears as
+`__PRESERVE_SAVED_PRIVATE_KEY__`, never as key material.
+
+A saved `version: 4` file still loads: its top-level `rpcQuorum` and
+`deployment.quorumRpcUrls` move into `connectivity`, `strategy.pollMilliseconds`
+becomes `runtime.pollMilliseconds`, the string `runtime.lookbackBlocks` becomes the
+number `runtime.logLookbackBlocks`, and the string basis points
+`runtime.maxHedgeSlippageBps` and `strategy.minimumProfitBps` become numbers. An
+unconfigured version 4 profile drops its quorum RPCs and policy, because it has no
+`connectivity` to hold them. The next successful settings save or chain profile switch
+writes version 5.
 
 The containing directory is created with owner-only permissions when possible, and
 every replacement configuration file is mode `0600`. File contents and the containing
@@ -925,7 +941,7 @@ signed maximum WETH input. For a sell, `zeroForOne = false`: the requested exact
 token input and returned token delta are negative, while the native output delta is
 positive and cannot fall below the signed minimum WETH output.
 
-When the saved `rpcQuorum` setting is `2`, at least two available read RPCs must return the
+When the saved `connectivity.rpcQuorum` setting is `2`, at least two available read RPCs must return the
 same quote at the exact quorum block, and every available response must agree. The executor
 calls the authenticated PoolManager directly, requires those signed deltas to match
 the requested input or output, settles only those deltas, and converts native ETH
@@ -1102,7 +1118,8 @@ scan. The same values live under `strategy` in the complete configuration:
 | TWAP window | `1800 seconds` | `twapSeconds` | Controls the V3 manipulation-resistance window. Minimum: 60 seconds. |
 | Remaining time | `36 seconds` | `minimumRemainingSeconds` | Inclusion buffer for timestamp-based games. |
 | Remaining blocks | `3 blocks` | `minimumRemainingBlocks` | Inclusion buffer for block-based games. |
-| Poll interval | `1000 ms` | `pollMilliseconds` | Longest idle wait between scans when no new head arrives; outside failure backoff a new block wakes the scan immediately. Also the centralized-exchange sampling cadence. Coordinator-free diagnostic mode queries every unseen event-log height. |
+
+`minimumProfitBps` is a JSON number, like every setting whose name ends in `Bps`.
 
 Increasing profit thresholds reduces execution frequency. Increasing the TWAP
 window or remaining-time buffers is generally more conservative, while decreasing
@@ -1113,8 +1130,14 @@ quote-refresh, simulation, or inventory guards.
 
 All other startup values are in `deployment`, `submission`, `approvedUniverses`, `tokenAddresses`, and
 `runtime`; `network` and `connectivity` are absent until the focused dashboard form
-saves them. **Risk limits and scanning** edits `runtime.riskLimits`,
-`runtime.maxHedgeSlippageBps`, and `runtime.lookbackBlocks`; **Execution mode** edits
+saves them. `connectivity` holds `readRpcUrl`, `publicRpcUrls`, `quorumRpcUrls`, and
+`rpcQuorum`. **Risk limits and scanning** edits `runtime.riskLimits`,
+`runtime.maxHedgeSlippageBps`, `runtime.logLookbackBlocks`, and
+`runtime.pollMilliseconds`, the main loop interval: the longest idle wait between
+scans when no new head arrives (default `1000` ms). Outside failure backoff a new
+block wakes the scan immediately. It is also the centralized-exchange sampling
+cadence; coordinator-free diagnostic mode queries every unseen event-log height.
+**Execution mode** edits
 `runtime.execute`. Deployment,
 execution-mode, and risk changes take effect at the next scan boundary.
 Process persistence paths and the dashboard bind cannot be edited while the bot is

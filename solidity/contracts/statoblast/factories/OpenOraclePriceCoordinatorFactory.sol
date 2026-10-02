@@ -85,8 +85,7 @@ contract PriceCoordinatorDeploymentWorker {
 		require(msg.sender == factory, 'Only factory');
 		bytes memory initCode = abi.encodePacked(CreationCodeStorage.load(creationCodeFirstChunk, creationCodeSecondChunk), constructorArguments);
 		address deployed = Create2Deployment.deploy(initCode, salt);
-		// Keep the historical data-free failure when the constructor reverts without data.
-		require(deployed != address(0));
+		require(deployed != address(0), 'Price coordinator deployment failed');
 		return OpenOraclePriceCoordinator(deployed);
 	}
 

@@ -60,7 +60,7 @@ export const pendingAuctionRefunds = async (sql: SQL, chainId: number, snapshotB
 export const escalationPositions = async (sql: SQL, chainId: number, snapshotBlock: string, address: string) =>
 	await sql`
 		SELECT deposit.game_address, deposit.event_data->>'outcome' AS outcome,
-			deposit.event_data->>'parentDepositIndex' AS deposit_index, deposit.event_data->>'attoRepAmount' AS principal_atto_rep,
+			deposit.event_data->>'parentDepositIndex' AS deposit_index, deposit.event_data->>'amountAttoRep' AS principal_atto_rep,
 			consumed.event_data->>'reason' AS consumption_reason, consumed.block_number::text AS consumed_block,
 			snapshot.read_result->>'finalQuestionResolution' AS final_resolution,
 			snapshot.block_number::text AS resolution_block

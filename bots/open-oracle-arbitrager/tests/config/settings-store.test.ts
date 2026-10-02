@@ -42,13 +42,14 @@ function settings(privateKeyValue: Hex | undefined) {
 		},
 		connectivity: {
 			publicRpcUrls: ['https://submit-one.example/', 'https://submit-two.example/'],
+			quorumRpcUrls: ['https://quorum.example/'],
 			readRpcUrl: 'https://read.example/',
+			rpcQuorum: 2 as const,
 		},
 		deployment: {
 			coordinatorAddresses: [],
 			executor: canonicalExecutorIdentity().address,
 			openOracle: canonicalCoreDeployment(mainnet).openOracle,
-			quorumRpcUrls: ['https://quorum.example/'],
 			rep: canonicalNetworkDeployment(mainnet).rep,
 			uniswapV2Enabled: false,
 			uniswapV3Enabled: true,
@@ -65,13 +66,13 @@ function settings(privateKeyValue: Hex | undefined) {
 		networkConfigured: true,
 		paused: true,
 		privateKey: privateKeyValue,
-		rpcQuorum: 2 as const,
 		runtime: {
 			execute: false,
 			historyFile: '.state/history.jsonl',
-			lookbackBlocks: 256n,
+			logLookbackBlocks: 256n,
 			maxHedgeSlippageBps: 50n,
 			once: false,
+			pollMilliseconds: 15_000,
 			positionFile: '.state/positions.json',
 			priceHistoryFile: '.state/prices.jsonl',
 			riskLimits: {
@@ -92,7 +93,6 @@ function settings(privateKeyValue: Hex | undefined) {
 			minimumProfitAttoWeth: 25n * 10n ** 15n,
 			minimumRemainingBlocks: 4n,
 			minimumRemainingSeconds: 48n,
-			pollMilliseconds: 15_000,
 			twapSeconds: 2_400,
 		},
 		submission: {
@@ -103,6 +103,97 @@ function settings(privateKeyValue: Hex | undefined) {
 		tokenAddresses: ['0x0000000000000000000000000000000000000001' as const],
 	}
 }
+
+const version4Runtime = {
+	execute: false,
+	historyFile: '.state/history-mainnet.jsonl',
+	lookbackBlocks: '128',
+	maxHedgeSlippageBps: '75',
+	once: false,
+	positionFile: '.state/positions-mainnet.json',
+	priceHistoryFile: '.state/prices-mainnet.jsonl',
+	riskLimits: { lifecycleGasReserveWeth: '0.01', maxConcurrentPositions: 1, maxDailyGasSpendWeth: '0.05', maxPositionNotionalWeth: '5', maxTotalLockedWeth: '10' },
+	ui: true,
+	uiHost: '127.0.0.1',
+	uiPort: 4173,
+}
+
+/** A complete version 4 operator file as earlier releases and the dashboard saved it. */
+function version4Document(overrides: { connectivity?: unknown; rpcQuorum?: unknown } = {}) {
+	return {
+		...example,
+		connectivity: { publicRpcUrls: ['https://submit.example'], readRpcUrl: 'https://read.example' },
+		deployment: { quorumRpcUrls: ['https://second.example', 'https://third.example'], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false },
+		network: 'mainnet',
+		networkConfigured: true,
+		rpcQuorum: 2,
+		runtime: version4Runtime,
+		strategy: { maxSpotTwapTicks: '100', minimumProfitBps: '150', minimumProfitWeth: '0.01', minimumRemainingBlocks: '3', minimumRemainingSeconds: '36', pollMilliseconds: 15_000, twapSeconds: 1_800 },
+		version: 4,
+		...overrides,
+	}
+}
+
+describe('operator settings version 4 migration', () => {
+	test('moves RPC quorum into connectivity, the poll interval into runtime, and stores numeric lookback and basis points', () => {
+		const parsed = parseOperatorSettings(version4Document())
+		expect(parsed.connectivity).toEqual({ publicRpcUrls: ['https://submit.example/'], quorumRpcUrls: ['https://second.example/', 'https://third.example/'], readRpcUrl: 'https://read.example/', rpcQuorum: 2 })
+		expect(parsed.runtime).toMatchObject({ logLookbackBlocks: 128n, maxHedgeSlippageBps: 75n, pollMilliseconds: 15_000 })
+		expect(parsed.strategy.minimumProfitBps).toBe(150n)
+		const serialized = serializeOperatorSettings(parsed)
+		expect(serialized.version).toBe(5)
+		expect(serialized).not.toHaveProperty('rpcQuorum')
+		expect(serialized.connectivity).toEqual({ publicRpcUrls: ['https://submit.example/'], quorumRpcUrls: ['https://second.example/', 'https://third.example/'], readRpcUrl: 'https://read.example/', rpcQuorum: 2 })
+		expect(serialized.deployment).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: false })
+		expect(serialized.runtime).toMatchObject({ logLookbackBlocks: 128, maxHedgeSlippageBps: 75, pollMilliseconds: 15_000 })
+		expect(serialized.runtime).not.toHaveProperty('lookbackBlocks')
+		expect(serialized.strategy).toMatchObject({ minimumProfitBps: 150 })
+		expect(serialized.strategy).not.toHaveProperty('pollMilliseconds')
+		expect(parseOperatorSettings(serialized)).toEqual(parsed)
+	})
+
+	test('keeps the version 4 lookback repair and the environment RPC policy default', () => {
+		expect(parseOperatorSettings({ ...version4Document(), runtime: { ...version4Runtime, lookbackBlocks: '50000' } }).runtime.logLookbackBlocks).toBe(256n)
+		const { rpcQuorum: _rpcQuorum, ...withoutPolicy } = version4Document()
+		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
+		try {
+			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
+			expect(parseOperatorSettings(withoutPolicy).connectivity.rpcQuorum).toBe(2)
+		} finally {
+			if (previous === undefined) delete process.env['ZOLTAR_BOT_RPC_QUORUM']
+			else process.env['ZOLTAR_BOT_RPC_QUORUM'] = previous
+		}
+	})
+
+	test('drops quorum readers and policy that an unconfigured version 4 profile could not use', () => {
+		const { connectivity: _connectivity, ...unconfigured } = version4Document({ rpcQuorum: 1 })
+		const parsed = parseOperatorSettings({ ...unconfigured, networkConfigured: false, paused: true, runtime: { ...unconfigured.runtime, execute: false } })
+		expect(parsed.networkConfigured).toBeFalse()
+		expect(parsed.connectivity.quorumRpcUrls).toEqual([])
+		expect(serializeOperatorSettings(parsed).connectivity).toBeUndefined()
+	})
+
+	test('loads a saved version 4 file from disk', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-arbitrager-v4-migration-'))
+		temporaryDirectories.push(directory)
+		const path = join(directory, 'operator.json')
+		const document = version4Document()
+		await writeFile(path, JSON.stringify({ ...document, runtime: { ...document.runtime, historyFile: join(directory, 'history.jsonl'), positionFile: join(directory, 'positions.json'), priceHistoryFile: join(directory, 'prices.jsonl') } }), { mode: 0o600 })
+		expect((await loadOperatorSettings(path))?.connectivity.rpcQuorum).toBe(2)
+	})
+
+	test('rejects the version 4 keys in a version 5 file', () => {
+		const current = serializeOperatorSettings(parseOperatorSettings(version4Document()))
+		expect(() => parseOperatorSettings({ ...current, rpcQuorum: 2 })).toThrow('Unknown operator configuration field: rpcQuorum')
+		expect(() => parseOperatorSettings({ ...current, deployment: { ...current.deployment, quorumRpcUrls: [] } })).toThrow('Deployment settings require the supported core deployment fields')
+		expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, lookbackBlocks: '256' } })).toThrow('Runtime settings require exactly the supported runtime fields')
+		expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, maxHedgeSlippageBps: '50' } })).toThrow('Runtime maxHedgeSlippageBps must be an integer from 0 to 1000')
+		expect(() => parseOperatorSettings({ ...current, runtime: { ...current.runtime, logLookbackBlocks: '256' } })).toThrow('Runtime logLookbackBlocks must be an integer from 0 to 256')
+		expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, minimumProfitBps: '100' } })).toThrow('Minimum return must be an integer from 0 to 100000')
+		expect(() => parseOperatorSettings({ ...current, strategy: { ...current.strategy, pollMilliseconds: 1_000 } })).toThrow('Unknown strategy setting: pollMilliseconds')
+		for (const version of [3, 6, '5']) expect(() => parseOperatorSettings({ ...current, version })).toThrow('unsupported version')
+	})
+})
 
 describe('operator settings persistence', () => {
 	test('keeps complete settings and durable journal paths isolated while switching chain profiles', async () => {
@@ -152,17 +243,18 @@ describe('operator settings persistence', () => {
 
 	test('defaults existing configuration files to the primary-reader RPC policy', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
-		delete serialized.rpcQuorum
-		expect(parseOperatorSettings(serialized).rpcQuorum).toBe(1)
+		const { rpcQuorum: _rpcQuorum, ...connectivity } = serialized.connectivity ?? {}
+		expect(parseOperatorSettings({ ...serialized, connectivity }).connectivity.rpcQuorum).toBe(1)
 	})
 
 	test('migrates a configuration file without a saved RPC policy from the shared ZOLTAR_BOT_RPC_QUORUM default', () => {
-		const serialized = serializeOperatorSettings(settings(undefined))
-		delete serialized.rpcQuorum
+		const stored = serializeOperatorSettings(settings(undefined))
+		const { rpcQuorum: _rpcQuorum, ...connectivity } = stored.connectivity ?? {}
+		const serialized = { ...stored, connectivity }
 		const previous = process.env['ZOLTAR_BOT_RPC_QUORUM']
 		try {
 			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '2'
-			expect(parseOperatorSettings(serialized).rpcQuorum).toBe(2)
+			expect(parseOperatorSettings(serialized).connectivity.rpcQuorum).toBe(2)
 			process.env['ZOLTAR_BOT_RPC_QUORUM'] = '3'
 			expect(() => parseOperatorSettings(serialized)).toThrow('ZOLTAR_BOT_RPC_QUORUM must be 1 or 2')
 		} finally {
@@ -185,20 +277,20 @@ describe('operator settings persistence', () => {
 
 	test('validates and persists the dashboard RPC quorum policy', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
-		for (const rpcQuorum of [null, '1', 0, 3]) expect(() => parseOperatorSettings({ ...serialized, rpcQuorum })).toThrow('rpcQuorum must be 1 or 2')
-		expect(parseOperatorSettings({ ...serialized, rpcQuorum: 1 }).rpcQuorum).toBe(1)
+		for (const rpcQuorum of [null, '1', 0, 3]) expect(() => parseOperatorSettings({ ...serialized, connectivity: { ...serialized.connectivity, rpcQuorum } })).toThrow('connectivity.rpcQuorum must be 1 or 2')
+		expect(parseOperatorSettings({ ...serialized, connectivity: { ...serialized.connectivity, rpcQuorum: 1 } }).connectivity.rpcQuorum).toBe(1)
 	})
 
 	test('permits live execution with only the primary read RPC by default', () => {
 		const value = settings(privateKey)
-		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] }, rpcQuorum: 1 })
+		const serialized = serializeOperatorSettings({ ...value, connectivity: { ...value.connectivity, quorumRpcUrls: [], rpcQuorum: 1 } })
 		const parsed = parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })
-		expect(parsed.deployment.quorumRpcUrls).toEqual([])
+		expect(parsed.connectivity.quorumRpcUrls).toEqual([])
 	})
 
 	test('requires independent readers when the two-reader policy is explicitly enabled', () => {
 		const value = settings(privateKey)
-		const serialized = serializeOperatorSettings({ ...value, deployment: { ...value.deployment, quorumRpcUrls: [] }, rpcQuorum: 2 })
+		const serialized = serializeOperatorSettings({ ...value, connectivity: { ...value.connectivity, quorumRpcUrls: [], rpcQuorum: 2 } })
 		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, execute: true } })).toThrow('at least two independent quorum RPCs')
 	})
 
@@ -280,16 +372,14 @@ describe('operator settings persistence', () => {
 		const parsed = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
 		await writeFile(path, JSON.stringify({ ...parsed, unexpected: true }), { encoding: 'utf8', mode: 0o600 })
 		expect(loadOperatorSettings(path)).rejects.toThrow('Unknown operator configuration field')
-		await writeFile(path, JSON.stringify({ ...parsed, version: 3 }), { encoding: 'utf8', mode: 0o600 })
+		await writeFile(path, JSON.stringify({ ...parsed, version: 6 }), { encoding: 'utf8', mode: 0o600 })
 		expect(loadOperatorSettings(path)).rejects.toThrow('unsupported version')
 	})
 
 	test('bounds coordinator-free event discovery to the latest 0 through 256 blocks', () => {
 		const serialized = serializeOperatorSettings(settings(undefined))
-		for (const lookbackBlocks of ['0', '256']) expect(parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks } }).runtime.lookbackBlocks).toBe(BigInt(lookbackBlocks))
-		expect(parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks: '50000' } }).runtime.lookbackBlocks).toBe(256n)
-		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks: '-1' } })).toThrow('Runtime lookbackBlocks must be a nonnegative integer string')
-		expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, lookbackBlocks: '257' } })).toThrow('Runtime lookbackBlocks must be from 0 through 256')
+		for (const logLookbackBlocks of [0, 256]) expect(parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, logLookbackBlocks } }).runtime.logLookbackBlocks).toBe(BigInt(logLookbackBlocks))
+		for (const logLookbackBlocks of [-1, 257, 50_000]) expect(() => parseOperatorSettings({ ...serialized, runtime: { ...serialized.runtime, logLookbackBlocks } })).toThrow('Runtime logLookbackBlocks must be an integer from 0 to 256')
 	})
 
 	test('rejects persistent runtime files that resolve to the same path', () => {
@@ -377,6 +467,6 @@ test('preserves default router intent through serialized network changes', () =>
 test('stores only venue switches and derives addresses again on load', () => {
 	const parsed = parseOperatorSettings({ ...example, deployment: { ...example.deployment, uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true } })
 	const stored = serializeOperatorSettings(parsed)
-	expect(stored.deployment).toEqual({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
+	expect(stored.deployment).toEqual({ uniswapV2Enabled: false, uniswapV3Enabled: true, uniswapV4Enabled: true })
 	expect(parseOperatorSettings(JSON.parse(JSON.stringify(stored))).deployment).toEqual(parsed.deployment)
 })

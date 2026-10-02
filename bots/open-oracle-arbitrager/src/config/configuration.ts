@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Address, Hex } from '@zoltar/bot-shared/ethereum'
-import { validateIndependentReadRpcUrls, type ConnectivitySettings } from '#monitoring/connectivity'
+import type { ConnectivitySettings } from '@zoltar/bot-shared/monitoring/connectivity'
 import { type MutableStrategy } from '#state/operator-state'
 import type { MutableSettlement } from '#state/settlement-store'
 import { networkConfiguration, type NetworkConfiguration } from '#config/network'
@@ -24,7 +24,7 @@ export type Configuration = MutableStrategy & {
 	execute: boolean
 	executor: Address | undefined
 	historyFile: string
-	lookbackBlocks: bigint
+	logLookbackBlocks: bigint
 	maxHedgeSlippageBps: bigint
 	network: NetworkConfiguration
 	networkConfigured: boolean
@@ -33,6 +33,7 @@ export type Configuration = MutableStrategy & {
 	operatorSettings: PersistedOperatorSettings
 	paused: boolean
 	persistedPrivateKey: Hex | undefined
+	pollMilliseconds: number
 	priceHistoryFile: string
 	privateKey: Hex | undefined
 	positionFile: string
@@ -56,8 +57,8 @@ export type Configuration = MutableStrategy & {
 export function runnableOperatorSettings(settingsFile: string, saved: PersistedOperatorSettings) {
 	const deployment = saved.deployment
 	const network = networkConfiguration(saved.network)
-	const quorumRpcUrls = [...validateIndependentReadRpcUrls(saved.connectivity.readRpcUrl, deployment.quorumRpcUrls)]
-	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
+	const quorumRpcUrls = [...saved.connectivity.quorumRpcUrls]
+	if (saved.runtime.execute && quorumRpcUrls.length < configuredQuorumRpcUrlMinimum(saved.connectivity.rpcQuorum)) throw new Error('Execution is enabled, but live operation requires at least two independent quorum RPCs (three read endpoints total)')
 	if (saved.runtime.execute && deployment.uniswapRouter === undefined && deployment.uniswapV2Router === undefined && deployment.uniswapV4PoolManager === undefined) throw new Error('Execution requires at least one enabled Uniswap venue available on this network')
 	assertDistinctPersistentPaths(settingsFile, saved.runtime)
 	return { deployment, network, quorumRpcUrls }
@@ -74,12 +75,12 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 	return {
 		...saved.strategy,
 		centralizedMarkets: saved.centralizedMarkets,
-		connectivity: saved.connectivity,
+		connectivity: { publicRpcUrls: saved.connectivity.publicRpcUrls, readRpcUrl: saved.connectivity.readRpcUrl },
 		coordinatorAddresses: [...deployment.coordinatorAddresses],
 		execute: saved.runtime.execute,
 		executor: deployment.executor,
 		historyFile: resolve(saved.runtime.historyFile),
-		lookbackBlocks: saved.runtime.lookbackBlocks,
+		logLookbackBlocks: saved.runtime.logLookbackBlocks,
 		maxHedgeSlippageBps: saved.runtime.maxHedgeSlippageBps,
 		network,
 		networkConfigured: saved.networkConfigured,
@@ -88,11 +89,12 @@ export async function loadConfiguration(settingsFile = resolve(process.env['OPEN
 		operatorSettings: saved,
 		paused: saved.paused,
 		persistedPrivateKey: saved.privateKey,
+		pollMilliseconds: saved.runtime.pollMilliseconds,
 		priceHistoryFile: resolve(saved.runtime.priceHistoryFile),
 		privateKey: saved.privateKey,
 		positionFile: resolve(saved.runtime.positionFile),
 		quorumRpcUrls,
-		rpcQuorum: saved.rpcQuorum,
+		rpcQuorum: saved.connectivity.rpcQuorum,
 		riskLimits: saved.runtime.riskLimits,
 		settlement: { ...saved.settlement },
 		router: deployment.uniswapRouter,
@@ -116,7 +118,6 @@ export function mutableStrategy(config: MutableStrategy): MutableStrategy {
 		minimumProfitAttoWeth: config.minimumProfitAttoWeth,
 		minimumRemainingBlocks: config.minimumRemainingBlocks,
 		minimumRemainingSeconds: config.minimumRemainingSeconds,
-		pollMilliseconds: config.pollMilliseconds,
 		twapSeconds: config.twapSeconds,
 	}
 }
@@ -127,6 +128,5 @@ export function applyStrategy(target: MutableStrategy, source: MutableStrategy) 
 	target.minimumProfitAttoWeth = source.minimumProfitAttoWeth
 	target.minimumRemainingBlocks = source.minimumRemainingBlocks
 	target.minimumRemainingSeconds = source.minimumRemainingSeconds
-	target.pollMilliseconds = source.pollMilliseconds
 	target.twapSeconds = source.twapSeconds
 }

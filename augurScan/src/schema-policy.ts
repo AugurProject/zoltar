@@ -20,6 +20,18 @@ const SUPPORTED_POSTGRES_VERSION_NUM = postgresVersionNumber(SUPPORTED_POSTGRES_
 
 export type SupportedSchemaVersion = typeof INITIAL_MIGRATABLE_SCHEMA_VERSION | typeof PREVIOUS_SCHEMA_VERSION | typeof CURRENT_SCHEMA_VERSION | typeof HISTORICAL_INTEGRITY_SCHEMA_VERSION
 
+type SchemaMigration = { readonly version: SupportedSchemaVersion; readonly file: string; readonly description: string }
+
+// Ordered upgrade steps; each records its own row in augurscan_schema_migrations when applied.
+const SCHEMA_MIGRATIONS: readonly SchemaMigration[] = [
+	{ version: HISTORICAL_INTEGRITY_SCHEMA_VERSION, file: '002-historical-integrity.sql', description: 'Historical integrity observations and indexer provenance' },
+	{ version: PREVIOUS_SCHEMA_VERSION, file: '003-indexer-ownership.sql', description: 'Indexer ownership leases' },
+	{ version: CURRENT_SCHEMA_VERSION, file: '004-question-seconds.sql', description: 'Exact question timestamps in Unix seconds' },
+]
+
+/** Migrations that upgrade a database at `startingVersion` to the current schema, in application order. */
+export const pendingSchemaMigrations = (startingVersion: SupportedSchemaVersion): readonly SchemaMigration[] => SCHEMA_MIGRATIONS.filter(migration => Number(migration.version) > Number(startingVersion))
+
 export const runSchemaTransaction = async <T>(begin: () => Promise<unknown>, commit: () => Promise<unknown>, rollback: () => Promise<unknown>, operation: () => Promise<T>): Promise<T> => {
 	await begin()
 	try {

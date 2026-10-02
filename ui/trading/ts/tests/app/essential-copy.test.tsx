@@ -38,14 +38,14 @@ describe('essential trading copy', () => {
 		const buy = ticketEstimateFor(market, 'entry', '1')
 		const sell = ticketEstimateFor(market, 'exit', '2', { scope: shareBalanceScope(market), yes: 10n * 10n ** 18n, no: 0n, invalid: 10n * 10n ** 18n, lp: 0n })
 		const entry = await renderIntoDocument(<TradeEstimatePanel estimate={buy} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
-		for (const phrase of ['You receive ≈', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'INVALID insurance', 'ETH if YES wins', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
+		for (const phrase of ['You receive ≈', 'Minimum received', 'Price impact', 'Pool fee', '1.25%', 'Invalid insurance', 'ETH if Yes wins', '0 ETH otherwise', 'Slippage 0.5%']) expect(entry.container.textContent).toContain(phrase)
 		// The share mechanics stay available behind one disclosure instead of a second always-open breakdown.
 		expect(entry.container.querySelectorAll('details')).toHaveLength(1)
 		await entry.cleanup()
 		const exit = await renderIntoDocument(<TradeEstimatePanel estimate={sell} market={market} settings={DEFAULT_TRADE_SETTINGS} impactTier='low' impactAcknowledged={false} disabled={false} onAcknowledgeImpact={() => undefined} />)
 		cleanupRendered = exit.cleanup
-		for (const phrase of ['You sell', 'You receive ≈', 'Minimum received', 'INVALID used', 'Pool fee']) expect(exit.container.textContent).toContain(phrase)
-		expect(exit.container.textContent).not.toContain('if YES wins')
+		for (const phrase of ['You sell', 'You receive ≈', 'Minimum received', 'Invalid used', 'Pool fee']) expect(exit.container.textContent).toContain(phrase)
+		expect(exit.container.textContent).not.toContain('if Yes wins')
 	})
 
 	test('escalates price-impact warnings and asks for acknowledgment before a high-impact trade', async () => {

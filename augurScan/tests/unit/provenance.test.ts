@@ -39,10 +39,11 @@ test('changes the application hash when a shared runtime dependency changes', as
 		await Promise.all([
 			writeFile(path.join(projectRoot, 'package.json'), '{}'),
 			writeFile(path.join(projectRoot, '../bun.lock'), ''),
-			writeFile(path.join(projectRoot, 'src/ethereum.ts'), "export {\n\tdecoderVersion,\n} from '../../shared/core/ts/evm/ethereum.ts'\n"),
+			writeFile(path.join(projectRoot, 'src/ethereum.ts'), "export {\n\tdecoderVersion,\n} from '@zoltar/core-shared/evm/ethereum'\n"),
 			writeFile(path.join(projectRoot, 'src/operations.ts'), "export const operation = 'stable'\n"),
 			writeFile(path.join(projectRoot, 'src/projections.ts'), "export const projection = 'stable'\n"),
 			writeFile(sharedSource, "export const decoderVersion = 'one'\n"),
+			writeFile(path.join(repositoryRoot, 'shared/core/package.json'), JSON.stringify({ name: '@zoltar/core-shared', exports: { './evm/ethereum': { bun: './ts/evm/ethereum.ts', default: './js/evm/ethereum.js' } } })),
 		])
 		const before = await sourceProvenance(projectRoot)
 		await writeFile(sharedSource, "export const decoderVersion = 'two'\n")

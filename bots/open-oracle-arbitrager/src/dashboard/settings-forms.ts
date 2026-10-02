@@ -20,9 +20,10 @@ type FocusedFormContext = {
 }
 
 /** The last configuration the bot returned for each section; forms diff against it and the go-live checklist reads it. */
-const loaded: { deployment: DashboardDeployment | undefined; execute: boolean; relayUrls: readonly string[]; rpcQuorum: 1 | 2; submissionMode: 'private' | 'public' } = {
+const loaded: { deployment: DashboardDeployment | undefined; execute: boolean; quorumRpcUrls: readonly string[]; relayUrls: readonly string[]; rpcQuorum: 1 | 2; submissionMode: 'private' | 'public' } = {
 	deployment: undefined,
 	execute: false,
+	quorumRpcUrls: [],
 	relayUrls: [],
 	rpcQuorum: 1,
 	submissionMode: 'public',
@@ -34,7 +35,7 @@ let loadedMarkets: Record<string, unknown> | undefined
 
 export function goLiveConfiguration(): GoLiveConfiguration | undefined {
 	if (loaded.deployment === undefined) return undefined
-	return { deployment: loaded.deployment, execute: loaded.execute, relayUrls: loaded.relayUrls, rpcQuorum: loaded.rpcQuorum, submissionMode: loaded.submissionMode }
+	return { deployment: loaded.deployment, execute: loaded.execute, quorumRpcUrls: loaded.quorumRpcUrls, relayUrls: loaded.relayUrls, rpcQuorum: loaded.rpcQuorum, submissionMode: loaded.submissionMode }
 }
 
 export function setLoadedRpcQuorum(rpcQuorum: 1 | 2) {
@@ -51,12 +52,11 @@ function input(name: keyof StrategySettings) {
 export function loadSettings(settings: StrategySettings) {
 	loadedStrategy = settings
 	input('minimumProfitWeth').value = settings.minimumProfitWeth
-	input('minimumProfitBps').value = settings.minimumProfitBps
+	input('minimumProfitBps').value = settings.minimumProfitBps.toString()
 	input('maxSpotTwapTicks').value = settings.maxSpotTwapTicks
 	input('twapSeconds').value = settings.twapSeconds.toString()
 	input('minimumRemainingBlocks').value = settings.minimumRemainingBlocks
 	input('minimumRemainingSeconds').value = settings.minimumRemainingSeconds
-	input('pollMilliseconds').value = settings.pollMilliseconds.toString()
 	markFormClean('strategy-form')
 }
 
@@ -70,36 +70,28 @@ export function loadSubmission(submission: SubmissionSettings) {
 	markFormClean('submission-form')
 }
 
-type DeploymentForm = 'connectivity-form' | 'deployment-form'
-
 /**
- * Venues and quorum RPC URLs share one stored section across two forms. Each form submits only its own
- * fields and the bot returns the section merged with the latest saved values, so the saves may overlap. A form that
- * saved, or that has no unsaved edits, takes the returned values; a form mid-edit keeps them, except when the complete
- * configuration reloads and every form restarts from the file.
+ * The venues form submits only the venue switches and the bot returns the section merged with the latest saved values. A
+ * form that saved, or that has no unsaved edits, takes the returned values; a form mid-edit keeps them, except when the
+ * complete configuration reloads and every form restarts from the file.
  */
-export function loadDeployment(deployment: DashboardDeployment, source?: DeploymentForm | 'configuration') {
+export function loadDeployment(deployment: DashboardDeployment, source?: 'configuration' | 'deployment-form') {
 	loaded.deployment = deployment
-	const accepts = (formId: DeploymentForm) => source === 'configuration' || source === formId || !formIsDirty(formId)
-	if (accepts('deployment-form')) {
+	if (source !== undefined || !formIsDirty('deployment-form')) {
 		element('deployment-v2-enabled', HTMLInputElement).checked = deployment.uniswapV2Enabled
 		element('deployment-v3-enabled', HTMLInputElement).checked = deployment.uniswapV3Enabled
 		element('deployment-v4-enabled', HTMLInputElement).checked = deployment.uniswapV4Enabled
 		markFormClean('deployment-form')
 	}
-	if (accepts('connectivity-form')) {
-		element('quorum-rpc-urls', HTMLTextAreaElement).value = deployment.quorumRpcUrls.join('\n')
-		markFormClean('connectivity-form')
-	}
 }
 
-/** The RPC endpoints form saved new quorum URLs; they live in the deployment section, so the loaded copy follows. */
+/** The saved `connectivity.quorumRpcUrls`, which the RPC endpoints form edits beside the primary and public RPCs. */
 export function applyQuorumRpcUrls(quorumRpcUrls: readonly string[]) {
-	if (loaded.deployment === undefined) return
-	loadDeployment({ ...loaded.deployment, quorumRpcUrls }, 'connectivity-form')
+	loaded.quorumRpcUrls = quorumRpcUrls
+	element('quorum-rpc-urls', HTMLTextAreaElement).value = quorumRpcUrls.join('\n')
 }
 
-type RuntimeLimitField = keyof StoredRuntimeLimits['riskLimits'] | 'lookbackBlocks' | 'maxHedgeSlippageBps'
+type RuntimeLimitField = keyof StoredRuntimeLimits['riskLimits'] | 'logLookbackBlocks' | 'maxHedgeSlippageBps' | 'pollMilliseconds'
 
 function runtimeInput(name: RuntimeLimitField) {
 	const found = element('runtime-form', HTMLFormElement).querySelector(`[name="${name}"]`)
@@ -114,8 +106,9 @@ export function loadRuntimeLimits(runtime: StoredRuntimeLimits) {
 	runtimeInput('maxConcurrentPositions').value = runtime.riskLimits.maxConcurrentPositions.toString()
 	runtimeInput('maxDailyGasSpendWeth').value = runtime.riskLimits.maxDailyGasSpendWeth
 	runtimeInput('lifecycleGasReserveWeth').value = runtime.riskLimits.lifecycleGasReserveWeth
-	runtimeInput('maxHedgeSlippageBps').value = runtime.maxHedgeSlippageBps
-	runtimeInput('lookbackBlocks').value = runtime.lookbackBlocks
+	runtimeInput('maxHedgeSlippageBps').value = runtime.maxHedgeSlippageBps.toString()
+	runtimeInput('logLookbackBlocks').value = runtime.logLookbackBlocks.toString()
+	runtimeInput('pollMilliseconds').value = runtime.pollMilliseconds.toString()
 	markFormClean('runtime-form')
 }
 
@@ -178,11 +171,10 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 		void submitFocusedForm('strategy-form', 'form-status', 'Saving strategy…', async () => {
 			const settings = {
 				maxSpotTwapTicks: input('maxSpotTwapTicks').value,
-				minimumProfitBps: input('minimumProfitBps').value,
+				minimumProfitBps: Number(input('minimumProfitBps').value),
 				minimumProfitWeth: input('minimumProfitWeth').value,
 				minimumRemainingBlocks: input('minimumRemainingBlocks').value,
 				minimumRemainingSeconds: input('minimumRemainingSeconds').value,
-				pollMilliseconds: Number(input('pollMilliseconds').value),
 				twapSeconds: Number(input('twapSeconds').value),
 			} satisfies StrategySettings
 			nonnegativeAtomicValue(settings.minimumProfitWeth, 'WETH')
@@ -218,9 +210,12 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 			const hedgeSlippageValue = runtimeInput('maxHedgeSlippageBps').value
 			const maxHedgeSlippageBps = Number(hedgeSlippageValue)
 			if (!/^\d+$/.test(hedgeSlippageValue) || !Number.isSafeInteger(maxHedgeSlippageBps) || maxHedgeSlippageBps > 1_000) throw new Error('Maximum hedge slippage must be a whole number from 0 to 1000 bps.')
-			const lookbackValue = runtimeInput('lookbackBlocks').value
-			const lookbackBlocks = Number(lookbackValue)
-			if (!/^\d+$/.test(lookbackValue) || !Number.isSafeInteger(lookbackBlocks) || lookbackBlocks > 256) throw new Error('Lookback period must be a whole number from 0 to 256 blocks.')
+			const lookbackValue = runtimeInput('logLookbackBlocks').value
+			const logLookbackBlocks = Number(lookbackValue)
+			if (!/^\d+$/.test(lookbackValue) || !Number.isSafeInteger(logLookbackBlocks) || logLookbackBlocks > 256) throw new Error('Lookback period must be a whole number from 0 to 256 blocks.')
+			const pollValue = runtimeInput('pollMilliseconds').value
+			const pollMilliseconds = Number(pollValue)
+			if (!/^\d+$/.test(pollValue) || !Number.isSafeInteger(pollMilliseconds) || pollMilliseconds < 1_000 || pollMilliseconds > 3_600_000) throw new Error('Poll interval must be a whole number from 1000 to 3600000 milliseconds.')
 			const changes = riskFields
 				.flatMap(field => {
 					const before = String(saved.riskLimits[field])
@@ -228,14 +223,16 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 					return before === after ? [] : [{ label: field.replace(/([A-Z])/g, ' $1'), before: `${before} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}`, after: `${after} ${field === 'maxConcurrentPositions' ? 'positions' : 'WETH'}` }]
 				})
 				.concat(
-					saved.maxHedgeSlippageBps === runtimeInput('maxHedgeSlippageBps').value ? [] : [{ label: 'Maximum hedge slippage', before: `${saved.maxHedgeSlippageBps} bps`, after: `${maxHedgeSlippageBps} bps` }],
-					saved.lookbackBlocks === runtimeInput('lookbackBlocks').value ? [] : [{ label: 'Lookback period', before: `${saved.lookbackBlocks} blocks`, after: `${lookbackBlocks} blocks` }],
+					saved.maxHedgeSlippageBps === maxHedgeSlippageBps ? [] : [{ label: 'Maximum hedge slippage', before: `${saved.maxHedgeSlippageBps.toString()} bps`, after: `${maxHedgeSlippageBps.toString()} bps` }],
+					saved.logLookbackBlocks === logLookbackBlocks ? [] : [{ label: 'Lookback period', before: `${saved.logLookbackBlocks.toString()} blocks`, after: `${logLookbackBlocks.toString()} blocks` }],
+					saved.pollMilliseconds === pollMilliseconds ? [] : [{ label: 'Poll interval', before: `${saved.pollMilliseconds.toString()} ms`, after: `${pollMilliseconds.toString()} ms` }],
 				)
 			if (changes.length > 0 && !(await confirmOperatorAction({ title: 'Review risk limits', description: 'These limits govern the next scan and live execution.', changes, confirmLabel: 'Save risk limits' }))) return
 			await submitFocusedForm('runtime-form', 'runtime-status', 'Saving risk limits…', async () => {
 				const runtime = {
-					lookbackBlocks: runtimeInput('lookbackBlocks').value,
-					maxHedgeSlippageBps: runtimeInput('maxHedgeSlippageBps').value,
+					logLookbackBlocks,
+					maxHedgeSlippageBps,
+					pollMilliseconds,
 					riskLimits: {
 						lifecycleGasReserveWeth: runtimeInput('lifecycleGasReserveWeth').value,
 						maxConcurrentPositions: Number(runtimeInput('maxConcurrentPositions').value),
@@ -298,8 +295,7 @@ export function registerFocusedSettingsForms({ api, refresh, syncControls }: Foc
 
 	onFormSubmit(element('deployment-form', HTMLFormElement), () => {
 		void submitFocusedForm('deployment-form', 'deployment-status', 'Validating venues…', async () => {
-			// Only the venue switches travel; the bot merges them into the latest saved section so a quorum save
-			// that is still in flight from another form is never overwritten with cached values.
+			// Only the venue switches travel; the bot merges them into the latest saved section.
 			const venues = {
 				uniswapV2Enabled: element('deployment-v2-enabled', HTMLInputElement).checked,
 				uniswapV3Enabled: element('deployment-v3-enabled', HTMLInputElement).checked,

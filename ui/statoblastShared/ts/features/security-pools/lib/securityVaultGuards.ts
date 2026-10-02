@@ -2,7 +2,8 @@ import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { getWalletActiveAppChainGuardState } from '@zoltar/ui-core-shared/transactions/actionGuards.js'
 import { formatAdditionalCurrencyBalance, formatCurrencyBalanceWithUnit } from '@zoltar/ui-core-shared/lib/formatters.js'
 import { getOracleRequestEthGuardMessage } from '../../open-oracle/lib/oracleRequestEth.js'
-import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
+import { MAX_STAGED_OPERATION_TIMEOUT_MINUTES, MIN_STAGED_OPERATION_TIMEOUT_MINUTES, parseTargetHealthFactorBps } from './securityVault.js'
+import * as securityPoolCopy from '../../../copy/securityPool.js'
 import * as commonCopy from '@zoltar/ui-core-shared/copy/common.js'
 
 export function getTargetHealthFactorGuardMessage(targetHealthFactor: string, minimumBps?: bigint) {
@@ -19,7 +20,7 @@ export function getVaultDepositGuardMessage({
 	currentVaultRepBackingAttoRep,
 	depositAmount,
 	isDepositBelowMinimum,
-	minimumVaultRepDepositAttoRep = MIN_SECURITY_VAULT_REP_DEPOSIT_ATTO_REP,
+	minimumVaultRepDepositAttoRep,
 	targetHealthFactor = '1',
 	minimumBackingRatioBps,
 	walletRepShortfallAttoRep,
@@ -28,7 +29,8 @@ export function getVaultDepositGuardMessage({
 	currentVaultRepBackingAttoRep?: bigint | undefined
 	depositAmount: bigint | undefined
 	isDepositBelowMinimum: boolean
-	minimumVaultRepDepositAttoRep?: bigint | undefined
+	/** The pool's effective minimum; undefined while the vault details read is in flight (failed reads are handled by the vault load blocker). */
+	minimumVaultRepDepositAttoRep: bigint | undefined
 	minimumBackingRatioBps?: bigint | undefined
 	targetHealthFactor?: string | undefined
 	walletRepShortfallAttoRep: bigint | undefined
@@ -39,6 +41,7 @@ export function getVaultDepositGuardMessage({
 	if (targetHealthFactorGuardMessage !== undefined) return targetHealthFactorGuardMessage
 	if (!approvalSatisfied) return 'Approve enough REP before depositing.'
 	if (walletRepShortfallAttoRep !== undefined && walletRepShortfallAttoRep > 0n) return `Need ${formatAdditionalCurrencyBalance(walletRepShortfallAttoRep, 'REP')} in this wallet.`
+	if (minimumVaultRepDepositAttoRep === undefined) return securityPoolCopy.vaultMinimumLoading
 	if (isDepositBelowMinimum) {
 		// Pool-held REP-per-unit rounding can credit slightly less than the deposit, so an exact minimum can still fall short.
 		if (currentVaultRepBackingAttoRep !== undefined && currentVaultRepBackingAttoRep > 0n) return `This vault must hold at least ${formatCurrencyBalanceWithUnit(minimumVaultRepDepositAttoRep, 'REP')} after the deposit. Deposit more REP.`

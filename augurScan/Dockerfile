@@ -22,7 +22,7 @@ COPY ui/zoltar/package.json ./ui/zoltar/package.json
 COPY ui/zoltarShared/package.json ./ui/zoltarShared/package.json
 
 FROM workspace AS dependencies
-RUN bun install --frozen-lockfile --production --filter augur-scan
+RUN bun install --frozen-lockfile --production --filter @zoltar/augur-scan
 
 FROM workspace AS browser-build
 # Shared TypeScript compilation also needs the root workspace's type dependencies.
@@ -42,7 +42,7 @@ COPY augurScan/public ./public
 RUN bun run build:browser
 
 FROM workspace AS metadata-build
-RUN bun install --frozen-lockfile --filter augur-scan --filter @zoltar/contracts
+RUN bun install --frozen-lockfile --filter @zoltar/augur-scan --filter @zoltar/contracts
 COPY solidity/contracts ./solidity/contracts
 COPY solidity/ts/compile.ts ./solidity/ts/compile.ts
 COPY solidity/ts/contractProjects.ts ./solidity/ts/contractProjects.ts

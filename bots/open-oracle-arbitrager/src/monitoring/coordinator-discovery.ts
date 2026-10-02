@@ -5,7 +5,7 @@ import type { ReadClient } from '#core/operator-types'
 import { securityPoolAbi, securityPoolFactoryAbi } from '@zoltar/bot-shared/contracts/abi'
 import { rpcFailureWithContext, type Hex } from '@zoltar/bot-shared/ethereum'
 import { settledQuorumValue } from '@zoltar/bot-shared/monitoring/read-quorum'
-import { endpointLabel } from '#monitoring/connectivity'
+import { endpointLabel } from '@zoltar/bot-shared/monitoring/connectivity'
 
 type DiscoveryConfiguration = Pick<Configuration, 'network' | 'openOracle' | 'operatorSettings' | 'execute' | 'connectivity' | 'quorumRpcUrls' | 'rpcQuorum'>
 

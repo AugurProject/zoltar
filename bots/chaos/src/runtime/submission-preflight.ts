@@ -30,7 +30,7 @@ export function submissionPreflightConfigurationIdentity(settings: OperatorSetti
 
 /** How long submission evidence stays current: the larger of two lifecycle polls and two configured block intervals. */
 function submissionPreflightRefreshMilliseconds(settings: OperatorSettings) {
-	return Math.max(settings.runtime.lifecyclePollMilliseconds * 2, settings.network.maximumBlockIntervalSeconds * 2_000)
+	return Math.max(settings.runtime.pollMilliseconds * 2, settings.network.maximumBlockIntervalSeconds * 2_000)
 }
 
 function submissionPreflightIsDue(checks: readonly EndpointCheck[], settings: OperatorSettings, nowMilliseconds = Date.now()) {

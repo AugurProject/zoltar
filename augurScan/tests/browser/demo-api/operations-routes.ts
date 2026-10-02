@@ -173,7 +173,7 @@ export async function demoOperationsCatalogRoute(env: DemoEnvironment, path: str
 							{
 								id: '1',
 								schema_version: '2',
-								app_version: '0.1.0',
+								app_version: '1.0.0',
 								abi_source_hash: demoHash.slice(2),
 								application_source_hash: `sha256:${demoHash.slice(2)}`,
 								projection_source_hash: `sha256:${demoHash.slice(2)}`,

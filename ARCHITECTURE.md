@@ -22,14 +22,15 @@ Arrows point from a dependency to its consumers. `tooling/repo/projects.ts` is t
 ```mermaid
 flowchart TD
 	contracts[solidity/contracts] --> artifacts[generated artifacts<br/>solidity/artifacts, contractArtifact.ts, abis.ts]
-	sharedCore[shared/core] --> sharedZoltar[shared/zoltar] & sharedOpenOracle[shared/openOracle]
-	sharedZoltar & sharedOpenOracle --> sharedStatoblast[shared/statoblast] --> sharedTrading[shared/trading]
+	sharedCore[shared/core] --> sharedZoltar[shared/zoltar] & sharedOpenOracle[shared/openOracle] & sharedStatoblast[shared/statoblast] & sharedTrading[shared/trading]
+	sharedZoltar & sharedOpenOracle & sharedStatoblast & sharedTrading --> artifacts
 	artifacts & sharedCore & sharedZoltar --> uiCore[ui/coreShared]
 	uiCore --> uiZoltarShared[ui/zoltarShared] --> uiStatoblastShared[ui/statoblastShared]
+	sharedOpenOracle & sharedStatoblast --> uiStatoblastShared
 	uiZoltarShared --> appZoltar[ui/zoltar]
 	uiStatoblastShared & sharedStatoblast --> appStatoblast[ui/statoblast]
 	uiStatoblastShared & sharedTrading --> appTrading[ui/trading]
-	artifacts & uiCore & sharedStatoblast --> bots[bots/*]
+	artifacts & uiCore & sharedZoltar & sharedOpenOracle & sharedStatoblast & sharedTrading --> bots[bots/*]
 	artifacts & sharedStatoblast --> augurScan[augurScan]
 ```
 

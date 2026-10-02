@@ -297,7 +297,7 @@ export function useForkAuctionSectionState(props: ForkAuctionSectionProps) {
 	const isVaultMigrationComplete = hasCompletedVaultMigration || (context.connectedWalletVaultSummary !== undefined && !hasWalletVaultMigrationBalance)
 	const truthAuctionBypassReason = getTruthAuctionBypassReason({
 		migratedAttoRep: context.selectedAuctionContext?.migratedAttoRep ?? context.selectedAuctionChildPool?.migratedAttoRep ?? 0n,
-		parentSettlementCollateralAttoEthAmount: context.forkAuctionDetails?.settlementCollateralAttoEth ?? context.previewPool?.settlementCollateralAttoEth,
+		parentSettlementCollateralAttoEth: context.forkAuctionDetails?.settlementCollateralAttoEth ?? context.previewPool?.settlementCollateralAttoEth,
 		auctionableAttoRepAtFork: context.forkAuctionDetails?.auctionableAttoRepAtFork,
 	})
 	const bidPriceValidationMessage = getTruthAuctionBidPriceValidationMessage(context.forkAuctionForm.submitBidPrice)

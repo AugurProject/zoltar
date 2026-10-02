@@ -267,6 +267,7 @@ export const projects: readonly Project[] = [
 			audit: { ...packageTask('bots/shared', 'audit'), command: botAudit },
 		},
 		generatedDirectories: [],
+		generatedFiles: ['bots/shared/src/contracts/abi.generated.ts'],
 		ci: { scope: 'bot-shared', componentName: 'bot-shared', requiresContractArtifacts: true },
 	},
 	{
@@ -289,7 +290,7 @@ export const projects: readonly Project[] = [
 		id: 'arbitrager',
 		path: 'bots/open-oracle-arbitrager',
 		type: 'bot',
-		dependencies: ['shared-core', 'shared-zoltar', 'shared-open-oracle', 'shared-statoblast', 'bot-shared', 'contracts'],
+		dependencies: ['shared-core', 'shared-open-oracle', 'shared-statoblast', 'bot-shared', 'contracts'],
 		tasks: {
 			setup: packageInstallTask('bots/open-oracle-arbitrager'),
 			test: packageTask('bots/open-oracle-arbitrager', 'test'),
@@ -299,7 +300,7 @@ export const projects: readonly Project[] = [
 			audit: { ...packageTask('bots/open-oracle-arbitrager', 'audit'), command: botAudit },
 		},
 		generatedDirectories: [],
-		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts'],
+		generatedFiles: ['bots/open-oracle-arbitrager/src/contracts/artifacts.generated.ts', 'bots/open-oracle-arbitrager/tests/contracts/harness-artifacts.generated.ts', 'bots/open-oracle-arbitrager/src/contracts/executor-abi.generated.ts', 'bots/open-oracle-arbitrager/docs/chart-runtime.js'],
 		ci: { scope: 'arbitrager', componentName: 'arbitrager', requiresContractArtifacts: true },
 	},
 	{

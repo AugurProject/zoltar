@@ -24,12 +24,7 @@ function createStep(id: DeploymentStatus['id'], label: string, deployed: boolean
 }
 
 function createProps(): DeploymentRouteContentProps {
-	const deploymentStatuses: DeploymentStatus[] = [
-		createStep('proxyDeployer', 'Proxy Deployer', true),
-		createStep('deploymentStatusOracle', 'Deployment Status Oracle', true, ['proxyDeployer']),
-		createStep('multicall3', 'Multicall3', true, ['proxyDeployer']),
-		createStep('zoltarQuestionData', 'Zoltar Question Data', false),
-	]
+	const deploymentStatuses: DeploymentStatus[] = [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('deploymentStatusOracle', 'DeploymentStatusOracle', true, ['proxyDeployer']), createStep('multicall3', 'Multicall3', true, ['proxyDeployer']), createStep('zoltarQuestionData', 'ZoltarQuestionData', false)]
 
 	return {
 		accountAddress: zeroAddress,
@@ -68,7 +63,7 @@ describe('DeploymentRouteContent', () => {
 		const documentQueries = within(document.body)
 		expect(documentQueries.queryByText('Deployment Readiness')).toBeNull()
 		expect(documentQueries.getAllByText('Next deployable').length).toBeGreaterThan(0)
-		expect(documentQueries.getAllByText('Zoltar Question Data').length).toBeGreaterThan(0)
+		expect(documentQueries.getAllByText('ZoltarQuestionData').length).toBeGreaterThan(0)
 		expect(document.body.querySelector('.route-header.deployment-route-header')).not.toBeNull()
 
 		const allContractsDisclosure = document.body.querySelector('.deployment-contract-details')
@@ -87,14 +82,14 @@ describe('DeploymentRouteContent', () => {
 			h(DeploymentRouteContent, {
 				...createProps(),
 				accountAddress: undefined,
-				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('zoltarQuestionData', 'Zoltar Question Data', false, ['deploymentStatusOracle'])],
-				deploymentSections: [{ title: 'Zoltar', steps: [createStep('zoltarQuestionData', 'Zoltar Question Data', false, ['deploymentStatusOracle'])] }],
+				deploymentStatuses: [createStep('proxyDeployer', 'Proxy Deployer', true), createStep('zoltarQuestionData', 'ZoltarQuestionData', false, ['deploymentStatusOracle'])],
+				deploymentSections: [{ title: 'Zoltar', steps: [createStep('zoltarQuestionData', 'ZoltarQuestionData', false, ['deploymentStatusOracle'])] }],
 			}),
 		)
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Deploy next missing', 'Connect wallet to continue.')
-		expectTransactionButtonDisabled(document.body, 'Deploy Zoltar Question Data', 'Connect wallet to deploy this contract.')
+		expectTransactionButtonDisabled(document.body, 'Deploy ZoltarQuestionData', 'Connect wallet to deploy this contract.')
 	})
 
 	test('enables deploy-next when a deterministic step is ready to deploy', async () => {
@@ -114,13 +109,13 @@ describe('DeploymentRouteContent', () => {
 		cleanupRenderedComponent = renderedComponent.cleanup
 
 		expectTransactionButtonDisabled(document.body, 'Deploy next missing', 'Deployment status is unavailable.')
-		expectTransactionButtonDisabled(document.body, 'Deploy Zoltar Question Data', 'Deployment status is unavailable.')
+		expectTransactionButtonDisabled(document.body, 'Deploy ZoltarQuestionData', 'Deployment status is unavailable.')
 		expect(document.body.textContent).not.toContain('Not deployed')
 		expect(document.body.textContent).not.toContain('Can deploy now.')
 		expect(document.body.textContent).not.toContain('Requires ')
 		expect(document.body.textContent).toContain('Unavailable')
 		expect(document.body.textContent).not.toContain('Loading deployment status…')
-		const questionDataDeployButton = within(document.body).getByRole('button', { name: 'Deploy Zoltar Question Data' })
+		const questionDataDeployButton = within(document.body).getByRole('button', { name: 'Deploy ZoltarQuestionData' })
 		const describedById = questionDataDeployButton.getAttribute('aria-describedby')
 		if (describedById === null) throw new Error('Expected unavailable deployment action to reference the shared recovery reason')
 		expect(document.getElementById(describedById)?.textContent).toBe('Deployment status is unavailable.')

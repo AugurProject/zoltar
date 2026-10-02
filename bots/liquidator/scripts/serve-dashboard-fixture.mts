@@ -44,7 +44,7 @@ const centralizedMarkets = {
 	},
 }
 const childMarketConfigurations: unknown[] = []
-const desiredPools = [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '42', statoblastSecurityMultiplierBps: '12500', universeId: '101' }]
+const desiredPools = [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '42', statoblastSecurityMultiplierBps: 12500, universeId: '101' }]
 let strategy = {
 	allowAutomaticDeposits: true,
 	allowAutomaticPoolCreation: false,

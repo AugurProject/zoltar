@@ -106,9 +106,9 @@ postgresTest(
 						chain_id, block_hash, tx_hash, log_index, block_number, game_address, event_name, event_data, canonical
 					) VALUES
 						(${historicalChainId}, ${firstHash}, ${firstTransactionHash}, 1, 1, ${escalationAddress}, 'DepositOnOutcome',
-							'{"outcome":"0","attoRepAmount":"10"}'::jsonb, true),
+							'{"outcome":"0","amountAttoRep":"10"}'::jsonb, true),
 						(${historicalChainId}, ${secondHash}, ${secondTransactionHash}, 1, 2, ${escalationAddress}, 'DepositOnOutcome',
-							'{"outcome":"0","attoRepAmount":"90"}'::jsonb, true)
+							'{"outcome":"0","amountAttoRep":"90"}'::jsonb, true)
 				`
 			await database.sql`
 					INSERT INTO truth_auction_events (

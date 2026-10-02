@@ -16,20 +16,20 @@ type RepPriceSource = 'uniswap' | 'open-oracle'
 /**
  * Why the resolved price came from its source:
  * - `selected`: the setting's own source supplied the price.
- * - `oracle-expired` / `oracle-missing`: the fallback setting used Uniswap because the pool Open Oracle price expired or was never reported.
- * - `oracle-unverified`: the fallback setting used Uniswap because chain time is not known yet, so the Open Oracle price cannot be proven fresh.
+ * - `oracle-expired` / `oracle-missing`: the fallback setting used Uniswap because the pool OpenOracle price expired or was never reported.
+ * - `oracle-unverified`: the fallback setting used Uniswap because chain time is not known yet, so the OpenOracle price cannot be proven fresh.
  * - `unavailable`: no price is available for the setting, so derived figures are unavailable.
  */
 type RepPriceReason = 'selected' | 'oracle-expired' | 'oracle-missing' | 'oracle-unverified' | 'unavailable'
 
 export type ResolvedRepPrice = {
 	price: bigint | undefined
-	/** Open Oracle settlement time of the price; undefined for a live Uniswap quote. */
+	/** OpenOracle settlement time of the price; undefined for a live Uniswap quote. */
 	observedAt: bigint | undefined
 	reason: RepPriceReason
 	setting: UiPriceOracle
 	source: RepPriceSource | undefined
-	/** True when the price is an Open Oracle report that the pool contracts no longer accept. */
+	/** True when the price is an OpenOracle report that the pool contracts no longer accept. */
 	stale: boolean
 	validUntil: bigint | undefined
 }

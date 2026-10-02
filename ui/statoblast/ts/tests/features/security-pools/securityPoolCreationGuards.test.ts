@@ -127,6 +127,6 @@ describe('security pool creation guards', () => {
 		expect(getInitialReportPriorityFeeValidationMessage('0')).toBe('Initial-report priority fee must be greater than 0\u00a0nanoETH per gas.')
 		expect(getInitialReportPriorityFeeValidationMessage('0.000000001')).toBeUndefined()
 		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n).toString())).toBeUndefined()
-		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for Open Oracle report limits.')
+		expect(getInitialReportPriorityFeeValidationMessage((MAX_ORACLE_INITIAL_REPORT_PRIORITY_FEE_ATTO_ETH_PER_GAS / 10n ** 9n + 1n).toString())).toBe('Initial-report priority fee is too large for OpenOracle report limits.')
 	})
 })

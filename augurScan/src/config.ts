@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { getUniswapNetworkDeployment } from '@zoltar/core-shared/deployment/uniswapDeployments'
 import { assertAbiCoverage } from './abi-catalog.ts'
-import { getAddress, isAddress } from './ethereum.ts'
+import { blockExplorerUrl, getAddress, isAddress } from './ethereum.ts'
 import { parseBasicAccessCredentials } from './http.ts'
 import { parseManifestValue } from './manifest.ts'
 import type { ManifestContract, NetworkConfig } from './types.ts'
@@ -18,7 +18,6 @@ type NetworkFile = {
 	readonly uniswapV4PoolManagerAddressEnv: string
 	readonly defaultUniswapV2FactoryAddress: string | undefined
 	readonly defaultRpcUrl: string
-	readonly explorerBaseUrl: string
 	readonly nativeSymbol: string
 	readonly confirmationDepth: number
 	readonly manifest: string
@@ -27,23 +26,7 @@ type NetworkFile = {
 /** An empty activity-source override selects the network default; this value disables the source. */
 const DISABLED_ACTIVITY_SOURCE = 'none'
 
-const NETWORK_FILE_KEYS = new Set([
-	'id',
-	'name',
-	'chainId',
-	'rpcUrlEnv',
-	'startBlockEnv',
-	'ammFactoryAddressEnv',
-	'uniswapV2FactoryAddressEnv',
-	'uniswapV3FactoryAddressEnv',
-	'uniswapV4PoolManagerAddressEnv',
-	'defaultUniswapV2FactoryAddress',
-	'defaultRpcUrl',
-	'explorerBaseUrl',
-	'nativeSymbol',
-	'confirmationDepth',
-	'manifest',
-])
+const NETWORK_FILE_KEYS = new Set(['id', 'name', 'chainId', 'rpcUrlEnv', 'startBlockEnv', 'ammFactoryAddressEnv', 'uniswapV2FactoryAddressEnv', 'uniswapV3FactoryAddressEnv', 'uniswapV4PoolManagerAddressEnv', 'defaultUniswapV2FactoryAddress', 'defaultRpcUrl', 'nativeSymbol', 'confirmationDepth', 'manifest'])
 
 const parseNetworkFile = (value: unknown, index: number): NetworkFile => {
 	const label = `networks.json entry ${index.toString()}`
@@ -77,7 +60,6 @@ const parseNetworkFile = (value: unknown, index: number): NetworkFile => {
 		uniswapV4PoolManagerAddressEnv: string('uniswapV4PoolManagerAddressEnv'),
 		defaultUniswapV2FactoryAddress: optionalAddress('defaultUniswapV2FactoryAddress'),
 		defaultRpcUrl: string('defaultRpcUrl'),
-		explorerBaseUrl: string('explorerBaseUrl'),
 		nativeSymbol: string('nativeSymbol'),
 		confirmationDepth: positiveInteger('confirmationDepth'),
 		manifest: string('manifest'),
@@ -150,13 +132,16 @@ export const loadNetworks = async (): Promise<readonly NetworkConfig[]> => {
 					if (!contracts.some(([address]) => address.toLowerCase() === normalized.toLowerCase())) contracts.push([normalized, label, kind])
 				}
 				assertAbiCoverage(contracts.map(([, , kind]) => kind))
+				// The block explorer comes from the chain definitions shared with the UIs and bots.
+				const explorerBaseUrl = blockExplorerUrl(definition.chainId)
+				if (explorerBaseUrl === undefined) throw new Error(`networks.json network ${definition.id} uses chain ${definition.chainId.toString()}, which has no shared block explorer`)
 				return {
 					id: definition.id,
 					name: definition.name,
 					chainId: definition.chainId,
 					rpcUrls,
 					startBlock,
-					explorerBaseUrl: definition.explorerBaseUrl,
+					explorerBaseUrl,
 					nativeSymbol: definition.nativeSymbol,
 					confirmationDepth: BigInt(definition.confirmationDepth),
 					contracts,

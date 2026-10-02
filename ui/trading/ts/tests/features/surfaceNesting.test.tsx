@@ -55,10 +55,10 @@ describe('trading surface nesting', () => {
 		expect(document.querySelector('[role="tablist"]')).not.toBeNull()
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => document.body.textContent?.includes('1 YES') === true, 'wallet balances')
+		await waitForDom(() => document.body.textContent?.includes('1 Yes') === true, 'wallet balances')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		// The wallet position sits in the reading column; the ticket shows the odds bar only to preview a trade.
-		expect(document.querySelector('.market-overview .market-holdings')?.textContent).toContain('1 YES')
+		expect(document.querySelector('.market-overview .market-holdings')?.textContent).toContain('1 Yes')
 		expect(document.querySelector('.market-ticket .market-holdings')).toBeNull()
 		expect(document.querySelectorAll('.market-overview .probability')).toHaveLength(1)
 		expect(document.querySelector('.market-ticket .probability')).toBeNull()
@@ -76,7 +76,7 @@ describe('trading surface nesting', () => {
 		const portfolio = await renderIntoDocument(<LiveTrading route='portfolio' configuration={configuration} configurationError={undefined} selectedUniverseId='1' onWorkflowLockChange={() => undefined} controllerServices={services} />)
 		cleanupRendered = portfolio.cleanup
 		await act(async () => buttonByLabel('Connect wallet').click())
-		await waitForDom(() => document.querySelector('.portfolio-position-row[data-portfolio-pool]') !== null && document.body.textContent?.includes('1 YES') === true, 'portfolio positions')
+		await waitForDom(() => document.querySelector('.portfolio-position-row[data-portfolio-pool]') !== null && document.body.textContent?.includes('1 Yes') === true, 'portfolio positions')
 		expect(nestedCardSurfaces(document.body)).toEqual([])
 		await portfolio.cleanup()
 		cleanupRendered = undefined

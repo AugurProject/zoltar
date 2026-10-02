@@ -84,7 +84,7 @@ export const demoOperationsDetail = (env: DemoEnvironment, path: string): unknow
 		const event = evidence('DepositOnOutcome', {
 			depositor: '0xc9b36e44643fc5d882654ffd9791ae7171b0e9db',
 			outcome: '1',
-			attoRepAmount: '1250000000000000000000',
+			amountAttoRep: '1250000000000000000000',
 		})
 		return {
 			chainId,

@@ -1,7 +1,7 @@
 import mainnetManifest from '../../../../docs/mainnet-deployment-addresses.json'
 import example from '../../config/operator.example.json'
 import sepoliaManifest from '../../../../docs/sepolia-deployment-addresses.json'
-import { chmod, mkdtemp, rm, symlink } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -67,7 +67,7 @@ const settings = {
 		mode: 'public',
 		relayUrls: [],
 	},
-	version: 1,
+	version: 2,
 }
 
 describe('liquidator settings', () => {
@@ -274,7 +274,7 @@ describe('liquidator settings', () => {
 		const parsed = parseSettings({
 			...settings,
 			childMarketConfigurations: [childMarket],
-			desiredPools: [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: '12500', universeId: '0' }],
+			desiredPools: [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: 12500, universeId: '0' }],
 		})
 		expect(parsed.childMarketConfigurations[0]?.assetAddress).toBe(getAddress(childMarket.assetAddress))
 		expect(parsed.desiredPools[0]).toEqual({ initialReportPriorityFeeAttoEthPerGas: 1_000_000_000n, questionId: 7n, statoblastSecurityMultiplierBps: 12_500n, universeId: 0n })
@@ -296,17 +296,51 @@ for (const [field, bits] of [
 	['universeId', 248],
 	['questionId', 256],
 	['initialReportPriorityFeeAttoEthPerGas', 256],
-	['statoblastSecurityMultiplierBps', 256],
 ] as const) {
 	test(`desired pool ${field} preserves unsigned syntax, bounds, and errors`, () => {
-		const pool = { initialReportPriorityFeeAttoEthPerGas: '0', questionId: '0', statoblastSecurityMultiplierBps: '12500', universeId: '0' }
+		const pool = { initialReportPriorityFeeAttoEthPerGas: '0', questionId: '0', statoblastSecurityMultiplierBps: 12500, universeId: '0' }
 		const parse = (value: unknown) => parseDesiredPools([{ ...pool, [field]: value }])
 		const maximum = 2n ** BigInt(bits) - 1n
 		expect(parse(maximum.toString())[0]?.[field]).toBe(maximum)
-		if (field !== 'statoblastSecurityMultiplierBps') expect(parse('0')[0]?.[field]).toBe(0n)
+		expect(parse('0')[0]?.[field]).toBe(0n)
 		expect(() => parse((maximum + 1n).toString())).toThrow(`desiredPools[0].${field} must fit in uint${bits}`)
 		for (const value of [-1, 0, undefined, '', '-1', '+1', '01', ' 1', '1 ', '1.0', '1e2', '0x10']) {
 			expect(() => parse(value)).toThrow(`desiredPools[0].${field} must be a non-negative integer string`)
 		}
 	})
 }
+
+test('desired pool statoblastSecurityMultiplierBps is a JSON number above 10000 basis points', () => {
+	const pool = { initialReportPriorityFeeAttoEthPerGas: '0', questionId: '0', statoblastSecurityMultiplierBps: 12500, universeId: '0' }
+	const parse = (value: unknown) => parseDesiredPools([{ ...pool, statoblastSecurityMultiplierBps: value }])
+	expect(parse(10_001)[0]?.statoblastSecurityMultiplierBps).toBe(10_001n)
+	expect(parse(Number.MAX_SAFE_INTEGER)[0]?.statoblastSecurityMultiplierBps).toBe(BigInt(Number.MAX_SAFE_INTEGER))
+	for (const value of ['12500', 10_000, 12_500.5, Number.MAX_SAFE_INTEGER + 1, undefined]) expect(() => parse(value)).toThrow('desiredPools[0].statoblastSecurityMultiplierBps must be an integer from 10001 through')
+	expect(serializedSettings(parseSettings({ ...settings, desiredPools: [pool] })).desiredPools[0]?.statoblastSecurityMultiplierBps).toBe(12_500)
+})
+
+describe('liquidator settings migration', () => {
+	const version1 = { ...settings, desiredPools: [{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: '12500', universeId: '0' }], version: 1 }
+
+	test('migrates a version 1 file whose basis-point pool multiplier is a string to the version 2 shape', async () => {
+		const parsed = parseSettings(version1)
+		expect(parsed.version).toBe(2)
+		expect(parsed.desiredPools[0]?.statoblastSecurityMultiplierBps).toBe(12_500n)
+		const serialized = serializedSettings(parsed)
+		expect(serialized.version).toBe(2)
+		expect(serialized.desiredPools).toEqual([{ initialReportPriorityFeeAttoEthPerGas: '1000000000', questionId: '7', statoblastSecurityMultiplierBps: 12_500, universeId: '0' }])
+		const directory = await mkdtemp(join(tmpdir(), 'zoltar-liquidator-migration-'))
+		try {
+			const path = join(directory, 'operator.json')
+			await writeFile(path, JSON.stringify(version1), { mode: 0o600 })
+			expect((await loadSettings(path)).settings.desiredPools[0]?.statoblastSecurityMultiplierBps).toBe(12_500n)
+		} finally {
+			await rm(directory, { force: true, recursive: true })
+		}
+	})
+
+	test('rejects the version 1 string multiplier in a version 2 file and unknown versions', () => {
+		expect(() => parseSettings({ ...version1, version: 2 })).toThrow('desiredPools[0].statoblastSecurityMultiplierBps must be an integer')
+		for (const version of [0, 3, '2', undefined]) expect(() => parseSettings({ ...settings, version })).toThrow('operator settings version must be 1 or 2')
+	})
+})

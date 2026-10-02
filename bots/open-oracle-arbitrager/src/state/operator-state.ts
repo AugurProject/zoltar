@@ -2,12 +2,13 @@ import type { UniverseIdentity } from '@zoltar/bot-shared/monitoring/universe-po
 import type { MissingContractDeployment } from '@zoltar/bot-shared/monitoring/deployed-contracts'
 import { appendFileDurably, durableFilesystem, type DurableAppendFilesystem } from '@zoltar/bot-shared/config/durable-file'
 import { isErrorCode } from '@zoltar/bot-shared/infrastructure/error-code'
+import { formatDecimalAmount, parseDecimalAmount, parseSignedDecimalAmount } from '@zoltar/bot-shared/infrastructure/json-validation'
 import { bigintToSafeNumber, type Address, type Hex } from '@zoltar/bot-shared/ethereum'
 import type { OpenOracleGame } from '@zoltar/open-oracle-shared/openOracle/openOracle'
 import { validateDeploymentSettings, type DeploymentSettings } from '#config/deployment-settings'
 import type { CanonicalDeploymentStatus } from '#config/runtime-deployment'
 import type { ExecutorDeploymentRecoveryStatus } from '#state/executor-deployment-recovery'
-import type { ConnectivitySettings, EndpointCheck, NetworkName } from '#monitoring/connectivity'
+import type { ConnectivitySettings, EndpointCheck, NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import type { SubmissionSettings, SubmissionTargetResult } from '#execution/transaction-submission'
 import type { OpportunitySnapshot } from '#state/opportunity-snapshot'
 import type { SettlementSnapshot } from '#state/settlement-store'
@@ -32,11 +33,10 @@ export type ExecutionHistoryFilesystem = DurableAppendFilesystem & {
 
 export type StrategySettings = {
 	maxSpotTwapTicks: string
-	minimumProfitBps: string
+	minimumProfitBps: number
 	minimumProfitWeth: string
 	minimumRemainingBlocks: string
 	minimumRemainingSeconds: string
-	pollMilliseconds: number
 	twapSeconds: number
 }
 
@@ -46,7 +46,6 @@ export type MutableStrategy = {
 	minimumProfitAttoWeth: bigint
 	minimumRemainingBlocks: bigint
 	minimumRemainingSeconds: bigint
-	pollMilliseconds: number
 	twapSeconds: number
 }
 
@@ -297,40 +296,30 @@ export function clearWalletDerivedState(state: OperatorState) {
 }
 
 export function parseDecimalWeth(value: string) {
-	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid WETH amount: ${value}`)
-	const [whole = '0', fraction = ''] = value.split('.')
-	return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0'))
+	return parseDecimalAmount(value, 'WETH amount')
 }
 
 export function parseSignedDecimalEth(value: string) {
-	if (!/^-?(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(value)) throw new Error(`Invalid ETH amount: ${value}`)
-	const negative = value.startsWith('-')
-	const unsigned = negative ? value.slice(1) : value
-	const parsed = parseDecimalWeth(unsigned)
-	return negative ? -parsed : parsed
+	return parseSignedDecimalAmount(value, 'ETH amount')
 }
 
 export function strategySettings(strategy: MutableStrategy): StrategySettings {
 	return {
 		maxSpotTwapTicks: strategy.maxSpotTwapTicks.toString(),
-		minimumProfitBps: strategy.minimumProfitBps.toString(),
+		minimumProfitBps: bigintToSafeNumber(strategy.minimumProfitBps, 'Minimum return basis points'),
 		minimumProfitWeth: decimalWeth(strategy.minimumProfitAttoWeth),
 		minimumRemainingBlocks: strategy.minimumRemainingBlocks.toString(),
 		minimumRemainingSeconds: strategy.minimumRemainingSeconds.toString(),
-		pollMilliseconds: strategy.pollMilliseconds,
 		twapSeconds: strategy.twapSeconds,
 	}
 }
 
 export function decimalWeth(value: bigint) {
-	const whole = value / 10n ** 18n
-	const fraction = value % 10n ** 18n
-	if (fraction === 0n) return whole.toString()
-	return `${whole.toString()}.${fraction.toString().padStart(18, '0').replace(/0+$/, '')}`
+	return formatDecimalAmount(value)
 }
 
 export function decimalSignedEth(value: bigint) {
-	return value < 0n ? `-${decimalWeth(-value)}` : decimalWeth(value)
+	return formatDecimalAmount(value)
 }
 
 export function gameCapitalSnapshot(games: readonly Pick<OpenOracleGame, 'currentAmount1' | 'currentAmount2' | 'settlerRewardAttoEth' | 'token1' | 'token2'>[], weth: Address): GameCapitalSnapshot {
@@ -528,7 +517,7 @@ export function operatorSnapshot(
 			},
 		},
 		connectivity,
-		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }, fixed.network),
+		deployment: fixed.deployment ?? validateDeploymentSettings({ coordinatorAddresses: [], executor: fixed.executor, uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: false }, fixed.network),
 		totalActualGasCostEth: sumDecimalWeth(state.executionHistory, 'actualGasCostEth'),
 		totalEstimatedNetProfitEth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),
 		totalEstimatedNetProfitWeth: sumDecimalWeth(state.executionHistory, 'estimatedNetProfitWeth'),

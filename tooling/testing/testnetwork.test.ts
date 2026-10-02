@@ -73,6 +73,9 @@ describe('local test network packaging', () => {
 	test('defaults both bots to one reader while the arbitrager owns its policy in saved settings', async () => {
 		expect(await readFile(liquidatorComposeFile, 'utf8')).toContain('ZOLTAR_BOT_RPC_QUORUM: ${ZOLTAR_BOT_RPC_QUORUM-1}')
 		expect(await readFile(arbitragerComposeFile, 'utf8')).not.toContain('ZOLTAR_BOT_RPC_QUORUM')
-		expect(JSON.parse(await readFile(arbitragerExampleFile, 'utf8'))).toMatchObject({ rpcQuorum: 1 })
+		// The unconfigured example stores no connectivity, so quorum falls back to the one-reader environment default until the operator saves it.
+		const arbitragerExample: unknown = JSON.parse(await readFile(arbitragerExampleFile, 'utf8'))
+		expect(arbitragerExample).not.toHaveProperty('rpcQuorum')
+		expect(arbitragerExample).not.toHaveProperty('connectivity')
 	})
 })

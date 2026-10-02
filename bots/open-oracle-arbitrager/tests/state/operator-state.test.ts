@@ -342,7 +342,6 @@ function strategy(): MutableStrategy {
 		minimumProfitAttoWeth: 10n ** 16n,
 		minimumRemainingBlocks: 3n,
 		minimumRemainingSeconds: 36n,
-		pollMilliseconds: 12_000,
 		twapSeconds: 1_800,
 	}
 }
@@ -350,11 +349,10 @@ function strategy(): MutableStrategy {
 function settings() {
 	return {
 		maxSpotTwapTicks: '75',
-		minimumProfitBps: '200',
+		minimumProfitBps: 200,
 		minimumProfitWeth: '0.025',
 		minimumRemainingBlocks: '4',
 		minimumRemainingSeconds: '48',
-		pollMilliseconds: 15_000,
 		twapSeconds: 2_400,
 	}
 }
@@ -386,19 +384,20 @@ describe('operator strategy settings', () => {
 			expect(() => updateStrategyFromRequest(current, value)).toThrow('Settings must be a JSON object')
 			expect(current).toEqual(before)
 		}
-		for (const pollMilliseconds of [999, 3_600_001, 1_000.5, Number.NaN, Number.POSITIVE_INFINITY, '1000']) {
-			expect(() => updateStrategyFromRequest(current, { ...settings(), pollMilliseconds })).toThrow('must be an integer from 1000 to 3600000')
+		for (const minimumProfitBps of [-1, 100_001, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '100']) {
+			expect(() => updateStrategyFromRequest(current, { ...settings(), minimumProfitBps })).toThrow('Minimum return must be an integer from 0 to 100000')
 			expect(current).toEqual(before)
 		}
+		expect(() => updateStrategyFromRequest(current, { ...settings(), pollMilliseconds: 1_000 })).toThrow('Unknown strategy setting: pollMilliseconds')
 		for (const twapSeconds of [59, 86_401, 60.5]) {
 			expect(() => updateStrategyFromRequest(current, { ...settings(), twapSeconds })).toThrow('must be an integer from 60 to 86400')
 			expect(current).toEqual(before)
 		}
-		for (const [pollMilliseconds, twapSeconds] of [
-			[1_000, 60],
-			[3_600_000, 86_400],
+		for (const [minimumProfitBps, twapSeconds] of [
+			[0, 60],
+			[100_000, 86_400],
 		]) {
-			expect(updateStrategyFromRequest(current, { ...settings(), pollMilliseconds, twapSeconds })).toMatchObject({ pollMilliseconds, twapSeconds })
+			expect(updateStrategyFromRequest(current, { ...settings(), minimumProfitBps, twapSeconds })).toMatchObject({ minimumProfitBps, twapSeconds })
 		}
 	})
 

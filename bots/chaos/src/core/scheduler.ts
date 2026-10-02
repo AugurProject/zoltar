@@ -116,16 +116,16 @@ export function createChaosScheduler(options: ChaosSchedulerOptions) {
 	}
 }
 
-export function backfillWaitMilliseconds(lifecyclePollMilliseconds: number, consecutiveBackfillCycles: number) {
-	if (!Number.isSafeInteger(lifecyclePollMilliseconds) || lifecyclePollMilliseconds < 1_000 || lifecyclePollMilliseconds > 60_000) {
+export function backfillWaitMilliseconds(pollMilliseconds: number, consecutiveBackfillCycles: number) {
+	if (!Number.isSafeInteger(pollMilliseconds) || pollMilliseconds < 1_000 || pollMilliseconds > 60_000) {
 		throw new Error('Backfill poll interval must be an integer from 1000 through 60000 milliseconds')
 	}
 	if (!Number.isSafeInteger(consecutiveBackfillCycles) || consecutiveBackfillCycles < 0) {
 		throw new Error('Consecutive backfill cycle count must be a non-negative integer')
 	}
-	const initialCadence = Math.min(lifecyclePollMilliseconds, 5_000)
+	const initialCadence = Math.min(pollMilliseconds, 5_000)
 	const completedWindows = Math.min(Math.floor(consecutiveBackfillCycles / 16), 4)
-	return Math.min(lifecyclePollMilliseconds, initialCadence * 2 ** completedWindows)
+	return Math.min(pollMilliseconds, initialCadence * 2 ** completedWindows)
 }
 
 export function operatorWaitMilliseconds(baseMilliseconds: number, state: Pick<RuntimeState, 'paused' | 'scheduler'>, nowMilliseconds = Date.now()) {

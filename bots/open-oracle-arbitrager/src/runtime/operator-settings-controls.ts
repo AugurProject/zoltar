@@ -14,11 +14,11 @@ import { acquireConfigurationSignerOperation } from './signer-operations.ts'
 /** Which operator-file sections hold a saved change the scan boundary has not consumed yet. */
 export function queuedSettingsSections(pending: PendingOperatorUpdates): QueuedSettingsSection[] {
 	const sections: QueuedSettingsSection[] = []
-	if (pending.connectivity !== undefined || pending.rpcQuorum !== undefined || pending.network !== undefined) sections.push('connectivity')
+	if (pending.connectivity !== undefined || pending.network !== undefined) sections.push('connectivity')
 	if (pending.deployment !== undefined) sections.push('deployment')
 	if (pending.execute !== undefined) sections.push('execution')
 	if (pending.centralizedMarkets !== undefined) sections.push('markets')
-	if (pending.riskLimits !== undefined || pending.lookbackBlocks !== undefined || pending.maxHedgeSlippageBps !== undefined) sections.push('risk')
+	if (pending.riskLimits !== undefined || pending.logLookbackBlocks !== undefined || pending.maxHedgeSlippageBps !== undefined || pending.pollMilliseconds !== undefined) sections.push('risk')
 	if (pending.settlement !== undefined) sections.push('settlement')
 	if (pending.strategy !== undefined) sections.push('strategy')
 	if (pending.submission !== undefined) sections.push('submission')
@@ -87,8 +87,9 @@ export function createOperatorSettingsControls(context: OperatorSettingsContext)
 			const next = parseRuntimeLimitsRequest(value)
 			return queueSettingsUpdate(async () => {
 				await persistFocusedSettings(settings => ({ ...settings, runtime: { ...settings.runtime, ...next } }))
-				pending.lookbackBlocks = next.lookbackBlocks
+				pending.logLookbackBlocks = next.logLookbackBlocks
 				pending.maxHedgeSlippageBps = next.maxHedgeSlippageBps
+				pending.pollMilliseconds = next.pollMilliseconds
 				pending.riskLimits = next.riskLimits
 				recordOperation(state, {
 					category: 'configuration',

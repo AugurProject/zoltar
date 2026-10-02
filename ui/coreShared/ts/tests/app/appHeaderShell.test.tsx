@@ -159,7 +159,7 @@ describe('AppHeaderShell', () => {
 					route: 'security-pools',
 					tabs: [
 						{ hash: '#/security-pools', label: 'Security pools', route: 'security-pools' },
-						{ hash: '#/open-oracle', label: 'Open Oracle', route: 'open-oracle' },
+						{ hash: '#/open-oracle', label: 'OpenOracle', route: 'open-oracle' },
 					],
 				}}
 				onRefresh={async () => undefined}

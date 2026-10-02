@@ -24,8 +24,8 @@ function walletBalanceLabel(value: bigint | undefined, outcome: ShareOutcome, ba
  */
 export function MarketPosition({ market, holdings, wallet, disabled, ownsBalanceError }: { market: LiveMarket; holdings: TicketBalances; wallet: Pick<TicketWallet, 'networkMismatchReason'>; disabled: boolean; ownsBalanceError: boolean }) {
 	const outcomes = [
-		{ outcome: 'yes', className: 'portfolio-holding-yes', value: holdings.balances?.yes, quantityOutcome: workflowCopy.yes, caption: workflowCopy.walletYes },
-		{ outcome: 'no', className: 'portfolio-holding-no', value: holdings.balances?.no, quantityOutcome: workflowCopy.no, caption: workflowCopy.walletNo },
+		{ outcome: 'yes', className: 'portfolio-holding-yes', value: holdings.balances?.yes, quantityOutcome: 'YES', caption: workflowCopy.walletYes },
+		{ outcome: 'no', className: 'portfolio-holding-no', value: holdings.balances?.no, quantityOutcome: 'NO', caption: workflowCopy.walletNo },
 		{ outcome: 'invalid', className: undefined, value: holdings.balances?.invalid, quantityOutcome: 'INVALID' as const, caption: workflowCopy.walletInvalid },
 	] as const
 	return (

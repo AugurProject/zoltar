@@ -1,5 +1,5 @@
 {
-	"version": 1,
+	"version": 2,
 	"connectivity": null,
 	"discovery": {
 		"maxPools": 100,
@@ -19,8 +19,8 @@
 	"privateKey": null,
 	"runtime": {
 		"execute": false,
-		"lifecyclePollMilliseconds": 12000,
 		"once": false,
+		"pollMilliseconds": 12000,
 		"protocolLogBlockSpan": 50000,
 		"protocolStartBlock": "0",
 		"stateFile": ".state/chaos.sepolia.json",

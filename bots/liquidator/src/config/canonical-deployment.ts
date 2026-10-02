@@ -4,6 +4,7 @@ import sepolia from '../../../../docs/sepolia-deployment-addresses.json'
 import { canonicalCoreDeployment, canonicalNetworkDeployment } from '@zoltar/bot-shared/config/canonical-deployment'
 import { presetNetworkChainId, type NetworkName } from '@zoltar/bot-shared/monitoring/connectivity'
 import { MAINNET_CHAIN_ID } from '@zoltar/core-shared/deployment/uniswapDeployments'
+import { mainnet as mainnetChain, sepolia as sepoliaChain } from '@zoltar/core-shared/evm/ethereum'
 
 export function canonicalDeployment(chainId: number) {
 	const core = canonicalCoreDeployment(chainId === MAINNET_CHAIN_ID ? mainnet : sepolia)
@@ -22,5 +23,5 @@ export function canonicalRootMarketIdentity(chainId: number) {
 
 /** Chain identity and block explorer of a preset network profile. */
 export function presetNetwork(name: NetworkName) {
-	return { chainId: presetNetworkChainId(name), explorerUrl: name === 'mainnet' ? 'https://etherscan.io' : 'https://sepolia.etherscan.io', name }
+	return { chainId: presetNetworkChainId(name), explorerUrl: (name === 'mainnet' ? mainnetChain : sepoliaChain).blockExplorers.default.url, name }
 }

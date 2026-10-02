@@ -41,7 +41,7 @@ function noPendingUpdates(): PendingOperatorUpdates {
 		connectivity: undefined,
 		deployment: undefined,
 		execute: undefined,
-		lookbackBlocks: undefined,
+		logLookbackBlocks: undefined,
 		maxHedgeSlippageBps: undefined,
 		network: undefined,
 		operatorSettings: undefined,
@@ -50,8 +50,8 @@ function noPendingUpdates(): PendingOperatorUpdates {
 		privateKey: undefined,
 		persistedPrivateKey: undefined,
 		persistedTokenAddresses: undefined,
+		pollMilliseconds: undefined,
 		riskLimits: undefined,
-		rpcQuorum: undefined,
 		settlement: undefined,
 		signerLock: undefined,
 		signerUpdate: false,
@@ -128,14 +128,23 @@ describe('queued operator execution settings', () => {
 		const config = await exampleConfiguration()
 		const state = operatorState()
 		const pending = noPendingUpdates()
-		const expandedLookbackBlocks = config.lookbackBlocks + 16n
-		pending.lookbackBlocks = expandedLookbackBlocks
+		const expandedLookbackBlocks = config.logLookbackBlocks + 16n
+		pending.logLookbackBlocks = expandedLookbackBlocks
 		expect(applyQueuedExecutionSettings(config, state, pending)).toEqual({ reportScanReset: true })
-		expect(config.lookbackBlocks).toBe(expandedLookbackBlocks)
-		expect(pending.lookbackBlocks).toBeUndefined()
+		expect(config.logLookbackBlocks).toBe(expandedLookbackBlocks)
+		expect(pending.logLookbackBlocks).toBeUndefined()
 		const unchanged = noPendingUpdates()
-		unchanged.lookbackBlocks = config.lookbackBlocks
+		unchanged.logLookbackBlocks = config.logLookbackBlocks
 		expect(applyQueuedExecutionSettings(config, state, unchanged)).toEqual({ reportScanReset: false })
+	})
+
+	test('applies a queued main loop poll interval at the scan boundary', async () => {
+		const config = await exampleConfiguration()
+		const pending = noPendingUpdates()
+		pending.pollMilliseconds = config.pollMilliseconds + 4_000
+		expect(applyQueuedExecutionSettings(config, operatorState(), pending)).toEqual({ reportScanReset: false })
+		expect(config.pollMilliseconds).toBe(5_000)
+		expect(pending.pollMilliseconds).toBeUndefined()
 	})
 
 	test('clears every derived report view for a complete report-window rebuild', () => {
@@ -174,11 +183,11 @@ describe('queued operator execution settings', () => {
 
 test('V4-only execution starts and authenticates without a manifest or V3 deployment identities', async () => {
 	const config = await exampleConfiguration()
-	const deployment = validateDeploymentSettings({ coordinatorAddresses: [config.openOracle], executor: config.openOracle, quorumRpcUrls: ['https://second.example', 'https://third.example'], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
+	const deployment = validateDeploymentSettings({ coordinatorAddresses: [config.openOracle], executor: config.openOracle, uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
 	const manager = deployment.uniswapV4PoolManager
 	const quoter = deployment.uniswapV4Quoter
 	if (manager === undefined || quoter === undefined) throw new Error('Expected the canonical V4 pair')
-	const settings = { ...config.operatorSettings, rpcQuorum: 2 as const, deployment, runtime: { ...config.operatorSettings.runtime, execute: true } }
+	const settings = { ...config.operatorSettings, connectivity: { ...config.operatorSettings.connectivity, quorumRpcUrls: ['https://second.example/', 'https://third.example/'], rpcQuorum: 2 as const }, deployment, runtime: { ...config.operatorSettings.runtime, execute: true } }
 	expect(runnableOperatorSettings(config.settingsFile, settings).deployment.uniswapRouter).toBeUndefined()
 	const reads: string[] = []
 	const client = createPublicClient({
@@ -265,7 +274,7 @@ test('dry-run authentication reports the missing executor and contracts without 
 
 test('a failed re-inspection after enabling another venue does not leave the previous verified result behind', async () => {
 	const config = await exampleConfiguration()
-	const deployment = validateDeploymentSettings({ quorumRpcUrls: [], uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
+	const deployment = validateDeploymentSettings({ uniswapV2Enabled: false, uniswapV3Enabled: false, uniswapV4Enabled: true }, config.network.name)
 	const client = createPublicClient({
 		chain: config.network.chain,
 		transport: custom({
@@ -321,7 +330,7 @@ test('live authentication tolerates a lagging endpoint once the quorum has verif
 for (const name of ['mainnet', 'sepolia'] as const)
 	test(`canonical ${name} deployment checks work without pins and reject every missing required contract`, async () => {
 		const base = await exampleConfiguration()
-		const deployment = validateDeploymentSettings({ quorumRpcUrls: [], uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false }, name)
+		const deployment = validateDeploymentSettings({ uniswapV2Enabled: true, uniswapV3Enabled: true, uniswapV4Enabled: false }, name)
 		const config = { ...base, network: networkConfiguration(name), openOracle: deployment.openOracle, router: deployment.uniswapRouter, v2Router: deployment.uniswapV2Router, execute: true }
 		const expected = [config.openOracle, config.network.weth, canonicalSecurityPoolFactory(config.network.name), config.network.factory, config.network.quoter, config.router, config.v2Router].filter(address => address !== undefined)
 		let missing: string | undefined

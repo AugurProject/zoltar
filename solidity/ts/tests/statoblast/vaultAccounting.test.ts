@@ -42,7 +42,7 @@ import { useStatoblastVaultAccountingFixture, type StatoblastVaultAccountingFixt
 const depositRepToVaultEvent = {
 	inputs: [
 		{ name: 'vault', type: 'address', indexed: true },
-		{ name: 'attoRepAmount', type: 'uint256' },
+		{ name: 'amountAttoRep', type: 'uint256' },
 		{ name: 'repBackingUnits', type: 'uint256' },
 		{ name: 'totalRepBackingUnits', type: 'uint256' },
 	],
@@ -144,7 +144,7 @@ describe('Statoblast: vault accounting', () => {
 		const totalRepBackingUnits = await getTotalRepBackingUnits(client, securityPoolAddresses.securityPool)
 
 		strictEqualTypeSafe(depositArgs.vault, client.account.address, 'event should identify the updated vault')
-		strictEqualTypeSafe(depositArgs.attoRepAmount, depositAmount, 'event should include the deposited REP amount')
+		strictEqualTypeSafe(depositArgs.amountAttoRep, depositAmount, 'event should include the deposited REP amount')
 		strictEqualTypeSafe(depositArgs.repBackingUnits, vault.repBackingUnits, 'event should include updated vault backingUnits')
 		strictEqualTypeSafe(depositArgs.totalRepBackingUnits, totalRepBackingUnits, 'event should include updated REP backing units denominator')
 	})
@@ -507,22 +507,21 @@ describe('Statoblast: vault accounting', () => {
 		strictEqualTypeSafe(vaultAfterWithdrawal.disputeStakedAttoRep, 0n, 'escalation lock should be released after withdrawal')
 	})
 
-	test('depositToEscalationGame rejects before and at market end, then succeeds one second later', async () => {
+	test('depositToEscalationGame rejects before market end and succeeds exactly at market end', async () => {
 		const endTime = await getQuestionEndDate(client, questionId)
+		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 
 		// The Anvil harness mines mutating transactions one second after the latest block timestamp.
 		// Setting time to endTime - 2 makes the next transaction execute one second before endTime.
 		await mockWindow.setTime(endTime - 2n)
 		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question active/)
 
-		// Setting time to endTime - 1 makes the next transaction execute exactly at endTime.
+		// Setting time to endTime - 1 makes the next transaction execute exactly at endTime, the first valid second.
 		await mockWindow.setTime(endTime - 1n)
-		await assert.rejects(depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond), /Question active/)
-
-		// Resetting to endTime makes the next transaction execute at endTime + 1, the first valid second.
-		await mockWindow.setTime(endTime)
-		await manipulatePriceOracle(client, mockWindow, securityPoolAddresses.openOraclePriceCoordinator)
 		await depositToEscalationGame(client, securityPoolAddresses.securityPool, QuestionOutcome.Yes, reportBond)
+		const escalationGame = await getSecurityPoolsEscalationGame(client, securityPoolAddresses.securityPool)
+		const activationTime = await client.readContract({ address: escalationGame, abi: statoblast_EscalationGame_EscalationGame.abi, functionName: 'activationTime', args: [] })
+		strictEqualTypeSafe(activationTime, endTime + 3n * DAY, 'the escalation game should be deployed exactly at the question end time')
 
 		const yesDeposits = await getEscalationGameDeposits(client, securityPoolAddresses.escalationGame, QuestionOutcome.Yes)
 		const yesDeposit = ensureDefined(yesDeposits[0], 'yesDeposits[0] is undefined')

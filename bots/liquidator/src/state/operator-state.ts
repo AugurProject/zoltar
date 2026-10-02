@@ -260,7 +260,7 @@ export function assertIntentSender(intentSender: Address, activeSender: Address)
 }
 
 function vaultView(vault: VaultPosition, multiplierBps?: bigint, price?: bigint) {
-	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.openInterestAttoEth, multiplierBps, price, vault.disputeStakedAttoRep)
+	const healthBps = multiplierBps === undefined || price === undefined ? undefined : vaultHealthBps(vault.vaultAttoRepBacking, vault.underwritingLimitAttoEth, multiplierBps, price, vault.disputeStakedAttoRep)
 	return {
 		address: vault.address,
 		capacityOwnershipRep: formatDecimalAmount(vault.underwritingLimitAttoEth),

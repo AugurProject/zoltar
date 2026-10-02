@@ -1,6 +1,6 @@
 import type { CandidatePriority, StrategySettings } from '#config/settings'
 import type { Address } from '@zoltar/bot-shared/ethereum'
-import { ceilDiv as divideUp } from '@zoltar/core-shared/math/bigint'
+import { ceilDiv } from '@zoltar/core-shared/math/bigint'
 import { getLiquidationMigrationSecurityMultiplierBps, getLiquidationVaultRepBackingToTransfer } from '@zoltar/statoblast-shared/statoblast/liquidation'
 
 export const PRICE_PRECISION = 10n ** 18n
@@ -49,12 +49,6 @@ export type LiquidationCandidate = {
 	vaultAttoRepBackingToTransfer: bigint
 }
 
-function ceilDiv(numerator: bigint, denominator: bigint) {
-	if (denominator <= 0n) throw new Error('Division denominator must be positive')
-	if (numerator === 0n) return 0n
-	return divideUp(numerator, denominator)
-}
-
 function mulDivUp(left: bigint, right: bigint, denominator: bigint) {
 	return ceilDiv(left * right, denominator)
 }
@@ -64,23 +58,24 @@ export function repForBackingUnits(backingUnits: bigint, totalAttoRep: bigint, d
 	return (backingUnits * totalAttoRep) / denominator
 }
 
-function backingUnitsForRep(vaultAttoRepBacking: bigint, totalAttoRep: bigint, denominator: bigint, roundUp = false) {
-	if (denominator === 0n || totalAttoRep === 0n) return vaultAttoRepBacking * PRICE_PRECISION
-	return roundUp ? mulDivUp(vaultAttoRepBacking, denominator, totalAttoRep) : (vaultAttoRepBacking * denominator) / totalAttoRep
+/** Mirrors `SecurityPoolUtils.calculateLiquidationBackingUnitsAward`: an unpriced pool mints REP at the initial unit scale. */
+function liquidationBackingUnitsAward(grossRepAwardAttoRep: bigint, totalAttoRep: bigint, denominator: bigint) {
+	if (denominator === 0n || totalAttoRep === 0n) return grossRepAwardAttoRep * PRICE_PRECISION
+	return mulDivUp(grossRepAwardAttoRep, denominator, totalAttoRep)
 }
 
-export function requiredRepForOpenInterest(openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, healthBps = BPS_DENOMINATOR, disputeStakedAttoRep = 0n) {
-	if (openInterestAttoEth === 0n) return 0n
-	const baseRequiredAttoRep = mulDivUp(openInterestAttoEth, price, PRICE_PRECISION)
+export function requiredRepForUnderwritingLimit(underwritingLimitAttoEth: bigint, multiplierBps: bigint, price: bigint, healthBps = BPS_DENOMINATOR, disputeStakedAttoRep = 0n) {
+	if (underwritingLimitAttoEth === 0n) return 0n
+	const baseRequiredAttoRep = mulDivUp(underwritingLimitAttoEth, price, PRICE_PRECISION)
 	const totalAssociatedRequiredAttoRep = mulDivUp(mulDivUp(baseRequiredAttoRep, multiplierBps, BPS_DENOMINATOR), healthBps, BPS_DENOMINATOR)
 	const associatedRequiredAttoRep = totalAssociatedRequiredAttoRep > disputeStakedAttoRep ? totalAssociatedRequiredAttoRep - disputeStakedAttoRep : 0n
 	const freeRequiredAttoRep = mulDivUp(mulDivUp(baseRequiredAttoRep, getLiquidationMigrationSecurityMultiplierBps(multiplierBps), BPS_DENOMINATOR), healthBps, BPS_DENOMINATOR)
 	return associatedRequiredAttoRep > freeRequiredAttoRep ? associatedRequiredAttoRep : freeRequiredAttoRep
 }
 
-export function vaultHealthBps(vaultAttoRepBacking: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
-	if (openInterestAttoEth === 0n || price === 0n) return undefined
-	const baseRequiredAttoRep = mulDivUp(openInterestAttoEth, price, PRICE_PRECISION)
+export function vaultHealthBps(vaultAttoRepBacking: bigint, underwritingLimitAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
+	if (underwritingLimitAttoEth === 0n || price === 0n) return undefined
+	const baseRequiredAttoRep = mulDivUp(underwritingLimitAttoEth, price, PRICE_PRECISION)
 	const associatedAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, multiplierBps, BPS_DENOMINATOR)
 	const freeAtProtocolMinimum = mulDivUp(baseRequiredAttoRep, getLiquidationMigrationSecurityMultiplierBps(multiplierBps), BPS_DENOMINATOR)
 	const associatedHealth = associatedAtProtocolMinimum === 0n ? BPS_DENOMINATOR : ((vaultAttoRepBacking + disputeStakedAttoRep) * BPS_DENOMINATOR) / associatedAtProtocolMinimum
@@ -88,33 +83,38 @@ export function vaultHealthBps(vaultAttoRepBacking: bigint, openInterestAttoEth:
 	return associatedHealth < freeHealth ? associatedHealth : freeHealth
 }
 
-function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
-	if (openInterestAttoEth === 0n || price === 0n) return 0n
+function liquidationPriceDistanceBps(targetVaultRepBackingAttoRep: bigint, underwritingLimitAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
+	if (underwritingLimitAttoEth === 0n || price === 0n) return 0n
 	const valueScale = PRICE_PRECISION * BPS_DENOMINATOR
-	const associatedThreshold = ((targetVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) / (openInterestAttoEth * multiplierBps)
-	const freeThreshold = (targetVaultRepBackingAttoRep * valueScale) / (openInterestAttoEth * getLiquidationMigrationSecurityMultiplierBps(multiplierBps))
+	const associatedThreshold = ((targetVaultRepBackingAttoRep + disputeStakedAttoRep) * valueScale) / (underwritingLimitAttoEth * multiplierBps)
+	const freeThreshold = (targetVaultRepBackingAttoRep * valueScale) / (underwritingLimitAttoEth * getLiquidationMigrationSecurityMultiplierBps(multiplierBps))
 	const thresholdPrice = associatedThreshold < freeThreshold ? associatedThreshold : freeThreshold
 	if (price <= thresholdPrice) return 0n
 	return ((price - thresholdPrice) * BPS_DENOMINATOR) / price
 }
 
-function isUnsafeVault(vaultAttoRepBacking: bigint, openInterestAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
-	const health = vaultHealthBps(vaultAttoRepBacking, openInterestAttoEth, multiplierBps, price, disputeStakedAttoRep)
+function isUnsafeVault(vaultAttoRepBacking: bigint, underwritingLimitAttoEth: bigint, multiplierBps: bigint, price: bigint, disputeStakedAttoRep = 0n) {
+	const health = vaultHealthBps(vaultAttoRepBacking, underwritingLimitAttoEth, multiplierBps, price, disputeStakedAttoRep)
 	return health !== undefined && health < BPS_DENOMINATOR
 }
 
 function calculateLiquidationTransfer(parameters: { currentPoolHeldAttoRepBalance: bigint; currentTargetBackingUnits: bigint; currentTotalRepBackingUnits: bigint; minimumRemainingAttoRep: bigint; price: bigint; requestedDebtAttoEth: bigint; snapshotTargetUnderwritingLimitAttoEth: bigint }) {
 	const zero = { backingUnitsToTransfer: 0n, underwritingLimitToMoveAttoEth: 0n, debtToMoveAttoEth: 0n, vaultAttoRepBackingToTransfer: 0n }
 	if (parameters.snapshotTargetUnderwritingLimitAttoEth === 0n || parameters.requestedDebtAttoEth === 0n || parameters.price === 0n) return zero
-	const reservedBackingUnits = backingUnitsForRep(parameters.minimumRemainingAttoRep, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits, true)
-	const transferableBackingUnits = parameters.currentTargetBackingUnits > reservedBackingUnits ? parameters.currentTargetBackingUnits - reservedBackingUnits : 0n
 	const debtToMoveAttoEth = parameters.requestedDebtAttoEth < parameters.snapshotTargetUnderwritingLimitAttoEth ? parameters.requestedDebtAttoEth : parameters.snapshotTargetUnderwritingLimitAttoEth
 	if (debtToMoveAttoEth === 0n) return zero
+	// Mirrors `SecurityPoolUtils.calculateBundledLiquidationTransfer`: without a conversion rate the whole target position stays reserved.
+	let reservedBackingUnits = 0n
+	if (parameters.minimumRemainingAttoRep !== 0n && debtToMoveAttoEth < parameters.snapshotTargetUnderwritingLimitAttoEth) {
+		const noConversion = parameters.currentPoolHeldAttoRepBalance === 0n || parameters.currentTotalRepBackingUnits === 0n
+		reservedBackingUnits = noConversion ? parameters.currentTargetBackingUnits : mulDivUp(parameters.minimumRemainingAttoRep, parameters.currentTotalRepBackingUnits, parameters.currentPoolHeldAttoRepBalance)
+	}
+	const transferableBackingUnits = parameters.currentTargetBackingUnits > reservedBackingUnits ? parameters.currentTargetBackingUnits - reservedBackingUnits : 0n
 	const underwritingLimitToMoveAttoEth = debtToMoveAttoEth
 	const grossRepAwardAttoRep = getLiquidationVaultRepBackingToTransfer(debtToMoveAttoEth, parameters.price)
-	const nominalBackingUnits = backingUnitsForRep(grossRepAwardAttoRep, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits, true)
+	const nominalBackingUnits = liquidationBackingUnitsAward(grossRepAwardAttoRep, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
 	const backingUnitsToTransfer = nominalBackingUnits < transferableBackingUnits ? nominalBackingUnits : transferableBackingUnits
-	const vaultAttoRepBackingToTransfer = parameters.currentTotalRepBackingUnits === 0n ? backingUnitsToTransfer / PRICE_PRECISION : repForBackingUnits(backingUnitsToTransfer, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
+	const vaultAttoRepBackingToTransfer = repForBackingUnits(backingUnitsToTransfer, parameters.currentPoolHeldAttoRepBalance, parameters.currentTotalRepBackingUnits)
 	return { backingUnitsToTransfer, underwritingLimitToMoveAttoEth, debtToMoveAttoEth, vaultAttoRepBackingToTransfer }
 }
 
@@ -139,12 +139,11 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 		snapshotTargetUnderwritingLimitAttoEth: target.underwritingLimitAttoEth,
 	})
 	const resultingUnderwritingLimitAttoEth = caller.underwritingLimitAttoEth + transfer.underwritingLimitToMoveAttoEth
-	const resultingOpenInterestAttoEth = resultingUnderwritingLimitAttoEth
 	const debtToMoveAttoEth = transfer.debtToMoveAttoEth
 	if (debtToMoveAttoEth < strategy.minimumLiquidationDebtAttoEth) return undefined
-	if (resultingOpenInterestAttoEth < pool.minimumSecurityBondDebtAttoEth) return undefined
+	if (resultingUnderwritingLimitAttoEth < pool.minimumSecurityBondDebtAttoEth) return undefined
 	const vaultAttoRepBackingToTransfer = transfer.vaultAttoRepBackingToTransfer
-	const healthRequiredAttoRep = requiredRepForOpenInterest(resultingOpenInterestAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps, caller.disputeStakedAttoRep)
+	const healthRequiredAttoRep = requiredRepForUnderwritingLimit(resultingUnderwritingLimitAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps, caller.disputeStakedAttoRep)
 	const requiredResultingAttoRep = healthRequiredAttoRep > pool.minimumVaultRepDepositAttoRep ? healthRequiredAttoRep : pool.minimumVaultRepDepositAttoRep
 	const resultingRepBeforeTopUpAttoRep = caller.vaultAttoRepBacking + vaultAttoRepBackingToTransfer
 	const finalHealthTopUpAttoRep = requiredResultingAttoRep > resultingRepBeforeTopUpAttoRep ? requiredResultingAttoRep - resultingRepBeforeTopUpAttoRep : 0n
@@ -161,7 +160,7 @@ export function evaluateCandidate(pool: PoolRiskContext, target: VaultPosition, 
 		pool,
 		priceDistanceBps,
 		requestedDebtAttoEth,
-		resultingHealthBps: vaultHealthBps(resultingRepBeforeTopUpAttoRep + topUpAttoRep, resultingOpenInterestAttoEth, pool.multiplierBps, pool.price, caller.disputeStakedAttoRep) ?? strategy.vaultTargetHealthBps,
+		resultingHealthBps: vaultHealthBps(resultingRepBeforeTopUpAttoRep + topUpAttoRep, resultingUnderwritingLimitAttoEth, pool.multiplierBps, pool.price, caller.disputeStakedAttoRep) ?? strategy.vaultTargetHealthBps,
 		target,
 		topUpAttoRep,
 		vaultAttoRepBackingToTransfer,
@@ -193,7 +192,7 @@ export function selectAllowedCandidate(candidates: readonly LiquidationCandidate
 
 export function surplusRepForWithdrawal(caller: VaultPosition, pool: Pick<PoolRiskContext, 'minimumVaultRepDepositAttoRep' | 'multiplierBps' | 'price'>, strategy: Pick<StrategySettings, 'minimumRepWithdrawalAttoRep' | 'vaultTargetHealthBps' | 'vaultWithdrawHealthBps'>) {
 	if (caller.vaultAttoRepBacking === 0n) return 0n
-	const healthRequiredAttoRep = requiredRepForOpenInterest(caller.underwritingLimitAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps, caller.disputeStakedAttoRep)
+	const healthRequiredAttoRep = requiredRepForUnderwritingLimit(caller.underwritingLimitAttoEth, pool.multiplierBps, pool.price, strategy.vaultTargetHealthBps, caller.disputeStakedAttoRep)
 	const retainedAttoRep = caller.underwritingLimitAttoEth > 0n && pool.minimumVaultRepDepositAttoRep > healthRequiredAttoRep ? pool.minimumVaultRepDepositAttoRep : healthRequiredAttoRep
 	if (caller.underwritingLimitAttoEth > 0n) {
 		const health = vaultHealthBps(caller.vaultAttoRepBacking, caller.underwritingLimitAttoEth, pool.multiplierBps, pool.price, caller.disputeStakedAttoRep)
