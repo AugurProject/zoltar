@@ -177,7 +177,7 @@ describe('ZoltarRoutes', () => {
 		expect(queries.queryByRole('button', { name: 'Migrate REP' })).toBeNull()
 		fireEvent.click(queries.getByRole('button', { name: 'Fork universe' }))
 		expect(viewChanges).toEqual(['fork'])
-		expect(queries.getByRole('textbox', { name: 'Open universe by ID' })).toBeTruthy()
+		expect(queries.getByRole('textbox', { name: 'Universe ID' })).toBeTruthy()
 		expect(document.querySelector('.migration-wizard')).toBeNull()
 	})
 

@@ -302,11 +302,13 @@ export type OutcomeSelectionListProps = {
 	emptyMessage?: ComponentChildren
 	items: Array<{
 		actions?: ComponentChildren
+		ariaLabel?: string
+		describedById?: string
 		key: string
 		label: ComponentChildren
 		details?: ComponentChildren
 		disabled?: boolean
-		selected: boolean
+		selected?: boolean
 		onSelect: () => void
 	}>
 }

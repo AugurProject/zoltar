@@ -808,7 +808,7 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	const universeDirectoryOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Universe' && candidate.href.includes('#/pools/universes')); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)
 	expect(universeDirectoryOpened).toBe(true)
 	await driver.waitForBodyText('Open universe by ID')
-	await driver.waitForBodyText('Child universe outcome')
+	await driver.waitForBodyText('Child universes')
 	await driver.waitForBodyWithoutText('Loading outcomes…')
 	expect(await driver.evaluate("document.querySelectorAll('.universe-browser .entity-card-list').length")).toBe(0)
 	// The fixture has one auction child; its fork outcome opens the child without entering its ID.
@@ -816,12 +816,8 @@ productionInteractionTest('deployment-auction', '#/deploy?simulate=1&simScenario
 	expect(auctionPools).toHaveLength(1)
 	const auctionPool = auctionPools[0]
 	if (auctionPool === undefined) throw new Error('Seeded auction child pool was not available')
-	const selectedOutcome = await driver.evaluate(
-		`(() => { const select = document.querySelector('.universe-browser select'); if (!(select instanceof HTMLSelectElement)) return undefined; const option = [...select.options].find(candidate => candidate.value === '${auctionPool.universeId.toString()}' && !candidate.disabled); if (option === undefined) return undefined; select.value = option.value; select.dispatchEvent(new Event('change', { bubbles: true })); return option.textContent })()`,
-	)
-	expect(selectedOutcome).toBe('Yes')
-	await driver.waitForButtonEnabled('Open child universe')
-	await driver.clickButton('Open child universe')
+	const openedOutcome = await driver.evaluate(`(() => { const button = document.querySelector('.universe-browser button[aria-label="Open Yes universe"]'); if (!(button instanceof HTMLButtonElement) || button.disabled) return false; button.click(); return true })()`)
+	expect(openedOutcome).toBe(true)
 	expect(await driver.evaluate("new URLSearchParams(location.hash.split('?')[1] ?? '').get('universe')")).toBe(auctionPool.universeId.toString())
 	await driver.waitForBodyWithoutText('Loading universe details')
 	const childPoolBrowserOpened = await driver.evaluate(`(() => { const link = [...document.querySelectorAll('a')].find(candidate => candidate.textContent?.trim() === 'Browse pools'); if (!(link instanceof HTMLAnchorElement)) return false; link.click(); return true })()`)

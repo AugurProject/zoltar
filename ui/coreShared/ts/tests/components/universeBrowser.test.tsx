@@ -84,13 +84,18 @@ describe('bounded universe overview', () => {
 	installDomTestLifecycle()
 
 	test('omits unqueried children and opens a hexadecimal ID without a tree scan', async () => {
-		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], lineage: undefined, relatedUniversesLoaded: false })} />)
+		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ childUniverses: [], lineage: undefined, outcomeLabel: 'Alpha', relatedUniversesLoaded: false })} />)
 		try {
 			const queries = within(document.body)
+			expect(queries.getByRole('heading', { name: 'Alpha' })).toBeTruthy()
 			expect(queries.queryByText('Child universes')).toBeNull()
 			expect(queries.queryByText('No deployed child universes.')).toBeNull()
 			expect(queries.getByRole('link', { name: 'Parent universe' }).getAttribute('href')).toContain('universe=0')
-			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
+			const summary = queries.getByText('Open universe by ID')
+			const lookup = summary.closest('details')
+			expect(lookup?.hasAttribute('open')).toBe(false)
+			await act(() => summary.click())
+			const input = queries.getByRole('textbox', { name: 'Universe ID' })
 			fireEvent.input(input, { target: { value: '0x15' } })
 			const form = document.body.querySelector('form')
 			if (form === null) throw new Error('Expected the universe lookup form')
@@ -105,7 +110,7 @@ describe('bounded universe overview', () => {
 		const rendered = await renderIntoDocument(<UniverseBrowser activeUniverseId={yesUniverseId} universe={createUniverse({ relatedUniversesLoaded: false })} />)
 		try {
 			const queries = within(document.body)
-			const input = queries.getByRole('textbox', { name: 'Open universe by ID' })
+			const input = queries.getByRole('textbox', { name: 'Universe ID' })
 			const form = document.body.querySelector('form')
 			if (form === null) throw new Error('Expected the universe lookup form')
 			const initialHash = window.location.hash

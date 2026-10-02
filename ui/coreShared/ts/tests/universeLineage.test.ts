@@ -58,6 +58,15 @@ describe('universe lineage labels', () => {
 		expect(labels.get('99')).toBe('Genesis › Yes › Alpha')
 	})
 
+	test('names the selected outcome without an ancestry walk and retains complete lineage when available', () => {
+		expect([...buildUniverseLineageLabels({ childUniverses: [], outcomeLabel: ' Yes ', universeId: yesUniverseId })]).toEqual([
+			['0', 'Genesis'],
+			[yesUniverseId.toString(), 'Yes'],
+		])
+		expect(buildUniverseLineageLabels({ childUniverses: [], outcomeLabel: 'No', lineage, universeId: noUniverseId }).get(noUniverseId.toString())).toBe('Genesis › Yes › No')
+		expect([...buildUniverseLineageLabels({ childUniverses: [], outcomeLabel: ' ', universeId: yesUniverseId })]).toEqual([['0', 'Genesis']])
+	})
+
 	test('knows only Genesis when the lineage is missing or incomplete', () => {
 		expect([...buildUniverseLineageLabels(undefined)]).toEqual([['0', 'Genesis']])
 		expect([...buildUniverseLineageLabels({ childUniverses: [{ outcomeLabel: 'Alpha', universeId: 99n }], lineage: undefined, universeId: yesUniverseId })]).toEqual([['0', 'Genesis']])

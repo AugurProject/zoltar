@@ -30,17 +30,19 @@ const lifecycle = installDomTestLifecycle({
 })
 
 describe('outcome-based universe traversal', () => {
-	test('requires choosing a deployed outcome and navigates without entering a universe ID', async () => {
+	test('opens a deployed outcome directly from a migration-style card without requiring an ID', async () => {
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={async () => page} />))
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Which proposal wins?')).not.toBeNull())
-		const select = q.getByRole('combobox', { name: 'Child universe outcome' })
-		const open = q.getByRole('button', { name: 'Open child universe' })
-		expect(open.hasAttribute('disabled')).toBe(true)
-		expect(q.getByRole('option', { name: 'Beta — not deployed' }).hasAttribute('disabled')).toBe(true)
-		fireEvent.change(select, { target: { value: '10' } })
-		await waitFor(() => expect(open.hasAttribute('disabled')).toBe(false))
-		expect(q.queryByText('Choose a deployed outcome to open its universe.')).toBeNull()
+		const open = q.getByRole('button', { name: 'Open Alpha universe' })
+		expect(view.container.querySelectorAll('.migration-outcome-row')).toHaveLength(2)
+		expect(open.hasAttribute('aria-pressed')).toBe(false)
+		const unavailable = q.getByRole('button', { name: 'Open Beta universe' })
+		expect(unavailable.hasAttribute('disabled')).toBe(true)
+		const descriptionId = unavailable.getAttribute('aria-describedby')
+		if (descriptionId === null) throw new Error('Missing deployment-status description')
+		expect(document.getElementById(descriptionId)?.textContent).toBe('Not deployed')
+		expect(q.queryByRole('combobox')).toBeNull()
 		fireEvent.click(open)
 		expect(window.location.hash).toContain('universe=10')
 	})
@@ -51,8 +53,8 @@ describe('outcome-based universe traversal', () => {
 		const loader: LoadUniverseOutcomes = async () => (++calls === 1 ? await pending.promise : page)
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
 		const q = within(view.container)
-		expect(q.getByRole('combobox').hasAttribute('disabled')).toBe(true)
-		expect(q.getByRole('button', { name: 'Open child universe' }).hasAttribute('disabled')).toBe(true)
+		expect(q.queryByText('Loading outcomes…')).not.toBeNull()
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
 		await act(async () => {
 			pending.reject(new Error('RPC unavailable'))
 			await Promise.resolve()
@@ -63,7 +65,7 @@ describe('outcome-based universe traversal', () => {
 		expect(calls).toBe(2)
 	})
 
-	test('paging clears the selected child and requests only the next page', async () => {
+	test('paging replaces outcome cards and requests only the next page', async () => {
 		const starts: bigint[] = []
 		const loader: LoadUniverseOutcomes = async (_address, _universeId, start) => {
 			starts.push(start)
@@ -72,10 +74,10 @@ describe('outcome-based universe traversal', () => {
 		const view = lifecycle.trackRendered(await renderIntoDocument(<UniverseOutcomeNavigation universe={universe} loadPage={loader} />))
 		const q = within(view.container)
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())
-		fireEvent.change(q.getByRole('combobox'), { target: { value: '10' } })
 		fireEvent.click(q.getByRole('button', { name: 'Next page' }))
 		await waitFor(() => expect(q.queryByText('Gamma')).not.toBeNull())
-		expect(q.getByRole('button', { name: 'Open child universe' }).hasAttribute('disabled')).toBe(true)
+		expect(q.queryByRole('button', { name: 'Open Alpha universe' })).toBeNull()
+		expect(q.getByRole('button', { name: 'Open Gamma universe' }).hasAttribute('disabled')).toBe(false)
 		expect(starts).toEqual([0n, 10n])
 		fireEvent.click(q.getByRole('button', { name: 'Previous page' }))
 		await waitFor(() => expect(q.queryByText('Alpha')).not.toBeNull())

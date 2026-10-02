@@ -9,6 +9,7 @@ export type UniverseLineageStep = Readonly<{
 
 /** The minimum universe facts needed to name a universe, its ancestors, and its children by lineage. */
 export type UniverseLineageSource = Readonly<{
+	outcomeLabel?: string | undefined
 	childUniverses: readonly Readonly<{ outcomeLabel: string; universeId: bigint }>[]
 	lineage?: readonly UniverseLineageStep[] | undefined
 	universeId: bigint
@@ -49,6 +50,8 @@ export function extendUniverseLineage(lineage: readonly UniverseLineageStep[] | 
 export function buildUniverseLineageLabels(source: UniverseLineageSource | undefined): ReadonlyMap<string, string> {
 	const labels = new Map<string, string>([['0', universeCopy.genesis]])
 	if (source === undefined) return labels
+	const outcomeLabel = source.outcomeLabel?.trim()
+	if (outcomeLabel && source.universeId !== 0n) labels.set(source.universeId.toString(), outcomeLabel)
 	const lineage = source.lineage
 	if (lineage !== undefined && isCompleteLineage(lineage, source.universeId)) {
 		lineage.forEach((step, index) => {

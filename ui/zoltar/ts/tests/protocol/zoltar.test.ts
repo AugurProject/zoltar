@@ -47,14 +47,20 @@ function createReadClient({ multicallResponses, readContractHandlers }: { multic
 }
 
 describe('zoltar contract helpers', () => {
-	test('overview reads stay constant for a forked universe without scanning ancestors, outcomes, or children', async () => {
+	test('overview reads stay constant for a forked universe without walking ancestry or scanning outcomes or children', async () => {
 		const reads: string[] = []
 		const client = createReadClient({
 			multicallResponses: [
 				[REP_TOKEN, [1n, 42n, 2n, REP_TOKEN, 123n], 1n, 100n, 10n],
 				['REP', 'REP', 8n],
+				[[1n, 41n, 0n, REP_TOKEN, 77n], REP_TOKEN],
 			],
 			readContractHandlers: {
+				getAnswerOptionName: async request => {
+					reads.push('outcome name')
+					expect(request.args).toEqual([41n, 2n])
+					return 'Alpha'
+				},
 				getUniverseTheoreticalSupplyAttoRep: async () => {
 					reads.push('supply')
 					return 1000n
@@ -68,7 +74,8 @@ describe('zoltar contract helpers', () => {
 		expect(summary?.relatedUniversesLoaded).toBe(false)
 		expect(summary?.forkQuestionDetails).toBeUndefined()
 		expect(summary?.lineage).toBeUndefined()
-		expect(reads).toEqual(['supply'])
+		expect(summary?.outcomeLabel).toBe('Alpha')
+		expect(reads).toEqual(['supply', 'outcome name'])
 	})
 
 	test('loadMarketDetails marks missing question data as non-existent without loading labels', async () => {

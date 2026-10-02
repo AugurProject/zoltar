@@ -10,7 +10,7 @@ type UniverseSwitcherProps = {
 	/** Where the full universe browser lives; omitted when the application has no browser route. */
 	browseHref?: string | undefined
 	/** The loaded active universe; its lineage and deployed children are the switch targets. */
-	universe: Pick<ZoltarUniverseSummary, 'childUniverses' | 'hasForked' | 'lineage' | 'universeId' | 'relatedUniversesLoaded'> | undefined
+	universe: Pick<ZoltarUniverseSummary, 'outcomeLabel' | 'childUniverses' | 'hasForked' | 'lineage' | 'universeId' | 'relatedUniversesLoaded'> | undefined
 }
 
 /** Every ancestor of the active universe with its own lineage name; without a lineage only Genesis is known. */
@@ -27,7 +27,8 @@ function getAncestors(activeUniverseId: bigint, lineage: readonly UniverseLineag
 export function UniverseSwitcher({ activeUniverseId, browseHref, universe }: UniverseSwitcherProps) {
 	const detailsRef = useRef<HTMLDetailsElement>(null)
 	const loadedUniverse = universe?.universeId === activeUniverseId ? universe : undefined
-	const universeLabel = formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId)
+	const lineageLabel = formatUniverseLineageLabel(loadedUniverse?.lineage, activeUniverseId)
+	const universeLabel = loadedUniverse?.relatedUniversesLoaded === false ? loadedUniverse.outcomeLabel?.trim() || lineageLabel : lineageLabel
 	const ancestors = getAncestors(activeUniverseId, loadedUniverse?.lineage)
 	const deployedChildren = loadedUniverse?.childUniverses.filter(child => child.exists) ?? []
 	// Attribute access keeps the disclosure state in sync in every DOM implementation.

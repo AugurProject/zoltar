@@ -7,7 +7,7 @@ export function OutcomeSelectionList({ className = '', emptyMessage, items }: Ou
 		<div className={['migration-outcome-list', className].filter(Boolean).join(' ')}>
 			{items.map(item => (
 				<div className={`migration-outcome-row ${item.selected ? 'active' : ''}`} key={item.key}>
-					<button aria-pressed={item.selected} className='migration-outcome-select' disabled={item.disabled} onClick={item.onSelect} type='button'>
+					<button aria-describedby={item.describedById} aria-label={item.ariaLabel} aria-pressed={item.selected} className='migration-outcome-select' disabled={item.disabled} onClick={item.onSelect} type='button'>
 						<div className='migration-outcome-copy'>
 							<span className='migration-outcome-label'>{item.label}</span>
 							{item.details === undefined ? undefined : <div className='migration-outcome-metrics'>{item.details}</div>}

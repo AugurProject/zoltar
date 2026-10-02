@@ -1,3 +1,7 @@
+import { Badge } from '@zoltar/ui-core-shared/components/Badge.js'
+import { OutcomeSelectionList } from '@zoltar/ui-core-shared/components/OutcomeSelectionList.js'
+import { StateHint } from '@zoltar/ui-core-shared/components/StateHint.js'
+import { formatOpenOutcomeUniverse } from '../../../copy/zoltar.js'
 import { useEffect, useId, useState } from 'preact/hooks'
 import type { Address } from '@zoltar/core-shared/evm/ethereum'
 import { FormInput } from '@zoltar/ui-core-shared/components/FormInput.js'
@@ -27,27 +31,20 @@ export function UniverseOutcomeNavigation({ universe, loadPage = loadConnectedOu
 }
 
 function OutcomeSelector({ address, universeId, loadPage }: { address: Address; universeId: bigint; loadPage: LoadUniverseOutcomes }) {
-	const selectId = useId()
-	const hintId = useId()
 	const valueId = useId()
+	const statusId = useId()
 	const backend = getActiveBackend()
 	const [start, setStart] = useState(0n)
 	const [retry, setRetry] = useState(0)
-	const [selected, setSelected] = useState('')
 	const [value, setValue] = useState('')
 	const [valueError, setValueError] = useState<string>()
 	const [snapshot, setSnapshot] = useState<{ backend: typeof backend; loadPage: LoadUniverseOutcomes; start: bigint; retry: number; page?: UniverseOutcomePage; error?: string }>()
 	const current = snapshot?.backend === backend && snapshot.loadPage === loadPage && snapshot.start === start && snapshot.retry === retry ? snapshot : undefined
 	const page = current?.page
 	const loading = current === undefined
-	const choice = page?.choices.find(candidate => candidate.universeId.toString() === selected && candidate.exists)
-	let hint: string | undefined
-	if (loading) hint = copy.loadingOutcomes
-	else if (choice === undefined) hint = copy.selectOutcomeHint
 	useEffect(() => {
 		let active = true
 		const guard = createActiveEnvironmentGuard()
-		setSelected('')
 		void (async () => {
 			try {
 				const page = await withReadTimeout(loadPage(address, universeId, start))
@@ -65,35 +62,31 @@ function OutcomeSelector({ address, universeId, loadPage }: { address: Address; 
 		<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 			<div className='form-grid'>
 				{page?.title === undefined ? undefined : <p className='detail'>{page.title}</p>}
-				<div className='field'>
-					<label htmlFor={selectId}>{copy.childOutcome}</label>
-					<select id={selectId} value={selected} disabled={loading || page === undefined} aria-describedby={hint === undefined ? undefined : hintId} onChange={event => setSelected(event.currentTarget.value)}>
-						<option value=''>{loading ? copy.loadingOutcomes : copy.chooseOutcome}</option>
-						{page?.choices.map(candidate => (
-							<option key={candidate.universeId.toString()} value={candidate.universeId.toString()} disabled={!candidate.exists}>
-								{candidate.exists ? candidate.label : copy.notDeployed(candidate.label)}
-							</option>
-						))}
-					</select>
-					{hint === undefined ? undefined : (
-						<p id={hintId} className='detail' aria-live='polite'>
-							{hint}
-						</p>
-					)}
-				</div>
-				<div className='actions'>
-					<button
-						type='button'
-						className='primary'
-						disabled={choice === undefined}
-						aria-describedby={hint === undefined ? undefined : hintId}
-						onClick={() => {
-							if (choice !== undefined) navigateToUniverse(choice.universeId)
-						}}
-					>
-						{copy.openChild}
-					</button>
-				</div>
+				{loading ? <StateHint announcement='polite' presentation={{ key: 'loading', badgeLabel: commonCopy.loading, badgeTone: 'loading', detail: copy.loadingOutcomes, detailIsLoading: true }} /> : undefined}
+				<OutcomeSelectionList
+					emptyMessage={page === undefined ? undefined : commonCopy.childUniversesEmpty}
+					items={(page?.choices ?? []).map(candidate => ({
+						ariaLabel: formatOpenOutcomeUniverse(candidate.label),
+						describedById: `${statusId}-${candidate.universeId}`,
+						key: candidate.universeId.toString(),
+						label: (
+							<>
+								{candidate.label}
+								{candidate.exists ? <span aria-hidden='true'>{copy.openOutcomeArrowTail}</span> : undefined}
+							</>
+						),
+						details: (
+							<span id={`${statusId}-${candidate.universeId}`}>
+								<Badge tone={candidate.exists ? 'ok' : 'muted'}>{candidate.exists ? commonCopy.deployed : commonCopy.notDeployed}</Badge>
+							</span>
+						),
+						disabled: !candidate.exists,
+						onSelect: () => {
+							if (candidate.exists) navigateToUniverse(candidate.universeId)
+						},
+					}))}
+				/>
+
 				<RetryableNotice message={current?.error} retryLabel={commonCopy.retry} onRetry={() => setRetry(count => count + 1)} />
 				<PaginationControls
 					loading={loading}

@@ -100,7 +100,8 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 	const lineage = resolveLineage(universe)
 	const currentStep = lineage[lineage.length - 1]
 	// The lineage trail already names the ancestors, so the heading names only this generation.
-	const universeName = lineage.length > 1 && currentStep !== undefined ? formatUniverseStepName(currentStep) : formatUniverseLineageLabel(universe.lineage, universe.universeId)
+	const lineageName = lineage.length > 1 && currentStep !== undefined ? formatUniverseStepName(currentStep) : formatUniverseLineageLabel(universe.lineage, universe.universeId)
+	const universeName = universe.outcomeLabel?.trim() || lineageName
 	return (
 		<div className='route-view-flow universe-browser'>
 			<SectionBlock variant='plain'>
@@ -136,7 +137,7 @@ export function UniverseBrowser({ actions, activeUniverseId, children, navigatio
 				</div>
 			)}
 			{navigation}
-			<UniverseLookup activeUniverseId={activeUniverseId} />
+			<UniverseLookup activeUniverseId={activeUniverseId} collapsible />
 			{universe.relatedUniversesLoaded === false ? undefined : (
 				<SectionBlock title={commonCopy.childUniverses} variant='plain'>
 					<ChildUniverseRecords activeUniverseId={activeUniverseId} renderChildSummary={renderChildSummary} universe={universe} />

@@ -65,6 +65,9 @@ void describe('forked categorical simulation backend', () => {
 		const child = genesis?.childUniverses.find(candidate => candidate.exists)
 		if (child === undefined) throw new Error('Expected a deployed child universe')
 		const childSummary = await loadZoltarUniverseSummary(backend.createReadClient(), child.universeId)
+		const overview = await loadZoltarUniverseSummary(backend.createReadClient(), child.universeId, undefined, { includeRelatedUniverses: false })
+		expect(overview?.outcomeLabel).toBe(child.outcomeLabel)
+		expect(overview?.lineage).toBeUndefined()
 
 		expect(genesis?.lineage).toEqual([{ outcomeLabel: undefined, universeId: 0n }])
 		expect(childSummary?.lineage).toEqual([
