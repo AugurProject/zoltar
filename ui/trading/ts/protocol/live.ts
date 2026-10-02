@@ -401,21 +401,6 @@ export async function discoverLiveUniverseMarketPage(
 	return { ...result, markets }
 }
 
-export async function discoverAllLiveMarketsInUniverse(client: PublicClient, configuration: DeploymentConfiguration, requestedUniverseId: bigint | undefined, _pageSize = 25n, index = createSecurityPoolDeploymentIndex<SecurityPoolDeployment, RegistryBlockAnchor>(), onProgress?: MarketDiscoveryProgress) {
-	const universeIds = await loadUniverseIds(client, configuration)
-	const selectedUniverseId = requestedUniverseId !== undefined && universeIds.includes(requestedUniverseId) ? requestedUniverseId : universeIds[0]
-	const selectedDeployments = selectedUniverseId === undefined ? [] : await loadSecurityPoolDeploymentsInUniverse(client, configuration, selectedUniverseId, index)
-	const total = BigInt(selectedDeployments.length)
-	const result = { start: 0n, count: total, total, previousStart: undefined, nextStart: undefined, universeIds, selectedUniverseId }
-	const markets = await mapWithConcurrency(
-		selectedDeployments,
-		6,
-		async deployment => await loadDiscoveredMarket(client, configuration, deployment),
-		markets => onProgress?.({ ...result, markets }),
-	)
-	return { ...result, markets }
-}
-
 export async function loadLiveBalances(client: PublicClient, market: LiveMarket, account: Address): Promise<LiveBalances> {
 	const scope = shareBalanceScope(market)
 	const [invalid, yes, no, lp] = await Promise.all([

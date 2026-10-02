@@ -29,7 +29,7 @@ describe('market page balance failure', () => {
 		...offlineControllerServices,
 		discoverAddressedMarket: async () => discoveryPage([{ ...market }]),
 		discoverTradingMarketPage: async () => discoveryPage([{ ...market }]),
-		discoverAllLiveMarketsInUniverse: async () => discoveryPage([{ ...market }]),
+		discoverSavedMarkets: async () => discoveryPage([{ ...market }]),
 		...connectedWalletServices(account, configuration.chainId),
 		createTradingWalletClient: () => ({ waitForTransactionReceipt: async () => ({ status: 'success' as const }) }),
 		loadLiveBalances: async () => {

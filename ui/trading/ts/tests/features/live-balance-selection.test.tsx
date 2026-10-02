@@ -1,3 +1,4 @@
+import { waitForDom } from '../support/dom.js'
 import { usePortfolioQueries, usePortfolioRefreshEffects } from '../../features/live/usePortfolioQueries.js'
 import { createLatestRequestGuard } from '@zoltar/ui-core-shared/lib/requestGuard.js'
 import { describe, expect, test } from 'bun:test'
@@ -82,7 +83,7 @@ describe('live balance selection', () => {
 		}
 		const rendered = await renderIntoDocument(<Probe markets={[market, secondMarket]} />)
 		cleanupRendered = rendered.cleanup
-		await flush()
+		await waitForDom(() => state?.portfolioBalanceState === 'ready', 'portfolio balances')
 		expect(state?.portfolioBalanceState).toBe('ready')
 		expect(state?.portfolioEntries[1]?.error).toContain('Second pool unavailable')
 		revalidating = true
@@ -93,6 +94,46 @@ describe('live balance selection', () => {
 		expect(state?.portfolioEntries[0]?.balances?.yes).toBe(2n)
 		gate.resolve()
 		await flush()
+	})
+
+	test('gradual portfolio discovery reuses slow reads and skips queued pools after navigation', async () => {
+		const first = createDeferred<void>()
+		const calls: Address[] = []
+		const services = {
+			...liveTradingControllerServices,
+			createTradingPublicClient: () => ({}),
+			loadLiveBalances: async (_client: unknown, selected: LiveMarket) => {
+				calls.push(selected.pool)
+				await first.promise
+				return balancesFor(selected, 1n)
+			},
+		}
+		const portfolioBalanceRequests = createLatestRequestGuard()
+		const balanceRequests = createLatestRequestGuard()
+		const accountRef = { current: account }
+		let state: ReturnType<typeof usePortfolioQueries> | undefined
+		function Probe({ markets, route = 'portfolio' }: { markets: readonly LiveMarket[]; route?: string }) {
+			const queries = usePortfolioQueries()
+			state = queries
+			usePortfolioRefreshEffects({ route, configuration, account, selected: undefined, visibleMarkets: markets, marketRevision: markets, selectedUniverseId: '1', walletContextInvalidated: false, accountRef, queries, services, portfolioBalanceRequests, balanceRequests })
+			return <div />
+		}
+		const rendered = await renderIntoDocument(<Probe markets={[market]} />)
+		cleanupRendered = rendered.cleanup
+		await flush()
+		await act(() => render(<Probe markets={[market, secondMarket]} />, rendered.container))
+		await flush()
+		expect(calls).toEqual([market.pool])
+		await act(() => render(<Probe markets={[market, secondMarket]} />, rendered.container))
+		first.resolve()
+		await waitForDom(() => state?.portfolioEntries[0]?.balances?.yes === 10n ** 18n, 'first progressive balance')
+		expect(calls).toEqual([market.pool])
+		await act(() => render(<Probe markets={[]} route='market' />, rendered.container))
+		await act(async () => {
+			await Bun.sleep(1_100)
+		})
+		expect(calls).toEqual([market.pool])
+		expect(state?.portfolioEntries).toEqual([])
 	})
 
 	async function renderController(initialRoute: string) {

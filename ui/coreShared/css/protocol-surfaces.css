@@ -2050,7 +2050,7 @@ main:has(.global-transaction-dialog-nonblocking) #app-content {
 }
 
 .approval-button-label {
-	white-space: nowrap;
+	overflow-wrap: anywhere;
 }
 
 .transaction-approval-editor .form-grid {

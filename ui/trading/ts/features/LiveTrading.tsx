@@ -1,3 +1,4 @@
+import * as portfolioCopy from '../copy/portfolio.js'
 import { UserMessage } from '@zoltar/ui-core-shared/components/UserMessage.js'
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks'
 import { isMarketTransactionPending } from './live/marketTransactionActivity.js'
@@ -104,7 +105,7 @@ export function LiveTrading({
 	})
 	const { account, walletClient, walletEthAttoEth, networkMismatchReason, connect, connectionMessage, refreshWalletSummaryAfterReceipt, executeWithCurrentWalletContext, createGuardedWalletWrite } = wallet
 	const { balanceError, portfolioBalanceState, portfolioBalanceError, visiblePortfolioEntries, selectedBalances, selectedBalanceState, retryBalances, retryPortfolioBalances } = balances
-	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, nowSeconds, refresh, refreshFromControl, refreshLocked, marketPage } = discovery
+	const { visibleMarkets, listedMarkets, selected, selectedPairInitialized, routePool, discoveryState, discoveryError, discoveryFreshness: freshness, nowSeconds, refresh, refreshFromControl, refreshLocked, marketPage } = discovery
 	const { setMode, setSide } = position
 	const { workflowLocked, marketWorkflowLocked, updateLiquidityWorkflowLock } = workflow
 	const workflowRoute = tradingWorkflowRoute(route)
@@ -244,14 +245,32 @@ export function LiveTrading({
 		const discovering = discoveryState === 'loading' && visibleMarkets.length === 0
 		return (
 			<div className='route-view-flow'>
-				<RouteHeader title={appCopy.portfolio} actions={walletAction} />
+				<RouteHeader
+					title={appCopy.portfolio}
+					actions={
+						<>
+							<button className='secondary' type='button' disabled={discoveryState === 'loading' || freshness.refreshing} aria-busy={discoveryState === 'loading' || freshness.refreshing} onClick={refreshFromControl}>
+								{discoveryState === 'loading' || freshness.refreshing ? commonCopy.refreshingData : portfolioCopy.refreshPortfolio}
+							</button>
+							{walletAction}
+						</>
+					}
+				/>
 				<ErrorNotice message={connectionMessage} />
 				<SectionBlock variant='plain' busy={discoveryState === 'loading'}>
 					{discovering ? <EmptyState live title={liveCopy.discoveringSecurityPools} /> : null}
 					<ErrorNotice message={discoveryState === 'error' ? liveCopy.securityPoolFactoryDiscoveryFailed(discoveryError) : undefined} />
-					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={liveCopy.noSecurityPoolsInUniverse} /> : null}
-					{discoveryState === 'error' || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
-						<LivePortfolio entries={visiblePortfolioEntries} balanceState={portfolioBalanceState} balanceError={portfolioBalanceError} retryBalances={retryPortfolioBalances} nowSeconds={nowSeconds} walletAction={{ label: walletActionLabel, disabled: workflowLocked, onClick: () => void connect() }} />
+					{discoveryState === 'ready' && visibleMarkets.length === 0 ? <EmptyState title={portfolioCopy.noSavedPools} detail={portfolioCopy.savePoolGuidance} /> : null}
+					{(discoveryState === 'error' && visibleMarkets.length === 0) || discovering || (discoveryState === 'ready' && visibleMarkets.length === 0) ? null : (
+						<LivePortfolio
+							discoveryComplete={discoveryState === 'ready'}
+							entries={visiblePortfolioEntries}
+							balanceState={portfolioBalanceState}
+							balanceError={portfolioBalanceError}
+							retryBalances={retryPortfolioBalances}
+							nowSeconds={nowSeconds}
+							walletAction={{ label: walletActionLabel, disabled: workflowLocked, onClick: () => void connect() }}
+						/>
 					)}
 				</SectionBlock>
 			</div>

@@ -34,7 +34,6 @@ export function OpenOracleSection({
 	activeView,
 	accountState,
 	environmentReady,
-	environmentRefreshKey,
 	loadBrowseReports = loadBrowseReportPage,
 	onApproveToken1,
 	onApproveToken2,
@@ -131,7 +130,7 @@ export function OpenOracleSection({
 		if (successfulCreateKey === undefined) return
 		setTouchedCreateFields(new Set())
 	}, [successfulCreateKey])
-	// A new report is newest on the first registry page; one bounded read adds it to the downloaded reports. Discover stays available if this best-effort read fails.
+	// A new report is newest on the first registry page; one bounded read adds it to the downloaded reports. Opening a report saves it to favorites even if this best-effort read fails.
 	useEffect(() => {
 		if (successfulCreateKey === undefined || !environmentReady) return undefined
 		let cancelled = false
@@ -163,7 +162,7 @@ export function OpenOracleSection({
 			<RouteHeader description={routeHeader.description} eyebrow={openOracleCopy.openOracleGame} title={routeHeader.title} />
 			{view === 'browse' ? (
 				<div className='workflow-stack route-workflow-stack'>
-					<OpenOracleReportBrowser environmentReady={environmentReady} environmentRefreshKey={environmentRefreshKey} loadBrowseReports={loadBrowseReports} onOpenReport={reportId => void openBrowseReport(reportId)} />
+					<OpenOracleReportBrowser onOpenReport={reportId => void openBrowseReport(reportId)} />
 				</div>
 			) : undefined}
 
