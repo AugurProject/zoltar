@@ -248,7 +248,6 @@ export const queuedVaultOperationManualRefreshDetail = 'If this operation is sti
 export const queuedVaultOperationAutomaticRefreshDetail = 'This request was submitted for automatic execution. Check its current status in staged operations.'
 
 export const operationDetails = 'Operation details'
-export const selectOperation = 'Select operation'
 export const openOperationById = 'Open operation by ID'
 
 export function universePoolCount(count: bigint) {

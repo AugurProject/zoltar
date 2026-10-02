@@ -86,26 +86,36 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 		return { loadSecurityVaultCalls, refreshSelectedPoolCalls, reportingLoadCalls }
 	}
 
-	test('selects a listed operation before executing its exact ID and retains execution guards', async () => {
+	test('executes each card directly with its exact ID and retains per-operation guards', async () => {
 		const executed: bigint[] = []
 		function Operations() {
-			const [selected, setSelected] = useState('1')
+			const [manualId, setManualId] = useState('1')
+			const [pending, setPending] = useState(false)
 			return (
 				<SecurityPoolStagedOperationsSection
 					activeOperationCount={2n}
 					canExecute={true}
-					executeGuardMessage={selected === '1' ? 'Wait for a valid price' : undefined}
-					executionPending={false}
+					executeGuardMessage={undefined}
+					operationGuardMessages={
+						new Map([
+							[1n, 'Wait for a valid price'],
+							[2n, undefined],
+						])
+					}
+					executionPending={pending}
 					loadingManager={false}
 					managerAddress={zeroAddress}
 					managerDetails={createOracleManagerDetails()}
 					managerError={undefined}
-					manualOperationId={selected}
-					onExecute={(_manager, id) => executed.push(id)}
+					manualOperationId={manualId}
+					onExecute={(_manager, id) => {
+						executed.push(id)
+						setPending(true)
+					}}
 					onLoadManager={() => undefined}
-					onManualOperationIdChange={setSelected}
+					onManualOperationIdChange={setManualId}
 					pendingSettlementOperationIds={[]}
-					resolvedOperationId={BigInt(selected)}
+					resolvedOperationId={BigInt(manualId)}
 					securityPoolAddress={zeroAddress}
 					stagedOperations={[
 						{ operationId: 1n, operation: 'withdrawRep', amount: 1n, operator: zeroAddress, targetVault: zeroAddress },
@@ -119,27 +129,24 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 		const rendered = await renderIntoDocument(<Operations />)
 		setCleanup(rendered.cleanup)
 		const queries = within(document.body)
-		const blocked = queries.getByRole('button', { name: 'Execute staged operation' })
-		expect(blocked.hasAttribute('disabled')).toBe(true)
+		expect(queries.queryByRole('button', { name: 'Selected' })).toBeNull()
+		expect(queries.queryByRole('button', { name: 'Select operation' })).toBeNull()
+		const [blocked, execute] = queries.getAllByRole('button', { name: 'Execute staged operation' })
+		if (!(blocked instanceof HTMLButtonElement) || !(execute instanceof HTMLButtonElement)) throw new Error('Expected each operation card to have an execute button')
+		expect(blocked.disabled).toBe(true)
 		expect(blocked.closest('details')).toBeNull()
 		expect(blocked.parentElement?.parentElement?.querySelector('.tx-action-feedback') === null).toBe(true)
 		const group = blocked.closest('.tx-action-group')
 		expect(group?.querySelector('.tx-action-feedback')?.textContent).toContain('Wait for a valid price')
 		expect(blocked.getAttribute('aria-describedby')).toBe(group?.querySelector('.tx-action-feedback [id]')?.id)
-		const selection = queries.getByRole('button', { name: 'Select operation' })
-		if (!(selection instanceof HTMLButtonElement)) throw new Error('Expected operation selection button')
-		selection.focus()
-		await act(async () => {
-			fireEvent.click(selection)
-		})
-		expect(document.activeElement).toBe(selection)
-		expect(selection.getAttribute('aria-pressed')).toBe('true')
-		const execute = queries.getByRole('button', { name: 'Execute staged operation' })
-		expect(execute.hasAttribute('disabled')).toBe(false)
+		expect(execute.disabled).toBe(false)
 		await act(async () => {
 			fireEvent.click(execute)
 		})
 		expect(executed).toEqual([2n])
+		expect(queries.getAllByRole('button', { name: 'Executing staged operation…' })).toHaveLength(1)
+		expect(blocked.disabled).toBe(true)
+		expect(execute.disabled).toBe(true)
 	})
 
 	describe('queueing and execution feedback', () => {
@@ -263,6 +270,27 @@ describe('SecurityPoolWorkflowSection: staged operations', () => {
 			const descriptionId = execute.getAttribute('aria-describedby')
 			expect(descriptionId).not.toBeNull()
 			expect(document.getElementById(descriptionId ?? '')?.textContent).toBe('Auto-executes after oracle settlement.')
+		})
+
+		test('gives each card its own automatic or manual price guard', async () => {
+			await renderSelectedPool({
+				poolOracleManagerDetails: createOracleManagerDetails({
+					isPriceValid: false,
+					pendingOperationSlotId: 7n,
+					pendingReportId: 12n,
+					pendingSettlementOperationIds: [7n],
+					stagedOperations: [
+						{ amount: 10n * 10n ** 18n, operator: zeroAddress, operation: 'setVaultUnderwritingLimit', operationId: 7n, targetVault: zeroAddress },
+						{ amount: 1n * 10n ** 18n, operator: zeroAddress, operation: 'withdrawRep', operationId: 8n, targetVault: zeroAddress },
+					],
+				}),
+				selectedPoolView: 'staged-operations',
+			})
+			const buttons = within(document.body).getAllByRole('button', { name: 'Execute staged operation' })
+			expect(buttons).toHaveLength(2)
+			const reasons = buttons.map(button => document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent)
+			expect(reasons).toEqual(['Auto-executes after oracle settlement.', 'Request a new price in Price oracle before executing this operation.'])
+			expect(buttons.every(button => button.hasAttribute('disabled'))).toBe(true)
 		})
 
 		test('blocks staged-operation execution at the exact oracle expiry boundary', async () => {
