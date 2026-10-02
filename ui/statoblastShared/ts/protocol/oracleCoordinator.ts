@@ -10,7 +10,7 @@ import * as securityPoolCopy from '../copy/securityPool.js'
 import { getOracleOperationTimingGuard, resolveOracleOperationEthFunding } from './oracleRequestFunding.js'
 import { getOracleManagerPriceValidUntilTimestamp } from './oracleTiming.js'
 import { addOpenOracleBountyBuffer, addOpenOracleInitialReportFundingBuffer } from './openOracleMath.js'
-import { loadOpenOracleInitialReportPrice } from './openOraclePricing.js'
+import { loadOpenOracleInitialReportPrice, type OraclePriceQueryProgress } from './openOraclePricing.js'
 import { decodeOracleQueueOperation, encodeOracleQueueOperation } from './oracleQueueOperation.js'
 import { getWethAddress } from '@zoltar/ui-zoltar-shared/protocol/uniswapQuoter.js'
 import { statoblast_OpenOraclePriceCoordinator_OpenOraclePriceCoordinator, statoblast_openOracle_OpenOracle_OpenOracle } from '../contractArtifact.js'
@@ -342,7 +342,8 @@ export async function loadOracleManagerQueueOperationEthValue(client: Pick<Write
 	return funding.includeBuffer ? addOpenOracleBountyBuffer(funding.costAttoEth) : funding.costAttoEth
 }
 
-export async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address, requestedInitialAttoWeth = 0n) {
+export async function getCoordinatorInitialReportPrice(client: CoordinatorInitialReportClient, managerAddress: Address, requestedInitialAttoWeth = 0n, onProgress?: OraclePriceQueryProgress) {
+	onProgress?.('oracle')
 	const [minimumToken1ReportAttoEth, rawReputationTokenAddress] = await Promise.all([
 		readCoordinatorMinimumReport(client, managerAddress),
 		client.readContract({
@@ -352,9 +353,8 @@ export async function getCoordinatorInitialReportPrice(client: CoordinatorInitia
 			args: [],
 		}),
 	])
-	const reputationTokenAddress = getAddress(rawReputationTokenAddress)
 	const initialReportAttoWeth = requestedInitialAttoWeth > minimumToken1ReportAttoEth ? requestedInitialAttoWeth : minimumToken1ReportAttoEth
-	const quote = await loadOpenOracleInitialReportPrice(client, getWethAddress(), reputationTokenAddress, initialReportAttoWeth)
+	const quote = await loadOpenOracleInitialReportPrice(client, getWethAddress(), getAddress(rawReputationTokenAddress), initialReportAttoWeth, onProgress)
 	const proposedRepPerEthPrice = (quote.token2Amount * COORDINATOR_PRICE_PRECISION) / initialReportAttoWeth
 	return proposedRepPerEthPrice > 0n ? proposedRepPerEthPrice : 1n
 }
